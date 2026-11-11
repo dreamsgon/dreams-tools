@@ -184,7 +184,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <label>Saved maps<select aria-label="Saved maps" value={source??""} onChange={e=>{const id=e.target.value;guard(()=>open(id));}}><option value="">New map</option>{workspace.scenes.filter(s=>s.drawing).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       <button onClick={()=>guard(()=>open(""))}>New map</button>
       <label>Map name<input maxLength={120} value={draft.name} onChange={e=>change(d=>{d.name=e.target.value||"Untitled map";})}/></label>
-      <div className="form-row">{(["width","height"] as const).map(key=><label key={key}>{key}<input aria-label={`Map ${key}`} type="number" min={200} max={8000} step={20} value={draft[key]} onChange={e=>{const n=Number(e.target.value);if(n>=200&&n<=8000)change(d=>{d[key]=n;});}}/></label>)}</div>
+      <div className="form-row">{(["width","height"] as const).map(key=><label key={key}>{key==="width"?"Width":"Height"}<input aria-label={`Map ${key}`} type="number" min={200} max={8000} step={20} value={draft[key]} onChange={e=>{const n=Number(e.target.value);if(n>=200&&n<=8000)change(d=>{d[key]=n;});}}/></label>)}</div>
       <label>Background<input type="color" value={draft.drawing.background} onChange={e=>change(d=>{d.drawing.background=e.target.value;})}/></label>
       <label className="creator-check"><input type="checkbox" checked={addSelection} onChange={e=>{setAddSelection(e.target.checked);setTool("select");}}/>Add to selection</label>
       <p className="muted">Shift-click shapes or layers to select several. {selectedIds.length} selected. Drag a selected shape to move the group.</p>

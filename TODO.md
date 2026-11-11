@@ -55,6 +55,12 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Verify hosted encyclopedia MCP access and wrong-campaign rejection with a real campaign key.
 - [ ] Review the 2 MB encyclopedia workspace limit and plan larger storage if needed.
 
+## Usability pass (docs/UX_HANDOFF.md)
+
+- [x] Part 1, visible bugs (handoff 1.1, 1.2, 1.3, 1.7): dice tray characters fixed, Maptable header and in-dialog links styled, signed-in account page shows a summary instead of the sign-in form, "1 token" pluralization, "Move scene to" wording, Map Creator Width/Height labels, labelled the blank-scene and remove-scene buttons.
+- [ ] 1.7 leftover: the handoff saw one unlabelled button inside "Initiative order & settings"; a source scan found none, so recheck in a browser with initiative entries.
+- [ ] Next: 1.4 dice tray placement and z-index scale, then 1.5/1.6, then the order in the handoff.
+
 ## Map acceptance and maintenance
 
 - [ ] Desktop and phone acceptance: map uploads/crop, grid alignment, map maker rooms/curves/freehand/merging/openings, multiselection, layers, undo/redo.

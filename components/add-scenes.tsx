@@ -1,5 +1,6 @@
 "use client";
 import {useState} from "react";
+import { countLabel } from "@/lib/plural";
 import {Modal} from "./dialogs";
 import {collectionPath,newScene,uid,type Scene,type Workspace} from "@/lib/model";
 export default function AddScenes({workspace:w,campaignId,initialDestination,initialMapType="encounter",commit,close,importMap,splitMap,openScene}: {
@@ -53,7 +54,7 @@ export default function AddScenes({workspace:w,campaignId,initialDestination,ini
         <span aria-live="polite">{selected.length} selected{hiddenCount>0?` (${hiddenCount} hidden by filters)`:""}</span>
         <div className="button-row"><button className="primary" disabled={!selected.length} onClick={()=>transfer(selected.map(s=>s.id),true)}>Copy selected here</button><button disabled={!selected.length} onClick={()=>transfer(selected.map(s=>s.id),false)}>Move selected here</button></div>
       </div>
-      <div className="import-scene-list">{candidates.map(s=><div className={"import-scene-row "+(selection.has(s.id)?"is-selected":"")} key={s.id}><label className="import-scene-selection"><input type="checkbox" aria-label={`Select ${s.name}`} checked={selection.has(s.id)} onChange={()=>toggle(s.id)}/><span><strong>{s.name}</strong><small>{s.containerId?collectionPath(w.collections,s.containerId):"Unfiled scenes"} · {s.tokens.length} tokens</small></span></label><div className="button-row"><button aria-label={`Copy ${s.name} here`} onClick={()=>transfer([s.id],true)}>Copy here</button><button aria-label={`Move ${s.name} here`} onClick={()=>transfer([s.id],false)}>Move here</button></div></div>)}
+      <div className="import-scene-list">{candidates.map(s=><div className={"import-scene-row "+(selection.has(s.id)?"is-selected":"")} key={s.id}><label className="import-scene-selection"><input type="checkbox" aria-label={`Select ${s.name}`} checked={selection.has(s.id)} onChange={()=>toggle(s.id)}/><span><strong>{s.name}</strong><small>{s.containerId?collectionPath(w.collections,s.containerId):"Unfiled scenes"} · {countLabel(s.tokens.length,"token")}</small></span></label><div className="button-row"><button aria-label={`Copy ${s.name} here`} onClick={()=>transfer([s.id],true)}>Copy here</button><button aria-label={`Move ${s.name} here`} onClick={()=>transfer([s.id],false)}>Move here</button></div></div>)}
       {!candidates.length&&<p className="muted">No scenes match. Try another campaign or upload a map above.</p>}</div>
       <p role="status">{status}</p>
     </div>
