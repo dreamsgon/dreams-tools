@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { S3Bucket, storageConfig } from '../lib/storage.ts';
 import { createTransfer, readTransfer, storedJson, workspaceBody } from '../lib/transfers.ts';
 import { readJsonResponse, stageTransfer } from '../lib/transfer-client.ts';
@@ -7,6 +8,29 @@ import { saveWorkspace, loadWorkspace } from '../lib/workspace-storage.ts';
 import { initialWorkspace } from '../lib/model.ts';
 
 const config = { bucket:'maptable-test',region:'us-east-1',prefix:'maptable',accessKeyId:'test-key',secretAccessKey:'test-secret' };
+test('S3 PUTs use fixed UTF-8/binary byte lengths over Node HTTP, not chunked transfer',async()=>{
+  const received=[];
+  const server=createServer(async(req,res)=>{
+    const chunks=[];for await(const chunk of req)chunks.push(chunk);
+    received.push({headers:req.headers,bytes:Buffer.concat(chunks)});
+    res.writeHead(200,{etag:'"saved"'});res.end();
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try {
+    const url=`http://127.0.0.1:${server.address().port}/object`;
+    const bucket=new S3Bucket(config,req=>fetch(new Request(url,req)));
+    const backing=new Uint8Array([99,1,2,3,99]);
+    const bodies=['{"name":"世界 🗺️"}',backing.subarray(1,4),new Uint8Array([4,5]).buffer,''];
+    for(const body of bodies)await bucket.put('test.json',body,{onlyIf:{etagDoesNotMatch:'*'}});
+    for(let i=0;i<bodies.length;i++){
+      const expected=Buffer.from(bodies[i]);
+      assert.deepEqual(received[i].bytes,expected);
+      assert.equal(received[i].headers['content-length'],String(expected.byteLength));
+      assert.equal(received[i].headers['transfer-encoding'],undefined);
+      assert.equal(received[i].headers['if-none-match'],'*');
+    }
+  } finally { server.closeAllConnections();await new Promise(resolve=>server.close(resolve)); }
+});
 function storage() {
   const objects = new Map(), requests = []; let revision = 0;
   const bucket = new S3Bucket(config,async req => {
@@ -86,3 +110,4 @@ test('browser stages only transfer metadata through the app; file bytes go direc
   });
   assert.equal(id,'transfer');assert.deepEqual(JSON.parse(calls[0].init.body),{purpose:'image',type:'image/png',size:3});assert.equal(calls.length,2);
 });
+

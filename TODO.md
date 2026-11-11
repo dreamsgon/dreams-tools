@@ -13,6 +13,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Stage large images, Discord renders and workspace payloads directly through S3 to avoid function payload limits.
 - [x] Adapt MCP and browser clients for large signed downloads without forwarding credentials.
 - [x] Add storage/transfer regression tests and a production HTTP smoke check.
+- [x] Fix Node S3 PUT framing with explicit UTF-8/binary Content-Length; add a real local HTTP transport regression (320 tests pass).
 - [x] Pass 319 tests, TypeScript checking, Next.js production build and local production HTTP smoke test.
 - [x] Add GitHub Actions for install, typecheck, tests, build and HTTP smoke checks.
 - [x] Update GitHub/Vercel instructions, environment example, IAM/CORS/lifecycle templates and architecture notes.

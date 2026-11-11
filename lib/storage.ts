@@ -55,6 +55,9 @@ export class S3Bucket implements Bucket {
   }
   async put(key: string, body: string | ArrayBuffer | Uint8Array, options: PutOptions = {}) {
     const headers = new Headers({ 'Content-Type': options.httpMetadata?.contentType || 'application/json', 'Cache-Control': 'private, no-store' });
+    // Signing wraps the body in a Request stream. Node otherwise sends ordinary
+    // chunked transfer encoding, which S3 PutObject does not accept.
+    headers.set('Content-Length', String(typeof body === 'string' ? Buffer.byteLength(body, 'utf8') : body.byteLength));
     if (options.onlyIf?.etagMatches) headers.set('If-Match', `"${options.onlyIf.etagMatches}"`);
     if (options.onlyIf?.etagDoesNotMatch) headers.set('If-None-Match', options.onlyIf.etagDoesNotMatch);
     const response = await this.request(key, { method: 'PUT', headers, body: body as BodyInit });
@@ -87,3 +90,4 @@ export class S3Bucket implements Bucket {
   }
 }
 export const getBucket = () => new S3Bucket(storageConfig());
+
