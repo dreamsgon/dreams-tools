@@ -6,7 +6,7 @@ Includes map creation, square/hex grids, tokens and libraries, campaign folders/
 
 ## Deploy
 
-Follow **[DEPLOY_VERCEL.md](DEPLOY_VERCEL.md)**. You need a Vercel project, a Supabase Auth project, and a private Amazon S3 bucket. The guide includes the [S3 bucket console](https://s3.console.aws.amazon.com/s3/buckets), IAM/CORS templates, environment variables, and account setup. The source is prepared; no live services or credentials are included or configured.
+Production is live at **https://dreams-tools-sable.vercel.app**. See [deployment status](docs/DEPLOYMENT_STATUS.md) for configured services and remaining checks. Follow **[DEPLOY_VERCEL.md](DEPLOY_VERCEL.md)** for setup instructions. Credentials are stored privately in Vercel and are not included in this repository or ZIP.
 
 Multiple email/password accounts are supported. Each account has separate map and encyclopedia workspaces, uploads, settings, and agent grants. Shared campaigns and real-time multiplayer are not implemented. Signup/confirmation/reset email for ordinary users requires Supabase custom SMTP.
 
@@ -48,3 +48,4 @@ Vercel hosts the app; Supabase verifies identities; S3 stores private workspace 
 To migrate existing maps, export a JSON backup with embedded images from the old app while you can access them, then restore it after signing into the new app. Accounts are not merged by email, and raw Sites/R2 data is not migrated automatically. Never commit your campaign backups.
 
 No project-wide license has been selected. Third-party notices remain in `vendor/`; the owner should select licensing before offering reuse rights.
+
