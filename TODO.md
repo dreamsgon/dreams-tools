@@ -26,10 +26,13 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Publish application source at the root of the owner's public `dreamsgon/dreams-tools` repository on `main`.
 - [ ] Select a project license.
-- [ ] Create/configure Supabase Auth, email confirmation, custom SMTP and allowed callback URLs.
-- [ ] Create the private S3 bucket and dedicated IAM identity; apply CORS and temporary-transfer lifecycle configuration.
-- [ ] Set required Vercel variables from .env.example; use separate data prefixes for development/preview.
-- [ ] Deploy through Vercel and complete the checks in DEPLOY_VERCEL.md.
+- [x] Configure Supabase email Auth, email confirmation and production callback URLs; preserve original Site callbacks.
+- [ ] Configure custom SMTP and verify email delivery for ordinary users.
+- [x] Create the private S3 bucket and dedicated IAM identity; apply production CORS and one-day temporary-transfer lifecycle configuration.
+- [x] Save all seven required variables in Vercel Production only, using sensitive storage.
+- [ ] Configure separate resources/prefixes if Development or Preview environments are needed.
+- [x] Deploy through Vercel; confirm Ready status, live home and Maptable sign-in redirect at https://dreams-tools-sable.vercel.app.
+- [ ] Complete authenticated live acceptance checks below; deployment alone does not prove them.
 - [ ] Verify two real accounts cannot read each other's workspaces, images, settings, transfers or campaign grants.
 - [ ] Verify real signup/login/logout/reset/Remember me with email delivery.
 - [ ] Verify real S3 signing, CORS, 20 MiB image boundary, large workspace transfers, save conflicts and reload persistence.
@@ -62,3 +65,4 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Additional hosting/storage adapters beyond the current Vercel + Supabase Auth + Amazon S3 setup.
 
 See docs/VALIDATION.md for exact completed checks and limits. Live-service checks above stay unchecked until actually exercised with the owner's configuration.
+
