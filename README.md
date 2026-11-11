@@ -42,6 +42,7 @@ Follow the [safe update workflow in AGENTS.md](AGENTS.md#safe-updates-to-the-dep
 - [TODO.md](TODO.md): completed port work, deployment checks, and future features.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): code layout, storage, and authentication.
 - [docs/VALIDATION.md](docs/VALIDATION.md): actual verification and remaining limitations.
+- [docs/UX_HANDOFF.md](docs/UX_HANDOFF.md): usability findings and the ordered list of fixes.
 
 The encyclopedia has its own read-only MCP connection, documented in [docs/ENCYCLOPEDIA.md](docs/ENCYCLOPEDIA.md). The optional map stdio MCP server is `scripts/maptable-mcp.mjs`. Supply `MAPTABLE_URL` and `MAPTABLE_AGENT_KEY` privately; generate a campaign key in Connections. No model-provider API key is needed to contribute code.
 

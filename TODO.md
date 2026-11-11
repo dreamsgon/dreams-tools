@@ -63,6 +63,11 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Large-library performance and storage costs; design safe collection of unreferenced immutable segments without breaking recovery.
 - [ ] Review the remaining starter dependencies/styles and trim unused ones with visual regression checks.
 
+## Usability
+
+- [x] Walk through both tools locally at desktop and phone sizes; record prioritized fixes in docs/UX_HANDOFF.md.
+- [ ] Work through docs/UX_HANDOFF.md in its suggested order, one pull request per item. Item 3.3 (shared campaigns between the two tools) waits for the owner's decision.
+
 ## Optional future work
 
 - [ ] Shared campaigns and live multiplayer.
