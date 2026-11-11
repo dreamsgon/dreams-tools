@@ -33,6 +33,9 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Save all seven required variables in Vercel Production only, using sensitive storage.
 - [ ] Configure separate resources/prefixes if Development or Preview environments are needed.
 - [x] Deploy through Vercel; confirm Ready status, live home and Maptable sign-in redirect at https://dreams-tools-sable.vercel.app.
+- [x] Verify the owner's password recovery email and successful sign-in.
+- [x] Verify authenticated Maptable and encyclopedia saves persist after full-page reload; deploy the S3 PUT framing fix.
+- [ ] Finish image-upload testing (automation was blocked by extension file access before upload).
 - [ ] Complete authenticated live acceptance checks below; deployment alone does not prove them.
 - [ ] Verify two real accounts cannot read each other's workspaces, images, settings, transfers or campaign grants.
 - [ ] Verify real signup/login/logout/reset/Remember me with email delivery.
