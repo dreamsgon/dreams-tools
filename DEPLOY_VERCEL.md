@@ -1,6 +1,6 @@
 # Deploy RPG Tools to Vercel
 
-This version runs standard Next.js on Vercel's Node.js runtime. No Cloudflare Worker binding, Sites project, or ChatGPT authentication headers are needed. Source and ZIP were prepared locally; you still need to configure your own accounts and deploy.
+This version runs standard Next.js on Vercel's Node.js runtime. No Cloudflare Worker binding, Sites project, or ChatGPT authentication headers are needed. The owner's production deployment is https://dreams-tools-sable.vercel.app; see [current status](docs/DEPLOYMENT_STATUS.md). The steps below also document setup for other deployments.
 
 ## 1. Create the services
 
@@ -105,3 +105,4 @@ Unit tests use local fakes and do not prove your IAM, CORS, SMTP, or hosted envi
 The same deployment now serves `/encyclopedia` alongside `/maptable`, linked from `/`. No extra database, bucket or environment variables are required. The existing private S3 bucket and Supabase account support both modules; the `MAPTABLE_` environment names are retained for compatibility. Encyclopedia saves and images are separate from Maptable.
 
 Follow [docs/ENCYCLOPEDIA.md](docs/ENCYCLOPEDIA.md) for migration and optional read-only MCP setup. Encyclopedia workspace JSON is capped at 2 MB; uploaded atlas images at 8 MB. Test two-account isolation, public player-link filtering, fog masks, save conflicts, and replacement/revocation on the deployed site. Revocation stops new authorized requests; already issued signed image URLs can remain valid for five minutes. The optional additional S3 image connection belongs to Maptable; encyclopedia images use the main private bucket.
+
