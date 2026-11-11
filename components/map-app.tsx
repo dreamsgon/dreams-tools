@@ -1,6 +1,8 @@
 "use client";
 import {readJsonResponse} from "@/lib/transfer-client";
 import { countLabel } from "@/lib/plural";
+import StandardDiceTray, { type DicePanel } from "./standard-dice-tray";
+import { diceDockPosition } from "@/lib/dice-dock";
 import { attachSceneMap } from "@/lib/scene-map";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
@@ -20,7 +22,7 @@ import FogRegions from "./fog-regions";
 import ExplorationPanel from "./exploration-panel";
 import {sceneTargets} from "@/lib/exploration";
 import TokenImage from "./token-image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Map as MapIcon,
   LayoutDashboard,
@@ -54,6 +56,8 @@ import {
   HelpCircle,
   UserRound,
   BookOpen,
+  Dices,
+  ScrollText,
 } from "lucide-react";
 import Board, { type View } from "./board";
 import CampaignAssets from "./campaign-assets";
@@ -162,6 +166,15 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [effectColor, setEffectColor] = useState("#d99a3a");
   const selectionScope = panel === "scenes" || panel === "tokens" || panel === "effects" || panel === "fog" || panel === "exploration" ? panel : panel === "grid" ? "measurements" : "none";
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
+  const [dicePanel,setDicePanel]=useState<DicePanel>(null);
+  const [diceDock,setDiceDock]=useState<CSSProperties>();
+  const toolbarRef=useRef<HTMLDivElement>(null);
+  const toggleDicePanel=(next:Exclude<DicePanel,null>)=>{setDicePanel(p=>p===next?null:next);setMobileToolsOpen(false);};
+  useEffect(()=>{
+    if(!dicePanel)return;
+    const place=()=>{const bar=toolbarRef.current;if(!bar)return;setDiceDock(diceDockPosition(bar.getBoundingClientRect(),window.innerWidth,window.innerHeight));};
+    place();window.addEventListener("resize",place);return()=>window.removeEventListener("resize",place);
+  },[dicePanel]);
   const [mobileHeaderOpen,setMobileHeaderOpen]=useState(false);
   const [mobilePanelExpanded,setMobilePanelExpanded]=useState(false);
   const selectionLabel = selectionScope === "exploration" ? "points of interest" : selectionScope === "scenes" ? "tokens and AoEs" : selectionScope === "effects" ? "AoEs" : selectionScope === "fog" ? "fog regions" : selectionScope === "measurements" ? "measurements" : selectionScope === "tokens" ? "tokens" : "nothing (open a map sidebar section)";
@@ -989,6 +1002,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <Shield size={21} />
             <span>Conditions</span>
           </button>
+          <button className="mobile-only" aria-expanded={dicePanel==="dice"} aria-controls="standard-dice-tray" onClick={()=>toggleDicePanel("dice")} title="Dice tray"><Dices size={21} aria-hidden="true" /><span>Dice</span></button>
+          <button className="mobile-only" aria-expanded={dicePanel==="log"} aria-controls="local-roll-log" onClick={()=>toggleDicePanel("log")} title="Roll log"><ScrollText size={21} aria-hidden="true" /><span>Roll log</span></button>
           <div className="rail-spacer" />
 
           <button onClick={() => setDialog("help")} title="Help">
@@ -1932,7 +1947,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             onView={setView}
             onMeasure={setMeasure}
           />
-          <div className="toolbar" role="toolbar" aria-label="Map tools">
+          <div className="toolbar" role="toolbar" aria-label="Map tools" ref={toolbarRef}>
             {tools.map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -1949,6 +1964,15 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <button onClick={addToken} title="Add token">
               <Plus size={20} />
               <span>Token</span>
+            </button>
+            <div className="toolbar-divider dice-tool" />
+            <button className={"dice-tool "+(dicePanel==="dice"?"active":"")} aria-expanded={dicePanel==="dice"} aria-controls="standard-dice-tray" onClick={()=>toggleDicePanel("dice")} title="Dice tray">
+              <Dices size={20} aria-hidden="true" />
+              <span>Dice</span>
+            </button>
+            <button className={"dice-tool "+(dicePanel==="log"?"active":"")} aria-expanded={dicePanel==="log"} aria-controls="local-roll-log" onClick={()=>toggleDicePanel("log")} title="Roll log">
+              <ScrollText size={20} aria-hidden="true" />
+              <span>Roll log</span>
             </button>
           </div>
           <footer className="map-footer">
@@ -1982,6 +2006,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         accept="application/json,.json"
         onChange={(e) => void restore(e.target.files?.[0])}
       />
+      <StandardDiceTray panel={dicePanel} onPanelChange={setDicePanel} style={diceDock} />
       {notice && (
         <div className="toast" role="status">
           {notice}

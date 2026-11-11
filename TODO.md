@@ -59,7 +59,8 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Part 1, visible bugs (handoff 1.1, 1.2, 1.3, 1.7): dice tray characters fixed, Maptable header and in-dialog links styled, signed-in account page shows a summary instead of the sign-in form, "1 token" pluralization, "Move scene to" wording, Map Creator Width/Height labels, labelled the blank-scene and remove-scene buttons.
 - [ ] 1.7 leftover: the handoff saw one unlabelled button inside "Initiative order & settings"; a source scan found none, so recheck in a browser with initiative entries.
-- [ ] Next: 1.4 dice tray placement and z-index scale, then 1.5/1.6, then the order in the handoff.
+- [x] Part 2, dice placement (handoff 1.4): the tray mounts on the Maptable board only, Dice and Roll log are tool bar buttons on desktop and Tools sheet buttons on phones, the tray opens above the tool bar, and the tray, dialogs, notices and drag ghost use the `--z-*` scale in globals.css. Remaining raw z-index values are local to their components.
+- [ ] Next: 1.5/1.6 clipping and text sizes, then the order in the handoff.
 
 ## Map acceptance and maintenance
 

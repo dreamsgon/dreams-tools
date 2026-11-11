@@ -3,8 +3,8 @@ import {api} from '@/lib/api';
 import type {MapRollRequest,MapRollContext} from '@/lib/map-rolls';
 
 
-import {useEffect,useRef,useState} from 'react';
-import {Dices,ChevronDown,Volume2,VolumeX,X,ScrollText} from 'lucide-react';
+import {useEffect,useRef,useState,type CSSProperties} from 'react';
+import {Volume2,VolumeX,X} from 'lucide-react';
 import {clearLocalRollLog,readLocalRollLog,recordLocalRoll,subscribeLocalRollLog,type LocalRollEntry} from '@/lib/local-roll-log';
 import {physicalRoll,rollDice,takePhysicalDice} from '@/lib/rolls';
 import {unlockDiceAudio} from '@/lib/dice-audio';
@@ -14,11 +14,16 @@ const sides=[4,6,8,10,12,20,100];
 type Entry={id:string;formula:string;total:number;detail:string;context?:MapRollContext};
 const historyKey='rpg-standard-dice-history-v1';
 function DieIcon({sides}:{sides:number}){return <svg viewBox="0 0 40 40" aria-hidden="true"><path d={sides===4?'M20 4 37 34H3Z':sides===6?'M6 6H34V34H6Z':sides===8?'M20 3 36 20 20 37 4 20Z':'M20 3 35 12 35 29 20 37 5 29 5 12Z'}/><path className="die-lines" d={sides===4?'M20 4V25L3 34M20 25 37 34':sides===6?'M6 6 13 13H34M13 13V34':sides===8?'M4 20H36M20 3V37':'M5 12 20 9 35 12 29 28 20 37 11 28 5 12M20 9 11 28H29Z'}/></svg>}
-export default function StandardDiceTray(){
+export type DicePanel='dice'|'log'|null;
+/** The board owns which panel is open; the tray only renders it. `style` positions the dock above the board tool bar. */
+export default function StandardDiceTray({panel,onPanelChange,style}:{panel:DicePanel;onPanelChange:(panel:DicePanel)=>void;style?:CSSProperties}){
+ const panelChange=useRef(onPanelChange);useEffect(()=>{panelChange.current=onPanelChange;},[onPanelChange]);
+ const open=panel==='dice',logOpen=panel==='log';
+ const setOpen=(next:boolean)=>panelChange.current(next?'dice':null),setLogOpen=(next:boolean)=>{if(!next)panelChange.current(null);};
  const [shareStatus,setShareStatus]=useState(''),[sharing,setSharing]=useState(false);
- const [logOpen,setLogOpen]=useState(false),[rollLog,setRollLog]=useState<LocalRollEntry[]>([]);
+ const [rollLog,setRollLog]=useState<LocalRollEntry[]>([]);
  useEffect(()=>{const refresh=()=>setRollLog([...readLocalRollLog()]);refresh();return subscribeLocalRollLog(refresh);},[]);
- const [open,setOpen]=useState(false),[counts,setCounts]=useState<Record<number,number>>({}),[modifier,setModifier]=useState(0),[custom,setCustom]=useState<string|null>(null),[history,setHistory]=useState<Entry[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[muted,setMuted]=useState(false),[throwing,setThrowing]=useState<{dice:PhysicalDie[];entry:Entry}|null>(null);
+ const [counts,setCounts]=useState<Record<number,number>>({}),[modifier,setModifier]=useState(0),[custom,setCustom]=useState<string|null>(null),[history,setHistory]=useState<Entry[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[muted,setMuted]=useState(false),[throwing,setThrowing]=useState<{dice:PhysicalDie[];entry:Entry}|null>(null);
  const canvas=useRef<HTMLCanvasElement>(null),alive=useRef(true);
  useEffect(()=>{alive.current=true;try{const h=JSON.parse(localStorage.getItem(historyKey)||'[]');if(Array.isArray(h))setHistory(h.filter(e=>typeof e?.id==='string'&&typeof e?.formula==='string'&&typeof e?.detail==='string'&&Number.isFinite(e?.total)).slice(0,30));setMuted(localStorage.getItem('rpg-tray-muted')==='true');}catch{}return()=>{alive.current=false;};},[]);
  const formula=custom!==null?custom.trim():sides.filter(s=>counts[s]).map(s=>`${counts[s]}d${s}`).join('+')+(modifier?(modifier>0?'+':'')+modifier:'');
@@ -27,8 +32,8 @@ export default function StandardDiceTray(){
  useEffect(()=>{const handler=(event:Event)=>{const request=(event as CustomEvent<MapRollRequest>).detail;if(!request?.formula||!request.context)return;setOpen(true);setCustom(request.formula);void roll(request.formula,{...request.context});};window.addEventListener('maptable-tray-roll',handler);return()=>window.removeEventListener('maptable-tray-roll',handler);});
  async function share(entry:Entry){if(!entry.context?.campaignId)return;setSharing(true);setShareStatus('');try{await api('/api/discord/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'roll',...entry.context,formula:entry.formula,total:entry.total,detail:entry.detail})});setShareStatus('Roll posted to Discord.');}catch(e){setShareStatus((e as Error).message);}finally{setSharing(false);}}
  async function roll(requestedFormula=formula,context?:MapRollContext){if(busy)return;setShareStatus('');setBusy(true);setError('');try{void unlockDiceAudio();const r=await physicalRoll(()=>rollDice(requestedFormula));const dice=takePhysicalDice(r);if(!alive.current)return;setThrowing({dice,entry:{id:crypto.randomUUID(),formula:r.formula,total:r.total,context,detail:r.parts.map(p=>p.count?`${p.sign<0?'−':''}[${p.dice.join(', ')}]`:`${p.subtotal>=0?'+':''}${p.subtotal}`).join(' ')}});}catch(e){setError((e as Error).message);setBusy(false);}}
- return <div className="standard-dice-dock">{throwing&&<div className="standard-dice-animation" aria-hidden="true"><canvas ref={canvas}/></div>}
- <div className="dice-dock-toggles"><button className="dice-tray-toggle" aria-expanded={open} aria-controls="standard-dice-tray" onClick={()=>{setOpen(v=>!v);setLogOpen(false);}}><Dices size={19}/> Dice tray {open&&<ChevronDown size={16}/>}</button><button className="dice-tray-toggle" aria-expanded={logOpen} aria-controls="local-roll-log" onClick={()=>{setLogOpen(v=>!v);setOpen(false);}}><ScrollText size={19}/> Roll log {logOpen&&<ChevronDown size={16}/>}</button></div>
+ return <div className="standard-dice-dock" style={style}>{throwing&&<div className="standard-dice-animation" aria-hidden="true"><canvas ref={canvas}/></div>}
+ 
  <section id="local-roll-log" className="standard-dice-tray local-roll-log" hidden={!logOpen} aria-label="Local roll log"><header><div><strong>Roll log</strong><small>Last 100 rolls · stored on this device</small></div><button disabled={!rollLog.length} onClick={clearLocalRollLog}>Clear log</button><button aria-label="Close roll log" onClick={()=>setLogOpen(false)}><X size={18}/></button></header>{rollLog.length?<ol>{rollLog.map(entry=><li key={entry.id}><b>{entry.total}</b><div><strong>{entry.label}</strong><small>{entry.breakdown}</small>{entry.outcome&&<span className="roll-log-outcome">{entry.outcome}</span>}<time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleString()}</time></div></li>)}</ol>:<p>No rolls yet. Dice tray and character rolls appear here.</p>}</section>
  <section id="standard-dice-tray" className="standard-dice-tray" hidden={!open} aria-label="Standard dice tray">
  <header><div><strong>Dice tray</strong><small>Quick rolls · saved on this device</small></div><button title={muted?'Unmute dice':'Mute dice'} aria-label={muted?'Unmute dice':'Mute dice'} aria-pressed={muted} onClick={()=>setMuted(m=>{try{localStorage.setItem('rpg-tray-muted',String(!m));}catch{}return !m;})}>{muted?<VolumeX size={18}/>:<Volume2 size={18}/>}</button><button aria-label="Close dice tray" onClick={()=>setOpen(false)}><X size={18}/></button></header>

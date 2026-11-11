@@ -2,6 +2,17 @@
 .map-import-preview {display:flex;align-items:center;justify-content:center;background:var(--ui-surface-edf0e8);border:1px solid var(--ui-border-dce4d6);border-radius:7px;padding:8px;max-height:220px;overflow:hidden;}
 .map-import-preview canvas {max-width:100%;max-height:200px;object-fit:contain;}
 :root {
+  /* Stacking order for anything that floats. Use these instead of new numbers.
+     map controls < phone sheets < header < floating panels (dice, drop targets)
+     < dice roll animation < dialogs < notices < drag ghost. */
+  --z-map-controls: 5;
+  --z-sheet: 25;
+  --z-header: 30;
+  --z-floating: 60;
+  --z-dice-roll: 90;
+  --z-modal: 200;
+  --z-toast: 250;
+  --z-drag: 1000;
   --bg: #e9edf1;
   --panel: #fff;
   --ink: #202c39;
@@ -800,7 +811,7 @@ small {
   inset: 0;
   background: #14291d70;
   backdrop-filter: blur(3px);
-  z-index: 20;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -937,7 +948,7 @@ small {
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 30;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 15px;
@@ -1288,7 +1299,7 @@ small {
 .organizer-drag-status { color: var(--ui-text-285c46); }
 .organizer-item .organizer-scene { min-width: 0; }
 
-.organizer-drag-status:not(:empty) { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 50; max-width: calc(100vw - 32px); padding: 10px 16px; border: 1px solid var(--ui-border-9bb6a0); border-radius: 8px; background: var(--ui-surface-f4faf2); pointer-events: none; }
+.organizer-drag-status:not(:empty) { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: var(--z-toast); max-width: calc(100vw - 32px); padding: 10px 16px; border: 1px solid var(--ui-border-9bb6a0); border-radius: 8px; background: var(--ui-surface-f4faf2); pointer-events: none; }
 
 @media (pointer: coarse) {
   .organizer-grip, .organizer-row > .organizer-grip:first-child { flex-basis: 44px; min-height: 44px; }
@@ -1298,8 +1309,8 @@ small {
 .organizer-root small { font-size: 11px; font-weight: normal; opacity: .7; }
 .organizer [data-dragging="true"] { opacity: .45; }
 .organizer [data-folder-drop] { border-radius: 8px; transition: background-color .12s, outline-color .12s; }
-.organizer-drag-ghost { position: fixed; left:0; top:0; z-index:1000; pointer-events:none; display:flex; gap:8px; align-items:center; max-width:190px; padding:10px 14px; border-radius:8px; background:#285c46; color:white; box-shadow:0 5px 18px #0003; will-change:transform; }
-.campaign-drop-targets { position:fixed; right:16px; top:90px; z-index:60; display:grid; gap:8px; max-width:min(300px,calc(100vw - 32px)); max-height:45vh; overflow:auto; padding:14px; background:var(--ui-surface-f6faf2); border:1px solid var(--ui-border-9bb6a0); border-radius:10px; }
+.organizer-drag-ghost { position: fixed; left:0; top:0; z-index:var(--z-drag); pointer-events:none; display:flex; gap:8px; align-items:center; max-width:190px; padding:10px 14px; border-radius:8px; background:#285c46; color:white; box-shadow:0 5px 18px #0003; will-change:transform; }
+.campaign-drop-targets { position:fixed; right:16px; top:90px; z-index:var(--z-floating); display:grid; gap:8px; max-width:min(300px,calc(100vw - 32px)); max-height:45vh; overflow:auto; padding:14px; background:var(--ui-surface-f6faf2); border:1px solid var(--ui-border-9bb6a0); border-radius:10px; }
 .campaign-drop-targets button { font-size:12px; }
 .campaign-assets { display:grid; gap:14px; }
 .campaign-assets label { display:grid; gap:6px; font-size:12px; }
@@ -1326,7 +1337,7 @@ small {
 .creator-stage { flex:1; min-width:0; overflow:auto; padding:28px; background:var(--ui-surface-d9dfd4); }
 .creator-stage svg { box-shadow:0 3px 16px #0002; }
 .creator-message { padding:8px 18px; background:var(--ui-surface-e5f0df); font-size:12px; }
-.creator-prompt { position:fixed; inset:0; background:#0006; display:grid; place-items:center; z-index:100; }
+.creator-prompt { position:fixed; inset:0; background:#0006; display:grid; place-items:center; z-index:var(--z-modal); }
 .creator-prompt > div { background:var(--ui-surface-ffffff); padding:24px; border-radius:12px; max-width:90vw; }
 @media(max-width:700px) {
  .creator-header { padding:10px; gap:6px; } .creator-header h1 { width:100%; } .creator-header button { font-size:11px; }
@@ -1928,7 +1939,7 @@ h3 { color:var(--ink); font-size:13px; }
 }
 @media(max-width:799px) {
  .app-shell .map-topbar {overflow-y:hidden;scrollbar-width:none;}
- body:has(.app-shell) .modal-backdrop {z-index:200;inset:0;}
+ body:has(.app-shell) .modal-backdrop {z-index:var(--z-modal);inset:0;}
  body:has(.app-shell) .modal {height:100dvh;box-sizing:border-box;}
  body:has(.app-shell) .modal .manual-save-controls {position:sticky;bottom:-16px;z-index:3;background:var(--panel);padding:10px 0;}
 }
@@ -1943,8 +1954,6 @@ h3 { color:var(--ink); font-size:13px; }
  .app-shell .side-panel.resizable-sidebar {bottom:48px;}
  .app-shell[data-panel-expanded="true"] .side-panel {height:calc(100% - 48px);max-height:calc(100% - 48px);}
  .app-shell[data-mobile-tools="true"] .rail {bottom:48px;}
- body:has(.app-shell) .standard-dice-dock {display:none;}
- body:has(.app-shell .header-actions[data-mobile-open="true"]) .standard-dice-dock {display:block;z-index:35;bottom:6px;}
 }
 .crop-controls {display:flex;justify-content:flex-end;align-items:flex-start;gap:6px;flex-wrap:wrap;}
 .crop-quick-actions {display:flex;gap:6px;pointer-events:auto;}
@@ -1991,3 +2000,7 @@ h3 { color:var(--ink); font-size:13px; }
 .account-tools span { font-size:13px; color:var(--muted); }
 .account-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:16px; border-top:1px solid var(--line); }
 @media(max-width:480px) { .account-tools { grid-template-columns:minmax(0,1fr); } }
+
+/* Dice and Roll log: tool bar buttons on desktop, Tools sheet buttons on phones. */
+@media(max-width:799px) { .app-shell .toolbar .dice-tool { display:none; } }
+@media(min-width:800px) { .app-shell .rail .mobile-only { display:none; } }
