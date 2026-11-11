@@ -1,0 +1,8 @@
+.token-editor-tabs { min-width: 0; }
+.token-editor-tablist { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line, #454545); }
+.token-editor-tablist [role="tab"] { flex: 1 0 auto; padding: 8px 10px; }
+.token-editor-tablist [aria-selected="true"] { background: var(--accent, #d69b36); color: #161616; border-color: var(--accent, #d69b36); font-weight: 700; }
+.token-editor-tablist [role="tab"]:focus-visible { outline: 2px solid var(--accent, #d69b36); outline-offset: 2px; }
+.token-editor-panel { display: grid; gap: 12px; min-width: 0; }
+
+.token-editor-panel[hidden] { display: none; }

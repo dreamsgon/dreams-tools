@@ -1,0 +1,54 @@
+.campaign-assets .asset-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100px, 100%), 1fr));
+  gap: 10px;
+  align-items: start;
+}
+.campaign-assets .asset-gallery-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.campaign-assets .asset-gallery-card.is-selected {border-color: var(--green);}
+.campaign-assets .asset-gallery-card[data-dragging] {opacity: .55;}
+.campaign-assets .asset-gallery-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.campaign-assets .asset-gallery-preview > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+}
+.campaign-assets .asset-gallery-token > img {border-radius: 50%;padding: 12px;}
+.campaign-assets .asset-gallery-preview .organizer-grip {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-height: 28px;
+  width: 26px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.campaign-assets .asset-gallery-caption {display: grid;gap: 5px;padding: 9px;}
+.campaign-assets .asset-gallery-caption strong {font-size: 12px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;}
+.campaign-assets .asset-gallery-caption small {font-size: 10px;color: var(--muted);overflow-wrap: anywhere;}
+.campaign-assets .asset-gallery-caption button {justify-content: space-between;width: 100%;font-size: 11px;min-height: 28px;padding: 4px 7px;margin-top: 3px;}
+.campaign-assets .asset-gallery-caption button[aria-expanded="true"] svg {transform: rotate(90deg);}
+.campaign-assets .asset-gallery-card .asset-item-details {gap: 9px;padding: 9px;}
+.campaign-assets .asset-gallery-card .asset-item-details label {min-width: 0;font-size: 11px;}
+.campaign-assets .asset-gallery-card .asset-item-details input,
+.campaign-assets .asset-gallery-card .asset-item-details select {width: 100%;min-width: 0;}
+

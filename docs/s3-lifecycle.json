@@ -1,0 +1,17 @@
+{
+  "Rules": [
+    {
+      "ID": "ExpireMaptableTemporaryTransfers",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "maptable/transfers/"
+      },
+      "Expiration": {
+        "Days": 1
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 1
+      }
+    }
+  ]
+}

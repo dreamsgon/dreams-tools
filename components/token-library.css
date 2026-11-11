@@ -1,0 +1,46 @@
+.saved-token-library > .button-row { display: flex; gap: 4px; }
+.saved-token-library > .button-row button { flex: 1; padding: 7px 5px; font-size: 12px; }
+.saved-token-library > .button-row button[aria-pressed="true"] { background: #273e38; border-color: #57aa88; }
+.saved-token-library .library-row { display: flex; align-items: center; gap: 5px; }
+.saved-token-library .library-row > button:first-child { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px; text-align: left; }
+.saved-token-library .library-row > button:last-child { flex: 0 0 30px; padding: 6px; }
+.saved-token-library .token-avatar { flex: 0 0 29px; width: 29px; height: 29px; }
+.saved-token-label { display: grid; min-width: 0; gap: 2px; }
+.saved-token-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.saved-token-label small { color: #9ca6b4; font-size: 10px; font-weight: 400; }
+.party-marker-callout { padding: 10px; margin: 10px 0; border: 1px solid #78613a; border-radius: 8px; background: #d69b360b; }
+.party-marker-callout > strong { font-size: 12px; }
+.party-marker-callout p { font-size: 11px; line-height: 1.5; margin: 5px 0 8px; color: #9ca6b4; }
+.party-marker-callout button { margin-right: 5px; margin-bottom: 3px; font-size: 11px; padding: 6px 8px; }
+
+.saved-token-library { min-width: 0; }
+.token-folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(110px, 100%), 1fr)); gap: 4px; margin: 4px 0 8px; }
+.token-folder-grid > .asset-list-item { margin: 0; min-width: 0; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--ui-surface-ffffff); }
+.token-folder-grid .asset-drag-row { align-items: flex-start; gap: 2px; }
+.token-folder-grid .organizer-grip { padding: 2px 0; width: 12px; min-width: 12px; }
+.saved-token-library .token-folder-grid .library-row { position: relative; display: block; }
+.saved-token-library .token-folder-grid .library-row > button:first-child { width: 100%; flex-direction: column; gap: 3px; padding: 3px 12px 3px 0; text-align: center; background: transparent; border: 0; }
+.saved-token-library .token-folder-grid .library-row > button:last-child { position: absolute; right: 0; top: 0; width: 25px; padding: 4px; }
+.saved-token-library .token-folder-grid .token-avatar { flex: 0 0 40px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; font-size: 14px; }
+.saved-token-library .token-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.token-folder-grid .saved-token-label { width: 100%; }
+.token-folder-grid .saved-token-label strong { white-space: normal; overflow-wrap: anywhere; }
+.token-folder-grid .saved-token-label strong { font-size: 11px; line-height: 1.15; }
+.token-folder-grid .saved-token-label small { font-size: 9px; line-height: 1.1; }
+.token-gallery-organizer .organizer-children { margin-left: 9px; padding-left: 6px; border-left: 1px solid var(--line); }
+.token-gallery-organizer .organizer-row { min-width: 0; }
+.token-gallery-organizer .organizer-row > button:last-child { min-width: 0; }
+.token-gallery-organizer .organizer-row > button:last-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.token-library-editor { display: grid; gap: 12px; }
+
+.saved-token-library > .token-roster-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.saved-token-library > .token-roster-filters button { padding: 5px 4px; font-size: 11px; }
+.saved-token-library h3 { margin: 8px 0 5px; }
+.saved-token-library > label { margin: 5px 0; gap: 3px; }
+.saved-token-library .token-gallery-organizer > .asset-drag-status:empty { display: none; }
+.saved-token-library .token-gallery-organizer > .muted { margin: 4px 0; font-size: 11px; }
+.saved-token-library .token-gallery-organizer > input { padding: 6px 8px; }
+.saved-token-library .asset-folder-toolbar { margin: 4px 0; }
+.saved-token-library .folder-view-actions { margin: 4px 0; }
+.saved-token-library .token-gallery-organizer .button-row button,
+.saved-token-library .folder-view-actions button { padding: 4px 6px; font-size: 11px; }

@@ -1,0 +1,14 @@
+.sidebar-resizer { display:none; }
+@media(min-width:701px) {
+ aside.resizable-sidebar { position:relative; width:var(--sidebar-width); min-width:0; flex-shrink:0; }
+ .sidebar-resizer { display:block; position:absolute; top:0; bottom:0; width:8px; z-index:12; cursor:col-resize; touch-action:none; background:transparent; }
+ .sidebar-resizer-right { right:0; }
+ .sidebar-resizer-left { left:0; }
+ .sidebar-resizer::after { content:""; position:absolute; top:0; bottom:0; width:2px; left:3px; background:var(--line); }
+ .sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after, [data-resizing]>.sidebar-resizer::after { background:var(--green); width:3px; }
+ .sidebar-resizer:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
+ aside.resizable-sidebar[data-resizing] { user-select:none; }
+}
+
+@media(min-width:701px) { aside.resizable-sidebar.creator-controls, aside.resizable-sidebar.creator-layer-panel { flex-basis:var(--sidebar-width); } }
+@media(max-width:700px) { .creator-layout aside.resizable-sidebar { width:auto; } .creator-layout .sidebar-resizer { display:none; } }
