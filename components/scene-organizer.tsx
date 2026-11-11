@@ -1,5 +1,6 @@
 "use client";
 import { useFolderExpansion } from "./folder-expansion";
+import { countLabel } from "@/lib/plural";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Folder, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Map as MapIcon } from "lucide-react";
@@ -141,7 +142,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     {grip({kind:"scene",id:s.id,name:s.name})}<button
     className={"organizer-scene " + (w.activeId === s.id ? "active" : "")}
     onClick={() => { setLocation(s.containerId); activate(s.id); }}>
-    <MapIcon size={16} /><span><strong>{s.name}</strong><small>{query ? collectionPath(w.collections, s.containerId) : `${s.tokens.length} tokens`}</small></span>
+    <MapIcon size={16} /><span><strong>{s.name}</strong><small>{query ? collectionPath(w.collections, s.containerId) : countLabel(s.tokens.length,"token")}</small></span>
   </button></div>;
   const collectionButton = (c: Collection, searched = false) => <>
     <button className="collection-primary" onClick={() => c.kind === "campaign" && dashboard ? openCampaign?.(c.id) : setLocation(c.id)}>
@@ -188,7 +189,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
       {w.collections.filter((c) => (dashboard || c.kind !== "campaign") && inScope(c.parentId) && collectionPath(w.collections, c.id).toLowerCase().includes(query)).map((c) => <div key={c.id} className="organizer-row" {...(c.kind === "folder" ? dropProps(c.id) : {})}>{grip({kind:"collection",id:c.id,name:c.name})}{collectionButton(c, true)}</div>)}
       {!dashboard && w.scenes.filter((s) => inScope(s.containerId) && `${s.name} ${collectionPath(w.collections, s.containerId)}`.toLowerCase().includes(query)).map(sceneRow)}
     </> : tree(rootId)}</div>
-    {dashboard && !w.collections.some((c) => c.kind === "campaign") && <p className="muted">Create your first campaign above. Your existing maps are available under Unfiled scenes; use Move scene to to add them to a campaign.</p>}
+    {dashboard && !w.collections.some((c) => c.kind === "campaign") && <p className="muted">Create your first campaign above. Your existing maps are available under Unfiled scenes; use Move scene to add them to a campaign.</p>}
     {current && current.id !== rootId && <div className="organizer-editor">
       {dashboard && current.kind === "campaign" && <button className="primary" onClick={() => openCampaign?.(current.id)}>Open campaign</button>}
       <h3>{current.kind === "campaign" ? "Campaign" : "Folder"} details</h3>

@@ -1972,3 +1972,22 @@ h3 { color:var(--ink); font-size:13px; }
 
 .map-type-actions { flex-wrap:wrap; margin:10px 0; }
 .map-type-actions button { min-width:0; white-space:normal; flex:1 1 120px; min-height:44px; }
+
+/* Links in the Maptable header and in dialogs */
+.header-actions .header-link { display:inline-flex; align-items:center; gap:6px; min-height:38px; padding:8px 12px; border:1px solid transparent; border-radius:7px; color:var(--chrome-text); font-weight:600; text-decoration:none; }
+.header-actions .header-link svg { color:#70d8cc; }
+.header-actions .header-link:hover { background:#273544; border-color:#536477; }
+.header-actions .header-link:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.modal a, .modal a:visited { color:var(--green); font-weight:600; text-decoration:underline; text-underline-offset:3px; }
+.modal a:hover { text-decoration-thickness:2px; }
+.modal a:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:3px; }
+
+/* Account page, signed in */
+.account-tools { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:20px 0; }
+.account-tools a { display:flex; flex-direction:column; gap:4px; padding:16px; border:1px solid var(--line); border-radius:6px; color:var(--ink); text-decoration:none; }
+.account-tools a:hover { border-color:var(--green); background:var(--green-soft); }
+.account-tools a:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.account-tools strong { font-size:16px; }
+.account-tools span { font-size:13px; color:var(--muted); }
+.account-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:16px; border-top:1px solid var(--line); }
+@media(max-width:480px) { .account-tools { grid-template-columns:minmax(0,1fr); } }

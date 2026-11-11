@@ -1,5 +1,6 @@
 "use client";
 import {readJsonResponse} from "@/lib/transfer-client";
+import { countLabel } from "@/lib/plural";
 import { attachSceneMap } from "@/lib/scene-map";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
@@ -52,6 +53,7 @@ import {
   Check,
   HelpCircle,
   UserRound,
+  BookOpen,
 } from "lucide-react";
 import Board, { type View } from "./board";
 import CampaignAssets from "./campaign-assets";
@@ -881,7 +883,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   if (dashboard) return <main className="campaign-dashboard">
-    <header><div className="brand"><MapIcon size={25} /><a href="/" title="RPG Tools home">Maptable</a></div><div className="header-actions"><a href="/encyclopedia" title="Open RPG Encyclopedia">Encyclopedia</a><span className="save-state" role="status">{saveStatus}</span><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><ThemeToggle/></div></header>
+    <header><div className="brand"><MapIcon size={25} /><a href="/" title="RPG Tools home">Maptable</a></div><div className="header-actions"><a className="header-link" href="/encyclopedia" title="Open RPG Encyclopedia"><BookOpen size={16} aria-hidden="true" />Encyclopedia</a><span className="save-state" role="status">{saveStatus}</span><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><ThemeToggle/></div></header>
     <div className="dashboard-content">
       <h1>Campaigns</h1><p>Choose a campaign to open its scenes. Organize campaigns into folders here.</p>
       {saveRecovery}
@@ -1058,7 +1060,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                         setSelected(null);
                       }}
                     >
-                      <Plus size={18} />
+                      <Plus size={18} aria-hidden="true" />Blank
                     </button>
                   </div>
                   <div className="button-row map-type-actions"><button onClick={()=>{setNewMapType("world");setDialog("add-scenes");}}>New World Map</button><button onClick={()=>{setNewMapType("area");setDialog("add-scenes");}}>New Area Map</button></div>
@@ -1157,7 +1159,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                         setNotice("Scene removed. Use Undo to restore it.");
                       }}
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={15} aria-hidden="true" />
+                      Remove scene
                     </button>
                   </div>
                   <hr />
@@ -1856,7 +1859,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </button>}
             <div className="map-title">
               {measure ||
-                `${scene.tokens.length} tokens · ${scene.effects.length} effects`}
+                `${countLabel(scene.tokens.length,"token")} · ${countLabel(scene.effects.length,"effect")}`}
             </div>
             {!player && <button aria-pressed={hideFog} onClick={()=>setHideFog(v=>!v)} aria-label={hideFog?"Restore fog":"Hide fog"} title="Temporarily hide fog in your GM view only">
               {hideFog ? <Eye size={17}/> : <EyeOff size={17}/>}
