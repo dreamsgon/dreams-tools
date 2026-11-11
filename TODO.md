@@ -23,6 +23,8 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Add campaign-scoped, read-only encyclopedia MCP keys and revocation.
 - [x] Test encyclopedia account isolation, concurrent saves, player filtering and fog-image access.
 
+- [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
+
 ## Owner setup and deployment
 
 - [x] Publish application source at the root of the owner's public `dreamsgon/dreams-tools` repository on `main`.

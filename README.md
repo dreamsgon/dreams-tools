@@ -31,6 +31,10 @@ npm start
 
 `test:http` starts and stops its own production server on an available local port after a build. It checks unauthenticated boundaries without live cloud writes. All commands run from this folder.
 
+## Updating the live app
+
+Follow the [safe update workflow in AGENTS.md](AGENTS.md#safe-updates-to-the-deployed-app). Start from current GitHub main, use a separate branch and pull request, run the required checks, and verify the Vercel deployment after an authorized merge. All assistants share this workflow; old ZIPs are not the source of truth.
+
 ## Files for contributors
 
 - [AGENTS.md](AGENTS.md): shared rules for Codex, Claude, T3Code, DeepSeek, and Grok.

@@ -14,6 +14,30 @@ Work on RPG Tools: Maptable and the RPG Encyclopedia. Keep map features and the 
 4. Run npm run typecheck, relevant tests (npm test for the full included suite), and npm run build plus npm run test:http for runtime changes. Report failures and unrun checks accurately.
 5. Update TODO.md with what changed and remaining work. Hand off the branch/commit, files changed, verification, and blockers. Do not mark browser or live-service checks complete based only on unit tests.
 
+## Safe updates to the deployed app
+
+GitHub repository https://github.com/dreamsgon/dreams-tools is the source of truth. Production is https://dreams-tools-sable.vercel.app. Vercel automatically builds and deploys changes that reach `main`; pushing or merging into `main` affects the live app.
+
+1. Start from the latest remote `main`. Check `git status` and the remote URL before editing; preserve uncommitted work. Fetch first and use a fast-forward update for a clean local main branch. Never reset someone else's work or treat an older ZIP as the current source.
+2. Read this file, README.md, DEPLOY_VERCEL.md, TODO.md and docs/DEPLOYMENT_STATUS.md. Use a separate branch and checkout/worktree for each assistant or concurrent task. Codex, Claude, DeepSeek, Grok and T3Code must not edit the same working files concurrently.
+3. Make only the requested changes. Preserve Supabase identity checks, S3 account isolation, saved-data compatibility and conditional saves. Keep explicit byte lengths on signed server-side S3 PUTs. Do not change production credentials, bucket/prefix, authentication or email settings as an incidental part of a feature update.
+4. For runtime changes, use Node 22 and run `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, then `npm run test:http`. Add focused regressions for behavior changes. For documentation-only changes, inspect the diff and links; application tests need not be rerun. Report failures and checks not run.
+5. Update TODO.md and relevant documentation. Review the final diff for unrelated edits, secrets, generated files and private campaign data. Commit and push the task branch, then open a pull request with the problem, resulting behavior, checks and any migration or rollback considerations.
+6. Default to a pull request for review; merge only when the user's instructions authorize that step and required checks pass. Do not infer merge permission solely from a request to implement a feature. If the user already authorized merging/deploying this change, complete it without asking again. Never force-push `main` or bypass required checks.
+7. Before merging, account for changes already merged by other assistants. Resolve conflicts deliberately and rerun affected checks after resolution. Review any preview only after confirming that its environment is configured. Production variables are currently Production-only: do not copy production credentials into previews or point preview writes at production data to make a preview work.
+8. After an authorized merge, wait for the matching Vercel deployment to report Ready. Verify the production site and the changed user flows; for persistence changes, check an authorized save and reload. A successful Git push or build alone is not proof of a working live feature. Report the commit/PR, production URL, verification results and remaining limits.
+9. If the build fails, inspect logs and fix it through the same workflow. If a release breaks production, preserve user data and use a reviewed revert or an authorized Vercel rollback to a known-good deployment. Never delete S3 data or recreate accounts as a deployment repair.
+
+### Data and release safety
+
+App deployments replace code; saved maps, images and encyclopedia data remain in S3, and accounts remain in Supabase. This does not make schema changes automatically safe. Before a storage/schema migration, obtain current private backups, document compatibility and recovery, and verify the migration on isolated data. A code rollback does not undo a data migration. Do not retire old data until the owner has verified the result.
+
+Do not commit `.env` files, credentials, account exports, campaign backups, `node_modules` or build output. Keep secrets in the appropriate service settings. A requested ZIP is a convenience snapshot: rebuild it from the reviewed source, exclude private/generated files, and identify its commit. Do not upload a stale ZIP over the repository.
+
+### Reusable task prompt
+
+> Update dreamsgon/dreams-tools. Read AGENTS.md first and start from the latest main branch. Work on a separate branch, preserve existing data and account isolation, run the required checks, update TODO.md, and open a pull request. Never commit credentials. Report what changed, how it was verified, and any deployment or migration steps still needed.
+
 ## Invariants
 
 - Preserve Supabase-verified identity and per-user S3 storage boundaries. There is no mock/header-based sign-in. Never reintroduce one.
