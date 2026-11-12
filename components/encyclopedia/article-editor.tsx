@@ -9,8 +9,10 @@ import {PageHistory,VersionDiff} from './page-history';
 import {StatblockView} from './statblock-view';
 import type {PageVersion} from '@/lib/encyclopedia/history';
 import {CharacterDetails,StatsPanel,ToolDialog,roles} from './character-tools';
-type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:()=>void;onForm:()=>void};
-export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onRename,onDelete,onNew,onForm}:Props){
+import {TagRow} from '@/components/tags';
+import type {Tag} from '@/lib/tags';
+type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:()=>void;onForm:()=>void;onTag?:(tag:Tag)=>void};
+export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onRename,onDelete,onNew,onForm,onTag}:Props){
  const [selected,setSelected]=useState(entry.kind==='map'?'map':'overview'),[details,setDetails]=useState(false),[tabDialog,setTabDialog]=useState<'new'|'rename'|null>(null),[notice,setNotice]=useState('');
  const character=entry.character??defaultCharacter(),custom=entry.tabs??[];
  const editor=useRef<HTMLTextAreaElement>(null);
@@ -35,7 +37,8 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  
  <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind}</span><span>{entry.campaignId?campaign?.name:'Shared world lore'}</span></div>
  <div className="article-title"><h1>{entry.title}</h1><button aria-label="Rename entry" onClick={onRename}><Pencil size={17}/></button></div>
- {entry.kind==='character'&&<div className="character-summary"><button className="button" onClick={()=>setDetails(true)}><Users size={15}/> Character details</button><span>{character.status}</span>{character.location&&<span>{character.location}</span>}{character.faction&&<span>{character.faction}</span>}{character.tags.map(t=><span className="tag" key={t}>{t}</span>)}</div>}
+ {entry.kind!=='folder'&&<TagRow className="article-tags" targets={[`entry:${entry.id}`]} onTagClick={onTag}/>}
+ {entry.kind==='character'&&<div className="character-summary"><button className="button" onClick={()=>setDetails(true)}><Users size={15}/> Character details</button><span>{character.status}</span>{character.location&&<span>{character.location}</span>}{character.faction&&<span>{character.faction}</span>}</div>}
  <div className="article-tabs" role="tablist" aria-label="Article tabs">{tabs.map(t=><button key={t.id} role="tab" aria-selected={active.id===t.id} onClick={()=>setSelected(t.id)}>{t.visibility==='gm'?<EyeOff size={13}/>:<Eye size={13}/>} {t.title}</button>)}<button aria-label="Add tab" disabled={custom.length>=30} onClick={()=>setTabDialog('new')}><Plus size={16}/> Add tab</button></div>
  {!isStatblock&&<div className="tab-controls"><label>Tab visibility<select aria-label="Tab visibility" value={active.visibility} onChange={e=>setVisibility(e.target.value as 'gm'|'players')}><option value="gm">GM only</option><option value="players">Player visible</option></select></label>{tab&&<div className="button-row"><button className="icon-button" aria-label="Rename tab" onClick={()=>setTabDialog('rename')}><Pencil size={15}/></button><button className="icon-button" aria-label="Move tab left" disabled={custom[0].id===tab.id} onClick={()=>reorderTab(-1)}><ArrowUp size={15}/></button><button className="icon-button" aria-label="Move tab right" disabled={custom.at(-1)?.id===tab.id} onClick={()=>reorderTab(1)}><ArrowDown size={15}/></button><button className="icon-button" aria-label="Delete tab" onClick={()=>{if(confirm('Delete this tab and its text?')){update({tabs:custom.filter(t=>t.id!==tab.id)});setSelected('overview');}}}><Trash2 size={15}/></button></div>}</div>}
  {active.visibility==='players'&&<p className="sharing-hint">Visible through this campaign’s player link{entry.campaignId===null?' and player links for other campaigns in this world':''}.{isStats?' Only fields also marked player-visible are included.':''}</p>}

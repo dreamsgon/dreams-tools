@@ -122,3 +122,11 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
   .campaigns-modal-foot { flex-wrap:wrap; }
   .campaigns-modal-foot small { flex-basis:100%; }
 }
+/* Tags */
+.campaigns-name .tag-list-inline { margin-top:6px; }
+.campaigns-name .tag-chip .tag-chip-name { flex-direction:row; align-items:center; gap:5px; padding:3px 8px; font-size:12px; }
+.campaigns-name .tag-chip button:hover { background:none; }
+.campaigns-tag-filter { align-self:center; min-height:30px; font-size:13px; }
+.campaigns-tag-filter .tag-chip-remove { min-height:0; border:0; }
+.campaigns-tags { margin:4px 0 12px; }
+.campaigns-tags .tag-add, .campaigns-tags .tag-chip button { min-height:0; }

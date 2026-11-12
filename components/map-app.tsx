@@ -70,6 +70,7 @@ import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
 import ToolSwitch, { AccountLink } from "./tool-switch";
 import { ActionMenu } from "./popover-menu";
+import { TagRow } from "./tags";
 import Breadcrumbs, { type Crumb } from "./breadcrumbs";
 import SceneSwitcher from "./scene-switcher";
 import CampaignScenes from "./campaign-scenes";
@@ -1194,6 +1195,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       }
                     />
                   </Field>
+                  <div className="field scene-tags"><span>Tags</span><TagRow targets={[`scene:${scene.id}`]}/></div>
                   <Field label="Kind of map"><select value={scene.mapType} onChange={e=>updateScene(s=>{s.mapType=e.target.value as Scene["mapType"];})}><option value="encounter">Encounter map</option><option value="area">Area map</option><option value="world">World map</option></select></Field>
                   <p className="muted">Area and world maps also show up in Explore.</p>
                   <Field label="Campaign and folder">
