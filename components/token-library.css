@@ -44,3 +44,6 @@
 .saved-token-library .folder-view-actions { margin: 4px 0; }
 .saved-token-library .token-gallery-organizer .button-row button,
 .saved-token-library .folder-view-actions button { padding: 4px 6px; font-size: 11px; }
+/* Drag ghost while dragging a token from the library onto the map. Follows the light and dark themes. */
+.token-drag-preview { position:fixed; z-index:11000; pointer-events:none; box-sizing:border-box; max-width:220px; padding:8px 12px; border-radius:var(--radius-lg, 8px); background:var(--panel); color:var(--ink); border:2px solid var(--line-strong); box-shadow:var(--shadow-md); }
+.token-drag-preview[data-ready="true"] { border-color:var(--accent); }
