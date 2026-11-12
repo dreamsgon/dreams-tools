@@ -1,0 +1,60 @@
+/* The RPG Tools home page: three doors, your campaigns, recently edited pages. */
+.home-page { padding-bottom:48px; }
+.home-page a { text-decoration:none; }
+.home-hello { padding:56px 0 28px; }
+.home-hello h1 { margin:0; font-family:var(--font-display); font-size:clamp(32px,calc(4.4vw / var(--ui-zoom, 1)),44px); line-height:1.08; letter-spacing:-.03em; font-weight:600; }
+.home-hello h1 span { color:var(--muted); }
+.home-hello p { margin:10px 0 0; font-size:17px; line-height:1.55; color:var(--muted); max-width:56ch; }
+
+.home-doors { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.home-door { display:flex; gap:16px; padding:22px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg); }
+.home-door-icon { flex:none; display:grid; place-items:center; width:44px; height:44px; border-radius:var(--radius); background:var(--accent-soft); color:var(--accent); }
+.home-door > div { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; }
+.home-page .home-door-label { margin:0; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.home-door h2 { margin:0; font-family:var(--font-display); font-size:21px; line-height:1.2; font-weight:600; letter-spacing:-.01em; }
+.home-page .home-door p:not(.home-door-label) { margin:0 0 8px; font-size:14px; line-height:1.55; color:var(--muted); }
+.home-button { display:inline-flex; align-items:center; min-height:36px; padding:6px 12px; margin-top:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink)!important; font-size:14px; font-weight:500; }
+.home-button:hover { background:var(--chrome-hover); }
+.home-button-primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent)!important; }
+.home-button-primary:hover { background:var(--accent-hover); }
+
+.home-section { margin-top:48px; }
+.home-section-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:10px; border-bottom:1px solid var(--ink); }
+.home-section-head-quiet { border-bottom-color:var(--line); }
+.home-section-head h2 { margin:0; font-size:19px; font-weight:600; }
+.home-section-head > span { display:flex; gap:20px; }
+.home-section-head a, .home-more a, .home-empty a { display:inline-flex; align-items:center; gap:4px; color:var(--accent); font-size:14px; font-weight:500; }
+.home-campaign-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:16px; }
+.home-campaign { display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg); overflow:hidden; }
+/* A plain pattern until campaigns get banner images. */
+.home-campaign-art { position:relative; display:block; height:96px; background:repeating-linear-gradient(135deg,var(--accent-soft) 0 14px,transparent 14px 28px); border-bottom:1px solid var(--line); }
+.home-campaign-art span { position:absolute; left:12px; top:12px; padding:2px 8px; border-radius:999px; background:var(--ink); color:var(--panel); font-size:11px; font-weight:600; }
+.home-campaign-body { display:flex; flex-direction:column; gap:4px; padding:14px 16px 16px; flex:1; }
+.home-campaign h3 { margin:0; font-size:17px; font-weight:600; }
+.home-campaign h3 a { color:var(--ink); }
+.home-campaign h3 a:hover { color:var(--accent); }
+.home-campaign-body > p { margin:0; font-size:13px; color:var(--muted); }
+.home-campaign-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:auto; padding-top:12px; font-size:13px; color:var(--muted); }
+.home-campaign-links { display:flex; gap:16px; }
+.home-campaign-links a { color:var(--accent); font-size:14px; font-weight:500; }
+.home-more, .home-empty { margin:12px 0 0; font-size:13px; color:var(--muted); }
+.home-empty { padding:20px 0; font-size:14px; }
+
+.home-recent { max-width:640px; }
+.home-recent ul { list-style:none; margin:0; padding:0; }
+.home-recent li a { display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--line); color:var(--ink); font-size:14px; }
+.home-recent li a:hover { background:var(--chrome-hover); }
+.home-recent li svg { flex:none; color:var(--muted); }
+.home-recent li span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.home-recent li small { margin-left:10px; color:var(--muted); font-size:12px; }
+.home-recent time { flex:none; color:var(--muted); font-size:12px; }
+.home-account-line { margin:56px 0 0; padding-top:20px; border-top:1px solid var(--line); font-size:14px; color:var(--muted); }
+.home-account-line a { color:var(--accent); }
+
+@media (max-width:900px) {
+  .home-doors, .home-campaign-grid { grid-template-columns:minmax(0,1fr); }
+  .home-hello { padding:36px 0 20px; }
+  .home-section-head { flex-wrap:wrap; }
+  .home-campaign-art { height:56px; }
+  .home-door { padding:18px; }
+}

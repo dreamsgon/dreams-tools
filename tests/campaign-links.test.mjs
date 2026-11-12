@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {campaignSummary,suggestPairs,applyPairs,cleanName} from '../lib/campaign-links.ts';
+import {campaignSummary,homeCampaigns,suggestPairs,applyPairs,cleanName} from '../lib/campaign-links.ts';
 import {workspaceSchema,importCopy,emptyWorkspace} from '../lib/encyclopedia/world-model.ts';
 
 const gh={repository:'',branch:'main'};
@@ -57,4 +57,44 @@ test('saved Encyclopedia data rejects a Maptable campaign paired twice, and impo
   assert.equal(copied.campaigns.some(c=>'maptableCampaignId' in c),false);
   assert.equal(cleanName('  Tomb   of the  Ash King '),'Tomb of the Ash King');
   assert.throws(()=>cleanName('  '),/name/);
+});
+
+const at=(n)=>`2026-02-${String(n).padStart(2,'0')}T00:00:00.000Z`;
+const entry=(id,worldId,campaignId,updatedAt,kind='note')=>({...page(id,campaignId,kind),worldId,updatedAt});
+const dated=(entries,extraWorlds=[])=>workspaceSchema.parse({schemaVersion:1,
+ worlds:[{id:'w1',name:'Ashenwood',description:'',archived:false},{id:'w2',name:'Old',description:'',archived:true},...extraWorlds],
+ campaigns:[{id:'e1',worldId:'w1',name:'Sunless Citadel',description:'',github:gh},{id:'e2',worldId:'w1',name:'Curse of the Ashen Crown',description:'',github:gh},{id:'e3',worldId:'w2',name:'Retired',description:'',github:gh}],
+ entries});
+
+test('recent lists the five newest pages first, with campaign name null for world lore', () => {
+  const b=dated([1,2,3,4,5,6,7].map(n=>entry(`r${n}`,'w1',n===3?null:'e1',at(n))));
+  const {recent}=campaignSummary(null,b);
+  assert.deepEqual(recent.map(r=>r.id),['r7','r6','r5','r4','r3']);
+  assert.deepEqual(recent[0],{id:'r7',title:'r7',kind:'note',campaignName:'Sunless Citadel',worldName:'Ashenwood',updatedAt:at(7)});
+  const lore=campaignSummary(null,dated([entry('lore','w1',null,at(9))])).recent[0];
+  assert.equal(lore.campaignName,null);
+  assert.equal(lore.worldName,'Ashenwood');
+  assert.deepEqual(campaignSummary(null,dated([])).recent,[]);
+});
+
+test('recent skips folders, archived worlds and template worlds', () => {
+  const b=dated([entry('keep','w1','e1',at(1)),entry('dir','w1','e1',at(8),'folder'),entry('old','w2','e3',at(9)),entry('tpl','w3',null,at(10))],[{id:'w3',name:'Template',description:'',archived:false,isTemplate:true}]);
+  assert.deepEqual(campaignSummary(null,b).recent.map(r=>r.id),['keep']);
+});
+
+test('each Encyclopedia campaign reports when its pages last changed, or null with no pages', () => {
+  const b=dated([entry('a','w1','e1',at(2)),entry('b','w1','e1',at(5),'character'),entry('c','w1','e1',at(9),'folder'),entry('d','w1',null,at(12))]);
+  const rows=campaignSummary(null,b).rows;
+  const last=id=>rows.find(r=>r.encyclopedia?.id===id).encyclopedia.lastEdited;
+  assert.equal(last('e1'),at(5),'folders and world lore do not count');
+  assert.equal(last('e2'),null);
+  assert.equal(last('e3'),null);
+});
+
+test('home campaigns are most recently edited first, then by name, without archived ones', () => {
+  const b=dated([entry('a','w1','e1',at(2)),entry('b','w1','e2',at(6)),entry('x','w2','e3',at(20))]);
+  const s=campaignSummary(map,b);
+  assert.deepEqual(homeCampaigns(s).map(r=>r.name),['Curse of the Ashen Crown','Sunless Citadel','Ashen Crown','One-shots','The Sunless Citadel']);
+  assert.equal(homeCampaigns(s).some(r=>r.encyclopedia?.archived),false);
+  assert.equal(s.rows.length,6,'the summary itself is not changed');
 });
