@@ -16,7 +16,7 @@ function writeSaved(list: MapStylePreset[]) { try { localStorage.setItem(SAVED, 
 /** A small sample map drawn in a style, for the preset cards. */
 function Sample({ style, background }: { style: MapStyle | null; background: string }) {
   const floor = style?.floor ?? unstyledColours.floor, wall = style?.wall ?? unstyledColours.wall;
-  const room = (id: string, a: [number, number], b: [number, number]): MapShape => ({ id, name: "", folderId: null, smooth: false, hidden: false, locked: false, type: "rect", roomParts: [], points: [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }], fill: floor, stroke: wall, thickness: 5, closed: true });
+  const room = (id: string, a: [number, number], b: [number, number]): MapShape => ({ id, name: "", folderId: null, smooth: false, hidden: false, locked: false, type: "rect", roomParts: [], stamp: null, rotation: 0, flip: false, points: [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }], fill: floor, stroke: wall, thickness: 5, closed: true });
   const drawing: Pick<MapDrawing, "background" | "style"> = { background, style: style && { ...style, gridSize: 20 } };
   const shapes: MapShape[] = [room("a", [16, 16], [100, 84]), room("b", [100, 40], [184, 104]),
     { ...room("d", [100, 52], [100, 72]), type: "door", stroke: wall, closed: false }];

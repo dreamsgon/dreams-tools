@@ -1,4 +1,5 @@
 import type { MapDrawing, MapShape, Point } from "./model";
+import { stampCorners } from "./map-stamps.ts";
 export function simplifyPoints(points:Point[], tolerance=3):Point[] {
   if(points.length<3)return points;
   const a=points[0],b=points[points.length-1],dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;
@@ -44,6 +45,7 @@ export function moveLayer(d:MapDrawing,id:string,direction:number){const shape=d
 export function shapePath(s: MapShape): string {
   const [a,b] = s.points;
   if(s.type==="merged")return roomPaths(s).join(" ");
+  if(s.type==="stamp"){const c=stampCorners(s);return `M ${c.map(p=>`${p.x} ${p.y}`).join(" L ")} Z`;}
   if(s.type === "rect") return `M ${a.x} ${a.y} H ${b.x} V ${b.y} H ${a.x} Z`;
   if(s.type === "ellipse") {
     const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2, rx=Math.abs(b.x-a.x)/2, ry=Math.abs(b.y-a.y)/2;

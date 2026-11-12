@@ -6,7 +6,8 @@ import { shapeOps, backgroundOps, type DrawOp } from "@/lib/map-style";
 export function DrawOps({ ops, id }: { ops: DrawOp[]; id: string }) {
   return <>{ops.map((op, i) => {
     const path = <path key={i} d={op.d} fill={op.fill ?? "none"} stroke={op.stroke ?? "none"} strokeWidth={op.width} opacity={op.opacity}
-      strokeLinecap={op.cap ?? "round"} strokeLinejoin="round" clipPath={op.clip ? `url(#${id}-clip${i})` : undefined}/>;
+      strokeLinecap={op.cap ?? "round"} strokeLinejoin="round" clipPath={op.clip ? `url(#${id}-clip${i})` : undefined}
+      transform={op.matrix ? `matrix(${op.matrix.join(" ")})` : undefined}/>;
     return op.clip ? <g key={i}><clipPath id={`${id}-clip${i}`}><path d={op.clip}/></clipPath>{path}</g> : path;
   })}</>;
 }
@@ -20,6 +21,7 @@ export default function DrawingShape({ shape: s, drawing, prefix = "shape" }: { 
   const opening = s.type === "door" || s.type === "window";
   return <g data-shape={s.id}>
     <DrawOps ops={shapeOps(s, drawing)} id={`${prefix}-${s.id}`}/>
-    {opening && <path d={shapePath(s)} fill="none" stroke="transparent" strokeWidth={Math.max(16, s.thickness)}/>}
+    {s.type === "stamp" ? <path d={shapePath(s)} fill="transparent" stroke="none"/>
+      : opening && <path d={shapePath(s)} fill="none" stroke="transparent" strokeWidth={Math.max(16, s.thickness)}/>}
   </g>;
 }

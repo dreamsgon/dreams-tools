@@ -12,6 +12,7 @@ export const creatorTools = [
   { id: "path", label: "Freehand", key: "F" },
   { id: "door", label: "Door", key: "D" },
   { id: "window", label: "Window", key: "N" },
+  { id: "stamp", label: "Stamps", key: "S" },
 ] as const;
 export type CreatorTool = typeof creatorTools[number]["id"];
 export const toolForKey = (key: string): CreatorTool | null => creatorTools.find(t => t.key === key.toUpperCase())?.id ?? null;
@@ -50,7 +51,7 @@ export function lineLength(s: Pick<MapShape, "type" | "points">): number {
   return length;
 }
 export function sizeLabel(s: Pick<MapShape, "type" | "closed" | "points">, grid: CreatorGrid): string {
-  if (isArea(s)) { const b = shapeBounds(s); return `${distance(b.w, grid).replace(` ${grid.unit}`, "")} × ${distance(b.h, grid)}`; }
+  if (isArea(s) || s.type === "stamp") { const b = shapeBounds(s); return `${distance(b.w, grid).replace(` ${grid.unit}`, "")} × ${distance(b.h, grid)}`; }
   return distance(lineLength(s), grid);
 }
 
@@ -97,7 +98,7 @@ function outline(type: string, points: Point[], closed: boolean): [Point, Point]
 export function wallSegments(shapes: MapShape[]): WallSegment[] {
   const out: WallSegment[] = [];
   for (const s of shapes) {
-    if (s.type === "door" || s.type === "window") continue;
+    if (s.type === "door" || s.type === "window" || s.type === "stamp") continue;
     // A merged room's wall is drawn twice as wide and half hidden under the floor.
     const thickness = s.type === "merged" ? s.thickness * 2 : s.thickness;
     const parts = s.type === "merged" ? s.roomParts.map(p => outline(p.type, s.points.slice(p.start, p.start + p.count), p.closed)) : [outline(s.type, s.points, s.closed)];
