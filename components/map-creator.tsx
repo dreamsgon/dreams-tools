@@ -2,16 +2,16 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
+import { ArrowLeft, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
 import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
-import DrawingShape, { DrawingBackground } from "./drawing-shape";
+import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
 import UseMapDialog, { pieceArt, type UseChoice } from "./use-map-dialog";
 import { setUpDrawnMapScene } from "@/lib/map-export";
 import type { GeneratedMap } from "@/lib/map-generator";
-import { stampById, stampBox, rotateStamp } from "@/lib/map-stamps";
+import { stampById as libraryStamp, stampBox, rotateStamp, customStamps, customStampAsset } from "@/lib/map-stamps";
 import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
@@ -35,7 +35,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const current=useRef(draft);current.current=draft;
   const [dirty,setDirty]=useState(false), [tool,setTool]=useState<Tool>("rect"), [selected,setSelected]=useState<string|null>(null);
   const [fill,setFill]=useState(initial?.drawing?.style?.floor??unstyledColours.floor),[stroke,setStroke]=useState(initial?.drawing?.style?.wall??unstyledColours.wall),[thickness,setThickness]=useState(14);
-  const [snap,setSnap]=useState(true),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
+  const [snap,setSnap]=useState(true),[join,setJoinState]=useState(()=>{try{return localStorage.getItem("map-creator-join")!=="off";}catch{return true;}}),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
+  // Joining rooms that touch can be turned off; the choice is kept on this device.
+  const setJoin=(on:boolean)=>{setJoinState(on);try{localStorage.setItem("map-creator-join",on?"on":"off");}catch{}};
+  const custom=customStamps(workspace.assets),stampById=(id:string|null|undefined)=>libraryStamp(id,custom);
+  const stampSources=new Map(custom.map(c=>[customStampAsset(c.id)!,c.image!]));
   const grid=gridOf(workspace.scenes.find(s=>s.id===source));
   const [drawingId,setDrawingId]=useState<string|null>(null);
   const stage=useRef<HTMLElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null),[spaceHeld,setSpaceHeld]=useState(false);
@@ -155,14 +159,14 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   };
   /** A new room that touches or overlaps others becomes one room with them, with no wall between. */
   const joinRooms=(d:Draft,id:string,apart:boolean):{id:string;message:string}=>{
-    const s=d.drawing.shapes.find(s=>s.id===id);if(!s||apart||!isRoom(s))return {id,message:""};
+    const s=d.drawing.shapes.find(s=>s.id===id);if(!s||apart||!join||!isRoom(s))return {id,message:""};
     const others=orderedShapes(d.drawing).filter(o=>o.id!==id&&!layerState(d.drawing,o.id).locked);
     const touching=touchingRooms(s,others,2);if(!touching.length)return {id,message:""};
     const joinedId=uid(),merged=mergeRooms([...touching,s],joinedId);if(!merged)return {id,message:""};
     const gone=[...touching.map(t=>t.id),id],order=layerIds(d.drawing),at=Math.min(...touching.map(t=>order.indexOf(t.id)));
     d.drawing.shapes=d.drawing.shapes.filter(x=>!gone.includes(x.id));d.drawing.shapes.push({...merged,name:touching[0].name||"Room"});
     const kept=order.slice(0,at).filter(x=>!gone.includes(x));d.drawing.layerOrder=[...kept,joinedId,...order.slice(at).filter(x=>!gone.includes(x))];
-    return {id:joinedId,message:`Joined with ${touching.map(t=>t.name||"a room").join(", ")}. Press Ctrl+Z to keep them apart, or hold Alt while drawing.`};
+    return {id:joinedId,message:`Joined with ${touching.map(t=>t.name||"a room").join(", ")}. Press Ctrl+Z to keep them apart, hold Alt while drawing, or turn off Join rooms.`};
   };
   const point=(e:React.PointerEvent):Point=>{
     const p=rawPoint(e);
@@ -333,7 +337,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label>Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
     <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
   </>;
-  const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink}/>:<div className="creator-panel">
+  const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink} custom={custom} addStamp={asset=>commit(w=>{w.assets.push(asset);})} resizeStamp={(assetId,squares)=>commit(w=>{const a=w.assets.find(a=>a.id===assetId);if(a)a.squares=squares;})}/>:<div className="creator-panel">
     {!selectedIds.length&&<>
       <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
       <button onClick={()=>setNewMap(true)}><Sparkles size={15}/> Generate or trace a new map</button>
@@ -382,10 +386,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>
     <label>Background<input type="color" value={draft.drawing.background} onChange={e=>change(d=>{d.drawing.background=e.target.value;})}/></label>
     <label className="creator-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to the grid (freehand always stays smooth)</label>
+    <label className="creator-check"><input type="checkbox" checked={join} onChange={e=>setJoin(e.target.checked)}/>Join rooms that touch into one room (hold Alt to keep one apart)</label>
     <p className="muted">Save keeps the drawing with its scene. Reopen it here any time to keep editing.</p>
   </div>;
   const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
-  return <main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
+  return <StampSources.Provider value={stampSources}><main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
     if(newMap||using)return;
     if(savingRef.current || pending || (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]"))return;
@@ -450,7 +455,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         </div>
       </section>
       {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
-      <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {grid.units} {grid.unit} squares, same as Maptable<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button>{snap&&<span className="muted">Hold Alt to draw freely</span>}</div>
+      <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {grid.units} {grid.unit} squares, same as Maptable<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button><button className="creator-link" aria-pressed={join} title="Rooms that touch become one room with no wall between" onClick={()=>setJoin(!join)}><Combine size={15}/> Join rooms {join?"on":"off"}</button>{(snap||join)&&<span className="muted">Hold Alt to {snap&&join?"draw freely and keep rooms apart":snap?"draw freely":"keep rooms apart"}</span>}</div>
       <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>
       </div>
       <ResizableSidebar className="creator-layer-panel creator-inspector" storageKey="map-creator-layers" defaultWidth={310} edge="left">
@@ -462,5 +467,5 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     {using && <UseMapDialog draft={draft} grid={grid} workspace={workspace} sceneName={source?workspace.scenes.find(s=>s.id===source)?.name??null:null} hadPieces={!!workspace.scenes.find(s=>s.id===source)?.tokens.some(t=>t.pieceOf)} destination={destination} close={()=>setUsing(false)} use={async choice=>{setUsing(false);const id=await save(choice);if(id)close(id);}}/>}
     {newMap && <NewMapDialog grid={grid.size} close={()=>setNewMap(false)} start={m=>{setNewMap(false);guard(()=>startMap(m));}} trace={(file,size)=>{setNewMap(false);guard(()=>startTrace(file,size));}}/>}
     {pending && <div className="creator-prompt" role="dialog" aria-modal="true" aria-label="Uncommitted drawing"><div><h2>Keep your drawing?</h2><p>Save your changes before leaving this map.</p><div className="button-row"><button disabled={saving} onClick={async()=>{const action=pending;if(await save()){setPending(null);action();}}}>Save changes</button><button disabled={saving} onClick={()=>{const action=pending;setPending(null);action();}}>Discard changes</button><button disabled={saving} onClick={()=>setPending(null)}>Keep editing</button></div></div></div>}
-  </main>;
+  </main></StampSources.Provider>;
 }

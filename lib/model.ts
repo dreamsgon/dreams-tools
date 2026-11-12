@@ -5,7 +5,9 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const short = z.string().max(120);
 const point = z.object({ x: finite, y: finite });
 export const assetSchema = z.object({
-  kind: z.enum(["image", "border"]).optional(),
+  kind: z.enum(["image", "border", "stamp"]).optional(),
+  // A map stamp you uploaded: how many grid squares it covers when placed.
+  squares: z.object({ w: z.number().int().min(1).max(10), h: z.number().int().min(1).max(10) }).optional(),
   id: short,
   name: short,
   src: z

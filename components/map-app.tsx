@@ -124,6 +124,7 @@ import {
   type Point,
 } from "@/lib/model";
 import type { Images } from "@/lib/render";
+import { drawingStampAssets } from "@/lib/map-stamps";
 
 type Panel = NavigationPanel;
 type Dialog = "scene-map" | "condition" | "split-map" | "add-scenes" | "map" | "token" | "export" | "connections" | "help" | null;
@@ -615,7 +616,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     let cancelled = false;
     setImageError("");
     const ids = new Set(
-      [scene.mapId, ...scene.tokens.flatMap((t) => [t.assetId, t.borderAssetId]), ...workspace.conditions.filter(c=>scene.tokens.some(t=>t.conditions.includes(c.id))).map(c=>c.assetId)].filter(
+      [scene.mapId, ...drawingStampAssets(scene.drawing), ...scene.tokens.flatMap((t) => [t.assetId, t.borderAssetId]), ...workspace.conditions.filter(c=>scene.tokens.some(t=>t.conditions.includes(c.id))).map(c=>c.assetId)].filter(
         Boolean,
       ) as string[],
     );

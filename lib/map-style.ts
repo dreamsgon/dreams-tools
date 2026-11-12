@@ -1,7 +1,7 @@
 import type { MapDrawing, MapShape, MapStyle, Point } from "./model.ts";
 import { orderedShapes, roomPaths, shapePath, openingPath, labelBox } from "./map-drawing.ts";
 import { roomPolygons, wallSegments } from "./map-creator.ts";
-import { stampById, stampMatrix } from "./map-stamps.ts";
+import { customStampAsset, stampById, stampMatrix } from "./map-stamps.ts";
 
 /**
  * Map styles: a preset look (Dungeon stone, Old parchment...) for the whole drawn map,
@@ -40,7 +40,7 @@ export function applyMapStyle(d: MapDrawing, next: MapStyle, background: string 
 }
 
 /** One thing to draw: a path filled or stroked, maybe clipped to the inside of a room. */
-export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; text?: { value: string; x: number; y: number; size: number } };
+export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; image?: { assetId: string; w: number; h: number }; text?: { value: string; x: number; y: number; size: number } };
 
 const ring = (pts: Point[]) => `M ${pts.map(p => `${round(p.x)} ${round(p.y)}`).join(" L ")} Z`;
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -138,6 +138,12 @@ function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">)
     return ops;
   }
   if (s.type === "stamp") {
+    const assetId = customStampAsset(s.stamp);
+    if (assetId) {
+      // An uploaded stamp: its picture fills the stamp's box, turned and flipped like any stamp.
+      const [p, q] = s.points, box = { w: Math.max(1, Math.abs(q.x - p.x)) / 40, h: Math.max(1, Math.abs(q.y - p.y)) / 40 };
+      return [{ d: "", image: { assetId, w: box.w * 40, h: box.h * 40 }, matrix: stampMatrix(s, box) }];
+    }
     const stamp = stampById(s.stamp);
     if (!stamp) return [];
     const matrix = stampMatrix(s, stamp), ink = style?.ink ?? "#2b2b2b";
@@ -181,11 +187,18 @@ export function backgroundOps(d: Pick<MapDrawing, "background" | "style">, width
   return ops;
 }
 
-function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
+/** Pictures for uploaded stamps, by asset id. A picture not loaded yet is left out. */
+export type StampImages = ReadonlyMap<string, CanvasImageSource>;
+function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp, images?: StampImages) {
   ctx.save();
   if (op.clip) ctx.clip(new Path2D(op.clip));
   if (op.matrix) ctx.transform(...op.matrix);
   if (op.opacity !== undefined) ctx.globalAlpha = op.opacity;
+  if (op.image) {
+    const img = images?.get(op.image.assetId);
+    if (img) ctx.drawImage(img, 0, 0, op.image.w, op.image.h);
+    ctx.restore(); return;
+  }
   if (op.text) {
     ctx.fillStyle = op.fill ?? "#000000"; ctx.font = `600 ${op.text.size}px Inter, system-ui, sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
@@ -197,19 +210,19 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
   ctx.restore();
 }
 /** Draws a map drawing onto a canvas, as Maptable shows it. Shapes in `skip` (stamps that are pieces on the table) are left out. */
-export function drawMapDrawing(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number, skip?: ReadonlySet<string>) {
+export function drawMapDrawing(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number, skip?: ReadonlySet<string>, images?: StampImages) {
   for (const op of backgroundOps(d, width, height)) drawOp(ctx, op);
-  for (const shape of orderedShapes(d)) if (!skip?.has(shape.id)) for (const op of shapeOps(shape, d)) drawOp(ctx, op);
+  for (const shape of orderedShapes(d)) if (!skip?.has(shape.id)) for (const op of shapeOps(shape, d)) drawOp(ctx, op, images);
 }
 
 /**
  * Draws a stamp on its own, unturned, in the middle of a square canvas as wide as its longer side,
  * for its picture as a piece on the table. The piece is turned on the table instead.
  */
-export function drawStampPiece(ctx: CanvasRenderingContext2D, s: MapShape, d: Pick<MapDrawing, "background" | "style">, side: number) {
+export function drawStampPiece(ctx: CanvasRenderingContext2D, s: MapShape, d: Pick<MapDrawing, "background" | "style">, side: number, images?: StampImages) {
   const [p, q] = s.points, w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y), long = Math.max(w, h, 1), k = side / long;
   const centred: MapShape = { ...s, rotation: 0, points: [{ x: (long - w) / 2, y: (long - h) / 2 }, { x: (long + w) / 2, y: (long + h) / 2 }] };
   ctx.save(); ctx.scale(k, k);
-  for (const op of buildShapeOps(centred, d)) drawOp(ctx, op);
+  for (const op of buildShapeOps(centred, d)) drawOp(ctx, op, images);
   ctx.restore();
 }

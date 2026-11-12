@@ -6,8 +6,8 @@ import type { MapShape, Point } from "./model.ts";
  * "ink" outlines take the map style's ink colour.
  */
 export type StampPart = { d: string; fill?: string; stroke?: "ink" | string; width?: number };
-export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[] };
-export const stampCategories = ["Dungeon", "Furniture", "Outdoors"] as const;
+export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[]; image?: string };
+export const stampCategories = ["Yours", "Dungeon", "Furniture", "Outdoors"] as const;
 export type StampCategory = typeof stampCategories[number];
 
 const R = (x: number, y: number, w: number, h: number) => `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
@@ -36,12 +36,33 @@ export const stamps: Stamp[] = [
   { id: "campfire", name: "Campfire", category: "Outdoors", w: 1, h: 1, parts: [...[0, 1, 2, 3, 4, 5, 6, 7].map(i => ink(C(20 + Math.cos(i * Math.PI / 4) * 12, 20 + Math.sin(i * Math.PI / 4) * 12, 3), "#8a8a84", 1)), paint("M 20 11 Q 27 19 20 27 Q 13 19 20 11 Z", "#e8742c"), paint("M 20 16 Q 24 21 20 25 Q 16 21 20 16 Z", "#f6c34a")] },
   { id: "well", name: "Well", category: "Outdoors", w: 1, h: 1, parts: [ink(C(20, 20, 13), "#a8a39a"), ink(C(20, 20, 7), "#3f6f8f", 1.5)] },
 ];
-export const stampById = (id: string | null | undefined) => stamps.find(s => s.id === id) ?? null;
+export const stampById = (id: string | null | undefined, custom: Stamp[] = []) => stamps.find(s => s.id === id) ?? custom.find(s => s.id === id) ?? null;
 
-/** Stamps whose name or category matches the search. */
-export function findStamps(query: string): Stamp[] {
-  const q = query.trim().toLowerCase();
-  return q ? stamps.filter(s => s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)) : stamps;
+/** Stamps you upload are pictures kept as assets; a placed one names its asset with this prefix. */
+export const customStampPrefix = "asset:";
+export const customStampAsset = (id: string | null | undefined) => id?.startsWith(customStampPrefix) ? id.slice(customStampPrefix.length) : null;
+type StampAsset = { id: string; name: string; src: string; width: number; height: number; kind?: string; squares?: { w: number; h: number } };
+/** How many squares an uploaded picture covers at first: one square across its shorter side. */
+export function defaultSquares(width: number, height: number) {
+  const ratio = width / Math.max(1, height), clamp = (n: number) => Math.min(10, Math.max(1, Math.round(n)));
+  return ratio >= 1 ? { w: clamp(ratio), h: 1 } : { w: 1, h: clamp(1 / ratio) };
+}
+/** Your uploaded stamps, as library stamps drawn from their picture. */
+export function customStamps(assets: StampAsset[]): Stamp[] {
+  return assets.filter(a => a.kind === "stamp").map(a => {
+    const size = a.squares ?? defaultSquares(a.width, a.height);
+    return { id: `${customStampPrefix}${a.id}`, name: (a.name.replace(/\.(png|webp|jpe?g|gif|svg)$/i, "").replace(/^./, c => c.toUpperCase()).slice(0, 60)) || "Stamp", category: "Yours", w: size.w, h: size.h, parts: [], image: a.src };
+  });
+}
+/** The assets a drawing's uploaded stamps use, so they can be loaded before drawing. */
+export function drawingStampAssets(d: { shapes: { type: string; stamp?: string | null }[] } | null | undefined): string[] {
+  return [...new Set((d?.shapes ?? []).flatMap(s => { const id = s.type === "stamp" ? customStampAsset(s.stamp) : null; return id ? [id] : []; }))];
+}
+
+/** Stamps whose name or category matches the search, yours first. */
+export function findStamps(query: string, custom: Stamp[] = []): Stamp[] {
+  const q = query.trim().toLowerCase(), all = [...custom, ...stamps];
+  return q ? all.filter(s => s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)) : all;
 }
 
 /** The box a stamp fills when dropped at a point: its squares, lined up with the grid. */

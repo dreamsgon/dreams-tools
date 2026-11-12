@@ -85,6 +85,10 @@
 .creator-stamp-grid button:hover { border-color:var(--accent); }
 .creator-stamp-grid button.active { border:2px solid var(--accent); padding:5px 1px; background:var(--accent-soft); color:var(--accent); font-weight:600; }
 .creator-stamp-grid svg { width:40px; height:40px; }
+.creator-stamp-grid img { width:40px; height:40px; object-fit:contain; }
+.creator-stamp-upload { display:flex; flex-direction:column; gap:6px; }
+.creator-stamp-upload button { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; }
+.creator-stamp-upload small { color:var(--muted); font-size:12px; line-height:1.4; }
 .creator-keys { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin:0; font-size:12px; }
 .creator-keys div { display:flex; align-items:center; gap:8px; min-width:0; }
 .creator-keys dt { flex:none; }
