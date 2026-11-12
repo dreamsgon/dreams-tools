@@ -1,15 +1,16 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, CloudFog, EyeOff, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Undo2 } from 'lucide-react';
+import { Check, CloudFog, Dices, EyeOff, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Undo2 } from 'lucide-react';
 import { decodePaint, encodePaint, fogBrush, mapKinds, mapPaint, paintScale, pointRevealed, terrains, tilesFromPaint, type MapData, type MapPaint, type MapPin } from '@/lib/encyclopedia/map-model';
 import { newId, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
 import { paintStroke } from '@/lib/encyclopedia/terrain-art';
 import { MapCanvas, useMapImage } from './map-canvas';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
+import { WorldGenerateDialog } from './world-generate-dialog';
 
 type Tool = 'select' | 'terrain' | 'place' | 'fog';
-type Snapshot = { paint: MapPaint | undefined; tiles: number[] };
+type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed'>;
 const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] = [
   { id: 'select', name: 'Select', key: 'V', icon: MousePointer2 },
   { id: 'terrain', name: 'Terrain', key: 'B', icon: Paintbrush },
@@ -18,8 +19,8 @@ const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] 
 ];
 
 /** The full-screen world and area map editor: tools on a rail, the map in the middle, and an inspector. */
-export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
-  entry: Entry; data: Workspace; campaign?: Campaign; setMap: (patch: Partial<MapData>) => void; close: () => void;
+export function WorldMapStudio({ entry, data, campaign, setMap, close, start }: {
+  entry: Entry; data: Workspace; campaign?: Campaign; setMap: (patch: Partial<MapData>) => void; close: () => void; start?: 'generate';
 }) {
   const map = entry.mapData!;
   const painted = map.source === 'generated';
@@ -30,12 +31,15 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
   const [selected, setSelected] = useState(''), [editingPin, setEditingPin] = useState<MapPin | null>(null);
   const [fogMode, setFogMode] = useState<'reveal' | 'conceal'>('reveal'), [fogSize, setFogSize] = useState(1);
   const [show, setShow] = useState({ art: true, pins: true, routes: true });
+  const [generating, setGenerating] = useState(start === 'generate' && map.source === 'generated');
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const d = dialog.current; if (d && !d.open) d.showModal(); return () => d?.close(); }, []);
   const stroke = useRef<{ cells: Uint8Array; last: { x: number; y: number }; base: MapPaint; changed: boolean } | null>(null);
   const { url } = useMapImage(map);
   const pin = map.pins.find(p => p.id === selected);
   const current = live ?? (painted ? mapPaint(map) : null);
 
-  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles });
+  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed });
   const commit = useCallback((paint: MapPaint, before: Snapshot) => {
     setUndo(u => [...u.slice(-29), before]); setRedo([]);
     setMap({ paint, tiles: tilesFromPaint(map, paint) });
@@ -43,7 +47,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
   const restore = (from: Snapshot[], to: (s: Snapshot[]) => void, back: (f: (s: Snapshot[]) => Snapshot[]) => void) => {
     const last = from.at(-1); if (!last) return;
     back(s => [...s, snapshot()]); to(from.slice(0, -1));
-    setMap({ paint: last.paint, tiles: last.tiles });
+    setMap(last);
   };
   const doUndo = () => restore(undo, setUndo, setRedo);
   const doRedo = () => restore(redo, setRedo, setUndo);
@@ -79,14 +83,13 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || editingPin)) return;
+      if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || editingPin || generating)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = tools.find(x => x.key.toLowerCase() === e.key.toLowerCase());
       if (t && (t.id !== 'terrain' || painted)) { setTool(t.id); return; }
       if (e.key === '[') setRadius(r => Math.max(1, r - 1));
       if (e.key === ']') setRadius(r => Math.min(20, r + 1));
-      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -96,12 +99,13 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
   const brushMiles = milesAcross(radius * 2);
   const k = paintScale(map.columns, map.rows);
 
-  return <div className="world-studio" role="dialog" aria-modal="true" aria-label={`Map editor: ${entry.title}`}>
+  return <dialog ref={dialog} className="world-studio" aria-label={`Map editor: ${entry.title}`} onCancel={e => { e.preventDefault(); if (!editingPin && !generating) close(); }}>
     <header className="world-studio-head">
       <div className="world-studio-title"><strong>{entry.title}</strong><span>{mapKinds[map.category]}</span></div>
       <span className="world-studio-saved"><Check size={13}/> Saved</span>
-      <button className="icon-button" aria-label="Undo terrain" disabled={!undo.length} onClick={doUndo}><Undo2 size={17}/></button>
-      <button className="icon-button" aria-label="Redo terrain" disabled={!redo.length} onClick={doRedo}><Redo2 size={17}/></button>
+      {painted && <button className="button" onClick={() => setGenerating(true)}><Dices size={15}/> Generate</button>}
+      <button className="icon-button" aria-label="Undo" disabled={!undo.length} onClick={doUndo}><Undo2 size={17}/></button>
+      <button className="icon-button" aria-label="Redo" disabled={!redo.length} onClick={doRedo}><Redo2 size={17}/></button>
       <button className="button primary" onClick={close}>Done</button>
     </header>
     <div className="world-studio-body">
@@ -171,8 +175,9 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close }: {
         </>}
       </aside>
     </div>
+    {generating && <WorldGenerateDialog map={map} onClose={() => setGenerating(false)} onUse={patch => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool('terrain'); }}/>}
     {editingPin && <PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id !== entry.id)}
       onClose={() => setEditingPin(null)}
       onSave={p => { if (!map.pins.some(v => v.id === p.id) && map.pins.length >= 100) return; setMap({ pins: map.pins.some(v => v.id === p.id) ? map.pins.map(v => v.id === p.id ? p : v) : [...map.pins, p] }); setSelected(p.id); setEditingPin(null); setTool('select'); }}/>}
-  </div>;
+  </dialog>;
 }

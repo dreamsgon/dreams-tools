@@ -4,6 +4,7 @@ import { decodePaint, terrains, type MapPaint } from "./map-model.ts";
  * Turning painted terrain into smooth shapes: each terrain becomes outlines traced around
  * its painted squares, rounded off, with small symbols for mountains, hills, forests and marsh.
  * Terrain numbers: 0 sea, 1 grassland, 2 forest, 3 hills, 4 mountains, 5 desert, 6 marsh, 7 snow.
+ * Snow beside mountains is drawn as snowy peaks; other snow is a flat snowfield.
  */
 export type TerrainLayer = { id: string; color: string; d: string };
 export type TerrainGlyph = { kind: "mountain" | "snowpeak" | "hill" | "tree" | "marsh"; x: number; y: number; size: number };
@@ -15,10 +16,27 @@ export const terrainLayerOrder: { id: string; color: string; test: (t: number) =
   { id: "desert", color: terrains[5].color, test: t => t === 5 },
   { id: "marsh", color: terrains[6].color, test: t => t === 6 },
   { id: "forest", color: terrains[2].color, test: t => t === 2 },
-  { id: "hills", color: terrains[3].color, test: t => t === 3 || t === 4 || t === 7 },
-  { id: "mountains", color: "#a0947f", test: t => t === 4 || t === 7 },
-  { id: "snow", color: terrains[7].color, test: t => t === 7 },
+  { id: "hills", color: terrains[3].color, test: t => t === 3 || t === 4 || t === ALPINE },
+  { id: "mountains", color: "#a0947f", test: t => t === 4 || t === ALPINE },
+  { id: "snow", color: terrains[7].color, test: t => t === 7 || t === ALPINE },
 ];
+
+/** Snow next to mountains is a snowy peak; snow anywhere else is a flat snowfield. */
+const ALPINE = 8;
+export function classifySnow(cells: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(cells);
+  const reach = Math.max(2, Math.round(Math.min(w, h) / 60));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (cells[y * w + x] !== 7) continue;
+    let near = false;
+    for (let dy = -reach; dy <= reach && !near; dy++) for (let dx = -reach; dx <= reach; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < w && yy < h && cells[yy * w + xx] === 4) { near = true; break; }
+    }
+    if (near) out[y * w + x] = ALPINE;
+  }
+  return out;
+}
 
 function grow(mask: Uint8Array, w: number, h: number, by: number): Uint8Array {
   let cur: Uint8Array = mask;
@@ -115,9 +133,9 @@ function loopsPath(loops: [number, number][][], sx: number, sy: number) {
 
 /** The terrain as layered shapes, bottom first, sized to a map of width × height. */
 export function terrainLayers(paint: MapPaint, width: number, height: number): TerrainLayer[] {
-  const cells = decodePaint(paint.columns, paint.rows, paint.cells);
-  if (!cells) return [];
-  const w = paint.columns, h = paint.rows, sx = width / w, sy = height / h;
+  const raw = decodePaint(paint.columns, paint.rows, paint.cells);
+  if (!raw) return [];
+  const w = paint.columns, h = paint.rows, sx = width / w, sy = height / h, cells = classifySnow(raw, w, h);
   const out: TerrainLayer[] = [];
   for (const layer of terrainLayerOrder) {
     let mask: Uint8Array = new Uint8Array(w * h);
@@ -137,9 +155,9 @@ function jitter(x: number, y: number, salt: number) {
 
 /** Small symbols scattered over the terrain, kept clear of the edges of each area. */
 export function terrainGlyphs(paint: MapPaint, width: number, height: number): TerrainGlyph[] {
-  const cells = decodePaint(paint.columns, paint.rows, paint.cells);
-  if (!cells) return [];
-  const w = paint.columns, h = paint.rows, sx = width / w, sy = height / h, unit = Math.min(sx, sy);
+  const raw = decodePaint(paint.columns, paint.rows, paint.cells);
+  if (!raw) return [];
+  const w = paint.columns, h = paint.rows, sx = width / w, sy = height / h, unit = Math.min(sx, sy), cells = classifySnow(raw, w, h);
   const t = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? -1 : cells[y * w + x]);
   const inside = (x: number, y: number, test: (v: number) => boolean, r: number) => {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (!test(t(x + dx, y + dy))) return false;
@@ -157,7 +175,7 @@ export function terrainGlyphs(paint: MapPaint, width: number, height: number): T
   scatter(4, v => v === 3, () => "hill", 2.4, 1);
   scatter(3, v => v === 2, () => "tree", 1.3, 1);
   scatter(4, v => v === 6, () => "marsh", 1.6, 1);
-  scatter(4, v => v === 4 || v === 7, v => (v === 7 ? "snowpeak" : "mountain"), 3, 1);
+  scatter(4, v => v === 4 || v === ALPINE, v => (v === ALPINE ? "snowpeak" : "mountain"), 3, 1);
   return out.sort((a, b) => a.y - b.y);
 }
 
