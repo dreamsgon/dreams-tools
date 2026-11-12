@@ -73,6 +73,8 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Encyclopedia features part 2: Maptable links — `[[maptable:<sceneId>|Label]]` renders an Open in Maptable card; Write mode and the article margin have a scene picker (`GET /api/encyclopedia/maptable-scenes`, read-only); `/maptable?scene=<id>` opens that scene once; players only get the label (`playerText`).
 - [x] Encyclopedia features part 2: tokens from the Encyclopedia — Maptable's Token gallery has a From the Encyclopedia tab that reads characters (read-only) and adds a library token plus a placed copy in Maptable's own data, reusing a same-named token in the campaign.
 - [x] Encyclopedia features part 2: page history — `users/<owner>/encyclopedia/history/<entryId>.json` keeps the text an entry had before a save (at most one version per 10 minutes, newest 20, 4 MB cap); deleting an entry deletes its history; a restore first keeps the current text (`POST /api/encyclopedia/history`). workspace.json is unchanged. Tests in `tests/encyclopedia-history.test.mjs`.
+- [x] Rolls part A: `[[1d20+5]]` / `[[1d20+5|Label]]` roll anywhere in an article or tab (same syntax as Maptable token notes; a formula needs a die so `[[1999]]` stays a link); results show in a card with the last few totals. `{{word|note}}` adds a hover note; links to other entries preview on hover. Players get rolls and notes as plain text and never the note (`playerInline`). Tests in `tests/encyclopedia-inline.test.mjs`.
+- [ ] Rolls part B: pasted statblocks with detected rolls, rolling sheet fields, rolls to Discord via a Maptable campaign; part C: statblocks on Maptable tokens.
 - [ ] Then 2.1 single save indicator and the rest of the handoff order.
 
 ## Map acceptance and maintenance

@@ -2,6 +2,7 @@ import {scopeMapWeather} from './map-weather.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap} from "./map-model.ts";
 import { z } from "zod";
+import {playerInline} from './inline.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -187,7 +188,7 @@ export function stripSecrets(text:string){if(!/:::/.test(text))return text;let h
 // "[[maptable:<sceneId>|Label]]" links open the GM's own Maptable scene; players only ever get the label.
 export const MAPTABLE_LINK=/\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]/g;
 export const maptableLinks=(text:string)=>[...text.matchAll(MAPTABLE_LINK)].map(m=>({sceneId:m[1],label:(m[2]??"").trim()||"Battle map"}));
-export function playerText(text:string){return stripSecrets(text).replace(MAPTABLE_LINK,(_,_id,label)=>(label??"").trim());}
+export function playerText(text:string){return playerInline(stripSecrets(text).replace(MAPTABLE_LINK,(_,_id,label)=>(label??"").trim()));}
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
 export function playerCampaign(s:Workspace,campaignId:string){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
