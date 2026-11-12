@@ -14,6 +14,7 @@ import {ThemeToggle} from "./theme";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
 import {ArticleEditor} from "./article-editor";
 import {QuickSearch} from "./quick-search";
+import {RollResults} from "./rolls";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks };
 const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Checklist" };
 type Modal = {
@@ -161,6 +162,7 @@ export default function WorkspaceApp() {
   {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
   {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)})}/>}
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
+  <RollResults/>
   {palette && <QuickSearch entries={shown} icons={icons} labels={labels} canCreate={!!world} scopeName={e => e.campaignId ? data.campaigns.find(c => c.id === e.campaignId)?.name ?? "Campaign" : "World lore"} onOpen={openEntry} onCreate={name => setModal({ type: "entry", name })} onView={showView} onClose={() => setPalette(false)}/>}
   {modal && <ModalDialog title={{ world: "Create a world", campaign: "Begin a campaign", entry: "Create an entry", settings: "Workspace & backups", library: "Your world library", rename: "Edit details", connections: "AI & campaign repositories" }[modal.type]} onClose={() => setModal(null)}>
    {modal.type === "library" ? <><p className="modal-intro">A home for every world you imagine.</p><div className="world-list">{data.worlds.map(w => <div key={w.id}><button onClick={() => { selectWorld(w.id); setModal(null); }}><Globe size={20}/><span><strong>{w.name}</strong><small>{w.archived ? "Archived" : `${data.campaigns.filter(c => c.worldId === w.id).length} campaigns`}</small></span><ChevronRight size={16}/></button><button aria-label={`${w.archived ? "Restore" : "Archive"} ${w.name}`} title={w.archived ? "Restore world" : "Archive world"} onClick={() => change({ ...data, worlds: data.worlds.map(x => x.id === w.id ? { ...x, archived: !x.archived } : x) })}><Archive size={16}/></button></div>)}</div><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={16}/> Create a world</button></> :

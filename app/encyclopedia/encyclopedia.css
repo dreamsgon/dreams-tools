@@ -271,3 +271,29 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .diff-remove{background:var(--danger-soft);box-shadow:inset 2px 0 var(--danger);text-decoration:line-through;text-decoration-color:var(--danger);color:var(--muted)}
 @media(min-width:1100px){.article-layout:has(+.history-drawer),.article-layout:has(.history-drawer){padding-right:340px}}
 @media(max-width:720px){.maptable-card{flex-wrap:wrap}.maptable-card .button{margin-left:70px}.history-drawer{top:0;width:100vw}}
+/* Rolls and tooltips part A */
+.roll-chip{display:inline-flex;align-items:center;gap:4px;padding:0 6px;margin:0 1px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent);font:500 13px/22px var(--font-sans);white-space:nowrap;vertical-align:1px;cursor:pointer}
+.roll-chip:hover{border-color:var(--accent)}
+.roll-chip:active{transform:translateY(1px)}
+.note-tip{position:relative;border-bottom:1px dotted var(--accent);cursor:help}
+.note-tip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note-tip-body{position:absolute;left:0;top:calc(100% + 6px);z-index:20;width:max-content;max-width:min(300px,80vw);padding:8px 10px;border-radius:var(--radius);background:var(--ink);color:var(--panel);font:400 12px/1.5 var(--font-sans);white-space:normal;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.note-tip:hover .note-tip-body,.note-tip:focus .note-tip-body{opacity:1;visibility:visible}
+.link-preview{position:fixed;z-index:40;width:300px;padding:14px;border:1px solid var(--line-strong);border-radius:var(--radius-lg);background:var(--panel);box-shadow:0 12px 32px var(--shadow-color);font-family:var(--font-sans);pointer-events:none}
+.link-preview .eyebrow{display:block;text-transform:uppercase}
+.link-preview strong{display:block;margin:4px 0;font:600 16px var(--font-display);color:var(--ink)}
+.link-preview p{font-size:13px;line-height:1.5;color:var(--muted)}
+.roll-result{position:fixed;right:24px;bottom:24px;z-index:50;width:320px;border:1px solid var(--line-strong);border-radius:var(--radius-lg);background:var(--panel);box-shadow:0 16px 40px var(--shadow-color);font-family:var(--font-sans);overflow:hidden}
+.roll-result-main{padding:14px 16px 12px}
+.roll-result-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:500;color:var(--muted)}
+.roll-result-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.roll-result-total{display:flex;align-items:baseline;gap:12px;margin-top:4px}
+.roll-result-total strong{font:600 40px/1 var(--font-display);letter-spacing:-1px;font-variant-numeric:tabular-nums;color:var(--ink);animation:roll-in .25s ease-out}
+.roll-result-total span,.roll-result-detail{font-size:13px;color:var(--muted)}
+.roll-result-detail{margin-top:6px;font-size:12px}
+.roll-result-foot{display:flex;align-items:center;gap:10px;padding:8px 16px;border-top:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--muted)}
+.roll-result-foot .spacer{flex:1}
+.roll-result-foot button{display:inline-flex;align-items:center;gap:5px;color:var(--ink);font-size:12px;font-weight:500}
+@keyframes roll-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.roll-result-total strong{animation:none}}
+@media(max-width:720px){.roll-result{left:16px;right:16px;bottom:16px;width:auto}}
