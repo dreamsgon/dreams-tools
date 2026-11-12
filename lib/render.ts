@@ -15,7 +15,7 @@ import {
 import { resolvedToken } from "./token-defaults";
 import { drawTokenName } from "./token-name";
 import { drawTokenHp, tokenHpLayout, tokenNameFontSize } from "./token-display-layout";
-import { drawMapDrawing } from "./map-drawing";
+import { drawMapDrawing } from "./map-style";
 import { effectPolygon, effectHandles, resolveEffect, effectVisibleToPlayers } from "./effects";
 export type Images = Map<string, HTMLImageElement>;
 export type RenderOptions = {

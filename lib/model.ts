@@ -152,8 +152,22 @@ export const mapShapeSchema = z.object({
   closed: z.boolean(),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
+/** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */
+export const mapStyleSchema = z.object({
+  preset: short.default("custom"),
+  floor: color,
+  wall: color,
+  hatch: color,
+  ink: color,
+  walls: z.enum(["solid", "double", "rough"]).default("solid"),
+  outside: z.enum(["hatched", "solid", "clear"]).default("solid"),
+  grid: z.enum(["on", "faint", "off"]).default("off"),
+  gridSize: finite.min(10).max(400).default(70),
+  shadow: z.boolean().default(false),
+});
 export const mapDrawingSchema = z.object({
   background: color,
+  style: mapStyleSchema.nullable().default(null),
   shapes: z.array(mapShapeSchema).max(1000),
   folders: z.array(z.object({id:short,name:short,parentId:short.nullable(),hidden:z.boolean().default(false),locked:z.boolean().default(false)})).max(200).default([]),
   layerOrder: z.array(short).max(1200).default([]),
@@ -167,6 +181,7 @@ export const mapDrawingSchema = z.object({
 });
 export type MapShape = z.infer<typeof mapShapeSchema>;
 export type MapDrawing = z.infer<typeof mapDrawingSchema>;
+export type MapStyle = z.infer<typeof mapStyleSchema>;
 export const pointOfInterestSchema = z.object({
   folderId: short.nullable().default(null),
   id: short,
