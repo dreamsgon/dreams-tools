@@ -143,13 +143,17 @@ export const mapShapeSchema = z.object({
   smooth: z.boolean().default(false),
   hidden: z.boolean().default(false),
   locked: z.boolean().default(false),
-  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window"]),
+  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "stamp"]),
   roomParts: z.array(z.object({type:z.enum(["rect","ellipse","path"]),start:z.number().int().min(0),count:z.number().int().min(2),smooth:z.boolean(),closed:z.boolean()})).max(1000).default([]),
   points: z.array(point).min(2).max(2000),
   fill: color.nullable(),
   stroke: color,
   thickness: finite.min(1).max(100),
   closed: z.boolean(),
+  // A stamp is a picture from the stamp library, drawn in its box (points), turned and flipped.
+  stamp: short.nullable().default(null),
+  rotation: finite.min(-360).max(360).default(0),
+  flip: z.boolean().default(false),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
 /** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */

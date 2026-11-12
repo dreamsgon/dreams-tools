@@ -2,10 +2,12 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge } from "lucide-react";
+import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2 } from "lucide-react";
 import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
+import StampLibrary from "./stamp-library";
+import { stampById, stampBox, rotateStamp } from "@/lib/map-stamps";
 import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
@@ -18,7 +20,7 @@ const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,dra
 type Tool=CreatorTool;
 type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
-const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>};
+const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -38,6 +40,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [selectedPoint,setSelectedPoint]=useState<number|null>(null);
   const [pointMode,setPointMode]=useState<"move"|"add"|"delete">("move");
   const [message,setMessage]=useState("");
+  const [stampId,setStampId]=useState("chest");
   const [saving,setSaving]=useState(false);
   const savingRef=useRef(false);
   const [pending,setPending]=useState<(()=>void)|null>(null);
@@ -107,12 +110,12 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     return {x:p.x,y:p.y};
   };
   const walls=()=>wallSegments(orderedShapes(current.current.drawing).filter(s=>!layerState(current.current.drawing,s.id).locked));
-  const pickTool=(next:Tool)=>{setTool(next);setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
+  const pickTool=(next:Tool)=>{setTool(next);if(next==="stamp")setTab("selected");setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
   const finishPoly=(pts:Point[]|null=polyPoints)=>{
     setPolyPoints(null);setPolyHover(null);
     if(!pts||pts.length<3){if(pts?.length)setMessage("A shaped room needs at least three corners.");return;}
     const before=structuredClone(current.current),id=uid(),next=structuredClone(before);
-    next.drawing.shapes.push({id,type:"path",roomParts:[],hidden:false,locked:false,name:`Room ${before.drawing.shapes.length+1}`,folderId:null,smooth:false,points:pts,fill,stroke,thickness,closed:true});
+    next.drawing.shapes.push({id,type:"path",roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,name:`Room ${before.drawing.shapes.length+1}`,folderId:null,smooth:false,points:pts,fill,stroke,thickness,closed:true});
     next.drawing.layerOrder=[...layerIds(next.drawing),id];
     const joined=joinRooms(next,id,false);apply(next,before);choose(joined.id);if(joined.message)setMessage(joined.message);
   };
@@ -163,8 +166,16 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       if(!last||last.x!==p.x||last.y!==p.y)setPolyPoints([...pts,p]);
       return;
     }
-    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle">;
-    const shape:MapShape={id,type,roomParts:[],hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
+    if(tool==="stamp"){
+      const stamp=stampById(stampId);if(!stamp)return;
+      const id=uid(),raw=rawPoint(e);
+      const shape:MapShape={id,type:"stamp",stamp:stamp.id,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:`${stamp.name} ${before.drawing.shapes.length+1}`,folderId:null,smooth:false,points:stampBox(stamp,raw,snap&&!e.altKey?grid.size:null,grid.size,before.width,before.height),fill:null,stroke,thickness:1,closed:false};
+      gesture.current={before,id,start:p,index:null,newShape:true};choose(id);
+      const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
+      return;
+    }
+    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp">;
+    const shape:MapShape={id,type,roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
     gesture.current={before,id,start:p,index:null,newShape:true};choose(id);setDrawingId(id);
     if(type==="door"||type==="window"){
       // Doors and windows sit in the nearest wall, a square wide, and slide along it.
@@ -178,7 +189,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     let next:Draft;
     if(g.newShape){
       next=structuredClone(current.current);const s=next.drawing.shapes.find(s=>s.id===g.id)!;
-      if(g.wall&&g.raw) s.points=openingOnWall(g.wall,g.raw,rawPoint(e),grid.size);
+      if(s.type==="stamp"){const stamp=stampById(s.stamp);if(stamp)s.points=stampBox(stamp,rawPoint(e),snap&&!e.altKey?grid.size:null,grid.size,next.width,next.height);}
+      else if(g.wall&&g.raw) s.points=openingOnWall(g.wall,g.raw,rawPoint(e),grid.size);
       else if(s.type==="path") {
         const last=s.points[s.points.length-1];
         if(Math.hypot(p.x-last.x,p.y-last.y)>=8 && s.points.length<2000)s.points.push(p);
@@ -208,9 +220,9 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const s=current.current.drawing.shapes.find(s=>s.id===g.id)!;
     if(g.newShape && s.type==="path")s.points=simplifyPoints(s.points,3);
     const changed=JSON.stringify(g.before)!==JSON.stringify(current.current);
-    if(g.newShape && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
+    if(g.newShape && s.type!=="stamp" && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
     if(!changed)return;
-    const joined=g.newShape?joinRooms(current.current,g.id,e.altKey):{id:g.id,message:""};
+    const joined=g.newShape&&s.type!=="stamp"?joinRooms(current.current,g.id,e.altKey):{id:g.id,message:""};
     apply(current.current,g.before);
     if(joined.id!==g.id){choose(joined.id);setMessage(joined.message);}
   };
@@ -259,7 +271,22 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const thicknessField=<label>Wall thickness <output>{selectedShape?.thickness??thickness} px</output><input type="range" min={1} max={60} value={selectedShape?.thickness??thickness} onChange={e=>{setThickness(+e.target.value);patchShape({thickness:+e.target.value});}}/></label>;
   const bounds=single?shapeBounds(single):null;
   const resize=(w:number,h:number)=>{if(!single||!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.points=resizeShape(s,Math.min(d.width,fromUnits(w,grid)),Math.min(d.height,fromUnits(h,grid))).points;});};
-  const selectedPanel=<div className="creator-panel">
+  // Stamps turn a quarter at a time (and stay on whole squares), or to any angle with the slider.
+  const turnStamp=(by:number,free=false)=>{if(single?.type!=="stamp")return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)Object.assign(s,rotateStamp(s,by,free||!snap?null:grid.size));});};
+  const stampSize=(key:"w"|"h",n:number)=>{if(single?.type!=="stamp"||!Number.isFinite(n)||n<.5||n>20)return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(!s)return;const [a,b]=s.points,x0=Math.min(a.x,b.x),y0=Math.min(a.y,b.y);s.points=key==="w"?[{x:x0,y:a.y},{x:Math.min(d.width,x0+n*grid.size),y:b.y}]:[{x:a.x,y:y0},{x:b.x,y:Math.min(d.height,y0+n*grid.size)}];});};
+  const stampPanel=single?.type==="stamp"&&<>
+    <div className="creator-actions">
+      <button onClick={()=>turnStamp(-90)} title="Turn left (Shift+R)"><RotateCcw size={15}/> Left</button>
+      <button onClick={()=>turnStamp(90)} title="Turn right (R)"><RotateCw size={15}/> Right</button>
+      <button aria-pressed={single.flip} onClick={()=>patchShape({flip:!single.flip})} title="Flip"><FlipHorizontal2 size={15}/> Flip</button>
+    </div>
+    <label>Angle <output>{Math.round(single.rotation)}°</output><input type="range" min={0} max={345} step={15} value={((single.rotation%360)+360)%360} onChange={e=>turnStamp(+e.target.value-single.rotation,true)}/></label>
+    <div className="creator-pair">
+      <label>Width (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].x-single.points[0].x)/grid.size*2)/2} onChange={e=>stampSize("w",+e.target.value)}/></label>
+      <label>Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>
+    </div>
+  </>;
+  const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink}/>:<div className="creator-panel">
     {!selectedIds.length&&<>
       <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
       <h3>New shapes</h3>{colours}{thicknessField}
@@ -268,11 +295,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     </>}
     {single&&<>
       <label>Name<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
-      {bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
+      {single.type==="stamp"?stampPanel:bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
         <label>Width ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.w,grid)} onChange={e=>resize(+e.target.value,toUnits(bounds.h,grid))}/></label>
         <label>Length ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.h,grid)} onChange={e=>resize(toUnits(bounds.w,grid),+e.target.value)}/></label>
       </div>:<p className="creator-measure">{isArea(single)?"Size":"Length"}: <strong>{sizeLabel(single,grid)}</strong></p>}
-      {colours}{thicknessField}
+      {single.type!=="stamp"&&<>{colours}{thicknessField}</>}
       {single.type==="path"&&<div className="creator-checks"><label className="creator-check"><input type="checkbox" checked={single.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close the outline</label><label className="creator-check"><input type="checkbox" checked={single.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label></div>}
       {(single.type==="path"||single.type==="line"||single.type==="rect")&&<div className="creator-points"><span>Corners ({single.type==="rect"?4:single.points.length})</span><div className="creator-seg" role="group" aria-label="Corner editing">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode==="move"?"Move":mode==="add"?"Add":"Remove"}</button>)}</div>
         <p className="muted">{pointMode==="add"?"Click a wall to add a corner there.":pointMode==="delete"?"Click a corner to remove it.":"Drag the white corners to reshape."}</p></div>}
@@ -311,6 +338,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();history(!e.shiftKey);return;}
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="d"){e.preventDefault();duplicate();return;}
     if(e.code==="Space"&&!(e.target as HTMLElement).closest("button")){e.preventDefault();setSpaceHeld(true);return;}
+    if(tool==="select"&&single?.type==="stamp"&&e.key.toLowerCase()==="r"&&!e.ctrlKey&&!e.metaKey){e.preventDefault();turnStamp(e.shiftKey?-90:90);return;}
     if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){const next=toolForKey(e.key);if(next){pickTool(next);return;}}
     if((e.key==="Delete"||e.key==="Backspace") && selectedShape){e.preventDefault();e.stopPropagation();if(selectedIds.length===1&&selectedPoint!==null)removePoint(selectedShape.id,selectedPoint);else deleteShape();}
   }}>
@@ -337,13 +365,18 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         <div className="creator-paper" style={{width:`${zoom*100}%`}}>
           <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerUp={finish} onPointerCancel={cancel} onDoubleClick={()=>{if(tool==="poly"&&polyPoints&&polyPoints.length>=3)finishPoly();}}
             onPointerMove={e=>{if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window")setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
-            onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);}}>
+            onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);}}
+            onDragOver={e=>{if(e.dataTransfer.types.includes("application/x-map-stamp")){e.preventDefault();e.dataTransfer.dropEffect="copy";}}}
+            onDrop={e=>{const stamp=stampById(e.dataTransfer.getData("application/x-map-stamp"));if(!stamp)return;e.preventDefault();
+              const raw=rawPoint(e as unknown as React.PointerEvent),id=uid();
+              change(d=>{d.drawing.layerOrder=[...layerIds(d.drawing),id];d.drawing.shapes.push({id,type:"stamp",stamp:stamp.id,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:`${stamp.name} ${d.drawing.shapes.length+1}`,folderId:null,smooth:false,points:stampBox(stamp,raw,snap&&!e.altKey?grid.size:null,grid.size,d.width,d.height),fill:null,stroke,thickness:1,closed:false});});
+              setStampId(stamp.id);choose(id);}}>
             <defs><pattern id="creator-grid" width={grid.size} height={grid.size} patternUnits="userSpaceOnUse"><path d={`M ${grid.size} 0 H 0 V ${grid.size}`} fill="none" stroke="#ffffff" strokeOpacity=".22" strokeWidth="1"/></pattern></defs>
             <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
             <rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
-            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
+            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
             {hoverWall&&(tool==="door"||tool==="window")&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke="#2f80ed" strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
             {tool==="poly"&&polyPoints&&<g pointerEvents="none">
               <path d={`M ${polyPoints.map(p=>`${p.x} ${p.y}`).join(" L ")}${polyHover?` L ${polyHover.x} ${polyHover.y}`:""}`} fill={fill} fillOpacity=".55" stroke={stroke} strokeWidth={thickness} strokeLinejoin="round"/>
@@ -354,7 +387,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
           </svg>
         </div>
       </section>
-      {(tool==="poly"||tool==="door"||tool==="window")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
+      {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
       <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {grid.units} {grid.unit} squares, same as Maptable<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button>{snap&&<span className="muted">Hold Alt to draw freely</span>}</div>
       <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>
       </div>

@@ -1,6 +1,7 @@
 import type { MapDrawing, MapShape, MapStyle, Point } from "./model.ts";
 import { orderedShapes, roomPaths, shapePath, openingPath } from "./map-drawing.ts";
 import { roomPolygons, wallSegments } from "./map-creator.ts";
+import { stampById, stampMatrix } from "./map-stamps.ts";
 
 /**
  * Map styles: a preset look (Dungeon stone, Old parchment...) for the whole drawn map,
@@ -39,7 +40,7 @@ export function applyMapStyle(d: MapDrawing, next: MapStyle, background: string 
 }
 
 /** One thing to draw: a path filled or stroked, maybe clipped to the inside of a room. */
-export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round" };
+export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number] };
 
 const ring = (pts: Point[]) => `M ${pts.map(p => `${round(p.x)} ${round(p.y)}`).join(" L ")} Z`;
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -129,6 +130,12 @@ export function shapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style"
 }
 function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
   const style = d.style, background = d.background;
+  if (s.type === "stamp") {
+    const stamp = stampById(s.stamp);
+    if (!stamp) return [];
+    const matrix = stampMatrix(s, stamp), ink = style?.ink ?? "#2b2b2b";
+    return stamp.parts.map(part => ({ d: part.d, fill: part.fill, stroke: part.stroke === "ink" ? ink : part.stroke, width: part.width, matrix }));
+  }
   if (s.type === "door" || s.type === "window") return [
     { d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" },
     { d: openingPath(s), stroke: s.stroke, width: 2 },
@@ -170,6 +177,7 @@ export function backgroundOps(d: Pick<MapDrawing, "background" | "style">, width
 function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
   ctx.save();
   if (op.clip) ctx.clip(new Path2D(op.clip));
+  if (op.matrix) ctx.transform(...op.matrix);
   if (op.opacity !== undefined) ctx.globalAlpha = op.opacity;
   const path = new Path2D(op.d);
   if (op.fill) { ctx.fillStyle = op.fill; ctx.fill(path); }
