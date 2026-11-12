@@ -1,4 +1,4 @@
-export const navigationPanels = ["scenes", "exploration", "assets", "tokens", "grid", "fog", "effects", "conditions"] as const;
+export const navigationPanels = ["scenes", "scene", "exploration", "assets", "tokens", "grid", "fog", "effects", "conditions"] as const;
 export type NavigationPanel = typeof navigationPanels[number] | null;
 export type NavigationState = {
   version: 1;

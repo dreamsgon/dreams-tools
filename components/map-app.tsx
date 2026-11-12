@@ -59,11 +59,19 @@ import {
   UserRound,
   Dices,
   ScrollText,
+  ChevronDown,
+  Globe,
+  Grid3x3,
+  LayoutGrid,
+  FolderPlus,
 } from "lucide-react";
 import Board, { type View } from "./board";
 import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
 import ToolSwitch, { AccountLink } from "./tool-switch";
+import { ActionMenu } from "./popover-menu";
+import SceneSwitcher from "./scene-switcher";
+import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
 import ConditionOrganizer from "./condition-organizer";
 import ConditionEntry from "./condition-entry";
@@ -237,7 +245,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   }, []);
   const [gridAdjust, setGridAdjust] = useState(false);
   const [location, setLocation] = useState<string | null>(null);
+  const [folderRequest, setFolderRequest] = useState(0);
+  const [sceneTab, setSceneTab] = useState<"general" | "map" | "size">("general");
   const [dashboard, setDashboard] = useState(true);
+  /** Dashboard: the campaign whose scenes are shown (null = maps not in a campaign). */
+  const [overview, setOverview] = useState<{ id: string | null } | null>(null);
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [dashboardLocation, setDashboardLocation] = useState<string | null>(null);
   const [dashboardSearch, setDashboardSearch] = useState("");
@@ -272,6 +284,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       .then(value=>{if(active)setSettings(value);}).catch(()=>{});
     return ()=>{active=false;};
   },[campaignId,dialog]);
+  const settingsTab = sceneTab === "size" && scene?.mapId ? "general" : sceneTab;
   const destination = workspace?.collections.some((c) => c.id === location) && campaignFor(location) === campaignId ? location : campaignId;
   const token = scene?.tokens.find((t) => t.id === selected),
     effect = scene?.effects.find((e) => e.id === selected);
@@ -911,10 +924,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     );
   const visibleLibrary = workspace.tokenLibrary.filter((t) => !workspace.libraryCampaigns[t.id] || workspace.libraryCampaigns[t.id] === campaignId);
   const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null).length : 0;
+  const enterScene = (id: string) => {
+    activate(id); setLocation(campaignFor(workspace.scenes.find(s => s.id === id)?.containerId ?? null));
+    setPanel("scenes"); setSidebar(true); setDashboard(false); setOverview(null); setSearch("");
+  };
   const openCampaign = (id: string | null) => {
     const first = workspace.scenes.find((s) => campaignFor(s.containerId) === id);
-    if (first) activate(first.id);
-    else commit((w) => {
+    if (first) { setOverview({ id }); setDashboard(true); return; }
+    commit((w) => {
       const created = newScene("First scene"); created.containerId = id;
       w.scenes.push(created); w.activeId = created.id;
     });
@@ -922,8 +939,12 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   };
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
+  const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
   if (dashboard) return <main className="campaign-dashboard">
-    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" /><strong aria-current="page">Campaigns</strong></nav><div className="header-actions"><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><AppearanceMenu /><AccountLink /></div></header>
+    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions"><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><AppearanceMenu /><AccountLink /></div></header>
+    {overviewOpen ? <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={overview.id}
+      lastSceneId={campaignFor(scene.containerId) === overview.id ? scene.id : null} open={enterScene} back={() => setOverview(null)}
+      addScenes={() => { const target = campaignFor(scene.containerId) === overview.id ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === overview.id); if (target) { enterScene(target.id); setNewMapType("encounter"); setDialog("add-scenes"); } }} /></div> :
     <div className="dashboard-content">
       {saveRecovery}
       {workspace.scenes.some((s) => s.id === scene.id) && <button className="dashboard-continue" onClick={() => setDashboard(false)}>
@@ -938,7 +959,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       {unfiledCount > 0 && <button className="dashboard-unfiled" onClick={() => openCampaign(null)}>
         <MapIcon size={22} aria-hidden="true" /><span><strong>Maps not in a campaign</strong><small>{countLabel(unfiledCount, "scene")}</small></span>
       </button>}
-    </div>
+    </div>}
   </main>;
   return (
     <main className="app-shell" data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>
@@ -946,13 +967,13 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         <ToolSwitch active="maptable" />
         <nav className="header-scene" aria-label="Breadcrumb">
           <span className="divider" />
-          <button className="crumb crumb-home" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button>
+          <button className="crumb crumb-home" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button>
           <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
-          <button className="crumb" title={`Show scenes in ${campaign?.name || "maps not in a campaign"}`} onClick={() => {setLocation(campaignId);setPanel("scenes");setSidebar(true);}}>{campaign?.name || "Not in a campaign"}</button>
+          <button className="crumb" title={`All scenes in ${campaign?.name || "maps not in a campaign"}`} onClick={() => {setOverview({id:campaignId});setDashboard(true);setGridAdjust(false);}}>{campaign?.name || "Not in a campaign"}</button>
           <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
-          <strong aria-current="page">{scene.name}</strong>
+          <SceneSwitcher workspace={workspace} campaignId={campaignId} scene={scene} open={id=>{activate(id);setSelected(null);}} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} />
         </nav>
-        <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
+        <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
           <AppearanceMenu />
@@ -990,7 +1011,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       <div className="workspace">
         <nav className="rail" aria-label="Workspace tools" onClick={()=>setMobileToolsOpen(false)}>
           <button
-            className={panel === "scenes" ? "active" : ""}
+            className={panel === "scenes" || panel === "scene" ? "active" : ""}
             onClick={() => {
               setPanel(panel === "scenes" ? null : "scenes");
               setSidebar(true);
@@ -1046,11 +1067,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Help</span>
           </button>
           <button title="Map Creator" onClick={()=>{setGridAdjust(false);setCreatorOpen(true);}}><MapIcon size={21}/><span>Create map</span></button>
-          <button title="Campaigns" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={21}/><span>Campaigns</span></button>
+          <button title="Campaigns" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><LayoutDashboard size={21}/><span>Campaigns</span></button>
         </nav>
         <nav className="mobile-navigation" aria-label="Phone navigation">
           <button onClick={()=>{setSidebar(false);setMobileToolsOpen(false);}}>Map</button>
-          <button aria-pressed={panel==="scenes"&&sidebar} onClick={()=>{setPanel("scenes");setSidebar(true);setMobileToolsOpen(false);}}>Scenes</button>
+          <button aria-pressed={(panel==="scenes"||panel==="scene")&&sidebar} onClick={()=>{setPanel("scenes");setSidebar(true);setMobileToolsOpen(false);}}>Scenes</button>
           <button aria-pressed={panel==="tokens"&&sidebar} onClick={()=>{setPanel("tokens");setSidebar(true);setMobileToolsOpen(false);}}>Tokens</button>
           <button aria-expanded={mobileToolsOpen} onClick={()=>{setMobileToolsOpen(v=>!v);setMobileHeaderOpen(false);}}>Tools</button>
         </nav>
@@ -1060,6 +1081,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               <h2>
                 {panel === "scenes"
                   ? "Scenes"
+                  : panel === "scene" ? "Scene settings"
                   : panel === "exploration" ? "Exploration maps"
                   : panel === "assets" ? "Campaign assets"
                   : panel === "tokens"
@@ -1089,48 +1111,57 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               </>}
               {panel === "scenes" && (
                 <>
+                  <div className="scenes-head">
+                    <ActionMenu label="Add to this campaign" trigger={<><Plus size={16} aria-hidden="true" />New<ChevronDown size={14} aria-hidden="true" /></>} items={[
+                      {icon:<Upload size={16}/>,label:"Upload a map",hint:"An image, Universal VTT file or a link",onClick:()=>{setLocation(destination);setNewMapType("encounter");setDialog("map");}},
+                      {icon:<Grid3x3 size={16}/>,label:"Blank encounter map",hint:"A grid to draw on and place tokens",onClick:()=>{const s=newScene();s.containerId=destination;commit(w=>{w.scenes.push(s);w.activeId=s.id;});setSelected(null);}},
+                      {icon:<MapIcon size={16}/>,label:"Area map",hint:"A town, dungeon level or region with pins",onClick:()=>{setNewMapType("area");setDialog("add-scenes");}},
+                      {icon:<Globe size={16}/>,label:"World map",hint:"The whole world, for travel and weather",onClick:()=>{setNewMapType("world");setDialog("add-scenes");}},
+                      {icon:<LayoutGrid size={16}/>,label:"Split a large map",hint:campaignId?"Cut one big image into linked areas":"Open a campaign first",disabled:!campaignId,divider:true,onClick:()=>{setLocation(destination);setDialog("split-map");}},
+                      {icon:<Copy size={16}/>,label:"Copy from another campaign",hint:"Bring scenes with their tokens and fog",onClick:()=>{setNewMapType("encounter");setDialog("add-scenes");}},
+                      {icon:<FolderPlus size={16}/>,label:"New folder",hint:"Group scenes by act, chapter or session",divider:true,onClick:()=>setFolderRequest(n=>n+1)},
+                    ]}/>
+                    <input
+                      className="search"
+                      aria-label="Search scenes"
+                      placeholder="Find a scene…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <SceneOrganizer workspace={workspace} rootId={campaignId} location={destination} setLocation={setLocation}
+                    commit={commit} activate={activate} search={search} newFolderRequest={folderRequest}
+                    onSettings={id=>{activate(id);setSceneTab("general");setPanel("scene");}} />
+                  <details className="scenes-backups">
+                    <summary>Backups and import</summary>
+                  <h3>Backups</h3>
+                  <p className="muted">
+                    Cloud saves follow you between devices. A backup includes
+                    all scenes and images.
+                  </p>
                   <div className="button-row">
-                    <button
-                      className="primary grow"
-                      onClick={() => {setNewMapType("encounter");setDialog("add-scenes");}}
-                    >
-                      <Upload size={16} />
-                      Add scenes
+                    <button disabled={busy} onClick={() => void backup()}>
+                      <Download size={15} />
+                      Backup
                     </button>
                     <button
-                      title="New blank scene"
-                      aria-label="New blank scene"
-                      onClick={() => {
-                        const s = newScene();
-                        s.containerId = destination;
-                        commit((w) => {
-                          w.scenes.push(s);
-                          w.activeId = s.id;
-                        });
-                        setSelected(null);
-                      }}
+                      disabled={busy}
+                      onClick={() => backupInput.current?.click()}
                     >
-                      <Plus size={18} aria-hidden="true" />Blank
+                      <Upload size={15} />
+                      Import
                     </button>
                   </div>
-                  <div className="button-row map-type-actions"><button onClick={()=>{setNewMapType("world");setDialog("add-scenes");}}>New World Map</button><button onClick={()=>{setNewMapType("area");setDialog("add-scenes");}}>New Area Map</button></div>
-                  <input
-                    className="search"
-                    aria-label="Search scenes"
-                    placeholder="Find a scene…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                  <SceneOrganizer workspace={workspace} rootId={campaignId} location={destination} setLocation={setLocation}
-                    commit={commit} activate={activate} search={search} />
-                  <hr />
-                  <h3>Scene details</h3>
-                  <Field label="Move map to"><select value={scene.mapType} onChange={e=>updateScene(s=>{s.mapType=e.target.value as Scene["mapType"];})}><option value="encounter">Encounter Map</option><option value="world">World Map</option><option value="area">Area Map</option></select></Field>
-                  <p className="muted">Change the map group without losing its contents or links. Find World and Area maps together in Explore.</p>
-                  <button onClick={()=>{
-                    if(scene.drawing && !window.confirm("Replace this scene’s drawing with an uploaded map? Tokens, fog, and other scene settings will be kept."))return;
-                    setDialog("scene-map");
-                  }}>{scene.mapId || scene.drawing ? "Replace map" : "Upload map"}</button>
+                  </details>
+                </>
+              )}
+              {panel === "scene" && (
+                <>
+                  <button className="scene-settings-back" onClick={()=>setPanel("scenes")}><ChevronLeft size={15} aria-hidden="true" />All scenes</button>
+                  <div className="scene-settings-tabs" role="tablist" aria-label="Scene settings">
+                    {([["general","General"],["map","Map image"],...(!scene.mapId?[["size","Size"] as const]:[])] as const).map(([id,label])=><button key={id} role="tab" aria-selected={settingsTab===id} onClick={()=>setSceneTab(id)}>{label}</button>)}
+                  </div>
+                  {settingsTab==="general" && <>
                   <Field label="Name">
                     <input
                       maxLength={120}
@@ -1142,14 +1173,56 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       }
                     />
                   </Field>
-                  <p className="muted">Move this scene to any campaign or folder below. Its map and tokens travel with it.</p>
-                  <Field label="Move scene to">
+                  <Field label="Kind of map"><select value={scene.mapType} onChange={e=>updateScene(s=>{s.mapType=e.target.value as Scene["mapType"];})}><option value="encounter">Encounter map</option><option value="area">Area map</option><option value="world">World map</option></select></Field>
+                  <p className="muted">Area and world maps also show up in Explore.</p>
+                  <Field label="Campaign and folder">
                     <select aria-label="Move scene to" value={scene.containerId ?? ""} onChange={(e) => {
                       const containerId = e.target.value || null;
                       updateScene((s) => { s.containerId = containerId; s.folder = ""; });
                       setLocation(containerId);
                     }}><LocationOptions workspace={workspace} /></select>
                   </Field>
+                  <div className="button-row">
+                    <button
+                      onClick={() =>
+                        commit((w) => {
+                          const copy = structuredClone(scene);
+                          copy.id = uid();
+                          copy.name = (scene.name + " copy").slice(0, 120);
+                          w.scenes.push(copy);
+                          w.activeId = copy.id;
+                        })
+                      }
+                    >
+                      <Copy size={15} />
+                      Duplicate
+                    </button>
+                    <button
+                      disabled={workspace.scenes.length < 2}
+                      className="danger"
+                      onClick={() => {
+                        commit((w) => {
+                          w.scenes = w.scenes.filter((s) => s.id !== scene.id);
+                          w.activeId = w.scenes[0].id;
+                        });
+                        setSelected(null);
+                        setNotice("Scene removed. Use Undo to restore it.");
+                      }}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                      Remove scene
+                    </button>
+                  </div>
+                  </>}
+                  {settingsTab==="map" && <>
+                    <p className="muted">{scene.mapId ? "This scene uses an uploaded map. Replacing it keeps tokens, fog and pins." : scene.drawing ? "This scene uses a drawn map." : "This scene is a blank grid. Upload a map image to put under it."}</p>
+                  <button onClick={()=>{
+                    if(scene.drawing && !window.confirm("Replace this scene’s drawing with an uploaded map? Tokens, fog, and other scene settings will be kept."))return;
+                    setDialog("scene-map");
+                  }}>{scene.mapId || scene.drawing ? "Replace map" : "Upload map"}</button>
+                    <p className="muted">Grid size and offset are under Grid in the tool rail.</p>
+                  </>}
+                  {settingsTab==="size" && !scene.mapId && <>
                   {!scene.mapId && (
                     <>
                     <div className="form-row">
@@ -1182,56 +1255,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     <p className="muted">Resize the blank canvas with the sliders, or expand its right/bottom edge by one grid cell. Existing objects stay in place.</p>
                     </>
                   )}
-                  <div className="button-row">
-                    <button
-                      onClick={() =>
-                        commit((w) => {
-                          const copy = structuredClone(scene);
-                          copy.id = uid();
-                          copy.name = (scene.name + " copy").slice(0, 120);
-                          w.scenes.push(copy);
-                          w.activeId = copy.id;
-                        })
-                      }
-                    >
-                      <Copy size={15} />
-                      Duplicate
-                    </button>
-                    <button
-                      disabled={workspace.scenes.length < 2}
-                      className="danger"
-                      onClick={() => {
-                        commit((w) => {
-                          w.scenes = w.scenes.filter((s) => s.id !== scene.id);
-                          w.activeId = w.scenes[0].id;
-                        });
-                        setSelected(null);
-                        setNotice("Scene removed. Use Undo to restore it.");
-                      }}
-                    >
-                      <Trash2 size={15} aria-hidden="true" />
-                      Remove scene
-                    </button>
-                  </div>
-                  <hr />
-                  <h3>Backups</h3>
-                  <p className="muted">
-                    Cloud saves follow you between devices. A backup includes
-                    all scenes and images.
-                  </p>
-                  <div className="button-row">
-                    <button disabled={busy} onClick={() => void backup()}>
-                      <Download size={15} />
-                      Backup
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => backupInput.current?.click()}
-                    >
-                      <Upload size={15} />
-                      Import
-                    </button>
-                  </div>
+                  </>}
+                  <p className="muted scene-settings-note">Changes save as you go.</p>
                 </>
               )}
               {panel === "assets" && <CampaignAssets workspace={workspace} campaignId={campaignId} commit={commit} />}
@@ -1867,7 +1892,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 </>
               )}
             </div>
-            <div className="manual-save-controls"><button onClick={()=>void manualSave()}>Save changes</button><small role="status">{saveError || saveStatus}</small></div>
+            {panel !== "scenes" && panel !== "scene" && <div className="manual-save-controls"><button onClick={()=>void manualSave()}>Save changes</button><small role="status">{saveError || saveStatus}</small></div>}
           </ResizableSidebar>
         )}
         <section className="map-workspace">
