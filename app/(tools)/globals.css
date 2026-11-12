@@ -1685,7 +1685,7 @@ h3 { color:var(--ink); font-size:13px; }
 .manual-save-controls button:hover { background:var(--accent-hover); }
 .manual-save-controls small { flex:1 1 100px; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
 .token-options-popout .manual-save-controls { position:sticky; bottom:0; margin-top:16px; border:1px solid var(--line); border-radius:var(--radius); }
-.side-panel > .panel-content { min-height:0; }
+.side-panel > .panel-content { flex:1 1 auto; min-height:0; }
 @media(max-width:600px) {
  .app-header { height:auto; min-height:61px; flex-wrap:wrap; padding:10px 13px; row-gap:8px; }
  .app-header .header-actions { margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }

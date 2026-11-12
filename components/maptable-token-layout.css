@@ -45,3 +45,18 @@
 .token-statblock .roll-chip{display:inline-flex;align-items:center;gap:3px;min-height:0;height:auto;margin:1px;padding:0 5px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:500;line-height:1.6;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;vertical-align:baseline}
 .token-statblock .roll-chip:hover{border-color:var(--accent)}
 .token-statblock .roll-chip:active{transform:translateY(1px)}
+/* Tokens panel: actions, the selected token, then the list, then initiative. */
+.token-gallery-link{width:100%;justify-content:center;gap:8px;margin:8px 0 0;}
+.token-selected{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:8px 10px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--raised);}
+.token-selected-info{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
+.token-selected-info .token-avatar{flex-shrink:0;}
+.token-selected-info>span:last-child{display:grid;min-width:0;}
+.token-selected-info small{font-size:11px;color:var(--muted);}
+.token-selected-info strong{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.token-selected-edit{flex-shrink:0;}
+.token-panel-hint{margin:12px 0 0;}
+.side-panel h3.token-panel-heading{margin:18px 0 8px;}
+.side-panel .campaign-defaults-button{margin:14px 0 0;}
+.initiative-live{display:flex;gap:8px;align-items:flex-start;margin:8px 0 0;}
+.initiative-preview-label{display:block;margin:8px 0 4px;font-size:12px;}
+.map-initiative details>button{width:100%;justify-content:center;}
