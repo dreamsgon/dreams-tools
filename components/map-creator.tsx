@@ -1,16 +1,22 @@
 "use client";
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, MousePointer2, Square, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge } from "lucide-react";
 import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type Point } from "@/lib/model";
 import DrawingShape from "./drawing-shape";
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
+import "./map-creator.css";
+import { creatorTools, toolForKey, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
 type Draft = { name:string; width:number; height:number; drawing:MapDrawing };
-const blank = ():Draft => ({name:"New drawn map",width:1400,height:1000,drawing:{background:"#8b9b75",shapes:[],folders:[],layerOrder:[]}});
+const blank = ():Draft => ({name:"New drawn map",width:1400,height:980,drawing:{background:"#8b9b75",shapes:[],folders:[],layerOrder:[]}});
 const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,drawing:structuredClone(s.drawing!)});
-type Tool="select"|"rect"|"circle"|"ellipse"|"line"|"curve"|"path"|"door"|"window";
+type Tool=CreatorTool;
+type Tab="selected"|"layers"|"map";
+const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
+const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -21,7 +27,10 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const current=useRef(draft);current.current=draft;
   const [dirty,setDirty]=useState(false), [tool,setTool]=useState<Tool>("rect"), [selected,setSelected]=useState<string|null>(null);
   const [fill,setFill]=useState("#cec7a9"),[stroke,setStroke]=useState("#414b3c"),[thickness,setThickness]=useState(14);
-  const [snap,setSnap]=useState(true),[zoom,setZoom]=useState(1);
+  const [snap,setSnap]=useState(true),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
+  const grid=gridOf(workspace.scenes.find(s=>s.id===source));
+  const [drawingId,setDrawingId]=useState<string|null>(null);
+  const stage=useRef<HTMLElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null),[spaceHeld,setSpaceHeld]=useState(false);
   const [multi,setMulti]=useState<string[]>([]);
   const [addSelection,setAddSelection]=useState(false);
   const [selectedPoint,setSelectedPoint]=useState<number|null>(null);
@@ -86,11 +95,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const point=(e:React.PointerEvent):Point=>{
     const matrix=svg.current!.getScreenCTM()!;
     const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
-    const grid=(v:number,max:number)=>Math.max(0,Math.min(max,(snap && tool!=="path")?Math.round(v/20)*20:Math.round(v)));
-    return {x:grid(p.x,draft.width),y:grid(p.y,draft.height)};
+    // Rooms and walls land on the same squares as the Maptable grid; Alt draws freely.
+    return snapPoint(p,snap&&tool!=="path"&&!e.altKey?grid.size:null,draft.width,draft.height);
   };
   const start=(e:React.PointerEvent<SVGSVGElement>)=>{
-    if(e.button!==0||gesture.current)return;
+    if(e.button!==0||gesture.current||spaceHeld)return;
     e.currentTarget.focus();
     e.currentTarget.setPointerCapture(e.pointerId);
     const p=point(e),before=structuredClone(current.current);
@@ -113,7 +122,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     }
     const id=uid(),type=tool==="circle"?"ellipse":tool;
     const shape:MapShape={id,type,roomParts:[],hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
-    gesture.current={before,id,start:p,index:null,newShape:true};choose(id);
+    gesture.current={before,id,start:p,index:null,newShape:true};choose(id);setDrawingId(id);
     const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
   };
   const move=(e:React.PointerEvent<SVGSVGElement>)=>{
@@ -145,14 +154,14 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   };
   const finish=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(!gesture.current)return;
-    move(e);const g=gesture.current;gesture.current=null;
+    move(e);const g=gesture.current;gesture.current=null;setDrawingId(null);
     const s=current.current.drawing.shapes.find(s=>s.id===g.id)!;
     if(g.newShape && s.type==="path")s.points=simplifyPoints(s.points,3);
     const changed=JSON.stringify(g.before)!==JSON.stringify(current.current);
     if(g.newShape && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
     if(changed)apply(current.current,g.before);
   };
-  const cancel=()=>{if(gesture.current){current.current=gesture.current.before;setDraft(current.current);gesture.current=null;setSelected(null);}};
+  const cancel=()=>{setDrawingId(null);if(gesture.current){current.current=gesture.current.before;setDraft(current.current);gesture.current=null;setSelected(null);}};
   const nearestSegment=(s:MapShape,p:Point)=>{
     let best=Infinity,index=0;
     for(let i=0;i<s.points.length-(s.closed?0:1);i++){
@@ -169,56 +178,123 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   };
   const deleteShape=()=>{if(!selectedShape)return;change(d=>{d.drawing.shapes=d.drawing.shapes.filter(s=>!selectedIds.includes(s.id));d.drawing.layerOrder=d.drawing.layerOrder.filter(id=>!selectedIds.includes(id));});setSelected(null);setSelectedPoint(null);};
   const sidebars=useDesktopSidebars("map-creator-sidebars");
+  const single=selectedShape&&selectedIds.length===1?selectedShape:null;
+  // The size label follows the shape being drawn, or the one selected.
+  const labelShape=(drawingId?draft.drawing.shapes.find(s=>s.id===drawingId):null)??(tool==="select"?single:null);
+  const labelSize=Math.max(14,Math.min(draft.width,draft.height)/45);
+  const label=labelShape&&labelShape.points.length>1?(()=>{const b=shapeBounds(labelShape),text=sizeLabel(labelShape,grid),w=text.length*labelSize*.62+labelSize,h=labelSize*1.8;
+    const y=b.y-h-labelSize*.6<0?b.y+b.h+labelSize*.6:b.y-h-labelSize*.6,x=Math.max(0,Math.min(draft.width-w,b.x+b.w/2-w/2));
+    return <g className="creator-size-label" pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx={labelSize*.3} fill="#16191c" fillOpacity=".88"/><text x={x+w/2} y={y+h*.66} textAnchor="middle" fontSize={labelSize} fontWeight={500} fill="#ffffff">{text}</text></g>;})():null;
+  const zoomBy=(step:number)=>setZoom(z=>Math.max(.5,Math.min(4,Math.round((z+step)*4)/4)));
+  useEffect(()=>{
+    const el=stage.current;if(!el)return;
+    const wheel=(e:WheelEvent)=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoomBy(e.deltaY<0?.25:-.25);};
+    el.addEventListener("wheel",wheel,{passive:false});return()=>el.removeEventListener("wheel",wheel);
+  },[]);
+  useEffect(()=>{const up=(e:KeyboardEvent)=>{if(e.code==="Space")setSpaceHeld(false);};window.addEventListener("keyup",up);return()=>window.removeEventListener("keyup",up);},[]);
+  const duplicate=()=>{if(!selectedIds.length)return;const ids:string[]=[];change(d=>{for(const id of selectedIds){const s=d.drawing.shapes.find(s=>s.id===id);if(!s)continue;const copy={...offsetShape(structuredClone(s),grid.size,grid.size,d.width,d.height),id:uid(),name:`${s.name||"Shape"} copy`.slice(0,120)};d.drawing.shapes.push(copy);d.drawing.layerOrder=[...layerIds(d.drawing),copy.id];ids.push(copy.id);}});setSelected(ids.at(-1)??null);setMulti(ids.slice(0,-1));};
+  const merge=()=>{
+    const id=uid(),merged=mergeRooms(orderedShapes(current.current.drawing).filter(s=>selectedIds.includes(s.id)),id);
+    if(!merged){setMessage("Select at least two filled rooms or closed floors to merge.");return;}
+    change(d=>{d.drawing.shapes=d.drawing.shapes.filter(s=>!selectedIds.includes(s.id));d.drawing.shapes.push(merged);d.drawing.layerOrder=[...layerIds(d.drawing).filter(x=>!selectedIds.includes(x)&&x!==id),id];});choose(id);setTool("select");
+  };
+  const opening=single?.type==="door"||single?.type==="window";
+  const colours=<div className="creator-pair">
+    {!opening&&<label>Floor<span className="creator-colour"><input type="color" aria-label="Floor colour" value={selectedShape?.fill??fill} onChange={e=>{setFill(e.target.value);patchShape({fill:e.target.value});}}/>{selectedShape&&<button type="button" className="creator-link" onClick={()=>patchShape({fill:selectedShape.fill?null:fill})}>{selectedShape.fill?"No floor":"Add floor"}</button>}</span></label>}
+    <label>{opening?"Frame":"Walls"}<input type="color" aria-label={opening?"Frame colour":"Wall colour"} value={selectedShape?.stroke??stroke} onChange={e=>{setStroke(e.target.value);patchShape({stroke:e.target.value});}}/></label>
+  </div>;
+  const thicknessField=<label>Wall thickness <output>{selectedShape?.thickness??thickness} px</output><input type="range" min={1} max={60} value={selectedShape?.thickness??thickness} onChange={e=>{setThickness(+e.target.value);patchShape({thickness:+e.target.value});}}/></label>;
+  const bounds=single?shapeBounds(single):null;
+  const resize=(w:number,h:number)=>{if(!single||!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.points=resizeShape(s,Math.min(d.width,fromUnits(w,grid)),Math.min(d.height,fromUnits(h,grid))).points;});};
+  const selectedPanel=<div className="creator-panel">
+    {!selectedIds.length&&<>
+      <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
+      <h3>New shapes</h3>{colours}{thicknessField}
+      <h3>Shortcuts</h3>
+      <dl className="creator-keys">{creatorTools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
+    </>}
+    {single&&<>
+      <label>Name<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
+      {bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
+        <label>Width ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.w,grid)} onChange={e=>resize(+e.target.value,toUnits(bounds.h,grid))}/></label>
+        <label>Length ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.h,grid)} onChange={e=>resize(toUnits(bounds.w,grid),+e.target.value)}/></label>
+      </div>:<p className="creator-measure">{isArea(single)?"Size":"Length"}: <strong>{sizeLabel(single,grid)}</strong></p>}
+      {colours}{thicknessField}
+      {single.type==="path"&&<div className="creator-checks"><label className="creator-check"><input type="checkbox" checked={single.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close the outline</label><label className="creator-check"><input type="checkbox" checked={single.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label></div>}
+      {(single.type==="path"||single.type==="line")&&<div className="creator-points"><span>Corners ({single.points.length})</span><div className="creator-seg" role="group" aria-label="Corner editing">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode==="move"?"Move":mode==="add"?"Add":"Remove"}</button>)}</div>
+        <p className="muted">{pointMode==="add"?"Click a wall to add a corner there.":pointMode==="delete"?"Click a corner to remove it.":"Drag the white corners to reshape."}</p></div>}
+    </>}
+    {selectedIds.length>1&&<>
+      <p className="creator-empty">{selectedIds.length} shapes selected. Drag any of them to move them together.</p>
+      {colours}{thicknessField}
+      <button onClick={merge}><Merge size={15}/> Merge into one room</button>
+      <p className="muted">Rooms must touch or overlap. The walls between them disappear.</p>
+    </>}
+    {selectedIds.length>0&&<div className="creator-actions"><button onClick={duplicate}><Copy size={15}/> Duplicate</button><button onClick={deleteShape}><Trash2 size={15}/> Delete</button></div>}
+    <label className="creator-check"><input type="checkbox" checked={addSelection} onChange={e=>{setAddSelection(e.target.checked);setTool("select");}}/>Tapping adds to the selection (for touch screens; Shift-click does the same)</label>
+  </div>;
+  const maxSquares=Math.floor(8000/grid.size);
+  const squares=(key:"width"|"height")=><label>{key==="width"?"Width":"Length"} (squares)<input aria-label={`Map ${key} in squares`} type="number" min={3} max={maxSquares} value={Math.round(draft[key]/grid.size)} onChange={e=>{const n=Math.round(+e.target.value);if(n>=3&&n<=maxSquares)change(d=>{d[key]=n*grid.size;});}}/></label>;
+  const mapPanel=<div className="creator-panel">
+    <label>Open a saved map<select aria-label="Saved maps" value={source??""} onChange={e=>{const id=e.target.value;guard(()=>open(id));}}><option value="">New map</option>{workspace.scenes.filter(s=>s.drawing).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    <button onClick={()=>guard(()=>open(""))}><Plus size={15}/> Start a new map</button>
+    <h3>This map</h3>
+    <div className="creator-pair">{squares("width")}{squares("height")}</div>
+    <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>
+    <label>Background<input type="color" value={draft.drawing.background} onChange={e=>change(d=>{d.drawing.background=e.target.value;})}/></label>
+    <label className="creator-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to the grid (freehand always stays smooth)</label>
+    <p className="muted">Save keeps the drawing with its scene. Reopen it here any time to keep editing.</p>
+  </div>;
+  const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["map","Map"]];
   return <main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
     if(savingRef.current || pending || (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]"))return;
     if(e.key==="Escape"){cancel();setSelected(null);}
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();history(!e.shiftKey);}
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();history(!e.shiftKey);return;}
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="d"){e.preventDefault();duplicate();return;}
+    if(e.code==="Space"&&!(e.target as HTMLElement).closest("button")){e.preventDefault();setSpaceHeld(true);return;}
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){const next=toolForKey(e.key);if(next){setTool(next);if(next!=="select")setSelected(null);return;}}
     if((e.key==="Delete"||e.key==="Backspace") && selectedShape){e.preventDefault();e.stopPropagation();if(selectedIds.length===1&&selectedPoint!==null)removePoint(selectedShape.id,selectedPoint);else deleteShape();}
   }}>
-    <header className="creator-header"><DesktopSidebars {...sidebars}/><h1>Map Creator</h1><span role="status">{dirty?"Uncommitted changes":saveStatus}</span>
+    <header className="creator-header">
+      <button className="creator-back" disabled={saving} onClick={()=>guard(()=>close())}><ArrowLeft size={16}/> Back</button>
+      <h1>Map Creator</h1>
+      <input className="creator-name" aria-label="Map name" maxLength={120} value={draft.name} onChange={e=>change(d=>{d.name=e.target.value||"Untitled map";})}/>
+      <span className="creator-spacer"/>
+      <span role="status" className="creator-status">{dirty?"Not saved yet":saveStatus}</span>
+      <button className="creator-icon" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" disabled={!undo.current.length} onClick={()=>history(true)}><Undo2 size={17}/></button>
+      <button className="creator-icon" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" disabled={!redo.current.length} onClick={()=>history(false)}><Redo2 size={17}/></button>
+      <DesktopSidebars {...sidebars}/>
       <AppearanceMenu />
-      <button disabled={saving} onClick={()=>guard(()=>close())}>Back</button><button disabled={saving} className="primary" onClick={()=>void save()}>{saving?"Saving…":"Save map"}</button><button disabled={saving} onClick={async()=>{const id=await save();if(id)close(id);}}>Save & use scene</button>
+      <button disabled={saving} onClick={()=>void save()}>{saving?"Saving…":"Save map"}</button>
+      <button disabled={saving} className="primary" onClick={async()=>{const id=await save();if(id)close(id);}}>Save & use as scene</button>
     </header>
-    <div className="creator-layout" inert={saving}><ResizableSidebar className="creator-controls" storageKey="map-creator-controls" defaultWidth={290}>
-      <label>Saved maps<select aria-label="Saved maps" value={source??""} onChange={e=>{const id=e.target.value;guard(()=>open(id));}}><option value="">New map</option>{workspace.scenes.filter(s=>s.drawing).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-      <button onClick={()=>guard(()=>open(""))}>New map</button>
-      <label>Map name<input maxLength={120} value={draft.name} onChange={e=>change(d=>{d.name=e.target.value||"Untitled map";})}/></label>
-      <div className="form-row">{(["width","height"] as const).map(key=><label key={key}>{key==="width"?"Width":"Height"}<input aria-label={`Map ${key}`} type="number" min={200} max={8000} step={20} value={draft[key]} onChange={e=>{const n=Number(e.target.value);if(n>=200&&n<=8000)change(d=>{d[key]=n;});}}/></label>)}</div>
-      <label>Background<input type="color" value={draft.drawing.background} onChange={e=>change(d=>{d.drawing.background=e.target.value;})}/></label>
-      <label className="creator-check"><input type="checkbox" checked={addSelection} onChange={e=>{setAddSelection(e.target.checked);setTool("select");}}/>Add to selection</label>
-      <p className="muted">Shift-click shapes or layers to select several. {selectedIds.length} selected. Drag a selected shape to move the group.</p>
-      <button disabled={selectedIds.length<2} onClick={()=>{
-        const id=uid(),merged=mergeRooms(orderedShapes(current.current.drawing).filter(s=>selectedIds.includes(s.id)),id);
-        if(!merged){setMessage("Select at least two filled rooms or closed floors to merge.");return;}
-        change(d=>{d.drawing.shapes=d.drawing.shapes.filter(s=>!selectedIds.includes(s.id));d.drawing.shapes.push(merged);d.drawing.layerOrder=[...layerIds(d.drawing).filter(x=>!selectedIds.includes(x)&&x!==id),id];});choose(id);setTool("select");
-      }}>Merge selected rooms</button>
-      <p className="muted">Overlap or touch rooms before merging. The merged room uses the first room's colors; internal walls disappear. Drag Door or Window along a wall to place an opening. Floor color sets its gap color.</p>
-      <label>Floor color<input type="color" value={selectedShape?.fill??fill} onChange={e=>{setFill(e.target.value);patchShape({fill:e.target.value});}}/></label>
-      <label>Wall color<input type="color" value={selectedShape?.stroke??stroke} onChange={e=>{setStroke(e.target.value);patchShape({stroke:e.target.value});}}/></label>
-      <label>Wall thickness<input type="range" min={1} max={60} value={selectedShape?.thickness??thickness} onChange={e=>{setThickness(+e.target.value);patchShape({thickness:+e.target.value});}}/>{selectedShape?.thickness??thickness} px</label>
-      <label className="creator-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap shapes to 20 px (freehand stays smooth)</label>
-      {selectedShape && <><h3>Selected {selectedShape.type}</h3><label className="creator-check"><input type="checkbox" checked={!!selectedShape.fill} onChange={e=>patchShape({fill:e.target.checked?fill:null})}/>Fill shape</label>
-        {selectedShape.type==="path" && <label className="creator-check"><input type="checkbox" checked={selectedShape.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close outline</label>}
-        {selectedShape.type==="path" && <label className="creator-check"><input type="checkbox" checked={selectedShape.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label>}
-        {(selectedShape.type==="path"||selectedShape.type==="line") && <><div className="button-row">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode} points</button>)}</div>
-        <p className="muted">Add: click a wall segment to insert a point. Delete: click a point handle. Move: drag handles. {selectedShape.points.length} points.</p>
-        <button disabled={selectedPoint===null} onClick={()=>removePoint(selectedShape.id,selectedPoint!)}>Delete selected point</button></>}
-        <button onClick={deleteShape}>Delete shape</button></>}
-      <div className="button-row"><button disabled={!undo.current.length} onClick={()=>history(true)}>Undo drawing</button><button disabled={!redo.current.length} onClick={()=>history(false)}>Redo drawing</button></div>
-      <label>Zoom<input type="range" min={1} max={3} step={0.25} value={zoom} onChange={e=>setZoom(+e.target.value)}/></label>
-      <p className="muted">Drag to draw. Select / edit moves shapes; drag white handles to reshape them. Curved walls have a middle control handle. Delete / Backspace removes a selected point, or the shape when no point is selected. Zoom and scroll for detail. Save commits the drawing to its scene and saves it to cloud; reopen it here to edit later.</p>
-
-
-    </ResizableSidebar><section className="creator-stage" aria-label="Map drawing area"><div style={{width:`${zoom*100}%`,minWidth:320}}>
-      <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{background:draft.drawing.background,touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel}>
-        <defs><pattern id="creator-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 H 0 V 20" fill="none" stroke="#ffffff" strokeOpacity=".18" strokeWidth="1"/></pattern></defs>
-        <rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>
-        {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} background={draft.drawing.background}/>)}
-        {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
-        {selectedShape && selectedIds.length===1 && tool==="select" && <g><path d={shapePath(selectedShape)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{selectedShape.points.map((p,i)=><circle key={i} data-shape={selectedShape.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
-      </svg></div></section><ResizableSidebar className="creator-layer-panel" storageKey="map-creator-layers" defaultWidth={310} edge="left">      <DrawingLayers drawing={draft.drawing} selected={selected} selectedIds={selectedIds} select={(id,add)=>{setTool("select");choose(id,!!add||addSelection);}} change={fn=>change(d=>fn(d.drawing))}/></ResizableSidebar></div>
-    <nav className="creator-bottom-tools" aria-label="Drawing tools">      <div className="creator-tools">{([["select","Select / edit"],["rect","Room / floor"],["circle","Circular room"],["ellipse","Oval room"],["line","Wall / line"],["curve","Curved wall"],["path","Freehand"],["door","Door"],["window","Window"]] as [Tool,string][]).map(([id,label])=><button key={id} aria-pressed={tool===id} className={tool===id?"active":""} onClick={()=>{setTool(id);setSelected(null);}}>{label}</button>)}</div></nav>
+    <div className="creator-layout" inert={saving}>
+      <nav className="creator-rail" aria-label="Drawing tools">{creatorTools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>{setTool(t.id);if(t.id!=="select")setSelected(null);}}>{TOOL_ICONS[t.id]}<span>{t.key}</span></button>)}</nav>
+      <div className="creator-canvas">
+      <section ref={stage} className="creator-stage" aria-label="Map drawing area" data-panning={spaceHeld||undefined}
+        onPointerDown={e=>{if(!spaceHeld&&e.button!==1)return;e.preventDefault();const el=stage.current!;pan.current={x:e.clientX,y:e.clientY,left:el.scrollLeft,top:el.scrollTop};e.currentTarget.setPointerCapture(e.pointerId);}}
+        onPointerMove={e=>{const p=pan.current;if(!p)return;const el=stage.current!;el.scrollLeft=p.left-(e.clientX-p.x);el.scrollTop=p.top-(e.clientY-p.y);}}
+        onPointerUp={()=>{pan.current=null;}} onPointerCancel={()=>{pan.current=null;}}>
+        <div className="creator-paper" style={{width:`${zoom*100}%`}}>
+          <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{background:draft.drawing.background,touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel}>
+            <defs><pattern id="creator-grid" width={grid.size} height={grid.size} patternUnits="userSpaceOnUse"><path d={`M ${grid.size} 0 H 0 V ${grid.size}`} fill="none" stroke="#ffffff" strokeOpacity=".22" strokeWidth="1"/></pattern></defs>
+            <rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>
+            {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} background={draft.drawing.background}/>)}
+            {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
+            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{single.points.map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
+            {label}
+          </svg>
+        </div>
+      </section>
+      <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {grid.units} {grid.unit} squares, same as Maptable<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button>{snap&&<span className="muted">Hold Alt to draw freely</span>}</div>
+      <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>
+      </div>
+      <ResizableSidebar className="creator-layer-panel creator-inspector" storageKey="map-creator-layers" defaultWidth={310} edge="left">
+        <div className="creator-tabs" role="tablist" aria-label="Inspector">{tabs.map(([id,name])=><button key={id} role="tab" aria-selected={tab===id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{name}</button>)}</div>
+        {tab==="selected"?selectedPanel:tab==="map"?mapPanel:<DrawingLayers drawing={draft.drawing} selected={selected} selectedIds={selectedIds} select={(id,add)=>{setTool("select");choose(id,!!add||addSelection);}} change={fn=>change(d=>fn(d.drawing))}/>}
+      </ResizableSidebar>
+    </div>
     {message && <div className="creator-message" role="status">{message}</div>}
     {pending && <div className="creator-prompt" role="dialog" aria-modal="true" aria-label="Uncommitted drawing"><div><h2>Keep your drawing?</h2><p>Save your changes before leaving this map.</p><div className="button-row"><button disabled={saving} onClick={async()=>{const action=pending;if(await save()){setPending(null);action();}}}>Save changes</button><button disabled={saving} onClick={()=>{const action=pending;setPending(null);action();}}>Discard changes</button><button disabled={saving} onClick={()=>setPending(null)}>Keep editing</button></div></div></div>}
   </main>;
