@@ -45,6 +45,7 @@ export function moveLayer(d:MapDrawing,id:string,direction:number){const shape=d
 export function shapePath(s: MapShape): string {
   const [a,b] = s.points;
   if(s.type==="merged")return roomPaths(s).join(" ");
+  if(s.type==="label"){const b=labelBox(s);return `M ${b.x} ${b.y} H ${b.x+b.w} V ${b.y+b.h} H ${b.x} Z`;}
   if(s.type==="stamp"){const c=stampCorners(s);return `M ${c.map(p=>`${p.x} ${p.y}`).join(" L ")} Z`;}
   if(s.type === "rect") return `M ${a.x} ${a.y} H ${b.x} V ${b.y} H ${a.x} Z`;
   if(s.type === "ellipse") {
@@ -81,4 +82,9 @@ export function openingPath(s:MapShape):string {
   if(s.type==="window")return path+line(offset(a,-3),offset(b,-3))+line(offset(a,3),offset(b,3));
   const end={x:a.x+nx*len,y:a.y+ny*len};
   return path+line(a,end)+`M ${b.x} ${b.y} A ${len} ${len} 0 0 1 ${end.x} ${end.y}`;
+}
+/** The box a label's text (and its badge) takes up, centred on its point. */
+export function labelBox(s:Pick<MapShape,"points"|"name"|"thickness">){
+  const size=s.thickness,text=s.name||" ",h=size*1.8,w=Math.max(h,text.length*size*.62+size*.9),p=s.points[0];
+  return {x:p.x-w/2,y:p.y-h/2,w,h};
 }

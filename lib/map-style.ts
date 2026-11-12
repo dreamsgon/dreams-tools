@@ -1,5 +1,5 @@
 import type { MapDrawing, MapShape, MapStyle, Point } from "./model.ts";
-import { orderedShapes, roomPaths, shapePath, openingPath } from "./map-drawing.ts";
+import { orderedShapes, roomPaths, shapePath, openingPath, labelBox } from "./map-drawing.ts";
 import { roomPolygons, wallSegments } from "./map-creator.ts";
 import { stampById, stampMatrix } from "./map-stamps.ts";
 
@@ -40,7 +40,7 @@ export function applyMapStyle(d: MapDrawing, next: MapStyle, background: string 
 }
 
 /** One thing to draw: a path filled or stroked, maybe clipped to the inside of a room. */
-export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number] };
+export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; text?: { value: string; x: number; y: number; size: number } };
 
 const ring = (pts: Point[]) => `M ${pts.map(p => `${round(p.x)} ${round(p.y)}`).join(" L ")} Z`;
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -130,6 +130,13 @@ export function shapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style"
 }
 function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
   const style = d.style, background = d.background;
+  if (s.type === "label") {
+    const b = labelBox(s), p = s.points[0], r = b.h / 2, ops: DrawOp[] = [];
+    // A badge is a circle for a number, or a pill for longer text.
+    if (s.fill) ops.push({ d: `M ${b.x + r} ${b.y} H ${b.x + b.w - r} A ${r} ${r} 0 0 1 ${b.x + b.w - r} ${b.y + b.h} H ${b.x + r} A ${r} ${r} 0 0 1 ${b.x + r} ${b.y} Z`, fill: s.fill, stroke: s.stroke, width: Math.max(1.5, s.thickness / 9) });
+    ops.push({ d: "", fill: s.stroke, text: { value: s.name, x: p.x, y: p.y, size: s.thickness } });
+    return ops;
+  }
   if (s.type === "stamp") {
     const stamp = stampById(s.stamp);
     if (!stamp) return [];
@@ -179,6 +186,11 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
   if (op.clip) ctx.clip(new Path2D(op.clip));
   if (op.matrix) ctx.transform(...op.matrix);
   if (op.opacity !== undefined) ctx.globalAlpha = op.opacity;
+  if (op.text) {
+    ctx.fillStyle = op.fill ?? "#000000"; ctx.font = `600 ${op.text.size}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
+    ctx.restore(); return;
+  }
   const path = new Path2D(op.d);
   if (op.fill) { ctx.fillStyle = op.fill; ctx.fill(path); }
   if (op.stroke) { ctx.lineCap = op.cap ?? "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.stroke; ctx.lineWidth = op.width ?? 1; ctx.stroke(path); }

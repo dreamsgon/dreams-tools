@@ -143,7 +143,7 @@ export const mapShapeSchema = z.object({
   smooth: z.boolean().default(false),
   hidden: z.boolean().default(false),
   locked: z.boolean().default(false),
-  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "stamp"]),
+  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "stamp", "label"]),
   roomParts: z.array(z.object({type:z.enum(["rect","ellipse","path"]),start:z.number().int().min(0),count:z.number().int().min(2),smooth:z.boolean(),closed:z.boolean()})).max(1000).default([]),
   points: z.array(point).min(2).max(2000),
   fill: color.nullable(),

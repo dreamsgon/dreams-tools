@@ -2,11 +2,13 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2 } from "lucide-react";
+import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
 import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import StampLibrary from "./stamp-library";
+import NewMapDialog from "./new-map-dialog";
+import type { GeneratedMap } from "@/lib/map-generator";
 import { stampById, stampBox, rotateStamp } from "@/lib/map-stamps";
 import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
 import DrawingLayers from "./drawing-layers";
@@ -20,7 +22,7 @@ const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,dra
 type Tool=CreatorTool;
 type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
-const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>};
+const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,label:<Type size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -41,6 +43,13 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [pointMode,setPointMode]=useState<"move"|"add"|"delete">("move");
   const [message,setMessage]=useState("");
   const [stampId,setStampId]=useState("chest");
+  const [newMap,setNewMap]=useState(false),[focusText,setFocusText]=useState<string|null>(null);
+  // An image to trace over: kept on this device only, never saved with the map.
+  const [trace,setTrace]=useState<{url:string;x:number;y:number;w:number;h:number;opacity:number}|null>(null);
+  // A new label's text box takes the keyboard once the click that placed it is over.
+  useEffect(()=>{if(!focusText)return;const t=setTimeout(()=>{const el=document.getElementById("creator-shape-name") as HTMLInputElement|null;if(el){el.focus();el.select();}setFocusText(null);},50);return()=>clearTimeout(t);},[focusText]);
+  const traceUrl=trace?.url;
+  useEffect(()=>()=>{if(traceUrl)URL.revokeObjectURL(traceUrl);},[traceUrl]);
   const [saving,setSaving]=useState(false);
   const savingRef=useRef(false);
   const [pending,setPending]=useState<(()=>void)|null>(null);
@@ -94,6 +103,22 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const next=s?fromScene(s):blank();setSource(s?.id??null);setDraft(next);current.current=next;
     setDirty(false);setSelected(null);undo.current=[];redo.current=[];setMessage("");
     setFill(next.drawing.style?.floor??unstyledColours.floor);setStroke(next.drawing.style?.wall??unstyledColours.wall);
+  };
+  const startMap=(map:GeneratedMap,keepTrace=false)=>{
+    const next:Draft={name:map.name,width:map.width,height:map.height,drawing:map.drawing};
+    setSource(null);setDraft(next);current.current=next;setDirty(true);setSelected(null);undo.current=[];redo.current=[];setMessage("");setNewMap(false);
+    if(!keepTrace)setTrace(null);
+    setFill(map.drawing.style?.floor??unstyledColours.floor);setStroke(map.drawing.style?.wall??unstyledColours.wall);
+  };
+  const startTrace=(file:File,size:{cols:number;rows:number})=>{
+    const url=URL.createObjectURL(file),img=new Image(),width=size.cols*grid.size,height=size.rows*grid.size;
+    img.onload=()=>{
+      startMap({name:file.name.replace(/\.[^.]+$/,"")||"Traced map",width,height,drawing:{background:"#ffffff",style:null,shapes:[],folders:[],layerOrder:[]}},true);
+      const w=width,h=img.naturalWidth?w*img.naturalHeight/img.naturalWidth:height;
+      setTrace({url,x:0,y:0,w,h,opacity:.5});setTab("map");
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);setMessage("That image could not be opened. Try a PNG, JPEG or WebP file.");setNewMap(false);};
+    img.src=url;
   };
   // A new style recolours the rooms drawn in the old one, and new rooms are drawn in it.
   const setStyle=(next:MapStyle|null,background:string|null)=>{
@@ -166,6 +191,14 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       if(!last||last.x!==p.x||last.y!==p.y)setPolyPoints([...pts,p]);
       return;
     }
+    if(tool==="label"){
+      const raw=rawPoint(e),size=grid.size,id=uid();
+      const at=snap&&!e.altKey?{x:Math.floor(raw.x/size)*size+size/2,y:Math.floor(raw.y/size)*size+size/2}:raw;
+      change(d=>{d.drawing.layerOrder=[...layerIds(d.drawing),id];d.drawing.shapes.push({id,type:"label",stamp:null,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:"Label",folderId:null,smooth:false,points:[at,{...at}],fill:null,stroke:d.drawing.style?.ink??"#1f2a24",thickness:22,closed:false});});
+      if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+      pickTool("select");setSelected(id);setTab("selected");setFocusText(id);
+      return;
+    }
     if(tool==="stamp"){
       const stamp=stampById(stampId);if(!stamp)return;
       const id=uid(),raw=rawPoint(e);
@@ -174,7 +207,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
       return;
     }
-    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp">;
+    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp"|"label">;
     const shape:MapShape={id,type,roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
     gesture.current={before,id,start:p,index:null,newShape:true};choose(id);setDrawingId(id);
     if(type==="door"||type==="window"){
@@ -247,7 +280,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   // The size label follows the shape being drawn, or the one selected.
   const labelShape=(drawingId?draft.drawing.shapes.find(s=>s.id===drawingId):null)??(tool==="select"?single:null);
   const labelSize=Math.max(14,Math.min(draft.width,draft.height)/45);
-  const label=labelShape&&labelShape.points.length>1?(()=>{const b=shapeBounds(labelShape),text=sizeLabel(labelShape,grid),w=text.length*labelSize*.62+labelSize,h=labelSize*1.8;
+  const label=labelShape&&labelShape.type!=="label"&&labelShape.points.length>1?(()=>{const b=shapeBounds(labelShape),text=sizeLabel(labelShape,grid),w=text.length*labelSize*.62+labelSize,h=labelSize*1.8;
     const y=b.y-h-labelSize*.6<0?b.y+b.h+labelSize*.6:b.y-h-labelSize*.6,x=Math.max(0,Math.min(draft.width-w,b.x+b.w/2-w/2));
     return <g className="creator-size-label" pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx={labelSize*.3} fill="#16191c" fillOpacity=".88"/><text x={x+w/2} y={y+h*.66} textAnchor="middle" fontSize={labelSize} fontWeight={500} fill="#ffffff">{text}</text></g>;})():null;
   const zoomBy=(step:number)=>setZoom(z=>Math.max(.5,Math.min(4,Math.round((z+step)*4)/4)));
@@ -286,20 +319,26 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <label>Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>
     </div>
   </>;
+  const labelPanel=single?.type==="label"&&<>
+    <label className="creator-check"><input type="checkbox" checked={!!single.fill} onChange={e=>patchShape({fill:e.target.checked?"#ffffff":null})}/>In a circle (for room numbers)</label>
+    <label>Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
+    <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
+  </>;
   const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink}/>:<div className="creator-panel">
     {!selectedIds.length&&<>
       <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
+      <button onClick={()=>setNewMap(true)}><Sparkles size={15}/> Generate or trace a new map</button>
       <h3>New shapes</h3>{colours}{thicknessField}
       <h3>Shortcuts</h3>
       <dl className="creator-keys">{creatorTools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
     </>}
     {single&&<>
-      <label>Name<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
-      {single.type==="stamp"?stampPanel:bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
+      <label>{single.type==="label"?"Text":"Name"}<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} id="creator-shape-name" onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
+      {single.type==="stamp"?stampPanel:single.type==="label"?labelPanel:bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
         <label>Width ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.w,grid)} onChange={e=>resize(+e.target.value,toUnits(bounds.h,grid))}/></label>
         <label>Length ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.h,grid)} onChange={e=>resize(toUnits(bounds.w,grid),+e.target.value)}/></label>
       </div>:<p className="creator-measure">{isArea(single)?"Size":"Length"}: <strong>{sizeLabel(single,grid)}</strong></p>}
-      {single.type!=="stamp"&&<>{colours}{thicknessField}</>}
+      {single.type!=="stamp"&&single.type!=="label"&&<>{colours}{thicknessField}</>}
       {single.type==="path"&&<div className="creator-checks"><label className="creator-check"><input type="checkbox" checked={single.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close the outline</label><label className="creator-check"><input type="checkbox" checked={single.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label></div>}
       {(single.type==="path"||single.type==="line"||single.type==="rect")&&<div className="creator-points"><span>Corners ({single.type==="rect"?4:single.points.length})</span><div className="creator-seg" role="group" aria-label="Corner editing">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode==="move"?"Move":mode==="add"?"Add":"Remove"}</button>)}</div>
         <p className="muted">{pointMode==="add"?"Click a wall to add a corner there.":pointMode==="delete"?"Click a corner to remove it.":"Drag the white corners to reshape."}</p></div>}
@@ -317,7 +356,18 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const squares=(key:"width"|"height")=><label>{key==="width"?"Width":"Length"} (squares)<input aria-label={`Map ${key} in squares`} type="number" min={3} max={maxSquares} value={Math.round(draft[key]/grid.size)} onChange={e=>{const n=Math.round(+e.target.value);if(n>=3&&n<=maxSquares)change(d=>{d[key]=n*grid.size;});}}/></label>;
   const mapPanel=<div className="creator-panel">
     <label>Open a saved map<select aria-label="Saved maps" value={source??""} onChange={e=>{const id=e.target.value;guard(()=>open(id));}}><option value="">New map</option>{workspace.scenes.filter(s=>s.drawing).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-    <button onClick={()=>guard(()=>open(""))}><Plus size={15}/> Start a new map</button>
+    <button onClick={()=>setNewMap(true)}><Plus size={15}/> Start a new map</button>
+    {trace&&<>
+      <h3>Tracing image</h3>
+      <p className="creator-measure">Only you see it, here. It is left out when you save.</p>
+      <label>Strength <output>{Math.round(trace.opacity*100)}%</output><input type="range" min={.1} max={1} step={.05} value={trace.opacity} onChange={e=>setTrace({...trace,opacity:+e.target.value})}/></label>
+      <label>Image width (squares)<input type="number" min={1} step={.5} value={Math.round(trace.w/grid.size*10)/10} onChange={e=>{const n=+e.target.value;if(n>0)setTrace({...trace,w:n*grid.size,h:trace.h*n*grid.size/trace.w});}}/></label>
+      <div className="creator-pair">
+        <label>Move across (squares)<input type="number" step={.1} value={Math.round(trace.x/grid.size*10)/10} onChange={e=>setTrace({...trace,x:+e.target.value*grid.size})}/></label>
+        <label>Move down (squares)<input type="number" step={.1} value={Math.round(trace.y/grid.size*10)/10} onChange={e=>setTrace({...trace,y:+e.target.value*grid.size})}/></label>
+      </div>
+      <div className="creator-actions"><button onClick={()=>setTrace({...trace,x:0,y:0,h:trace.h*draft.width/trace.w,w:draft.width})}>Fit to the map</button><button onClick={()=>setTrace(null)}><Trash2 size={15}/> Remove</button></div>
+    </>}
     <h3>This map</h3>
     <div className="creator-pair">{squares("width")}{squares("height")}</div>
     <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>
@@ -328,6 +378,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
   return <main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
+    if(newMap)return;
     if(savingRef.current || pending || (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]"))return;
     if(tool==="poly"&&polyPoints){
       if(e.key==="Enter"){e.preventDefault();finishPoly();return;}
@@ -351,6 +402,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button className="creator-icon" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" disabled={!undo.current.length} onClick={()=>history(true)}><Undo2 size={17}/></button>
       <button className="creator-icon" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" disabled={!redo.current.length} onClick={()=>history(false)}><Redo2 size={17}/></button>
       <DesktopSidebars {...sidebars}/>
+      <button className="creator-icon" aria-label="Start a new map" title="Start a new map: generate, trace or blank" onClick={()=>setNewMap(true)}><FilePlus2 size={17}/></button>
       <AppearanceMenu />
       <button disabled={saving} onClick={()=>void save()}>{saving?"Saving…":"Save map"}</button>
       <button disabled={saving} className="primary" onClick={async()=>{const id=await save();if(id)close(id);}}>Save & use as scene</button>
@@ -375,8 +427,9 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
             <rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
+            {trace&&<image href={trace.url} x={trace.x} y={trace.y} width={trace.w} height={trace.h} opacity={trace.opacity} preserveAspectRatio="none" pointerEvents="none"/>}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
-            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
+            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"||single.type==="label"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
             {hoverWall&&(tool==="door"||tool==="window")&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke="#2f80ed" strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
             {tool==="poly"&&polyPoints&&<g pointerEvents="none">
               <path d={`M ${polyPoints.map(p=>`${p.x} ${p.y}`).join(" L ")}${polyHover?` L ${polyHover.x} ${polyHover.y}`:""}`} fill={fill} fillOpacity=".55" stroke={stroke} strokeWidth={thickness} strokeLinejoin="round"/>
@@ -397,6 +450,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       </ResizableSidebar>
     </div>
     {message && <div className="creator-message" role="status">{message}</div>}
+    {newMap && <NewMapDialog grid={grid.size} close={()=>setNewMap(false)} start={m=>{setNewMap(false);guard(()=>startMap(m));}} trace={(file,size)=>{setNewMap(false);guard(()=>startTrace(file,size));}}/>}
     {pending && <div className="creator-prompt" role="dialog" aria-modal="true" aria-label="Uncommitted drawing"><div><h2>Keep your drawing?</h2><p>Save your changes before leaving this map.</p><div className="button-row"><button disabled={saving} onClick={async()=>{const action=pending;if(await save()){setPending(null);action();}}}>Save changes</button><button disabled={saving} onClick={()=>{const action=pending;setPending(null);action();}}>Discard changes</button><button disabled={saving} onClick={()=>setPending(null)}>Keep editing</button></div></div></div>}
   </main>;
 }
