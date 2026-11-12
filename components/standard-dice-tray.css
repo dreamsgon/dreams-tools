@@ -8,3 +8,26 @@
 
 .local-roll-log ol{max-height:none;margin:0}.local-roll-log li>div{min-width:0;overflow-wrap:anywhere}.local-roll-log time{display:block;font-size:10px;color:var(--muted);margin-top:5px}.roll-log-outcome{display:block;font-size:12px;margin-top:4px}.local-roll-log>p{font-size:13px;color:var(--muted)}
 .standard-dice-dock button{border-radius:0}
+
+/* Refined tray and roll log: shared tokens, the chosen accent and fonts. */
+.standard-dice-dock{font-family:var(--font-sans)}
+.standard-dice-dock .standard-dice-tray{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow-md)}
+.standard-dice-dock .standard-dice-tray header strong{font-family:var(--font-display);font-size:16px;font-weight:600;letter-spacing:-.01em}
+.standard-dice-dock .standard-dice-tray small{font-size:12px}
+.standard-dice-dock .standard-dice-tray button{border-radius:9px;background:var(--raised);border-color:var(--line);font-weight:500}
+.standard-dice-dock .standard-dice-tray button:hover:not(:disabled){background:var(--hover)}
+.standard-dice-dock .standard-dice-tray header button{width:34px;height:34px;min-height:34px;padding:0;background:transparent;border-color:transparent;color:var(--muted)}
+.standard-dice-dock .tray-dice{gap:6px}
+.standard-dice-dock .tray-dice button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;font-size:12px;font-weight:600}
+.standard-dice-dock .tray-dice svg{height:26px;fill:var(--accent-soft);stroke:var(--accent)}
+.standard-dice-dock .tray-dice b{top:-6px;right:-4px;min-width:20px;padding:2px 6px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:11px}
+.standard-dice-dock .standard-dice-tray label{font-size:12px;color:var(--muted)}
+.standard-dice-dock .standard-dice-tray input{border-radius:9px;background:var(--control);font-variant-numeric:tabular-nums}
+.standard-dice-dock .standard-dice-tray .tray-roll{padding:9px 22px;background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.standard-dice-dock .standard-dice-tray .tray-roll:hover:not(:disabled){background:var(--accent-hover)}
+.standard-dice-dock .tray-result{padding:14px 16px;border-radius:10px;background:var(--raised);color:var(--muted);font-variant-numeric:tabular-nums}
+.standard-dice-dock .tray-result>strong{order:2;margin-left:auto;font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;color:var(--ink)}
+.standard-dice-dock .tray-result>span{color:var(--ink);font-size:13px}
+.standard-dice-dock .standard-dice-tray li>b,.standard-dice-dock .local-roll-log li>b{font-family:var(--font-display);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.standard-dice-dock .local-roll-log li{padding:10px 0}
+.standard-dice-dock .local-roll-log header button:not([aria-label]){width:auto;padding:0 10px;font-size:12px}

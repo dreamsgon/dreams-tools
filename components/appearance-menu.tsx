@@ -4,17 +4,30 @@ import { Palette } from "lucide-react";
 import {
   ACCENTS,
   ACCENT_STORAGE_KEY,
+  APPEARANCE_STORAGE_KEYS,
   DEFAULT_ACCENT,
+  DEFAULT_THEME_MODE,
+  FONT_ROLES,
+  FONT_ROLE_IDS,
   LEGACY_THEME_KEYS,
+  MOTION_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  fontOption,
+  fontStylesheetUrl,
   parseAccent,
+  parseFont,
+  parseMotion,
   pickThemeMode,
   resolveTheme,
   type AccentId,
+  type FontRole,
+  type MotionPreference,
   type ThemeMode,
 } from "@/lib/appearance";
 
 const MODE_LABELS: Record<ThemeMode, string> = { light: "Light", dark: "Dark", system: "System" };
+
+type Settings = { mode: ThemeMode; accent: AccentId; motion: MotionPreference; fonts: Record<FontRole, string> };
 
 function read(key: string) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -22,34 +35,65 @@ function read(key: string) {
 function write(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* private mode: the choice lasts for this page only */ }
 }
+function forget(key: string) {
+  try { localStorage.removeItem(key); } catch { /* nothing saved */ }
+}
 function prefersDark() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
-function apply(mode: ThemeMode, accent: AccentId) {
+function defaults(): Settings {
+  return {
+    mode: DEFAULT_THEME_MODE,
+    accent: DEFAULT_ACCENT,
+    motion: "system",
+    fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, FONT_ROLES[role].defaultId])) as Record<FontRole, string>,
+  };
+}
+function load(): Settings {
+  if (typeof window === "undefined") return defaults();
+  return {
+    mode: pickThemeMode(read(THEME_STORAGE_KEY), LEGACY_THEME_KEYS.map(read)),
+    accent: parseAccent(read(ACCENT_STORAGE_KEY)) ?? DEFAULT_ACCENT,
+    motion: parseMotion(read(MOTION_STORAGE_KEY)),
+    fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, parseFont(role, read(FONT_ROLES[role].storageKey))])) as Record<FontRole, string>,
+  };
+}
+function applyFont(role: FontRole, id: string) {
+  const root = document.documentElement, config = FONT_ROLES[role], option = fontOption(role, id);
+  if (id === config.defaultId) root.style.removeProperty(config.cssVar);
+  else root.style.setProperty(config.cssVar, option.stack);
+  const linkId = `rpg-font-${role}`, href = fontStylesheetUrl(option);
+  let link = document.getElementById(linkId) as HTMLLinkElement | null;
+  if (!href) { link?.remove(); return; }
+  if (!link) { link = document.createElement("link"); link.rel = "stylesheet"; link.id = linkId; document.head.appendChild(link); }
+  if (link.href !== href) link.href = href;
+}
+function apply(settings: Settings) {
   const root = document.documentElement;
-  root.dataset.theme = resolveTheme(mode, prefersDark());
-  root.dataset.themeMode = mode;
-  root.dataset.accent = accent;
+  root.dataset.theme = resolveTheme(settings.mode, prefersDark());
+  root.dataset.themeMode = settings.mode;
+  root.dataset.accent = settings.accent;
+  if (settings.motion === "reduced") root.dataset.motion = "reduced"; else delete root.dataset.motion;
+  for (const role of FONT_ROLE_IDS) applyFont(role, settings.fonts[role]);
 }
 
-/** Theme and accent colour picker. Saved on this device only. */
+/** Theme, accent, fonts and motion. Saved on this device only. */
 export default function AppearanceMenu({ className = "" }: { className?: string }) {
   const [open, setOpen] = useState(false);
   // The panel only renders after a click, so reading storage here cannot cause a
-  // hydration mismatch. The boot script in app/layout.tsx already applied both.
-  const [mode, setMode] = useState<ThemeMode>(() => typeof window === "undefined" ? "system" : pickThemeMode(read(THEME_STORAGE_KEY), LEGACY_THEME_KEYS.map(read)));
-  const [accent, setAccent] = useState<AccentId>(() => typeof window === "undefined" ? DEFAULT_ACCENT : parseAccent(read(ACCENT_STORAGE_KEY)) ?? DEFAULT_ACCENT);
+  // hydration mismatch. The boot script in app/layout.tsx already applied it all.
+  const [settings, setSettings] = useState<Settings>(load);
   const wrapper = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
   useEffect(() => {
-    if (mode !== "system") return;
+    if (settings.mode !== "system") return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => apply("system", accent);
+    const update = () => { document.documentElement.dataset.theme = resolveTheme("system", query.matches); };
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
-  }, [mode, accent]);
+  }, [settings.mode]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,8 +108,17 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
     return () => { document.removeEventListener("pointerdown", onPointer); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  const chooseMode = (next: ThemeMode) => { setMode(next); write(THEME_STORAGE_KEY, next); apply(next, accent); };
-  const chooseAccent = (next: AccentId) => { setAccent(next); write(ACCENT_STORAGE_KEY, next); apply(mode, next); };
+  const update = (next: Settings, key: string, value: string) => { setSettings(next); write(key, value); apply(next); };
+  const chooseMode = (mode: ThemeMode) => update({ ...settings, mode }, THEME_STORAGE_KEY, mode);
+  const chooseAccent = (accent: AccentId) => update({ ...settings, accent }, ACCENT_STORAGE_KEY, accent);
+  const chooseMotion = (motion: MotionPreference) => update({ ...settings, motion }, MOTION_STORAGE_KEY, motion);
+  const chooseFont = (role: FontRole, id: string) => update({ ...settings, fonts: { ...settings.fonts, [role]: id } }, FONT_ROLES[role].storageKey, id);
+  const reset = () => {
+    for (const key of [...APPEARANCE_STORAGE_KEYS, ...LEGACY_THEME_KEYS]) forget(key);
+    const next = defaults();
+    setSettings(next);
+    apply(next);
+  };
 
   return <div className={`appearance ${className}`.trim()} ref={wrapper}>
     <button ref={trigger} type="button" className="appearance-trigger icon-button" aria-label="Appearance" title="Appearance" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
@@ -78,20 +131,40 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
         <legend>Theme</legend>
         <div className="appearance-segments" role="radiogroup" aria-label="Theme">
           {(Object.keys(MODE_LABELS) as ThemeMode[]).map((value) =>
-            <button key={value} type="button" role="radio" aria-checked={mode === value} onClick={() => chooseMode(value)}>{MODE_LABELS[value]}</button>)}
+            <button key={value} type="button" role="radio" aria-checked={settings.mode === value} onClick={() => chooseMode(value)}>{MODE_LABELS[value]}</button>)}
         </div>
       </fieldset>
       <fieldset className="appearance-group">
         <legend>Accent colour</legend>
         <div className="appearance-swatches" role="radiogroup" aria-label="Accent colour">
           {ACCENTS.map((item) =>
-            <button key={item.id} type="button" role="radio" aria-checked={accent === item.id} onClick={() => chooseAccent(item.id)}
+            <button key={item.id} type="button" role="radio" aria-checked={settings.accent === item.id} onClick={() => chooseAccent(item.id)}
               style={{ "--swatch-light": item.light, "--swatch-dark": item.dark } as CSSProperties}>
               <span className="appearance-swatch" aria-hidden="true" />{item.label}
             </button>)}
         </div>
       </fieldset>
-      <p className="appearance-note">Saved on this device. Shared maps and what players see are not affected.</p>
+      <fieldset className="appearance-group">
+        <legend>Fonts</legend>
+        {FONT_ROLE_IDS.map((role) => {
+          const config = FONT_ROLES[role], id = `${panelId}-font-${role}`;
+          return <div className="appearance-font" key={role}>
+            <label htmlFor={id}>{config.label}</label>
+            <select id={id} value={settings.fonts[role]} onChange={(event) => chooseFont(role, event.target.value)}>
+              {config.options.map((option) => <option key={option.id} value={option.id}>{option.label}{option.id === config.defaultId ? " (default)" : ""}</option>)}
+            </select>
+            <p className="appearance-sample" style={{ fontFamily: `var(${config.cssVar})` }}>{config.sample}</p>
+          </div>;
+        })}
+      </fieldset>
+      <label className="appearance-check">
+        <input type="checkbox" checked={settings.motion === "reduced"} onChange={(event) => chooseMotion(event.target.checked ? "reduced" : "system")} />
+        Reduce motion and animations
+      </label>
+      <div className="appearance-footer">
+        <p className="appearance-note">Saved on this device. Shared maps and what players see are not affected.</p>
+        <button type="button" className="appearance-reset" onClick={reset}>Reset</button>
+      </div>
     </div>}
   </div>;
 }
