@@ -45,7 +45,7 @@ export const mapSchema=z.object({
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
  paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),
- hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),
+ hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
  if(m.source==='generated'&&m.tiles.length!==m.columns*m.rows)bad('Terrain must match the map dimensions');
@@ -154,7 +154,7 @@ export function playerMap(m:MapData):MapData{
   labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y)),
   hexes:m.hexes?.filter(h=>h.visibility==='players'&&(!fog||visible.has(h.cell))).map(h=>({...h,tableId:undefined})),
   party:m.party?.visibility==='players'&&(!fog||visible.has(m.party.cell))?{...m.party,trail:fog?m.party.trail.filter(c=>visible.has(c)):m.party.trail}:undefined,
-  encounterTableId:undefined};
+  encounterTableId:undefined,maptableSceneId:undefined};
 }
 /** The parts of a line that lie outside the fog, so players only get what they have seen. */
 export function revealedRuns(m:MapData,points:{x:number;y:number}[]){

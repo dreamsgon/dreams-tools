@@ -110,7 +110,8 @@ export default function WorkspaceApp() {
         if (!blocked.current && version.current !== savedVersion.current)
             void save();
     } }
-    function change(next: Workspace) { const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setStatus("Unsaved changes"); if (timer.current)
+    /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
+    function change(input: Workspace | ((latest: Workspace) => Workspace)) { const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setStatus("Unsaved changes"); if (timer.current)
         clearTimeout(timer.current); timer.current = setTimeout(save, 600); return true; }
     function updateEntry(id: string, patch: Partial<Entry>) { change({ ...current.current, entries: current.current.entries.map(e => e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e) }); }
     /** Clicking a tag opens search with that tag, across pages, scenes and campaigns. */

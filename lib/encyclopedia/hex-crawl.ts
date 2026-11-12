@@ -1,4 +1,5 @@
-import { cellFinder, cellShape, mapSize, newMap, terrains, type HexNote, type MapData, type MapParty } from './map-model.ts';
+import { cellFinder, cellShape, fogBrush, mapSize, newMap, pointCell, terrains, type HexNote, type MapData, type MapParty } from './map-model.ts';
+import type { Workspace } from './world-model.ts';
 import { advanceDate, calendarSchema, type Calendar } from './calendar-model.ts';
 import { generateWeather, weatherOn } from './weather-model.ts';
 
@@ -170,4 +171,21 @@ export function setHexNote(m: MapData, note: HexNote): HexNote[] {
 export function areaMapFor(name: string, unit: 'mi' | 'km' = 'mi'): MapData {
   const m = newMap('hex', 'island', name.slice(0, 100) || 'Area map', 20, 14);
   return { ...m, scale: { width: (unit === 'km' ? 10 : 6) * 20.5, unit }, compass: true, scaleBar: true };
+}
+
+/** When the party is on an area map, the place it belongs to is revealed on every map that links it. */
+export function revealInParents(w: Workspace, areaId: string): Workspace {
+  let changed = false;
+  const entries = w.entries.map(e => {
+    const m = e.mapData;
+    if (!m?.fog?.enabled) return e;
+    const pins = m.pins.filter(p => p.areaMapId === areaId);
+    if (!pins.length) return e;
+    const seen = new Set(m.fog.revealed), before = seen.size;
+    for (const p of pins) for (const i of fogBrush(m, pointCell(m, p.x, p.y), 1)) seen.add(i);
+    if (seen.size === before) return e;
+    changed = true;
+    return { ...e, mapData: { ...m, fog: { ...m.fog, revealed: [...seen].sort((a, b) => a - b) } } };
+  });
+  return changed ? { ...w, entries } : w;
 }
