@@ -87,6 +87,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Random tables part C: `[[table:Name]]` on pages and embedded tables, Maptable dice tray Tables and Oracle tabs, results to Discord.
 - [x] Board right-click menu: uses the app's tokens in both themes instead of fixed dark colours, never scrolls sideways, groups actions under rules, shows the token name, lists Status as Active / Unconscious / Dead with a check on the current one, marks Delete as destructive, and stays fully on screen using its measured size (`components/context-menu.css`).
 - [x] Tokens panel order (handoff 2.4): Make token, a labelled Quick token and the gallery link sit on top; the selected token shows as a strip with Edit; the token list comes next (search appears from six tokens); Initiative follows with its turn bar, and Discord posting, its live-update option and preview are folded under Post to Discord. Campaign token defaults moved to the bottom. The side panel's content now fills the height so the save bar stays at the bottom on short panels. No saved-data change.
+- [x] Unified pop-up styling (step 1 of the menu/popover series): the token drag ghost in the token library uses the app theme tokens (`components/token-library.css`, `.token-drag-preview`) instead of fixed dark colours, so no board or sidebar pop-up uses fixed dark colours. Tokens follow light and dark themes; the ready state uses the accent border.
 - [ ] Then 2.1 single save indicator and the rest of the handoff order.
 
 ## Map acceptance and maintenance
