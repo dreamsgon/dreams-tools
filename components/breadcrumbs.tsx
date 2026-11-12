@@ -23,18 +23,19 @@ export type Crumb = {
  * lists the other places at that level, long trails fold their middle into "…", and on
  * a phone it becomes Back plus a title that opens the whole path. Alt+Up goes up a level.
  */
-export default function Breadcrumbs({ items, label = "Breadcrumb", className = "" }: { items: Crumb[]; label?: string; className?: string }) {
+/** `fewest` is how many levels stay when space runs out: 3 keeps the parent beside the page, 2 keeps only the first and the page. */
+export default function Breadcrumbs({ items, label = "Breadcrumb", className = "", fewest = 3 }: { items: Crumb[]; label?: string; className?: string; fewest?: 2 | 3 }) {
   const nav = useRef<HTMLElement>(null), measure = useRef<HTMLOListElement>(null);
   const [max, setMax] = useState(items.length);
   useEffect(() => {
     const el = nav.current, ruler = measure.current;
     if (!el || !ruler || typeof ResizeObserver === "undefined") return;
     // Measures every level at its natural width, then shows as many as fit.
-    const fit = () => setMax(fitCount([...ruler.children].map(li => li.getBoundingClientRect().width), el.clientWidth));
+    const fit = () => setMax(fitCount([...ruler.children].map(li => li.getBoundingClientRect().width), el.clientWidth, 16, 34, fewest));
     const watch = new ResizeObserver(fit);
     watch.observe(el); watch.observe(ruler);
     return () => watch.disconnect();
-  }, []);
+  }, [fewest]);
   const parent = items.length > 1 ? items[items.length - 2] : null;
   useEffect(() => {
     const up = (e: KeyboardEvent) => {
@@ -46,7 +47,7 @@ export default function Breadcrumbs({ items, label = "Breadcrumb", className = "
     window.addEventListener("keydown", up);
     return () => window.removeEventListener("keydown", up);
   }, [parent]);
-  const { shown, hidden } = foldCrumbs(items, max);
+  const { shown, hidden } = foldCrumbs(items, max, fewest);
   return <nav ref={nav} className={`crumbbar ${className}`.trim()} aria-label={label}>
     <ol className="crumbbar-full">
       {shown.map((c, i) => <Fragment key={c.id}>
