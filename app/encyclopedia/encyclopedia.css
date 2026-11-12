@@ -205,3 +205,29 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .section-heading h2{font-weight:600;font-size:21px;letter-spacing:-.01em}
 .kind-pill{background:transparent;padding:0;letter-spacing:.06em;text-transform:uppercase;font-weight:600;font-size:11px}
 @media(max-width:720px){.dashboard-card{grid-template-columns:28px minmax(0,1fr);padding:16px 0}.dashboard-card>.button-row,.dashboard-card>.button{grid-column:2;grid-row:auto;margin-top:8px;flex-wrap:wrap}.recent-grid{gap:20px}}
+/* Encyclopedia features part 1: GM secrets and quick search */
+.secret-block{margin:16px 0;padding:10px 0 10px 16px;border-left:2px dashed var(--accent);background:color-mix(in srgb,var(--accent-soft) 45%,transparent)}
+.secret-block>p,.secret-block>.bullet-line,.secret-block>blockquote{margin-right:12px}
+.secret-label{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.article-toolbar .button.secret-button{color:var(--accent)}
+.search-box .quick-hint{display:inline-flex;margin-left:auto;padding:0}
+.search-box kbd,.quick-search kbd{font:500 11px var(--font-sans);color:var(--muted);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:1px 5px;white-space:nowrap}
+.quick-search{width:min(620px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 140px));margin:110px auto auto;padding:0;border:1px solid var(--line-strong);border-radius:var(--radius-lg);background:var(--panel);color:var(--ink);box-shadow:0 16px 48px var(--shadow-color);overflow:hidden}
+.quick-search[open]{display:flex;flex-direction:column}
+.quick-search::backdrop{background:var(--overlay)}
+.quick-input{display:flex;align-items:center;gap:10px;height:52px;flex:none;padding:0 16px;border-bottom:1px solid var(--line);color:var(--muted)}
+.quick-input input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font-size:16px}
+.quick-input input:focus{outline:none}
+.quick-results{overflow-y:auto;flex:1;min-height:0}
+.quick-group{padding:10px 0 4px}
+.quick-group+.quick-group{border-top:1px solid var(--line)}
+.quick-group>.eyebrow{display:block;padding:0 14px 6px}
+.quick-row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;min-height:42px;padding:0 14px;text-align:left;color:var(--muted)}
+.quick-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-row strong{font-weight:500;font-size:14px;color:var(--ink)}
+.quick-row small{margin-left:8px;color:var(--muted)}
+.quick-row[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+.quick-row kbd{border:0;color:var(--muted)}
+.quick-empty{padding:16px 14px 6px;color:var(--muted);font-size:13px}
+.quick-foot{display:flex;gap:16px;flex:none;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg);color:var(--muted);font-size:12px}
+@media(max-width:720px){.quick-search{margin-top:24px}.quick-row small{display:none}.quick-foot{display:none}.search-box .quick-hint{display:none}}

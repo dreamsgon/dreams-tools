@@ -1,6 +1,7 @@
 "use client";
 import type {ReactNode} from "react";
-import {resolveLink,type Entry,type Workspace} from "@/lib/encyclopedia/world-model";
+import {Lock} from "lucide-react";
+import {resolveLink,SECRET_OPEN,SECRET_CLOSE,type Entry,type Workspace} from "@/lib/encyclopedia/world-model";
 export function ArticleBody({ entry, data, onOpen, onChange }: {
     entry: Entry;
     data: Workspace;
@@ -16,7 +17,7 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
     } if (part.startsWith("**"))
         return <strong key={i}>{part.slice(2, -2)}</strong>; if (part.startsWith("`"))
         return <code key={i}>{part.slice(1, -1)}</code>; return part; }); }
-    return <>{lines.map((line, index) => { if (line.startsWith("```")) {
+    function render(line: string, index: number): ReactNode { if (line.startsWith("```")) {
         fenced = !fenced;
         return null;
     } if (fenced)
@@ -26,5 +27,12 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
         return <Heading key={index}>{inline(h[2])}</Heading>;
     } const bullet = line.match(/^(\s*)[-*] (.*)$/); if (bullet)
         return <div className="bullet-line" key={index} style={{ marginLeft: Math.min(bullet[1].length, 40) * 8 }}>• <span>{inline(bullet[2])}</span></div>; if (line.startsWith("> "))
-        return <blockquote key={index}>{inline(line.slice(2))}</blockquote>; return line ? <p key={index}>{inline(line)}</p> : <div className="paragraph-gap" key={index}/>; })}</>;
+        return <blockquote key={index}>{inline(line.slice(2))}</blockquote>; return line ? <p key={index}>{inline(line)}</p> : <div className="paragraph-gap" key={index}/>; }
+    // "::: secret" … ":::" blocks are GM-only. The server removes them from player views; here they are marked.
+    const out: ReactNode[] = [];
+    let secret: { start: number; children: ReactNode[] } | null = null;
+    const close = () => { if (!secret) return; out.push(<div className="secret-block" key={`secret-${secret.start}`}><div className="secret-label"><Lock size={12} aria-hidden="true"/> GM secret · hidden from players</div>{secret.children}</div>); secret = null; fenced = false; };
+    lines.forEach((line, index) => { if (!secret && SECRET_OPEN.test(line.replace(/\r$/, ""))) { secret = { start: index, children: [] }; return; } if (secret && SECRET_CLOSE.test(line.replace(/\r$/, ""))) { close(); return; } const node = render(line, index); (secret ? secret.children : out).push(node); });
+    close();
+    return <>{out}</>;
 }
