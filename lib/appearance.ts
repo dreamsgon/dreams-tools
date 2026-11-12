@@ -137,8 +137,35 @@ export function parseMotion(value: unknown): MotionPreference {
   return value === "reduced" ? "reduced" : "system";
 }
 
+/**
+ * Text size scales the whole interface (text, controls and spacing together), like browser
+ * zoom but saved per device for RPG Tools only. Maps keep their own zoom.
+ */
+export const TEXT_SIZES = [
+  { id: "smaller", label: "Smaller", zoom: 0.85 },
+  { id: "small", label: "Small", zoom: 0.92 },
+  { id: "default", label: "Default", zoom: 1 },
+  { id: "large", label: "Large", zoom: 1.1 },
+  { id: "larger", label: "Larger", zoom: 1.25 },
+] as const;
+export type TextSizeId = (typeof TEXT_SIZES)[number]["id"];
+export const DEFAULT_TEXT_SIZE: TextSizeId = "default";
+export const TEXT_SIZE_STORAGE_KEY = "rpg-tools:text-size";
+export function parseTextSize(value: unknown): TextSizeId {
+  return typeof value === "string" && TEXT_SIZES.some((size) => size.id === value) ? (value as TextSizeId) : DEFAULT_TEXT_SIZE;
+}
+/**
+ * The interface zoom now in use. Mouse positions (clientX, getBoundingClientRect) are in screen
+ * pixels, while CSS lengths inside the page are zoomed, so divide a screen position by this
+ * before using it as a fixed position.
+ */
+export function uiZoom(): number {
+  if (typeof document === "undefined") return 1;
+  return TEXT_SIZES.find((size) => size.id === document.documentElement.dataset.textSize)?.zoom ?? 1;
+}
+
 /** Every key the Appearance menu writes, for "Reset to defaults". */
-export const APPEARANCE_STORAGE_KEYS = [THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, MOTION_STORAGE_KEY, ...FONT_ROLE_IDS.map((role) => FONT_ROLES[role].storageKey)];
+export const APPEARANCE_STORAGE_KEYS = [THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, MOTION_STORAGE_KEY, TEXT_SIZE_STORAGE_KEY, ...FONT_ROLE_IDS.map((role) => FONT_ROLES[role].storageKey)];
 
 const bootFonts = FONT_ROLE_IDS.map((role) => {
   const config = FONT_ROLES[role];
@@ -149,7 +176,7 @@ const bootFonts = FONT_ROLE_IDS.map((role) => {
  * Runs in <head> before the first paint so pages never flash the wrong theme,
  * accent or font. Kept dependency-free because it is inlined as a string.
  */
-export const appearanceBootScript = `(function(){try{var d=document.documentElement,s=window.localStorage,m=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(m!=="light"&&m!=="dark"&&m!=="system"){m="system";var k=${JSON.stringify(LEGACY_THEME_KEYS)};for(var i=0;i<k.length;i++){var o=s.getItem(k[i]);if(o==="light"||o==="dark"){m=o;break;}}}var dark=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);d.dataset.theme=dark?"dark":"light";d.dataset.themeMode=m;var a=s.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)});d.dataset.accent=${JSON.stringify(ACCENTS.map((a) => a.id))}.indexOf(a)>=0?a:${JSON.stringify(DEFAULT_ACCENT)};if(s.getItem(${JSON.stringify(MOTION_STORAGE_KEY)})==="reduced")d.dataset.motion="reduced";var f=${JSON.stringify(bootFonts)};for(var j=0;j<f.length;j++){var c=f[j].options[s.getItem(f[j].key)];if(!c)continue;d.style.setProperty(f[j].cssVar,c[0]);if(c[1]){var l=document.createElement("link");l.rel="stylesheet";l.href=c[1];l.id="rpg-font-"+f[j].role;document.head.appendChild(l);}}}catch(e){}})();`;
+export const appearanceBootScript = `(function(){try{var d=document.documentElement,s=window.localStorage,m=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(m!=="light"&&m!=="dark"&&m!=="system"){m="system";var k=${JSON.stringify(LEGACY_THEME_KEYS)};for(var i=0;i<k.length;i++){var o=s.getItem(k[i]);if(o==="light"||o==="dark"){m=o;break;}}}var dark=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);d.dataset.theme=dark?"dark":"light";d.dataset.themeMode=m;var a=s.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)});d.dataset.accent=${JSON.stringify(ACCENTS.map((a) => a.id))}.indexOf(a)>=0?a:${JSON.stringify(DEFAULT_ACCENT)};if(s.getItem(${JSON.stringify(MOTION_STORAGE_KEY)})==="reduced")d.dataset.motion="reduced";var z=s.getItem(${JSON.stringify(TEXT_SIZE_STORAGE_KEY)});if(${JSON.stringify(TEXT_SIZES.map((x) => x.id).filter((id) => id !== DEFAULT_TEXT_SIZE))}.indexOf(z)>=0)d.dataset.textSize=z;var f=${JSON.stringify(bootFonts)};for(var j=0;j<f.length;j++){var c=f[j].options[s.getItem(f[j].key)];if(!c)continue;d.style.setProperty(f[j].cssVar,c[0]);if(c[1]){var l=document.createElement("link");l.rel="stylesheet";l.href=c[1];l.id="rpg-font-"+f[j].role;document.head.appendChild(l);}}}catch(e){}})();`;
 
 /** The three default faces, always loaded by the root layout. */
 export const DEFAULT_FONTS_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Schibsted+Grotesk:wght@500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap";

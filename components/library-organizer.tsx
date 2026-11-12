@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import { useFolderExpansion } from "./folder-expansion";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -69,7 +70,7 @@ export default function LibraryOrganizer<T extends { id: string; name: string }>
     const tick = (now: number) => {
       const d = drag.current; if (!d) return;
       const dt = Math.min(32, now - previous); previous = now;
-      if (ghost.current) ghost.current.style.transform = `translate3d(${Math.max(0, Math.min(d.px + 12, window.innerWidth - 190))}px,${Math.max(0, Math.min(d.py + 14, window.innerHeight - 50))}px,0)`;
+      if (ghost.current) ghost.current.style.transform = `translate3d(${Math.max(0, Math.min(d.px + 12, window.innerWidth - 190)) / uiZoom()}px,${Math.max(0, Math.min(d.py + 14, window.innerHeight - 50)) / uiZoom()}px,0)`;
       if (d.host) {
         const bounds = d.host.getBoundingClientRect();
         const top = Math.max(0, bounds.top), bottom = Math.min(window.innerHeight, bounds.bottom);

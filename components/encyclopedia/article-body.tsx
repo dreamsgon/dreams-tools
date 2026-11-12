@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import {useRef,useState,type ReactNode} from "react";
 import {Lock,Map as MapIcon,ArrowUpRight} from "lucide-react";
 import {rollTarget,plainExcerpt,INLINE_TOKENS} from "@/lib/encyclopedia/inline";
@@ -14,7 +15,7 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
     const lines = entry.body.split("\n");
     const [preview, setPreview] = useState<{ entry: Entry; x: number; y: number } | null>(null);
     const hover = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const showPreview = (target: Entry, el: HTMLElement) => { if (hover.current) clearTimeout(hover.current); hover.current = setTimeout(() => { const r = el.getBoundingClientRect(); setPreview({ entry: target, x: Math.min(r.left, window.innerWidth - 316), y: r.bottom + 6 }); }, 350); };
+    const showPreview = (target: Entry, el: HTMLElement) => { if (hover.current) clearTimeout(hover.current); hover.current = setTimeout(() => { const r = el.getBoundingClientRect(), z = uiZoom(); setPreview({ entry: target, x: Math.min(r.left / z, window.innerWidth / z - 316), y: r.bottom / z + 6 }); }, 350); };
     const hidePreview = () => { if (hover.current) clearTimeout(hover.current); hover.current = null; setPreview(null); };
     let fenced = false;
     function inline(text: string): ReactNode { return text.split(INLINE_TOKENS).map((part, i) => { if (part.startsWith("{{") && part.endsWith("}}")) {

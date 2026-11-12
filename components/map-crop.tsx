@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import {useRef,useState} from "react";
 import {mapCrop,type Scene,type MapCrop} from "@/lib/model";
 import {snapCropToGrid} from "@/lib/crop-snap";
@@ -9,7 +10,7 @@ export default function MapCropEditor({scene,view,save,close,initialName="Area 1
  const [draft,setDraft]=useState<MapCrop|null>(()=>{const crop=mapCrop(scene);return crop?snapCropToGrid(crop,scene):null;});
  const updateDraft=(crop:MapCrop)=>setDraft(snapToGrid?snapCropToGrid(crop,scene):crop);
  const gesture=useRef<{x:number;y:number;initial:MapCrop|null;kind:string}|null>(null);
- const point=(event:React.PointerEvent<SVGSVGElement>)=>{const box=event.currentTarget.getBoundingClientRect();return {x:Math.max(0,Math.min(scene.width,(event.clientX-box.left-view.x)/view.scale)),y:Math.max(0,Math.min(scene.height,(event.clientY-box.top-view.y)/view.scale))};};
+ const point=(event:React.PointerEvent<SVGSVGElement>)=>{const box=event.currentTarget.getBoundingClientRect(),z=uiZoom();return {x:Math.max(0,Math.min(scene.width,((event.clientX-box.left)/z-view.x)/view.scale)),y:Math.max(0,Math.min(scene.height,((event.clientY-box.top)/z-view.y)/view.scale))};};
  const screen=draft?{x:view.x+draft.x*view.scale,y:view.y+draft.y*view.scale,width:draft.width*view.scale,height:draft.height*view.scale}:null;
  return <div role="dialog" aria-label="Map crop editor" onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();close();}}} style={{position:"absolute",inset:0,zIndex:12}}>
  <svg aria-label="Drag to crop map; drag inside to move; drag corners to resize" tabIndex={0} style={{width:"100%",height:"100%",touchAction:"none",cursor:"crosshair",background:"#0003"}} onPointerDown={e=>{if(e.button!==0)return;e.currentTarget.focus();e.currentTarget.setPointerCapture(e.pointerId);const p=point(e);const kind=(e.target as SVGElement).getAttribute('data-kind')??'new';gesture.current={...p,initial:draft,kind};if(kind==='new')updateDraft({x:p.x,y:p.y,width:1,height:1});}} onPointerMove={e=>{const g=gesture.current;if(!g)return;const p=point(e),r=g.initial;if(g.kind==='move'&&r){updateDraft({...r,x:Math.max(0,Math.min(scene.width-r.width,r.x+p.x-g.x)),y:Math.max(0,Math.min(scene.height-r.height,r.y+p.y-g.y))});return;}const anchor=r&&g.kind!=='new'?{x:g.kind.includes('w')?r.x+r.width:r.x,y:g.kind.includes('n')?r.y+r.height:r.y}:{x:g.x,y:g.y};updateDraft({x:Math.min(anchor.x,p.x),y:Math.min(anchor.y,p.y),width:Math.max(1,Math.abs(p.x-anchor.x)),height:Math.max(1,Math.abs(p.y-anchor.y))});}} onPointerUp={()=>{gesture.current=null;}} onPointerCancel={()=>{gesture.current=null;}}>

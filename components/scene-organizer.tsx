@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import { useFolderExpansion } from "./folder-expansion";
 import { countLabel } from "@/lib/plural";
 import { useEffect, useRef, useState } from "react";
@@ -99,7 +100,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
       const drag=pending.current;
       if(!drag?.active)return;
       const dt=Math.min(32,now-previous);previous=now;
-      if(ghost.current) ghost.current.style.transform=`translate3d(${Math.min(drag.px+14,window.innerWidth-200)}px,${Math.min(drag.py+16,window.innerHeight-60)}px,0)`;
+      if(ghost.current) ghost.current.style.transform=`translate3d(${Math.min(drag.px+14,window.innerWidth-200)/uiZoom()}px,${Math.min(drag.py+16,window.innerHeight-60)/uiZoom()}px,0)`;
       if(drag.host){
         const rect=drag.host.getBoundingClientRect();
         const top=Math.max(rect.top,0), bottom=Math.min(rect.bottom,window.innerHeight);
