@@ -58,7 +58,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 ## Usability pass (docs/UX_HANDOFF.md)
 
 - [x] Walk through both tools locally at desktop and phone sizes; record prioritized fixes in docs/UX_HANDOFF.md.
-- [ ] Item 3.3 (shared campaigns between the two tools) waits for the owner's decision.
+- [x] Item 3.3, Campaigns page (owner chose to link the tools): `/campaigns` lists Maptable and Encyclopedia campaigns together and is linked from the home page and the site header. An Encyclopedia campaign can be paired with a Maptable campaign through the new optional `maptableCampaignId` field; nothing is moved or copied, and unpairing leaves both unchanged. Match your campaigns suggests same-name pairs. New campaign creates it in either or both tools, Add maps / Start notes fill in the missing half, and renaming renames both. Before the first change the server keeps a private copy of both workspaces at `encyclopedia/backups/before-campaigns-page.json`, and the page offers a backup download. `/maptable?campaign=<id>` and `/encyclopedia?campaign=<id>` open a campaign directly. Archive and delete stay in each tool.
 - [x] Part 1, visible bugs (handoff 1.1, 1.2, 1.3, 1.7): dice tray characters fixed, Maptable header and in-dialog links styled, signed-in account page shows a summary instead of the sign-in form, "1 token" pluralization, "Move scene to" wording, Map Creator Width/Height labels, labelled the blank-scene and remove-scene buttons.
 - [ ] 1.7 leftover: the handoff saw one unlabelled button inside "Initiative order & settings"; a source scan found none, so recheck in a browser with initiative entries.
 - [x] Part 2, dice placement (handoff 1.4): the tray mounts on the Maptable board only, Dice and Roll log are tool bar buttons on desktop and Tools sheet buttons on phones, the tray opens above the tool bar, and the tray, dialogs, notices and drag ghost use the `--z-*` scale in globals.css. Remaining raw z-index values are local to their components.
@@ -93,7 +93,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 ## Optional future work
 
-- [ ] Shared campaigns and live multiplayer.
+- [ ] Live multiplayer. (Shared campaigns: see the Campaigns page.)
 - [ ] Automatic wall-based vision.
 - [ ] Offline mode.
 - [ ] Additional hosting/storage adapters beyond the current Vercel + Supabase Auth + Amazon S3 setup.

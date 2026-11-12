@@ -33,7 +33,9 @@ export const defaultCharacter=():CharacterData=>({role:"npc",group:"",tags:[],lo
 export const worldSchema = z.object({ id, name, description: z.string().max(1000), archived: z.boolean(), isTemplate:z.boolean().optional() });
 export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
-  discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"])}).optional() });
+  discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"])}).optional(),
+  // Optional (added later): the Maptable campaign that holds this campaign's maps, set on the Campaigns page.
+  maptableCampaignId:z.string().min(1).max(120).optional() });
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map"]),
@@ -50,6 +52,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
     for (const c of s.campaigns)
         if (!worlds.has(c.worldId))
             bad("Campaign world is missing");
+    const paired=s.campaigns.flatMap(c=>c.maptableCampaignId?[c.maptableCampaignId]:[]);if(new Set(paired).size!==paired.length)bad("A Maptable campaign can be paired with only one Encyclopedia campaign");
     for(const c of s.campaigns){if(new Set((c.calendars??[]).map(x=>x.id)).size!==(c.calendars??[]).length)bad("Calendar IDs must be unique within a campaign");if(new Set((c.statFields??[]).map(f=>f.id)).size!==(c.statFields??[]).length)bad("Stat field IDs must be unique within a campaign");}
     for (const e of s.entries) {
         if(e.kind==='map'&&!e.mapData)bad('Map entries need map data');
@@ -123,7 +126,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     const links=(body:string)=>body.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,(full,target,label)=>ids.has(target)?`[[${ref(target)}${label??""}]]`:full);
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
-        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => ({ ...c, id: ref(c.id), worldId: ref(c.worldId) }))],
+        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId) }; delete copy.maptableCampaignId; return copy; })],
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined }))],
     });
 }

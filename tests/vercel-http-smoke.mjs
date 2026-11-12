@@ -23,16 +23,18 @@ try{
   assert.ok(ready,output);
   const html=await (await fetch(base+'/account')).text();assert.match(html,/Register/);assert.match(html,/Forgot password/);assert.doesNotMatch(html,/Continue with ChatGPT/);
   const map=await fetch(base+'/maptable',{redirect:'manual'});assert.equal(map.status,307);assert.match(map.headers.get('location'),/\/account$/);
-  const home=await (await fetch(base+'/')).text();assert.match(home,/RPG Encyclopedia/);assert.match(home,/href="\/maptable"/);assert.match(home,/href="\/encyclopedia"/);
+  const home=await (await fetch(base+'/')).text();assert.match(home,/RPG Encyclopedia/);assert.match(home,/href="\/maptable"/);assert.match(home,/href="\/encyclopedia"/);assert.match(home,/href="\/campaigns"/);
+  assert.match(await (await fetch(base+'/campaigns')).text(),/Sign in to see your campaigns/);
   const encyclopedia=await fetch(base+'/encyclopedia',{redirect:'manual'});assert.equal(encyclopedia.status,307);assert.match(encyclopedia.headers.get('location'),/\/account$/);
   assert.equal((await fetch(base+'/encyclopedia/player')).status,200);
   const forged={'oai-authenticated-user-id':'attacker','oai-authenticated-user-email':'attacker@example.com'};
-  for(const path of ['/api/workspace','/api/assets?id=00000000-0000-0000-0000-000000000000','/api/settings','/api/s3?key=maps/test.png']){
+  for(const path of ['/api/workspace','/api/assets?id=00000000-0000-0000-0000-000000000000','/api/settings','/api/s3?key=maps/test.png','/api/campaigns','/api/campaigns?download=backup']){
     const response=await fetch(base+path,{headers:forged});assert.equal(response.status,401,path);assert.equal((await response.json()).error,'Unauthorized');
   }
   for(const path of ['/api/encyclopedia/workspace','/api/encyclopedia/map-images?id=00000000-0000-0000-0000-000000000000','/api/encyclopedia/history?entry=demo-greyhaven','/api/encyclopedia/maptable-scenes','/api/encyclopedia/tables'])assert.equal((await fetch(base+path,{headers:forged})).status,401);
   for(const path of ['/api/encyclopedia/player-links','/api/encyclopedia/agent-access','/api/encyclopedia/mcp','/api/encyclopedia/history','/api/encyclopedia/discord-roll'])assert.equal((await fetch(base+path,{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{}'})).status,401);
   assert.equal((await fetch(base+'/api/encyclopedia/player-view',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"token":"invalid"}'})).status,404);
+  assert.equal((await fetch(base+'/api/campaigns',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{"action":"pair","pairs":[]}'})).status,401);
   const agent=await fetch(base+'/api/agent/maps');assert.equal(agent.status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);
   const account=await fetch(base+'/api/account',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:'{}'});assert.equal(account.status,403);

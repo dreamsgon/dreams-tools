@@ -310,8 +310,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       let saved = null;
       try { saved = navigationScope ? parseNavigationState(sessionStorage.getItem(navigationStorageKey(navigationScope))) : null; } catch { /* Storage is optional. */ }
       // /maptable?scene=<id> (from an Encyclopedia link) opens that scene once, then the address is tidied.
-      let requested: string | null = null;
-      if (!navigationRestored.current) { try { requested = new URLSearchParams(window.location.search).get("scene"); } catch { requested = null; } }
+      let requested: string | null = null, requestedCampaign: string | null = null;
+      if (!navigationRestored.current) { try { const query = new URLSearchParams(window.location.search); requested = query.get("scene"); requestedCampaign = query.get("campaign"); } catch { requested = null; } }
       const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
       const activeId = linked ?? (navigationRestored.current ? state.current?.activeId : saved?.activeId);
       if (activeId) data = preserveActiveScene(data, activeId);
@@ -327,9 +327,16 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           setDashboardLocation(validLocation(saved.dashboardLocation));
           setConditionLocation(data.conditionFolders.some(c => c.id === saved.conditionLocation) ? saved.conditionLocation : null);
         }
-        if (requested) {
+        // /maptable?campaign=<id> (from the Campaigns page) opens that campaign's scenes once.
+        if (!linked && requestedCampaign && data.collections.some(c => c.id === requestedCampaign && c.kind === "campaign")) {
+          setDashboard(true); setCreatorOpen(false);
+          const inCampaign = (id: string | null) => { for (let n = 0; id && n < 100; n++) { const c = data.collections.find(item => item.id === id); if (!c || c.kind === "campaign") return c?.id === requestedCampaign; id = c.parentId; } return false; };
+          if (data.scenes.some(s => inCampaign(s.containerId))) setOverview({ id: requestedCampaign });
+          else { setOverview(null); setDashboardLocation(requestedCampaign); }
+        }
+        if (requested || requestedCampaign) {
           if (linked) { setDashboard(false); setCreatorOpen(false); }
-          try { const url = new URL(window.location.href); url.searchParams.delete("scene"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
+          try { const url = new URL(window.location.href); url.searchParams.delete("scene"); url.searchParams.delete("campaign"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
         }
         setNavigationReady(true);
       }
