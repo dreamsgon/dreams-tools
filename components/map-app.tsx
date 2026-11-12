@@ -56,13 +56,13 @@ import {
   Check,
   HelpCircle,
   UserRound,
-  BookOpen,
   Dices,
   ScrollText,
 } from "lucide-react";
 import Board, { type View } from "./board";
 import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
+import ToolSwitch, { AccountLink } from "./tool-switch";
 import ConditionSymbol from "./condition-symbol";
 import ConditionOrganizer from "./condition-organizer";
 import ConditionEntry from "./condition-entry";
@@ -898,7 +898,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   if (dashboard) return <main className="campaign-dashboard">
-    <header><div className="brand"><MapIcon size={25} /><a href="/" title="RPG Tools home">Maptable</a></div><div className="header-actions"><a className="header-link" href="/encyclopedia" title="Open RPG Encyclopedia"><BookOpen size={16} aria-hidden="true" />Encyclopedia</a><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><AppearanceMenu /></div></header>
+    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" /><strong aria-current="page">Campaigns</strong></nav><div className="header-actions"><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><AppearanceMenu /><AccountLink /></div></header>
     <div className="dashboard-content">
       {saveRecovery}
       {workspace.scenes.some((s) => s.id === scene.id) && <button className="dashboard-continue" onClick={() => setDashboard(false)}>
@@ -918,10 +918,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   return (
     <main className="app-shell" data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>
       <header className="app-header">
-        <div className="brand">
-          <MapIcon size={25} />
-          <a href="/" title="RPG Tools home">Maptable</a>
-        </div>
+        <ToolSwitch active="maptable" />
         <nav className="header-scene" aria-label="Breadcrumb">
           <span className="divider" />
           <button className="crumb crumb-home" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button>
@@ -962,6 +959,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <Share2 size={17} />
             <span>Share map</span>
           </button>
+          <AccountLink />
         </div>
       </header>
       <div className="workspace">

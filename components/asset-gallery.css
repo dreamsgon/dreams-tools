@@ -8,7 +8,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 .campaign-assets .asset-gallery-card.is-selected {border-color: var(--green);}
@@ -40,7 +40,7 @@
   padding: 4px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
 }
 .campaign-assets .asset-gallery-caption {display: grid;gap: 5px;padding: 9px;}
 .campaign-assets .asset-gallery-caption strong {font-size: 12px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;}
