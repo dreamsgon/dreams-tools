@@ -26,12 +26,13 @@ export const rowSchema = z.object({
   max: z.number().int().min(-1000).max(100000).optional(),
   weight: z.number().int().min(0).max(1000).optional(),
 });
+export const partSchema = z.object({ id, label: z.string().trim().min(1).max(60), tableId: id });
 export const oddsSchema = z.object({ label: z.string().trim().min(1).max(60), yes: z.number().int().min(0).max(100) });
 export const tableSchema = z.object({
   id,
   name: z.string().trim().min(1).max(160),
   category: categorySchema,
-  kind: z.enum(['table', 'pair', 'oracle']),
+  kind: z.enum(['table', 'pair', 'oracle', 'generator']),
   description: z.string().max(2000).optional(),
   /** null: every campaign, now and future. Otherwise Encyclopedia campaign ids. */
   campaignIds: z.array(id).max(500).nullable(),
@@ -39,8 +40,14 @@ export const tableSchema = z.object({
   formula: z.string().max(60).optional(),
   rows: z.array(rowSchema).max(1000).optional(),
   pair: z.tuple([id, id]).optional(),
+  /** pair: what goes between the two words. Defaults to ' · '. */
+  joiner: z.string().max(5).optional(),
   odds: z.array(oddsSchema).min(2).max(9).optional(),
   twistTableId: id.optional(),
+  /** generator: labelled lines, each rolled on a table. A line labelled Name becomes the title. */
+  parts: z.array(partSchema).max(20).optional(),
+  /** generator: rolled on demand, such as a reaction during a conversation. */
+  extras: z.array(partSchema).max(10).optional(),
   updatedAt: z.string().datetime(),
 });
 export const librarySchema = z.object({
@@ -61,6 +68,7 @@ export const librarySchema = z.object({
       if (new Set(t.rows?.map(r => r.id)).size !== (t.rows?.length ?? 0)) ctx.addIssue({ code: 'custom', message: 'Row IDs must be unique within a table' });
     }
     if (t.kind === 'pair' && (!t.pair || t.pair.some(p => !ids.has(p)))) ctx.addIssue({ code: 'custom', message: `“${t.name}” needs two tables to combine` });
+    if (t.kind === 'generator' && (!t.parts?.length || [...t.parts, ...(t.extras ?? [])].some(p => !ids.has(p.tableId)))) ctx.addIssue({ code: 'custom', message: `“${t.name}” needs at least one line, each rolled on a table in your library` });
     if (t.kind === 'oracle' && !t.odds) ctx.addIssue({ code: 'custom', message: `“${t.name}” needs odds` });
   }
 });
@@ -141,9 +149,15 @@ function rollInner(library: TableLibrary, table: RandomTable, random: Random, st
   if (table.kind === 'pair') {
     const parts = depth < 6 ? (table.pair ?? []).map(pid => library.tables.find(t => t.id === pid)).filter((t): t is RandomTable => !!t) : [];
     const rolled = parts.map(t => rollInner(library, t, random, steps, depth + 1));
-    const text = rolled.map(r => r.text).join(' · ');
+    const text = rolled.map(r => r.text).join(table.joiner ?? ' · ');
     if (depth) steps.push({ table: table.name, roll: '', text });
     return { text, roll: rolled.map(r => r.roll).join(', ') };
+  }
+  if (table.kind === 'generator') {
+    const lines = depth < 6 ? (table.parts ?? []).map(p => { const t = library.tables.find(x => x.id === p.tableId); return t ? `${p.label}: ${rollInner(library, t, random, steps, depth + 1).text}` : ''; }).filter(Boolean) : [];
+    const text = lines.join('; ');
+    if (depth) steps.push({ table: table.name, roll: '', text });
+    return { text, roll: '' };
   }
   if (table.kind === 'oracle') {
     const a = askOracle(table, table.odds?.[Math.floor((table.odds.length - 1) / 2)]?.label ?? '', 5, random);
@@ -263,7 +277,8 @@ export const EXPORT_FORMAT = 'rpg-tools-tables';
 export function exportTables(library: TableLibrary, ids: string[]) {
   const wanted = new Set(ids);
   // Pairs need the tables they combine.
-  for (const t of library.tables) if (wanted.has(t.id) && t.kind === 'pair') t.pair?.forEach(p => wanted.add(p));
+  const refs = (t: RandomTable) => [...(t.pair ?? []), ...(t.parts ?? []).map(p => p.tableId), ...(t.extras ?? []).map(p => p.tableId), ...(t.twistTableId ? [t.twistTableId] : [])];
+  for (let grew = true; grew;) { grew = false; for (const t of library.tables) if (wanted.has(t.id)) for (const r of refs(t)) if (!wanted.has(r) && library.tables.some(x => x.id === r)) { wanted.add(r); grew = true; } }
   return { format: EXPORT_FORMAT, version: 1, tables: library.tables.filter(t => wanted.has(t.id)).map(t => ({ ...t, campaignIds: null })) };
 }
 /** Adds tables from an export as new tables with new IDs, used in the given campaigns (null: all). Pairs are re-pointed. */
@@ -274,7 +289,7 @@ export function importTables(library: TableLibrary, input: unknown, campaignIds:
   const tables = parsed.tables.map(t => {
     let name = t.name; for (let n = 2; names.has(name.toLowerCase()); n++) name = `${t.name} (${n})`;
     names.add(name.toLowerCase());
-    return { ...t, id: map.get(t.id)!, name, campaignIds, updatedAt: now, pair: t.pair ? t.pair.map(p => map.get(p) ?? p) as [string, string] : undefined, twistTableId: t.twistTableId ? map.get(t.twistTableId) : undefined };
+    return { ...t, id: map.get(t.id)!, name, campaignIds, updatedAt: now, pair: t.pair ? t.pair.map(p => map.get(p) ?? p) as [string, string] : undefined, twistTableId: t.twistTableId ? map.get(t.twistTableId) : undefined, parts: t.parts?.map(p => ({ ...p, tableId: map.get(p.tableId) ?? p.tableId })), extras: t.extras?.map(p => ({ ...p, tableId: map.get(p.tableId) ?? p.tableId })) };
   });
   return { library: librarySchema.parse({ ...library, tables: [...library.tables, ...tables] }), added: tables.length };
 }
@@ -283,4 +298,26 @@ export function bringToCampaign(library: TableLibrary, ids: string[], campaignId
   if (!copy) return { ...library, tables: library.tables.map(t => ids.includes(t.id) && t.campaignIds && !t.campaignIds.includes(campaignId) ? { ...t, campaignIds: [...t.campaignIds, campaignId], updatedAt: now } : t) };
   const out = importTables(library, exportTables(library, ids), [campaignId], makeId, now).library;
   return out;
+}
+
+/* ---------- Generators ---------- */
+export type GeneratorLine = { partId: string; label: string; tableId: string; text: string; roll: string; steps: RollStep[] };
+/** Rolls a generator's lines. Lines in keep stay as they are. */
+export function rollGenerator(library: TableLibrary, generatorId: string, keep: GeneratorLine[] = [], random: Random = Math.random): GeneratorLine[] {
+  const g = library.tables.find(t => t.id === generatorId);
+  if (!g || g.kind !== 'generator') throw Error('That generator is no longer in your library.');
+  return (g.parts ?? []).map(p => keep.find(k => k.partId === p.id) ?? rollLine(library, p, random));
+}
+export function rollLine(library: TableLibrary, part: { id: string; label: string; tableId: string }, random: Random = Math.random): GeneratorLine {
+  try { const r = rollTable(library, part.tableId, random); return { partId: part.id, label: part.label, tableId: part.tableId, text: r.text, roll: r.roll, steps: r.steps }; }
+  catch { return { partId: part.id, label: part.label, tableId: part.tableId, text: 'Missing table', roll: '', steps: [] }; }
+}
+const isName = (label: string) => /^name$/i.test(label.trim());
+/** The name line (labelled Name) becomes the title; the rest become page text. */
+export function generatorPage(lines: GeneratorLine[], who = '') {
+  const name = lines.find(l => isName(l.label))?.text.trim();
+  const title = (name || who.trim() || 'New character').slice(0, 160);
+  const intro = name && who.trim() ? [`**Who:** ${who.trim()}`] : [];
+  const body = [...intro, ...lines.filter(l => !isName(l.label)).map(l => `**${l.label}:** ${l.text}`)].join('\n\n');
+  return { title, body };
 }

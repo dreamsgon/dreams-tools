@@ -1,11 +1,11 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Dices,Plus,Upload,Download,Search,ArrowLeft,Trash2,Copy,Pencil,Check,RotateCcw,X,ListOrdered} from 'lucide-react';
+import {Dices,Plus,Upload,Download,Search,ArrowLeft,Trash2,Copy,Pencil,Check,RotateCcw,X,ListOrdered,Lock,LockOpen,UserPlus,ArrowUp} from 'lucide-react';
 import {ToolDialog} from './character-tools';
 import {newId} from '@/lib/encyclopedia/world-model';
-import {TABLE_CATEGORIES,DEFAULT_ODDS,librarySchema,inCampaign,rollTable,askOracle,rangeGaps,rangeLabel,parseTableText,findTable,parseCsvTable,tableToCsv,exportTables,importTables,bringToCampaign,LIBRARY_LIMIT,
- type RandomTable,type TableLibrary,type TableCategory,type TableRoll,type TableRow} from '@/lib/encyclopedia/tables';
-import {starterTables} from '@/lib/encyclopedia/starter-tables';
+import {TABLE_CATEGORIES,DEFAULT_ODDS,librarySchema,inCampaign,rollTable,askOracle,rangeGaps,rangeLabel,parseTableText,findTable,parseCsvTable,tableToCsv,exportTables,importTables,bringToCampaign,rollGenerator,rollLine,generatorPage,LIBRARY_LIMIT,
+ type GeneratorLine,type RandomTable,type TableLibrary,type TableCategory,type TableRoll,type TableRow} from '@/lib/encyclopedia/tables';
+import {addMissingStarters} from '@/lib/encyclopedia/starter-tables';
 
 export type TableCampaign={id:string;name:string;world:string};
 type LogItem=TableRoll&{at:number;n:number;question?:string;twist?:string};
@@ -13,11 +13,12 @@ const categoryLabel=(c:TableCategory)=>TABLE_CATEGORIES.find(x=>x[0]===c)?.[1]??
 const now=()=>new Date().toISOString();
 function download(name:string,text:string,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 const fileName=(s:string)=>s.replace(/[^\w -]+/g,'').trim().replace(/\s+/g,'-').toLowerCase()||'tables';
-const rollLabel=(t:RandomTable)=>t.kind==='pair'?'2 tables':t.kind==='oracle'?'d100':t.mode==='ranges'?t.formula??'':'list';
+const rollLabel=(t:RandomTable)=>t.kind==='generator'?`${t.parts?.length??0} lines`:t.kind==='pair'?'2 tables':t.kind==='oracle'?'d100':t.mode==='ranges'?t.formula??'':'list';
 let sequence=0;
 
 /** The Random tables page: one library for the account, shown for the open campaign. */
-export function RandomTablesSection({campaignId,campaigns,home=0}:{campaignId:string|null;campaigns:TableCampaign[];home?:number}){
+export type SaveCharacter=(page:{title:string;body:string})=>void;
+export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter}:{campaignId:string|null;campaigns:TableCampaign[];home?:number;onSaveCharacter?:SaveCharacter}){
  const [lib,setLib]=useState<TableLibrary|null>(null),[error,setError]=useState(''),[status,setStatus]=useState('');
  const [open,setOpen]=useState<string|null>(null),[editing,setEditing]=useState(false),[query,setQuery]=useState(''),[category,setCategory]=useState<TableCategory|''>(''),[scope,setScope]=useState<'here'|'all'>(campaignId?'here':'all');
  const [log,setLog]=useState<LogItem[]>([]),[importing,setImporting]=useState(false),[creating,setCreating]=useState(false);
@@ -48,9 +49,9 @@ export function RandomTablesSection({campaignId,campaigns,home=0}:{campaignId:st
 
  if(table)return <div className="tables-layout"><section className="page-content tables-page">{banner}
   <TableView key={table.id} table={table} lib={lib} campaigns={campaigns} campaignId={campaignId} editing={editing} setEditing={setEditing} onBack={()=>{setOpen(null);setEditing(false);}}
-   update={patch=>updateTable(table.id,patch)} change={change} record={record} onOpen={id=>{setOpen(id);setEditing(false);}}
-   onDelete={()=>{const users=lib.tables.filter(t=>t.pair?.includes(table.id)||t.twistTableId===table.id);if(users.length){setError(`“${users[0].name}” uses this table. Change or delete it first.`);return;}if(!confirm(`Delete “${table.name}”? Export it first if you might want it back.`))return;change({...lib,tables:lib.tables.filter(t=>t.id!==table.id)});setOpen(null);}}
-   onDuplicate={()=>{const copy={...structuredClone(table),id:newId(),name:uniqueName(lib,table.name+' copy'),updatedAt:now(),rows:table.rows?.map(r=>({...r,id:newId()}))};if(change({...lib,tables:[...lib.tables,copy]})){setOpen(copy.id);setEditing(true);}}}/>
+   update={patch=>updateTable(table.id,patch)} change={change} record={record} onOpen={id=>{setOpen(id);setEditing(false);}} onSaveCharacter={onSaveCharacter}
+   onDelete={()=>{const users=lib.tables.filter(t=>t.id!==table.id&&(t.pair?.includes(table.id)||t.twistTableId===table.id||[...(t.parts??[]),...(t.extras??[])].some(p=>p.tableId===table.id)));if(users.length){setError(`“${users[0].name}” uses this table. Change or delete it first.`);return;}if(!confirm(`Delete “${table.name}”? Export it first if you might want it back.`))return;change({...lib,tables:lib.tables.filter(t=>t.id!==table.id)});setOpen(null);}}
+   onDuplicate={()=>{const copy={...structuredClone(table),id:newId(),name:uniqueName(lib,table.name+' copy'),updatedAt:now(),rows:table.rows?.map(r=>({...r,id:newId()})),parts:table.parts?.map(p=>({...p,id:newId()})),extras:table.extras?.map(p=>({...p,id:newId()}))};if(change({...lib,tables:[...lib.tables,copy]})){setOpen(copy.id);setEditing(true);}}}/>
   <p className="tables-status">{status}</p></section>{logAside}</div>;
 
  const groups=TABLE_CATEGORIES.map(([c,label])=>({c,label,tables:shown.filter(t=>t.category===c).sort((a,b)=>a.name.localeCompare(b.name))})).filter(g=>g.tables.length);
@@ -60,11 +61,12 @@ export function RandomTablesSection({campaignId,campaigns,home=0}:{campaignId:st
   <div className="tables-toolbar"><label className="search-box"><Search size={15}/><input aria-label="Find a table" placeholder="Find a table…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
    <div className="tables-chips" role="group" aria-label="Kind of table"><button className={!category?'on':''} aria-pressed={!category} onClick={()=>setCategory('')}>All</button>{TABLE_CATEGORIES.filter(([c])=>lib.tables.some(t=>t.category===c)).map(([c,label])=><button key={c} className={category===c?'on':''} aria-pressed={category===c} onClick={()=>setCategory(category===c?'':c)}>{label}</button>)}</div></div>
   {campaign&&<div className="segmented tables-scope" role="group" aria-label="Which tables"><button className={scope==='here'?'on':''} aria-pressed={scope==='here'} onClick={()=>setScope('here')}>Used in {campaign.name}</button><button className={scope==='all'?'on':''} aria-pressed={scope==='all'} onClick={()=>setScope('all')}>All my tables</button></div>}
-  {!lib.tables.length?<div className="tables-empty"><ListOrdered size={40} strokeWidth={1.2}/><h2>No tables yet</h2><p>Start with a few starter tables (an oracle, meaning words, complications, weather and names), paste a table from a book you own, or import a file.</p><div className="button-row"><button className="button primary" onClick={()=>change({...lib,tables:starterTables(newId)})}><Plus size={15}/> Add starter tables</button><button className="button" onClick={()=>setImporting(true)}><Upload size={15}/> Paste or import</button></div></div>
+  {!lib.tables.length?<div className="tables-empty"><ListOrdered size={40} strokeWidth={1.2}/><h2>No tables yet</h2><p>Start with a few starter tables (an oracle, meaning words, an NPC generator, complications, weather and names), paste a table from a book you own, or import a file.</p><div className="button-row"><button className="button primary" onClick={()=>change(addMissingStarters(lib,newId).library)}><Plus size={15}/> Add starter tables</button><button className="button" onClick={()=>setImporting(true)}><Upload size={15}/> Paste or import</button></div></div>
    :!groups.length?<p className="subtitle">{scope==='here'&&campaign?`No tables are used in ${campaign.name} yet. Switch to All my tables, or import from another campaign.`:'No tables match.'}</p>
    :groups.map(g=><div key={g.c} className="tables-group"><h2>{g.label} <span>{g.tables.length}</span></h2><div className="tables-grid">{g.tables.map(t=><div key={t.id} className="table-card">
     <button className="table-card-open" onClick={()=>{setOpen(t.id);setEditing(false);}}><span className="table-card-head"><strong>{t.name}</strong><span className="die-tag">{rollLabel(t)}</span></span><span className="table-card-desc">{t.description||sample(t,lib)}</span></button>
-    <div className="table-card-foot"><span>{t.kind==='table'?`${t.rows?.length??0} rows`:t.kind==='pair'?'word pair':'oracle'}</span><span>{t.campaignIds===null?'All campaigns':t.campaignIds.length===1&&t.campaignIds[0]===campaignId?'This campaign':`${t.campaignIds.length} campaign${t.campaignIds.length===1?'':'s'}`}</span><span className="spacer"/>{t.kind==='oracle'?<button className="text-button" onClick={()=>{setOpen(t.id);setEditing(false);}}>Ask</button>:<button className="text-button" onClick={()=>roll(t.id)}><Dices size={13}/> Roll</button>}</div></div>)}</div></div>)}
+    <div className="table-card-foot"><span>{t.kind==='table'?`${t.rows?.length??0} rows`:t.kind==='pair'?'word pair':t.kind==='generator'?'generator':'oracle'}</span><span>{t.campaignIds===null?'All campaigns':t.campaignIds.length===1&&t.campaignIds[0]===campaignId?'This campaign':`${t.campaignIds.length} campaign${t.campaignIds.length===1?'':'s'}`}</span><span className="spacer"/>{t.kind==='oracle'||t.kind==='generator'?<button className="text-button" onClick={()=>{setOpen(t.id);setEditing(false);}}>{t.kind==='oracle'?'Ask':'Open'}</button>:<button className="text-button" onClick={()=>roll(t.id)}><Dices size={13}/> Roll</button>}</div></div>)}</div></div>)}
+  {lib.tables.length>0&&addMissingStarters(lib,()=>'').added>0&&<p className="aside-hint tables-starters">Missing the starter tables, such as the NPC generator? <button className="text-button" onClick={()=>{const r=addMissingStarters(lib,newId);if(change(r.library))setStatus(`Added ${r.added} starter table${r.added===1?'':'s'}`);}}>Add them</button></p>}
   <p className="tables-status">{status}</p>
   {creating&&<NewTableDialog lib={lib} onClose={()=>setCreating(false)} onCreate={t=>{const full={...t,campaignIds:defaultScope,updatedAt:now()} as RandomTable;if(change({...lib,tables:[...lib.tables,full]})){setCreating(false);setOpen(full.id);setEditing(true);}}}/>}
   {importing&&<ImportDialog lib={lib} campaigns={campaigns} campaignId={campaignId} onClose={()=>setImporting(false)} onDone={(next,message)=>{if(change(next)){setImporting(false);setStatus(message);}}} setError={setError}/>}
@@ -72,7 +74,7 @@ export function RandomTablesSection({campaignId,campaigns,home=0}:{campaignId:st
 }
 
 function uniqueName(lib:TableLibrary,name:string){let out=name.slice(0,160);for(let n=2;lib.tables.some(t=>t.name.toLowerCase()===out.toLowerCase());n++)out=`${name.slice(0,150)} (${n})`;return out;}
-function sample(t:RandomTable,lib:TableLibrary){if(t.kind==='pair')return t.pair?.map(id=>lib.tables.find(x=>x.id===id)?.name).filter(Boolean).join(' + ')??'';if(t.kind==='oracle')return 'Ask a yes or no question.';return (t.rows??[]).slice(0,3).map(r=>r.text.replace(/\[\[(?:table:)?([^\]|]+)[^\]]*\]\]/g,'$1')).join(' · ');}
+function sample(t:RandomTable,lib:TableLibrary){if(t.kind==='generator')return (t.parts??[]).map(p=>p.label).join(' · ');if(t.kind==='pair')return t.pair?.map(id=>lib.tables.find(x=>x.id===id)?.name).filter(Boolean).join(' + ')??'';if(t.kind==='oracle')return 'Ask a yes or no question.';return (t.rows??[]).slice(0,3).map(r=>r.text.replace(/\[\[(?:table:)?([^\]|]+)[^\]]*\]\]/g,'$1')).join(' · ');}
 
 function RollLog({log,onClear}:{log:LogItem[];onClear:()=>void}){
  const [copied,setCopied]=useState(0);
@@ -84,7 +86,7 @@ function RollLog({log,onClear}:{log:LogItem[];onClear:()=>void}){
  </aside>;
 }
 
-function TableView({table,lib,campaigns,campaignId,editing,setEditing,onBack,update,change,record,onOpen,onDelete,onDuplicate}:{table:RandomTable;lib:TableLibrary;campaigns:TableCampaign[];campaignId:string|null;editing:boolean;setEditing:(v:boolean)=>void;onBack:()=>void;update:(p:Partial<RandomTable>)=>void;change:(l:TableLibrary)=>boolean;record:(r:TableRoll,extra?:Partial<LogItem>)=>void;onOpen:(id:string)=>void;onDelete:()=>void;onDuplicate:()=>void}){
+function TableView({table,lib,campaigns,campaignId,editing,setEditing,onBack,update,change,record,onOpen,onDelete,onDuplicate,onSaveCharacter}:{table:RandomTable;lib:TableLibrary;campaigns:TableCampaign[];campaignId:string|null;editing:boolean;setEditing:(v:boolean)=>void;onBack:()=>void;update:(p:Partial<RandomTable>)=>void;change:(l:TableLibrary)=>boolean;record:(r:TableRoll,extra?:Partial<LogItem>)=>void;onOpen:(id:string)=>void;onDelete:()=>void;onDuplicate:()=>void;onSaveCharacter?:SaveCharacter}){
  const [last,setLast]=useState<LogItem|null>(null);
  const doRoll=()=>{try{const r=rollTable(lib,table.id);setLast({...r,at:Date.now(),n:0});record(r);}catch{/* shown by the library */}};
  const others=lib.tables.filter(t=>t.id!==table.id&&t.kind!=='oracle');
@@ -92,11 +94,12 @@ function TableView({table,lib,campaigns,campaignId,editing,setEditing,onBack,upd
   <div className="article-path"><button onClick={onBack}><ArrowLeft size={13}/> Random tables</button><span>/ {categoryLabel(table.category)}</span></div>
   <div className="tables-title"><div>{editing?<input className="tables-name-input" aria-label="Table name" maxLength={160} defaultValue={table.name} onBlur={e=>{const v=e.target.value.trim();if(v&&v!==table.name)update({name:uniqueName({...lib,tables:lib.tables.filter(t=>t.id!==table.id)},v)});}}/>:<h1>{table.name}</h1>}
    {editing?<textarea className="tables-desc-input" aria-label="Description" rows={2} maxLength={2000} placeholder="What is this table for? (optional)" defaultValue={table.description??''} onBlur={e=>{if(e.target.value!==(table.description??''))update({description:e.target.value||undefined});}}/>:table.description&&<p className="subtitle">{table.description}</p>}</div>
-   <div className="button-row">{editing?<button className="button primary" onClick={()=>setEditing(false)}><Check size={15}/> Done</button>:<button className="button" onClick={()=>setEditing(true)}><Pencil size={14}/> Edit</button>}{table.kind!=='oracle'&&!editing&&<button className="button primary" onClick={doRoll}><Dices size={15}/> Roll</button>}</div></div>
-  {table.kind==='oracle'?<Oracle table={table} lib={lib} campaignId={campaignId} editing={editing} update={update} change={change} record={record}/>
-   :table.kind==='pair'?<div className="tables-pair">{[0,1].map(i=>{const part=lib.tables.find(t=>t.id===table.pair?.[i]);return <div key={i} className="tables-pair-part"><span className="field-caption">{i?'Second word':'First word'}</span>{editing?<select aria-label={i?'Second table':'First table'} value={table.pair?.[i]??''} onChange={e=>{const p=[...(table.pair??['',''])] as [string,string];p[i]=e.target.value;update({pair:p});}}>{others.filter(t=>t.kind==='table').map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>:part?<button className="text-button" onClick={()=>onOpen(part.id)}>{part.name} ({part.rows?.length??0})</button>:<span>Missing</span>}</div>;})}</div>
+   <div className="button-row">{editing?<button className="button primary" onClick={()=>setEditing(false)}><Check size={15}/> Done</button>:<button className="button" onClick={()=>setEditing(true)}><Pencil size={14}/> Edit</button>}{table.kind!=='oracle'&&table.kind!=='generator'&&!editing&&<button className="button primary" onClick={doRoll}><Dices size={15}/> Roll</button>}</div></div>
+  {table.kind==='generator'?<Generator table={table} lib={lib} editing={editing} update={update} record={record} onOpen={onOpen} onSaveCharacter={onSaveCharacter}/>
+   :table.kind==='oracle'?<Oracle table={table} lib={lib} campaignId={campaignId} editing={editing} update={update} change={change} record={record}/>
+   :table.kind==='pair'?<div className="tables-pair">{[0,1].map(i=>{const part=lib.tables.find(t=>t.id===table.pair?.[i]);return <div key={i} className="tables-pair-part"><span className="field-caption">{i?'Second word':'First word'}</span>{editing?<select aria-label={i?'Second table':'First table'} value={table.pair?.[i]??''} onChange={e=>{const p=[...(table.pair??['',''])] as [string,string];p[i]=e.target.value;update({pair:p});}}>{others.filter(t=>t.kind==='table').map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>:part?<button className="text-button" onClick={()=>onOpen(part.id)}>{part.name} ({part.rows?.length??0})</button>:<span>Missing</span>}</div>;})}{editing&&<label className="field-label tables-joiner">Between the words<select value={table.joiner??' · '} onChange={e=>update({joiner:e.target.value===' · '?undefined:e.target.value})}><option value=" · ">A dot (Abandon · a promise)</option><option value=" ">A space (to protect a secret)</option><option value=", ">A comma (cold, quiet)</option></select></label>}</div>
    :<RowsEditor table={table} lib={lib} editing={editing} update={update} onOpen={onOpen}/>}
-  {last&&!editing&&table.kind!=='oracle'&&<div className="tables-result" role="status"><span>{last.roll}</span><p>{last.text}</p>{last.steps.length>0&&<small>{last.steps.map(s=>`${s.table}: ${s.text}`).join(' · ')}</small>}<button className="text-button" onClick={doRoll}><RotateCcw size={13}/> Roll again</button></div>}
+  {last&&!editing&&table.kind!=='oracle'&&table.kind!=='generator'&&<div className="tables-result" role="status"><span>{last.roll}</span><p>{last.text}</p>{last.steps.length>0&&<small>{last.steps.map(s=>`${s.table}: ${s.text}`).join(' · ')}</small>}<button className="text-button" onClick={doRoll}><RotateCcw size={13}/> Roll again</button></div>}
   <div className="tables-settings">
    {editing&&<label className="field-label">Kind<select value={table.category} onChange={e=>update({category:e.target.value as TableCategory})}>{TABLE_CATEGORIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></label>}
    <Availability table={table} campaigns={campaigns} campaignId={campaignId} update={update}/>
@@ -139,6 +142,51 @@ function RowsEditor({table,lib,editing,update,onOpen}:{table:RandomTable;lib:Tab
  </div>;
 }
 
+/** A generator: one labelled line per table. Lock the lines you like, reroll the rest, then save it as a character page. */
+function Generator({table,lib,editing,update,record,onOpen,onSaveCharacter}:{table:RandomTable;lib:TableLibrary;editing:boolean;update:(p:Partial<RandomTable>)=>void;record:(r:TableRoll,extra?:Partial<LogItem>)=>void;onOpen:(id:string)=>void;onSaveCharacter?:SaveCharacter}){
+ const fresh=(keep:GeneratorLine[]=[])=>{try{return rollGenerator(lib,table.id,keep);}catch{return [];}};
+ const [lines,setLines]=useState<GeneratorLine[]>(()=>fresh()),[locked,setLocked]=useState<Set<string>>(new Set()),[who,setWho]=useState(''),[extras,setExtras]=useState<Record<string,GeneratorLine>>({}),[copied,setCopied]=useState(false);
+ const parts=table.parts??[];
+ // Lines follow the parts: new parts get rolled, removed parts drop out.
+ const shown=parts.map(p=>{const l=lines.find(x=>x.partId===p.id);return l&&l.tableId===p.tableId?{...l,label:p.label}:null;});
+ if(!editing&&shown.some(l=>!l)){const next=shown.map((l,i)=>l??rollLine(lib,parts[i]));setLines(next as GeneratorLine[]);}
+ const current=shown.filter(Boolean) as GeneratorLine[];
+ const summary=(ls:GeneratorLine[])=>ls.map(l=>`${l.label}: ${l.text}`).join('; ');
+ const rollAll=()=>{const next=fresh(current.filter(l=>locked.has(l.partId)));setLines(next);setExtras({});record({tableId:table.id,title:table.name,roll:'',text:summary(next),steps:[]});};
+ const reroll=(partId:string)=>{const p=parts.find(x=>x.id===partId);if(p)setLines(current.map(l=>l.partId===partId?rollLine(lib,p):l));};
+ const rollExtra=(p:{id:string;label:string;tableId:string})=>{const l=rollLine(lib,p);setExtras(old=>({...old,[p.id]:l}));record({tableId:p.tableId,title:`${table.name} · ${p.label}`,roll:l.roll,text:l.text,steps:l.steps});};
+ const toggle=(id:string)=>setLocked(old=>{const n=new Set(old);if(n.has(id))n.delete(id);else n.add(id);return n;});
+ const all=[...current,...(table.extras??[]).map(p=>extras[p.id]).filter(Boolean)];
+ if(editing)return <div className="gen-edit">
+  <PartsEditor title="Lines" hint="Each line is rolled on one of your tables. A line called Name becomes the title of the character page." parts={parts} lib={lib} self={table.id} min={1} onChange={next=>update({parts:next})} onOpen={onOpen}/>
+  <PartsEditor title="Roll when needed" hint="Optional. These aren’t rolled with the rest; use them during play, like a reaction or a topic of conversation." parts={table.extras??[]} lib={lib} self={table.id} min={0} onChange={next=>update({extras:next})} onOpen={onOpen}/>
+ </div>;
+ return <div className="gen">
+  <label className="field-caption" htmlFor="gen-who">Who are they? <span>(optional)</span></label>
+  <input id="gen-who" className="oracle-question" maxLength={160} placeholder="The innkeeper at the Stonehill Inn" value={who} onChange={e=>setWho(e.target.value)}/>
+  <div className="gen-lines">{current.map(l=>{const on=locked.has(l.partId);return <div key={l.partId} className={`gen-line ${on?'locked':''}`}>
+   <span className="gen-label">{l.label}</span><span className="gen-text">{l.text}{l.roll&&<small>{l.roll}</small>}</span>
+   <span className="gen-tools"><button className="icon-button" aria-pressed={on} aria-label={on?`Unlock ${l.label}`:`Keep ${l.label}`} title={on?'Kept when you roll again. Click to unlock.':'Keep this line when you roll again'} onClick={()=>toggle(l.partId)}>{on?<Lock size={14}/>:<LockOpen size={14}/>}</button><button className="icon-button" aria-label={`Reroll ${l.label}`} title="Reroll this line" disabled={on} onClick={()=>reroll(l.partId)}><RotateCcw size={14}/></button></span></div>;})}</div>
+  {!current.length&&<p className="form-error">This generator has no lines yet. Choose Edit to add some.</p>}
+  <div className="button-row gen-actions"><button className="button primary" onClick={rollAll}><Dices size={15}/> {locked.size?'Roll the unlocked lines':'Roll again'}</button>
+   {onSaveCharacter&&<button className="button" disabled={!current.length} onClick={()=>onSaveCharacter(generatorPage(all,who))}><UserPlus size={15}/> Save as a character page</button>}
+   <button className="button" disabled={!current.length} onClick={()=>{const page=generatorPage(all,who);void navigator.clipboard?.writeText(`${page.title}\n\n${page.body.replace(/\*\*/g,'')}`).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500);}).catch(()=>{});}}>{copied?<><Check size={15}/> Copied</>:<><Copy size={15}/> Copy</>}</button></div>
+  {(table.extras??[]).length>0&&<div className="gen-extras"><span className="field-caption">Roll when needed</span>{(table.extras??[]).map(p=><div key={p.id} className="gen-extra"><button className="button small" onClick={()=>rollExtra(p)}><Dices size={13}/> {p.label}</button>{extras[p.id]&&<span className="gen-text">{extras[p.id].text}{extras[p.id].roll&&<small>{extras[p.id].roll}</small>}</span>}</div>)}</div>}
+ </div>;
+}
+
+function PartsEditor({title,hint,parts,lib,self,min,onChange,onOpen}:{title:string;hint:string;parts:NonNullable<RandomTable['parts']>;lib:TableLibrary;self:string;min:number;onChange:(p:NonNullable<RandomTable['parts']>)=>void;onOpen:(id:string)=>void}){
+ const choices=lib.tables.filter(t=>t.id!==self&&t.kind!=='oracle'&&t.kind!=='generator').sort((a,b)=>a.name.localeCompare(b.name));
+ const set=(i:number,patch:Partial<NonNullable<RandomTable['parts']>[number]>)=>onChange(parts.map((p,j)=>j===i?{...p,...patch}:p));
+ const move=(i:number,d:number)=>{const n=[...parts];const [p]=n.splice(i,1);n.splice(i+d,0,p);onChange(n);};
+ return <div className="gen-parts"><span className="field-caption">{title}</span><p className="aside-hint">{hint}</p>
+  {parts.map((p,i)=><div key={p.id} className="gen-part"><input aria-label={`Line ${i+1} label`} maxLength={60} defaultValue={p.label} onBlur={e=>{const v=e.target.value.trim();if(v&&v!==p.label)set(i,{label:v});else e.target.value=p.label;}}/>
+   <select aria-label={`Line ${i+1} table`} value={p.tableId} onChange={e=>set(i,{tableId:e.target.value})}>{choices.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
+   <span className="gen-tools"><button className="text-button" onClick={()=>onOpen(p.tableId)}>Open</button><button className="icon-button" aria-label={`Move line ${i+1} up`} disabled={!i} onClick={()=>move(i,-1)}><ArrowUp size={14}/></button><button className="icon-button" aria-label={`Remove line ${i+1}`} disabled={parts.length<=min} onClick={()=>onChange(parts.filter((_,j)=>j!==i))}><X size={14}/></button></span></div>)}
+  {choices.length>0&&parts.length<(min?20:10)&&<button className="text-button" onClick={()=>onChange([...parts,{id:newId(),label:`Line ${parts.length+1}`,tableId:choices[0].id}])}><Plus size={13}/> Add a line</button>}
+ </div>;
+}
+
 /** A row's text with [[1d4]] shown as a dice chip and [[table:Name]] as a link to that table. */
 function ResultText({text,lib,onOpen}:{text:string;lib:TableLibrary;onOpen:(id:string)=>void}){
  const parts=text.split(/(\[\[[^\]\n]+\]\])/g);
@@ -170,14 +218,16 @@ function Oracle({table,lib,campaignId,editing,update,change,record}:{table:Rando
 function NewTableDialog({lib,onClose,onCreate}:{lib:TableLibrary;onClose:()=>void;onCreate:(t:Omit<RandomTable,'campaignIds'|'updatedAt'>)=>void}){
  const [kind,setKind]=useState<RandomTable['kind']>('table'),[name,setName]=useState(''),[category,setCategory]=useState<TableCategory>('encounter');
  const lists=lib.tables.filter(t=>t.kind==='table'),[a,setA]=useState(lists[0]?.id??''),[b,setB]=useState(lists[1]?.id??lists[0]?.id??'');
- return <ToolDialog title="New table" onClose={onClose}><form className="details-form" onSubmit={e=>{e.preventDefault();if(!name.trim())return;const base={id:newId(),name:uniqueName(lib,name.trim()),category:kind==='oracle'?'oracle':kind==='pair'?'meaning':category};
+ return <ToolDialog title="New table" onClose={onClose}><form className="details-form" onSubmit={e=>{e.preventDefault();if(!name.trim())return;const base={id:newId(),name:uniqueName(lib,name.trim()),category:kind==='oracle'?'oracle':kind==='pair'?'meaning':kind==='generator'?'npc':category};
   if(kind==='table')onCreate({...base,kind,mode:'ranges',formula:'d6',rows:Array.from({length:6},(_,i)=>({id:newId(),text:'',min:i+1}))});
-  else if(kind==='pair'){if(!a||!b)return;onCreate({...base,kind,pair:[a,b]});}else onCreate({...base,kind,odds:DEFAULT_ODDS});}}>
-  <div className="segmented" role="group" aria-label="Kind of table">{([['table','Table'],['pair','Word pair'],['oracle','Yes or no oracle']] as const).map(([k,l])=><button type="button" key={k} className={kind===k?'on':''} aria-pressed={kind===k} onClick={()=>setKind(k)}>{l}</button>)}</div>
-  <label>Name<input autoFocus required maxLength={160} value={name} onChange={e=>setName(e.target.value)} placeholder={kind==='pair'?'Mood and place':kind==='oracle'?'Will they agree?':'Ember Road encounters'}/></label>
+  else if(kind==='pair'){if(!a||!b)return;onCreate({...base,kind,pair:[a,b]});}
+  else if(kind==='generator'){if(!a)return;onCreate({...base,kind,parts:[{id:newId(),label:'Name',tableId:lib.tables.find(t=>t.kind==='table'&&t.category==='names')?.id??a}],extras:[]});}else onCreate({...base,kind,odds:DEFAULT_ODDS});}}>
+  <div className="segmented" role="group" aria-label="Kind of table">{([['table','Table'],['pair','Word pair'],['generator','Generator'],['oracle','Yes or no oracle']] as const).map(([k,l])=><button type="button" key={k} className={kind===k?'on':''} aria-pressed={kind===k} onClick={()=>setKind(k)}>{l}</button>)}</div>
+  <label>Name<input autoFocus required maxLength={160} value={name} onChange={e=>setName(e.target.value)} placeholder={kind==='pair'?'Mood and place':kind==='generator'?'Tavern regular':kind==='oracle'?'Will they agree?':'Ember Road encounters'}/></label>
   {kind==='table'&&<label>Kind<select value={category} onChange={e=>setCategory(e.target.value as TableCategory)}>{TABLE_CATEGORIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></label>}
+  {kind==='generator'&&!lists.length&&<p className="form-error">Make a table first. Each line of a generator is rolled on one of your tables.</p>}
   {kind==='pair'&&(lists.length?<><label>First word from<select value={a} onChange={e=>setA(e.target.value)}>{lists.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label>Second word from<select value={b} onChange={e=>setB(e.target.value)}>{lists.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label></>:<p className="form-error">Make two word tables first.</p>)}
-  <p className="aside-hint">{kind==='table'?'Starts as a d6 table. You can paste a list next.':kind==='pair'?'Rolls both tables and joins the words.':'Comes with five odds from Nearly impossible to Nearly certain. You can change them.'}</p>
+  <p className="aside-hint">{kind==='table'?'Starts as a d6 table. You can paste a list next.':kind==='pair'?'Rolls both tables and joins the words.':kind==='generator'?'Rolls several tables at once, one per line, like a name, a mood and a want. Add the lines next.':'Comes with five odds from Nearly impossible to Nearly certain. You can change them.'}</p>
   <button className="button primary">Create</button></form></ToolDialog>;
 }
 

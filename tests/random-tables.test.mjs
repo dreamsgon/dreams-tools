@@ -99,3 +99,55 @@ test('tables are saved per account beside the workspace, with revisions',async()
   assert.equal((await store.readTables('bob')).revision,0);
   assert.equal((await store.readTables('alice')).data.tables.length,6);
 });
+
+const genLib=()=>librarySchema.parse({...lib(),tables:[...lib().tables,
+ {id:'gen',name:'Townsfolk',category:'npc',kind:'generator',campaignIds:null,updatedAt:now,
+  parts:[{id:'p1',label:'Name',tableId:'names'},{id:'p2',label:'Wants',tableId:'pair'}],extras:[{id:'e1',label:'Topic',tableId:'verbs'}]}]});
+
+test('generators roll every line, keep locked lines, and need real tables',async()=>{
+  const {rollGenerator,rollLine,generatorPage}=await import('../lib/encyclopedia/tables.ts');
+  const lines=rollGenerator(genLib(),'gen',[],seq(0));
+  assert.deepEqual(lines.map(l=>[l.label,l.text]),[['Name','Hesk'],['Wants','Abandon · a promise']]);
+  const kept=[{...lines[0],text:'Mirela'}];
+  assert.equal(rollGenerator(genLib(),'gen',kept,seq(0))[0].text,'Mirela');
+  assert.equal(rollTable(genLib(),'gen',seq(0)).text,'Name: Hesk; Wants: Abandon · a promise');
+  assert.equal(rollLine(genLib(),{id:'z',label:'X',tableId:'gone'}).text,'Missing table');
+  const bad=structuredClone(genLib());bad.tables.find(t=>t.id==='gen').parts[0].tableId='gone';
+  assert.equal(librarySchema.safeParse(bad).success,false);
+  const empty=structuredClone(genLib());empty.tables.find(t=>t.id==='gen').parts=[];
+  assert.equal(librarySchema.safeParse(empty).success,false);
+  const page=generatorPage(lines,'The ferryman');
+  assert.equal(page.title,'Hesk');
+  assert.equal(page.body,'**Who:** The ferryman\n\n**Wants:** Abandon · a promise');
+  assert.equal(generatorPage(lines.slice(1),'The ferryman').title,'The ferryman');
+  assert.equal(generatorPage(lines.slice(1)).title,'New character');
+});
+
+test('exporting a generator brings its tables, and importing remaps them',()=>{
+  const file=exportTables(genLib(),['gen']);
+  assert.deepEqual(file.tables.map(t=>t.id).sort(),['gen','names','nouns','pair','verbs']);
+  const {library,added}=importTables(librarySchema.parse({schemaVersion:1,tables:[]}),file,['c9'],makeId,now);
+  assert.equal(added,5);
+  const g=library.tables.find(t=>t.kind==='generator'),ids=new Set(library.tables.map(t=>t.id));
+  assert.ok([...g.parts,...g.extras].every(p=>ids.has(p.tableId)&&p.tableId!=='names'&&p.tableId!=='verbs'));
+});
+
+test('NPC starters are original, valid, and only added once',async()=>{
+  const {npcStarterTables,addMissingStarters}=await import('../lib/encyclopedia/starter-tables.ts');
+  const npc=librarySchema.parse({schemaVersion:1,tables:npcStarterTables(makeId,now)});
+  const g=npc.tables.find(t=>t.kind==='generator');
+  assert.deepEqual(rollTable(npc,g.id).steps.length>=0,true);
+  assert.equal(npc.tables.find(t=>t.name==='NPC power').rows.length,5);
+  assert.match(rollTable(npc,npc.tables.find(t=>t.name==='NPC wants').id).text,/^to \w+ [^·]+$/,'wants read as a phrase');
+  assert.deepEqual(rangeGaps(npc.tables.find(t=>t.name==='NPC reaction')),{missing:[],overlap:[]});
+  const empty=librarySchema.parse({schemaVersion:1,tables:[]});
+  const first=addMissingStarters(empty,makeId,now);
+  assert.ok(first.added>12);
+  librarySchema.parse(first.library);
+  assert.equal(first.library.tables.filter(t=>t.name==='Quick names').length,1,'the generator reuses Quick names');
+  assert.equal(addMissingStarters(first.library,makeId,now).added,0);
+  const old=librarySchema.parse({schemaVersion:1,tables:starterTables(makeId,now)});
+  const more=addMissingStarters(old,makeId,now);
+  assert.equal(more.added,npcStarterTables(makeId,now).length-1);
+  assert.equal(more.library.tables.find(t=>t.kind==='generator').parts[0].tableId,old.tables.find(t=>t.name==='Quick names').id);
+});

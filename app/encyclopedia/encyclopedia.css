@@ -436,6 +436,30 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .tables-how{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
 .tables-how legend{font-size:11px;color:var(--muted);margin-bottom:6px}
 .file-button{align-self:flex-start;cursor:pointer}
+.gen{display:flex;flex-direction:column;gap:8px}
+.gen .field-caption span{color:var(--muted);font-weight:400}
+.gen-lines{margin-top:10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised)}
+.gen-line{display:grid;grid-template-columns:140px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line)}
+.gen-line:last-child{border-bottom:0}
+.gen-line.locked{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.gen-line.locked .gen-label{color:var(--accent)}
+.gen-label{font-size:12px;color:var(--muted)}
+.gen-text{font:16px/1.5 var(--font-reading)}
+.gen-text small{margin-left:8px;font:11px var(--font-sans);color:var(--muted)}
+.gen-tools{display:inline-flex;align-items:center;gap:4px}
+.gen-tools .icon-button{width:30px;height:30px}
+.gen-tools .icon-button[aria-pressed=true]{color:var(--accent)}
+.gen-actions{margin-top:6px}
+.gen-extras{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.gen-extra{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.gen-edit{display:flex;flex-direction:column;gap:22px}
+.gen-parts{display:flex;flex-direction:column;gap:6px}
+.gen-parts .aside-hint{margin:0 0 4px}
+.gen-part{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px;align-items:center}
+.gen-part input,.gen-part select{border:1px solid var(--line);border-radius:var(--radius);padding:7px 9px;background:var(--panel);color:var(--ink);min-width:0}
+.gen-parts>.text-button{align-self:flex-start}
+.tables-starters{margin-top:20px}
+@media(max-width:700px){.gen-line{grid-template-columns:minmax(0,1fr) auto}.gen-label{grid-column:1/-1;margin-bottom:-8px}.gen-part{grid-template-columns:1fr 1fr}.gen-part .gen-tools{grid-column:1/-1;justify-content:flex-end}}
 @media(max-width:1000px){.tables-layout{grid-template-columns:1fr}.tables-log{border-left:0;border-top:1px solid var(--line);position:static;max-height:none}}
 @media(max-width:700px){.tables-title{flex-direction:column}.tables-pair,.tables-two{grid-template-columns:1fr}.oracle-odds{flex-wrap:wrap}.oracle-odds button{flex:1 1 30%}.tables-row{grid-template-columns:70px minmax(0,1fr) auto}}
 .table-ref,.table-dice{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid var(--line);border-radius:var(--radius-sm);font:500 12px var(--font-sans);line-height:20px;vertical-align:1px;color:var(--accent);background:var(--panel)}

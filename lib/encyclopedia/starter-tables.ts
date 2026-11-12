@@ -1,4 +1,4 @@
-import { DEFAULT_ODDS, type RandomTable, type TableRow } from './tables.ts';
+import { DEFAULT_ODDS, type RandomTable, type TableLibrary, type TableRow } from './tables.ts';
 
 /**
  * Starter tables written for RPG Tools. They are short, generic and original:
@@ -31,4 +31,49 @@ export function starterTables(makeId: () => string, now = new Date().toISOString
       rows: ranges([[2, 2, 'Storm: travel is slow and dangerous'], [3, 3, 'Steady rain'], [4, 4, 'Overcast and cool'], [5, 5, 'Clear and mild'], [6, 6, 'Fog until midday, then clear'], [7, 7, 'Windy'], [8, 8, 'Unusually hot or cold for the season']]) },
     { ...base, id: id.names, name: 'Quick names', category: 'names', kind: 'table', mode: 'weighted', rows: list(NAMES) },
   ];
+}
+
+const DEMEANOURS = ['Guarded, with a dry sense of humour', 'Warm and talkative', 'Nervous, glancing at the door', 'Blunt and impatient', 'Polite but cold', 'Cheerful, a little too loud', 'Tired and distracted', 'Curious, asks a lot of questions', 'Proud and easily offended', 'Gentle and soft-spoken', 'Suspicious of strangers', 'Flattering, wants something', 'Grim and quiet', 'Playful, likes a joke', 'Formal and careful with words', 'Anxious to please', 'Bored, barely listening', 'Dreamy and absent-minded', 'Fierce and protective', 'Calm and hard to read'];
+const WANT_VERBS = 'protect find escape repay prove win hide earn avenge forget reach keep rebuild expose leave serve undo learn defeat honour'.split(' ');
+const WANT_NOUNS = ['a reputation', 'a lost sibling', 'an old debt', 'their family', 'a secret', 'a rival', 'their home', 'a fortune', 'a promise', 'the truth', 'a mentor', 'a crime', 'their freedom', 'a sacred place', 'a love', 'a title', 'the past', 'a stolen thing', 'their faith', 'a quiet life'];
+const FOCUS = ['An old debt', 'A sick relative', 'A rival nearby', 'Tonight\u2019s work', 'A rumour they heard', 'A letter they can\u2019t read', 'Money, always money', 'Someone they are hiding', 'A festival coming up', 'A job that went wrong', 'The weather and the harvest', 'A strange dream'];
+const QUIRKS = ['Counts coins when nervous', 'Hums the same tune', 'Never sits with their back to a door', 'Collects small bones', 'Speaks of themselves by name', 'Always eating something', 'Quotes a saint or a poet', 'Laughs at the wrong moments', 'Keeps a pet in a pocket', 'Taps a ring on every surface', 'Smells of smoke', 'Mispronounces names on purpose', 'Never finishes a sentence', 'Writes everything down', 'Swears by an odd god', 'Wears too many layers', 'Keeps glancing at the sky', 'Remembers every face', 'Whistles through a missing tooth', 'Cannot stand silence'];
+const TOPICS = ['Their work and its troubles', 'A local scandal', 'The road and its dangers', 'Old wars and old heroes', 'Prices, taxes and thieves', 'Someone they miss', 'A warning about a place', 'The party\u2019s gear or looks', 'Gods, omens and luck', 'A favour they need'];
+
+/** NPC generator starter: original tables rolled together. Uses an existing names table when given. */
+export function npcStarterTables(makeId: () => string, now = new Date().toISOString(), namesTableId?: string): RandomTable[] {
+  const id = { names: namesTableId ?? makeId(), demeanour: makeId(), verbs: makeId(), nouns: makeId(), wants: makeId(), power: makeId(), focus: makeId(), quirks: makeId(), reaction: makeId(), topic: makeId(), generator: makeId() };
+  const list = (items: string[]): TableRow[] => items.map(text => ({ id: makeId(), text }));
+  const ranges = (items: [number, number, string][]): TableRow[] => items.map(([min, max, text]) => ({ id: makeId(), text, min, ...(max !== min ? { max } : {}) }));
+  const base = { campaignIds: null, updatedAt: now, category: 'npc' as const };
+  const out: RandomTable[] = [
+    { ...base, id: id.demeanour, name: 'NPC demeanour', kind: 'table', mode: 'weighted', rows: list(DEMEANOURS) },
+    { ...base, id: id.verbs, name: 'NPC wants: verbs', kind: 'table', mode: 'weighted', rows: list(WANT_VERBS.map(v => `to ${v}`)) },
+    { ...base, id: id.nouns, name: 'NPC wants: things', kind: 'table', mode: 'weighted', rows: list(WANT_NOUNS) },
+    { ...base, id: id.wants, name: 'NPC wants', kind: 'pair', pair: [id.verbs, id.nouns], joiner: ' ' },
+    { ...base, id: id.power, name: 'NPC power', kind: 'table', mode: 'ranges', formula: '2d6', description: 'How capable they are compared with the party.',
+      rows: ranges([[2, 3, 'Much weaker than the party'], [4, 5, 'A little weaker than the party'], [6, 8, 'About as capable as the party'], [9, 10, 'A little stronger than the party'], [11, 12, 'Much stronger than the party']]) },
+    { ...base, id: id.focus, name: 'NPC current focus', kind: 'table', mode: 'weighted', rows: list(FOCUS) },
+    { ...base, id: id.quirks, name: 'NPC quirks', kind: 'table', mode: 'weighted', rows: list(QUIRKS) },
+    { ...base, id: id.reaction, name: 'NPC reaction', kind: 'table', mode: 'ranges', formula: '2d6', description: 'Roll during a conversation to see how they take what was said.',
+      rows: ranges([[2, 2, 'Hostile: they end the talk or turn on the party'], [3, 4, 'Colder: they close up'], [5, 6, 'A little warier'], [7, 7, 'Unchanged'], [8, 9, 'A little warmer'], [10, 11, 'Friendly: they offer something'], [12, 12, 'Won over: they will go out of their way to help']]) },
+    { ...base, id: id.topic, name: 'NPC conversation topic', kind: 'table', mode: 'weighted', description: 'What they steer the talk toward.', rows: list(TOPICS) },
+    { ...base, id: id.generator, name: 'NPC generator', kind: 'generator', description: 'Rolls a name, demeanour, wants, power, current focus and a quirk. Keep the lines you like and reroll the rest.',
+      parts: [['Name', id.names], ['Demeanour', id.demeanour], ['Wants', id.wants], ['Power', id.power], ['Current focus', id.focus], ['Quirk', id.quirks]].map(([label, tableId]) => ({ id: makeId(), label, tableId })),
+      extras: [['Reaction', id.reaction], ['Steers the talk toward', id.topic]].map(([label, tableId]) => ({ id: makeId(), label, tableId })) },
+  ];
+  if (!namesTableId) out.unshift({ ...base, id: id.names, name: 'Quick names', category: 'names', kind: 'table', mode: 'weighted', rows: list(NAMES) });
+  return out;
+}
+
+/** Adds the starter sets a library doesn't have yet (checked by name), so starters can be added more than once safely. */
+export function addMissingStarters(library: TableLibrary, makeId: () => string, now = new Date().toISOString()): { library: TableLibrary; added: number } {
+  const has = (name: string) => library.tables.find(t => t.name.toLowerCase() === name.toLowerCase());
+  let tables = library.tables;
+  if (!has('Action and subject') && !has('Yes or no oracle')) tables = [...tables, ...starterTables(makeId, now).filter(t => !has(t.name))];
+  if (!tables.some(t => t.name.toLowerCase() === 'npc generator')) {
+    const names = tables.find(t => t.name.toLowerCase() === 'quick names' && t.kind === 'table');
+    tables = [...tables, ...npcStarterTables(makeId, now, names?.id).filter(t => !tables.some(x => x.name.toLowerCase() === t.name.toLowerCase()))];
+  }
+  return { library: { ...library, tables }, added: tables.length - library.tables.length };
 }
