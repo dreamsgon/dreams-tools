@@ -1,10 +1,20 @@
+import { createContext, useContext } from "react";
 import type { MapDrawing, MapShape } from "@/lib/model";
 import { shapePath } from "@/lib/map-drawing";
 import { shapeOps, backgroundOps, type DrawOp } from "@/lib/map-style";
 
 /** Draws a list of paths as SVG; clipped paths get their own clip path. */
+/** Where uploaded stamps' pictures are, by asset id. */
+export const StampSources = createContext<ReadonlyMap<string, string>>(new Map());
+
 export function DrawOps({ ops, id }: { ops: DrawOp[]; id: string }) {
+  const sources = useContext(StampSources);
   return <>{ops.map((op, i) => {
+    if (op.image) {
+      const src = sources.get(op.image.assetId), transform = op.matrix ? `matrix(${op.matrix.join(" ")})` : undefined;
+      return src ? <image key={i} href={src} width={op.image.w} height={op.image.h} preserveAspectRatio="none" transform={transform}/>
+        : <rect key={i} width={op.image.w} height={op.image.h} fill="none" stroke="#8a939a" strokeDasharray="6 4" transform={transform}/>;
+    }
     if (op.text) return <text key={i} x={op.text.x} y={op.text.y} fill={op.fill} fontSize={op.text.size} fontWeight={600} textAnchor="middle" dominantBaseline="central" fontFamily="Inter, system-ui, sans-serif" style={{ userSelect: "none" }}>{op.text.value}</text>;
     const path = <path key={i} d={op.d} fill={op.fill ?? "none"} stroke={op.stroke ?? "none"} strokeWidth={op.width} opacity={op.opacity}
       strokeLinecap={op.cap ?? "round"} strokeLinejoin="round" clipPath={op.clip ? `url(#${id}-clip${i})` : undefined}

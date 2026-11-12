@@ -1,5 +1,6 @@
 "use client";
 
+import { drawingStampAssets } from "@/lib/map-stamps";
 import {stageTransfer} from "@/lib/transfer-client";
 
 import AgentAccess from "./agent-access";
@@ -1220,7 +1221,7 @@ export function ExportDialog({
 
           [
 
-            scene.mapId,
+            scene.mapId,  ...drawingStampAssets(scene.drawing),
 
             ...scene.tokens.filter((t) => !t.hidden).flatMap((t) => [t.assetId, t.borderAssetId]),
 

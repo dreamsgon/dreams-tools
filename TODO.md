@@ -4,6 +4,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 ## Completed source preparation
 
+- [x] Map Creator extras: a Join rooms on/off switch (status bar and Map tab, kept per device; Alt still keeps one room apart), and your own stamps: upload a picture in the Stamps tool, set how many squares it covers, and place, turn and flip it like any stamp. Uploaded stamps are Maptable assets of kind `stamp` (Assets › Map stamps), draw in Maptable and exports, and can become movable pieces.
 - [x] Extract map tools without character sheets, rulebooks, original Git history, secrets or campaign data.
 - [x] Add common instructions for Codex, Claude, T3Code, DeepSeek and Grok, plus CLAUDE.md.
 - [x] Replace Sites/Vinext/Workers with standard Next.js scripts/configuration for Vercel.

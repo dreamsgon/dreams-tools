@@ -251,7 +251,7 @@ export function renderScene(
     const img = images.get(s.mapId);
     if (img) ctx.drawImage(img, 0, 0, s.width, s.height);
   }
-  if (s.drawing) drawMapDrawing(ctx, s.drawing, s.width, s.height, new Set(s.tokens.flatMap(t => t.pieceOf ? [t.pieceOf] : [])));
+  if (s.drawing) drawMapDrawing(ctx, s.drawing, s.width, s.height, new Set(s.tokens.flatMap(t => t.pieceOf ? [t.pieceOf] : [])), images);
   drawGrid(ctx, s);
   for (const storedEffect of s.effects) {
     if (options.player && !effectVisibleToPlayers(storedEffect, s.tokens)) continue;

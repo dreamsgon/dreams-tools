@@ -72,13 +72,13 @@ export default function CampaignAssets({workspace:w,campaignId,commit}: {
     <option value="">Shared across campaigns</option>
     {campaigns.map((c)=><option key={c.id} value={c.id}>{collectionPath(w.collections,c.id)}</option>)}
   </select></label>;
-  const assets=w.assets.filter((a)=>visible(a.name,w.assetCampaigns[a.id])&&(assetType==="all"||(assetType==="border")===isTokenBorder(w,a.id))&&(search.trim()||(w.assetLocations[a.id]??null)===selectedFolder));
+  const assets=w.assets.filter((a)=>visible(a.name,w.assetCampaigns[a.id])&&(assetType==="all"||(assetType==="stamp"?a.kind==="stamp":a.kind!=="stamp"&&(assetType==="border")===isTokenBorder(w,a.id)))&&(search.trim()||(w.assetLocations[a.id]??null)===selectedFolder));
   const tokens=w.tokenLibrary.filter((t)=>visible(t.name,w.libraryCampaigns[t.id])&&(search.trim()||(w.libraryLocations[t.id]??null)===selectedFolder));
   return <section className="campaign-assets">
     {moving&&<div ref={ghost} className="organizer-drag-ghost" aria-hidden="true"><GripVertical size={16}/>{moving.name}</div>}
     <p className="asset-drag-status" role="status">{moving?`Moving ${moving.name} - ${over!==undefined?"release to move here":"choose a folder"}. Escape cancels.`:message||"Drag handles to move items into folders or back to Assets root."}</p>
     <input aria-label="Search assets" placeholder="Search all folders…" value={search} onChange={(e)=>setSearch(e.target.value)}/>
-    <label>Asset type<select value={assetType} onChange={e=>setAssetType(e.target.value)}><option value="all">All assets</option><option value="border">Custom borders</option><option value="image">Images</option></select></label>
+    <label>Asset type<select value={assetType} onChange={e=>setAssetType(e.target.value)}><option value="all">All assets</option><option value="border">Custom borders</option><option value="image">Images</option><option value="stamp">Map stamps</option></select></label>
     <button disabled={uploading} onClick={()=>borderUpload.current?.click()}>{uploading?"Uploading border…":"Upload custom border"}</button>
     <input ref={borderUpload} type="file" accept="image/png,image/webp" hidden onChange={async e=>{
       const file=e.target.files?.[0];e.target.value="";if(!file)return;
@@ -111,14 +111,14 @@ export default function CampaignAssets({workspace:w,campaignId,commit}: {
       <p className="muted">Viewing: {path(selectedFolder)}</p>
     </section>
     {search.trim()&&<p className="muted">Results across all folders</p>}
-    <h3 className="asset-section-title"><ImageIcon size={16}/>{assetType==="border"?"Custom borders":"Images & borders"} <span>{assets.length}</span></h3>
+    <h3 className="asset-section-title"><ImageIcon size={16}/>{assetType==="border"?"Custom borders":assetType==="stamp"?"Map stamps":"Images & borders"} <span>{assets.length}</span></h3>
     <div className="asset-gallery">{assets.map((a)=><div className={"asset-gallery-card "+(selected===a.id?"is-selected":"")} key={a.id} data-dragging={moving?.id===a.id||undefined}>
       <div className="asset-gallery-preview"><img src={a.src} alt={a.name} loading="lazy"/>{grip({id:a.id,name:a.name,kind:"asset"})}</div>
-      <div className="asset-gallery-caption"><strong title={a.name}>{a.name}</strong><small>{isTokenBorder(w,a.id)?"Custom border":"Image"} · {a.width} × {a.height}</small>{search.trim()&&<small>{path(w.assetLocations[a.id]??null)}</small>}<button aria-label={`Edit ${a.name}`} aria-expanded={selected===a.id} onClick={()=>setSelected(selected===a.id?null:a.id)}>{selected===a.id?"Close details":"Edit details"}<ChevronRight size={14}/></button></div>
+      <div className="asset-gallery-caption"><strong title={a.name}>{a.name}</strong><small>{a.kind==="stamp"?"Map stamp":isTokenBorder(w,a.id)?"Custom border":"Image"} · {a.width} × {a.height}</small>{search.trim()&&<small>{path(w.assetLocations[a.id]??null)}</small>}<button aria-label={`Edit ${a.name}`} aria-expanded={selected===a.id} onClick={()=>setSelected(selected===a.id?null:a.id)}>{selected===a.id?"Close details":"Edit details"}<ChevronRight size={14}/></button></div>
       {selected===a.id&&<div className="asset-item-details">
       <label>Name<input aria-label="Asset name" maxLength={120} value={a.name} onChange={e=>commit(next=>{next.assets.find(item=>item.id===a.id)!.name=e.target.value;})}/></label>
-      <label>Asset type<select value={isTokenBorder(w,a.id)?"border":"image"} onChange={e=>commit(next=>{next.assets.find(item=>item.id===a.id)!.kind=e.target.value as "border"|"image";})}><option value="image">Image</option><option value="border">Custom border</option></select></label>
-      {isTokenBorder(w,a.id)&&<small>Available in token options under Border from Assets.</small>}
+      <label>Asset type<select value={a.kind==="stamp"?"stamp":isTokenBorder(w,a.id)?"border":"image"} onChange={e=>commit(next=>{next.assets.find(item=>item.id===a.id)!.kind=e.target.value as "border"|"image"|"stamp";})}><option value="image">Image</option><option value="border">Custom border</option><option value="stamp">Map stamp</option></select></label>
+      {a.kind==="stamp"?<small>Available in the Map Creator’s Stamps tool, under Yours.</small>:isTokenBorder(w,a.id)&&<small>Available in token options under Border from Assets.</small>}
       {folderSelect(a.id,a.name)}
       {destination(w.assetCampaigns[a.id],a.name,(id)=>commit((next)=>moveAssetToCampaign(next,a.id,id)))}</div>}
     </div>)}</div>

@@ -1,6 +1,6 @@
 import { newToken, type MapDrawing, type PointOfInterest, type Scene, type Token } from "./model.ts";
 import { orderedShapes } from "./map-drawing.ts";
-import { stampById } from "./map-stamps.ts";
+import { customStampAsset, stampById } from "./map-stamps.ts";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 import { wallSegments } from "./map-creator.ts";
@@ -39,8 +39,9 @@ export type StampPiece = { shapeId: string; name: string; look: string; lookName
 export function stampPieces(d: MapDrawing, gridSize: number): StampPiece[] {
   const ink = d.style?.ink ?? "#2b2b2b";
   return orderedShapes(d).flatMap(s => {
-    const stamp = s.type === "stamp" ? stampById(s.stamp) : null;
-    if (!stamp) return [];
+    const builtIn = s.type === "stamp" ? stampById(s.stamp) : null, uploaded = s.type === "stamp" ? customStampAsset(s.stamp) : null;
+    if (!builtIn && !uploaded) return [];
+    const stamp = builtIn ?? { id: s.stamp!, name: s.name.replace(/\s+\d+$/, "").trim() || "Stamp" };
     const [p, q] = s.points, w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y);
     const tenths = (n: number) => Math.round(n * 10) / 10, across = `${tenths(w / gridSize)}×${tenths(h / gridSize)}`;
     const turned = ((((s.rotation ?? 0) % 360) + 540) % 360) - 180;

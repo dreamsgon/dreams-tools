@@ -5,7 +5,8 @@ import { uid, type Asset, type MapDrawing, type Workspace } from "@/lib/model";
 import { orderedShapes } from "@/lib/map-drawing";
 import { drawMapDrawing, drawStampPiece } from "@/lib/map-style";
 import { buildUvtt, exportName, roomNumbers, stampPieces } from "@/lib/map-export";
-import { canvasBlob, download, uploadAsset } from "@/lib/api";
+import { canvasBlob, download, loadImage, uploadAsset } from "@/lib/api";
+import { drawingStampAssets } from "@/lib/map-stamps";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
 
 type Draft = { name: string; width: number; height: number; drawing: MapDrawing };
@@ -27,12 +28,22 @@ function places(workspace: Workspace, start: string | null) {
   return out;
 }
 
-async function renderPng(d: Draft): Promise<Blob> {
+/** Loads the pictures of the drawing's uploaded stamps, so they can be drawn onto a canvas. */
+async function stampImages(drawing: MapDrawing, library: Asset[]) {
+  const images = new Map<string, HTMLImageElement>();
+  for (const id of drawingStampAssets(drawing)) {
+    const asset = library.find(a => a.id === id);
+    if (asset) images.set(id, await loadImage(asset.src));
+  }
+  return images;
+}
+
+async function renderPng(d: Draft, library: Asset[]): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = d.width; canvas.height = d.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("This browser cannot draw the map image.");
-  drawMapDrawing(ctx, d.drawing, d.width, d.height);
+  drawMapDrawing(ctx, d.drawing, d.width, d.height, undefined, await stampImages(d.drawing, library));
   return canvasBlob(canvas);
 }
 /**
@@ -40,7 +51,7 @@ async function renderPng(d: Draft): Promise<Blob> {
  * Returns each look's asset id and the assets that were added.
  */
 export async function pieceArt(drawing: MapDrawing, gridSize: number, library: Asset[]) {
-  const looks: Record<string, string> = {}, added: Asset[] = [];
+  const looks: Record<string, string> = {}, added: Asset[] = [], images = await stampImages(drawing, library);
   for (const piece of stampPieces(drawing, gridSize)) {
     if (looks[piece.look]) continue;
     const have = library.find(a => a.name === piece.lookName) ?? added.find(a => a.name === piece.lookName);
@@ -51,7 +62,7 @@ export async function pieceArt(drawing: MapDrawing, gridSize: number, library: A
     canvas.width = side; canvas.height = side;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("This browser cannot draw the stamp pictures.");
-    drawStampPiece(ctx, shape, drawing, side);
+    drawStampPiece(ctx, shape, drawing, side, images);
     const { src } = await uploadAsset(await canvasBlob(canvas), exportName(piece.name, "png"));
     const asset: Asset = { id: uid(), kind: "image", name: piece.lookName, src, width: side, height: side };
     added.push(asset); looks[piece.look] = asset.id;
@@ -103,9 +114,9 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
         </div>
       </div>
       <footer>
-        <button disabled={!!busy} onClick={() => run("png", async () => download(await renderPng(draft), exportName(draft.name, "png")))}><Download size={15}/> {busy === "png" ? "Exporting…" : "Export image"}</button>
+        <button disabled={!!busy} onClick={() => run("png", async () => download(await renderPng(draft, workspace.assets), exportName(draft.name, "png")))}><Download size={15}/> {busy === "png" ? "Exporting…" : "Export image"}</button>
         <button disabled={!!busy} title="A Universal VTT file with walls and doors, for other virtual tabletops" onClick={() => run("vtt", async () => {
-          const image = await base64(await renderPng(draft));
+          const image = await base64(await renderPng(draft, workspace.assets));
           const json = JSON.stringify(buildUvtt(draft.drawing, draft.width, draft.height, grid.size, image));
           download(new Blob([json], { type: "application/json" }), exportName(draft.name, "dd2vtt"));
         })}><FileJson size={15}/> {busy === "vtt" ? "Exporting…" : "Export Universal VTT"}</button>
