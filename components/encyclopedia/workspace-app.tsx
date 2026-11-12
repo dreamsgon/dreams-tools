@@ -34,6 +34,7 @@ export default function WorkspaceApp() {
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
+    const linkQuery = useRef<URLSearchParams | null>(null);
     async function load() { try {
         const res = await fetch("/api/encyclopedia/workspace");
         const body = await res.json() as {
@@ -53,9 +54,13 @@ export default function WorkspaceApp() {
         revision.current = body.revision;
         const first = checked.worlds.find(w => !w.archived&&!w.isTemplate) ?? checked.worlds.find(w=>!w.isTemplate);
         // /encyclopedia?entry=<id> (from a Maptable token) opens that entry once, then the address is tidied.
-        const linked = new URLSearchParams(window.location.search).get("entry"), target = linked ? checked.entries.find(e => e.id === linked) : undefined;
-        if (linked) window.history.replaceState(null, "", window.location.pathname);
-        if (target) { setWorldId(target.worldId); setCampaignId(target.campaignId ?? null); setView("overview"); setSelected(target.id); }
+        // Read the address once: the tidy-up below must not hide the link from a second load.
+        const query = (linkQuery.current ??= new URLSearchParams(window.location.search)), linked = query.get("entry"), target = linked ? checked.entries.find(e => e.id === linked) : undefined;
+        // /encyclopedia?campaign=<id> (from the Campaigns page) opens that campaign once.
+        const linkedCampaign = query.get("campaign"), campaignTarget = linkedCampaign ? checked.campaigns.find(c => c.id === linkedCampaign) : undefined;
+        if (linked || linkedCampaign) window.history.replaceState(null, "", window.location.pathname);
+        if (campaignTarget && !target) { setWorldId(campaignTarget.worldId); setCampaignId(campaignTarget.id); setView("overview"); }
+        else if (target) { setWorldId(target.worldId); setCampaignId(target.campaignId ?? null); setView("overview"); setSelected(target.id); }
         else { setWorldId(first?.id ?? ""); setCampaignId(null); }
         setLoaded(true);
         setStatus("All changes saved");
