@@ -70,6 +70,7 @@ import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
 import ToolSwitch, { AccountLink } from "./tool-switch";
 import { ActionMenu } from "./popover-menu";
+import Breadcrumbs, { type Crumb } from "./breadcrumbs";
 import SceneSwitcher from "./scene-switcher";
 import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
@@ -935,6 +936,23 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     activate(id); setLocation(campaignFor(workspace.scenes.find(s => s.id === id)?.containerId ?? null));
     setPanel("scenes"); setSidebar(true); setDashboard(false); setOverview(null); setSearch("");
   };
+  // Campaigns › campaign › folders › scene. Folder arrows list the scenes in that folder.
+  const sceneTrail = (): Crumb[] => {
+    const toCampaigns = () => { setDashboard(true); setOverview(null); setGridAdjust(false); };
+    const toCampaign = (id: string | null) => { setOverview({ id }); setDashboard(true); setGridAdjust(false); };
+    const open = (id: string) => { activate(id); setSelected(null); };
+    const folders: typeof workspace.collections = [];
+    for (let at = workspace.collections.find(c => c.id === scene.containerId); at && at.kind === "folder" && !folders.includes(at); at = workspace.collections.find(c => c.id === at!.parentId)) folders.unshift(at);
+    const campaigns = workspace.collections.filter(c => c.kind === "campaign");
+    return [
+      { id: "campaigns", label: "Campaigns", icon: <LayoutDashboard size={15} aria-hidden="true" />, go: toCampaigns },
+      { id: "campaign", label: campaign?.name || "Not in a campaign", go: () => toCampaign(campaignId),
+        siblings: { heading: "Campaigns", items: campaigns.map(c => ({ id: c.id, label: c.name, current: c.id === campaignId, go: () => openCampaign(c.id) })) } },
+      ...folders.map(f => ({ id: f.id, label: f.name,
+        siblings: { heading: `Scenes in ${f.name}`, items: workspace.scenes.filter(x => x.containerId === f.id).map(x => ({ id: x.id, label: x.name, current: x.id === scene.id, go: () => open(x.id) })) } })),
+      { id: "scene", label: scene.name, render: <SceneSwitcher workspace={workspace} campaignId={campaignId} scene={scene} open={open} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} /> },
+    ];
+  };
   const openCampaign = (id: string | null) => {
     const first = workspace.scenes.find((s) => campaignFor(s.containerId) === id);
     if (first) { setOverview({ id }); setDashboard(true); return; }
@@ -972,14 +990,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     <main className="app-shell" data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>
       <header className="app-header">
         <ToolSwitch active="maptable" />
-        <nav className="header-scene" aria-label="Breadcrumb">
+        <div className="header-scene">
           <span className="divider" />
-          <button className="crumb crumb-home" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button>
-          <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
-          <button className="crumb" title={`All scenes in ${campaign?.name || "maps not in a campaign"}`} onClick={() => {setOverview({id:campaignId});setDashboard(true);setGridAdjust(false);}}>{campaign?.name || "Not in a campaign"}</button>
-          <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
-          <SceneSwitcher workspace={workspace} campaignId={campaignId} scene={scene} open={id=>{activate(id);setSelected(null);}} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} />
-        </nav>
+          <Breadcrumbs items={sceneTrail()} />
+        </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>

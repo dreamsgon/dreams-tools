@@ -1,6 +1,6 @@
 "use client";
 import {useRef,useState} from 'react';
-import {ArrowLeft,ArrowUp,ArrowDown,BookOpen,Pencil,Plus,Trash2,Eye,EyeOff,Users,Lock,History,Map as MapIcon,ArrowUpRight,Link as LinkIcon} from 'lucide-react';
+import {ArrowUp,ArrowDown,BookOpen,Pencil,Plus,Trash2,Eye,EyeOff,Users,Lock,History,Map as MapIcon,ArrowUpRight,Link as LinkIcon} from 'lucide-react';
 import {workspaceSchema,canParent,compareEntries,defaultCharacter,folderPath,newId,reorderEntry,resolveLink,visibleEntries,maptableLinks,type Entry,type Workspace,type Campaign,type ArticleTab} from '@/lib/encyclopedia/world-model';
 import {MapEditor} from './map-editor';
 import {ArticleBody,maptableHref} from './article-body';
@@ -10,7 +10,7 @@ import {StatblockView} from './statblock-view';
 import type {PageVersion} from '@/lib/encyclopedia/history';
 import {CharacterDetails,StatsPanel,ToolDialog,roles} from './character-tools';
 type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:()=>void;onForm:()=>void};
-export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onOverview,onRename,onDelete,onNew,onForm}:Props){
+export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onRename,onDelete,onNew,onForm}:Props){
  const [selected,setSelected]=useState(entry.kind==='map'?'map':'overview'),[details,setDetails]=useState(false),[tabDialog,setTabDialog]=useState<'new'|'rename'|null>(null),[notice,setNotice]=useState('');
  const character=entry.character??defaultCharacter(),custom=entry.tabs??[];
  const editor=useRef<HTMLTextAreaElement>(null);
@@ -32,7 +32,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  const siblings=data.entries.filter(e=>e.worldId===entry.worldId&&e.campaignId===entry.campaignId&&e.parentId===entry.parentId).sort(compareEntries),position=siblings.findIndex(e=>e.id===entry.id);
  const links=visibleEntries(data,entry.worldId,entry.campaignId).filter(e=>e.id!==entry.id&&[e.body,...(e.tabs??[]).map(t=>t.body)].some(body=>[...body.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)].some(m=>resolveLink(data,e,m[1])?.id===entry.id)));
  return <section className={`article-layout ${entry.kind==='map'?'map-article-layout':''}`}><article className="article">
- <div className="article-path"><button onClick={onOverview}><ArrowLeft size={14}/> Overview</button><span> / {folderPath(data,entry)||'Top level'}</span></div>
+ 
  <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind}</span><span>{entry.campaignId?campaign?.name:'Shared world lore'}</span></div>
  <div className="article-title"><h1>{entry.title}</h1><button aria-label="Rename entry" onClick={onRename}><Pencil size={17}/></button></div>
  {entry.kind==='character'&&<div className="character-summary"><button className="button" onClick={()=>setDetails(true)}><Users size={15}/> Character details</button><span>{character.status}</span>{character.location&&<span>{character.location}</span>}{character.faction&&<span>{character.faction}</span>}{character.tags.map(t=><span className="tag" key={t}>{t}</span>)}</div>}

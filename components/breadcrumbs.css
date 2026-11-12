@@ -1,0 +1,57 @@
+/* One breadcrumb trail, shared by the Encyclopedia and Maptable. */
+.crumbbar { --crumb-ink:var(--ink); --crumb-muted:var(--muted); display:flex; align-items:center; min-width:0; flex:1 1 auto; font-size:13px; }
+.crumbbar-full { display:flex; align-items:center; gap:2px; min-width:0; margin:0; padding:0; list-style:none; }
+.crumbbar-full > li { display:flex; align-items:center; min-width:0; }
+.crumbbar-full > li.crumbbar-item { flex:0 1 auto; }
+.crumbbar-sep { flex:none; color:var(--crumb-muted); opacity:.7; padding:0 1px; }
+.crumbbar-level { position:relative; display:flex; align-items:center; min-width:0; border-radius:var(--radius); }
+.crumbbar-level:hover, .crumbbar-level.is-open { background:var(--chrome-hover, var(--accent-soft)); }
+.crumbbar .crumbbar-name { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:220px; min-height:30px; padding:4px 6px; border:0; border-radius:var(--radius); background:none; color:var(--crumb-muted); font:inherit; font-weight:500; cursor:pointer; white-space:nowrap; }
+.crumbbar .crumbbar-name span { overflow:hidden; text-overflow:ellipsis; }
+.crumbbar .crumbbar-name svg { flex:none; }
+.crumbbar .crumbbar-name:hover { color:var(--crumb-ink); }
+.crumbbar .is-current .crumbbar-name { color:var(--crumb-ink); font-weight:600; cursor:default; }
+.crumbbar .crumbbar-more { padding:4px 8px; }
+.crumbbar .crumbbar-caret { display:grid; place-items:center; width:20px; height:30px; margin-left:-4px; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--crumb-muted); cursor:pointer; }
+.crumbbar .crumbbar-caret:hover { color:var(--crumb-ink); }
+.crumbbar-menu { position:absolute; z-index:60; top:calc(100% + 6px); left:0; min-width:240px; max-width:320px; padding:4px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); box-shadow:0 10px 30px #0000002e; color:var(--ink); }
+.crumbbar-menu-head { padding:8px 10px 6px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--line); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.crumbbar-menu-list { max-height:min(360px, calc(60vh / var(--ui-zoom, 1))); overflow:auto; }
+.crumbbar-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:var(--radius); background:none; color:var(--ink); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.crumbbar-menu button span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.crumbbar-menu button svg { flex:none; color:var(--muted); }
+.crumbbar-menu button:hover:not(:disabled) { background:var(--chrome-hover, var(--accent-soft)); }
+.crumbbar-menu button:disabled { cursor:default; }
+.crumbbar-menu button.is-current, .crumbbar-menu button[aria-current="page"] { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.crumbbar-menu button.is-current svg:last-child { color:var(--accent); }
+.crumbbar-menu .crumbbar-menu-new { margin-top:4px; border-top:1px solid var(--line); border-radius:0 0 var(--radius) var(--radius); color:var(--accent); font-weight:500; }
+.crumbbar-menu .crumbbar-menu-new svg { color:var(--accent); }
+
+.crumbbar-compact { display:none; position:relative; align-items:center; gap:4px; min-width:0; flex:1; }
+.crumbbar-back { display:grid; place-items:center; flex:none; width:36px; height:36px; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--crumb-ink); cursor:pointer; }
+.crumbbar-title { display:flex; align-items:center; gap:6px; min-width:0; padding:2px 6px; border:0; background:none; color:var(--crumb-ink); font:inherit; text-align:left; cursor:pointer; }
+.crumbbar-title > span { display:flex; flex-direction:column; min-width:0; }
+.crumbbar-title small { font-size:11px; color:var(--crumb-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.crumbbar-title strong { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.crumbbar-title > svg { flex:none; color:var(--crumb-muted); }
+.crumbbar-path { left:0; right:0; max-width:none; }
+
+@media (max-width:720px) {
+  .crumbbar-full { display:none; }
+  .crumbbar-compact { display:flex; }
+}
+
+/* Maptable's header uses the chrome colours. */
+.app-header .crumbbar { --crumb-ink:var(--chrome-text); --crumb-muted:var(--chrome-muted); }
+.app-header .crumbbar .scene-switcher { min-width:0; }
+
+/* The Encyclopedia shows the trail on its own row under the top bar, so long paths have room. */
+.crumb-row { display:flex; align-items:center; min-height:40px; padding:4px 16px 4px 12px; border-bottom:1px solid var(--line); background:var(--panel); }
+@media (max-width:720px) { .crumb-row { padding:4px 8px; min-height:48px; } }
+.crumbbar { position:relative; }
+.crumbbar-full > li.crumbbar-item { flex-shrink:0; }
+.crumbbar-full > li.crumbbar-item:last-child { flex-shrink:1; min-width:0; }
+.crumbbar-measure { position:absolute; left:0; top:0; height:0; overflow:hidden; visibility:hidden; pointer-events:none; }
+.crumbbar-measure > li { flex:none; display:flex; }
+.crumbbar-menu button:disabled { opacity:1; color:var(--ink); }
+.crumbbar-menu button[aria-current="page"]:disabled { color:var(--accent); }
