@@ -71,6 +71,7 @@ import TokenLibrary from "./token-library";
 import EncyclopediaTokens, { roleColor, type EncyclopediaCharacter } from "./encyclopedia-tokens";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import TokenNotesControl from "./token-notes-control";
+import TokenStatblock from "./token-statblock";
 import "./maptable-token-layout.css";
 import AddScenes from "./add-scenes";
 import MapSplitDialog from "./map-split-dialog";
@@ -709,8 +710,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const addEncyclopediaToken = (c: EncyclopediaCharacter) => {
     if (!scene || player) return;
     const existing = state.current?.tokenLibrary.find(t => t.name === c.name && (state.current?.libraryCampaigns[t.id] ?? null) === campaignId);
-    if (existing) { placeLibraryToken(existing); return; }
-    const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), color: roleColor[c.role], useDispositionColor: false,
+    if (existing) {
+      if (!existing.encyclopediaEntryId) commit(w => { const t = w.tokenLibrary.find(t => t.id === existing.id); if (t) t.encyclopediaEntryId = c.id; });
+      placeLibraryToken({ ...existing, encyclopediaEntryId: existing.encyclopediaEntryId ?? c.id }); return;
+    }
+    const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), encyclopediaEntryId: c.id, color: roleColor[c.role], useDispositionColor: false,
       rosterRole: c.role === "npc" ? "npc" : "party", disposition: c.role === "pc" ? "party" : c.role === "companion" ? "ally" : "neutral" };
     commit(w => { w.tokenLibrary.push(preset); w.libraryCampaigns[preset.id] = campaignId; });
     placeLibraryToken(preset);
@@ -1402,6 +1406,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                         ))}
                       </div>
                         </>},
+                        {id: "statblock", label: "Statblock", content: <TokenStatblock token={token} sceneId={scene.id} campaignId={campaignId} onLink={encyclopediaEntryId=>patchToken({encyclopediaEntryId})}/>},
                         {id: "notes", label: "Notes", content: <>
                       <TokenNotesControl section="notes" token={token} onChange={patchToken} sceneId={scene.id} campaignId={campaignId}/>
                         </>},

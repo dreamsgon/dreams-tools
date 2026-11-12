@@ -51,8 +51,11 @@ export default function WorkspaceApp() {
         setData(checked);
         revision.current = body.revision;
         const first = checked.worlds.find(w => !w.archived&&!w.isTemplate) ?? checked.worlds.find(w=>!w.isTemplate);
-        setWorldId(first?.id ?? "");
-        setCampaignId(null);
+        // /encyclopedia?entry=<id> (from a Maptable token) opens that entry once, then the address is tidied.
+        const linked = new URLSearchParams(window.location.search).get("entry"), target = linked ? checked.entries.find(e => e.id === linked) : undefined;
+        if (linked) window.history.replaceState(null, "", window.location.pathname);
+        if (target) { setWorldId(target.worldId); setCampaignId(target.campaignId ?? null); setView("overview"); setSelected(target.id); }
+        else { setWorldId(first?.id ?? ""); setCampaignId(null); }
         setLoaded(true);
         setStatus("All changes saved");
     }

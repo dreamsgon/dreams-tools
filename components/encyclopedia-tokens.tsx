@@ -2,19 +2,27 @@
 import {useEffect,useMemo,useState} from "react";
 import {Search} from "lucide-react";
 
-export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc";detail:string;world:string};
-type Raw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string}}[]};
+export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc";detail:string;world:string;hasStatblock:boolean};
+export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean}}[]};
+
+let cached:Promise<EncyclopediaRaw>|null=null;
+/** The signed-in user's Encyclopedia, read-only and fetched once per page unless refreshed. */
+export function loadEncyclopedia(refresh=false):Promise<EncyclopediaRaw>{
+ if(!cached||refresh){cached=fetch("/api/encyclopedia/workspace").then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Encyclopedia characters.":v.error??"Could not load your Encyclopedia.");return v.data??{};});cached.catch(()=>{cached=null;});}
+ return cached;
+}
 
 export const roleColor={pc:"#3f6f9a",companion:"#5f7d4a",npc:"#8f5a3c"} as const;
 const roleName={pc:"Player character",companion:"Companion",npc:"NPC"} as const;
 
 /** Characters from the signed-in user's Encyclopedia (read-only). Templates are left out. */
-export function encyclopediaCharacters(raw:Raw):EncyclopediaCharacter[]{
+export function encyclopediaCharacters(raw:EncyclopediaRaw):EncyclopediaCharacter[]{
  const worlds=new Map((raw.worlds??[]).filter(w=>!w.isTemplate).map(w=>[w.id,w.name])),campaigns=new Map((raw.campaigns??[]).map(c=>[c.id,c.name]));
  return (raw.entries??[]).filter(e=>e.kind==="character"&&worlds.has(e.worldId)).map(e=>{
   const role:EncyclopediaCharacter["role"]=e.character?.role==="pc"||e.character?.role==="companion"?e.character.role:"npc";
   const detail=[roleName[role],e.character?.faction||e.character?.location,e.campaignId?campaigns.get(e.campaignId):"",e.character?.status&&e.character.status!=="active"?e.character.status:""].filter(Boolean).join(" · ");
-  return {id:e.id,name:e.title.slice(0,120),role,detail,world:worlds.get(e.worldId)!};
+  const hasStatblock=!!e.character?.statblock?.trim();
+  return {id:e.id,name:e.title.slice(0,120),role,detail:hasStatblock?`${detail} · Statblock`:detail,world:worlds.get(e.worldId)!,hasStatblock};
  }).sort((a,b)=>a.world.localeCompare(b.world)||a.name.localeCompare(b.name));
 }
 
@@ -24,7 +32,7 @@ const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map(w
 export default function EncyclopediaTokens({disabled,onAdd}:{disabled:boolean;onAdd:(c:EncyclopediaCharacter)=>void}){
  const [list,setList]=useState<EncyclopediaCharacter[]|null>(null),[error,setError]=useState(""),[query,setQuery]=useState(""),[added,setAdded]=useState("");
  useEffect(()=>{const controller=new AbortController();
-  fetch("/api/encyclopedia/workspace",{signal:controller.signal}).then(async r=>{const v=await r.json() as {data?:Raw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Encyclopedia characters.":v.error??"Could not load your Encyclopedia.");setList(encyclopediaCharacters(v.data??{}));})
+  loadEncyclopedia(true).then(raw=>{if(!controller.signal.aborted)setList(encyclopediaCharacters(raw));})
    .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
   return()=>controller.abort();},[]);
  const q=query.trim().toLowerCase();

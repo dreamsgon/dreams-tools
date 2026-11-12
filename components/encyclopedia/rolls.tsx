@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useRef,useState} from "react";
+import {createContext,useContext,useEffect,useRef,useState} from "react";
 import {Dices,X,RotateCcw,Send,Check} from "lucide-react";
 import {rollDice} from "@/lib/rolls";
 
@@ -17,9 +17,12 @@ export function rollInline(title:string,formula:string){
  window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;
 }
 
+/** Where chips send their rolls. The Encyclopedia shows its own result card; Maptable passes rolls to its dice tray. */
+export const RollHandler=createContext<((title:string,formula:string)=>void)|null>(null);
+
 export function RollChip({title,formula,label,context}:{title:string;formula:string;label:string|null;context?:string}){
- const what=[context,label].filter(Boolean).join(" ");
- return <button type="button" className="roll-chip" title={`Roll ${formula}`} onClick={()=>rollInline(what?`${title} · ${what}`:title,formula)}><Dices size={12} aria-hidden="true"/>{label??formula}</button>;
+ const what=[context,label].filter(Boolean).join(" "),handler=useContext(RollHandler);
+ return <button type="button" className="roll-chip" title={`Roll ${formula}`} onClick={()=>(handler??rollInline)(what?`${title} · ${what}`:title,formula)}><Dices size={12} aria-hidden="true"/>{label??formula}</button>;
 }
 
 export type DiscordTarget={campaignId:string;label:string};
