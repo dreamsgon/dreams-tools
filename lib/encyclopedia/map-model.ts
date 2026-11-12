@@ -7,6 +7,16 @@ export const weatherLinkSchema=z.object({campaignId:id,calendarId:id,regionId:id
 export const pinSchema=z.object({weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
 export const routeSchema=z.object({id,name:z.string().trim().min(1).max(100),unit:z.enum(['mi','km']),stops:z.array(id).min(2).max(20),distances:z.array(z.number().finite().positive().max(1000000)).min(1).max(19),speed:z.number().finite().min(.1).max(10000),hoursPerDay:z.number().finite().min(1).max(24),visibility:z.enum(['gm','players'])}).superRefine((r,ctx)=>{if(r.distances.length!==r.stops.length-1||r.stops.some((s,i)=>i>0&&s===r.stops[i-1]))ctx.addIssue({code:'custom',message:'Routes need a distance for each leg and different adjacent stops.'});});
 export type MapRoute=z.infer<typeof routeSchema>;
+/** Painted terrain: a finer raster than the map's cells, stored as runs of terrain numbers ("<terrain><count in base 36>", joined by dots). */
+export const PAINT_MAX={columns:240,rows:180};
+export function encodePaint(cells:ArrayLike<number>){const runs:string[]=[];let i=0;while(i<cells.length){let j=i;while(j<cells.length&&cells[j]===cells[i])j++;runs.push(`${cells[i]}${(j-i).toString(36)}`);i=j;}return runs.join('.');}
+export function decodePaint(columns:number,rows:number,text:string):Uint8Array|null{
+ const total=columns*rows,out=new Uint8Array(total);let at=0;
+ for(const run of text.split('.')){const t=run.charCodeAt(0)-48,n=parseInt(run.slice(1),36);if(!(t>=0&&t<=7)||!/^[0-9a-z]+$/.test(run.slice(1))||!(n>0)||at+n>total)return null;out.fill(t,at,at+n);at+=n;}
+ return at===total?out:null;
+}
+export const paintSchema=z.object({columns:z.number().int().min(12).max(PAINT_MAX.columns),rows:z.number().int().min(12).max(PAINT_MAX.rows),cells:z.string().min(2).max(250000).regex(/^[0-7][0-9a-z]+(\.[0-7][0-9a-z]+)*$/)}).superRefine((p,ctx)=>{if(!decodePaint(p.columns,p.rows,p.cells))ctx.addIssue({code:'custom',message:'Painted terrain must cover the whole map'});});
+export type MapPaint=z.infer<typeof paintSchema>;
 export const mapSchema=z.object({
  category:z.enum(['world','region','hex']),source:z.enum(['generated','image']),visibility:z.enum(['gm','players']),
  columns:z.number().int().min(6).max(40),rows:z.number().int().min(6).max(30),grid:z.enum(['none','square','hex']),coordinates:z.boolean(),
@@ -15,6 +25,7 @@ export const mapSchema=z.object({
  pins:z.array(pinSchema).max(100),
  scale:z.object({width:z.number().finite().positive().max(10000000),unit:z.enum(['mi','km'])}).optional(),routes:z.array(routeSchema).max(50).optional(),
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
+ paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
  if(m.source==='generated'&&m.tiles.length!==m.columns*m.rows)bad('Terrain must match the map dimensions');
@@ -25,6 +36,7 @@ export const mapSchema=z.object({
  if(new Set((m.routes??[]).map(r=>r.id)).size!==(m.routes??[]).length)bad('Route IDs must be unique');
  for(const route of m.routes??[])if(route.stops.some(id=>!m.pins.some(p=>p.id===id)))bad('Every route stop must be a location on this map');
  if(new Set(m.pins.map(p=>p.id)).size!==m.pins.length)bad('Map pin IDs must be unique');
+ if(m.paint&&m.source!=='generated')bad('Only drawn terrain can be painted');
 });
 export type MapData=z.infer<typeof mapSchema>;
 export type MapPin=z.infer<typeof pinSchema>;
@@ -47,6 +59,34 @@ export function generateTerrain(columns:number,rows:number,seed:string,preset:Ma
  const h=height-edge,wet=smoothNoise(nx*7,ny*7,n+300);
  if(h<.19)return 0;if(h>.61)return 7;if(h>.53)return 4;if(h>.45)return 3;if(wet>.63)return 2;if(wet<.26)return 5;if(h<.27&&wet>.48)return 6;return 1;
  });
+}
+/** How many paint squares fit across one map cell. */
+export function paintScale(columns:number,rows:number){return Math.max(1,Math.min(6,Math.floor(PAINT_MAX.columns/columns),Math.floor(PAINT_MAX.rows/rows)));}
+/** A fast cell lookup for a point given as fractions of the map size; hex maps pick the nearest hex centre. */
+export function cellFinder(m:MapData){
+ if(m.grid!=='hex')return (x:number,y:number)=>Math.min(m.rows-1,Math.max(0,Math.floor(y*m.rows)))*m.columns+Math.min(m.columns-1,Math.max(0,Math.floor(x*m.columns)));
+ const size=mapSize(m),centres=Array.from({length:m.columns*m.rows},(_,i)=>cellShape(m,i)),r=centres[0].h/2;
+ const offsetY=centres[0].y-r,offsetX=centres[0].x-centres[0].w/2;
+ return (x:number,y:number)=>{const px=x*size.width,py=y*size.height,row=Math.round((py-offsetY-r)/(1.5*r)),col=Math.round((px-offsetX)/centres[0].w-.5);let best=-1,dist=Infinity;
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const rr=row+dr,cc=col+dc;if(rr<0||cc<0||rr>=m.rows||cc>=m.columns)continue;const c=centres[rr*m.columns+cc],d=(c.x-px)**2+(c.y-py)**2;if(d<dist){dist=d;best=rr*m.columns+cc;}}
+  return best;};
+}
+/** Paint from the map's cells, with soft, wobbly edges so coasts and forests don't follow the grid. */
+export function paintFromTiles(m:MapData):MapPaint{
+ const k=paintScale(m.columns,m.rows),columns=m.columns*k,rows=m.rows*k,n=hash(m.seed||'map'),cell=cellFinder(m),out=new Uint8Array(columns*rows);
+ for(let y=0;y<rows;y++)for(let x=0;x<columns;x++){const u=(x+.5)/columns,v=(y+.5)/rows;
+  const dx=(smoothNoise(u*m.columns*.9,v*m.rows*.9,n+11)-.5)*.9+(smoothNoise(u*m.columns*2.7,v*m.rows*2.7,n+13)-.5)*.35,dy=(smoothNoise(u*m.columns*.9,v*m.rows*.9,n+17)-.5)*.9+(smoothNoise(u*m.columns*2.7,v*m.rows*2.7,n+19)-.5)*.35;
+  const i=cell(Math.min(1,Math.max(0,u+dx/m.columns)),Math.min(1,Math.max(0,v+dy/m.rows)));out[y*columns+x]=m.tiles[i]??1;}
+ return {columns,rows,cells:encodePaint(out)};
+}
+/** The terrain the map shows: its own paint, or paint made from its cells. */
+export function mapPaint(m:MapData):MapPaint|null{return m.source!=='generated'?null:m.paint??paintFromTiles(m);}
+/** Each cell takes the terrain that covers most of it, so cell-based tools keep working on painted maps. */
+export function tilesFromPaint(m:MapData,paint:MapPaint):number[]{
+ const cells=decodePaint(paint.columns,paint.rows,paint.cells);if(!cells)return m.tiles;
+ const cell=cellFinder(m),counts=Array.from({length:m.columns*m.rows},()=>new Array(8).fill(0));
+ for(let y=0;y<paint.rows;y++)for(let x=0;x<paint.columns;x++){const i=cell((x+.5)/paint.columns,(y+.5)/paint.rows);if(i>=0)counts[i][cells[y*paint.columns+x]]++;}
+ return counts.map((c,i)=>{const most=Math.max(...c);return most?c.indexOf(most):m.tiles[i]??1;});
 }
 export function newMap(category:MapData['category']='region',preset:MapData['preset']='island',seed='A new world',columns=24,rows=18):MapData{
  return {category,source:'generated',visibility:'gm',columns,rows,grid:category==='hex'?'hex':'none',coordinates:category==='hex',tiles:generateTerrain(columns,rows,seed,preset),seed,preset,imageId:null,imageWidth:1200,imageHeight:800,pins:[]};
@@ -83,8 +123,16 @@ export function playerMap(m:MapData):MapData{
  return {...m,routes:m.routes?.filter(r=>r.visibility==='players'&&(!fog||visible.size===m.columns*m.rows)&&r.stops.every(id=>m.pins.some(p=>p.id===id&&p.visibility==='players'))),seed:fog?'':m.seed,preset:fog?'blank':m.preset,
   imageId:fog?(m.source==='image'&&fogImageReady(m)?m.fog!.previewImageId!:null):m.imageId,
   tiles:fog?m.tiles.map((v,i)=>visible.has(i)?v:0):m.tiles,
+  paint:fog&&m.paint?hiddenPaint(m,m.paint,visible):m.paint,
   fog:m.fog?{enabled:m.fog.enabled,revealed:[...m.fog.revealed]}:undefined,
   pins:m.pins.filter(p=>p.visibility==='players'&&pointRevealed(m,p.x,p.y))};
+}
+/** Paint with every square under fog turned to sea, so players never receive hidden terrain. */
+function hiddenPaint(m:MapData,paint:MapPaint,visible:Set<number>):MapPaint{
+ if(visible.size===m.columns*m.rows)return paint;
+ const cells=decodePaint(paint.columns,paint.rows,paint.cells);if(!cells)return {...paint,cells:encodePaint(new Uint8Array(paint.columns*paint.rows))};
+ const cell=cellFinder(m);for(let y=0;y<paint.rows;y++)for(let x=0;x<paint.columns;x++)if(!visible.has(cell((x+.5)/paint.columns,(y+.5)/paint.rows)))cells[y*paint.columns+x]=0;
+ return {...paint,cells:encodePaint(cells)};
 }
 export function fitMapSize(width:number,height:number,mapWidth:number,mapHeight:number,zoom=1){
  const scale=Math.min(Math.max(1,width)/mapWidth,Math.max(1,height)/mapHeight)*zoom;
