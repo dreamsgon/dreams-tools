@@ -3,7 +3,7 @@ import { useFolderExpansion } from "./folder-expansion";
 import { countLabel } from "@/lib/plural";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Folder, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Map as MapIcon } from "lucide-react";
+import { Folder, Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Map as MapIcon } from "lucide-react";
 import { uid, collectionPath, canMoveCollection, type Workspace, type Collection } from "@/lib/model";
 
 type Props = {
@@ -16,6 +16,10 @@ type Props = {
   dashboard?: boolean;
   rootId?: string | null;
   openCampaign?: (id: string) => void;
+  /** Dashboard only: campaign holding the scene that was open last. */
+  lastCampaignId?: string | null;
+  /** Dashboard only: extra buttons shown beside New campaign. */
+  extraActions?: React.ReactNode;
 };
 export function LocationOptions({ workspace, exclude, dashboard = false }: { workspace: Workspace; exclude?: string; dashboard?: boolean }) {
   return <><option value="">All campaigns & scenes</option>{workspace.collections
@@ -32,7 +36,7 @@ export function LocationOptions({ workspace, exclude, dashboard = false }: { wor
     .sort((a, b) => collectionPath(workspace.collections, a.id).localeCompare(collectionPath(workspace.collections, b.id)))
     .map((c) => <option key={c.id} value={c.id}>{collectionPath(workspace.collections, c.id)}</option>)}</>;
 }
-export default function SceneOrganizer({ workspace: w, location, setLocation, commit, activate, search, dashboard = false, rootId = null, openCampaign }: Props) {
+export default function SceneOrganizer({ workspace: w, location, setLocation, commit, activate, search, dashboard = false, rootId = null, openCampaign, lastCampaignId = null, extraActions }: Props) {
   const [closed, setClosed] = useFolderExpansion(dashboard ? "dashboard" : `scenes:${rootId ?? "root"}`);
   const [creating, setCreating] = useState<Collection["kind"] | null>(null);
   const [name, setName] = useState("");
@@ -55,6 +59,13 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     return () => window.removeEventListener("keydown", cancel);
   }, []);
   const current = w.collections.find((c) => c.id === location);
+  const hasFolders = w.collections.some((c) => c.kind === "folder");
+  const showFolderTools = !dashboard || hasFolders || !!moving;
+  const sceneCount = (campaignId: string) => w.scenes.filter((s) => {
+    let id = s.containerId;
+    while (id) { if (id === campaignId) return true; id = w.collections.find((c) => c.id === id)?.parentId ?? null; }
+    return false;
+  }).length;
   const query = search.trim().toLowerCase();
   const inScope = (id: string | null) => {
     while (id !== rootId) {
@@ -147,13 +158,13 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   const collectionButton = (c: Collection, searched = false) => <>
     <button className="collection-primary" onClick={() => c.kind === "campaign" && dashboard ? openCampaign?.(c.id) : setLocation(c.id)}>
       {c.kind === "campaign" ? <BookOpen size={18} /> : <Folder size={18} />}
-      <span><strong>{searched ? collectionPath(w.collections, c.id) : c.name}</strong><small>{c.kind === "campaign" ? "Open campaign →" : `${w.collections.filter(child => child.parentId === c.id).length + w.scenes.filter(scene => scene.containerId === c.id).length} items`}</small></span>
+      <span><strong>{searched ? collectionPath(w.collections, c.id) : c.name}</strong>{dashboard && c.id === lastCampaignId && <em className="collection-badge">Last opened</em>}<small>{c.kind === "campaign" ? (dashboard ? countLabel(sceneCount(c.id), "scene") : "Open campaign →") : `${w.collections.filter(child => child.parentId === c.id).length + w.scenes.filter(scene => scene.containerId === c.id).length} items`}</small></span>
     </button>
     {dashboard && c.kind === "campaign" && <button className="collection-pin" aria-label={`${c.pinned ? "Unpin" : "Pin"} ${c.name}`} aria-pressed={!!c.pinned} title={c.pinned ? "Unpin campaign" : "Pin campaign"} onClick={() => commit(next => { const campaign = next.collections.find(item => item.id === c.id); if(campaign) campaign.pinned = !campaign.pinned; })}><Pin size={15} /></button>}
     <button className="collection-edit" title={`Edit ${c.name}`} aria-label={`Edit ${c.name}`} onClick={() => setLocation(location === c.id ? rootId : c.id)}><Pencil size={14} /></button>
   </>;
   const tree = (parentId: string | null): React.ReactNode => <>
-    {w.collections.filter((c) => c.parentId === parentId && (dashboard || c.kind !== "campaign")).map((c) => <div key={c.id} {...(c.kind === "folder" ? dropProps(c.id) : {})} data-dragging={moving?.id===c.id || undefined}>
+    {w.collections.filter((c) => c.parentId === parentId && (dashboard || c.kind !== "campaign")).map((c) => <div key={c.id} data-kind={c.kind} {...(c.kind === "folder" ? dropProps(c.id) : {})} data-dragging={moving?.id===c.id || undefined}>
       <div {...(c.kind === "folder" ? dropProps(c.id) : {})} className={"organizer-row " + (location === c.id ? "active" : "")}>
         {grip({kind:"collection",id:c.id,name:c.name})}
         {c.kind === "folder" && <button aria-label={`${closed.has(c.id) ? "Expand" : "Collapse"} ${c.name}`} aria-expanded={!closed.has(c.id)} onClick={() => setClosed((old) => {
@@ -169,27 +180,28 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   </>;
   return <section className={`organizer scene-organizer ${dashboard ? "dashboard-organizer" : ""}`} aria-label="Campaign and scene organizer">
     {dashboard && w.collections.some(c => c.kind === "campaign" && c.pinned) && <section className="pinned-campaigns" aria-label="Pinned campaigns"><h3><Pin size={16}/> Pinned campaigns</h3>{w.collections.filter(c => c.kind === "campaign" && c.pinned && (!query || collectionPath(w.collections,c.id).toLowerCase().includes(query))).map(c => <div key={c.id} className="organizer-row">{collectionButton(c)}</div>)}</section>}
-    <button {...dropProps(rootId)} className={(dashboard ? "organizer-root " : "scene-root-link ") + (location === rootId ? "active" : "")} onClick={() => setLocation(rootId)}>{dashboard ? "All campaigns" : "All scenes"}{dashboard && moving && <small>Drop here to move out of folders</small>}</button>
+    {dashboard && <div className="button-row dashboard-actions"><button className="primary" onClick={() => {setCreating("campaign");setName("");}}><Plus size={16} aria-hidden="true" />New campaign</button><button onClick={() => {setCreating("folder");setName("");}}><Folder size={16} aria-hidden="true" />New folder</button>{extraActions}</div>}
+    {showFolderTools && <button {...dropProps(rootId)} className={(dashboard ? "organizer-root " : "scene-root-link ") + (location === rootId ? "active" : "")} onClick={() => setLocation(rootId)}>{dashboard ? "All campaigns" : "All scenes"}{dashboard && moving && <small>Drop here to move out of folders</small>}</button>}
     {moving && createPortal(<div ref={ghost} className="organizer-drag-ghost" aria-hidden="true"><GripVertical size={16}/>{moving.name}</div>,document.body)}
     {dashboard && moving && <p className="muted organizer-drag-help">Drag into a folder or onto {dashboard ? "Dashboard root" : "All scenes"} to move out of folders.</p>}
     <p className="organizer-drag-status" role="status">{moving ? `Moving ${moving.name} — ${over !== undefined ? "release to move here" : "choose a folder"}. Escape cancels.` : announcement}</p>
-    <p className="muted organizer-path">Selected folder: {collectionPath(w.collections, dashboard && current?.kind === "campaign" ? current.parentId : location)}</p>
-    <div className="button-row">{dashboard && <button onClick={() => {setCreating("campaign");setName("");}}>New campaign</button>}<button onClick={() => {setCreating("folder");setName("");}}>New folder</button></div>
+    {showFolderTools && <p className="muted organizer-path">Selected folder: {collectionPath(w.collections, dashboard && current?.kind === "campaign" ? current.parentId : location)}</p>}
+    {!dashboard && <div className="button-row"><button onClick={() => {setCreating("folder");setName("");}}>New folder</button></div>}
     {creating && <form className="organizer-editor" onSubmit={(e) => {
       e.preventDefault(); if (!name.trim()) return;
       const id = uid(); commit((next) => next.collections.push({id, name: name.trim(), kind: creating, parentId: creating === "folder" ? rootId : dashboard && current?.kind === "campaign" ? current.parentId : current?.id ?? rootId}));
       setClosed((old) => {const next = new Set(old); if (location) next.delete(location); return next;});
-      setLocation(id); setCreating(null); setName("");
+      setLocation(dashboard && creating === "campaign" ? rootId : id); setCreating(null); setName("");
     }}>
       {creating === "folder" && <p className="muted">Created at {dashboard ? "the dashboard root" : rootId ? "the campaign root" : "the scene root"}. Drag it into another folder afterward if needed.</p>}
       <label>{creating === "campaign" ? "Campaign name" : "Folder name"}<input autoFocus required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <div className="button-row"><button type="submit" disabled={!name.trim()}>Create {creating}</button><button type="button" onClick={() => setCreating(null)}>Cancel</button></div>
     </form>}
-    <div className="folder-view-actions"><button onClick={() => setClosed(new Set())}>Expand all</button><button onClick={() => setClosed(new Set(w.collections.filter(c => c.kind === "folder").map(c => c.id)))}>Collapse all</button></div><div className="organizer-tree">{query ? <>
+    {showFolderTools && <div className="folder-view-actions"><button onClick={() => setClosed(new Set())}>Expand all</button><button onClick={() => setClosed(new Set(w.collections.filter(c => c.kind === "folder").map(c => c.id)))}>Collapse all</button></div>}<div className="organizer-tree">{query ? <>
       {w.collections.filter((c) => (dashboard || c.kind !== "campaign") && inScope(c.parentId) && collectionPath(w.collections, c.id).toLowerCase().includes(query)).map((c) => <div key={c.id} className="organizer-row" {...(c.kind === "folder" ? dropProps(c.id) : {})}>{grip({kind:"collection",id:c.id,name:c.name})}{collectionButton(c, true)}</div>)}
       {!dashboard && w.scenes.filter((s) => inScope(s.containerId) && `${s.name} ${collectionPath(w.collections, s.containerId)}`.toLowerCase().includes(query)).map(sceneRow)}
     </> : tree(rootId)}</div>
-    {dashboard && !w.collections.some((c) => c.kind === "campaign") && <p className="muted">Create your first campaign above. Your existing maps are available under Unfiled scenes; use Move scene to add them to a campaign.</p>}
+    {dashboard && !w.collections.some((c) => c.kind === "campaign") && <p className="dashboard-empty">No campaigns yet. Choose <strong>New campaign</strong> to start one. Maps you already have are under <strong>Maps not in a campaign</strong>.</p>}
     {current && current.id !== rootId && <div className="organizer-editor">
       {dashboard && current.kind === "campaign" && <button className="primary" onClick={() => openCampaign?.(current.id)}>Open campaign</button>}
       <h3>{current.kind === "campaign" ? "Campaign" : "Folder"} details</h3>

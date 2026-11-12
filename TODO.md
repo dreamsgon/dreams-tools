@@ -57,10 +57,14 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 ## Usability pass (docs/UX_HANDOFF.md)
 
+- [x] Walk through both tools locally at desktop and phone sizes; record prioritized fixes in docs/UX_HANDOFF.md.
+- [ ] Item 3.3 (shared campaigns between the two tools) waits for the owner's decision.
 - [x] Part 1, visible bugs (handoff 1.1, 1.2, 1.3, 1.7): dice tray characters fixed, Maptable header and in-dialog links styled, signed-in account page shows a summary instead of the sign-in form, "1 token" pluralization, "Move scene to" wording, Map Creator Width/Height labels, labelled the blank-scene and remove-scene buttons.
 - [ ] 1.7 leftover: the handoff saw one unlabelled button inside "Initiative order & settings"; a source scan found none, so recheck in a browser with initiative entries.
 - [x] Part 2, dice placement (handoff 1.4): the tray mounts on the Maptable board only, Dice and Roll log are tool bar buttons on desktop and Tools sheet buttons on phones, the tray opens above the tool bar, and the tray, dialogs, notices and drag ghost use the `--z-*` scale in globals.css. Remaining raw z-index values are local to their components.
-- [ ] Next: 1.5/1.6 clipping and text sizes, then the order in the handoff.
+- [x] Part 3, everything fits (handoff 1.5, 1.6): home/account header wraps on phones (no sideways scroll), the left rail scrolls and compacts on short screens, side-panel button rows wrap, and side panels use one 13px size for labels, checkboxes, helper text and fold-outs.
+- [x] Part 4, Campaigns dashboard (handoff 2.2 plus navigation): continue card replaces "Return to <campaign>", campaigns show as cards with scene counts and a "Last opened" mark, New campaign is the primary action, search/folder path/expand-collapse only appear when needed, Undo/Redo moved to header icons, "Unfiled scenes" became a "Maps not in a campaign" card, and the board header has a Campaigns breadcrumb (compact back button at 1000px and below). The rail "Dashboard" is now "Campaigns".
+- [ ] Next: visual polish pass, then 2.1 single save indicator and the rest of the handoff order.
 
 ## Map acceptance and maintenance
 

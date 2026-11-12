@@ -45,6 +45,7 @@ import {
   Square,
   X,
   ChevronRight,
+  ChevronLeft,
   Trash2,
   Copy,
   Download,
@@ -884,6 +885,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       </main>
     );
   const visibleLibrary = workspace.tokenLibrary.filter((t) => !workspace.libraryCampaigns[t.id] || workspace.libraryCampaigns[t.id] === campaignId);
+  const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null).length : 0;
   const openCampaign = (id: string | null) => {
     const first = workspace.scenes.find((s) => campaignFor(s.containerId) === id);
     if (first) activate(first.id);
@@ -896,15 +898,21 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   if (dashboard) return <main className="campaign-dashboard">
-    <header><div className="brand"><MapIcon size={25} /><a href="/" title="RPG Tools home">Maptable</a></div><div className="header-actions"><a className="header-link" href="/encyclopedia" title="Open RPG Encyclopedia"><BookOpen size={16} aria-hidden="true" />Encyclopedia</a><span className="save-state" role="status">{saveStatus}</span><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><ThemeToggle/></div></header>
+    <header><div className="brand"><MapIcon size={25} /><a href="/" title="RPG Tools home">Maptable</a></div><div className="header-actions"><a className="header-link" href="/encyclopedia" title="Open RPG Encyclopedia"><BookOpen size={16} aria-hidden="true" />Encyclopedia</a><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><ThemeToggle/></div></header>
     <div className="dashboard-content">
-      <h1>Campaigns</h1><p>Choose a campaign to open its scenes. Organize campaigns into folders here.</p>
       {saveRecovery}
-      <div className="button-row"><button onClick={() => setDashboard(false)}>Return to {campaign?.name || "map"}</button><button onClick={() => setCreatorOpen(true)}>Map Creator</button><button onClick={() => openCampaign(null)}>Unfiled scenes</button>
-        <button disabled={!history.current.length} onClick={undo}>Undo</button><button disabled={!future.current.length} onClick={redo}>Redo</button></div>
-      <input className="search" aria-label="Search campaigns" placeholder="Find a campaign or folder" value={dashboardSearch} onChange={(e) => setDashboardSearch(e.target.value)} />
+      {workspace.scenes.some((s) => s.id === scene.id) && <button className="dashboard-continue" onClick={() => setDashboard(false)}>
+        <span><small>Continue where you left off</small><strong>{scene.name}</strong><span>{campaign?.name ?? "Not in a campaign"} · {countLabel(scene.tokens.length, "token")}</span></span>
+        <span className="dashboard-continue-action">Open map <ChevronRight size={17} aria-hidden="true" /></span>
+      </button>}
+      <div className="dashboard-title"><h1>Campaigns</h1></div>
+      {(workspace.collections.length >= 8 || dashboardSearch) && <input className="search" aria-label="Search campaigns" placeholder="Find a campaign or folder" value={dashboardSearch} onChange={(e) => setDashboardSearch(e.target.value)} />}
       <SceneOrganizer workspace={workspace} dashboard openCampaign={openCampaign} location={workspace.collections.some((c) => c.id === dashboardLocation) ? dashboardLocation : null}
-        setLocation={setDashboardLocation} commit={commit} activate={activate} search={dashboardSearch} />
+        setLocation={setDashboardLocation} commit={commit} activate={activate} search={dashboardSearch} lastCampaignId={campaignId}
+        extraActions={<button onClick={() => setCreatorOpen(true)}><MapIcon size={16} aria-hidden="true" />Create a map</button>} />
+      {unfiledCount > 0 && <button className="dashboard-unfiled" onClick={() => openCampaign(null)}>
+        <MapIcon size={22} aria-hidden="true" /><span><strong>Maps not in a campaign</strong><small>{countLabel(unfiledCount, "scene")}</small></span>
+      </button>}
     </div>
   </main>;
   return (
@@ -914,11 +922,15 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <MapIcon size={25} />
           <a href="/" title="RPG Tools home">Maptable</a>
         </div>
-        <div className="header-scene">
+        <nav className="header-scene" aria-label="Breadcrumb">
           <span className="divider" />
-          <span>{scene.name}</span>
-          <small>{campaign?.name || "Unfiled scenes"}</small>
-        </div>
+          <button className="crumb crumb-home" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button>
+          <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
+          <button className="crumb" title={`Show scenes in ${campaign?.name || "maps not in a campaign"}`} onClick={() => {setLocation(campaignId);setPanel("scenes");setSidebar(true);}}>{campaign?.name || "Not in a campaign"}</button>
+          <ChevronRight size={14} aria-hidden="true" className="crumb-sep" />
+          <strong aria-current="page">{scene.name}</strong>
+        </nav>
+        <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
           <ThemeToggle/>
@@ -1011,7 +1023,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Help</span>
           </button>
           <button title="Map Creator" onClick={()=>{setGridAdjust(false);setCreatorOpen(true);}}><MapIcon size={21}/><span>Create map</span></button>
-          <button title="Dashboard" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={21}/><span>Dashboard</span></button>
+          <button title="Campaigns" onClick={() => {setDashboard(true);setGridAdjust(false);}}><LayoutDashboard size={21}/><span>Campaigns</span></button>
         </nav>
         <nav className="mobile-navigation" aria-label="Phone navigation">
           <button onClick={()=>{setSidebar(false);setMobileToolsOpen(false);}}>Map</button>
