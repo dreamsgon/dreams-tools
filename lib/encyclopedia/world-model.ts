@@ -14,6 +14,8 @@ export const tabSchema = z.object({id, title:name, body:z.string().max(100000), 
 export const statFieldSchema = z.object({
   id, label:name, section:z.string().trim().max(100), type:z.enum(["text","number","textarea","checkbox","select"]),
   options:z.array(z.string().trim().min(1).max(100)).max(40), visibility:visibilitySchema, archived:z.boolean(),
+  // Optional (added later): what clicking the value rolls. d20 = 1d20 + the number; formula = the text itself; custom = rollFormula with {value}.
+  roll:z.enum(["none","d20","formula","custom"]).optional(), rollFormula:z.string().trim().max(200).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
 export const characterSchema = z.object({
@@ -21,13 +23,17 @@ export const characterSchema = z.object({
   location:z.string().max(160), faction:z.string().max(160), status:z.enum(["active","inactive","missing","deceased"]),
   statsVisibility:visibilitySchema,
   statsByCampaign:z.record(id,z.record(id,statValueSchema)),
+  // Optional (added later): a pasted statblock, kept exactly as pasted. GM-only; never sent to players.
+  statblock:z.string().max(50000).optional(), statblockRolls:z.boolean().optional(),
 });
 export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
 export type StatField=z.infer<typeof statFieldSchema>;
 export const defaultCharacter=():CharacterData=>({role:"npc",group:"",tags:[],location:"",faction:"",status:"active",statsVisibility:"gm",statsByCampaign:{}});
 export const worldSchema = z.object({ id, name, description: z.string().max(1000), archived: z.boolean(), isTemplate:z.boolean().optional() });
-export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional() });
+export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
+  // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
+  discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"])}).optional() });
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map"]),
