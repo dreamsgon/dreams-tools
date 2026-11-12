@@ -179,7 +179,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [fogShape, setFogShape] = useState<"brush" | "rect" | "polygon" | "edit">("brush"),
     [effectSize, setEffectSize] = useState(2),
     [effectColor, setEffectColor] = useState("#d99a3a");
-  const selectionScope = panel === "scenes" || panel === "tokens" || panel === "effects" || panel === "fog" || panel === "exploration" ? panel : panel === "grid" ? "measurements" : "none";
+  // Tokens and AoEs can be picked up whatever else is open; only the fog and grid panels pick their own things.
+  const selectionScope = panel === "scenes" || panel === "tokens" || panel === "effects" || panel === "fog" || panel === "exploration" ? panel : panel === "grid" ? "measurements" : "scenes";
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
   const [dicePanel,setDicePanel]=useState<DicePanel>(null);
   const [diceDock,setDiceDock]=useState<CSSProperties>();
@@ -192,13 +193,13 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   },[dicePanel]);
   const [mobileHeaderOpen,setMobileHeaderOpen]=useState(false);
   const [mobilePanelExpanded,setMobilePanelExpanded]=useState(false);
-  const selectionLabel = selectionScope === "exploration" ? "points of interest" : selectionScope === "scenes" ? "tokens and AoEs" : selectionScope === "effects" ? "AoEs" : selectionScope === "fog" ? "fog regions" : selectionScope === "measurements" ? "measurements" : selectionScope === "tokens" ? "tokens" : "nothing (open a map sidebar section)";
+  const selectionLabel = selectionScope === "exploration" ? "markers and tokens" : selectionScope === "scenes" ? "tokens and AoEs" : selectionScope === "effects" ? "tokens and AoEs" : selectionScope === "fog" ? "fog regions" : selectionScope === "measurements" ? "measurements and tokens" : selectionScope === "tokens" ? "tokens" : "nothing (open a map sidebar section)";
   useEffect(()=>{
     if(!["exploration","scenes"].includes(selectionScope))setSelectedPoiId(null);
     const current=state.current;
     const currentScene=current?.scenes.find(s=>s.id===current.activeId);
     const allowed=new Set([
-      ...(["scenes","tokens"].includes(selectionScope)?currentScene?.tokens.map(t=>t.id)??[]:[]),
+      ...(selectionScope!=="fog"?currentScene?.tokens.map(t=>t.id)??[]:[]),
       ...(["scenes","effects"].includes(selectionScope)?currentScene?.effects.map(t=>t.id)??[]:[]),
       ...(selectionScope==="measurements"?currentScene?.measurements.map(t=>t.id)??[]:[]),
     ]);

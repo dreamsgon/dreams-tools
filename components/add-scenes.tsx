@@ -1,8 +1,14 @@
 "use client";
 import {useState} from "react";
 import { countLabel } from "@/lib/plural";
+import {Globe2,Mountain,Swords,type LucideIcon} from "lucide-react";
 import {Modal} from "./dialogs";
 import {collectionPath,newScene,uid,type Scene,type Workspace} from "@/lib/model";
+const MAP_KINDS:[Scene["mapType"],string,string,LucideIcon][]=[
+  ["encounter","Encounter map","A battle map for a fight, on a grid.",Swords],
+  ["area","Area map","A town, dungeon or region to explore.",Mountain],
+  ["world","World map","Your whole setting. Its markers open area maps.",Globe2],
+];
 export default function AddScenes({workspace:w,campaignId,initialDestination,initialMapType="encounter",commit,close,importMap,splitMap,openScene}: {
   workspace:Workspace;campaignId:string|null;initialDestination:string|null;initialMapType?:Scene["mapType"];
   commit:(fn:(w:Workspace)=>void)=>void;close:()=>void;importMap:(destination:string|null,mapType:Scene["mapType"])=>void;splitMap:(destination:string|null)=>void;openScene:(id:string)=>void;
@@ -36,8 +42,11 @@ export default function AddScenes({workspace:w,campaignId,initialDestination,ini
         <option value={campaignId??""}>{targetName} / All scenes</option>
         {w.collections.filter(c=>c.kind==="folder"&&campaignFor(c.id)===campaignId).map(c=><option key={c.id} value={c.id}>{collectionPath(w.collections,c.id)}</option>)}
       </select></label>
-      <label>New map type<select value={mapType} onChange={e=>setMapType(e.target.value as Scene["mapType"])}><option value="encounter">Encounter Map</option><option value="world">World Map</option><option value="area">Area Map</option></select></label>
-      <p className="muted">Choose a type, then start blank or upload a map. You can change its type later in Scenes. Existing scenes keep their type when copied or moved below.</p>
+      <div className="add-map-types" role="radiogroup" aria-label="Kind of map">
+        <span className="add-step">1. What kind of map?</span>
+        {MAP_KINDS.map(([type,label,hint,Icon])=><button key={type} type="button" role="radio" aria-checked={mapType===type} className="add-map-type" onClick={()=>setMapType(type)}><Icon size={22} aria-hidden="true"/><strong>{label}</strong><span>{hint}</span></button>)}
+      </div>
+      <span className="add-step">2. How do you want to start?</span>
       <div className="add-scene-actions">
         <button disabled={!campaignId} onClick={()=>splitMap(destination)}><strong>Split a large map</strong><span>{campaignId?"Preview numbered sections and create linked area scenes.":"Open a campaign to create linked map sections."}</span></button>
         <button onClick={()=>importMap(destination,mapType)}><strong>Upload or link {mapName}</strong><span>Use an image, Universal VTT export, URL, or connected storage.</span></button>

@@ -145,7 +145,8 @@ export default function Board(p: Props) {
   }, [contextMenu]);
   useEffect(() => { setContextMenu(null); }, [p.scene.id, p.selectionScope, p.player, p.tool]);
   const allowPois = p.selectionScope === "exploration" || p.selectionScope === "scenes";
-  const allowTokens = p.selectionScope === "scenes" || p.selectionScope === "tokens";
+  // Tokens can be dragged with Select whatever panel is open, except while editing fog regions.
+  const allowTokens = p.selectionScope !== "fog" && p.selectionScope !== "none";
   const allowEffects = p.selectionScope === "scenes" || p.selectionScope === "effects";
   const allowFog = p.selectionScope === "fog";
   const allowMeasurements = p.selectionScope === "measurements";

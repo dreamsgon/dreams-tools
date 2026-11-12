@@ -469,7 +469,7 @@ export function newScene(name = "Untitled scene"): Scene {
       color: "#58675e",
       opacity: 0.3,
       labels: true,
-      labelMode: "cells",
+      labelMode: "perimeter",
       labelTheme: "light",
       snap: true,
       units: 5,

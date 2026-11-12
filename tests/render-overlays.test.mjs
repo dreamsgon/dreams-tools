@@ -104,8 +104,12 @@ test('stored measurements respect player visibility and render beneath fog',()=>
  }finally{globalThis.document=oldDocument;}
 });
 test('dark label theme uses pale text; perimeter rectangles never cover the map',()=>{
- const s=newScene();s.grid.labelTheme='dark';let ctx=context();drawGrid(ctx,s);assert.ok(ctx.calls.some(c=>c[0]==='set'&&c[1]==='fillStyle'&&c[2]==='#f1f1e6'));
+ const s=newScene();s.grid.labelMode='cells';s.grid.labelTheme='dark';let ctx=context();drawGrid(ctx,s);assert.ok(ctx.calls.some(c=>c[0]==='set'&&c[1]==='fillStyle'&&c[2]==='#f1f1e6'));
  s.grid.labelMode='perimeter';ctx=context();drawPerimeterLabels(ctx,s);for(const c of ctx.calls.filter(c=>c[0]==='fillRect'))assert.ok(c[1]+c[3]<=0||c[2]+c[4]<=0);
+});
+
+test('new scenes put cell addresses outside the map edges',()=>{
+ assert.equal(newScene().grid.labelMode,'perimeter');
 });
 
 test('scene background is painted before transparent map images',()=>{
