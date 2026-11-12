@@ -66,11 +66,11 @@ const dated=(entries,extraWorlds=[])=>workspaceSchema.parse({schemaVersion:1,
  campaigns:[{id:'e1',worldId:'w1',name:'Sunless Citadel',description:'',github:gh},{id:'e2',worldId:'w1',name:'Curse of the Ashen Crown',description:'',github:gh},{id:'e3',worldId:'w2',name:'Retired',description:'',github:gh}],
  entries});
 
-test('recent lists the five newest pages first, with campaign name null for world lore', () => {
+test('recent lists the six newest pages first, with campaign name null for world lore', () => {
   const b=dated([1,2,3,4,5,6,7].map(n=>entry(`r${n}`,'w1',n===3?null:'e1',at(n))));
   const {recent}=campaignSummary(null,b);
-  assert.deepEqual(recent.map(r=>r.id),['r7','r6','r5','r4','r3']);
-  assert.deepEqual(recent[0],{id:'r7',title:'r7',kind:'note',campaignName:'Sunless Citadel',worldName:'Ashenwood',updatedAt:at(7)});
+  assert.deepEqual(recent.map(r=>r.id),['r7','r6','r5','r4','r3','r2']);
+  assert.deepEqual(recent[0],{id:'r7',title:'r7',kind:'note',campaignId:'e1',campaignName:'Sunless Citadel',worldName:'Ashenwood',path:'',updatedAt:at(7)});
   const lore=campaignSummary(null,dated([entry('lore','w1',null,at(9))])).recent[0];
   assert.equal(lore.campaignName,null);
   assert.equal(lore.worldName,'Ashenwood');
@@ -97,4 +97,17 @@ test('home campaigns are most recently edited first, then by name, without archi
   assert.deepEqual(homeCampaigns(s).map(r=>r.name),['Curse of the Ashen Crown','Sunless Citadel','Ashen Crown','One-shots','The Sunless Citadel']);
   assert.equal(homeCampaigns(s).some(r=>r.encyclopedia?.archived),false);
   assert.equal(s.rows.length,6,'the summary itself is not changed');
+});
+
+test('pages carry the folders they sit in, and each campaign lists its three newest pages and its maps', () => {
+  const inFolder=(e,parentId)=>({...e,parentId});
+  const b=dated([entry('places','w1','e1',at(1),'folder'),inFolder(entry('fens','w1','e1',at(1),'folder'),'places'),
+    inFolder(entry('greyfen','w1','e1',at(4)),'fens'),entry('a','w1','e1',at(2)),entry('b','w1','e1',at(5),'character')]);
+  b.entries.push(entry('m1','w1','e1',at(3),'map'));
+  const s=campaignSummary(null,b);
+  assert.equal(s.recent.find(r=>r.id==='greyfen').path,'places › fens');
+  const e1=s.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia;
+  assert.deepEqual(e1.latest.map(p=>p.id),['b','greyfen','m1'],'folders are left out');
+  assert.equal(e1.maps,1);
+  assert.deepEqual(s.rows.find(r=>r.encyclopedia?.id==='e2').encyclopedia.latest,[]);
 });

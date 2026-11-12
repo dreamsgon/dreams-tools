@@ -13,10 +13,16 @@ import { scenesInOrder } from "./scene-order.ts";
 export type MapCampaign = { id: string; name: string; scenes: number };
 export type BookCampaign = { id: string; name: string; description: string; worldId: string; worldName: string; archived: boolean; pages: number; characters: number; maptableCampaignId: string | null;
   /** When a page in this campaign last changed, or null when it has none. */
-  lastEdited: string | null };
+  lastEdited: string | null;
+  /** How many of its pages are maps. */
+  maps: number;
+  /** Its most recently changed pages, newest first (at most three). */
+  latest: RecentPage[] };
 export type CampaignRow = { key: string; name: string; maptable: MapCampaign | null; encyclopedia: BookCampaign | null };
 /** A recently changed Encyclopedia page, for the home page. */
-export type RecentPage = { id: string; title: string; kind: string; campaignName: string | null; worldName: string; updatedAt: string };
+export type RecentPage = { id: string; title: string; kind: string; campaignId: string | null; campaignName: string | null; worldName: string;
+  /** The folders it sits in, outermost first, e.g. "Places › The Fens". Empty at the top level. */
+  path: string; updatedAt: string };
 export type CampaignSummary = {
   rows: CampaignRow[];
   /** The most recently changed Encyclopedia pages, newest first. */
@@ -33,12 +39,14 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
   const worlds = new Map(s.worlds.map(w => [w.id, w]));
   return s.campaigns.filter(c => !worlds.get(c.worldId)?.isTemplate).map(c => {
     const own = s.entries.filter(e => e.campaignId === c.id && e.kind !== "folder");
+    const latest = newestFirst(own).slice(0, 3).map(e => recentPage(s, e));
     return {
       id: c.id, name: c.name, description: c.description, worldId: c.worldId,
       worldName: worlds.get(c.worldId)?.name ?? "", archived: worlds.get(c.worldId)?.archived ?? false,
       pages: own.length, characters: own.filter(e => e.kind === "character").length,
       maptableCampaignId: c.maptableCampaignId ?? null,
-      lastEdited: own.reduce<string | null>((latest, e) => !latest || e.updatedAt > latest ? e.updatedAt : latest, null),
+      lastEdited: own.reduce<string | null>((last, e) => !last || e.updatedAt > last ? e.updatedAt : last, null),
+      maps: own.filter(e => e.kind === "map").length, latest,
     };
   });
 }
@@ -63,13 +71,27 @@ export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"
   };
 }
 
-function recentPages(s: BookWorkspace, limit = 5): RecentPage[] {
-  const worlds = new Map(s.worlds.map(w => [w.id, w])), campaigns = new Map(s.campaigns.map(c => [c.id, c.name]));
-  return s.entries
-    .filter(e => e.kind !== "folder" && !worlds.get(e.worldId)?.isTemplate && !worlds.get(e.worldId)?.archived)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, limit)
-    .map(e => ({ id: e.id, title: e.title, kind: e.kind, campaignName: e.campaignId ? campaigns.get(e.campaignId) ?? null : null, worldName: worlds.get(e.worldId)?.name ?? "", updatedAt: e.updatedAt }));
+type BookEntry = BookWorkspace["entries"][number];
+const newestFirst = (entries: BookEntry[]) => [...entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+function recentPage(s: BookWorkspace, e: BookEntry): RecentPage {
+  const names: string[] = [], seen = new Set<string>();
+  for (let parent = e.parentId; parent && !seen.has(parent);) {
+    seen.add(parent);
+    const folder = s.entries.find(f => f.id === parent);
+    if (!folder) break;
+    names.unshift(folder.title);
+    parent = folder.parentId;
+  }
+  return { id: e.id, title: e.title, kind: e.kind, campaignId: e.campaignId,
+    campaignName: e.campaignId ? s.campaigns.find(c => c.id === e.campaignId)?.name ?? null : null,
+    worldName: s.worlds.find(w => w.id === e.worldId)?.name ?? "", path: names.join(" › "), updatedAt: e.updatedAt };
+}
+
+function recentPages(s: BookWorkspace, limit = 6): RecentPage[] {
+  const worlds = new Map(s.worlds.map(w => [w.id, w]));
+  return newestFirst(s.entries.filter(e => e.kind !== "folder" && !worlds.get(e.worldId)?.isTemplate && !worlds.get(e.worldId)?.archived))
+    .slice(0, limit).map(e => recentPage(s, e));
 }
 
 /** Campaigns for the home page: not archived, most recently edited first, then by name. */
