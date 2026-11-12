@@ -52,3 +52,31 @@ test('boot script is plain JavaScript that sets theme and accent',()=>{
   assert.match(appearanceBootScript,/dataset\.theme/);
   assert.match(appearanceBootScript,/dataset\.accent/);
 });
+
+import {FONT_ROLES,FONT_ROLE_IDS,parseFont,fontOption,fontStylesheetUrl,parseMotion,APPEARANCE_STORAGE_KEYS} from '../lib/appearance.ts';
+
+test('every font role has a valid default and unique options',()=>{
+  for(const role of FONT_ROLE_IDS){
+    const config=FONT_ROLES[role];
+    const ids=config.options.map(o=>o.id);
+    assert.equal(new Set(ids).size,ids.length,role+' ids are unique');
+    assert.ok(ids.includes(config.defaultId),role+' default exists');
+    assert.equal(fontOption(role,config.defaultId).query,null,role+' default is loaded by the layout, not on demand');
+    assert.ok(config.options.length>=8,role+' offers a good range');
+    assert.ok(APPEARANCE_STORAGE_KEYS.includes(config.storageKey));
+  }
+});
+
+test('unknown fonts fall back to the default, and URLs only point at Google Fonts',()=>{
+  assert.equal(parseFont('ui','comic-sans'),'inter');
+  assert.equal(parseFont('title','cinzel'),'cinzel');
+  for(const role of FONT_ROLE_IDS)for(const option of FONT_ROLES[role].options){
+    const url=fontStylesheetUrl(option);
+    if(url)assert.match(url,/^https:\/\/fonts\.googleapis\.com\/css2\?family=[A-Za-z0-9+]+(:[a-z,@;0-9.]+)?&display=swap$/);
+  }
+});
+
+test('motion preference only accepts reduced',()=>{
+  assert.equal(parseMotion('reduced'),'reduced');
+  assert.equal(parseMotion('fast'),'system');
+});
