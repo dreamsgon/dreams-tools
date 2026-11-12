@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {GripVertical,Folder,FolderPlus,ChevronRight,ChevronDown} from "lucide-react";
 import { uid, canMoveCollection, collectionPath, type Condition, type Workspace } from "@/lib/model";
@@ -33,7 +34,7 @@ export default function ConditionOrganizer({workspace:w,commit,location,setLocat
     const tick=(now:number)=>{
       const d=drag.current;if(!d)return;
       const dt=Math.min(32,now-previous);previous=now;
-      if(ghost.current)ghost.current.style.transform=`translate3d(${Math.min(d.px+12,window.innerWidth-190)}px,${Math.min(d.py+14,window.innerHeight-50)}px,0)`;
+      if(ghost.current)ghost.current.style.transform=`translate3d(${Math.min(d.px+12,window.innerWidth-190)/uiZoom()}px,${Math.min(d.py+14,window.innerHeight-50)/uiZoom()}px,0)`;
       if(d.host){const r=d.host.getBoundingClientRect();const top=Math.max(0,r.top),bottom=Math.min(window.innerHeight,r.bottom);d.host.scrollTop+=(d.py<top+50?-1:d.py>bottom-50?1:0)*dt*.5;}
       const target=targetAt(d.item,d.px,d.py);
       if(target!==d.target){d.target=target;d.since=now;setOver(target);}

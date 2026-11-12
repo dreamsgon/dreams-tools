@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import {readJsonResponse} from "@/lib/transfer-client";
 import { countLabel } from "@/lib/plural";
 import StandardDiceTray, { type DicePanel } from "./standard-dice-tray";
@@ -176,7 +177,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const toggleDicePanel=(next:Exclude<DicePanel,null>)=>{setDicePanel(p=>p===next?null:next);setMobileToolsOpen(false);};
   useEffect(()=>{
     if(!dicePanel)return;
-    const place=()=>{const bar=toolbarRef.current;if(!bar)return;setDiceDock(diceDockPosition(bar.getBoundingClientRect(),window.innerWidth,window.innerHeight));};
+    const place=()=>{const bar=toolbarRef.current;if(!bar)return;const z=uiZoom(),r=bar.getBoundingClientRect();setDiceDock(diceDockPosition({top:r.top/z,right:r.right/z},window.innerWidth/z,window.innerHeight/z));};
     place();window.addEventListener("resize",place);return()=>window.removeEventListener("resize",place);
   },[dicePanel]);
   const [mobileHeaderOpen,setMobileHeaderOpen]=useState(false);

@@ -88,13 +88,15 @@ html:root[data-theme="dark"] {
 .appearance { position:relative; display:inline-flex; }
 .appearance-trigger { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; min-height:36px; padding:0; border-radius:var(--radius); }
 .appearance-trigger .appearance-dot { position:absolute; right:7px; bottom:7px; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--chrome, var(--panel, var(--white, #fff))); pointer-events:none; }
-.appearance-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:var(--z-modal, 200); width:320px; max-height:min(680px, calc(100vh - 80px)); overflow-y:auto; overscroll-behavior:contain; max-width:calc(100vw - 24px); display:flex; flex-direction:column; gap:16px; padding:16px; background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); border:1px solid var(--line, #d4dbe0); border-radius:var(--radius-lg); box-shadow:0 16px 48px rgb(0 0 0 / .18); text-align:left; white-space:normal; font-size:13px; font-weight:400; }
+.appearance-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:var(--z-modal, 200); width:320px; max-height:min(680px, calc(calc(100vh / var(--ui-zoom, 1)) - 80px)); overflow-y:auto; overscroll-behavior:contain; max-width:calc(calc(100vw / var(--ui-zoom, 1)) - 24px); display:flex; flex-direction:column; gap:16px; padding:16px; background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); border:1px solid var(--line, #d4dbe0); border-radius:var(--radius-lg); box-shadow:0 16px 48px rgb(0 0 0 / .18); text-align:left; white-space:normal; font-size:13px; font-weight:400; }
 .appearance-panel h2 { margin:0; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; letter-spacing:-.1px; color:inherit; }
 .appearance-group { display:flex; flex-direction:column; gap:8px; margin:0; padding:0; border:0; min-width:0; }
 .appearance-group legend { padding:0; margin-bottom:8px; font-size:12px; color:var(--muted, #56616a); }
 .appearance-segments { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px; padding:3px; border:1px solid var(--line, #d4dbe0); border-radius:var(--radius); background:var(--heading-surface, var(--sand, transparent)); }
 .appearance-segments button { min-height:32px; padding:4px 6px; border:0; border-radius:var(--radius); background:transparent; color:var(--muted, #56616a); font-size:13px; font-weight:500; box-shadow:none; }
 .appearance-segments button[aria-checked="true"] { background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); box-shadow:0 1px 2px rgb(0 0 0 / .14); }
+.appearance-text-sizes { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.appearance-text-sizes span { font-weight:600; line-height:1; }
 .appearance-swatches { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
 .appearance-swatches button { display:flex; align-items:center; gap:8px; min-height:36px; padding:4px 8px 4px 4px; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--ink, #1c2329); font-size:12px; font-weight:500; box-shadow:none; justify-content:flex-start; }
 .appearance-swatches button:hover, .appearance-segments button:hover { background:var(--heading-surface, var(--sand, rgb(0 0 0 / .05))); }
@@ -104,7 +106,7 @@ html:root[data-theme="dark"] {
 .appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-light); }
 :root[data-theme="dark"] .appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-dark); }
 .appearance-note { margin:0; font-size:12px; line-height:1.5; color:var(--muted, #56616a); }
-@media (max-width:480px) { .appearance-panel { position:fixed; top:auto; bottom:12px; left:12px; right:12px; width:auto; max-width:none; max-height:calc(100vh - 96px); } }
+@media (max-width:480px) { .appearance-panel { position:fixed; top:auto; bottom:12px; left:12px; right:12px; width:auto; max-width:none; max-height:calc(calc(100vh / var(--ui-zoom, 1)) - 96px); } }
 .appearance-font { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted, #56616a); }
 .appearance-font select { width:100%; min-height:36px; padding:6px 8px; border:1px solid var(--line, #d4dbe0); border-radius:var(--radius); background:var(--control, var(--panel, var(--white, #fff))); color:var(--ink, #1c2329); font:inherit; font-size:13px; }
 .appearance-sample { margin:0; font-size:15px; line-height:1.4; color:var(--ink, #1c2329); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -116,6 +118,13 @@ html:root[data-theme="dark"] {
 
 /* Reduced motion, chosen in the Appearance menu or set by the device. */
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+
+/* Text size (Appearance menu): zooms the whole interface. Viewport units are divided by
+   --ui-zoom wherever they size a layout, so full-height screens still fit the window. */
+html[data-text-size="smaller"] { zoom:.85; --ui-zoom:.85; }
+html[data-text-size="small"] { zoom:.92; --ui-zoom:.92; }
+html[data-text-size="large"] { zoom:1.1; --ui-zoom:1.1; }
+html[data-text-size="larger"] { zoom:1.25; --ui-zoom:1.25; }
 
 /* Shared tool header: the RPG Tools wordmark, the tool tabs and the account link. */
 .tool-switch { display:flex; align-items:center; align-self:stretch; gap:24px; min-width:0; flex:none; }

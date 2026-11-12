@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 
 import "./token-library.css";
 
@@ -218,7 +219,7 @@ export default function TokenLibrary({ workspace: w, commit, campaignId, onPlace
           <small>Edits and deletion affect this saved token. Placed tokens keep their settings.</small>
 
         </div></Modal>, document.body); })()}
-    {dragPreview && createPortal(<div aria-hidden="true" style={{ position: "fixed", left: dragPreview.x + 14, top: dragPreview.y + 14, zIndex: 11000, pointerEvents: "none", padding: "8px 12px", borderRadius: 8, background: "#20252b", color: "#fff", border: `2px solid ${dragPreview.ready ? "#57aa88" : "#88909a"}`, maxWidth: 220 }}>{dragPreview.name || "Token"} · {dragPreview.ready ? "Release to place" : "Drag onto map"}</div>, document.body)}
+    {dragPreview && createPortal(<div aria-hidden="true" style={{ position: "fixed", left: dragPreview.x / uiZoom() + 14, top: dragPreview.y / uiZoom() + 14, zIndex: 11000, pointerEvents: "none", padding: "8px 12px", borderRadius: 8, background: "#20252b", color: "#fff", border: `2px solid ${dragPreview.ready ? "#57aa88" : "#88909a"}`, maxWidth: 220 }}>{dragPreview.name || "Token"} · {dragPreview.ready ? "Release to place" : "Drag onto map"}</div>, document.body)}
     <p className="empty-small">Click a token’s icon or name to place it, or drag it onto the map. Use the grip to move it between folders. Escape cancels a drag.</p>
     <p role="status" className="empty-small">{dragMessage}</p>
 

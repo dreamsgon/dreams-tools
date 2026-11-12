@@ -89,7 +89,7 @@ export default function MapSplitDialog({ close, onImport, containerId }: {
           <label>Pixels per grid cell<input type="number" min={20} max={500} step={1} value={gridSize} disabled={busy} onChange={e => setGridSize(Number(e.target.value))}/></label>
         </div>
         <p className="muted">Up to 36 tiles; each tile must fit within 8,000 × 8,000 pixels. Overlap repeats edge pixels to make transitions easier.</p>
-        <svg role="img" aria-label="Numbered tile preview, ordered left to right then top to bottom" viewBox={`0 0 ${source.width} ${source.height}`} style={{ display: "block", width: "100%", maxHeight: "42vh", background: "#171717" }}>
+        <svg role="img" aria-label="Numbered tile preview, ordered left to right then top to bottom" viewBox={`0 0 ${source.width} ${source.height}`} style={{ display: "block", width: "100%", maxHeight: "calc(42vh / var(--ui-zoom, 1))", background: "#171717" }}>
           <image href={source.url} width={source.width} height={source.height}/>
           {plan.tiles.map((tile, index) => <g key={index}>
             <rect x={tile.x} y={tile.y} width={tile.width} height={tile.height} fill="none" stroke="#fbbf24" strokeWidth={3} vectorEffect="non-scaling-stroke"/>

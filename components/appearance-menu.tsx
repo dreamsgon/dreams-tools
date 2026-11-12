@@ -11,23 +11,27 @@ import {
   FONT_ROLE_IDS,
   LEGACY_THEME_KEYS,
   MOTION_STORAGE_KEY,
+  TEXT_SIZES,
+  TEXT_SIZE_STORAGE_KEY,
   THEME_STORAGE_KEY,
   fontOption,
   fontStylesheetUrl,
   parseAccent,
   parseFont,
   parseMotion,
+  parseTextSize,
   pickThemeMode,
   resolveTheme,
   type AccentId,
   type FontRole,
   type MotionPreference,
+  type TextSizeId,
   type ThemeMode,
 } from "@/lib/appearance";
 
 const MODE_LABELS: Record<ThemeMode, string> = { light: "Light", dark: "Dark", system: "System" };
 
-type Settings = { mode: ThemeMode; accent: AccentId; motion: MotionPreference; fonts: Record<FontRole, string> };
+type Settings = { mode: ThemeMode; accent: AccentId; motion: MotionPreference; textSize: TextSizeId; fonts: Record<FontRole, string> };
 
 function read(key: string) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -46,6 +50,7 @@ function defaults(): Settings {
     mode: DEFAULT_THEME_MODE,
     accent: DEFAULT_ACCENT,
     motion: "system",
+    textSize: "default",
     fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, FONT_ROLES[role].defaultId])) as Record<FontRole, string>,
   };
 }
@@ -55,6 +60,7 @@ function load(): Settings {
     mode: pickThemeMode(read(THEME_STORAGE_KEY), LEGACY_THEME_KEYS.map(read)),
     accent: parseAccent(read(ACCENT_STORAGE_KEY)) ?? DEFAULT_ACCENT,
     motion: parseMotion(read(MOTION_STORAGE_KEY)),
+    textSize: parseTextSize(read(TEXT_SIZE_STORAGE_KEY)),
     fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, parseFont(role, read(FONT_ROLES[role].storageKey))])) as Record<FontRole, string>,
   };
 }
@@ -74,6 +80,7 @@ function apply(settings: Settings) {
   root.dataset.themeMode = settings.mode;
   root.dataset.accent = settings.accent;
   if (settings.motion === "reduced") root.dataset.motion = "reduced"; else delete root.dataset.motion;
+  if (settings.textSize === "default") delete root.dataset.textSize; else root.dataset.textSize = settings.textSize;
   for (const role of FONT_ROLE_IDS) applyFont(role, settings.fonts[role]);
 }
 
@@ -112,6 +119,7 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
   const chooseMode = (mode: ThemeMode) => update({ ...settings, mode }, THEME_STORAGE_KEY, mode);
   const chooseAccent = (accent: AccentId) => update({ ...settings, accent }, ACCENT_STORAGE_KEY, accent);
   const chooseMotion = (motion: MotionPreference) => update({ ...settings, motion }, MOTION_STORAGE_KEY, motion);
+  const chooseTextSize = (textSize: TextSizeId) => update({ ...settings, textSize }, TEXT_SIZE_STORAGE_KEY, textSize);
   const chooseFont = (role: FontRole, id: string) => update({ ...settings, fonts: { ...settings.fonts, [role]: id } }, FONT_ROLES[role].storageKey, id);
   const reset = () => {
     for (const key of [...APPEARANCE_STORAGE_KEYS, ...LEGACY_THEME_KEYS]) forget(key);
@@ -132,6 +140,15 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
         <div className="appearance-segments" role="radiogroup" aria-label="Theme">
           {(Object.keys(MODE_LABELS) as ThemeMode[]).map((value) =>
             <button key={value} type="button" role="radio" aria-checked={settings.mode === value} onClick={() => chooseMode(value)}>{MODE_LABELS[value]}</button>)}
+        </div>
+      </fieldset>
+      <fieldset className="appearance-group">
+        <legend>Text size · {TEXT_SIZES.find((size) => size.id === settings.textSize)?.label}</legend>
+        <div className="appearance-segments appearance-text-sizes" role="radiogroup" aria-label="Text size">
+          {TEXT_SIZES.map((size) =>
+            <button key={size.id} type="button" role="radio" aria-checked={settings.textSize === size.id} aria-label={size.label} title={`${size.label} (${Math.round(size.zoom * 100)}%)`} onClick={() => chooseTextSize(size.id)}>
+              <span aria-hidden="true" style={{ fontSize: Math.round(13 * size.zoom) }}>A</span>
+            </button>)}
         </div>
       </fieldset>
       <fieldset className="appearance-group">

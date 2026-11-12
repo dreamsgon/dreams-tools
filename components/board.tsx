@@ -1,4 +1,5 @@
 "use client";
+import { uiZoom } from "@/lib/appearance";
 import { tokenDragPosition, startTokenMovePlan, appendTokenMovePoint, undoTokenMovePoint, tokenMovePlanValid, tokenMovePlanDestination, type TokenMovePlan } from "@/lib/token-movement";
 import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
@@ -218,7 +219,8 @@ export default function Board(p: Props) {
       const detail = (event as CustomEvent<LibraryTokenDrop>).detail;
       if (!detail || !p.workspace.tokenLibrary.some(token => token.id === detail.tokenId)) return;
       const bounds = cropFocus ? mapCrop(p.scene) : null;
-      const point = libraryTokenDropPoint({ x: detail.clientX, y: detail.clientY }, target.getBoundingClientRect(), view,
+      const z = uiZoom(), box = target.getBoundingClientRect();
+      const point = libraryTokenDropPoint({ x: detail.clientX / z, y: detail.clientY / z }, { left: box.left / z, top: box.top / z }, view,
         bounds ?? { x: 0, y: 0, width: p.scene.width, height: p.scene.height });
       if (!point || p.scene.tokens.length >= 500) return;
       event.preventDefault();
@@ -228,8 +230,10 @@ export default function Board(p: Props) {
     return () => target.removeEventListener(LIBRARY_TOKEN_DROP, drop);
   }, [p, cropEditing, cropFocus, view]);
   const fit = useCallback(() => {
-    const r = host.current?.getBoundingClientRect();
-    if (!r) return;
+    const box = host.current?.getBoundingClientRect();
+    if (!box) return;
+    // Layout pixels: the Text size setting zooms the page, and the rect is in screen pixels.
+    const z = uiZoom(), r = { width: box.width / z, height: box.height / z };
     const bounds = { x: fitX, y: fitY, width: fitWidth, height: fitHeight };
     const scale = Math.min(
       (r.width - 64) / bounds.width,
@@ -384,7 +388,7 @@ export default function Board(p: Props) {
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const dpr = Math.min(devicePixelRatio || 1, 2) * uiZoom();
     c.width = Math.round(view.width * dpr);
     c.height = Math.round(view.height * dpr);
     const ctx = c.getContext("2d")!;
@@ -537,8 +541,8 @@ export default function Board(p: Props) {
     p.images,
   ]);
   const screen = (e: { clientX: number; clientY: number }) => {
-    const r = canvas.current!.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const r = canvas.current!.getBoundingClientRect(), z = uiZoom();
+    return { x: (e.clientX - r.left) / z, y: (e.clientY - r.top) / z };
   };
   const world = (s: Point, v = view) => ({
     x: (s.x - v.x) / v.scale,
@@ -1151,12 +1155,13 @@ export default function Board(p: Props) {
           else if (token) target = { kind: "token", id: token.id };
           else if (saved) target = { kind: "measurement", id: saved.id };
           else if (effect) target = { kind: "effect", id: effect.id };
-          setContextMenu(target ? { ...target, x: Math.max(8, Math.min(e.clientX, window.innerWidth - 228)), y: Math.max(8, Math.min(e.clientY, window.innerHeight - 330)) } : null);
+          const z = uiZoom();
+          setContextMenu(target ? { ...target, x: Math.max(8, Math.min(e.clientX / z, window.innerWidth / z - 228)), y: Math.max(8, Math.min(e.clientY / z, window.innerHeight / z - 330)) } : null);
         }}
         tabIndex={0}
         aria-label={`Interactive map: ${p.scene.name}. Use the token list to edit tokens and their coordinates.`}
       />
-      {contextMenu && createPortal(<div ref={menuRef} role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ position: "fixed", left: contextMenu.x, top: contextMenu.y, zIndex: 10000, width: 220, maxHeight: "calc(100vh - 16px)", overflowY: "auto", padding: 5, border: "1px solid #555", borderRadius: 8, background: "#20252b", color: "#f3f4f6", boxShadow: "0 8px 28px #0008" }}>
+      {contextMenu && createPortal(<div ref={menuRef} role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ position: "fixed", left: contextMenu.x, top: contextMenu.y, zIndex: 10000, width: 220, maxHeight: "calc(calc(100vh / var(--ui-zoom, 1)) - 16px)", overflowY: "auto", padding: 5, border: "1px solid #555", borderRadius: 8, background: "#20252b", color: "#f3f4f6", boxShadow: "0 8px 28px #0008" }}>
         {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget)}
         {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"))}
         {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && menuAction("Duplicate", () => changeMenuTarget("duplicate"), contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500)}
