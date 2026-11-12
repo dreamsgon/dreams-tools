@@ -178,13 +178,18 @@ export function demoWorkspace(): Workspace {
         ] };
 }
 
+// GM secrets: a block from a line "::: secret" to a line ":::" is GM-only, even inside a player-visible tab.
+// An unclosed block runs to the end of the text, so a missing ":::" never leaks the rest of a secret.
+export const SECRET_OPEN=/^[ \t]*:::[ \t]*secret[ \t]*$/i,SECRET_CLOSE=/^[ \t]*:::[ \t]*$/;
+export function stripSecrets(text:string){if(!/:::/.test(text))return text;let hidden=false,found=false;const kept:string[]=[];for(const line of text.split("\n")){const bare=line.replace(/\r$/,"");if(!hidden&&SECRET_OPEN.test(bare)){hidden=found=true;continue;}if(hidden){if(SECRET_CLOSE.test(bare))hidden=false;continue;}kept.push(line);}return !found?text:kept.join("\n").replace(/\n{3,}/g,"\n\n").trim();}
+
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
 export function playerCampaign(s:Workspace,campaignId:string){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  const candidates=visibleEntries(s,c.worldId,c.id);
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
-   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:e.body}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:t.body}))];
+   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:stripSecrets(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:stripSecrets(t.body)}))];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData)return [];
