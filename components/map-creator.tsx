@@ -3,11 +3,13 @@ import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
-import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
+import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
+import UseMapDialog, { pieceArt, type UseChoice } from "./use-map-dialog";
+import { setUpDrawnMapScene } from "@/lib/map-export";
 import type { GeneratedMap } from "@/lib/map-generator";
 import { stampById, stampBox, rotateStamp } from "@/lib/map-stamps";
 import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
@@ -43,7 +45,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [pointMode,setPointMode]=useState<"move"|"add"|"delete">("move");
   const [message,setMessage]=useState("");
   const [stampId,setStampId]=useState("chest");
-  const [newMap,setNewMap]=useState(false),[focusText,setFocusText]=useState<string|null>(null);
+  const [using,setUsing]=useState(false),[newMap,setNewMap]=useState(false),[focusText,setFocusText]=useState<string|null>(null);
   // An image to trace over: kept on this device only, never saved with the map.
   const [trace,setTrace]=useState<{url:string;x:number;y:number;w:number;h:number;opacity:number}|null>(null);
   // A new label's text box takes the keyboard once the click that placed it is over.
@@ -80,15 +82,22 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const previous=stack.pop();if(!previous)return;
     other.push(current.current);current.current=previous;setDraft(previous);setSelected(null);setDirty(true);
   };
-  const save=async ():Promise<string|null>=>{
+  const save=async (use?:UseChoice):Promise<string|null>=>{
     if(savingRef.current)return null;
     if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
     savingRef.current=true;setSaving(true);
     const id=source??uid(),data=structuredClone(current.current);
+    let pieces:{looks:Record<string,string>;added:Asset[]}|null=null;
+    if(use?.pieces){
+      try{pieces=await pieceArt(data.drawing,grid.size,workspace.assets);}
+      catch(e){savingRef.current=false;setSaving(false);setMessage(e instanceof Error?`Stamp pictures could not be made: ${e.message}`:"Stamp pictures could not be made. Try again.");return null;}
+    }
     commit(w=>{
+      if(pieces)w.assets.push(...pieces.added);
       let scene=w.scenes.find(s=>s.id===id);
-      if(!scene){scene=newScene(data.name);scene.id=id;scene.containerId=destination;w.scenes.push(scene);}
+      if(!scene){scene=newScene(data.name);scene.id=id;scene.containerId=use?.destination??destination;w.scenes.push(scene);}
       Object.assign(scene,data,{mapId:null});
+      if(use)setUpDrawnMapScene(scene,{fog:use.fog,markers:use.markers,grid,pieces:pieces?.looks??null});
     });
     setSource(id);setDirty(false);setMessage("");
     try {
@@ -378,7 +387,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
   return <main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
-    if(newMap)return;
+    if(newMap||using)return;
     if(savingRef.current || pending || (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]"))return;
     if(tool==="poly"&&polyPoints){
       if(e.key==="Enter"){e.preventDefault();finishPoly();return;}
@@ -405,7 +414,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button className="creator-icon" aria-label="Start a new map" title="Start a new map: generate, trace or blank" onClick={()=>setNewMap(true)}><FilePlus2 size={17}/></button>
       <AppearanceMenu />
       <button disabled={saving} onClick={()=>void save()}>{saving?"Saving…":"Save map"}</button>
-      <button disabled={saving} className="primary" onClick={async()=>{const id=await save();if(id)close(id);}}>Save & use as scene</button>
+      <button disabled={saving} className="primary" onClick={()=>setUsing(true)}>Use in Maptable</button>
     </header>
     <div className="creator-layout" inert={saving}>
       <nav className="creator-rail" aria-label="Drawing tools">{creatorTools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>pickTool(t.id)}>{TOOL_ICONS[t.id]}<span>{t.key}</span></button>)}</nav>
@@ -450,6 +459,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       </ResizableSidebar>
     </div>
     {message && <div className="creator-message" role="status">{message}</div>}
+    {using && <UseMapDialog draft={draft} grid={grid} workspace={workspace} sceneName={source?workspace.scenes.find(s=>s.id===source)?.name??null:null} hadPieces={!!workspace.scenes.find(s=>s.id===source)?.tokens.some(t=>t.pieceOf)} destination={destination} close={()=>setUsing(false)} use={async choice=>{setUsing(false);const id=await save(choice);if(id)close(id);}}/>}
     {newMap && <NewMapDialog grid={grid.size} close={()=>setNewMap(false)} start={m=>{setNewMap(false);guard(()=>startMap(m));}} trace={(file,size)=>{setNewMap(false);guard(()=>startTrace(file,size));}}/>}
     {pending && <div className="creator-prompt" role="dialog" aria-modal="true" aria-label="Uncommitted drawing"><div><h2>Keep your drawing?</h2><p>Save your changes before leaving this map.</p><div className="button-row"><button disabled={saving} onClick={async()=>{const action=pending;if(await save()){setPending(null);action();}}}>Save changes</button><button disabled={saving} onClick={()=>{const action=pending;setPending(null);action();}}>Discard changes</button><button disabled={saving} onClick={()=>setPending(null)}>Keep editing</button></div></div></div>}
   </main>;

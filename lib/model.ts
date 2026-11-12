@@ -80,6 +80,9 @@ export const tokenSchema = z.object({
   showHp: z.boolean(),
   hidden: z.boolean(),
   conditions: z.array(short).max(30),
+  // A piece of the map (a stamp from the Map Creator): drawn as its picture, with no ring, HP or name.
+  // While it is on the scene, the stamp it came from is not drawn in the map.
+  pieceOf: short.optional(),
 });
 export const gridSchema = z.object({
   type: z.enum(["square", "hex-flat", "hex-pointy", "none"]),

@@ -196,8 +196,20 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp) {
   if (op.stroke) { ctx.lineCap = op.cap ?? "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.stroke; ctx.lineWidth = op.width ?? 1; ctx.stroke(path); }
   ctx.restore();
 }
-/** Draws a map drawing onto a canvas, as Maptable shows it. */
-export function drawMapDrawing(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number) {
+/** Draws a map drawing onto a canvas, as Maptable shows it. Shapes in `skip` (stamps that are pieces on the table) are left out. */
+export function drawMapDrawing(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number, skip?: ReadonlySet<string>) {
   for (const op of backgroundOps(d, width, height)) drawOp(ctx, op);
-  for (const shape of orderedShapes(d)) for (const op of shapeOps(shape, d)) drawOp(ctx, op);
+  for (const shape of orderedShapes(d)) if (!skip?.has(shape.id)) for (const op of shapeOps(shape, d)) drawOp(ctx, op);
+}
+
+/**
+ * Draws a stamp on its own, unturned, in the middle of a square canvas as wide as its longer side,
+ * for its picture as a piece on the table. The piece is turned on the table instead.
+ */
+export function drawStampPiece(ctx: CanvasRenderingContext2D, s: MapShape, d: Pick<MapDrawing, "background" | "style">, side: number) {
+  const [p, q] = s.points, w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y), long = Math.max(w, h, 1), k = side / long;
+  const centred: MapShape = { ...s, rotation: 0, points: [{ x: (long - w) / 2, y: (long - h) / 2 }, { x: (long + w) / 2, y: (long + h) / 2 }] };
+  ctx.save(); ctx.scale(k, k);
+  for (const op of buildShapeOps(centred, d)) drawOp(ctx, op);
+  ctx.restore();
 }

@@ -11,6 +11,7 @@ import {
   type Scene,
   type Point,
   type FogStroke,
+  type Token,
 } from "./model";
 import { resolvedToken } from "./token-defaults";
 import { drawTokenName } from "./token-name";
@@ -34,6 +35,24 @@ export function drawSceneBackdrop(ctx: CanvasRenderingContext2D, scene: Scene, c
   ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
 }
 /** Vector marks stay legible in exports without depending on emoji fonts. */
+/** A map piece: its picture, turned, with no ring, HP or name. A dashed box shows it is selected. */
+function drawPiece(ctx: CanvasRenderingContext2D, t: Token, side: number, img: CanvasImageSource | null | undefined, selected: boolean) {
+  ctx.save();
+  if (t.hidden) ctx.globalAlpha = 0.4;
+  ctx.translate(t.x, t.y);
+  ctx.rotate((t.imageRotation ?? 0) * Math.PI / 180);
+  if (img) {
+    ctx.shadowColor = "#00000040"; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+    ctx.drawImage(img, -side / 2, -side / 2, side, side);
+  } else {
+    ctx.fillStyle = t.color; ctx.fillRect(-side / 4, -side / 4, side / 2, side / 2);
+  }
+  if (selected) {
+    ctx.shadowColor = "transparent"; ctx.setLineDash([6, 4]); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+    ctx.strokeRect(-side / 2 - 3, -side / 2 - 3, side + 6, side + 6);
+  }
+  ctx.restore();
+}
 export function drawTokenStatus(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, status?: "active" | "dead" | "unconscious") {
   if (status !== "dead" && status !== "unconscious") return;
   ctx.save();
@@ -232,7 +251,7 @@ export function renderScene(
     const img = images.get(s.mapId);
     if (img) ctx.drawImage(img, 0, 0, s.width, s.height);
   }
-  if (s.drawing) drawMapDrawing(ctx, s.drawing, s.width, s.height);
+  if (s.drawing) drawMapDrawing(ctx, s.drawing, s.width, s.height, new Set(s.tokens.flatMap(t => t.pieceOf ? [t.pieceOf] : [])));
   drawGrid(ctx, s);
   for (const storedEffect of s.effects) {
     if (options.player && !effectVisibleToPlayers(storedEffect, s.tokens)) continue;
@@ -291,11 +310,16 @@ export function renderScene(
     }
     ctx.restore();
   }
-  for (const storedToken of s.tokens) {
+  // Map pieces lie on the floor, under everyone else.
+  for (const storedToken of [...s.tokens.filter(t => t.pieceOf), ...s.tokens.filter(t => !t.pieceOf)]) {
     const t = resolvedToken(w, s.id, storedToken);
     if (t.hidden && options.player) continue;
     const r = tokenRadius(t, s.grid),
       img = t.assetId ? images.get(t.assetId) : null;
+    if (t.pieceOf) {
+      drawPiece(ctx, t, s.grid.size * t.size, img, t.id === options.selected && !options.player);
+      continue;
+    }
     ctx.save();
     if (t.hidden) ctx.globalAlpha = 0.4;
     ctx.shadowColor = "#00000045";
