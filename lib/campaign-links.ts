@@ -11,10 +11,16 @@ import { scenesInOrder } from "./scene-order.ts";
  */
 
 export type MapCampaign = { id: string; name: string; scenes: number };
-export type BookCampaign = { id: string; name: string; description: string; worldId: string; worldName: string; archived: boolean; pages: number; characters: number; maptableCampaignId: string | null };
+export type BookCampaign = { id: string; name: string; description: string; worldId: string; worldName: string; archived: boolean; pages: number; characters: number; maptableCampaignId: string | null;
+  /** When a page in this campaign last changed, or null when it has none. */
+  lastEdited: string | null };
 export type CampaignRow = { key: string; name: string; maptable: MapCampaign | null; encyclopedia: BookCampaign | null };
+/** A recently changed Encyclopedia page, for the home page. */
+export type RecentPage = { id: string; title: string; kind: string; campaignName: string | null; worldName: string; updatedAt: string };
 export type CampaignSummary = {
   rows: CampaignRow[];
+  /** The most recently changed Encyclopedia pages, newest first. */
+  recent: RecentPage[];
   worlds: { id: string; name: string; archived: boolean }[];
   /** Scenes that are not inside any Maptable campaign. */
   loose: number;
@@ -32,6 +38,7 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
       worldName: worlds.get(c.worldId)?.name ?? "", archived: worlds.get(c.worldId)?.archived ?? false,
       pages: own.length, characters: own.filter(e => e.kind === "character").length,
       maptableCampaignId: c.maptableCampaignId ?? null,
+      lastEdited: own.reduce<string | null>((latest, e) => !latest || e.updatedAt > latest ? e.updatedAt : latest, null),
     };
   });
 }
@@ -52,7 +59,23 @@ export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"
     rows: rows.sort(byName),
     worlds: book.worlds.filter(w => !w.isTemplate).map(w => ({ id: w.id, name: w.name, archived: w.archived })),
     loose: (map?.scenes ?? []).filter(s => !inCampaign.has(s.id)).length,
+    recent: recentPages(book),
   };
+}
+
+function recentPages(s: BookWorkspace, limit = 5): RecentPage[] {
+  const worlds = new Map(s.worlds.map(w => [w.id, w])), campaigns = new Map(s.campaigns.map(c => [c.id, c.name]));
+  return s.entries
+    .filter(e => e.kind !== "folder" && !worlds.get(e.worldId)?.isTemplate && !worlds.get(e.worldId)?.archived)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit)
+    .map(e => ({ id: e.id, title: e.title, kind: e.kind, campaignName: e.campaignId ? campaigns.get(e.campaignId) ?? null : null, worldName: worlds.get(e.worldId)?.name ?? "", updatedAt: e.updatedAt }));
+}
+
+/** Campaigns for the home page: not archived, most recently edited first, then by name. */
+export function homeCampaigns(summary: CampaignSummary): CampaignRow[] {
+  const edited = (r: CampaignRow) => r.encyclopedia?.lastEdited ?? "";
+  return summary.rows.filter(r => !r.encyclopedia?.archived).sort((a, b) => edited(b).localeCompare(edited(a)) || byName(a, b));
 }
 
 const plain = (name: string) => name.trim().toLocaleLowerCase().replace(/^the\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();

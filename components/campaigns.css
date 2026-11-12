@@ -103,15 +103,6 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-empty .rpg-open { display:inline-flex; align-items:center; padding:0 18px; margin-top:12px; }
 
 /* The home page's short list. */
-.home-campaigns { margin:0 0 40px; }
-.home-campaigns-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:10px; border-bottom:1px solid var(--ink); }
-.home-campaigns-head h2 { margin:0; font-size:19px; }
-.home-campaigns-head a, .home-campaigns-row a, .home-campaigns-more a { color:var(--accent); font-size:14px; font-weight:600; text-decoration:none; }
-.home-campaigns-row { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) 110px; gap:16px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); font-size:14px; }
-.home-campaigns-row strong { font-size:15px; font-weight:600; }
-.home-campaigns-row span { color:var(--muted); }
-.home-campaigns-row .home-campaigns-links { display:flex; justify-content:flex-end; gap:16px; }
-.home-campaigns-more { margin:12px 0 0; color:var(--muted); font-size:13px; }
 
 @media (max-width: 960px) {
   .campaigns-page.has-details { grid-template-columns:minmax(0,1fr); }
@@ -130,7 +121,4 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
   .campaigns-match-head { display:none; }
   .campaigns-modal-foot { flex-wrap:wrap; }
   .campaigns-modal-foot small { flex-basis:100%; }
-  .home-campaigns-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px 12px; }
-  .home-campaigns-row strong, .home-campaigns-row .home-campaigns-links { grid-column:1 / -1; }
-  .home-campaigns-row .home-campaigns-links { justify-content:flex-start; }
 }

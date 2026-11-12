@@ -21,7 +21,10 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     fetch("/api/campaigns", { cache: "no-store" }).then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || "Could not load your campaigns.");
-      if (live) setSummary(body);
+      if (!live) return;
+      setSummary(body);
+      // The home page links here with ?new=1 to start a campaign straight away.
+      if (new URLSearchParams(window.location.search).get("new") === "1") setDialog({ kind: "new" });
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load your campaigns."));
     return () => { live = false; };
   }, [signedIn]);
