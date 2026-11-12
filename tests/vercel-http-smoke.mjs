@@ -31,7 +31,7 @@ try{
     const response=await fetch(base+path,{headers:forged});assert.equal(response.status,401,path);assert.equal((await response.json()).error,'Unauthorized');
   }
   for(const path of ['/api/encyclopedia/workspace','/api/encyclopedia/map-images?id=00000000-0000-0000-0000-000000000000','/api/encyclopedia/history?entry=demo-greyhaven','/api/encyclopedia/maptable-scenes'])assert.equal((await fetch(base+path,{headers:forged})).status,401);
-  for(const path of ['/api/encyclopedia/player-links','/api/encyclopedia/agent-access','/api/encyclopedia/mcp','/api/encyclopedia/history'])assert.equal((await fetch(base+path,{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{}'})).status,401);
+  for(const path of ['/api/encyclopedia/player-links','/api/encyclopedia/agent-access','/api/encyclopedia/mcp','/api/encyclopedia/history','/api/encyclopedia/discord-roll'])assert.equal((await fetch(base+path,{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{}'})).status,401);
   assert.equal((await fetch(base+'/api/encyclopedia/player-view',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"token":"invalid"}'})).status,404);
   const agent=await fetch(base+'/api/agent/maps');assert.equal(agent.status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);
