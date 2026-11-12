@@ -13,6 +13,7 @@ export const creatorTools = [
   { id: "door", label: "Door", key: "D" },
   { id: "window", label: "Window", key: "N" },
   { id: "stamp", label: "Stamps", key: "S" },
+  { id: "label", label: "Label", key: "T" },
 ] as const;
 export type CreatorTool = typeof creatorTools[number]["id"];
 export const toolForKey = (key: string): CreatorTool | null => creatorTools.find(t => t.key === key.toUpperCase())?.id ?? null;
@@ -98,7 +99,7 @@ function outline(type: string, points: Point[], closed: boolean): [Point, Point]
 export function wallSegments(shapes: MapShape[]): WallSegment[] {
   const out: WallSegment[] = [];
   for (const s of shapes) {
-    if (s.type === "door" || s.type === "window" || s.type === "stamp") continue;
+    if (s.type === "door" || s.type === "window" || s.type === "stamp" || s.type === "label") continue;
     // A merged room's wall is drawn twice as wide and half hidden under the floor.
     const thickness = s.type === "merged" ? s.thickness * 2 : s.thickness;
     const parts = s.type === "merged" ? s.roomParts.map(p => outline(p.type, s.points.slice(p.start, p.start + p.count), p.closed)) : [outline(s.type, s.points, s.closed)];
