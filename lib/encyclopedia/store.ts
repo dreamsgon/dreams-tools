@@ -1,5 +1,6 @@
 import type { S3Bucket } from '../storage.ts';
 import { emptyWorkspace, workspaceSchema, playerCampaign, type Workspace } from './world-model.ts';
+import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from './tables.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -28,6 +29,23 @@ export class EncyclopediaStore {
     // Page history is a convenience copy: a failure here never fails or undoes the save.
     await this.recordHistory(owner, previous.data, data).catch(() => {});
     return next;
+  }
+  /** Random tables: one library per account, used across campaigns. Saved separately so the workspace limit is unaffected. */
+  async readTables(owner: string) {
+    const object = await this.bucket.get(encyclopediaPrefix(owner)+'tables.json');
+    if (!object) return { data: emptyLibrary(), revision: 0, etag: null as string | null };
+    const saved = await object.json<{data:unknown;revision:number}>();
+    if (!Number.isSafeInteger(saved.revision) || saved.revision < 1) throw Error('Invalid tables revision.');
+    return { data: librarySchema.parse(saved.data), revision: saved.revision, etag: object.etag };
+  }
+  async saveTables(owner: string, input: TableLibrary, revision: number) {
+    const data = librarySchema.parse(input);
+    if (new TextEncoder().encode(JSON.stringify(data)).length > LIBRARY_LIMIT) throw Error('Your tables exceed the 1 MB limit. Export some and delete them to make room.');
+    const previous = await this.readTables(owner);
+    if (previous.revision !== revision) return null;
+    const next = revision + 1;
+    const saved = await this.bucket.put(encyclopediaPrefix(owner)+'tables.json', JSON.stringify({data,revision:next}), {onlyIf:previous.etag?{etagMatches:previous.etag}:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
+    return saved ? next : null;
   }
   private historyPath(owner: string, entryId: string) { return encyclopediaPrefix(owner)+`history/${encodeURIComponent(entryId)}.json`; }
   async history(owner: string, entryId: string): Promise<PageHistory> {
