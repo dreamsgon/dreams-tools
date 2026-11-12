@@ -164,8 +164,25 @@ export function uiZoom(): number {
   return TEXT_SIZES.find((size) => size.id === document.documentElement.dataset.textSize)?.zoom ?? 1;
 }
 
+/**
+ * How wide pages may grow: the home page, Campaigns, the campaign hub and Encyclopedia
+ * pages. Maptable's board always fills the window. Saved per device.
+ */
+export const PAGE_WIDTHS = [
+  { id: "narrow", label: "Narrow" },
+  { id: "default", label: "Standard" },
+  { id: "wide", label: "Wide" },
+  { id: "full", label: "Full" },
+] as const;
+export type PageWidthId = (typeof PAGE_WIDTHS)[number]["id"];
+export const DEFAULT_PAGE_WIDTH: PageWidthId = "default";
+export const PAGE_WIDTH_STORAGE_KEY = "rpg-tools:page-width";
+export function parsePageWidth(value: unknown): PageWidthId {
+  return typeof value === "string" && PAGE_WIDTHS.some((w) => w.id === value) ? (value as PageWidthId) : DEFAULT_PAGE_WIDTH;
+}
+
 /** Every key the Appearance menu writes, for "Reset to defaults". */
-export const APPEARANCE_STORAGE_KEYS = [THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, MOTION_STORAGE_KEY, TEXT_SIZE_STORAGE_KEY, ...FONT_ROLE_IDS.map((role) => FONT_ROLES[role].storageKey)];
+export const APPEARANCE_STORAGE_KEYS = [THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, MOTION_STORAGE_KEY, TEXT_SIZE_STORAGE_KEY, PAGE_WIDTH_STORAGE_KEY, ...FONT_ROLE_IDS.map((role) => FONT_ROLES[role].storageKey)];
 
 const bootFonts = FONT_ROLE_IDS.map((role) => {
   const config = FONT_ROLES[role];
@@ -176,7 +193,7 @@ const bootFonts = FONT_ROLE_IDS.map((role) => {
  * Runs in <head> before the first paint so pages never flash the wrong theme,
  * accent or font. Kept dependency-free because it is inlined as a string.
  */
-export const appearanceBootScript = `(function(){try{var d=document.documentElement,s=window.localStorage,m=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(m!=="light"&&m!=="dark"&&m!=="system"){m="system";var k=${JSON.stringify(LEGACY_THEME_KEYS)};for(var i=0;i<k.length;i++){var o=s.getItem(k[i]);if(o==="light"||o==="dark"){m=o;break;}}}var dark=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);d.dataset.theme=dark?"dark":"light";d.dataset.themeMode=m;var a=s.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)});d.dataset.accent=${JSON.stringify(ACCENTS.map((a) => a.id))}.indexOf(a)>=0?a:${JSON.stringify(DEFAULT_ACCENT)};if(s.getItem(${JSON.stringify(MOTION_STORAGE_KEY)})==="reduced")d.dataset.motion="reduced";var z=s.getItem(${JSON.stringify(TEXT_SIZE_STORAGE_KEY)});if(${JSON.stringify(TEXT_SIZES.map((x) => x.id).filter((id) => id !== DEFAULT_TEXT_SIZE))}.indexOf(z)>=0)d.dataset.textSize=z;var f=${JSON.stringify(bootFonts)};for(var j=0;j<f.length;j++){var c=f[j].options[s.getItem(f[j].key)];if(!c)continue;d.style.setProperty(f[j].cssVar,c[0]);if(c[1]){var l=document.createElement("link");l.rel="stylesheet";l.href=c[1];l.id="rpg-font-"+f[j].role;document.head.appendChild(l);}}}catch(e){}})();`;
+export const appearanceBootScript = `(function(){try{var d=document.documentElement,s=window.localStorage,m=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(m!=="light"&&m!=="dark"&&m!=="system"){m="system";var k=${JSON.stringify(LEGACY_THEME_KEYS)};for(var i=0;i<k.length;i++){var o=s.getItem(k[i]);if(o==="light"||o==="dark"){m=o;break;}}}var dark=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);d.dataset.theme=dark?"dark":"light";d.dataset.themeMode=m;var a=s.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)});d.dataset.accent=${JSON.stringify(ACCENTS.map((a) => a.id))}.indexOf(a)>=0?a:${JSON.stringify(DEFAULT_ACCENT)};if(s.getItem(${JSON.stringify(MOTION_STORAGE_KEY)})==="reduced")d.dataset.motion="reduced";var z=s.getItem(${JSON.stringify(TEXT_SIZE_STORAGE_KEY)});if(${JSON.stringify(TEXT_SIZES.map((x) => x.id).filter((id) => id !== DEFAULT_TEXT_SIZE))}.indexOf(z)>=0)d.dataset.textSize=z;var pw=s.getItem(${JSON.stringify(PAGE_WIDTH_STORAGE_KEY)});if(${JSON.stringify(PAGE_WIDTHS.map((x) => x.id).filter((id) => id !== DEFAULT_PAGE_WIDTH))}.indexOf(pw)>=0)d.dataset.pageWidth=pw;var f=${JSON.stringify(bootFonts)};for(var j=0;j<f.length;j++){var c=f[j].options[s.getItem(f[j].key)];if(!c)continue;d.style.setProperty(f[j].cssVar,c[0]);if(c[1]){var l=document.createElement("link");l.rel="stylesheet";l.href=c[1];l.id="rpg-font-"+f[j].role;document.head.appendChild(l);}}}catch(e){}})();`;
 
 /** The three default faces, always loaded by the root layout. */
 export const DEFAULT_FONTS_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Schibsted+Grotesk:wght@500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap";

@@ -96,6 +96,7 @@ html:root[data-theme="dark"] {
 .appearance-segments button { min-height:32px; padding:4px 6px; border:0; border-radius:var(--radius); background:transparent; color:var(--muted, #56616a); font-size:13px; font-weight:500; box-shadow:none; }
 .appearance-segments button[aria-checked="true"] { background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); box-shadow:0 1px 2px rgb(0 0 0 / .14); }
 .appearance-text-sizes { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.appearance-widths { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .appearance-text-sizes span { font-weight:600; line-height:1; }
 .appearance-swatches { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
 .appearance-swatches button { display:flex; align-items:center; gap:8px; min-height:36px; padding:4px 8px 4px 4px; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--ink, #1c2329); font-size:12px; font-weight:500; box-shadow:none; justify-content:flex-start; }
@@ -138,3 +139,8 @@ html[data-text-size="larger"] { zoom:1.25; --ui-zoom:1.25; }
 .tool-account { display:inline-flex; flex:none; align-items:center; justify-content:center; width:32px; height:32px; min-height:32px; padding:0; border:1px solid var(--line); border-radius:50%; background:transparent; color:var(--muted); text-decoration:none; }
 .tool-account:hover { color:var(--ink); border-color:var(--line-strong); background:transparent; }
 @media (max-width:760px) { .tool-switch nav { display:none; } }
+
+/* Page width, from the Appearance menu. Standard keeps the widths pages were designed at. */
+html[data-page-width="narrow"] { --page-width:880px; --content-width:960px; --reading-width:600px; }
+html[data-page-width="wide"] { --page-width:1320px; --content-width:1600px; --reading-width:880px; }
+html[data-page-width="full"] { --page-width:100000px; --content-width:none; --reading-width:1fr; }
