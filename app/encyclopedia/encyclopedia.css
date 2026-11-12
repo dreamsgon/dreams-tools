@@ -593,3 +593,15 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .link-typing button[aria-selected=true] strong{color:var(--accent)}
 .link-typing .link-typing-create{border-top:1px solid var(--line);border-radius:0 0 var(--radius) var(--radius);margin-top:4px;color:var(--accent);font-size:12px}
 .link-typing .link-typing-create svg{color:var(--accent)}
+/* One header bar: the tools, then where you are, then search and actions (as in Maptable). */
+.topbar>.crumbs{flex:none}
+.topbar .topbar-crumbs{flex:1 1 auto;min-width:0;align-self:center;padding-left:12px;border-left:1px solid var(--line);min-height:28px}
+.topbar .search-box input{width:150px}
+/* The page you are on keeps its name; the levels above it shorten or fold into … first. */
+.topbar-crumbs .crumbbar-full>li.crumbbar-item:last-child{flex-shrink:0;min-width:90px;max-width:100%}
+.topbar-crumbs .crumbbar-full>li.crumbbar-item:last-child .crumbbar-name{max-width:240px}
+.topbar .top-actions{flex:none}
+.topbar .top-actions>.button{white-space:nowrap}
+/* Narrower screens: search becomes one button that opens quick search, and New entry shows only its plus. */
+@media(max-width:1300px){.topbar-crumbs .crumbbar-full>li:first-child .crumbbar-name>span{display:none}.topbar .search-box{position:relative;padding-right:6px}.topbar .search-box input{display:none}.topbar .search-box .quick-hint::after{content:"";position:absolute;inset:0}.topbar .top-actions>.button.primary{font-size:0;gap:0;padding:0 9px}}
+@media(max-width:720px){.topbar .topbar-crumbs{padding-left:0;border-left:0}.topbar .search-box kbd{display:none}}

@@ -63,3 +63,9 @@ test('foldCrumbs with max 3 keeps the first item and the last two', () => {
   // 5 items: shown A, D, E; hidden B C
   assert.deepEqual(foldCrumbs(['A','B','C','D','E'],3),{shown:['A','D','E'],hidden:['B','C']});
 });
+
+test('a tight header can fold down to the first level and the page', () => {
+  assert.equal(fitCount([100,90,80,120],200,16,34,2),2);
+  assert.deepEqual(foldCrumbs(['A','B','C','D'],2,2),{shown:['A','D'],hidden:['B','C']});
+  assert.deepEqual(foldCrumbs(['A','B','C','D'],3,2),{shown:['A','C','D'],hidden:['B']});
+});
