@@ -1,5 +1,6 @@
 import type { S3Bucket } from '../storage.ts';
 import { emptyWorkspace, workspaceSchema, playerCampaign, type Workspace } from './world-model.ts';
+import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -23,7 +24,36 @@ export class EncyclopediaStore {
     if (previous.revision!==revision) return null;
     const next=revision+1;
     const saved=await this.bucket.put(encyclopediaPrefix(owner)+'workspace.json',JSON.stringify({data,revision:next}),{onlyIf:previous.etag?{etagMatches:previous.etag}:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
-    return saved ? next : null;
+    if (!saved) return null;
+    // Page history is a convenience copy: a failure here never fails or undoes the save.
+    await this.recordHistory(owner, previous.data, data).catch(() => {});
+    return next;
+  }
+  private historyPath(owner: string, entryId: string) { return encyclopediaPrefix(owner)+`history/${encodeURIComponent(entryId)}.json`; }
+  async history(owner: string, entryId: string): Promise<PageHistory> {
+    if (!historyEntryId(entryId)) return emptyHistory();
+    const object = await this.bucket.get(this.historyPath(owner, entryId));
+    if (!object) return emptyHistory();
+    const parsed = historySchema.safeParse(await object.json());
+    return parsed.success ? parsed.data : emptyHistory();
+  }
+  private async addHistory(owner: string, entryId: string, snapshot: Snapshot, at: string, now: Date, force = false) {
+    const before = await this.history(owner, entryId), after = addVersion(before, snapshot, at, now, force);
+    if (after !== before) await this.bucket.put(this.historyPath(owner, entryId), JSON.stringify(after), { httpMetadata: { contentType: 'application/json' } });
+  }
+  async recordHistory(owner: string, before: Workspace, after: Workspace, now = new Date()) {
+    const { changed, deleted } = changedEntries(before.entries, after.entries);
+    for (const entry of changed.slice(0, 50)) if (historyEntryId(entry.id)) await this.addHistory(owner, entry.id, snapshotOf(entry), entry.updatedAt, now);
+    for (const id of deleted) if (historyEntryId(id)) await this.bucket.delete(this.historyPath(owner, id)).catch(() => {});
+  }
+  /** Keeps the current text of an entry before a restore replaces it. The entry must exist in the saved workspace. */
+  async checkpoint(owner: string, entryId: string, snapshot: Snapshot, now = new Date()) {
+    if (!historyEntryId(entryId)) return false;
+    const { data } = await this.read(owner);
+    const entry = data.entries.find(e => e.id === entryId);
+    if (!entry || entry.kind === 'folder') return false;
+    await this.addHistory(owner, entryId, snapshot, entry.updatedAt, now, true);
+    return true;
   }
   private linkPath(owner: string,campaign: string,kind: LinkKind) { return encyclopediaPrefix(owner)+`${kind}-links/${encodeURIComponent(campaign)}.json`; }
   async createLink(owner: string,campaignId: string,kind: LinkKind='player') {

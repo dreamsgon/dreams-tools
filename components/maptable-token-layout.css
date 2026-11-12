@@ -7,3 +7,21 @@
 
 .workspace:has(>.token-gallery-panel){position:relative;}
 .token-row-initiative{display:flex;flex-direction:column;justify-content:center;gap:3px;flex:0 0 58px;font-size:10px;color:var(--muted);text-align:center;margin:0!important}.token-row-initiative input{width:58px!important;padding:6px!important;text-align:center;min-height:32px;}.token-list-row{align-items:center;}
+/* Token gallery sources: saved tokens and Encyclopedia characters */
+.token-gallery-tabs{display:flex;gap:18px;padding:0 14px;border-bottom:1px solid var(--line);flex:none}
+.token-gallery-tabs button{height:38px;padding:0;border:0;background:none;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer}
+.token-gallery-tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px var(--accent)}
+.ency-token-search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--radius);color:var(--muted)}
+.ency-token-search input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;font-size:13px}
+.ency-token-search input:focus{outline:none}
+.ency-token-search:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.ency-token-hint{margin:8px 0 6px;font-size:12px;line-height:1.5;color:var(--muted)}
+.ency-token-world{margin:14px 0 2px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ency-token-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px;border-bottom:1px solid var(--line)}
+.ency-token-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:600}
+.ency-token-text{display:flex;flex-direction:column;min-width:0}
+.ency-token-text strong{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ency-token-text small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ency-token-add{height:30px;padding:0 10px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--panel);color:var(--ink);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.ency-token-add:hover{background:var(--hover)}
+.ency-token-add:disabled{opacity:.45;cursor:not-allowed}
