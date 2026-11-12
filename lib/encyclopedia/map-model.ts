@@ -18,6 +18,13 @@ export type MapLabel=z.infer<typeof mapLabelSchema>;
 export const pinSchema=z.object({kind:z.enum(placeKinds.map(k=>k.id) as [PlaceKind,...PlaceKind[]]).optional(),areaMapId:id.nullable().optional(),weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
 export const routeSchema=z.object({id,name:z.string().trim().min(1).max(100),unit:z.enum(['mi','km']),stops:z.array(id).min(2).max(20),distances:z.array(z.number().finite().positive().max(1000000)).min(1).max(19),speed:z.number().finite().min(.1).max(10000),hoursPerDay:z.number().finite().min(1).max(24),visibility:z.enum(['gm','players'])}).superRefine((r,ctx)=>{if(r.distances.length!==r.stops.length-1||r.stops.some((s,i)=>i>0&&s===r.stops[i-1]))ctx.addIssue({code:'custom',message:'Routes need a distance for each leg and different adjacent stops.'});});
 export type MapRoute=z.infer<typeof routeSchema>;
+const cellIndex=z.number().int().min(0).max(1199);
+/** Notes for one hex or square of an area map: what is there and which table to roll for encounters. */
+export const hexNoteSchema=z.object({cell:cellIndex,title:z.string().trim().max(100),notes:z.string().max(4000),tableId:id.nullable().optional(),exploredOn:z.string().trim().max(80).optional(),visibility:z.enum(['gm','players'])});
+export type HexNote=z.infer<typeof hexNoteSchema>;
+/** Where the party is on an area map, the cells they came through, and the travel hours already spent today. */
+export const partySchema=z.object({cell:cellIndex,trail:z.array(cellIndex).max(500),hours:z.number().finite().min(0).max(24),visibility:z.enum(['gm','players'])});
+export type MapParty=z.infer<typeof partySchema>;
 /** Painted terrain: a finer raster than the map's cells, stored as runs of terrain numbers ("<terrain><count in base 36>", joined by dots). */
 export const PAINT_MAX={columns:240,rows:180};
 export function encodePaint(cells:ArrayLike<number>){const runs:string[]=[];let i=0;while(i<cells.length){let j=i;while(j<cells.length&&cells[j]===cells[i])j++;runs.push(`${cells[i]}${(j-i).toString(36)}`);i=j;}return runs.join('.');}
@@ -38,6 +45,7 @@ export const mapSchema=z.object({
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
  paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),
+ hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
  if(m.source==='generated'&&m.tiles.length!==m.columns*m.rows)bad('Terrain must match the map dimensions');
@@ -49,6 +57,9 @@ export const mapSchema=z.object({
  for(const route of m.routes??[])if(route.stops.some(id=>!m.pins.some(p=>p.id===id)))bad('Every route stop must be a location on this map');
  if(new Set(m.pins.map(p=>p.id)).size!==m.pins.length)bad('Map pin IDs must be unique');
  if(m.paint&&m.source!=='generated')bad('Only drawn terrain can be painted');
+ const cells=m.columns*m.rows;
+ if(m.hexes&&(new Set(m.hexes.map(h=>h.cell)).size!==m.hexes.length||m.hexes.some(h=>h.cell>=cells)))bad('Hex notes must be unique and inside the map');
+ if(m.party&&(m.grid==='none'||m.party.cell>=cells||m.party.trail.some(c=>c>=cells)))bad('The party must stand on a grid cell inside the map');
  if(new Set([...(m.paths??[]).map(p=>p.id),...(m.labels??[]).map(l=>l.id)]).size!==(m.paths?.length??0)+(m.labels?.length??0))bad('Map path and label IDs must be unique');
 });
 export type MapData=z.infer<typeof mapSchema>;
@@ -140,7 +151,10 @@ export function playerMap(m:MapData):MapData{
   fog:m.fog?{enabled:m.fog.enabled,revealed:[...m.fog.revealed]}:undefined,
   pins:m.pins.filter(p=>p.visibility==='players'&&pointRevealed(m,p.x,p.y)),
   paths:m.paths?.filter(p=>p.visibility==='players').flatMap(p=>revealedRuns(m,p.points).map((points,i)=>({...p,id:i?`${p.id}-${i}`.slice(0,100):p.id,points}))),
-  labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y))};
+  labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y)),
+  hexes:m.hexes?.filter(h=>h.visibility==='players'&&(!fog||visible.has(h.cell))).map(h=>({...h,tableId:undefined})),
+  party:m.party?.visibility==='players'&&(!fog||visible.has(m.party.cell))?{...m.party,trail:fog?m.party.trail.filter(c=>visible.has(c)):m.party.trail}:undefined,
+  encounterTableId:undefined};
 }
 /** The parts of a line that lie outside the fog, so players only get what they have seen. */
 export function revealedRuns(m:MapData,points:{x:number;y:number}[]){
