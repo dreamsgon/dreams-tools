@@ -53,5 +53,5 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
     lines.forEach((line, index) => { if (!secret && SECRET_OPEN.test(line.replace(/\r$/, ""))) { secret = { start: index, children: [] }; return; } if (secret && SECRET_CLOSE.test(line.replace(/\r$/, ""))) { close(); return; } const node = render(line, index); (secret ? secret.children : out).push(node); });
     close();
     const p = preview?.entry, c = p?.kind === "character" ? p.character : undefined;
-    return <>{out}{p && preview && <div className="link-preview" role="tooltip" style={{ left: preview.x, top: preview.y }}><span className="eyebrow">{[p.kind === "character" ? ({ pc: "Player character", companion: "Companion", npc: "NPC" } as const)[c?.role ?? "npc"] : p.kind, c?.faction || c?.location].filter(Boolean).join(" · ")}</span><strong>{p.title}</strong>{plainExcerpt(p.body) && <p>{plainExcerpt(p.body)}</p>}</div>}</>;
+    return <>{out}{p && preview && <div className="link-preview" role="tooltip" style={{ left: preview.x, top: preview.y }}><span className="eyebrow">{[p.kind === "character" ? ({ pc: "Player character", creature: "Creature", companion: "Companion", npc: "NPC" } as const)[c?.role ?? "npc"] : p.kind, c?.faction || c?.location].filter(Boolean).join(" · ")}</span><strong>{p.title}</strong>{plainExcerpt(p.body) && <p>{plainExcerpt(p.body)}</p>}</div>}</>;
 }

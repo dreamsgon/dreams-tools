@@ -1,6 +1,6 @@
 import {scopeMapWeather} from './map-weather.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
-import {mapSchema,playerMap} from "./map-model.ts";
+import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
@@ -20,7 +20,7 @@ export const statFieldSchema = z.object({
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
 export const characterSchema = z.object({
-  role:z.enum(["pc","companion","npc"]), group:z.string().trim().max(300), tags:z.array(z.string().trim().min(1).max(60)).max(30),
+  role:z.enum(["pc","companion","npc","creature"]), group:z.string().trim().max(300), tags:z.array(z.string().trim().min(1).max(60)).max(30),
   location:z.string().max(160), faction:z.string().max(160), status:z.enum(["active","inactive","missing","deceased"]),
   statsVisibility:visibilitySchema,
   statsByCampaign:z.record(id,z.record(id,statValueSchema)),
@@ -39,10 +39,21 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   maptableCampaignId:z.string().min(1).max(120).optional(),
   // Optional (added later): the widgets on the campaign front page players see first.
   frontPage:frontPageSchema.optional() });
+/**
+ * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
+ * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
+ * is what a Maptable token shows. Players see it when they can see the page's Overview.
+ */
+export const pictureSchema = z.object({
+    imageId: imageIdSchema, width: z.number().int().min(1).max(20000), height: z.number().int().min(1).max(20000),
+    x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1), size: z.number().finite().min(0.2).max(1),
+    ring: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), squares: z.number().int().min(1).max(6).optional(),
+});
+export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map"]),
-    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), updatedAt: z.string().datetime(),
+    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -212,7 +223,7 @@ export function playerCampaign(s:Workspace,campaignId:string){
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"?e.picture:undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));

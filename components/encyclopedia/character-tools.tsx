@@ -7,7 +7,7 @@ import {RollChip} from './rolls';
 import {PlayerView} from './player-view';
 import {TagList,useTags} from '@/components/tags';
 import {tagsOn} from '@/lib/tags';
-export const roles={pc:'Player Characters',companion:'Companions / Sidekicks',npc:'NPCs'};
+export const roles={pc:'Player Characters',companion:'Companions / Sidekicks',npc:'NPCs',creature:'Creatures'};
 export function ToolDialog({title,onClose,children,wide=false}:{title:string;onClose:()=>void;children:ReactNode;wide?:boolean}){const ref=useRef<HTMLDialogElement>(null);useEffect(()=>{ref.current?.showModal();},[]);return <dialog ref={ref} className={`modal ${wide?'wide-modal':''}`} onCancel={onClose} onClick={e=>{if(e.target===ref.current)onClose();}}><div className="modal-inner"><div className="modal-heading"><h2>{title}</h2><button aria-label="Close dialog" onClick={onClose}><X size={20}/></button></div>{children}</div></dialog>;}
 export function CharactersSection({data,worldId,campaignId,change,onOpen,onForm,onShare,onNewFolder}:{data:Workspace;worldId:string;campaignId:string|null;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onForm:()=>void;onShare:()=>void;onNewFolder:()=>void}){
  const {library}=useTags(),tagsFor=(e:Entry)=>library?tagsOn(library,`entry:${e.id}`):[];
