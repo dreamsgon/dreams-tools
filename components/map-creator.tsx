@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type Point } from "@/lib/model";
 import DrawingShape from "./drawing-shape";
 import DrawingLayers from "./drawing-layers";
-import ThemeToggle from "./theme-toggle";
+import AppearanceMenu from "./appearance-menu";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
 type Draft = { name:string; width:number; height:number; drawing:MapDrawing };
 const blank = ():Draft => ({name:"New drawn map",width:1400,height:1000,drawing:{background:"#8b9b75",shapes:[],folders:[],layerOrder:[]}});
@@ -177,7 +177,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if((e.key==="Delete"||e.key==="Backspace") && selectedShape){e.preventDefault();e.stopPropagation();if(selectedIds.length===1&&selectedPoint!==null)removePoint(selectedShape.id,selectedPoint);else deleteShape();}
   }}>
     <header className="creator-header"><DesktopSidebars {...sidebars}/><h1>Map Creator</h1><span role="status">{dirty?"Uncommitted changes":saveStatus}</span>
-      <ThemeToggle/>
+      <AppearanceMenu />
       <button disabled={saving} onClick={()=>guard(()=>close())}>Back</button><button disabled={saving} className="primary" onClick={()=>void save()}>{saving?"Saving…":"Save map"}</button><button disabled={saving} onClick={async()=>{const id=await save();if(id)close(id);}}>Save & use scene</button>
     </header>
     <div className="creator-layout" inert={saving}><ResizableSidebar className="creator-controls" storageKey="map-creator-controls" defaultWidth={290}>
