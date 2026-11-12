@@ -80,21 +80,3 @@ export function openingPath(s:MapShape):string {
   const end={x:a.x+nx*len,y:a.y+ny*len};
   return path+line(a,end)+`M ${b.x} ${b.y} A ${len} ${len} 0 0 1 ${end.x} ${end.y}`;
 }
-export function drawMapDrawing(ctx:CanvasRenderingContext2D,d:MapDrawing,width:number,height:number) {
-  ctx.save();ctx.fillStyle=d.background;ctx.fillRect(0,0,width,height);
-  ctx.lineCap="round";ctx.lineJoin="round";
-  for(const shape of orderedShapes(d)) {
-    if(shape.type==="merged"){
-      const paths=roomPaths(shape).map(p=>new Path2D(p));ctx.strokeStyle=shape.stroke;ctx.lineWidth=shape.thickness*2;
-      paths.forEach(p=>ctx.stroke(p));ctx.fillStyle=shape.fill??d.background;paths.forEach(p=>ctx.fill(p));continue;
-    }
-    if(shape.type==="door"||shape.type==="window"){
-      ctx.save();ctx.lineCap="butt";ctx.strokeStyle=shape.fill??d.background;ctx.lineWidth=shape.thickness+6;ctx.stroke(new Path2D(shapePath(shape)));
-      ctx.strokeStyle=shape.stroke;ctx.lineWidth=2;ctx.stroke(new Path2D(openingPath(shape)));ctx.restore();continue;
-    }
-    const path=new Path2D(shapePath(shape));
-    if(shape.fill){ctx.fillStyle=shape.fill;ctx.fill(path);}
-    ctx.strokeStyle=shape.stroke;ctx.lineWidth=shape.thickness;ctx.stroke(path);
-  }
-  ctx.restore();
-}

@@ -1,16 +1,25 @@
-import type {MapShape} from "@/lib/model";
-import {shapePath,roomPaths,openingPath} from "@/lib/map-drawing";
-export default function DrawingShape({shape:s,background}:{shape:MapShape;background:string}){
-  if(s.type==="merged"){
-    const paths=roomPaths(s);
-    return <g data-shape={s.id} strokeLinejoin="round" strokeLinecap="round">
-      {paths.map((d,i)=><path key={`wall${i}`} d={d} fill="none" stroke={s.stroke} strokeWidth={s.thickness*2}/>)}
-      {paths.map((d,i)=><path key={`floor${i}`} d={d} fill={s.fill??background} stroke="none"/>)}</g>;
-  }
-  if(s.type==="door"||s.type==="window")return <g data-shape={s.id}>
-    <path d={shapePath(s)} fill="none" stroke={s.fill??background} strokeWidth={s.thickness+6}/>
-    <path d={openingPath(s)} fill="none" stroke={s.stroke} strokeWidth={2}/>
-    <path d={shapePath(s)} fill="none" stroke="transparent" strokeWidth={Math.max(16,s.thickness)}/>
+import type { MapDrawing, MapShape } from "@/lib/model";
+import { shapePath } from "@/lib/map-drawing";
+import { shapeOps, backgroundOps, type DrawOp } from "@/lib/map-style";
+
+/** Draws a list of paths as SVG; clipped paths get their own clip path. */
+export function DrawOps({ ops, id }: { ops: DrawOp[]; id: string }) {
+  return <>{ops.map((op, i) => {
+    const path = <path key={i} d={op.d} fill={op.fill ?? "none"} stroke={op.stroke ?? "none"} strokeWidth={op.width} opacity={op.opacity}
+      strokeLinecap={op.cap ?? "round"} strokeLinejoin="round" clipPath={op.clip ? `url(#${id}-clip${i})` : undefined}/>;
+    return op.clip ? <g key={i}><clipPath id={`${id}-clip${i}`}><path d={op.clip}/></clipPath>{path}</g> : path;
+  })}</>;
+}
+
+/** The outside of the rooms, in the drawing's style. */
+export function DrawingBackground({ drawing, width, height }: { drawing: Pick<MapDrawing, "background" | "style">; width: number; height: number }) {
+  return <g pointerEvents="none"><DrawOps ops={backgroundOps(drawing, width, height)} id="creator-bg"/></g>;
+}
+
+export default function DrawingShape({ shape: s, drawing, prefix = "shape" }: { shape: MapShape; drawing: Pick<MapDrawing, "background" | "style">; prefix?: string }) {
+  const opening = s.type === "door" || s.type === "window";
+  return <g data-shape={s.id}>
+    <DrawOps ops={shapeOps(s, drawing)} id={`${prefix}-${s.id}`}/>
+    {opening && <path d={shapePath(s)} fill="none" stroke="transparent" strokeWidth={Math.max(16, s.thickness)}/>}
   </g>;
-  return <path data-shape={s.id} d={shapePath(s)} fill={s.fill??"none"} stroke={s.stroke} strokeWidth={s.thickness} strokeLinecap="round" strokeLinejoin="round"/>;
 }

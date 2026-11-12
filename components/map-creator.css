@@ -67,6 +67,16 @@
 .creator-seg button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); font-weight:600; }
 .creator-actions { display:flex; gap:8px; }
 .creator-actions button { flex:1; }
+.creator-field { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted); }
+.creator-style-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.creator-style-card { position:relative; min-width:0; }
+.creator-style-card > button:first-child { display:flex; flex-direction:column; align-items:stretch; gap:5px; width:100%; min-height:0; height:100%; padding:5px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:12px; font-weight:500; line-height:1.25; text-align:left; white-space:normal; overflow-wrap:anywhere; box-shadow:none; }
+.creator-style-card > button:first-child:hover { border-color:var(--accent); }
+.creator-style-card svg { display:block; width:100%; aspect-ratio:5 / 3; border-radius:3px; }
+.creator-style-card.active > button:first-child { border:2px solid var(--accent); padding:4px; background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.creator-style-card.add > button { align-items:center; justify-content:center; min-height:78px; border-style:dashed; color:var(--muted); text-align:center; }
+.creator-style-card.add > button:disabled { opacity:.55; }
+.creator-style-remove { position:absolute; top:2px; right:2px; display:grid; place-items:center; width:20px; min-height:20px !important; padding:0; border:1px solid var(--line); border-radius:50%; background:var(--panel); color:var(--muted); box-shadow:none; }
 .creator-keys { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin:0; font-size:12px; }
 .creator-keys div { display:flex; align-items:center; gap:8px; min-width:0; }
 .creator-keys dt { flex:none; }

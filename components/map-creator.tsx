@@ -3,18 +3,20 @@ import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge } from "lucide-react";
-import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type Point } from "@/lib/model";
-import DrawingShape from "./drawing-shape";
+import { newScene, uid, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
+import DrawingShape, { DrawingBackground } from "./drawing-shape";
+import MapStylePanel from "./map-style-panel";
+import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
 import "./map-creator.css";
 import { creatorTools, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
 type Draft = { name:string; width:number; height:number; drawing:MapDrawing };
-const blank = ():Draft => ({name:"New drawn map",width:1400,height:980,drawing:{background:"#8b9b75",shapes:[],folders:[],layerOrder:[]}});
+const blank = ():Draft => ({name:"New drawn map",width:1400,height:980,drawing:{background:"#8b9b75",style:null,shapes:[],folders:[],layerOrder:[]}});
 const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,drawing:structuredClone(s.drawing!)});
 type Tool=CreatorTool;
-type Tab="selected"|"layers"|"map";
+type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
 const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
@@ -26,7 +28,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [draft,setDraft]=useState<Draft>(()=>initial?fromScene(initial):blank());
   const current=useRef(draft);current.current=draft;
   const [dirty,setDirty]=useState(false), [tool,setTool]=useState<Tool>("rect"), [selected,setSelected]=useState<string|null>(null);
-  const [fill,setFill]=useState("#cec7a9"),[stroke,setStroke]=useState("#414b3c"),[thickness,setThickness]=useState(14);
+  const [fill,setFill]=useState(initial?.drawing?.style?.floor??unstyledColours.floor),[stroke,setStroke]=useState(initial?.drawing?.style?.wall??unstyledColours.wall),[thickness,setThickness]=useState(14);
   const [snap,setSnap]=useState(true),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
   const grid=gridOf(workspace.scenes.find(s=>s.id===source));
   const [drawingId,setDrawingId]=useState<string|null>(null);
@@ -88,6 +90,12 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const s=workspace.scenes.find(s=>s.id===id && s.drawing);
     const next=s?fromScene(s):blank();setSource(s?.id??null);setDraft(next);current.current=next;
     setDirty(false);setSelected(null);undo.current=[];redo.current=[];setMessage("");
+    setFill(next.drawing.style?.floor??unstyledColours.floor);setStroke(next.drawing.style?.wall??unstyledColours.wall);
+  };
+  // A new style recolours the rooms drawn in the old one, and new rooms are drawn in it.
+  const setStyle=(next:MapStyle|null,background:string|null)=>{
+    change(d=>{applyMapStyle(d.drawing,next??{...mapStylePresets[0].style,...unstyledColours},background);if(!next)d.drawing.style=null;});
+    setFill(next?.floor??unstyledColours.floor);setStroke(next?.wall??unstyledColours.wall);
   };
   const patchShape=(patch:Partial<MapShape>)=>{if(selected)change(d=>{for(const s of d.drawing.shapes)if(selectedIds.includes(s.id))Object.assign(s,patch);});};
   useEffect(()=>{
@@ -290,7 +298,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label className="creator-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to the grid (freehand always stays smooth)</label>
     <p className="muted">Save keeps the drawing with its scene. Reopen it here any time to keep editing.</p>
   </div>;
-  const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["map","Map"]];
+  const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
   return <main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
     if(savingRef.current || pending || (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]"))return;
@@ -327,12 +335,13 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         onPointerMove={e=>{const p=pan.current;if(!p)return;const el=stage.current!;el.scrollLeft=p.left-(e.clientX-p.x);el.scrollTop=p.top-(e.clientY-p.y);}}
         onPointerUp={()=>{pan.current=null;}} onPointerCancel={()=>{pan.current=null;}}>
         <div className="creator-paper" style={{width:`${zoom*100}%`}}>
-          <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{background:draft.drawing.background,touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerUp={finish} onPointerCancel={cancel} onDoubleClick={()=>{if(tool==="poly"&&polyPoints&&polyPoints.length>=3)finishPoly();}}
+          <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerUp={finish} onPointerCancel={cancel} onDoubleClick={()=>{if(tool==="poly"&&polyPoints&&polyPoints.length>=3)finishPoly();}}
             onPointerMove={e=>{if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window")setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
             onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);}}>
             <defs><pattern id="creator-grid" width={grid.size} height={grid.size} patternUnits="userSpaceOnUse"><path d={`M ${grid.size} 0 H 0 V ${grid.size}`} fill="none" stroke="#ffffff" strokeOpacity=".22" strokeWidth="1"/></pattern></defs>
+            <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
             <rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>
-            {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} background={draft.drawing.background}/>)}
+            {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
             {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
             {hoverWall&&(tool==="door"||tool==="window")&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke="#2f80ed" strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
@@ -351,7 +360,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       </div>
       <ResizableSidebar className="creator-layer-panel creator-inspector" storageKey="map-creator-layers" defaultWidth={310} edge="left">
         <div className="creator-tabs" role="tablist" aria-label="Inspector">{tabs.map(([id,name])=><button key={id} role="tab" aria-selected={tab===id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{name}</button>)}</div>
-        {tab==="selected"?selectedPanel:tab==="map"?mapPanel:<DrawingLayers drawing={draft.drawing} selected={selected} selectedIds={selectedIds} select={(id,add)=>{setTool("select");choose(id,!!add||addSelection);}} change={fn=>change(d=>fn(d.drawing))}/>}
+        {tab==="selected"?selectedPanel:tab==="map"?mapPanel:tab==="style"?<MapStylePanel drawing={draft.drawing} gridSize={grid.size} setStyle={setStyle}/>:<DrawingLayers drawing={draft.drawing} selected={selected} selectedIds={selectedIds} select={(id,add)=>{setTool("select");choose(id,!!add||addSelection);}} change={fn=>change(d=>fn(d.drawing))}/>}
       </ResizableSidebar>
     </div>
     {message && <div className="creator-message" role="status">{message}</div>}
