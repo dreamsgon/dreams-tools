@@ -17,6 +17,7 @@ import {QuickSearch} from "./quick-search";
 import {RollResults} from "./rolls";
 import {DiscordRollsSetting} from "./discord-rolls";
 import {RandomTablesSection} from "./random-tables";
+import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks };
 const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Checklist" };
 type Modal = {
@@ -108,6 +109,32 @@ export default function WorkspaceApp() {
     function selectWorld(id: string) { setView("dashboard");setTool(null); setWorldId(id); setCampaignId(null); setSelected(null); setQuery(""); setMobile(false); }
     function selectCampaign(id: string | null) { setView("overview");setTool(null); setCampaignId(id); setSelected(null); setQuery(""); setMobile(false); }
     function openEntry(id: string) { setView("overview"); setSelected(id); setQuery(""); setEditing(false); setMobile(false); }
+    // The one breadcrumb trail: Dashboard, world, campaign, section or folders, page.
+    function crumbTrail(): Crumb[] {
+        const trail: Crumb[] = [{ id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={14}/>, go: () => { setCampaignId(null); openDashboard(); } }];
+        if (!world || (view === "dashboard" && !query)) return trail;
+        const worldsList = data.worlds.filter(w => !w.isTemplate && (!w.archived || w.id === world.id));
+        trail.push({ id: "world", label: world.name, icon: <Globe size={14}/>, go: () => selectCampaign(null),
+            siblings: { heading: "Worlds", items: worldsList.map(w => ({ id: w.id, label: w.name, current: w.id === world.id, go: () => { setWorldId(w.id); selectCampaign(null); } })) } });
+        const inCampaign = campaign && (entry ? entry.campaignId !== null : true);
+        if (campaign && inCampaign) trail.push({ id: "campaign", label: campaign.name, icon: <Flag size={14}/>, go: () => selectCampaign(campaign.id),
+            siblings: { heading: `Campaigns in ${world.name}`, items: data.campaigns.filter(c => c.worldId === world.id).map(c => ({ id: c.id, label: c.name, current: c.id === campaign.id, go: () => selectCampaign(c.id) })) } });
+        const sections = [["characters", "Characters", <Users key="i" size={14}/>], ["maps", "Maps", <MapIcon key="i" size={14}/>], ["calendar", "Calendars", <CalendarDays key="i" size={14}/>], ["tables", "Random tables", <ListChecks key="i" size={14}/>]] as const;
+        const section = sections.find(([id]) => id === view);
+        if (section && !entry) trail.push({ id: "section", label: section[1], icon: section[2], go: () => showSection(section[0]),
+            siblings: { heading: "Sections", items: sections.map(([id, label, icon]) => ({ id, label, icon, current: id === view, go: () => showSection(id) })) } });
+        if (entry) {
+            const chain: Entry[] = [];
+            for (let at = entry.parentId ? data.entries.find(e => e.id === entry.parentId) : undefined; at && !chain.includes(at); at = at.parentId ? data.entries.find(e => e.id === at!.parentId) : undefined) chain.unshift(at);
+            const levelOf = (e: Entry) => data.entries.filter(x => x.worldId === e.worldId && x.campaignId === e.campaignId && x.parentId === e.parentId).sort(compareEntries);
+            const where = (e: Entry) => e.parentId ? data.entries.find(x => x.id === e.parentId)?.title ?? "this folder" : e.campaignId ? campaign?.name ?? "this campaign" : `${world.name} lore`;
+            for (const e of [...chain, entry]) trail.push({ id: e.id, label: e.title, icon: <EntryIcon kind={e.kind}/>, go: () => openEntry(e.id),
+                siblings: { heading: `In ${where(e)}`, items: levelOf(e).map(x => ({ id: x.id, label: x.title, icon: <EntryIcon kind={x.kind}/>, current: x.id === e.id, go: () => openEntry(x.id) })),
+                    ...(e === entry ? { onNew: { label: "New page here", run: () => setModal({ type: "entry" }) } } : {}) } });
+        }
+        return trail;
+    }
+    function showSection(id: "characters" | "maps" | "calendar" | "tables") { setView(id); if (id === "tables") setTablesHome(n => n + 1); setSelected(null); setQuery(""); setMobile(false); }
     function toggleFolder(id: string) { setClosed(old => { const next = new Set(old); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
     function exportAll() { download(current.current, "world-manager-backup.json"); }
     async function importFile(file: File) { try {
@@ -157,7 +184,7 @@ export default function WorkspaceApp() {
    <SidebarResize width={sidebar.width} maxWidth={sidebar.maxWidth} onChange={sidebar.setWidth}/>
   </aside>
   <main className="main-panel">
-   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/><span className="crumbs-divider" aria-hidden="true"/><button onClick={openDashboard}>{world?.name ?? "World library"}</button>{world && <><ChevronRight size={13}/><span>{entry?.campaignId === null ? "World lore" : campaign?.name ?? "World lore"}</span></>}</div><div className="top-actions"><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => setPalette(true)}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button><ThemeToggle/><AccountLink/></div></header>
+   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><div className="top-actions"><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => setPalette(true)}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button><ThemeToggle/><AccountLink/></div></header><div className="crumb-row"><Breadcrumbs items={crumbTrail()}/></div>
    <FogImageSync data={data} change={change}/>{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={() => { if (confirm("Reload saved data? Unsaved changes in this tab will be discarded. Export your draft first."))
         location.reload(); }}>Reload</button><button onClick={() => { blocked.current = false; setError(""); void save(); }}>Retry save</button></div>}
    {view==='dashboard'&&!query ? <WorkspaceDashboard data={data} worldId={worldId} change={change} onWorld={selectWorld} onCampaign={(wid,cid)=>{setWorldId(wid);selectCampaign(cid);}} onLore={wid=>{setWorldId(wid);selectCampaign(null);navigation.open('lore');}} onNewCampaign={()=>setModal({type:'campaign'})} onEdit={id=>setModal({type:'rename',id})}/> : !world ? <div className="empty-world"><span className="eyebrow">EVERY WORLD STARTS WITH A PAGE</span><h1>Make room for<br />your next adventure.</h1><p>Keep the world you imagine and the campaigns you play in one thoughtful workspace.</p><div className="button-row"><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={17}/> Create a world</button><button className="button" onClick={() => { change(demoWorkspace()); setWorldId("demo-world"); setCampaignId("demo-campaign"); }}>Explore a sample world <ArrowUpRight size={16}/></button></div><button className="text-button" onClick={() => fileInput.current?.click()}><Upload size={15}/> Bring an existing backup</button><div className="empty-illustration"><Compass size={120} strokeWidth={.7}/><span>WORLDS / CAMPAIGNS / STORIES</span></div></div> :
