@@ -9,6 +9,7 @@ import type { Calendar } from '@/lib/encyclopedia/calendar-model';
 import type { TableLibrary } from '@/lib/encyclopedia/tables';
 import { HexInspector } from './hex-inspector';
 import { WorldUseDialog } from './world-use-dialog';
+import { mapLooks, nameFonts, type MapLookId } from '@/lib/encyclopedia/map-looks';
 import { MapCanvas, useMapImage } from './map-canvas';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
@@ -67,6 +68,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels });
   /** A change that Undo can take back. */
   const edit = (patch: Partial<MapData>) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); };
+  const setStyle = (patch: NonNullable<MapData['mapStyle']>) => setMap({ mapStyle: { ...map.mapStyle, ...patch } });
   const setPath = (id: string, patch: Partial<MapPath>) => setMap({ paths: map.paths?.map(p => p.id === id ? { ...p, ...patch } : p) });
   const setLabel = (id: string, patch: Partial<MapLabel>) => setMap({ labels: map.labels?.map(l => l.id === id ? { ...l, ...patch } : l) });
   const removeSelected = () => {
@@ -254,6 +256,13 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <label className="world-check"><input type="checkbox" checked={!!map.scaleBar} disabled={!map.scale} onChange={e => setMap({ scaleBar: e.target.checked })}/><span>Scale bar<small>{map.scale ? 'Sized from the map width.' : 'Set the map width first.'}</small></span></label>
             <label className="world-field">Grid<select value={map.grid} disabled={map.fog?.enabled} title={map.fog?.enabled ? 'Turn fog off to change the grid' : undefined} onChange={e => setMap({ grid: e.target.value as MapData['grid'] })}><option value="none">No grid</option><option value="hex">Hex grid</option><option value="square">Square grid</option></select></label>
             <label className="world-check"><input type="checkbox" checked={map.coordinates} onChange={e => setMap({ coordinates: e.target.checked })}/><span>Cell numbers</span></label>
+            <h3 className="world-sub">Style</h3>
+            <div className="world-looks" role="group" aria-label="Look">{(Object.keys(mapLooks) as MapLookId[]).map(id => { const l = mapLooks[id]; return <button key={id} aria-pressed={(map.mapStyle?.look ?? 'painted') === id} onClick={() => setStyle({ look: id })}><span className="world-look-swatch">{[l.sea, l.layers.land ?? terrains[1].color, l.layers.forest ?? terrains[2].color, l.ink].map((c, i) => <i key={i} style={{ background: c }}/>)}</span><strong>{l.name}</strong><small>{l.hint}</small></button>; })}</div>
+            <div className="world-field">Place names<div className="world-seg" role="group" aria-label="Place name font">{(Object.keys(nameFonts) as (keyof typeof nameFonts)[]).map(f => <button key={f} aria-pressed={(map.mapStyle?.font ?? 'serif') === f} style={{ fontFamily: nameFonts[f].family }} onClick={() => setStyle({ font: f })}>{nameFonts[f].name}</button>)}</div></div>
+            <div className="world-field">Name size<div className="world-seg" role="group" aria-label="Name size">{(['small', 'medium', 'large'] as const).map(z => <button key={z} aria-pressed={(map.mapStyle?.nameSize ?? 'medium') === z} onClick={() => setStyle({ nameSize: z })}>{z === 'small' ? 'Small' : z === 'medium' ? 'Medium' : 'Large'}</button>)}</div></div>
+            <label className="world-check"><input type="checkbox" checked={!!map.mapStyle?.legend} onChange={e => setStyle({ legend: e.target.checked })}/><span>Legend<small>Built from the terrains, kinds of place and lines the map uses.</small></span></label>
+            <label className="world-check"><input type="checkbox" checked={map.mapStyle?.title !== undefined} onChange={e => setStyle({ title: e.target.checked ? entry.title.slice(0, 100) : undefined })}/><span>Title on the map</span></label>
+            {map.mapStyle?.title !== undefined && <label className="world-field">Title<input value={map.mapStyle.title} maxLength={100} onChange={e => setStyle({ title: e.target.value })}/></label>}
           </>}
           {cell < 0 && <>
           <h3 className="world-sub">Show</h3>

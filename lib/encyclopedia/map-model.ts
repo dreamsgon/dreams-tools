@@ -46,6 +46,7 @@ export const mapSchema=z.object({
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
  paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),
  hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),
+ mapStyle:z.object({look:z.enum(['painted','atlas','ink']).optional(),font:z.enum(['serif','plain','hand']).optional(),nameSize:z.enum(['small','medium','large']).optional(),legend:z.boolean().optional(),title:z.string().trim().max(100).optional()}).optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
  if(m.source==='generated'&&m.tiles.length!==m.columns*m.rows)bad('Terrain must match the map dimensions');
