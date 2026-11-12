@@ -23,6 +23,7 @@ export const conditionSchema = z.object({
   assetId: short.nullable().optional(),
 });
 export const tokenSchema = z.object({
+  encyclopediaEntryId: short.optional(),
   sourceLibraryId: short.optional(),
   initiativeGroup: z.string().max(80).optional(),
   skipInitiative: z.boolean().optional(),
