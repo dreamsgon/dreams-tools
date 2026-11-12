@@ -1,9 +1,8 @@
-import { Map as MapIcon } from "lucide-react";
 import AppearanceMenu from "./appearance-menu";
 
 export default function SiteHeader({ account = false, signedIn = false }: { account?: boolean; signedIn?: boolean }) {
   return <header className="site-header">
-    <a href="/" className="brand"><MapIcon size={25} aria-hidden="true" />RPG Tools</a>
+    <a href="/" className="brand"><span className="tool-switch-mark" aria-hidden="true" />RPG Tools</a>
     <nav aria-label="Main navigation">
       <AppearanceMenu />
       <a href="/maptable" className="site-nav-link">Maptable</a>
