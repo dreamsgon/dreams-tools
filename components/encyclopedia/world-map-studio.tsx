@@ -1,9 +1,13 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, CloudFog, Dices, EyeOff, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Route, Shield, Type, Undo2, Waves } from 'lucide-react';
-import { decodePaint, encodePaint, fogBrush, mapKinds, mapPaint, paintScale, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
+import { decodePaint, encodePaint, fogBrush, mapKinds, mapPaint, paintScale, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
 import { newId, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
 import { paintStroke, thinLine } from '@/lib/encyclopedia/terrain-art';
+import { crawlPlan, type Pace } from '@/lib/encyclopedia/hex-crawl';
+import type { Calendar } from '@/lib/encyclopedia/calendar-model';
+import type { TableLibrary } from '@/lib/encyclopedia/tables';
+import { HexInspector } from './hex-inspector';
 import { MapCanvas, useMapImage } from './map-canvas';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
@@ -23,12 +27,13 @@ const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] 
 ];
 
 /** The full-screen world and area map editor: tools on a rail, the map in the middle, and an inspector. */
-export function WorldMapStudio({ entry, data, campaign, setMap, close, start, onOpen }: {
+export function WorldMapStudio({ entry, data, campaign, setMap, close, start, onOpen, onCalendarChange, onNewAreaMap }: {
   entry: Entry; data: Workspace; campaign?: Campaign; setMap: (patch: Partial<MapData>) => void; close: () => void; start?: 'generate'; onOpen?: (id: string) => void;
+  onCalendarChange?: (c: Calendar) => boolean; onNewAreaMap?: (pinId: string) => void;
 }) {
   const map = entry.mapData!;
   const painted = map.source === 'generated';
-  const [tool, setTool] = useState<Tool>(painted ? 'terrain' : 'select');
+  const [tool, setTool] = useState<Tool>(painted && map.category !== 'hex' ? 'terrain' : 'select');
   const [terrain, setTerrain] = useState(2), [radius, setRadius] = useState(3), [landOnly, setLandOnly] = useState(true);
   const [live, setLive] = useState<MapPaint | null>(null);
   const [undo, setUndo] = useState<Snapshot[]>([]), [redo, setRedo] = useState<Snapshot[]>([]);
@@ -37,6 +42,17 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const [show, setShow] = useState({ art: true, pins: true, routes: true, paths: true, labels: true });
   const [draft, setDraft] = useState<MapPath | null>(null), [newLabel, setNewLabel] = useState('');
   const [generating, setGenerating] = useState(start === 'generate' && map.source === 'generated');
+  const [cell, setCell] = useState(-1), [pace, setPace] = useState<Pace>('normal');
+  const [library, setLibrary] = useState<TableLibrary | null | 'error'>(null);
+  const gridded = map.grid !== 'none';
+  useEffect(() => {
+    if (!gridded || library) return;
+    let live = true;
+    fetch('/api/encyclopedia/tables').then(r => r.ok ? r.json() : Promise.reject(r)).then((body: { data?: TableLibrary }) => { if (live) setLibrary(body.data?.tables ? body.data : { schemaVersion: 1, tables: [] }); }).catch(() => { if (live) setLibrary('error'); });
+    return () => { live = false; };
+  }, [gridded, library]);
+  const select = (id: string) => { setSelected(id); setCell(-1); };
+  const plan = cell >= 0 && map.party ? crawlPlan(map, cell, pace) : null;
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { const d = dialog.current; if (d && !d.open) d.showModal(); return () => d?.close(); }, []);
   const stroke = useRef<{ cells: Uint8Array; last: { x: number; y: number }; base: MapPaint; changed: boolean } | null>(null);
@@ -136,7 +152,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const brushMiles = milesAcross(radius * 2);
   const k = paintScale(map.columns, map.rows);
 
-  return <dialog ref={dialog} className="world-studio" aria-label={`Map editor: ${entry.title}`} onCancel={e => { e.preventDefault(); const active = document.activeElement as HTMLElement | null; if (active?.matches('input, textarea, select')) { active.blur(); return; } if (draft) { setDraft(null); return; } if (selected) { setSelected(''); return; } if (!editingPin && !generating) close(); }}>
+  return <dialog ref={dialog} className="world-studio" aria-label={`Map editor: ${entry.title}`} onCancel={e => { e.preventDefault(); const active = document.activeElement as HTMLElement | null; if (active?.matches('input, textarea, select')) { active.blur(); return; } if (draft) { setDraft(null); return; } if (selected) { setSelected(''); return; } if (cell >= 0) { setCell(-1); return; } if (!editingPin && !generating) close(); }}>
     <header className="world-studio-head">
       <div className="world-studio-title"><strong>{entry.title}</strong><span>{mapKinds[map.category]}</span></div>
       <span className="world-studio-saved"><Check size={13}/> Saved</span>
@@ -151,12 +167,12 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       </nav>
       <section className="world-studio-map">
         <MapViewport map={map} editing={tool !== 'select'}>
-          <MapCanvas map={map} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft}
+          <MapCanvas map={map} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
             brush={brush} fogEditing={tool === 'fog'} onCell={tool === 'fog' ? explore : undefined}
-            selectedItem={selected} onItem={tool === 'select' ? setSelected : undefined}
-            onPlace={tool === 'place' ? place : tool === 'label' ? addLabel : tool === 'select' ? () => setSelected('') : undefined} onPin={id => { setSelected(id); if (tool !== 'select') setTool('select'); }}/>
+            selectedItem={selected} onItem={tool === 'select' ? select : undefined}
+            onPlace={tool === 'place' ? place : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>
         </MapViewport>
-        <p className="world-studio-tip">{tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Click the map to add a place.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
+        <p className="world-studio-tip">{tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Click the map to add a place.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
       </section>
       <aside className="world-studio-inspector" aria-label="Inspector">
         {tool === 'terrain' && painted && <>
@@ -196,6 +212,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <div className="button-row">
               {pin.areaMapId && onOpen && areaMaps.some(m => m.id === pin.areaMapId) && <button className="button primary" onClick={() => { close(); onOpen(pin.areaMapId!); }}>Open area map <ArrowUpRight size={14}/></button>}
               {pin.entryId && onOpen && <button className="button" onClick={() => { close(); onOpen(pin.entryId!); }}>Open article <ArrowUpRight size={14}/></button>}
+              {!pin.areaMapId && onNewAreaMap && <button className="button" onClick={() => { close(); onNewAreaMap(pin.id); }}>New area map</button>}
             </div>
             <div className="button-row">
               <button className="button" onClick={() => setEditingPin(pin)}>Edit place</button>
@@ -213,7 +230,8 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <div className="world-seg" role="group" aria-label="Size">{(['small', 'medium', 'large'] as const).map(z => <button key={z} aria-pressed={label.size === z} onClick={() => setLabel(label.id, { size: z })}>{z === 'small' ? 'Small' : z === 'medium' ? 'Medium' : 'Large'}</button>)}</div>
             <label className="world-field">Who can see it<select value={label.visibility} onChange={e => setLabel(label.id, { visibility: e.target.value as MapLabel['visibility'] })}><option value="gm">GM only</option><option value="players">Players too</option></select></label>
             <button className="text-button" onClick={removeSelected}>Delete label</button>
-          </div> : !drawing && <>
+          </div> : cell >= 0 && tool === 'select' ? <HexInspector key={cell} map={map} cell={cell} plan={plan} pace={pace} setPace={setPace} campaign={campaign} library={library} setMap={setMap} onCalendarChange={onCalendarChange}/>
+          : !drawing && <>
             <h3>Map</h3>
             <label className="world-field">Map type<select value={map.category} onChange={e => setMap({ category: e.target.value as MapData['category'] })}>{Object.entries(mapKinds).map(([key, v]) => <option key={key} value={key}>{v}</option>)}</select></label>
             <div className="world-pair">
@@ -225,6 +243,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <label className="world-field">Grid<select value={map.grid} disabled={map.fog?.enabled} title={map.fog?.enabled ? 'Turn fog off to change the grid' : undefined} onChange={e => setMap({ grid: e.target.value as MapData['grid'] })}><option value="none">No grid</option><option value="hex">Hex grid</option><option value="square">Square grid</option></select></label>
             <label className="world-check"><input type="checkbox" checked={map.coordinates} onChange={e => setMap({ coordinates: e.target.checked })}/><span>Cell numbers</span></label>
           </>}
+          {cell < 0 && <>
           <h3 className="world-sub">Show</h3>
           {painted && <label className="world-check"><input type="checkbox" checked={show.art} onChange={e => setShow({ ...show, art: e.target.checked })}/><span>Mountains, hills and trees</span></label>}
           <label className="world-check"><input type="checkbox" checked={show.pins} onChange={e => setShow({ ...show, pins: e.target.checked })}/><span>Places <small>{map.pins.length} of 100</small></span></label>
@@ -232,14 +251,15 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
           <label className="world-check"><input type="checkbox" checked={show.labels} onChange={e => setShow({ ...show, labels: e.target.checked })}/><span>Names on the map</span></label>
           <label className="world-check"><input type="checkbox" checked={show.routes} onChange={e => setShow({ ...show, routes: e.target.checked })}/><span>Travel routes</span></label>
           <h3 className="world-sub">Places</h3>
-          {map.pins.length ? <ul className="world-places">{map.pins.map((p, i) => <li key={p.id}><button aria-pressed={selected === p.id} onClick={() => setSelected(selected === p.id ? '' : p.id)}><span>{i + 1}</span>{p.title}{(p.visibility === 'gm' || !pointRevealed(map, p.x, p.y)) && <EyeOff size={13} aria-label="Hidden from players"/>}</button></li>)}</ul>
+          {map.pins.length ? <ul className="world-places">{map.pins.map((p, i) => <li key={p.id}><button aria-pressed={selected === p.id} onClick={() => select(selected === p.id ? '' : p.id)}><span>{i + 1}</span>{p.title}{(p.visibility === 'gm' || !pointRevealed(map, p.x, p.y)) && <EyeOff size={13} aria-label="Hidden from players"/>}</button></li>)}</ul>
             : <p className="aside-hint">Choose Place, then click the map.</p>}
+          </>}
         </>}
       </aside>
     </div>
     {generating && <WorldGenerateDialog map={map} onClose={() => setGenerating(false)} onUse={patch => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool('terrain'); }}/>}
     {editingPin && <PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id !== entry.id)}
       onClose={() => setEditingPin(null)}
-      onSave={p => { if (!map.pins.some(v => v.id === p.id) && map.pins.length >= 100) return; edit({ pins: map.pins.some(v => v.id === p.id) ? map.pins.map(v => v.id === p.id ? p : v) : [...map.pins, p] }); setSelected(p.id); setEditingPin(null); setTool('select'); }}/>}
+      onSave={p => { if (!map.pins.some(v => v.id === p.id) && map.pins.length >= 100) return; edit({ pins: map.pins.some(v => v.id === p.id) ? map.pins.map(v => v.id === p.id ? p : v) : [...map.pins, p] }); select(p.id); setEditingPin(null); setTool('select'); }}/>}
   </dialog>;
 }

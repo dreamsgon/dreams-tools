@@ -75,8 +75,20 @@ export function PlaceSymbol({kind,x,y,r,selected}:{kind:NonNullable<MapPin['kind
   case 'camp':return <g transform={`translate(${x} ${y})`}><path d={`M${-r*.85} ${r*.6}L0 ${-r*.8}L${r*.85} ${r*.6}Z`} fill={paper} stroke={ink} strokeWidth={sw} strokeLinejoin="round"/><path d={`M0 ${-r*.8}L${-r*.2} ${r*.6}H${r*.2}Z`} fill={ink}/></g>;
  }
 }
+/** Hex crawl marks: cells with notes, the party and its trail, the walk being planned, and the selected cell. */
+function CrawlLayer({map,selectedCell,route}:{map:MapData;selectedCell?:number;route?:number[]}){
+ const first=cellShape(map,0),u=Math.min(first.w,first.h),sw=Math.max(1.2,u*.06),party=map.party;
+ const centre=(i:number)=>{const c=cellShape(map,i);return `${c.x},${c.y}`;};
+ return <g className="map-crawl" pointerEvents="none">
+  {map.hexes?.map(h=>{const c=cellShape(map,h.cell);return <circle key={h.cell} cx={c.x+c.w*.26} cy={c.y-c.h*.2} r={u*.075} fill="#b7673e" stroke="#fffdf6" strokeWidth={u*.025}><title>{h.title||'Notes'}</title></circle>;})}
+  {party&&party.trail.length>0&&<polyline points={[...party.trail,party.cell].map(centre).join(' ')} fill="none" stroke="#a33a3a" strokeWidth={sw*1.3} strokeDasharray={`0.1 ${sw*2.6}`} strokeLinecap="round" strokeLinejoin="round"/>}
+  {party&&!!route?.length&&<polyline points={[party.cell,...route].map(centre).join(' ')} fill="none" stroke="#a33a3a" strokeWidth={sw} strokeDasharray={`${sw*3} ${sw*2}`} strokeOpacity={.65}/>}
+  {selectedCell!==undefined&&selectedCell>=0&&<polygon points={cellShape(map,selectedCell).points} fill="#e3b341" fillOpacity={.16} stroke="#d39a1c" strokeWidth={sw*1.3}/>}
+  {party&&(()=>{const c=cellShape(map,party.cell);return <g aria-label="Party"><circle cx={c.x} cy={c.y} r={u*.3} fill="#fffdf6" fillOpacity={.55} stroke="#a33a3a" strokeWidth={sw*1.7}/><circle cx={c.x} cy={c.y} r={u*.09} fill="#a33a3a"/></g>;})()}
+ </g>;
+}
 export type PaintBrush={radius:number;onStroke:(x:number,y:number,start:boolean)=>void;onEnd:()=>void};
-export function MapCanvas({map,imageUrl,onCell,onPlace,onPin,selectedPin,thumbnail=false,fogMode='gm',onStrokeStart,fogEditing=false,paint:livePaint,brush:paintBrush,show,selectedItem,onItem,draft}:{map:MapData;imageUrl?:string;onCell?:(i:number)=>void;onPlace?:(x:number,y:number)=>void;onPin?:(id:string)=>void;selectedPin?:string;thumbnail?:boolean;fogMode?:'gm'|'player';onStrokeStart?:()=>void;fogEditing?:boolean;paint?:MapPaint;brush?:PaintBrush;show?:{art?:boolean;pins?:boolean;routes?:boolean;paths?:boolean;labels?:boolean};selectedItem?:string;onItem?:(id:string)=>void;draft?:MapPath|null}){
+export function MapCanvas({map,imageUrl,onCell,onPlace,onPin,selectedPin,thumbnail=false,fogMode='gm',onStrokeStart,fogEditing=false,paint:livePaint,brush:paintBrush,show,selectedItem,onItem,draft,selectedCell,route}:{map:MapData;imageUrl?:string;onCell?:(i:number)=>void;onPlace?:(x:number,y:number)=>void;onPin?:(id:string)=>void;selectedPin?:string;thumbnail?:boolean;fogMode?:'gm'|'player';onStrokeStart?:()=>void;fogEditing?:boolean;paint?:MapPaint;brush?:PaintBrush;show?:{art?:boolean;pins?:boolean;routes?:boolean;paths?:boolean;labels?:boolean};selectedItem?:string;onItem?:(id:string)=>void;draft?:MapPath|null;selectedCell?:number;route?:number[]}){
  const maskId=useId().replace(/:/g,''),drawing=useRef(false),lastCell=useRef(-1),[hover,setHover]=useState<{x:number;y:number}|null>(null);
  const terrainPaint=livePaint??cachedPaint(map);
  const showPins=show?.pins!==false,showRoutes=show?.routes!==false;
@@ -103,6 +115,7 @@ export function MapCanvas({map,imageUrl,onCell,onPlace,onPin,selectedPin,thumbna
  {!thumbnail&&show?.paths!==false&&(!!map.paths?.length||!!draft)&&<MapPaths paths={map.paths??[]} width={size.width} height={size.height} prefix={maskId} selected={selectedItem} onSelect={onItem} draft={draft}/>}
  {!thumbnail&&show?.labels!==false&&!!map.labels?.length&&<MapLabels labels={map.labels} width={size.width} height={size.height} selected={selectedItem} onSelect={onItem}/>}
  {fog&&<rect width={size.width} height={size.height} fill="#24312e" opacity={fogMode==='gm'?.58:1} mask={`url(#${maskId})`} pointerEvents="none"/>}
+ {!thumbnail&&map.grid!=='none'&&(!!map.hexes?.length||!!map.party||(selectedCell??-1)>=0)&&<CrawlLayer map={map} selectedCell={selectedCell} route={route}/>}
  {!thumbnail&&(map.compass||map.scaleBar)&&<>{map.scaleBar&&<ScaleBar map={map} width={size.width} height={size.height}/>}{map.compass&&<Compass x={size.width-Math.min(size.width,size.height)*.08} y={size.height-Math.min(size.width,size.height)*.09} r={Math.min(size.width,size.height)*.045}/>}</>}
  {!thumbnail&&showPins&&map.pins.map((pin,i)=>{const x=pin.x*size.width,y=pin.y*size.height,r=size.width/90;return <g key={pin.id} role={onPin?'button':undefined} tabIndex={onPin?0:undefined} aria-label={`Pin ${pin.title}`} className="map-pin" onClick={e=>{e.stopPropagation();onPin?.(pin.id);}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPin?.(pin.id);}}}>
  {pin.kind?<><circle cx={x} cy={y} r={r*1.2} fill="transparent"/><PlaceSymbol kind={pin.kind} x={x} y={y} r={pin.kind==='city'||pin.kind==='castle'?r*1.05:r*.9} selected={selectedPin===pin.id}/></>:<><circle cx={x} cy={y} r={r} fill={selectedPin===pin.id?'#b7673e':'#344f43'} stroke="#fff9e9" strokeWidth={r*.18}/><text x={x} y={y+r*.34} textAnchor="middle" fill="white" fontSize={r} pointerEvents="none">{i+1}</text></>}<text x={x} y={y-r*1.6} textAnchor={pin.x>.8?'end':pin.x<.2?'start':'middle'} fontSize={pin.kind==='city'?r*1.4:r*1.05} fontFamily={pin.kind?"Georgia, 'Times New Roman', serif":undefined} fill="#263e34" stroke="#fff9e9" strokeWidth={r*.22} paintOrder="stroke" fontWeight={pin.kind&&pin.kind!=='city'?'500':'600'} pointerEvents="none">{pin.title}</text>
