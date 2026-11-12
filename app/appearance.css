@@ -1,0 +1,39 @@
+/* Accent colours shared by every RPG Tools page. lib/appearance.ts lists the same ids;
+ * tests/appearance.test.mjs checks the two stay in step. The data-accent and data-theme
+ * attributes are set before first paint by the boot script in app/layout.tsx. */
+:root { --accent:#1f6f68; --accent-hover:#185a54; --accent-soft:#e0eeec; --on-accent:#ffffff; }
+:root[data-theme="dark"] { --accent:#5fc2b5; --accent-hover:#82d3c8; --accent-soft:#17302d; --on-accent:#0c1214; }
+:root[data-accent="verdigris"] { --accent:#1f6f68; --accent-hover:#185a54; --accent-soft:#e0eeec; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="verdigris"] { --accent:#5fc2b5; --accent-hover:#82d3c8; --accent-soft:#17302d; --on-accent:#0c1214; }
+:root[data-accent="lapis"] { --accent:#2f5ea8; --accent-hover:#264d8a; --accent-soft:#e3ebf7; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="lapis"] { --accent:#86a8ea; --accent-hover:#a5bff0; --accent-soft:#1b2740; --on-accent:#0c1214; }
+:root[data-accent="ember"] { --accent:#a94c27; --accent-hover:#8c3e1f; --accent-soft:#f6e6de; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="ember"] { --accent:#f0956b; --accent-hover:#f4ae8e; --accent-soft:#3a2219; --on-accent:#0c1214; }
+:root[data-accent="amethyst"] { --accent:#6a4f9f; --accent-hover:#574184; --accent-soft:#ece6f5; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="amethyst"] { --accent:#b39be6; --accent-hover:#c8b6ee; --accent-soft:#2a2340; --on-accent:#0c1214; }
+:root[data-accent="brass"] { --accent:#7d5f1a; --accent-hover:#654d15; --accent-soft:#f2ecdc; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="brass"] { --accent:#d9b25e; --accent-hover:#e4c482; --accent-soft:#352c17; --on-accent:#0c1214; }
+:root[data-accent="crimson"] { --accent:#a33346; --accent-hover:#872a3a; --accent-soft:#f5e1e4; --on-accent:#ffffff; }
+:root[data-theme="dark"][data-accent="crimson"] { --accent:#ef8a99; --accent-hover:#f4a8b3; --accent-soft:#3a1c22; --on-accent:#0c1214; }
+
+/* Appearance menu. Uses whichever surface tokens the page defines. */
+.appearance { position:relative; display:inline-flex; }
+.appearance-trigger { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; min-height:36px; padding:0; border-radius:8px; }
+.appearance-trigger .appearance-dot { position:absolute; right:7px; bottom:7px; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--chrome, var(--panel, var(--white, #fff))); pointer-events:none; }
+.appearance-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:var(--z-modal, 200); width:288px; max-width:calc(100vw - 24px); display:flex; flex-direction:column; gap:16px; padding:16px; background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); border:1px solid var(--line, #d4dbe0); border-radius:12px; box-shadow:0 16px 48px rgb(0 0 0 / .18); text-align:left; white-space:normal; font-size:13px; font-weight:400; }
+.appearance-panel h2 { margin:0; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; letter-spacing:-.1px; color:inherit; }
+.appearance-group { display:flex; flex-direction:column; gap:8px; margin:0; padding:0; border:0; min-width:0; }
+.appearance-group legend { padding:0; margin-bottom:8px; font-size:12px; color:var(--muted, #56616a); }
+.appearance-segments { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px; padding:3px; border:1px solid var(--line, #d4dbe0); border-radius:9px; background:var(--heading-surface, var(--sand, transparent)); }
+.appearance-segments button { min-height:32px; padding:4px 6px; border:0; border-radius:6px; background:transparent; color:var(--muted, #56616a); font-size:13px; font-weight:500; box-shadow:none; }
+.appearance-segments button[aria-checked="true"] { background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); box-shadow:0 1px 2px rgb(0 0 0 / .14); }
+.appearance-swatches { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+.appearance-swatches button { display:flex; align-items:center; gap:8px; min-height:36px; padding:4px 8px 4px 4px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--ink, #1c2329); font-size:12px; font-weight:500; box-shadow:none; justify-content:flex-start; }
+.appearance-swatches button:hover, .appearance-segments button:hover { background:var(--heading-surface, var(--sand, rgb(0 0 0 / .05))); }
+.appearance-swatches button[aria-checked="true"] { border-color:var(--line, #d4dbe0); background:var(--heading-surface, var(--sand, transparent)); }
+.appearance-swatch { flex:0 0 22px; width:22px; height:22px; border-radius:50%; background:var(--swatch-light); }
+:root[data-theme="dark"] .appearance-swatch { background:var(--swatch-dark); }
+.appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-light); }
+:root[data-theme="dark"] .appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-dark); }
+.appearance-note { margin:0; font-size:12px; line-height:1.5; color:var(--muted, #56616a); }
+@media (max-width:480px) { .appearance-panel { position:fixed; top:auto; bottom:12px; left:12px; right:12px; width:auto; max-width:none; } }

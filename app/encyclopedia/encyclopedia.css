@@ -123,3 +123,12 @@ select option { background:var(--paper);color:var(--ink); }
 @media(max-width:720px){.sidebar{position:fixed;height:100dvh;min-height:0;overflow-y:auto;overscroll-behavior:contain}.navigation-trees{overflow:visible}.dashboard-tabs{gap:20px}.dashboard-world-bar>label:first-child{width:100%;flex-direction:column;align-items:stretch}.dashboard-world-bar select{width:100%;max-width:100%}.workspace-dashboard .section-heading{flex-wrap:wrap}.dashboard-card{padding:21px}.template-callout{padding:21px}}
 
 .rpg-tools-switcher{display:flex;flex-wrap:wrap;align-items:center;gap:20px;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--paper);font-size:13px}.rpg-tools-switcher a{color:var(--ink);text-decoration:none}.rpg-tools-switcher a:first-child{font-weight:700;margin-right:auto}.rpg-tools-switcher a[aria-current]{color:var(--green);text-decoration:underline;text-underline-offset:5px}
+/* Accent colour from the shared Appearance menu (app/appearance.css). */
+:root{--green:var(--accent);--green-pale:var(--accent-soft);--night-accent:var(--accent);--night-primary:var(--accent);--night-primary-hover:var(--accent-hover);--night-selected:var(--accent-soft)}
+.button.primary,.button.primary:hover{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.campaign-link.active,.tree-row.selected{background:var(--accent-soft);color:var(--accent)}
+.active-dot,.status-dot{background:var(--accent)}
+.toast{background:var(--accent);color:var(--on-accent)}
+.topbar .appearance-trigger,.welcome-theme .appearance-trigger,.player-refresh .appearance-trigger{border:1px solid var(--line);border-radius:6px;color:var(--muted);background:transparent}
+.player-refresh .appearance{margin-right:auto}
