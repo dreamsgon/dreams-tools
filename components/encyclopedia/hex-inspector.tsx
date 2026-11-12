@@ -12,9 +12,9 @@ const hoursText = (h: number) => { const r = Math.round(h * 2) / 2; return `${r}
 const checkOptions = [[0, 'No checks'], [8, '1 in 8 per hex'], [6, '1 in 6 per hex'], [4, '1 in 4 per hex']] as const;
 
 /** Everything about one hex or square of an area map: its notes, its encounters, and moving the party there. */
-export function HexInspector({ map, cell, plan, pace, setPace, campaign, library, setMap, onCalendarChange }: {
+export function HexInspector({ map, cell, plan, pace, setPace, campaign, library, setMap, onCalendarChange, onRevealInParents }: {
   map: MapData; cell: number; plan: CrawlPlan | null; pace: Pace; setPace: (p: Pace) => void; campaign?: Campaign;
-  library: TableLibrary | null | 'error'; setMap: (patch: Partial<MapData>) => void; onCalendarChange?: (c: Calendar) => boolean;
+  library: TableLibrary | null | 'error'; setMap: (patch: Partial<MapData>) => void; onCalendarChange?: (c: Calendar) => boolean; onRevealInParents?: () => void;
 }) {
   const note = hexNote(map, cell), word = cellWord(map);
   const [calendarId, setCalendarId] = useState(campaign?.calendars?.[0]?.id ?? '');
@@ -42,6 +42,7 @@ export function HexInspector({ map, cell, plan, pace, setPace, campaign, library
       next = advanceCalendar(calendar, plan.days, region);
       if (onCalendarChange && !onCalendarChange(next)) { setLog({ cell, lines: ['The calendar could not be saved, so the party stayed put.'] }); return; }
     }
+    onRevealInParents?.();
     setMap(moveParty(map, plan, next ? formatDate(next, next.current) : undefined));
     const lines = [`Moved ${plan.cells.length} ${word.toLowerCase()}${plan.cells.length === 1 ? '' : 'es'} to ${word.toLowerCase()} ${cellLabel(map, cell)}${next ? `. ${formatDate(next, next.current)}` : ''}.`];
     for (const c of encounterChecks(plan.cells, sides)) {
@@ -83,7 +84,7 @@ export function HexInspector({ map, cell, plan, pace, setPace, campaign, library
     <h3 className="world-sub"><Users size={16}/> The party</h3>
     {!map.party ? <>
       <p className="aside-hint">Put the party on the map to track where they are. Moving them spends travel time, explores the {word.toLowerCase()}es they pass, and can roll for encounters.</p>
-      <button type="button" className="button primary" onClick={() => setMap({ party: placeParty(map, cell), ...(map.fog?.enabled ? { fog: { ...map.fog, revealed: [...new Set([...map.fog.revealed, cell])].sort((a, b) => a - b) } } : {}) })}><Footprints size={15}/> Put the party here</button>
+      <button type="button" className="button primary" onClick={() => { onRevealInParents?.(); setMap({ party: placeParty(map, cell), ...(map.fog?.enabled ? { fog: { ...map.fog, revealed: [...new Set([...map.fog.revealed, cell])].sort((a, b) => a - b) } } : {}) }); }}><Footprints size={15}/> Put the party here</button>
     </> : map.party.cell === cell ? <>
       <p>The party is here. {hoursText(map.party.hours)} of {HOURS_PER_DAY} travel hours used today.</p>
       <button type="button" className="button" onClick={makeCamp}>Make camp{calendar ? ' and start the next day' : ''}</button>
