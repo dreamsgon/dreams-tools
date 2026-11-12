@@ -1,0 +1,20 @@
+/* The campaign front page, shared by the player view and the campaign hub. */
+.front-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.front-widget { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; padding:18px 20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); color:var(--ink); }
+.front-wide { grid-column:span 2; }
+.front-widget h2 { margin:0 0 6px; font-family:inherit; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.front-big { font-family:var(--font-display); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.2; }
+.front-heading { font-size:17px; font-weight:600; }
+.front-muted { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
+.front-prose { margin:0; font-family:var(--font-reading, inherit); font-size:15px; line-height:1.6; }
+.front-text { white-space:pre-wrap; }
+.front-list { list-style:none; margin:0; padding:0; width:100%; }
+.front-list li { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+.front-list li:last-child { border-bottom:0; }
+.front-list li svg { flex:none; color:var(--muted); }
+.front-widget .front-link { padding:0; border:0; background:none; color:var(--accent); font:inherit; text-align:left; cursor:pointer; text-decoration:none; }
+.front-widget .front-link:hover { text-decoration:underline; }
+.front-widget .front-more { display:inline-flex; align-items:center; gap:4px; margin-top:6px; font-size:14px; font-weight:500; }
+.front-empty { color:var(--muted); }
+@media (max-width:900px) { .front-grid { grid-template-columns:minmax(0,1fr); } .front-wide { grid-column:auto; } }
+.player-layout .front-grid { margin-top:20px; }

@@ -2,7 +2,9 @@ import type { Bucket } from "./storage-types";
 import { loadWorkspace, saveWorkspace } from "./workspace-storage.ts";
 import { initialWorkspace, uid, type Workspace as MapWorkspace } from "./model.ts";
 import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
-import { newId, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
+import { newId, playerCampaign, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
+import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
+import { scenesInOrder } from "./scene-order.ts";
 import { applyPairs, campaignSummary, cleanName } from "./campaign-links.ts";
 
 /*
@@ -120,4 +122,38 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     } else throw new Error("Choose a campaign.");
   } else throw new Error("Unknown action.");
   return summaryOf(await readBoth(s));
+}
+
+/** One campaign for the campaign hub: its dashboard and its front page. */
+export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }, key: string) {
+  const summary = summaryOf(both), row = summary.rows.find(r => r.key === key);
+  if (!row) throw new Error("Campaign not found");
+  const map = both.map?.workspace ?? null, book = both.book.data;
+  const campaign = row.encyclopedia ? book.campaigns.find(c => c.id === row.encyclopedia!.id) ?? null : null;
+  const own = campaign ? book.entries.filter(e => e.campaignId === campaign.id && e.kind !== "folder") : [];
+  const player = campaign ? playerCampaign(book, campaign.id) : null;
+  return {
+    row,
+    scenes: map && row.maptable ? scenesInOrder(map, row.maptable.id).map(item => ({ id: item.scene.id, name: item.scene.name })) : [],
+    party: own.filter(e => e.kind === "character" && e.character?.role === "pc").map(e => ({ id: e.id, title: e.title })),
+    recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt })),
+    front: player?.frontPage ?? null,
+    frontConfig: campaign ? campaign.frontPage ?? defaultFrontPage(campaign.calendars ?? []) : null,
+    calendars: (campaign?.calendars ?? []).map(c => ({ id: c.id, name: c.name, shared: c.visibility === "players" })),
+    playerPages: (player?.entries ?? []).map(e => ({ id: e.id, title: e.title })),
+  };
+}
+export type CampaignHub = ReturnType<typeof hubOf>;
+
+/** Saves the front page of an Encyclopedia campaign and returns the updated hub. */
+export async function saveFrontPage(s: Session, key: string, input: unknown) {
+  const both = await readBoth(s);
+  const row = summaryOf(both).rows.find(r => r.key === key);
+  if (!row?.encyclopedia) throw new Error("Start Encyclopedia notes for this campaign to give it a front page.");
+  const parsed = frontPageSchema.safeParse(input);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That front page could not be saved.");
+  const frontPage = parsed.data;
+  await backupOnce(s, both);
+  await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, frontPage } : c) });
+  return hubOf(await readBoth(s), key);
 }
