@@ -20,6 +20,10 @@ import {
   parseFont,
   parseMotion,
   parseTextSize,
+  parsePageWidth,
+  PAGE_WIDTHS,
+  PAGE_WIDTH_STORAGE_KEY,
+  type PageWidthId,
   pickThemeMode,
   resolveTheme,
   type AccentId,
@@ -31,7 +35,7 @@ import {
 
 const MODE_LABELS: Record<ThemeMode, string> = { light: "Light", dark: "Dark", system: "System" };
 
-type Settings = { mode: ThemeMode; accent: AccentId; motion: MotionPreference; textSize: TextSizeId; fonts: Record<FontRole, string> };
+type Settings = { mode: ThemeMode; accent: AccentId; motion: MotionPreference; textSize: TextSizeId; pageWidth: PageWidthId; fonts: Record<FontRole, string> };
 
 function read(key: string) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -51,6 +55,7 @@ function defaults(): Settings {
     accent: DEFAULT_ACCENT,
     motion: "system",
     textSize: "default",
+    pageWidth: "default",
     fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, FONT_ROLES[role].defaultId])) as Record<FontRole, string>,
   };
 }
@@ -61,6 +66,7 @@ function load(): Settings {
     accent: parseAccent(read(ACCENT_STORAGE_KEY)) ?? DEFAULT_ACCENT,
     motion: parseMotion(read(MOTION_STORAGE_KEY)),
     textSize: parseTextSize(read(TEXT_SIZE_STORAGE_KEY)),
+    pageWidth: parsePageWidth(read(PAGE_WIDTH_STORAGE_KEY)),
     fonts: Object.fromEntries(FONT_ROLE_IDS.map((role) => [role, parseFont(role, read(FONT_ROLES[role].storageKey))])) as Record<FontRole, string>,
   };
 }
@@ -81,6 +87,7 @@ function apply(settings: Settings) {
   root.dataset.accent = settings.accent;
   if (settings.motion === "reduced") root.dataset.motion = "reduced"; else delete root.dataset.motion;
   if (settings.textSize === "default") delete root.dataset.textSize; else root.dataset.textSize = settings.textSize;
+  if (settings.pageWidth === "default") delete root.dataset.pageWidth; else root.dataset.pageWidth = settings.pageWidth;
   for (const role of FONT_ROLE_IDS) applyFont(role, settings.fonts[role]);
 }
 
@@ -120,6 +127,7 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
   const chooseAccent = (accent: AccentId) => update({ ...settings, accent }, ACCENT_STORAGE_KEY, accent);
   const chooseMotion = (motion: MotionPreference) => update({ ...settings, motion }, MOTION_STORAGE_KEY, motion);
   const chooseTextSize = (textSize: TextSizeId) => update({ ...settings, textSize }, TEXT_SIZE_STORAGE_KEY, textSize);
+  const choosePageWidth = (pageWidth: PageWidthId) => update({ ...settings, pageWidth }, PAGE_WIDTH_STORAGE_KEY, pageWidth);
   const chooseFont = (role: FontRole, id: string) => update({ ...settings, fonts: { ...settings.fonts, [role]: id } }, FONT_ROLES[role].storageKey, id);
   const reset = () => {
     for (const key of [...APPEARANCE_STORAGE_KEYS, ...LEGACY_THEME_KEYS]) forget(key);
@@ -149,6 +157,13 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
             <button key={size.id} type="button" role="radio" aria-checked={settings.textSize === size.id} aria-label={size.label} title={`${size.label} (${Math.round(size.zoom * 100)}%)`} onClick={() => chooseTextSize(size.id)}>
               <span aria-hidden="true" style={{ fontSize: Math.round(13 * size.zoom) }}>A</span>
             </button>)}
+        </div>
+      </fieldset>
+      <fieldset className="appearance-group">
+        <legend>Page width</legend>
+        <div className="appearance-segments appearance-widths" role="radiogroup" aria-label="Page width">
+          {PAGE_WIDTHS.map((width) =>
+            <button key={width.id} type="button" role="radio" aria-checked={settings.pageWidth === width.id} onClick={() => choosePageWidth(width.id)}>{width.label}</button>)}
         </div>
       </fieldset>
       <fieldset className="appearance-group">

@@ -1632,8 +1632,8 @@ h3 { color:var(--ink); font-size:13px; }
 .app-header .header-actions button.primary:hover { background:var(--accent-hover); }
 
 /* Shared RPG Tools home and account surfaces. */
-.rpg-hub { background:var(--bg); color:var(--ink); padding:0 max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - 1040px)/2)); }
-.rpg-hub .site-header { background:var(--chrome); color:var(--chrome-text); margin:0 min(-20px,calc((1040px - calc(100vw / var(--ui-zoom, 1)))/2)); padding:16px max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - 1040px)/2)); border-bottom:1px solid var(--chrome-line); }
+.rpg-hub { background:var(--bg); color:var(--ink); padding:0 max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - var(--page-width, 1040px))/2)); }
+.rpg-hub .site-header { background:var(--chrome); color:var(--chrome-text); margin:0 min(-20px,calc((var(--page-width, 1040px) - calc(100vw / var(--ui-zoom, 1)))/2)); padding:16px max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - var(--page-width, 1040px))/2)); border-bottom:1px solid var(--chrome-line); }
 .site-header nav { display:flex; align-items:center; gap:16px; }
 .site-header .brand { color:var(--chrome-text); white-space:nowrap; }
 .site-header .brand svg { color:var(--accent); }
@@ -1923,7 +1923,7 @@ h3 { color:var(--ink); font-size:13px; }
 }
 
 /* Part 4: Campaigns dashboard. */
-.dashboard-content { max-width:1040px; }
+.dashboard-content { max-width:var(--page-width, 1040px); }
 .dashboard-continue { display:flex; width:100%; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; margin-bottom:28px; text-align:left; background:var(--green-soft); border:1px solid var(--green); border-radius:var(--radius-lg); color:var(--ink); }
 .dashboard-continue > span:first-child { display:flex; flex-direction:column; gap:3px; min-width:0; }
 .dashboard-continue small { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--green); }
