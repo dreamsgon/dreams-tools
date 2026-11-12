@@ -1294,16 +1294,16 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       Make token
                     </button>
                     <button
-                      title="Add text token"
-                      aria-label="Add text token"
+                      title="Add a plain token with a name and colour, no image"
                       onClick={addToken}
                     >
-                      <UserRound size={18} />
+                      <UserRound size={16} />
+                      Quick token
                     </button>
                   </div>
-                  <CampaignTokenDefaults workspace={workspace} campaignId={campaignId} commit={commit}/>
+                  <button className="token-gallery-link" onClick={()=>setTokenGalleryOpen(true)}><LayoutGrid size={16} />Add from the token gallery</button>
                   {token ? (
-                    <TokenOptions key={token.id} request={tokenEditRequest.id===token.id?tokenEditRequest.count:0} onRequestHandled={()=>setTokenEditRequest({id:"",count:0})}>
+                    <TokenOptions key={token.id} request={tokenEditRequest.id===token.id?tokenEditRequest.count:0} onRequestHandled={()=>setTokenEditRequest({id:"",count:0})} summary={<><span className="token-avatar" style={{ background: token.color }}>{token.assetId ? <img src={workspace.assets.find((a) => a.id === token.assetId)?.src} alt="" /> : token.name.slice(0, 2)}</span><span><small>Selected</small><strong>{token.name || "Unnamed token"}</strong></span></>}>
                       <div className="section-heading">
                         <h3>Selected token</h3>
                         <button
@@ -1528,19 +1528,16 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                         Remove effect
                       </button>
                     </>
-                  ) : (
-                    <p className="muted">
-                      Select a token on the map or in the list to edit it. Use
-                      the person button for a quick text token.
+                  ) : scene.tokens.length > 0 ? (
+                    <p className="muted token-panel-hint">
+                      Click a token here or on the map to edit it.
                     </p>
-                  )}
-                  <hr />
-                  <h3>
+                  ) : null}
+                  <h3 className="token-panel-heading">
                     On this map{" "}
                     <span className="count">{scene.tokens.length}</span>
                   </h3>
-                  <MapInitiative scene={scene} campaignId={campaignId} update={updateScene} save={manualSave} workspace={workspace}/>
-                  <input aria-label="Find tokens on this map" placeholder="Find a token on this map…" value={tokenSearch} onChange={e => setTokenSearch(e.target.value)} />
+                  {(scene.tokens.length > 5 || tokenSearch) && <input aria-label="Find tokens on this map" placeholder="Find a token on this map…" value={tokenSearch} onChange={e => setTokenSearch(e.target.value)} />}
                   <div className="token-list">
                     {scene.tokens.filter(t => t.name.toLowerCase().includes(tokenSearch.trim().toLowerCase())).map((t) => (
                       <div className="token-list-row" key={t.id}>
@@ -1582,10 +1579,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     ))}
                   </div>
                   {!scene.tokens.length && (
-                    <p className="empty-small">No tokens yet.</p>
+                    <p className="empty-small">No tokens on this map yet. Make one from an image, or add a quick token with just a name.</p>
                   )}
-                  <hr />
-                  <button onClick={()=>setTokenGalleryOpen(true)}>Open token gallery</button>
+                  <h3 className="token-panel-heading">Initiative</h3>
+                  <MapInitiative scene={scene} campaignId={campaignId} update={updateScene} save={manualSave} workspace={workspace}/>
+                  <CampaignTokenDefaults workspace={workspace} campaignId={campaignId} commit={commit}/>
                 </>
               )}
               {panel === "grid" && (

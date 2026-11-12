@@ -3,9 +3,10 @@ import { uiZoom } from "@/lib/appearance";
 import { tokenDragPosition, startTokenMovePlan, appendTokenMovePoint, undoTokenMovePoint, tokenMovePlanValid, tokenMovePlanDestination, type TokenMovePlan } from "@/lib/token-movement";
 import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Maximize, Minus, Plus } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ExternalLink, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2 } from "lucide-react";
+import "./context-menu.css";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
@@ -121,6 +122,13 @@ export default function Board(p: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!contextMenu) return;
+    const menu = menuRef.current;
+    if (menu) {
+      // Keep the whole menu on screen, whatever its real size turns out to be.
+      const z = uiZoom(), box = menu.getBoundingClientRect(), width = box.width / z, height = box.height / z;
+      const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth / z - width - 8)), top = Math.max(8, Math.min(contextMenu.y, window.innerHeight / z - height - 8));
+      menu.style.left = `${left}px`; menu.style.top = `${top}px`;
+    }
     menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const dismiss = (event: PointerEvent) => { if (!menuRef.current?.contains(event.target as Node)) setContextMenu(null); };
     const key = (event: KeyboardEvent) => {
@@ -1109,7 +1117,7 @@ export default function Board(p: Props) {
       else p.select(null);
     }
   };
-  const menuAction = (label: string, action: () => void, disabled = false) => <button role="menuitem" disabled={disabled} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", border: 0, borderRadius: 4, background: "transparent", color: "inherit", font: "inherit", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.45 : 1 }} onClick={() => { setContextMenu(null); action(); }}>{label}</button>;
+  const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span></button>;
   return (
     <div className={"board tool-" + p.tool} ref={host}>
       <canvas
@@ -1156,19 +1164,21 @@ export default function Board(p: Props) {
           else if (saved) target = { kind: "measurement", id: saved.id };
           else if (effect) target = { kind: "effect", id: effect.id };
           const z = uiZoom();
-          setContextMenu(target ? { ...target, x: Math.max(8, Math.min(e.clientX / z, window.innerWidth / z - 228)), y: Math.max(8, Math.min(e.clientY / z, window.innerHeight / z - 330)) } : null);
+          setContextMenu(target ? { ...target, x: Math.max(8, e.clientX / z), y: Math.max(8, e.clientY / z) } : null);
         }}
         tabIndex={0}
         aria-label={`Interactive map: ${p.scene.name}. Use the token list to edit tokens and their coordinates.`}
       />
-      {contextMenu && createPortal(<div ref={menuRef} role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ position: "fixed", left: contextMenu.x, top: contextMenu.y, zIndex: 10000, width: 220, maxHeight: "calc(calc(100vh / var(--ui-zoom, 1)) - 16px)", overflowY: "auto", padding: 5, border: "1px solid #555", borderRadius: 8, background: "#20252b", color: "#f3f4f6", boxShadow: "0 8px 28px #0008" }}>
-        {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget)}
-        {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"))}
-        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && menuAction("Duplicate", () => changeMenuTarget("duplicate"), contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500)}
-        {contextMenu.kind === "token" && <>{(["active", "unconscious", "dead"] as const).map(status => <span key={status}>{menuAction(status === "active" ? "Clear death / unconscious marker" : `Mark ${status}`, () => p.update(scene => { const token = scene.tokens.find(t => t.id === contextMenu.id); if(token) token.status = status; }))}</span>)}</>}
-        {contextMenu.kind === "token" && <>{menuAction("Bring forward", () => changeMenuTarget("forward"))}{menuAction("Send backward", () => changeMenuTarget("backward"))}</>}
-        {contextMenu.kind === "poi" && "targetSceneId" in (menuItem ?? {}) && menuAction("Open linked map", () => { const poi = p.scene.pointsOfInterest.find(item => item.id === contextMenu.id); if (poi?.targetSceneId) p.openLinkedScene?.(poi.targetSceneId); }, !p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)?.targetSceneId)}
-        {menuAction("Delete", () => changeMenuTarget("delete"))}
+      {contextMenu && createPortal(<div ref={menuRef} className="context-menu" role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ left: contextMenu.x, top: contextMenu.y }}>
+        {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{menuItem.name}</div>}
+        {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget, { icon: contextMenu.kind === "measurement" ? <MousePointer2 size={15} /> : <Pencil size={15} /> })}
+        {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"), { icon: menuItem.hidden ? <Eye size={15} /> : <EyeOff size={15} /> })}
+        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}
+        {contextMenu.kind === "poi" && "targetSceneId" in (menuItem ?? {}) && menuAction("Open linked map", () => { const poi = p.scene.pointsOfInterest.find(item => item.id === contextMenu.id); if (poi?.targetSceneId) p.openLinkedScene?.(poi.targetSceneId); }, { icon: <ExternalLink size={15} />, disabled: !p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)?.targetSceneId })}
+        {contextMenu.kind === "token" && <><hr /><div className="context-menu-label" id="context-menu-status">Status</div><div role="group" aria-labelledby="context-menu-status">{(["active", "unconscious", "dead"] as const).map(status => <span key={status}>{menuAction(status === "active" ? "Active" : status === "unconscious" ? "Unconscious" : "Dead", () => p.update(scene => { const token = scene.tokens.find(t => t.id === contextMenu.id); if(token) token.status = status; }), { checked: (p.scene.tokens.find(t => t.id === contextMenu.id)?.status ?? "active") === status })}</span>)}</div></>}
+        {contextMenu.kind === "token" && <><hr />{menuAction("Bring forward", () => changeMenuTarget("forward"), { icon: <ArrowUpToLine size={15} /> })}{menuAction("Send backward", () => changeMenuTarget("backward"), { icon: <ArrowDownToLine size={15} /> })}</>}
+        <hr />
+        {menuAction("Delete", () => changeMenuTarget("delete"), { icon: <Trash2 size={15} />, danger: true })}
       </div>, document.body)}
       {!p.scene.mapId && !p.scene.drawing && !p.scene.pointsOfInterest.length && p.scene.tokens.length === 0 && !p.scene.effects.length && !p.scene.measurements.length && !p.scene.fog.strokes.length && ["select","pan"].includes(p.tool) && (
         <div className="board-hint">
