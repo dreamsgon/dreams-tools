@@ -1,4 +1,4 @@
-import { encodePaint, paintScale, tilesFromPaint, type MapData, type MapPaint, type MapPin } from "./map-model.ts";
+import { encodePaint, paintScale, tilesFromPaint, type MapData, type MapPaint, type MapPath, type MapPin } from "./map-model.ts";
 
 /**
  * Making a whole world from a seed: land and sea shaped by the kind of map, mountains where the
@@ -82,7 +82,10 @@ export function placeName(random: () => number) {
 }
 
 /** Height, wetness and warmth for every paint square. */
-export function worldTerrain(o: WorldOptions): MapPaint {
+export function worldTerrain(o: WorldOptions): MapPaint { return buildWorld(o).paint; }
+
+type BuiltWorld = { paint: MapPaint; cells: Uint8Array; height: Float32Array; w: number; h: number; sea: number };
+function buildWorld(o: WorldOptions): BuiltWorld {
   const k = paintScale(o.columns, o.rows), w = o.columns * k, h = o.rows * k, n = hash(o.seed || "world");
   const aspect = w / h, base = fbm(n, 5), detail = fbm(n + 7, 3), wet = fbm(n + 31, 4), warp = fbm(n + 53, 2);
   const freq = o.kind === "archipelago" ? 5.5 : 3.2;
@@ -121,7 +124,7 @@ export function worldTerrain(o: WorldOptions): MapPaint {
     else if (temp > 0.25 && m < 0.42) cells[i] = 5;
     else cells[i] = 1;
   }
-  return { columns: w, rows: h, cells: encodePaint(cells) };
+  return { paint: { columns: w, rows: h, cells: encodePaint(cells) }, cells, height, w, h, sea };
 }
 
 /** Towns spread over the land, near the coast where there is one, never on mountains. */
@@ -153,17 +156,110 @@ export function worldPlaces(paint: MapPaint, cells: Uint8Array, count: number, s
   return out;
 }
 
+const riverEnds = ["run", "water", "flow", "brook", "wash", "rill", "burn"];
+/** A made-up river name. */
+export function riverName(random: () => number) {
+  const name = starts[Math.floor(random() * starts.length)] + riverEnds[Math.floor(random() * riverEnds.length)];
+  return `The ${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
+}
+
+/** Rivers that start high in the mountains and run downhill until they reach the sea or join another river. */
+export function worldRivers(world: BuiltWorld, count: number, seed: string): MapPath[] {
+  const { w, h, height, cells } = world, random = seeded(`${seed}:rivers`), used = new Int32Array(w * h).fill(-1), out: MapPath[] = [];
+  const sources = Array.from(cells.keys()).filter(i => cells[i] === 4 || cells[i] === 7).sort((a, b) => height[b] - height[a]);
+  const gap = Math.min(w, h) / 5, starts: number[] = [];
+  for (const i of sources) {
+    if (starts.length >= count * 3) break;
+    if (starts.every(j => Math.hypot((i % w) - (j % w), Math.floor(i / w) - Math.floor(j / w)) > gap)) starts.push(i);
+  }
+  // Distance to the sea, so every step of a river gets closer to it.
+  const toSea = new Int32Array(w * h).fill(-1), queue: number[] = [];
+  for (let i = 0; i < w * h; i++) if (cells[i] === 0) { toSea[i] = 0; queue.push(i); }
+  for (let q = 0; q < queue.length; q++) {
+    const i = queue[q], x = i % w, y = Math.floor(i / w);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+      const j = yy * w + xx;
+      if (toSea[j] < 0) { toSea[j] = toSea[i] + 1; queue.push(j); }
+    }
+  }
+  for (const start of starts) {
+    if (out.length >= count) break;
+    if (toSea[start] < 0) continue;
+    const route = [start];
+    let cur = start, ended = false;
+    while (toSea[cur] > 0) {
+      const x = cur % w, y = Math.floor(cur / w);
+      let best = -1, low = Infinity;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if ((!dx && !dy) || xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const j = yy * w + xx;
+        if (toSea[j] >= toSea[cur]) continue;
+        const e = height[j] + random() * 0.03;
+        if (e < low) { low = e; best = j; }
+      }
+      if (best < 0) break;
+      route.push(best); cur = best;
+      if (used[best] >= 0) break;
+    }
+    ended = toSea[cur] === 0 || used[cur] >= 0;
+    if (!ended || route.length < Math.min(w, h) / 6) continue;
+    for (const i of route) if (used[i] < 0) used[i] = out.length;
+    const points = route.filter((_, i) => i % 3 === 0 || i === route.length - 1).map(i => ({ x: ((i % w) + 0.5) / w, y: (Math.floor(i / w) + 0.5) / h }));
+    out.push({ id: `gen-river-${hash(`${seed}:${start}`).toString(36)}`, kind: "river", name: riverName(random), points: points.slice(0, 400), visibility: "gm" });
+  }
+  return out;
+}
+
+/** Roads joining the towns: the shortest set of links that connects them all, leaving out links that cross open sea. */
+export function worldRoads(world: BuiltWorld, towns: MapPin[], seed: string): MapPath[] {
+  const { w, h, cells } = world, random = seeded(`${seed}:roads`), out: MapPath[] = [];
+  const seaShare = (a: MapPin, b: MapPin) => {
+    let sea = 0;
+    for (let k = 1; k < 20; k++) { const x = Math.floor((a.x + (b.x - a.x) * k / 20) * w), y = Math.floor((a.y + (b.y - a.y) * k / 20) * h); if (!cells[y * w + x]) sea++; }
+    return sea / 19;
+  };
+  if (towns.length < 2) return out;
+  const joined = new Set([0]);
+  while (joined.size < towns.length) {
+    let best: [number, number] | null = null, dist = Infinity;
+    for (const i of joined) for (let j = 0; j < towns.length; j++) {
+      if (joined.has(j)) continue;
+      const d = Math.hypot(towns[i].x - towns[j].x, (towns[i].y - towns[j].y) * h / w);
+      if (d < dist) { dist = d; best = [i, j]; }
+    }
+    if (!best) break;
+    const [i, j] = best;
+    joined.add(j);
+    const a = towns[i], b = towns[j];
+    if (seaShare(a, b) > 0.15 || dist > 0.45) continue;
+    const nx = -(b.y - a.y), ny = b.x - a.x, points = [{ x: a.x, y: a.y }];
+    for (const t of [0.33, 0.66]) { const wob = (random() - 0.5) * 0.18; points.push({ x: Math.min(1, Math.max(0, a.x + (b.x - a.x) * t + nx * wob)), y: Math.min(1, Math.max(0, a.y + (b.y - a.y) * t + ny * wob)) }); }
+    points.push({ x: b.x, y: b.y });
+    out.push({ id: `gen-road-${hash(`${seed}:${a.id}:${b.id}`).toString(36)}`, kind: "road", name: "", points, visibility: "gm" });
+  }
+  return out;
+}
+
+/** Pins a generated world added earlier and nobody has changed since, which a new world replaces. */
+export const isGeneratedPlace = (p: MapPin, map: MapData) => p.id.startsWith("place-") && !p.notes && !p.entryId && !p.areaMapId && !(map.routes ?? []).some(r => r.stops.includes(p.id));
+
 /** The parts of a map that a generated world replaces. Places already on the map stay; new towns are added after them. */
-export function generateWorld(o: WorldOptions, map: MapData): Pick<MapData, "paint" | "tiles" | "seed" | "scale" | "pins"> {
-  const paint = worldTerrain(o);
-  const decoded = new Uint8Array(paint.columns * paint.rows);
-  let at = 0;
-  for (const run of paint.cells.split(".")) { const n = parseInt(run.slice(1), 36); decoded.fill(run.charCodeAt(0) - 48, at, at + n); at += n; }
-  const taken = new Set(map.pins.map(p => p.title.toLowerCase()));
-  const added = o.places ? worldPlaces(paint, decoded, worldAcross[o.across].places, o.seed).filter(p => !taken.has(p.title.toLowerCase()) && !map.pins.some(q => q.id === p.id)) : [];
+export function generateWorld(o: WorldOptions, map: MapData): Pick<MapData, "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
+  const world = buildWorld(o), paint = world.paint;
+  const kept = map.pins.filter(p => !isGeneratedPlace(p, map));
+  const taken = new Set(kept.map(p => p.title.toLowerCase()));
+  const added = o.places ? worldPlaces(paint, world.cells, worldAcross[o.across].places, o.seed).filter(p => !taken.has(p.title.toLowerCase()) && !kept.some(q => q.id === p.id)) : [];
+  added.forEach((p, i) => { p.kind = i < Math.max(1, Math.round(added.length / 5)) ? "city" : i >= added.length - Math.round(added.length / 3) ? "village" : "town"; });
+  const pins = [...kept, ...added].slice(0, 100), placed = added.filter(p => pins.includes(p));
+  const rivers = worldRivers(world, { region: 2, kingdom: 4, continent: 6 }[o.across], o.seed);
+  const roads = o.places ? worldRoads(world, placed, o.seed) : [];
+  const paths = [...(map.paths ?? []).filter(p => !p.id.startsWith("gen-")), ...rivers, ...roads].slice(0, 300);
   return {
     paint, tiles: tilesFromPaint({ ...map, columns: o.columns, rows: o.rows }, paint), seed: o.seed.slice(0, 100),
     scale: { width: map.scale?.unit === "km" ? Math.round(worldAcross[o.across].miles * 1.609) : worldAcross[o.across].miles, unit: map.scale?.unit ?? "mi" },
-    pins: [...map.pins, ...added].slice(0, 100),
+    pins, paths,
   };
 }
