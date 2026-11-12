@@ -183,13 +183,18 @@ export function demoWorkspace(): Workspace {
 export const SECRET_OPEN=/^[ \t]*:::[ \t]*secret[ \t]*$/i,SECRET_CLOSE=/^[ \t]*:::[ \t]*$/;
 export function stripSecrets(text:string){if(!/:::/.test(text))return text;let hidden=false,found=false;const kept:string[]=[];for(const line of text.split("\n")){const bare=line.replace(/\r$/,"");if(!hidden&&SECRET_OPEN.test(bare)){hidden=found=true;continue;}if(hidden){if(SECRET_CLOSE.test(bare))hidden=false;continue;}kept.push(line);}return !found?text:kept.join("\n").replace(/\n{3,}/g,"\n\n").trim();}
 
+
+// "[[maptable:<sceneId>|Label]]" links open the GM's own Maptable scene; players only ever get the label.
+export const MAPTABLE_LINK=/\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]/g;
+export const maptableLinks=(text:string)=>[...text.matchAll(MAPTABLE_LINK)].map(m=>({sceneId:m[1],label:(m[2]??"").trim()||"Battle map"}));
+export function playerText(text:string){return stripSecrets(text).replace(MAPTABLE_LINK,(_,_id,label)=>(label??"").trim());}
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
 export function playerCampaign(s:Workspace,campaignId:string){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  const candidates=visibleEntries(s,c.worldId,c.id);
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
-   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:stripSecrets(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:stripSecrets(t.body)}))];
+   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)}))];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData)return [];

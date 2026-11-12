@@ -68,6 +68,7 @@ import ConditionOrganizer from "./condition-organizer";
 import ConditionEntry from "./condition-entry";
 import EffectsPanel from "./effects-panel";
 import TokenLibrary from "./token-library";
+import EncyclopediaTokens, { roleColor, type EncyclopediaCharacter } from "./encyclopedia-tokens";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import TokenNotesControl from "./token-notes-control";
 import "./maptable-token-layout.css";
@@ -154,6 +155,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [explorationHistory,setExplorationHistory]=useState<string[]>([]),
     [tokenEditRequest,setTokenEditRequest]=useState({id:"",count:0}),
     [tokenGalleryOpen,setTokenGalleryOpen]=useState(false),
+    [galleryTab,setGalleryTab]=useState<"saved"|"encyclopedia">("saved"),
     [tool, setTool] = useState<Tool>("select"),
     [player, setPlayer] = useState(false),
     [hideFog,setHideFog]=useState(false),
@@ -292,7 +294,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       acknowledged.current=result.workspace?data:null;
       let saved = null;
       try { saved = navigationScope ? parseNavigationState(sessionStorage.getItem(navigationStorageKey(navigationScope))) : null; } catch { /* Storage is optional. */ }
-      const activeId = navigationRestored.current ? state.current?.activeId : saved?.activeId;
+      // /maptable?scene=<id> (from an Encyclopedia link) opens that scene once, then the address is tidied.
+      let requested: string | null = null;
+      if (!navigationRestored.current) { try { requested = new URLSearchParams(window.location.search).get("scene"); } catch { requested = null; } }
+      const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
+      const activeId = linked ?? (navigationRestored.current ? state.current?.activeId : saved?.activeId);
       if (activeId) data = preserveActiveScene(data, activeId);
       if (!navigationRestored.current) {
         navigationRestored.current = true;
@@ -305,6 +311,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           setLocation(validLocation(saved.location));
           setDashboardLocation(validLocation(saved.dashboardLocation));
           setConditionLocation(data.conditionFolders.some(c => c.id === saved.conditionLocation) ? saved.conditionLocation : null);
+        }
+        if (requested) {
+          if (linked) { setDashboard(false); setCreatorOpen(false); }
+          try { const url = new URL(window.location.href); url.searchParams.delete("scene"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
         }
         setNavigationReady(true);
       }
@@ -694,6 +704,16 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     if (!scene || player) return;
     const copy={...structuredClone(t),id:uid(),sourceLibraryId:t.id,conditionRounds:{},attachedToId:null,...snap(point??{x:scene.width/2,y:scene.height/2},scene.grid,t.size)};
     updateScene(s=>s.tokens.push(copy));setSelected(copy.id);setTool("select");setPlayer(false);
+  };
+  // Tokens from Encyclopedia characters live only in Maptable's data; a same-named library token in this campaign is reused.
+  const addEncyclopediaToken = (c: EncyclopediaCharacter) => {
+    if (!scene || player) return;
+    const existing = state.current?.tokenLibrary.find(t => t.name === c.name && (state.current?.libraryCampaigns[t.id] ?? null) === campaignId);
+    if (existing) { placeLibraryToken(existing); return; }
+    const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), color: roleColor[c.role], useDispositionColor: false,
+      rosterRole: c.role === "npc" ? "npc" : "party", disposition: c.role === "pc" ? "party" : c.role === "companion" ? "ally" : "neutral" };
+    commit(w => { w.tokenLibrary.push(preset); w.libraryCampaigns[preset.id] = campaignId; });
+    placeLibraryToken(preset);
   };
   const addToken = () => {
     setSelectedIds([]);
@@ -2007,7 +2027,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Any system. Your rules.</span>
           </footer>
         </section>
-        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-content">                  <TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} onPlace={placeLibraryToken} save={manualSave}/></div></ResizableSidebar>}
+        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-tabs" role="tablist" aria-label="Token sources"><button role="tab" aria-selected={galleryTab==="saved"} onClick={()=>setGalleryTab("saved")}>Saved tokens</button><button role="tab" aria-selected={galleryTab==="encyclopedia"} onClick={()=>setGalleryTab("encyclopedia")}>From the Encyclopedia</button></div><div className="token-gallery-content">{galleryTab==="saved"?<TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} onPlace={placeLibraryToken} save={manualSave}/>:<EncyclopediaTokens disabled={!scene} onAdd={addEncyclopediaToken}/>}</div></ResizableSidebar>}
       </div>
       <input
         hidden

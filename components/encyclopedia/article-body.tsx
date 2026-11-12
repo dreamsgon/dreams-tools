@@ -1,7 +1,8 @@
 "use client";
 import type {ReactNode} from "react";
-import {Lock} from "lucide-react";
+import {Lock,Map as MapIcon,ArrowUpRight} from "lucide-react";
 import {resolveLink,SECRET_OPEN,SECRET_CLOSE,type Entry,type Workspace} from "@/lib/encyclopedia/world-model";
+export const maptableHref = (sceneId: string) => `/maptable?scene=${encodeURIComponent(sceneId)}`;
 export function ArticleBody({ entry, data, onOpen, onChange }: {
     entry: Entry;
     data: Workspace;
@@ -12,12 +13,16 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
     let fenced = false;
     function inline(text: string): ReactNode { return text.split(/(\[\[[^\]]+\]\]|\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => { if (part.startsWith("[[")) {
         const [target, label] = part.slice(2, -2).split("|");
+        const scene = target.match(/^maptable:([A-Za-z0-9_-]{1,120})$/);
+        if (scene) return <a key={i} className="wiki-link maptable-inline" href={maptableHref(scene[1])} target="_blank" rel="noopener" title="Open this battle map in Maptable">{label?.trim() || "Battle map"}<ArrowUpRight size={13} aria-hidden="true"/></a>;
         const found = resolveLink(data, entry, target);
         return found ? <button key={i} className="wiki-link" onClick={() => onOpen(found.id)}>{label ?? found.title}</button> : <span key={i} className="broken-link" title="No matching article in this scope">{label ?? target}</span>;
     } if (part.startsWith("**"))
         return <strong key={i}>{part.slice(2, -2)}</strong>; if (part.startsWith("`"))
         return <code key={i}>{part.slice(1, -1)}</code>; return part; }); }
-    function render(line: string, index: number): ReactNode { if (line.startsWith("```")) {
+    function render(line: string, index: number): ReactNode { const card = !fenced && line.trim().match(/^\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]$/); if (card)
+        return <div className="maptable-card" key={index}><span className="maptable-card-thumb" aria-hidden="true"><MapIcon size={18}/></span><span className="maptable-card-text"><strong>{card[2]?.trim() || "Battle map"}</strong><small>Battle map in Maptable · only you can open it</small></span><a className="button" href={maptableHref(card[1])} target="_blank" rel="noopener">Open in Maptable <ArrowUpRight size={14} aria-hidden="true"/></a></div>;
+        if (line.startsWith("```")) {
         fenced = !fenced;
         return null;
     } if (fenced)
