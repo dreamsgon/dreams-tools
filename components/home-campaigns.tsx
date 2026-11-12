@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FileText, Map as MapIcon, Plus, User, ChevronRight } from "lucide-react";
 import { homeCampaigns, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
@@ -17,8 +18,8 @@ export function when(iso: string, now = Date.now()) {
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", ...(new Date(t).getFullYear() === new Date(now).getFullYear() ? {} : { year: "numeric" }) });
 }
 
-/** Where a campaign opens from the home page. The campaign hub replaces this once it exists. */
-const openHref = (r: CampaignRow) => r.encyclopedia ? `/encyclopedia?campaign=${encodeURIComponent(r.encyclopedia.id)}` : `/maptable?campaign=${encodeURIComponent(r.maptable!.id)}`;
+/** A campaign opens in its hub on the Campaigns page. */
+const openHref = (r: CampaignRow) => `/campaigns/${encodeURIComponent(r.key)}`;
 
 /** Your campaigns and recently edited pages on the home page. Hidden until there is something to show. */
 export default function HomeCampaigns() {
@@ -34,12 +35,12 @@ export default function HomeCampaigns() {
     <section className="home-section" aria-labelledby="home-campaigns-title">
       <div className="home-section-head">
         <h2 id="home-campaigns-title">Your campaigns</h2>
-        <span><a href="/campaigns?new=1"><Plus size={14} aria-hidden="true" />New campaign</a><a href="/campaigns"><ChevronRight size={14} aria-hidden="true" />All campaigns</a></span>
+        <span><Link href="/campaigns?new=1"><Plus size={14} aria-hidden="true" />New campaign</Link><Link href="/campaigns"><ChevronRight size={14} aria-hidden="true" />All campaigns</Link></span>
       </div>
       {rows.length ? <div className="home-campaign-grid">
         {rows.slice(0, 3).map((r, i) => <CampaignCard key={r.key} row={r} latest={i === 0 && !!r.encyclopedia?.lastEdited} />)}
-      </div> : <p className="home-empty">No campaigns yet. <a href="/campaigns?new=1">Start your first campaign</a>.</p>}
-      {rows.length > 3 && <p className="home-more">{plural(rows.length - 3, "more campaign")} · <a href="/campaigns">See them all</a></p>}
+      </div> : <p className="home-empty">No campaigns yet. <Link href="/campaigns?new=1">Start your first campaign</Link>.</p>}
+      {rows.length > 3 && <p className="home-more">{plural(rows.length - 3, "more campaign")} · <Link href="/campaigns">See them all</Link></p>}
     </section>
     {recent.length > 0 && <section className="home-section home-recent" aria-labelledby="home-recent-title">
       <div className="home-section-head home-section-head-quiet"><h2 id="home-recent-title">Recently edited</h2></div>
@@ -52,9 +53,9 @@ function CampaignCard({ row, latest }: { row: CampaignRow; latest: boolean }) {
   const e = row.encyclopedia, m = row.maptable;
   const facts = [e?.worldName, m ? plural(m.scenes, "scene") : null, e ? plural(e.pages, "page") : null].filter(Boolean).join(" · ");
   return <article className="home-campaign">
-    <a className="home-campaign-art" href={openHref(row)} tabIndex={-1} aria-hidden="true">{latest && <span>Last edited</span>}</a>
+    <Link className="home-campaign-art" href={openHref(row)} tabIndex={-1} aria-hidden="true">{latest && <span>Last edited</span>}</Link>
     <div className="home-campaign-body">
-      <h3><a href={openHref(row)}>{row.name}</a></h3>
+      <h3><Link href={openHref(row)}>{row.name}</Link></h3>
       <p>{facts}</p>
       <div className="home-campaign-foot">
         <span className="home-campaign-links">

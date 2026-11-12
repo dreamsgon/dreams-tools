@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, Download, Link2, Map as MapIcon, Plus, Search, X } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Download, Link2, Map as MapIcon, Plus, Search, X } from "lucide-react";
 import { suggestPairs, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import "./campaigns.css";
 
@@ -89,8 +89,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><span>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</span><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Start notes</button>}</span>
             <span role="cell" className="campaigns-open">
-              {r.maptable && <a href={mapsHref(r.maptable.id)}><MapIcon size={15} aria-hidden="true" />Maptable</a>}
-              {r.encyclopedia && <a href={notesHref(r.encyclopedia.id)}><BookOpen size={15} aria-hidden="true" />Notes</a>}
+              <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
             </span>
           </div>)}
           {!rows.length && <p className="campaigns-muted campaigns-none">{summary.rows.length ? "No campaigns match." : "No campaigns yet. Make one with New campaign."}</p>}

@@ -3,6 +3,7 @@ import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap} from "./map-model.ts";
 import { z } from "zod";
 import {playerInline} from './inline.ts';
+import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -35,7 +36,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"])}).optional(),
   // Optional (added later): the Maptable campaign that holds this campaign's maps, set on the Campaigns page.
-  maptableCampaignId:z.string().min(1).max(120).optional() });
+  maptableCampaignId:z.string().min(1).max(120).optional(),
+  // Optional (added later): the widgets on the campaign front page players see first.
+  frontPage:frontPageSchema.optional() });
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map"]),
@@ -126,7 +129,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     const links=(body:string)=>body.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,(full,target,label)=>ids.has(target)?`[[${ref(target)}${label??""}]]`:full);
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
-        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId) }; delete copy.maptableCampaignId; return copy; })],
+        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; return copy; })],
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined }))],
     });
 }
@@ -214,7 +217,9 @@ export function playerCampaign(s:Workspace,campaignId:string){
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
  for(const e of entries){if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
- return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries};
+ const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
+ const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
+ return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
 }
 export type PlayerCampaign=ReturnType<typeof playerCampaign>;
 export function searchableText(e:Entry){return [e.title,e.body,...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
