@@ -526,3 +526,35 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .world-looks{display:flex;flex-direction:column;gap:6px}.world-looks button{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
 .world-looks button[aria-pressed=true]{border:2px solid var(--accent);padding:7px 9px;background:var(--accent-soft)}.world-looks strong{font-size:13px}.world-looks small{grid-column:2;font-size:12px;color:var(--muted)}
 .world-look-swatch{grid-row:span 2;display:grid;grid-template-columns:1fr 1fr;width:30px;height:30px;border-radius:4px;overflow:hidden;border:1px solid rgba(0,0,0,.15)}.world-look-swatch i{display:block}
+/* A character's picture and the token it makes. */
+.picture-panel{display:flex;gap:20px;align-items:flex-start;margin:18px 0 6px}
+.picture-full{flex:none;padding:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--raised);cursor:zoom-in}
+.picture-full img{display:block;max-width:240px;max-height:240px;width:auto;height:auto}
+.picture-full>span{display:grid;place-items:center;width:200px;height:200px;font-size:12px;color:var(--muted)}
+.picture-side{display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-width:0}
+.picture-side .aside-hint{margin:0}
+.picture-token-row{display:flex;align-items:center;gap:14px}
+.picture-token-row span{display:flex;flex-direction:column;gap:2px;font-size:13px}
+.picture-token-row small{color:var(--muted)}
+.picture-actions{display:flex;gap:8px;flex-wrap:wrap}
+.picture-token{display:inline-block;flex:none;border-radius:50%;background-color:var(--raised);background-repeat:no-repeat}
+.picture-add{display:flex;align-items:center;gap:14px;width:100%;max-width:440px;padding:16px 18px;border:1px dashed var(--line);border-radius:var(--radius);text-align:left;color:var(--accent)}
+.picture-add:hover{background:var(--hover)}
+.picture-add span{display:flex;flex-direction:column;gap:3px}
+.picture-add strong{font-size:13px;font-weight:600}
+.picture-add small{font-size:11px;color:var(--muted);line-height:1.5}
+.frame-layout{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.frame-stage{position:relative;flex:none;background-size:100% 100%;background-color:var(--raised);border-radius:var(--radius);overflow:hidden;touch-action:none}
+.frame-circle{position:absolute;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 999px rgb(0 0 0 / .55);cursor:move}
+.frame-circle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.frame-options{display:flex;flex-direction:column;gap:6px;min-width:200px;align-items:flex-start}
+.frame-options .field-label{width:100%}
+.frame-options input[type=range]{display:block;width:100%;margin-top:8px;accent-color:var(--accent)}
+.ring-choice{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:0;padding:0;margin:14px 0 0}
+.ring-choice legend{font-size:10px;color:var(--muted);margin-bottom:8px}
+.ring-choice button{width:24px;height:24px;border-radius:50%;padding:0}
+.ring-choice button[aria-pressed=true]{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
+.ring-choice .ring-auto{width:auto;height:24px;border-radius:12px;padding:0 10px;font-size:11px;border:1px solid var(--line)}
+.frame-buttons{justify-content:flex-end;margin-top:22px}
+.character-row-picture{flex:none}
+@media(max-width:720px){.picture-panel{flex-direction:column}.picture-full img{max-width:100%}}

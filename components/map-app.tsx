@@ -79,7 +79,8 @@ import ConditionOrganizer from "./condition-organizer";
 import ConditionEntry from "./condition-entry";
 import EffectsPanel from "./effects-panel";
 import TokenLibrary from "./token-library";
-import EncyclopediaTokens, { roleColor, type EncyclopediaCharacter } from "./encyclopedia-tokens";
+import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter } from "./encyclopedia-tokens";
+import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import TokenNotesControl from "./token-notes-control";
 import TokenStatblock from "./token-statblock";
@@ -734,18 +735,44 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     updateScene(s=>s.tokens.push(copy));setSelected(copy.id);setTool("select");setPlayer(false);
   };
   // Tokens from Encyclopedia characters live only in Maptable's data; a same-named library token in this campaign is reused.
-  const addEncyclopediaToken = (c: EncyclopediaCharacter) => {
+  // A character's picture is copied into Maptable's assets once, framed the way its page frames the token.
+  const pictureAsset = async (c: EncyclopediaCharacter) => {
+    if (!c.picture) return null;
+    const r = await fetch("/api/encyclopedia/map-images?id=" + encodeURIComponent(c.picture.imageId));
+    if (!r.ok) throw new Error(`The picture for ${c.name} could not be loaded. Try again, or add it without one from Saved tokens.`);
+    const { src } = await uploadAsset(await r.blob(), `${c.name}.png`), id = uid();
+    commit(w => { w.assets.push({ id, name: c.name.slice(0, 120), src, width: c.picture!.width, height: c.picture!.height, kind: "image" }); w.assetLocations[id] = null; w.assetCampaigns[id] = campaignId; });
+    return id;
+  };
+  const pictureLook = (c: EncyclopediaCharacter, assetId: string) => c.picture ? { assetId, ...tokenImageFit(c.picture), borderColor: c.picture.ring ?? roleColor[c.role], size: c.picture.squares ?? 1 } : {};
+  const addEncyclopediaToken = async (c: EncyclopediaCharacter) => {
     if (!scene || player) return;
     const existing = state.current?.tokenLibrary.find(t => t.name === c.name && (state.current?.libraryCampaigns[t.id] ?? null) === campaignId);
     if (existing) {
-      if (!existing.encyclopediaEntryId) commit(w => { const t = w.tokenLibrary.find(t => t.id === existing.id); if (t) t.encyclopediaEntryId = c.id; });
-      placeLibraryToken({ ...existing, encyclopediaEntryId: existing.encyclopediaEntryId ?? c.id }); return;
+      let look = {};
+      if (c.picture && !existing.assetId) { const assetId = await pictureAsset(c); if (assetId) look = pictureLook(c, assetId); }
+      commit(w => { const t = w.tokenLibrary.find(t => t.id === existing.id); if (t) Object.assign(t, { encyclopediaEntryId: t.encyclopediaEntryId ?? c.id }, look); });
+      placeLibraryToken({ ...existing, encyclopediaEntryId: existing.encyclopediaEntryId ?? c.id, ...look }); return;
     }
+    const assetId = await pictureAsset(c);
     const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), encyclopediaEntryId: c.id, color: roleColor[c.role], useDispositionColor: false,
-      rosterRole: c.role === "npc" ? "npc" : "party", disposition: c.role === "pc" ? "party" : c.role === "companion" ? "ally" : "neutral" };
+      rosterRole: c.role === "npc" || c.role === "creature" ? "npc" : "party", disposition: c.role === "pc" ? "party" : c.role === "companion" ? "ally" : c.role === "creature" ? "enemy" : "neutral",
+      ...(assetId ? pictureLook(c, assetId) : {}) };
     commit(w => { w.tokenLibrary.push(preset); w.libraryCampaigns[preset.id] = campaignId; });
     placeLibraryToken(preset);
   };
+  // "Add to Maptable" on an Encyclopedia page opens Maptable with ?addCharacter=<page id>: add it once the scene is open.
+  const pendingCharacter = useRef<string | null>(null);
+  useEffect(() => { try { pendingCharacter.current = new URLSearchParams(window.location.search).get("addCharacter"); } catch { /* No address to read. */ } }, []);
+  useEffect(() => {
+    const id = pendingCharacter.current;
+    // Wait until a scene is open on the board, not just remembered behind the dashboard.
+    if (!id || !scene || player || dashboard) return;
+    pendingCharacter.current = null;
+    try { const url = new URL(window.location.href); url.searchParams.delete("addCharacter"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
+    loadEncyclopedia(true).then(raw => { const c = encyclopediaCharacters(raw).find(c => c.id === id); if (!c) throw new Error("That character is no longer in your Encyclopedia."); return addEncyclopediaToken(c).then(() => setNotice(`${c.name} is on ${scene.name}.`)); })
+      .catch(e => setNotice(e instanceof Error ? e.message : "Could not add the character."));
+  });
   const addToken = () => {
     setSelectedIds([]);
     setFogSelectedIndices([]);

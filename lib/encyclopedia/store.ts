@@ -109,6 +109,6 @@ export class EncyclopediaStore {
     const grant=await this.grant(token);if(!grant)return null;
     const {data}=await this.read(grant.owner);
     if(!data.campaigns.some(c=>c.id===grant.campaignId))return null;
-    return playerCampaign(data,grant.campaignId).entries.some(e=>e.mapData?.imageId===imageId)?grant.owner:null;
+    return playerCampaign(data,grant.campaignId).entries.some(e=>e.mapData?.imageId===imageId||e.picture?.imageId===imageId)?grant.owner:null;
   }
 }

@@ -19,6 +19,7 @@
 .ency-token-world{margin:14px 0 2px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .ency-token-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px;border-bottom:1px solid var(--line)}
 .ency-token-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:600}
+.ency-token-picture{flex:none;background-color:var(--raised,#333);background-repeat:no-repeat}
 .ency-token-text{display:flex;flex-direction:column;min-width:0}
 .ency-token-text strong{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ency-token-text small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
