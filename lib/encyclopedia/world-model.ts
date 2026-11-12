@@ -108,12 +108,13 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
             }
             seen.add(next);
             const p = entries.get(next);
-            if (!p || p.kind !== "folder" || p.worldId !== e.worldId || p.campaignId !== e.campaignId) {
-                bad("Parent must be a folder in the same campaign or shared lore");
+            // Any page can hold sub-pages, as long as it is in the same campaign (or both are shared lore).
+            if (!p || p.worldId !== e.worldId || p.campaignId !== e.campaignId) {
+                bad("A page can only go inside a page in the same campaign or shared lore");
                 break;
             }
             if (++depth > 20) {
-                bad("Use at most 20 folder levels");
+                bad("Use at most 20 levels of pages");
                 break;
             }
             next = p.parentId;
@@ -145,7 +146,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     });
 }
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
-    if (parent.kind !== "folder" || parent.worldId !== entry.worldId || parent.campaignId !== entry.campaignId)
+    if (parent.worldId !== entry.worldId || parent.campaignId !== entry.campaignId)
         return false;
     let current: Entry | undefined = parent;
     const seen = new Set<string>();
