@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { creatorTools, toolForKey, distance, toUnits, fromUnits, sizeLabel, lineLength, snapPoint, resizeShape, offsetShape } from "../lib/map-creator.ts";
+import { creatorTools, toolForKey, distance, toUnits, fromUnits, sizeLabel, lineLength, snapPoint, resizeShape, offsetShape,
+  rectCorners, roomsTouch, touchingRooms, wallSegments, nearestWall, openingOnWall } from "../lib/map-creator.ts";
+import { mergeRooms } from "../lib/map-drawing.ts";
 
 // 70 px per 5 ft square: 14 px per foot.
 const grid = { size: 70, units: 5, unit: "ft" };
@@ -111,4 +113,115 @@ test("offsetShape never moves a shape past the map edges", () => {
   assert.deepEqual(right.points, rect(70, 70, 70, 70).points);
   const left = offsetShape(shape, -500, -500, 140, 140);
   assert.deepEqual(left.points, rect(0, 0, 70, 70).points);
+});
+
+// Full shapes, as the drawing stores them.
+const room = (id, a, b, extra = {}) => ({ id, type: "rect", closed: true, fill: "#ddd", stroke: "#000", thickness: 4,
+  points: [a, b], roomParts: [], hidden: false, locked: false, name: id, folderId: null, smooth: false, ...extra });
+const opening = (id, type, a, b) => ({ ...room(id, a, b), type, closed: false, fill: null });
+
+test("rectCorners gives the four corners clockwise from the first point", () => {
+  assert.deepEqual(rectCorners(room("r", { x: 10, y: 20 }, { x: 50, y: 60 })), [
+    { x: 10, y: 20 }, { x: 50, y: 20 }, { x: 50, y: 60 }, { x: 10, y: 60 },
+  ]);
+});
+
+test("roomsTouch is true for overlapping rooms", () => {
+  assert.equal(roomsTouch(room("a", { x: 0, y: 0 }, { x: 100, y: 100 }), room("b", { x: 50, y: 50 }, { x: 150, y: 150 })), true);
+});
+
+test("roomsTouch is true for rooms sharing a whole wall, or part of one", () => {
+  const a = room("a", { x: 0, y: 0 }, { x: 100, y: 100 });
+  assert.equal(roomsTouch(a, room("b", { x: 100, y: 0 }, { x: 200, y: 100 })), true);
+  assert.equal(roomsTouch(a, room("c", { x: 100, y: 50 }, { x: 200, y: 200 })), true);
+});
+
+test("roomsTouch is false for rooms that only meet at a corner, or 40 px apart", () => {
+  const a = room("a", { x: 0, y: 0 }, { x: 100, y: 100 });
+  assert.equal(roomsTouch(a, room("b", { x: 100, y: 100 }, { x: 200, y: 200 })), false);
+  assert.equal(roomsTouch(a, room("c", { x: 140, y: 0 }, { x: 240, y: 100 })), false);
+});
+
+test("roomsTouch is true when one room is inside another", () => {
+  assert.equal(roomsTouch(room("a", { x: 0, y: 0 }, { x: 300, y: 300 }), room("b", { x: 100, y: 100 }, { x: 150, y: 150 })), true);
+});
+
+test("touchingRooms returns only other filled rooms that touch the shape", () => {
+  const a = room("a", { x: 0, y: 0 }, { x: 100, y: 100 });
+  const others = [
+    a,                                                            // the shape itself
+    room("b", { x: 50, y: 50 }, { x: 150, y: 150 }),              // touching, filled
+    room("unfilled", { x: 50, y: 50 }, { x: 150, y: 150 }, { fill: null }),
+    room("far", { x: 140, y: 0 }, { x: 240, y: 100 }),           // 40 px away
+  ];
+  assert.deepEqual(touchingRooms(a, others).map(s => s.id), ["b"]);
+});
+
+test("wallSegments gives four segments for a rectangle", () => {
+  assert.equal(wallSegments([room("a", { x: 0, y: 0 }, { x: 100, y: 100 })]).length, 4);
+});
+
+test("wallSegments skips doors and windows", () => {
+  const walls = wallSegments([
+    room("a", { x: 0, y: 0 }, { x: 100, y: 100 }),
+    opening("d", "door", { x: 0, y: 0 }, { x: 10, y: 0 }),
+    opening("w", "window", { x: 0, y: 50 }, { x: 10, y: 50 }),
+  ]);
+  assert.equal(walls.length, 4);
+  assert.ok(walls.every(w => w.shapeId === "a"));
+});
+
+test("wallSegments leaves out walls hidden inside a joined room", () => {
+  const merged = mergeRooms([
+    room("r1", { x: 140, y: 140 }, { x: 560, y: 490 }),
+    room("r2", { x: 560, y: 280 }, { x: 980, y: 700 }),
+  ], "m");
+  assert.ok(merged);
+  const walls = wallSegments([merged]);
+  assert.ok(walls.length > 0);
+  for (const w of walls) {
+    if (w.a.x === 560 && w.b.x === 560) {
+      const lo = Math.min(w.a.y, w.b.y), hi = Math.max(w.a.y, w.b.y);
+      assert.ok(hi <= 280 || lo >= 490, `wall at x=560 from y=${lo} to ${hi} is inside the joined room`);
+    }
+  }
+});
+
+test("a merged room's walls are drawn twice as thick", () => {
+  const merged = mergeRooms([
+    room("r1", { x: 140, y: 140 }, { x: 560, y: 490 }, { thickness: 4 }),
+    room("r2", { x: 560, y: 280 }, { x: 980, y: 700 }, { thickness: 4 }),
+  ], "m");
+  assert.ok(wallSegments([merged]).every(w => w.thickness === 8));
+  assert.ok(wallSegments([room("a", { x: 0, y: 0 }, { x: 100, y: 100 }, { thickness: 4 })]).every(w => w.thickness === 4));
+});
+
+test("nearestWall returns null when no wall is within range", () => {
+  const walls = wallSegments([room("a", { x: 0, y: 0 }, { x: 100, y: 100 })]);
+  assert.equal(nearestWall(walls, { x: 50, y: -20 }, 5), null);
+});
+
+test("nearestWall returns the closest wall within range", () => {
+  const walls = wallSegments([room("a", { x: 0, y: 0 }, { x: 100, y: 100 })]);
+  const top = nearestWall(walls, { x: 50, y: -3 }, 5);
+  assert.deepEqual([top.a, top.b], [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  const right = nearestWall(walls, { x: 97, y: 50 }, 10);
+  assert.deepEqual([right.a, right.b], [{ x: 100, y: 0 }, { x: 100, y: 100 }]);
+});
+
+test("a click makes an opening one width wide, centred on the click", () => {
+  const wall = { a: { x: 0, y: 0 }, b: { x: 100, y: 0 } };
+  assert.deepEqual(openingOnWall(wall, { x: 50, y: 3 }, { x: 50, y: 3 }, 20), [{ x: 40, y: 0 }, { x: 60, y: 0 }]);
+});
+
+test("near a wall's end the opening is pushed inside the wall", () => {
+  const wall = { a: { x: 0, y: 0 }, b: { x: 100, y: 0 } };
+  assert.deepEqual(openingOnWall(wall, { x: 2, y: 3 }, { x: 2, y: 3 }, 20), [{ x: 0, y: 0 }, { x: 20, y: 0 }]);
+  assert.deepEqual(openingOnWall(wall, { x: 99, y: 3 }, { x: 99, y: 3 }, 20), [{ x: 80, y: 0 }, { x: 100, y: 0 }]);
+});
+
+test("a drag gives the dragged span along the wall", () => {
+  const wall = { a: { x: 0, y: 0 }, b: { x: 100, y: 0 } };
+  assert.deepEqual(openingOnWall(wall, { x: 30, y: 0 }, { x: 70, y: 0 }, 20), [{ x: 30, y: 0 }, { x: 70, y: 0 }]);
+  assert.deepEqual(openingOnWall(wall, { x: 70, y: 0 }, { x: 30, y: 0 }, 20), [{ x: 30, y: 0 }, { x: 70, y: 0 }]);
 });
