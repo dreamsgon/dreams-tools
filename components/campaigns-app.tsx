@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronRight, Download, Link2, Map as MapIcon, Plus, Search, X } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Download, Link2, Map as MapIcon, Plus, Search, Tag as TagIcon, X } from "lucide-react";
 import { suggestPairs, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
+import { TagList, TagRow, TagsManager, useTags } from "./tags";
+import { campaignTargets, tagsOn } from "@/lib/tags";
 import "./campaigns.css";
 
 type Dialog = null | { kind: "new" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
@@ -14,6 +16,9 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [query, setQuery] = useState(""), [world, setWorld] = useState<string | null>(null), [archived, setArchived] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null), [dialog, setDialog] = useState<Dialog>(null);
+  const { library } = useTags(), [tagFilter, setTagFilter] = useState<string | null>(null), [tagsOpen, setTagsOpen] = useState(false);
+  const rowTags = (r: CampaignRow) => library ? tagsOn(library, ...campaignTargets(r)) : [];
+  const filterTag = library?.tags.find(t => t.id === tagFilter) ?? null;
 
   useEffect(() => {
     if (!signedIn) return;
@@ -45,7 +50,8 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const rows = useMemo(() => (summary?.rows ?? []).filter(r =>
     (archived || !r.encyclopedia?.archived) &&
     (!world || r.encyclopedia?.worldId === world) &&
-    (!query.trim() || r.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))), [summary, archived, world, query]);
+    (!filterTag || (library ? tagsOn(library, ...campaignTargets(r)) : []).some(t => t.id === filterTag.id)) &&
+    (!query.trim() || r.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))), [summary, archived, world, query, filterTag, library]);
   const archivedCount = (summary?.rows ?? []).filter(r => r.encyclopedia?.archived).length;
   const worldsInUse = (summary?.worlds ?? []).filter(w => !w.archived && summary!.rows.some(r => r.encyclopedia?.worldId === w.id));
   const unpairedMaps = (summary?.rows ?? []).filter(r => r.maptable && !r.encyclopedia);
@@ -79,11 +85,12 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             <button type="button" aria-pressed={!world} onClick={() => setWorld(null)}>All worlds</button>
             {worldsInUse.map(w => <button type="button" key={w.id} aria-pressed={world === w.id} onClick={() => setWorld(w.id)}>{w.name}</button>)}
           </div>}
+          {filterTag && <span className={`tag-chip tag-${filterTag.color} campaigns-tag-filter`}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
         </div>
         <div className="campaigns-table" role="table" aria-label="Campaigns">
           <div className="campaigns-row campaigns-row-head" role="row"><span role="columnheader">Campaign</span><span role="columnheader"><MapIcon size={14} aria-hidden="true" />Maptable</span><span role="columnheader"><BookOpen size={14} aria-hidden="true" />Encyclopedia</span><span role="columnheader"><span className="sr-only">Open</span></span></div>
           {rows.map(r => <div key={r.key} role="row" className={`campaigns-row${r.key === selectedKey ? " selected" : ""}`}>
-            <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button></span>
+            <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
             <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add maps</button>}</span>
             <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><span>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</span><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
@@ -97,10 +104,12 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
         <div className="campaigns-foot">
           {archivedCount > 0 && <span>{plural(archivedCount, "campaign")} in archived worlds <button type="button" className="campaigns-link" onClick={() => setArchived(!archived)}>{archived ? "Hide" : "Show"}</button></span>}
           {summary.loose > 0 && <span><MapIcon size={15} aria-hidden="true" />{plural(summary.loose, "map")} not in a campaign <a className="campaigns-link" href="/maptable">Sort them</a></span>}
+          <span><TagIcon size={15} aria-hidden="true" /><button type="button" className="campaigns-link" onClick={() => setTagsOpen(true)}>Manage tags</button></span>
           <span><Download size={15} aria-hidden="true" /><a className="campaigns-link" href="/api/campaigns?download=backup">Download a backup of both tools</a></span>
         </div>
       </>}
     </div>
+    {tagsOpen && <TagsManager onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
@@ -130,6 +139,7 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
       <button type="button" className="campaigns-icon" onClick={close} aria-label="Close details"><X size={18} /></button>
     </div>
     <h2>{row.name}</h2>
+    <TagRow className="campaigns-tags" targets={campaignTargets(row)} />
     {row.encyclopedia?.description && <p className="campaigns-muted">{row.encyclopedia.description}</p>}
     <div className="campaigns-details-open">
       {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Open in Maptable</a>}

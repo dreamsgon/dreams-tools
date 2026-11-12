@@ -6,6 +6,8 @@ import type { CampaignHub } from "@/lib/campaigns-server";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
 import { FrontPageView, sessionTime } from "./front-page-view";
 import { when } from "./home-campaigns";
+import { TagRow } from "./tags";
+import { campaignTargets } from "@/lib/tags";
 import "./campaign-hub.css";
 
 type Tab = "dashboard" | "front";
@@ -44,6 +46,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       <div className="hub-title">
         <p>Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>
+        <TagRow className="hub-tags" targets={campaignTargets(row)} />
       </div>
     </div>
     <div className="hub-tabs">

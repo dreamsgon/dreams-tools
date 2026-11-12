@@ -465,3 +465,13 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .table-ref,.table-dice{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:1px solid var(--line);border-radius:var(--radius-sm);font:500 12px var(--font-sans);line-height:20px;vertical-align:1px;color:var(--accent);background:var(--panel)}
 .table-dice{background:var(--accent-soft);border-color:transparent}
 .table-ref.missing{color:var(--warning);border-style:dashed}
+/* Tags in quick search */
+.quick-input .tag-chip{flex:none}
+.quick-row .tag-list-inline{flex-wrap:nowrap;justify-content:flex-end}
+.quick-scopes{display:flex;align-items:center;gap:6px;flex:none;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.quick-scopes button{min-height:28px;padding:3px 11px;border:1px solid var(--line-strong);border-radius:999px;background:none;color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+.quick-scopes button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.quick-scopes span{margin-left:auto;color:var(--muted);font-size:12px}
+.quick-foot .quick-manage{margin-left:auto;padding:0;border:0;background:none;color:var(--accent);font:inherit;font-weight:500;cursor:pointer}
+.quick-foot .quick-manage:hover{text-decoration:underline}
+.article-tags{margin:6px 0 16px}
