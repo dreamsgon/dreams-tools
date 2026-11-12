@@ -508,3 +508,5 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .world-generate-preview{display:flex;flex-direction:column;gap:10px}.world-generate-map{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#e7e3d5}.world-generate-map .map-canvas{display:block;width:100%;height:auto}
 .world-generate-actions{justify-content:flex-end}
 @media(max-width:820px){.world-generate{grid-template-columns:1fr}.world-generate-preview{order:-1}}
+.world-chips{display:flex;flex-wrap:wrap;gap:6px}.world-chips button{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);font:inherit;font-size:12px;font-weight:500;cursor:pointer}.world-chips button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.world-field input:not([type]),.world-field input[type=text]{height:34px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:0 8px;background:var(--panel);color:var(--ink);font:inherit;font-weight:400;font-size:13px}

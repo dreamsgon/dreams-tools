@@ -4,7 +4,18 @@ export const terrains=[{name:'Sea',color:'#83afba'},{name:'Grassland',color:'#c0
 export const mapKinds={world:'World map',region:'Area map',hex:'Hex crawl'};
 export const imageIdSchema=z.string().uuid();
 export const weatherLinkSchema=z.object({campaignId:id,calendarId:id,regionId:id});
-export const pinSchema=z.object({weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
+/** What a place is, which sets its symbol on the map. Pins without a kind keep the numbered marker. */
+export const placeKinds=[{id:'city',name:'City'},{id:'town',name:'Town'},{id:'village',name:'Village'},{id:'castle',name:'Castle'},{id:'dungeon',name:'Dungeon'},{id:'ruin',name:'Ruin'},{id:'landmark',name:'Landmark'},{id:'camp',name:'Camp'}] as const;
+export type PlaceKind=typeof placeKinds[number]['id'];
+const point=z.object({x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1)});
+/** Rivers, roads and borders drawn on the map, with points as fractions of the map size. */
+export const pathKinds=[{id:'river',name:'River'},{id:'road',name:'Road'},{id:'border',name:'Border'}] as const;
+export const mapPathSchema=z.object({id,kind:z.enum(['river','road','border']),name:z.string().trim().max(100),points:z.array(point).min(2).max(400),visibility:z.enum(['gm','players'])});
+export type MapPath=z.infer<typeof mapPathSchema>;
+/** Names written on the map itself: seas, regions, mountain ranges. */
+export const mapLabelSchema=z.object({id,text:z.string().trim().min(1).max(80),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),size:z.enum(['small','medium','large']),visibility:z.enum(['gm','players'])});
+export type MapLabel=z.infer<typeof mapLabelSchema>;
+export const pinSchema=z.object({kind:z.enum(placeKinds.map(k=>k.id) as [PlaceKind,...PlaceKind[]]).optional(),areaMapId:id.nullable().optional(),weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
 export const routeSchema=z.object({id,name:z.string().trim().min(1).max(100),unit:z.enum(['mi','km']),stops:z.array(id).min(2).max(20),distances:z.array(z.number().finite().positive().max(1000000)).min(1).max(19),speed:z.number().finite().min(.1).max(10000),hoursPerDay:z.number().finite().min(1).max(24),visibility:z.enum(['gm','players'])}).superRefine((r,ctx)=>{if(r.distances.length!==r.stops.length-1||r.stops.some((s,i)=>i>0&&s===r.stops[i-1]))ctx.addIssue({code:'custom',message:'Routes need a distance for each leg and different adjacent stops.'});});
 export type MapRoute=z.infer<typeof routeSchema>;
 /** Painted terrain: a finer raster than the map's cells, stored as runs of terrain numbers ("<terrain><count in base 36>", joined by dots). */
@@ -26,6 +37,7 @@ export const mapSchema=z.object({
  scale:z.object({width:z.number().finite().positive().max(10000000),unit:z.enum(['mi','km'])}).optional(),routes:z.array(routeSchema).max(50).optional(),
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
+ paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
  if(m.source==='generated'&&m.tiles.length!==m.columns*m.rows)bad('Terrain must match the map dimensions');
@@ -37,6 +49,7 @@ export const mapSchema=z.object({
  for(const route of m.routes??[])if(route.stops.some(id=>!m.pins.some(p=>p.id===id)))bad('Every route stop must be a location on this map');
  if(new Set(m.pins.map(p=>p.id)).size!==m.pins.length)bad('Map pin IDs must be unique');
  if(m.paint&&m.source!=='generated')bad('Only drawn terrain can be painted');
+ if(new Set([...(m.paths??[]).map(p=>p.id),...(m.labels??[]).map(l=>l.id)]).size!==(m.paths?.length??0)+(m.labels?.length??0))bad('Map path and label IDs must be unique');
 });
 export type MapData=z.infer<typeof mapSchema>;
 export type MapPin=z.infer<typeof pinSchema>;
@@ -125,7 +138,16 @@ export function playerMap(m:MapData):MapData{
   tiles:fog?m.tiles.map((v,i)=>visible.has(i)?v:0):m.tiles,
   paint:fog&&m.paint?hiddenPaint(m,m.paint,visible):m.paint,
   fog:m.fog?{enabled:m.fog.enabled,revealed:[...m.fog.revealed]}:undefined,
-  pins:m.pins.filter(p=>p.visibility==='players'&&pointRevealed(m,p.x,p.y))};
+  pins:m.pins.filter(p=>p.visibility==='players'&&pointRevealed(m,p.x,p.y)),
+  paths:m.paths?.filter(p=>p.visibility==='players').flatMap(p=>revealedRuns(m,p.points).map((points,i)=>({...p,id:i?`${p.id}-${i}`.slice(0,100):p.id,points}))),
+  labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y))};
+}
+/** The parts of a line that lie outside the fog, so players only get what they have seen. */
+export function revealedRuns(m:MapData,points:{x:number;y:number}[]){
+ if(!m.fog?.enabled||m.fog.revealed.length===m.columns*m.rows)return [points];
+ const cell=cellFinder(m),visible=new Set(m.fog.revealed),runs:{x:number;y:number}[][]=[];let run:{x:number;y:number}[]=[];
+ for(const p of points){if(visible.has(cell(p.x,p.y)))run.push(p);else{if(run.length>=2)runs.push(run);run=[];}}
+ if(run.length>=2)runs.push(run);return runs;
 }
 /** Paint with every square under fog turned to sea, so players never receive hidden terrain. */
 function hiddenPaint(m:MapData,paint:MapPaint,visible:Set<number>):MapPaint{

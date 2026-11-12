@@ -15,7 +15,7 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
   const set = (patch: Partial<WorldOptions>) => setO(v => ({ ...v, ...patch }));
   const result = useMemo(() => generateWorld({ ...o, seed: o.seed.trim() || 'world' }, map), [o, map]);
   const preview: MapData = { ...map, ...result, source: 'generated', imageId: null, fog: undefined, routes: [], compass: true, scaleBar: true };
-  const added = result.pins.length - map.pins.length;
+  const added = result.pins.filter(p => !map.pins.some(q => q.id === p.id)).length;
   return <ToolDialog title="Generate a world" wide onClose={onClose}>
     <div className="world-generate">
       <div className="world-generate-options">
@@ -30,14 +30,14 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
         <div className="world-field">Climate
           <div className="world-seg" role="group" aria-label="Climate">{worldClimates.map(c => <button key={c.id} type="button" aria-pressed={o.climate === c.id} onClick={() => set({ climate: c.id })}>{c.name}</button>)}</div>
         </div>
-        <label className="world-check"><input type="checkbox" checked={o.places} onChange={e => set({ places: e.target.checked })}/><span>Add towns with made-up names<small>{o.places ? `${added} town${added === 1 ? '' : 's'}, GM only until you share them. You can rename them.` : 'Places already on the map always stay.'}</small></span></label>
+        <label className="world-check"><input type="checkbox" checked={o.places} onChange={e => set({ places: e.target.checked })}/><span>Add towns and roads<small>{o.places ? `${added} place${added === 1 ? '' : 's'} with made-up names, GM only until you share them. Places you have written notes for always stay.` : 'Places already on the map stay.'}</small></span></label>
         <div className="world-field">Seed (the same seed always makes the same world)
           <div className="world-seed"><input aria-label="Seed" value={o.seed} maxLength={100} onChange={e => set({ seed: e.target.value })}/><button type="button" className="button" onClick={() => set({ seed: randomWorldSeed() })}><Dices size={15}/> Reroll</button></div>
         </div>
       </div>
       <div className="world-generate-preview">
         <div className="world-generate-map"><MapCanvas map={preview}/></div>
-        <p className="aside-hint">The terrain is painted, not tiled, so you can keep shaping coasts and forests with the brush afterwards. This replaces the terrain and sets the map width to {result.scale!.width.toLocaleString()} {result.scale!.unit}.</p>
+        <p className="aside-hint">The terrain is painted, not tiled, so you can keep shaping coasts and forests with the brush afterwards. Rivers run downhill from the mountains to the sea. This replaces the terrain and the rivers and roads it made before, and sets the map width to {result.scale!.width.toLocaleString()} {result.scale!.unit}.</p>
         <div className="button-row world-generate-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="button" className="button primary" onClick={() => onUse({ ...result, compass: map.compass ?? true, scaleBar: map.scaleBar ?? true })}>Use this world</button></div>
       </div>
     </div>

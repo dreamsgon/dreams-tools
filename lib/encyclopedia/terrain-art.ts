@@ -203,3 +203,28 @@ export function paintStroke(cells: Uint8Array, columns: number, rows: number, fr
   }
   return changed;
 }
+
+/** A smooth curve through points given as fractions of a map of width × height. */
+export function smoothLine(points: { x: number; y: number }[], width: number, height: number) {
+  const pts = points.map(p => [r1(p.x * width), r1(p.y * height)] as const);
+  if (pts.length < 2) return "";
+  if (pts.length === 2) return `M${pts[0][0]} ${pts[0][1]}L${pts[1][0]} ${pts[1][1]}`;
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = r1((pts[i][0] + pts[i + 1][0]) / 2), my = r1((pts[i][1] + pts[i + 1][1]) / 2);
+    d += `Q${pts[i][0]} ${pts[i][1]} ${mx} ${my}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + `L${last[0]} ${last[1]}`;
+}
+
+/** Thins a freehand line: drops points closer than `gap` (in map fractions) to the last kept one. */
+export function thinLine(points: { x: number; y: number }[], gap: number) {
+  if (points.length < 3) return points;
+  const out = [points[0]];
+  for (const p of points.slice(1, -1)) { const q = out[out.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) >= gap) out.push(p); }
+  const end = points[points.length - 1], q = out[out.length - 1];
+  if (out.length > 1 && Math.hypot(end.x - q.x, end.y - q.y) < gap / 2) out.pop();
+  out.push(end);
+  return out.slice(0, 400);
+}
