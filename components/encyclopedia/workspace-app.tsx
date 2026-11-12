@@ -20,6 +20,8 @@ import {RollResults} from "./rolls";
 import {DiscordRollsSetting} from "./discord-rolls";
 import {RandomTablesSection} from "./random-tables";
 import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
+import {placeFromQuery,placeQuery} from "@/lib/encyclopedia/place";
+const PLACE_KEY = "encyclopedia:place";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks };
 const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Checklist" };
 type Modal = {
@@ -56,14 +58,14 @@ export default function WorkspaceApp() {
         setData(checked);
         revision.current = body.revision;
         const first = checked.worlds.find(w => !w.archived&&!w.isTemplate) ?? checked.worlds.find(w=>!w.isTemplate);
-        // /encyclopedia?entry=<id> (from a Maptable token) opens that entry once, then the address is tidied.
-        // Read the address once: the tidy-up below must not hide the link from a second load.
-        const query = (linkQuery.current ??= new URLSearchParams(window.location.search)), linked = query.get("entry"), target = linked ? checked.entries.find(e => e.id === linked) : undefined;
-        // /encyclopedia?campaign=<id> (from the Campaigns page) opens that campaign once.
-        const linkedCampaign = query.get("campaign"), campaignTarget = linkedCampaign ? checked.campaigns.find(c => c.id === linkedCampaign) : undefined;
-        if (linked || linkedCampaign) window.history.replaceState(null, "", window.location.pathname);
-        if (campaignTarget && !target) { setWorldId(campaignTarget.worldId); setCampaignId(campaignTarget.id); setView("overview"); }
-        else if (target) { setWorldId(target.worldId); setCampaignId(target.campaignId ?? null); setView("overview"); setSelected(target.id); }
+        // The address says where you were (?entry=, ?campaign=, ?world=&view=), so a refresh or Back returns there.
+        // Links from Maptable tokens and the Campaigns page use the same address. Without one, this tab's last place is used.
+        // Read the address once: a second load must not lose it.
+        const query = (linkQuery.current ??= new URLSearchParams(window.location.search));
+        let stored: URLSearchParams | null = null;
+        try { stored = new URLSearchParams(sessionStorage.getItem(PLACE_KEY) ?? ""); } catch { /* Storage is optional. */ }
+        const place = placeFromQuery(query, checked) ?? (stored ? placeFromQuery(stored, checked) : null);
+        if (place) { setWorldId(place.worldId); setCampaignId(place.campaignId); setView(place.view); setSelected(place.entryId); }
         else { setWorldId(first?.id ?? ""); setCampaignId(null); }
         setLoaded(true);
         setStatus("All changes saved");
@@ -75,6 +77,12 @@ export default function WorkspaceApp() {
         e.preventDefault();
     } }; window.addEventListener("beforeunload", leave); return () => { window.removeEventListener("beforeunload", leave); if (timer.current)
         clearTimeout(timer.current); }; }, []);
+    useEffect(() => {
+        if (!loaded) return;
+        const search = placeQuery({ worldId, campaignId, view, entryId: view === "overview" ? selected : null });
+        try { sessionStorage.setItem(PLACE_KEY, search); } catch { /* Storage is optional. */ }
+        if (search !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + search + window.location.hash);
+    }, [loaded, worldId, campaignId, view, selected]);
     useEffect(() => { if (toast) {
         const t = setTimeout(() => setToast(""), 4000);
         return () => clearTimeout(t);
