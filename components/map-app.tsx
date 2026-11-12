@@ -261,10 +261,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     try {
       sessionStorage.setItem(navigationStorageKey(navigationScope), JSON.stringify({
         version: 1, dashboard, creatorOpen, panel, sidebar, activeId: workspace.activeId,
-        location, dashboardLocation, conditionLocation,
+        location, dashboardLocation, conditionLocation, overview,
       }));
     } catch { /* Browsers may disable session storage. Navigation still works. */ }
-  }, [navigationReady, navigationScope, workspace, dashboard, creatorOpen, panel, sidebar, location, dashboardLocation, conditionLocation]);
+  }, [navigationReady, navigationScope, workspace, dashboard, creatorOpen, panel, sidebar, location, dashboardLocation, conditionLocation, overview]);
   const scene =
     workspace?.scenes.find((s) => s.id === workspace.activeId) ||
     workspace?.scenes[0];
@@ -329,6 +329,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           setLocation(validLocation(saved.location));
           setDashboardLocation(validLocation(saved.dashboardLocation));
           setConditionLocation(data.conditionFolders.some(c => c.id === saved.conditionLocation) ? saved.conditionLocation : null);
+          // A campaign that was deleted since falls back to the dashboard's campaign list.
+          if (saved.overview && (saved.overview.id === null || data.collections.some(c => c.id === saved.overview?.id && c.kind === "campaign"))) setOverview(saved.overview);
         }
         // /maptable?campaign=<id> (from the Campaigns page) opens that campaign's scenes once.
         if (!linked && requestedCampaign && data.collections.some(c => c.id === requestedCampaign && c.kind === "campaign")) {

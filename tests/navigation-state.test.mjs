@@ -4,10 +4,10 @@ import { navigationStorageKey, parseNavigationState } from "../lib/navigation-st
 import { preserveActiveScene } from "../lib/workspace-sync.ts";
 
 const navigation = { version: 1, dashboard: false, creatorOpen: true, panel: "fog", sidebar: false,
-  activeId: "map-2", location: "folder", dashboardLocation: null, conditionLocation: "conditions" };
+  activeId: "map-2", location: "folder", dashboardLocation: null, conditionLocation: "conditions", overview: { id: "camp" } };
 
 test("refresh navigation round trips dashboard, creator and collapsed sidebar states", () => {
-  for (const value of [navigation, { ...navigation, dashboard: true, creatorOpen: false, panel: null }]) {
+  for (const value of [navigation, { ...navigation, dashboard: true, creatorOpen: false, panel: null, overview: { id: null } }]) {
     assert.deepEqual(parseNavigationState(JSON.stringify(value)), value);
   }
 });
@@ -18,6 +18,13 @@ test("malformed and obsolete navigation cannot restore invalid controls", () => 
     JSON.stringify({ ...navigation, activeId: {} }), JSON.stringify({ ...navigation, location: "" })]) {
     assert.equal(parseNavigationState(value), null);
   }
+});
+
+test("the open campaign on the dashboard is restored, and older saves without it still load", () => {
+  const { overview: _, ...older } = navigation;
+  assert.deepEqual(parseNavigationState(JSON.stringify(older)), { ...older, overview: null });
+  assert.deepEqual(parseNavigationState(JSON.stringify({ ...navigation, overview: { id: "" } })), { ...navigation, overview: null });
+  assert.deepEqual(parseNavigationState(JSON.stringify({ ...navigation, overview: { id: 5 } })), { ...navigation, overview: null });
 });
 
 test("storage keys isolate accounts and encode identifier separators", () => {
