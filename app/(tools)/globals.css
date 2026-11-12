@@ -2004,3 +2004,61 @@ h3 { color:var(--ink); font-size:13px; }
 /* Dice and Roll log: tool bar buttons on desktop, Tools sheet buttons on phones. */
 @media(max-width:799px) { .app-shell .toolbar .dice-tool { display:none; } }
 @media(min-width:800px) { .app-shell .rail .mobile-only { display:none; } }
+
+/* Part 3: everything fits. */
+.rail { overflow-y:auto; min-height:0; scrollbar-width:thin; }
+@media(min-width:800px) and (max-height:940px) { .rail { gap:4px; padding-top:10px; padding-bottom:10px; } .rail button { min-height:50px; padding:6px 2px; } }
+.side-panel { font-size:13px; }
+.side-panel p { line-height:1.5; }
+.side-panel summary { font-size:13px; font-weight:600; cursor:pointer; padding:4px 0; }
+.side-panel label:has(> input[type="checkbox"]), .side-panel label:has(> input[type="radio"]) { display:flex; align-items:center; gap:8px; font-size:13px; }
+.side-panel .button-row { flex-wrap:wrap; }
+.side-panel .button-row > button { min-width:0; white-space:normal; }
+@media(max-width:600px) {
+ .rpg-hub .site-header { flex-wrap:wrap; row-gap:10px; }
+ .rpg-hub .site-header nav { width:100%; justify-content:flex-start; flex-wrap:wrap; }
+ .rpg-hub .site-header nav .theme-toggle { order:1; margin-left:auto; }
+}
+
+/* Part 4: Campaigns dashboard. */
+.dashboard-content { max-width:1040px; }
+.dashboard-continue { display:flex; width:100%; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; margin-bottom:28px; text-align:left; background:var(--green-soft); border:1px solid var(--green); border-radius:10px; color:var(--ink); }
+.dashboard-continue > span:first-child { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.dashboard-continue small { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--green); }
+.dashboard-continue strong { font-size:21px; overflow-wrap:anywhere; }
+.dashboard-continue > span:first-child > span { font-size:14px; color:var(--muted); }
+.dashboard-continue-action { display:inline-flex; align-items:center; gap:4px; padding:10px 16px; border-radius:7px; background:#106b63; color:#fff; font-weight:600; white-space:nowrap; }
+.dashboard-continue:hover .dashboard-continue-action { background:#0c5953; }
+.dashboard-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.dashboard-title h1 { margin:0; }
+.dashboard-actions { margin-bottom:16px; flex-wrap:wrap; }
+.dashboard-content .dashboard-organizer { background:transparent; border:0; box-shadow:none; padding:0; }
+.dashboard-organizer .organizer-tree { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
+.dashboard-organizer .organizer-tree > [data-kind="folder"], .dashboard-organizer .organizer-children > [data-kind="folder"] { grid-column:1/-1; }
+.dashboard-organizer .organizer-children { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; padding:10px 0 4px 18px; }
+.dashboard-organizer [data-kind="campaign"] > .organizer-row { height:100%; min-height:112px; align-items:stretch; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+.dashboard-organizer [data-kind="campaign"] > .organizer-row:hover { border-color:var(--green); }
+.dashboard-organizer [data-kind="campaign"] .collection-primary { flex-direction:column; align-items:flex-start; padding:16px 12px; }
+.dashboard-organizer [data-kind="campaign"] .collection-primary svg { color:var(--green); }
+.dashboard-organizer [data-kind="campaign"] .collection-primary strong { font-size:16px; }
+.dashboard-organizer [data-kind="campaign"] .organizer-row > .collection-pin, .dashboard-organizer [data-kind="campaign"] .organizer-row > .collection-edit:last-child { align-self:flex-start; margin-top:8px; }
+.collection-badge { display:inline-block; margin-top:4px; font-style:normal; font-size:11px; font-weight:600; color:var(--green); }
+.dashboard-unfiled { display:flex; align-items:center; justify-content:flex-start; gap:12px; width:100%; margin-top:14px; padding:16px; text-align:left; background:transparent; border:1px dashed var(--line); border-radius:10px; color:var(--ink); }
+.dashboard-unfiled:hover { border-color:var(--green); }
+.dashboard-unfiled span { display:flex; flex-direction:column; gap:2px; }
+.dashboard-unfiled small { font-size:12px; color:var(--muted); }
+.dashboard-empty { padding:24px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); text-align:center; }
+.campaign-dashboard > header .icon-button { width:38px; padding:0; }
+@media(max-width:600px) { .dashboard-continue { flex-direction:column; align-items:stretch; } .dashboard-continue-action { justify-content:center; } }
+
+/* Breadcrumb back to Campaigns from a map. */
+.app-header .header-scene { gap:8px; }
+.app-header .crumb { min-height:32px; padding:4px 8px; font-size:13px; font-weight:500; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--chrome-text); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
+.app-header .crumb-home { display:inline-flex; align-items:center; gap:6px; background:#273544; border-color:#536477; }
+.app-header .crumb-home svg { color:#70d8cc; }
+.app-header .crumb:hover { background:#273544; border-color:#536477; }
+.app-header .crumb-sep { color:var(--chrome-muted); flex-shrink:0; }
+.app-header .header-scene strong { font-size:13px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.header-campaigns-compact { display:none; }
+@media(max-width:1000px) { .app-header .header-campaigns-compact { display:inline-flex; align-items:center; gap:2px; min-height:40px; padding:6px 10px; background:#273544; border:1px solid #536477; color:#f0f3f7; font-weight:600; margin-right:auto; margin-left:8px; } }
+@media(max-width:600px) { .campaign-dashboard > header { padding:12px 16px; } .campaign-dashboard > header .header-actions { width:100%; flex-wrap:wrap; gap:8px; } .campaign-dashboard > header .header-link { padding-left:0; margin-right:auto; } }
