@@ -3,6 +3,8 @@
  * each change replaced so the GM can undo it. Also holds the campaign's "paused" switch.
  */
 import type { S3Bucket } from "../storage.ts";
+import { stable } from "../stable-json.ts";
+export { stable };
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import type { Entry, Workspace } from "../encyclopedia/world-model.ts";
 import type { TablePart } from "./table.ts";
@@ -24,12 +26,6 @@ export type ActivityLog = { paused: boolean; entries: ActivityEntry[] };
 export const ACTIVITY_LIMIT = 200;
 const path = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `ai-activity/${encodeURIComponent(campaignId)}.json`;
 
-/** JSON with sorted keys, so two copies of the same page always compare equal. */
-export function stable(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
-  if (v && typeof v === "object") return `{${Object.keys(v).filter(k => (v as Record<string, unknown>)[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(",")}}`;
-  return JSON.stringify(v);
-}
 /** A short fingerprint of a page (FNV-1a, two lanes). */
 export function fingerprint(e: Entry): string {
   const s = stable(e);

@@ -5,7 +5,7 @@
  * and it is named in `both` so the app can say so.
  */
 import { workspaceSchema, type Workspace } from "./world-model.ts";
-import { stable } from "../mcp/activity.ts";
+import { stable } from "../stable-json.ts";
 
 type Item = { id: string };
 function join<T extends Item>(base: T[], mine: T[], theirs: T[], both: string[], name: (t: T) => string): T[] {
