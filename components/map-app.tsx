@@ -1074,7 +1074,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <Breadcrumbs items={sceneTrail()} />
         </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
-        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
+        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} scene={scene?.name} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
         {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>

@@ -5,14 +5,21 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bot, Check, Dices, Map as MapIcon, Pause, Play, ScrollText, Undo2, User, X } from "lucide-react";
+import { ArrowUp, Bot, Check, Dices, Map as MapIcon, Pause, Play, RotateCcw, ScrollText, Undo2, User, X } from "lucide-react";
 import "./ai-connection.css";
 
 type Line = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; undone?: string; canUndo: boolean };
 /** Where a suggested move would put a token, for the dashed token on the map. */
 export type SuggestedMove = { id: string; sceneId: string; tokenId: string; x: number; y: number; label: string };
 type Waiting = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; args: Record<string, unknown>; preview?: Omit<SuggestedMove, "id" | "label"> };
-type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; connected: string[]; hasConnections: boolean };
+/** A connection made with an API key: the GM can ask it from this panel. */
+type Chat = { id: string; name: string; provider: string; model: string };
+type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; connected: string[]; hasConnections: boolean; chat?: Chat[] };
+type Step = { tool: string; title: string; ok: boolean; waiting?: string; summary?: string };
+type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true };
+/** The conversation is kept for this browser tab only. */
+const saved = (key: string): Said[] => { try { return JSON.parse(sessionStorage.getItem(key) ?? "[]") as Said[]; } catch { return []; } };
+const keep = (key: string, said: Said[]) => { try { sessionStorage.setItem(key, JSON.stringify(said.slice(-40))); } catch { /* Private windows may block storage. */ } };
 
 /** The approve button says what it does. */
 const verb = (tool: string) => ({ move_token: "Move", roll: "Roll it", set_condition: "Add", damage: "Apply", heal: "Heal", reveal_fog: "Reveal", show_token: "Show", start_combat: "Start", next_turn: "Next turn", end_combat: "End" } as Record<string, string>)[tool] ?? "Approve";
@@ -30,8 +37,10 @@ const time = (iso: string) => {
 const argNames: Record<string, string> = { to: "Move to", as: "Roll as", for: "What for", on: "On" };
 const argName = (k: string) => argNames[k] ?? (k[0]!.toUpperCase() + k.slice(1).replace(/([A-Z])/g, " $1").toLowerCase());
 
-export function AiActivity({ campaignId, maptableCampaignId, combat, onChanged, onSuggestedMoves, onSettings }: {
+export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onChanged, onSuggestedMoves, onSettings }: {
   campaignId?: string; maptableCampaignId?: string; combat?: { round: number; turn: string; next?: string } | null; onChanged: () => void;
+  /** Maptable: the open scene, so the AI knows what the GM is looking at. */
+  scene?: string;
   /** Maptable: the moves waiting for an OK, to draw as dashed tokens. */
   onSuggestedMoves?: (moves: SuggestedMove[]) => void;
   /** Opens "What it may do" for the connections. Without it, the link goes to the Encyclopedia. */
@@ -39,6 +48,8 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, onChanged, 
 }) {
   const [state, setState] = useState<State | null>(null), [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [top, setTop] = useState(48);
   const [changing, setChanging] = useState<{ id: string; args: Record<string, unknown> } | null>(null);
+  const [tab, setTab] = useState<"ask" | "activity">("ask"), [talkTo, setTalkTo] = useState(""), [chatLog, setChatLog] = useState<{ key: string; list: Said[] }>({ key: "", list: [] }), [draft, setDraft] = useState(""), [thinking, setThinking] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null);
   const newest = useRef<string | null>(null), changed = useRef(onChanged), chip = useRef<HTMLButtonElement>(null), moves = useRef(onSuggestedMoves), lastMoves = useRef("[]");
   useEffect(() => { moves.current = onSuggestedMoves; }, [onSuggestedMoves]);
   const which: Record<string, string> = campaignId ? { campaignId } : { maptableCampaignId: maptableCampaignId ?? "" };
@@ -78,38 +89,91 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, onChanged, 
     finally { setBusy(""); }
   }
 
+  const chats = state?.chat ?? [], chat = chats.find(c => c.id === talkTo) ?? chats[0];
+  const store = `rpg-ai-chat:${campaignId ?? maptableCampaignId}:${chat?.id ?? ""}`;
+  const said = chatLog.key === store ? chatLog.list : chat ? saved(store) : [];
+  const setSaid = (list: Said[]) => setChatLog({ key: store, list });
+  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [said.length, store, thinking, open, tab]);
+
+  async function ask() {
+    const text = draft.trim();
+    if (!text || !chat || thinking) return;
+    const next: Said[] = [...said.filter(m => !m.error), { role: "user", text }];
+    setSaid(next); keep(store, next); setDraft(""); setThinking(true);
+    try {
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: chat.id, scene, messages: next.map(m => ({ role: m.role, text: m.text })) }) });
+      const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string };
+      if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
+      const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");
+      const done: Said[] = [...next, { role: "assistant", text: reply, steps: body.steps ?? [] }];
+      setSaid(done); keep(store, done);
+      if (body.steps?.some(st => st.ok)) changed.current();
+      await load();
+    } catch (e) { setSaid([...next, { role: "assistant", text: e instanceof Error ? e.message : "Could not ask the AI.", error: true }]); }
+    finally { setThinking(false); }
+  }
+
   if (!state?.hasConnections) return null;
-  const who = state.connected[0], waiting = state.waiting ?? [];
+  const who = state.connected[0], waiting = state.waiting ?? [], showing = chat ? tab : "activity";
+  const card = (w: Waiting) => <>
+    <span className="ai-waiting-icon" aria-hidden>{icon(w.tool)}</span>
+    <div>
+      <strong>{w.summary}</strong>
+      {w.detail && <span>{w.detail}</span>}
+      {w.preview && <span>Shown on the map as a dashed token.</span>}
+      {changing?.id === w.id ? <form className="ai-change" onSubmit={e => { e.preventDefault(); void act("approve", w.id, changing.args); }}>
+        {editable(changing.args).map(([k, v]) => <label key={k}><span>{argName(k)}</span>{typeof v === "boolean"
+          ? <input type="checkbox" checked={v} onChange={e => setChanging({ id: w.id, args: { ...changing.args, [k]: e.target.checked } })}/>
+          : <input value={String(v)} inputMode={typeof v === "number" ? "numeric" : undefined} onChange={e => setChanging({ id: w.id, args: { ...changing.args, [k]: typeof v === "number" ? (e.target.value.trim() === "" ? "" : Number(e.target.value)) : e.target.value } })}/>}</label>)}
+        <div className="ai-waiting-actions"><button type="submit" className="button small primary" disabled={!!busy}><Check size={14}/> {busy === w.id ? "Working…" : verb(w.tool)}</button><button type="button" className="button small" onClick={() => setChanging(null)}>Cancel</button></div>
+      </form> : <div className="ai-waiting-actions">
+        <button className="button small primary" disabled={!!busy} onClick={() => void act("approve", w.id)}><Check size={14}/> {busy === w.id ? "Working…" : verb(w.tool)}</button>
+        {editable(w.args).length > 0 && <button className="button small" disabled={!!busy} onClick={() => setChanging({ id: w.id, args: w.args })}>Change</button>}
+        <button className="button small quiet" disabled={!!busy} onClick={() => void act("skip", w.id)}>Skip</button>
+      </div>}
+      <small>{w.connection} · {time(w.at)}</small>
+    </div>
+  </>;
+  /** Under an answer: what it looked up, and anything it asked for, with the same buttons as the Activity tab. */
+  const steps = (list: Step[]) => {
+    const looked = [...new Set(list.filter(st => !st.waiting).map(st => st.title))];
+    return <>
+      {list.filter(st => st.waiting).map(st => {
+        const w = waiting.find(x => x.id === st.waiting), line = state.entries.find(x => x.id === st.waiting) as (Line & { decided?: string }) | undefined;
+        return w ? <div key={st.waiting} className="ai-chat-card">{card(w)}</div> : <p key={st.waiting} className="ai-chat-decided"><Check size={13}/> {st.summary}{line?.undone ? " · undone" : ""}</p>;
+      })}
+      {looked.length > 0 && <p className="ai-chat-used">Used: {looked.join(", ")}</p>}
+    </>;
+  };
   return <>
     <button ref={chip} className={`ai-chip${state.paused ? " paused" : waiting.length ? " asking" : who ? " live" : ""}`} onClick={() => { setTop(chip.current?.closest("header")?.getBoundingClientRect().bottom ?? 48); setOpen(!open); }} aria-expanded={open} aria-controls="ai-activity" title="AI activity">
-      <Bot size={15}/><span>{state.paused ? "AI paused" : waiting.length ? <><span className="ai-chip-name">{waiting[0].connection} is helping · </span>{waiting.length} to approve</> : who && combat ? "AI is running combat" : who ? <>AI connected<span className="ai-chip-name"> · {who}</span></> : "AI activity"}</span>
+      <Bot size={15}/><span>{state.paused ? "AI paused" : !waiting.length && chat && !who ? <>Ask<span className="ai-chip-name"> {chat.name}</span></> : waiting.length ? <><span className="ai-chip-name">{waiting[0].connection} is helping · </span>{waiting.length} to approve</> : who && combat ? "AI is running combat" : who ? <>AI connected<span className="ai-chip-name"> · {who}</span></> : "AI activity"}</span>
     </button>
     {/* In document.body, so the panel sits above the map's own layers. */}
     {open && createPortal(<aside className="ai-panel" id="ai-activity" aria-label="AI activity" style={{ top }}>
-      <div className="ai-panel-head"><Bot size={16}/><h2>AI activity</h2><span className="ai-panel-who">{state.paused ? "Paused" : who ?? "Not connected now"}</span><button className="icon-button" aria-label="Close AI activity" onClick={() => setOpen(false)}><X size={16}/></button></div>
+      <div className="ai-panel-head"><Bot size={16}/>{chat ? <div className="ai-panel-tabs" role="tablist">
+        <button role="tab" aria-selected={showing === "ask"} onClick={() => setTab("ask")}>Ask {chat.name}</button>
+        <button role="tab" aria-selected={showing === "activity"} onClick={() => setTab("activity")}>Activity{waiting.length ? ` · ${waiting.length} waiting` : ""}</button>
+      </div> : <><h2>AI activity</h2><span className="ai-panel-who">{state.paused ? "Paused" : who ?? "Not connected now"}</span></>}<button className="icon-button" aria-label="Close AI activity" onClick={() => setOpen(false)}><X size={16}/></button></div>
+      {showing === "ask" && chat && <>
+        {chats.length > 1 && <label className="ai-chat-pick">Ask <select value={chat.id} onChange={e => setTalkTo(e.target.value)}>{chats.map(c => <option key={c.id} value={c.id}>{c.name} ({c.provider})</option>)}</select></label>}
+        <div className="ai-chat" aria-live="polite">
+          {!said.length && <p className="ai-panel-empty">Ask {chat.name} about this campaign{scene ? " or the open scene" : ""}: what a monster does on its turn, a line of read-aloud, a name for the innkeeper. What it may change follows What it may do, so moves and rolls can wait for your OK here.</p>}
+          {said.map((m, i) => m.role === "user" ? <p key={i} className="ai-chat-me">{m.text}</p> : <div key={i} className={`ai-chat-ai${m.error ? " error" : ""}`}>{m.text.split(/\n{2,}/).map((para, j) => <p key={j}>{para}</p>)}{m.steps && steps(m.steps)}</div>)}
+          {thinking && <p className="ai-chat-thinking">{chat.name} is thinking…</p>}
+          <div ref={bottom}/>
+        </div>
+        <form className="ai-chat-box" onSubmit={e => { e.preventDefault(); void ask(); }}>
+          <div className="ai-chat-meta">{scene && <span>Sees: {scene}</span>}<span>{chat.model}</span>{said.length > 0 && <button type="button" onClick={() => { setSaid([]); keep(store, []); }}><RotateCcw size={12}/> New chat</button>}</div>
+          <div className="ai-chat-row"><textarea value={draft} rows={2} placeholder={`Ask ${chat.name}…`} aria-label={`Ask ${chat.name}`} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(); } }}/><button type="submit" className="button primary" aria-label="Send" disabled={!draft.trim() || thinking}><ArrowUp size={16}/></button></div>
+        </form>
+      </>}
+      {showing === "activity" && <>
       {combat && <p className="ai-panel-combat"><span>Round {combat.round}</span><strong>{combat.turn}’s turn</strong>{combat.next && <span>Next: {combat.next}</span>}</p>}
       {note && <p className="ai-panel-note" role="status">{note}</p>}
       {waiting.length > 0 && <section className="ai-waiting" aria-label="Waiting for you">
         <div className="ai-waiting-head"><h3>Waiting for you · {waiting.length}</h3>{waiting.length > 1 && <button className="button small" disabled={!!busy} onClick={() => void act("approveAll")}>{busy === "approveAll" ? "Approving…" : "Approve all"}</button>}</div>
-        <ol>{[...waiting].reverse().map(w => <li key={w.id}>
-          <span className="ai-waiting-icon" aria-hidden>{icon(w.tool)}</span>
-          <div>
-            <strong>{w.summary}</strong>
-            {w.detail && <span>{w.detail}</span>}
-            {w.preview && <span>Shown on the map as a dashed token.</span>}
-            {changing?.id === w.id ? <form className="ai-change" onSubmit={e => { e.preventDefault(); void act("approve", w.id, changing.args); }}>
-              {editable(changing.args).map(([k, v]) => <label key={k}><span>{argName(k)}</span>{typeof v === "boolean"
-                ? <input type="checkbox" checked={v} onChange={e => setChanging({ id: w.id, args: { ...changing.args, [k]: e.target.checked } })}/>
-                : <input value={String(v)} inputMode={typeof v === "number" ? "numeric" : undefined} onChange={e => setChanging({ id: w.id, args: { ...changing.args, [k]: typeof v === "number" ? (e.target.value.trim() === "" ? "" : Number(e.target.value)) : e.target.value } })}/>}</label>)}
-              <div className="ai-waiting-actions"><button type="submit" className="button small primary" disabled={!!busy}><Check size={14}/> {busy === w.id ? "Working…" : verb(w.tool)}</button><button type="button" className="button small" onClick={() => setChanging(null)}>Cancel</button></div>
-            </form> : <div className="ai-waiting-actions">
-              <button className="button small primary" disabled={!!busy} onClick={() => void act("approve", w.id)}><Check size={14}/> {busy === w.id ? "Working…" : verb(w.tool)}</button>
-              {editable(w.args).length > 0 && <button className="button small" disabled={!!busy} onClick={() => setChanging({ id: w.id, args: w.args })}>Change</button>}
-              <button className="button small quiet" disabled={!!busy} onClick={() => void act("skip", w.id)}>Skip</button>
-            </div>}
-            <small>{w.connection} · {time(w.at)}</small>
-          </div>
-        </li>)}</ol>
+        <ol>{[...waiting].reverse().map(w => <li key={w.id}>{card(w)}</li>)}</ol>
       </section>}
       {waiting.length > 0 && state.entries.length > 0 && <h3 className="ai-done-head">Done</h3>}
       {state.entries.length ? <ol className="ai-feed">{state.entries.map(e => <li key={e.id} className={e.undone ? "undone" : ""}>
@@ -122,6 +186,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, onChanged, 
         {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Encyclopedia, under Connect an AI)</small></a>}
         <p>{state.paused ? "The AI can still read, but every change is refused until you resume." : "While paused, the AI can still read but every change is refused until you resume."}</p>
       </div>
+      </>}
     </aside>, document.body)}
   </>;
 }
