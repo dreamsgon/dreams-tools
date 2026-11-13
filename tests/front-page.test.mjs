@@ -129,8 +129,8 @@ const hubBook=(campaign={})=>build([
 
 test('hubOf for a paired campaign', () => {
   const hub=hubOf({map:{workspace:mapWs()},book:{data:hubBook()}},'e:e1');
-  assert.deepEqual(hub.scenes,[{id:'s-a',name:'First'},{id:'s-b',name:'Second'}]);
-  assert.deepEqual(hub.party,[{id:'gm-pc',title:'gm-pc'}],'GM-only pcs are included');
+  assert.deepEqual(hub.scenes.map(({id,name})=>({id,name})),[{id:'s-a',name:'First'},{id:'s-b',name:'Second'}]);
+  assert.deepEqual(hub.party.map(({id,title,role})=>({id,title,role})),[{id:'gm-pc',title:'gm-pc',role:'pc'}],'GM-only pcs are included');
   assert.deepEqual(hub.recent.map(r=>r.id),['npc','gm-pc','r6','r5','r4']);
   assert.equal(hub.recent.some(r=>r.kind==='folder'),false);
   assert.deepEqual(hub.frontConfig,defaultFrontPage([]));
@@ -157,7 +157,7 @@ test('hubOf for a Maptable-only campaign has no front page', () => {
   assert.equal(hub.frontConfig,null);
   assert.deepEqual(hub.party,[]);
   assert.deepEqual(hub.recent,[]);
-  assert.deepEqual(hub.scenes,[{id:'s-x',name:'Other'}]);
+  assert.deepEqual(hub.scenes.map(({id,name})=>({id,name})),[{id:'s-x',name:'Other'}]);
   assert.deepEqual(hub.playerPages,[]);
 });
 

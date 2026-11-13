@@ -1,7 +1,7 @@
 import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { failure, privateHeaders } from "@/lib/server";
-import { backupFile, campaignAction, campaignSession, hubOf, readBoth, saveFrontPage, summaryOf, type CampaignAction } from "@/lib/campaigns-server";
+import { backupFile, campaignAction, campaignSession, hubOf, readBoth, saveDashboard, saveFrontPage, summaryOf, type CampaignAction } from "@/lib/campaigns-server";
 export const dynamic = "force-dynamic";
 
 // One campaign list across Maptable and the Encyclopedia. See lib/campaigns-server.ts.
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     const text = await request.text();
     if (text.length > 100_000) throw new Error("Request is too large.");
     const body = JSON.parse(text);
+    if (body?.action === "dashboard") return Response.json(await saveDashboard(s, String(body.key ?? ""), body.dashboard), { headers: privateHeaders });
     if (body?.action === "frontPage") return Response.json(await saveFrontPage(s, String(body.key ?? ""), body.frontPage), { headers: privateHeaders });
     return Response.json(await campaignAction(s, body as CampaignAction), { headers: privateHeaders });
   } catch (e) { return failure(e); }

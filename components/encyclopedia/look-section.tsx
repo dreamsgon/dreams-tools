@@ -7,6 +7,7 @@ import {fontOption,fontStylesheetUrl} from '@/lib/appearance';
 import type {Campaign} from '@/lib/encyclopedia/world-model';
 import {uploadMapImage} from './map-transfer';
 import {usePictureSrc} from './character-picture';
+import './look.css';
 
 /** The campaign banner: the whole width, cropped to a strip, keeping the chosen height in view. */
 export function LookBanner({look,playerToken,className='',children}:{look?:Look;playerToken?:string;className?:string;children?:React.ReactNode}){
