@@ -13,8 +13,9 @@ export default function PlayerClient(){
   finally{if(request.current===controller){request.current=null;setUpdating(false);}}
  },[]);
  useEffect(()=>{const token=location.hash.slice(1);setToken(token);if(!/^[a-f0-9]{64}$/.test(token)){setError('This player link is invalid. Ask your GM for a current link.');return;}
-  void refresh(token);const timer=setInterval(()=>void refresh(token),5000),focus=()=>void refresh(token);window.addEventListener('focus',focus);
-  return()=>{clearInterval(timer);window.removeEventListener('focus',focus);request.current?.abort();request.current=null;};
+  // Background tabs stop polling and catch up as soon as they are shown again.
+  void refresh(token);const timer=setInterval(()=>{if(!document.hidden)void refresh(token);},5000),focus=()=>{if(!document.hidden)void refresh(token);};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
+  return()=>{clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);request.current?.abort();request.current=null;};
  },[refresh]);
  return <><div className="player-refresh"><ThemeToggle/>{token&&<><span>{updating?'Updating…':error?'Updates paused until the connection recovers':`Updates every 5 seconds · Last checked ${refreshed}`}</span><button className="button" disabled={updating} onClick={()=>void refresh(token)}>Refresh now</button></>}</div>{data?<PlayerView data={data} playerToken={token}/>:<div className="welcome"><h1>{error?'Link unavailable':'Opening the campaign…'}</h1><p>{error||'Loading player-visible notes.'}</p></div>}</>;
 }

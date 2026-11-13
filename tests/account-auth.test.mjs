@@ -38,3 +38,12 @@ test('password changes need verified Supabase identity',async()=>{
  const post=route({getUser:async()=>({error:{},data:{user:null}}),updateUser:()=>{throw Error('must not call');}});
  assert.equal((await post(req({action:'password',password:'long-test-password'}))).status,400);
 });
+test('the proxy refreshes session cookies without a second Supabase identity call',async()=>{
+ const code=await compile('../proxy.ts');
+ const run=async(cookies,auth)=>{let made=0;const proxy=new Function('NextResponse','createServerClient','supabaseUrl','supabaseKey','rememberCookie','sessionCookieOptions',code+';return proxy;')(NextResponse,(url,key,{cookies:jar})=>{made++;return {auth:auth(jar)};},supabaseUrl,supabaseKey,rememberCookie,sessionCookieOptions);
+  const request=new NextRequest('https://tools.example/maptable',{headers:{cookie:cookies}});return {response:await proxy(request),made};};
+ const signedOut=await run('',()=>({}));assert.equal(signedOut.made,0);assert.equal(signedOut.response.headers.get('cache-control'),'private, no-store');
+ let sessions=0;
+ const fresh=await run('sb-test-auth-token=old',jar=>({getUser:()=>{throw Error('identity is verified by getAppUser, not the proxy');},getClaims:async()=>{sessions++;jar.setAll([{name:'sb-test-auth-token',value:'renewed',options:{maxAge:60}}],{});return {data:null,error:null};}}));
+ assert.equal(sessions,1);assert.equal(fresh.response.cookies.get('sb-test-auth-token')?.value,'renewed');assert.equal(fresh.response.headers.get('cache-control'),'private, no-store');
+});

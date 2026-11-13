@@ -15,7 +15,11 @@ export async function proxy(request:NextRequest) {
       response.headers.set("Cache-Control","private, no-store");
     }
   }});
-  try {await client.auth.getUser();}catch {/* Protected routes independently verify identity. */}
+  // Refresh the session cookies. getClaims() renews an expired access token and checks the JWT against the project's
+  // cached signing keys, so a signed-in request no longer waits on two Supabase Auth round trips (it falls back to one
+  // getUser() call for projects still on a shared JWT secret).
+  // Identity is verified once, with Supabase Auth, by getAppUser() in each protected page and API route.
+  try {await client.auth.getClaims();}catch {/* Protected routes independently verify identity. */}
   return response;
 }
 export const config={matcher:["/","/maptable/:path*","/encyclopedia/:path*","/account/:path*","/auth/:path*","/api/:path*"]};
