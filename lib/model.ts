@@ -203,6 +203,11 @@ export const pointOfInterestSchema = z.object({
   targetSceneId: short.nullable().default(null),
   activation: z.enum(["double", "single"]).default("double"),
   notes: z.string().max(2000).optional(),
+  /** Map notes: text to read to the players, and Encyclopedia pages linked to the marker. */
+  readAloud: z.string().max(4000).optional(),
+  pages: z.array(short).max(20).optional(),
+  /** Players can open this note (its read-aloud text and the pages they can already read). */
+  playersSee: z.boolean().optional(),
 });
 export type PointOfInterest = z.infer<typeof pointOfInterestSchema>;
 export const sceneSchema = z.object({

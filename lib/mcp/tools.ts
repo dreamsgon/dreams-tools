@@ -339,7 +339,7 @@ const tools: Tool[] = [
           turn: s.tokens.find(t => t.id === current)?.name ?? null,
           order: order.flatMap(id => { const t = s.tokens.find(x => x.id === id); return t ? [`${t.name}${t.initiative !== null && t.initiative !== undefined ? ` (${t.initiative})` : ""}`] : []; }),
         } : undefined,
-        pointsOfInterest: s.pointsOfInterest.length ? s.pointsOfInterest.map(p => ({ name: p.name, square: gridOn(s) ? address(p, s.grid) || undefined : undefined, hiddenFromPlayers: p.hidden || undefined, gmNotes: p.notes || undefined, leadsTo: p.targetSceneId ? c.maps!.scenes.find(x => x.id === p.targetSceneId)?.name : undefined })) : undefined,
+        pointsOfInterest: s.pointsOfInterest.length ? s.pointsOfInterest.map(p => ({ name: p.name, square: gridOn(s) ? address(p, s.grid) || undefined : undefined, hiddenFromPlayers: p.hidden || undefined, gmNotes: p.notes || undefined, readAloud: p.readAloud || undefined, pages: p.pages?.length ? p.pages.flatMap(id => { const e = c.book?.entries.find(x => x.id === id); return e ? [e.title] : []; }) : undefined, playersSeeNote: p.playersSee || undefined, leadsTo: p.targetSceneId ? c.maps!.scenes.find(x => x.id === p.targetSceneId)?.name : undefined })) : undefined,
       };
     },
   },

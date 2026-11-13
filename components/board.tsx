@@ -7,6 +7,8 @@ import { useEffect, useRef, useState, useCallback, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ExternalLink, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2 } from "lucide-react";
 import "./context-menu.css";
+import { PAGE_DRAG } from "@/lib/map-notes";
+import type { PointOfInterest } from "@/lib/model";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
@@ -111,11 +113,19 @@ type Props = {
   onMeasurementChange?: (points: Point[]) => void;
   /** Moves an AI helper suggested, waiting for the GM's OK: drawn as a dashed token with an arrow. Never shown to players. */
   suggested?: { id: string; sceneId: string; tokenId: string; x: number; y: number }[];
+  /** Map notes: the marker whose note card is open, drawn beside it by `renderNote`. */
+  notePoiId?: string | null;
+  renderNote?: (poi: PointOfInterest, at: { x: number; y: number; width: number; height: number }) => ReactNode;
+  /** Player view: a tap on a marker (or on nothing, with null). */
+  onPlayerPoiTap?: (id: string | null) => void;
+  /** An Encyclopedia page dropped on the map, with the marker it landed on. */
+  onPageDrop?: (entryId: string, point: Point, poiId: string | null) => void;
 };
 export default function Board(p: Props) {
   const [newCrop,setNewCrop]=useState(false);
   const [cropEditing,setCropEditing]=useState(false);
   const [cropMenuOpen,setCropMenuOpen]=useState(false);
+  const [pageDrop,setPageDrop]=useState(false);
   const cropFocus = Boolean(p.scene.crop && p.scene.cropFocus && !cropEditing);
   const setCropFocus = (value:boolean|((current:boolean)=>boolean)) => p.update(s=>{s.cropFocus=typeof value==="function"?value(Boolean(s.crop && s.cropFocus)):value;});
   useEffect(()=>{setCropEditing(false);},[p.scene.id]);
@@ -969,6 +979,13 @@ export default function Board(p: Props) {
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
+    if (p.player && p.onPlayerPoiTap) {
+      const sp = screen(e);
+      if (Math.hypot(sp.x - g.screen.x, sp.y - g.screen.y) < 6) {
+        const pos = world(sp);
+        p.onPlayerPoiTap([...p.scene.pointsOfInterest].reverse().find(item => !item.hidden && Math.hypot(item.x - pos.x, item.y - pos.y) <= Math.max(18, 18 / view.scale))?.id ?? null);
+      }
+    }
     if (g.kind === "plan-tap" && validMovePlan) {
       const next = appendTokenMovePoint(validMovePlan, clamp(world(screen(e))), p.scene.grid, p.scene);
       setMovePlan(next); setMeasurement(next.points);
@@ -1147,7 +1164,7 @@ export default function Board(p: Props) {
   };
   const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span></button>;
   return (
-    <div className={"board tool-" + p.tool} ref={host}>
+    <div className={"board tool-" + p.tool + (pageDrop ? " page-drop-target" : "")} ref={host}>
       <canvas
         onDoubleClick={e=>{
           if(p.player || p.gridAdjust || p.tool!=="select")return;
@@ -1159,6 +1176,20 @@ export default function Board(p: Props) {
           if (movePlan) return;
           const token=[...p.scene.tokens].reverse().find(t=>Math.hypot(point.x-t.x,point.y-t.y)<=tokenRadius(t,p.scene.grid));
           if(token){e.preventDefault();p.editToken(token.id);}
+        }}
+        onDragOver={e => {
+          if (p.player || !p.onPageDrop || !e.dataTransfer.types.includes(PAGE_DRAG)) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setPageDrop(true);
+        }}
+        onDragLeave={() => setPageDrop(false)}
+        onDrop={e => {
+          setPageDrop(false);
+          const id = e.dataTransfer.getData(PAGE_DRAG);
+          if (p.player || !p.onPageDrop || !id) return;
+          e.preventDefault();
+          const pos = clamp(world(screen(e)));
+          const poi = [...p.scene.pointsOfInterest].reverse().find(item => Math.hypot(item.x - pos.x, item.y - pos.y) <= Math.max(18, 18 / view.scale));
+          p.onPageDrop(id, pos, poi?.id ?? null);
         }}
         ref={canvas}
         data-library-token-drop={!p.player && !cropEditing && !!p.onLibraryTokenDrop ? "true" : undefined}
@@ -1197,6 +1228,10 @@ export default function Board(p: Props) {
         tabIndex={0}
         aria-label={`Interactive map: ${p.scene.name}. Use the token list to edit tokens and their coordinates.`}
       />
+      {p.notePoiId && p.renderNote && (() => {
+        const poi = p.scene.pointsOfInterest.find(item => item.id === p.notePoiId);
+        return poi && (!p.player || !poi.hidden) ? p.renderNote(poi, { x: poi.x * view.scale + view.x, y: poi.y * view.scale + view.y, width: view.width, height: view.height }) : null;
+      })()}
       {contextMenu && createPortal(<div ref={menuRef} className="context-menu" role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ left: contextMenu.x, top: contextMenu.y }}>
         {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{menuItem.name}</div>}
         {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget, { icon: contextMenu.kind === "measurement" ? <MousePointer2 size={15} /> : <Pencil size={15} /> })}

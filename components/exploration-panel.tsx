@@ -5,9 +5,12 @@ import { collectionPath, uid, type PointOfInterest, type Scene, type Workspace }
 import { canMovePoiFolder, movePoiFolder, deletePoiFolder, poiFolderPath } from "@/lib/poi-folders";
 import { resolvePointOfInterestTarget, sceneTargets } from "@/lib/exploration";
 import { Field, Toggle } from "./dialogs";
+import { addNotePage, notePages, removeNotePage, MAX_NOTE_PAGES, type NotePage } from "@/lib/map-notes";
+import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/world-model";
+import { PageSearch } from "./map-note-card";
 import "./exploration-panel.css";
 
-type Props = {workspace:Workspace;scene:Scene;update:(fn:(scene:Scene)=>void)=>void;selectedId:string|null;select:(id:string|null)=>void;place:(activation:"double"|"single")=>void;createMap:(type:Scene["mapType"])=>void;openScene:(id:string)=>void};
+type Props = {workspace:Workspace;scene:Scene;pages:NotePage[];book:EncyclopediaWorkspace|null;bookError:string;update:(fn:(scene:Scene)=>void)=>void;selectedId:string|null;select:(id:string|null)=>void;place:(activation:"double"|"single")=>void;createMap:(type:Scene["mapType"])=>void;openScene:(id:string)=>void};
 const mapTypes = ["world", "area", "encounter"] as const;
 const mapNames = {world:"World",area:"Area",encounter:"Encounter"};
 const mapIcons = {world:Globe2,area:Mountain,encounter:Swords};
@@ -19,11 +22,13 @@ const DRAG_TYPE = "application/x-maptable-poi";
  * Exploration: link maps together with markers. A world map's markers open area
  * maps, an area map's open encounters, and every map lists the maps that lead to it.
  */
-export default function ExplorationPanel({workspace,scene,update,selectedId,select,place,openScene,createMap}:Props) {
+export default function ExplorationPanel({workspace,scene,pages,book,bookError,update,selectedId,select,place,openScene,createMap}:Props) {
   const [closed,setClosed] = useState<Set<string>>(new Set());
   const [editingFolder,setEditingFolder] = useState<string|null>(null);
   const [dragging,setDragging] = useState(false);
   const [query,setQuery] = useState("");
+  const [adding,setAdding] = useState(false);
+  const [pageHint,setPageHint] = useState("");
   const targets = sceneTargets(workspace,scene.id);
   const selected = scene.pointsOfInterest.find(point=>point.id===selectedId);
   const linkedName = (point:PointOfInterest) => resolvePointOfInterestTarget(workspace,scene.id,point)?.name || null;
@@ -64,8 +69,17 @@ export default function ExplorationPanel({workspace,scene,update,selectedId,sele
         </div>
       </div>
       {scene.poiFolders.length>0&&<Field label="Folder"><select value={point.folderId??""} onChange={e=>patch({folderId:e.target.value||null})}><option value="">No folder</option>{scene.poiFolders.map(f=><option key={f.id} value={f.id}>{poiFolderPath(scene.poiFolders,f.id)}</option>)}</select></Field>}
-      <Field label="Notes"><textarea value={point.notes??""} maxLength={2000} rows={2} placeholder="Only you see these" onChange={e=>patch({notes:e.target.value})}/></Field>
+      <Field label="Quick notes"><textarea value={point.notes??""} maxLength={2000} rows={2} placeholder="Only you see these" onChange={e=>patch({notes:e.target.value})}/></Field>
+      <Field label="Read aloud"><textarea value={point.readAloud??""} maxLength={4000} rows={3} placeholder="What you read to the players when they get here" onChange={e=>patch({readAloud:e.target.value})}/></Field>
+      <div className="field"><span>Pages from the Encyclopedia</span>
+        {notePages(book,point.pages).map(page=><div key={page.id} className="explore-page"><span><strong>{page.title}</strong><small>{page.kind}</small></span><button className="explore-icon" aria-label={`Take ${page.title} off this marker`} title="Take off" onClick={()=>update(current=>{const p=current.pointsOfInterest.find(p=>p.id===point.id);if(p)removeNotePage(p,page.id);})}><Trash2 size={14}/></button></div>)}
+        {bookError&&<p className="muted" role="alert">{bookError}</p>}
+        {adding?<PageSearch autoFocus pages={pages} taken={point.pages} onPick={page=>{update(current=>{const p=current.pointsOfInterest.find(p=>p.id===point.id);if(p)addNotePage(p,page.id);});setAdding(false);}}/>
+          :<button disabled={(point.pages?.length??0)>=MAX_NOTE_PAGES} onClick={()=>setAdding(true)}>Add a page</button>}
+      </div>
       <Toggle label="Hidden from players" checked={point.hidden} onChange={hidden=>patch({hidden})}/>
+      <Toggle label="Players see this note" checked={!!point.playersSee&&!point.hidden} onChange={playersSee=>patch({playersSee})}/>
+      {point.playersSee&&!point.hidden&&<p className="muted explore-hint">Players can click the marker for its read-aloud text and the pages they can already read in the Encyclopedia. Quick notes stay yours.</p>}
       <div className="explore-editor-foot">
         <button className="danger" onClick={()=>{update(current=>{current.pointsOfInterest=current.pointsOfInterest.filter(p=>p.id!==point.id);});select(null);}}><Trash2 size={15}/> Delete marker</button>
         <button onClick={()=>select(null)}>Done</button>
@@ -127,6 +141,11 @@ export default function ExplorationPanel({workspace,scene,update,selectedId,sele
     </div>
     {!scene.pointsOfInterest.length&&<div className="explore-empty"><MapPin size={20}/><p>No markers yet. Add one, click the map where it goes, then choose the map it opens.</p></div>}
     {q&&scene.pointsOfInterest.length>0&&!scene.pointsOfInterest.some(matches)&&<p className="empty-small">No markers match “{query}”.</p>}
+
+    <div className="section-heading"><h3>Encyclopedia pages</h3></div>
+    <p className="muted explore-hint">Drag a page onto the map to pin it there as a note, or onto a marker to add it to that marker’s note.{selected?" Click a page to add it to the selected marker.":""}</p>
+    {bookError?<p className="muted" role="alert">{bookError}</p>:!book?<p className="muted">Loading your Encyclopedia…</p>:<PageSearch pages={pages} taken={selected?.pages} onPick={page=>{if(!selected){setPageHint("Select a marker first, or drag the page onto the map.");return;}let added=false;update(current=>{const p=current.pointsOfInterest.find(p=>p.id===selected.id);if(p)added=addNotePage(p,page.id);});setPageHint(added?`Added ${page.title} to ${pointName(selected)}.`:"That marker’s note is full.");}}/>}
+    {pageHint&&<p className="muted explore-hint" role="status">{pageHint}</p>}
 
     <details className="explore-maps" open>
       <summary>Maps in this campaign</summary>

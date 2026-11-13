@@ -407,6 +407,9 @@ export function renderScene(
     ctx.fillStyle=point.color;ctx.fill();ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.stroke();
     ctx.fillStyle="#111827";ctx.font="bold 16px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
     ctx.fillText(point.activation==="single"?">":"i",0,0);
+    // Map notes: a small badge when the marker has a note (for players, only a shared one).
+    const noted=options.player?point.playersSee&&!!(point.readAloud?.trim()||point.pages?.length):!!(point.notes?.trim()||point.readAloud?.trim()||point.pages?.length);
+    if(noted){ctx.beginPath();ctx.arc(11,-11,5,0,Math.PI*2);ctx.fillStyle="#ffffff";ctx.fill();ctx.strokeStyle=point.color;ctx.lineWidth=2;ctx.stroke();}
     ctx.font="bold 12px sans-serif";
     const label=point.name.slice(0,60), width=ctx.measureText(label).width+12;
     const labelX = (Math.max(width*markerScale/2,Math.min(s.width-width*markerScale/2,point.x))-point.x)/markerScale;
