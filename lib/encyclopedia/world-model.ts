@@ -9,6 +9,7 @@ import {dashboardSchema} from './dashboard.ts';
 import {questSchema,playerQuest,newQuest,questCategoriesSchema,questCategories} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
 import {lookSchema,playerLook} from './look.ts';
+import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -86,6 +87,8 @@ export const entrySchema = z.object({
     order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
     // Optional (added later): the template this page was made from, and its info box values by field id.
     templateId:id.optional(), fields:z.record(id, z.union([z.string().max(2000), z.number().finite()])).optional(),
+    // Optional (added later): on a session page, the recap an AI drafted (timeline, quotes, GM notes, things to check).
+    recap:recapSchema.optional(),
     updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
@@ -105,6 +108,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
         if(e.kind==='map'&&!e.mapData)bad('Map entries need map data');
         if(e.mapData&&e.kind!=='map')bad('Map data requires a map entry');
         if(e.quest&&e.kind!=='quest')bad('Quest details require a quest entry');
+        if(e.recap&&e.kind!=='session')bad('A recap belongs on a session page');
         if(e.codex)for(const cid of Object.keys(e.codex.found)){const c=campaigns.get(cid);if(!c||c.worldId!==e.worldId||(e.campaignId!==null&&e.campaignId!==cid))bad('A codex find belongs to a campaign that can see the page');}
         for(const ref of [e.quest?.giverId,e.quest?.placeId]){if(!ref)continue;const t=entries.get(ref);if(t&&(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId)))bad('A quest cannot point outside its world or campaign');}
         for(const pin of e.mapData?.pins??[]){if(pin.entryId){const target=entries.get(pin.entryId);if(target&&(target.worldId!==e.worldId||(target.campaignId!==null&&target.campaignId!==e.campaignId)))bad('A map pin cannot link outside its world or campaign');}}
@@ -252,10 +256,11 @@ export function playerText(text:string){return playerInline(stripSecrets(text).r
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
 export function playerCampaign(s:Workspace,campaignId:string){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
- const candidates=visibleEntries(s,c.worldId,c.id);
+ // A draft recap never reaches players, whatever its tabs say.
+ const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft');
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
-   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)}))];
+   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;

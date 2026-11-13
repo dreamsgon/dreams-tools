@@ -1,6 +1,7 @@
 import type { S3Bucket } from '../storage.ts';
 import { emptyWorkspace, workspaceSchema, playerCampaign, type Workspace } from './world-model.ts';
 import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from './tables.ts';
+import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -66,7 +67,10 @@ export class EncyclopediaStore {
   async recordHistory(owner: string, before: Workspace, after: Workspace, now = new Date()) {
     const { changed, deleted } = changedEntries(before.entries, after.entries);
     for (const entry of changed.slice(0, 50)) if (historyEntryId(entry.id)) await this.addHistory(owner, entry.id, snapshotOf(entry), entry.updatedAt, now);
-    for (const id of deleted) if (historyEntryId(id)) await this.bucket.delete(this.historyPath(owner, id)).catch(() => {});
+    for (const id of deleted) if (historyEntryId(id)) {
+      await this.bucket.delete(this.historyPath(owner, id)).catch(() => {});
+      if (before.entries.find(e => e.id === id)?.kind === 'session') await this.bucket.delete(this.transcriptPath(owner, id)).catch(() => {});
+    }
   }
   /** Keeps the current text of an entry before a restore replaces it. The entry must exist in the saved workspace. */
   async checkpoint(owner: string, entryId: string, snapshot: Snapshot, now = new Date()) {
@@ -76,6 +80,22 @@ export class EncyclopediaStore {
     if (!entry || entry.kind === 'folder') return false;
     await this.addHistory(owner, entryId, snapshot, entry.updatedAt, now, true);
     return true;
+  }
+  /** A session's transcript, kept beside the workspace so a long session never counts against its 2 MB. */
+  private transcriptPath(owner: string, entryId: string) { return encyclopediaPrefix(owner)+`transcripts/${encodeURIComponent(entryId)}.txt`; }
+  async readTranscript(owner: string, entryId: string) {
+    if (!historyEntryId(entryId)) return null;
+    const object = await this.bucket.get(this.transcriptPath(owner, entryId));
+    return object ? new TextDecoder().decode(await object.arrayBuffer()) : null;
+  }
+  /** Saves (or with an empty text, deletes) a transcript. The session page must exist. */
+  async saveTranscript(owner: string, entryId: string, text: string) {
+    if (!historyEntryId(entryId)) throw Error('That page id is not valid.');
+    if (text.length > TRANSCRIPT_LIMIT) throw Error('That transcript is over the 2,000,000 character limit. Split the session into two pages.');
+    const { data } = await this.read(owner);
+    if (data.entries.find(e => e.id === entryId)?.kind !== 'session') throw Error('A transcript belongs on a session page.');
+    if (!text.trim()) { await this.bucket.delete(this.transcriptPath(owner, entryId)).catch(() => {}); return; }
+    await this.bucket.put(this.transcriptPath(owner, entryId), text, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
   }
   private linkPath(owner: string,campaign: string,kind: LinkKind) { return encyclopediaPrefix(owner)+`${kind}-links/${encodeURIComponent(campaign)}.json`; }
   async createLink(owner: string,campaignId: string,kind: LinkKind='player') {

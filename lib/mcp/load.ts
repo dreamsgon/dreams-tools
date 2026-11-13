@@ -58,11 +58,14 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   const prefix = `users/${encodeURIComponent(grant.owner)}/`;
   const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(bucket, prefix, maps!.workspace, s, mode) : undefined;
   const perms = grant.perms ?? fromLevel(grant.level);
-  const base = { maps, level: grant.level, perms, picture };
+  // Transcripts are the GM's raw material: only a connection that may see GM-only things reads them.
+  const store = new EncyclopediaStore(bucket);
+  const transcript: McpContext["transcript"] = perms.seeSecrets === "off" ? undefined : id => store.readTranscript(grant.owner, id);
+  const base = { maps, level: grant.level, perms, picture, transcript };
   if (grant.level === "read") return narrow({ ...base, book, campaign: book.campaigns[0] });
   const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
   const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
-  const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, base,
+  const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, { ...base, connection },
     post => sendEncyclopediaPost(bucket, grant.owner, campaign.id, post).then(() => undefined));
   // A change set to "Ask me" waits in the GM's AI panel as a suggestion.
   const suggest: McpContext["suggest"] = async s => {
@@ -72,5 +75,5 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   };
   const suggestions = activity.entries.filter(e => e.waiting && e.connectionId === grant.connectionId)
     .map(e => ({ id: e.id, at: e.at, summary: e.summary, state: e.decided ?? "waiting" as const, ...(e.result ? { result: e.result } : {}) }));
-  return narrow({ ...base, book, campaign: book.campaigns[0], paused: activity.paused, commit, suggest, suggestions });
+  return narrow({ ...base, connection, book, campaign: book.campaigns[0], paused: activity.paused, commit, suggest, suggestions });
 }
