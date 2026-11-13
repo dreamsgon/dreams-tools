@@ -140,3 +140,22 @@ test('Maptable joins the GM\'s unsaved edits with an AI save',()=>{
  const clash=editScene(base,id,d=>{tok(d,'bram').hp=1;});
  const r=mergeMaptable(base,mine,clash);assert.deepEqual(r.both,['Bram']);assert.equal(tok(r.merged.scenes[0],'bram').x,245);
 });
+
+test('view_scene draws the scene, keeping hidden tokens and fogged ground from the players view',async()=>{
+ const {sceneSvg}=await import('../lib/mcp/scene-image.ts');
+ const w=table(),s=w.scenes[0];
+ s.fog.strokes=[{mode:'reveal',shape:'rect',size:20,points:[{x:0,y:0},{x:210,y:210}]}];
+ const gm=sceneSvg(s,'gm',null).svg,players=sceneSvg(s,'players',null).svg;
+ assert.match(gm,/Bog Hag \(hidden\)/);assert.doesNotMatch(players,/Bog Hag/);
+ assert.match(players,/<mask id="fog"/);assert.match(players,/>C</);assert.match(players,/>3</);
+ assert.equal(sceneSvg({...s,width:2800,height:1400},'gm',null).width,1280,'big maps are scaled down');
+ assert.match(sceneSvg({...s,tokens:[{...s.tokens[0],name:'<b>&'}]},'gm',null).svg,/&lt;b&gt;&amp;/,'names are escaped');
+ // Through the tool: an image plus a legend of squares.
+ const book=demoWorkspace(),bk=campaignExport(book,CAMPAIGN),calls=[];
+ const c={book:bk,campaign:bk.campaigns[0],level:'read',maps:{workspace:w,campaignId:'mt-salt',scenes:campaignScenes(w,'mt-salt')},picture:async(sc,mode)=>{calls.push([sc.name,mode]);return {data:'AAAA',mimeType:'image/jpeg'};}};
+ const r=await callTool(c,'view_scene',{view:'players'});
+ assert.equal(r.isError,false);assert.equal(r.content[0].type,'image');assert.deepEqual(calls,[['Greyfen marsh','players']]);
+ assert.match(r.content[1].text,/Bram B2/);assert.doesNotMatch(r.content[1].text,/Bog Hag/);
+ assert.match((await callTool({...c,picture:undefined},'view_scene',{})).content[0].text,/aren't available/);
+ assert.match((await callTool(c,'view_scene',{view:'sideways'})).content[0].text,/gm or players/);
+});

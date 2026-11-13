@@ -33,6 +33,8 @@ export type McpContext = {
   commit?: (tool: string, change: Change) => Promise<WriteOut>;
   /** The GM paused AI changes from the activity log. */
   paused?: boolean;
+  /** Draws a scene as a JPEG (view_scene). Missing where pictures can't be made. */
+  picture?: (scene: Scene, mode: "gm" | "players") => Promise<{ data: string; mimeType: string; note?: string }>;
 };
 
 /** What a change did: the new workspace (if it changed), a line for the activity log, and the reply for the AI. */
@@ -44,7 +46,7 @@ export type WriteOut = { next?: Book; maps?: Maps; summary: string; detail?: str
 export type Change = (full: Book, scoped: McpContext, now: Date) => WriteOut;
 
 type JsonSchema = Record<string, unknown>;
-type Tool = { name: string; title: string; description: string; level: Level; inputSchema: JsonSchema; readOnly: boolean; run?: (c: McpContext, a: Record<string, unknown>) => unknown; write?: (a: Record<string, unknown>) => Change };
+type Tool = { name: string; title: string; description: string; level: Level; inputSchema: JsonSchema; readOnly: boolean; run?: (c: McpContext, a: Record<string, unknown>) => unknown; write?: (a: Record<string, unknown>) => Change; picture?: true };
 
 const str = (description: string, max = 200) => ({ type: "string", minLength: 1, maxLength: max, description });
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -321,6 +323,11 @@ const tools: Tool[] = [
         pointsOfInterest: s.pointsOfInterest.length ? s.pointsOfInterest.map(p => ({ name: p.name, square: gridOn(s) ? address(p, s.grid) || undefined : undefined, hiddenFromPlayers: p.hidden || undefined, gmNotes: p.notes || undefined, leadsTo: p.targetSceneId ? c.maps!.scenes.find(x => x.id === p.targetSceneId)?.name : undefined })) : undefined,
       };
     },
+  },
+  {
+    name: "view_scene", title: "See a scene", level: "read", readOnly: true, picture: true,
+    description: "A picture of a scene: the map, the grid with its square names along the edges, tokens with names and HP bars, area effects and fog. Use it to see the lay of the land; use read_scene for exact numbers. view: \"players\" shows only what players see.",
+    inputSchema: obj({ scene: str("The scene's name or id. Leave out for the open scene.", 120), view: { type: "string", enum: ["gm", "players"], description: "gm (the default) shows hidden tokens and dims the fog; players shows the table as players see it." } }),
   },
   {
     name: "measure", title: "Measure a distance", level: "read", readOnly: true,
@@ -699,6 +706,14 @@ export async function callTool(c: McpContext, name: unknown, args: unknown) {
   if (extra.length) return error(`Unknown argument${extra.length > 1 ? "s" : ""}: ${extra.join(", ")}. This tool takes ${allowed.join(", ") || "no arguments"}.`);
   try {
     let value: unknown;
+    if (tool.picture) {
+      const sc = sceneFor(c, input), mode = input.view === "players" ? "players" : input.view === undefined || input.view === "gm" ? "gm" : fail("view must be gm or players.");
+      if (!c.picture) return error("Pictures of scenes aren't available on this connection. Use read_scene.");
+      const pic = await c.picture(sc, mode);
+      const shown = placedTokens(sc).filter(t => mode === "gm" || !t.hidden).map(t => `${t.name}${tokenSquare(sc, t) ? ` ${tokenSquare(sc, t)}` : ""}`);
+      const legend = [`${sc.name}, ${mode === "gm" ? "GM view: hidden tokens are dashed and fog is see-through" : "as players see it"}.`, gridOn(sc) ? "Square names run along the top (letters) and left (numbers)." : "", shown.length ? `Tokens: ${shown.join(", ")}.` : "No tokens.", getCurrentInitiativeEntry(sc) ? `The gold ring marks whose turn it is (${getCurrentInitiativeEntry(sc)!.label}).` : "", pic.note ?? ""].filter(Boolean).join(" ");
+      return { content: [{ type: "image", data: pic.data, mimeType: pic.mimeType }, { type: "text", text: `${NOTE}\n${legend}` }], isError: false };
+    }
     if (tool.write) {
       if (c.paused) return error("The GM has paused AI changes for this campaign. You can still read. Ask the GM to resume from the AI activity panel.");
       if (!c.commit) return error("This connection can't make changes.");
