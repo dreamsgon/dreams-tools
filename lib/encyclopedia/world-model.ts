@@ -6,6 +6,7 @@ import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 import {questSchema,playerQuest,newQuest} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
+import {lookSchema,playerLook} from './look.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -42,7 +43,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the widgets on the campaign front page players see first.
   frontPage:frontPageSchema.optional(),
   // Optional (added later): the codex category order and quick notes from the table waiting to be filed.
-  codexCategories:z.array(codexCategory).max(40).optional(), codexInbox:z.array(inboxNoteSchema).max(200).optional() });
+  codexCategories:z.array(codexCategory).max(40).optional(), codexInbox:z.array(inboxNoteSchema).max(200).optional(),
+  // Optional (added later): the campaign's accent, heading font, page surface and banner.
+  look:lookSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -239,7 +242,7 @@ export function playerCampaign(s:Workspace,campaignId:string){
  for(const e of entries){if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null};if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
  const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
- return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
+ return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look)},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
 }
 export type PlayerCampaign=ReturnType<typeof playerCampaign>;
 export function searchableText(e:Entry){return [e.title,e.body,...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
