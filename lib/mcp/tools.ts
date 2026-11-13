@@ -15,6 +15,8 @@ import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isI
 import { editScene } from "./table.ts";
 import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts";
 import type { MovePreview } from "./activity.ts";
+import { PART_SIZE, compactTranscript, draftRecap, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
+import { recapPageKinds } from "../encyclopedia/recap-schema.ts";
 
 export type Level = "read" | "assist" | "run";
 export const levels: Level[] = ["read", "assist", "run"];
@@ -44,6 +46,10 @@ export type McpContext = {
   suggest?: (s: Suggestion) => Promise<string>;
   /** This connection's latest suggestions and what the GM decided (check_suggestions). */
   suggestions?: { id: string; at: string; summary: string; state: "waiting" | "approved" | "skipped"; result?: string }[];
+  /** Reads a session page's stored transcript. Missing when this connection can't see GM-only things. */
+  transcript?: (entryId: string) => Promise<string | null>;
+  /** This connection's name, for "drafted by". */
+  connection?: string;
 };
 export type Suggestion = { tool: string; args: Record<string, unknown>; summary: string; detail?: string; preview?: MovePreview };
 export const permsFor = (c: Pick<McpContext, "perms" | "level">): Perms => c.perms ?? fromLevel(c.level);
@@ -62,7 +68,7 @@ export type Change = (full: Book, scoped: McpContext, now: Date) => WriteOut;
 type JsonSchema = Record<string, unknown>;
 type Tool = {
   name: string; title: string; description: string; level: Level; inputSchema: JsonSchema; readOnly: boolean;
-  run?: (c: McpContext, a: Record<string, unknown>) => unknown; write?: (a: Record<string, unknown>) => Change; picture?: true;
+  run?: (c: McpContext, a: Record<string, unknown>) => unknown | Promise<unknown>; write?: (a: Record<string, unknown>) => Change; picture?: true;
   /** How a suggestion reads in the GM's panel, when trying the change first would give it away (a dice roll). */
   ask?: (a: Record<string, unknown>) => string;
 };
@@ -246,7 +252,41 @@ const tools: Tool[] = [
         quest: e.quest ? questDetails(c, e) : undefined,
         codex: e.codex ? { category: e.codex.category, playerSummary: e.codex.summary, found: !!e.codex.found[c.campaign.id] } : undefined,
         children: children.length ? children : undefined,
+        recap: e.recap ? {
+          status: e.recap.status, playedOn: e.recap.playedOn, source: e.recap.source,
+          timeline: e.recap.timeline.map(b => b.big ? `## ${b.title}` : b.title), quotes: e.recap.quotes.length || undefined,
+          waitingForGM: openItems(e.recap).length || undefined, transcriptWords: e.recap.transcriptWords,
+        } : undefined,
       };
+    },
+  },
+  {
+    name: "list_names", title: "List page names", level: "read", readOnly: true,
+    description: "Every page title in this campaign, grouped by kind. Cheaper than searching name by name: use it once before writing a recap, to spell names the way the campaign does.",
+    inputSchema: obj({}),
+    run: c => {
+      const out: Record<string, string[]> = {};
+      for (const e of pages(c)) if (e.kind !== "session") (out[e.kind] ??= []).push(e.title);
+      return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v.sort((a, b) => a.localeCompare(b)).slice(0, 400)]));
+    },
+  },
+  {
+    name: "read_transcript", title: "Read a session transcript", level: "read", readOnly: true,
+    description: `Read the transcript the GM stored on a session page, one part at a time (about ${PART_SIZE.toLocaleString("en")} characters each). Timestamps, filler and repeated speaker names are already taken out. Read each part once, in order, and take notes as you go.`,
+    inputSchema: obj({ page: str("The session page's title or id. Leave out for the latest session with a transcript."), part: { type: "integer", minimum: 1, maximum: 200, description: "Which part (default 1)." } }),
+    run: async (c, a) => {
+      if (!c.transcript) return fail("This connection can't read transcripts: they are GM-only.");
+      const q = text(a, "page", false), sessions = pages(c).filter(e => e.kind === "session");
+      if (a.part !== undefined && (typeof a.part !== "number" || !Number.isInteger(a.part) || a.part < 1)) fail("part must be a whole number from 1.");
+      const ask = "Ask the GM to paste one on the page's Transcript tab, or read the source with your own tools.";
+      let e: Entry | undefined, raw: string | null = null;
+      if (q) { e = pick(sessions, q, x => x.id, x => x.title, "session page"); raw = await c.transcript(e.id); }
+      else for (const x of [...sessions].sort((x, y) => y.updatedAt.localeCompare(x.updatedAt)).slice(0, 5)) if ((raw = await c.transcript(x.id))?.trim()) { e = x; break; }
+      if (!e) return fail(`None of the latest sessions has a transcript. ${ask}`);
+      if (!raw?.trim()) return fail(`“${e.title}” has no transcript. ${ask}`);
+      const parts = transcriptParts(compactTranscript(raw)), n = (a.part as number | undefined) ?? 1;
+      if (n > parts.length) fail(`“${e.title}” has ${parts.length} part${parts.length > 1 ? "s" : ""}.`);
+      return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
     },
   },
   {
@@ -520,6 +560,36 @@ const tools: Tool[] = [
       };
     },
   },
+  {
+    name: "save_recap", title: "Save a session recap", level: "assist", readOnly: false,
+    description: "Save a session recap as a draft on a session page: the recap players will read, a timeline, quotes, GM notes, and what changed in the world. Nothing else changes yet: each new page, page update and quest change waits in the page's \"Check before publishing\" list for the GM. Players see nothing until the GM publishes it. Write [[Name]] around names in the recap; the server links the ones that have pages.",
+    inputSchema: obj({
+      page: str("An existing session page to fill, by title or id. Leave out to make a new one."),
+      title: str("Such as \"Session 13 · The drowned chapel\".", 120),
+      playedOn: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "The real-world date it was played, YYYY-MM-DD." },
+      source: str("Where it came from, in a few words, such as \"Notion: Session 13 notes\".", 200),
+      recap: { type: "string", minLength: 1, maxLength: 20000, description: "The recap players will read, in Markdown: past tense, only what the players saw." },
+      timeline: { type: "array", maxItems: 60, description: "What happened, in order.", items: { type: "object", properties: { title: str("What happened.", 200), big: { type: "boolean", description: "A major turn of the session." }, steps: { type: "array", maxItems: 12, items: str("A short step.", 300) } }, required: ["title"], additionalProperties: false } },
+      quotes: { type: "array", maxItems: 20, description: "Memorable lines, word for word.", items: { type: "object", properties: { text: str("The words exactly as said.", 500), who: str("Who said it.", 120) }, required: ["text"], additionalProperties: false } },
+      gmNotes: { type: "string", maxLength: 20000, description: "For the GM only: hooks, secrets the party got close to, rules calls, things to follow up." },
+      found: { type: "array", maxItems: 40, description: "People, places, factions, lore and things that are new or changed. The server matches names to pages.", items: { type: "object", properties: { name: str("Its name.", 160), kind: { type: "string", enum: ["character", "place", "faction", "lore", "note"] }, text: { type: "string", minLength: 1, maxLength: 4000, description: "One or two sentences: who or what it is, or what changed." }, playersSee: { type: "boolean", description: "For a new page: players may read it." } }, required: ["name", "text"], additionalProperties: false } },
+      quests: { type: "array", maxItems: 30, description: "Quests that moved. An unknown quest becomes a new rumour.", items: { type: "object", properties: { quest: str("The quest's title.", 160), log: { type: "string", maxLength: 4000, description: "A line for its log." }, tick: str("An objective that is now done, by its text.", 300), playersSee: { type: "boolean", description: "Players may read the log line." } }, required: ["quest"], additionalProperties: false } },
+      codex: { type: "array", maxItems: 20, description: "Codex entries the party found.", items: { type: "object", properties: { page: str("The codex page's title."), label: str("Where or when, such as the session title.", 80) }, required: ["page"], additionalProperties: false } },
+    }, ["title", "recap", "timeline"]),
+    write: a => {
+      const input = recapInput(a), q = text(a, "page", false);
+      return (full, c, now) => {
+        const existing = q ? own(pick(pages(c).filter(e => e.kind === "session"), q, x => x.id, x => x.title, "session page")) : undefined;
+        const entry = draftRecap(c.book, c.campaign, input, { by: c.connection ?? "An AI", now, existing, folderId: sessionFolder(c.book, c.campaign.id)?.id ?? null });
+        const next = existing ? patchEntry(full, existing.id, entry) : { ...full, entries: [...full.entries, entry] };
+        const waiting = openItems(entry.recap);
+        return {
+          next, summary: `Drafted the recap “${entry.title}”`, detail: waiting.length ? `${waiting.length} thing${waiting.length > 1 ? "s" : ""} to check before publishing` : "Nothing else to check",
+          reply: { saved: { id: entry.id, title: entry.title }, toCheck: waiting.map(r => `${r.kind}: ${r.name}`), note: "Saved as a draft: players can't see it. Tell the GM to open the page, check the list and publish it. Nothing else in the campaign has changed." },
+        };
+      };
+    },
+  },
   // ---- Run the game: the table. Each change is logged in the AI activity log, where the GM can undo it. ----
   {
     name: "move_token", title: "Move a token", level: "run", readOnly: false,
@@ -734,6 +804,35 @@ function questDetails(c: McpContext, e: Entry) {
   };
 }
 
+/** Checks save_recap's lists. Lengths are checked by the page's own schema when it saves. */
+function recapInput(a: Record<string, unknown>): AiRecap {
+  const arr = (key: string, max: number) => {
+    const v = a[key];
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.length > max || v.some(x => !x || typeof x !== "object" || Array.isArray(x))) return fail(`${key} must be a list of up to ${max} objects.`);
+    return v as Record<string, unknown>[];
+  };
+  const s = (o: Record<string, unknown>, key: string, max: number, need = false) => optionalText(o, key, max, need);
+  const flag = (o: Record<string, unknown>, key: string) => bool(o, key) || undefined;
+  const playedOn = text(a, "playedOn", false, 10);
+  if (playedOn && !/^\d{4}-\d{2}-\d{2}$/.test(playedOn)) fail("playedOn must be YYYY-MM-DD.");
+  return {
+    title: text(a, "title", true, 120)!, playedOn, source: text(a, "source", false, 200), recap: optionalText(a, "recap", 20000, true), gmNotes: optionalText(a, "gmNotes", 20000),
+    timeline: arr("timeline", 60).map(b => {
+      const steps = b.steps === undefined ? [] : Array.isArray(b.steps) && b.steps.length <= 12 && b.steps.every(x => typeof x === "string" && x.trim() && x.length <= 300) ? b.steps as string[] : fail("Each timeline steps must be a list of up to 12 short lines.");
+      return { title: s(b, "title", 200, true), big: flag(b, "big"), steps };
+    }),
+    quotes: arr("quotes", 20).map(x => ({ text: s(x, "text", 500, true), who: s(x, "who", 120) })),
+    found: arr("found", 40).map(x => {
+      const kind = s(x, "kind", 20) || "note";
+      if (!(recapPageKinds as readonly string[]).includes(kind)) fail("found kind must be character, place, faction, lore or note.");
+      return { name: s(x, "name", 160, true), kind, text: s(x, "text", 4000, true), playersSee: flag(x, "playersSee") };
+    }),
+    quests: arr("quests", 30).map(x => ({ quest: s(x, "quest", 160, true), log: s(x, "log", 4000) || undefined, tick: s(x, "tick", 300) || undefined, playersSee: flag(x, "playersSee") })),
+    codex: arr("codex", 20).map(x => ({ page: s(x, "page", 200, true), label: s(x, "label", 80) || undefined })),
+  };
+}
+
 /** Tools of this level, without the ones whose actions are all off (and check_suggestions when nothing waits for an OK). */
 export function toolsFor(level: Level, perms: Perms = fromLevel(level)) {
   const off = (t: Tool) => t.name === "roll" ? perms.rollOpen === "off" && perms.rollSecret === "off"
@@ -791,7 +890,7 @@ export async function callTool(c: McpContext, name: unknown, args: unknown, opts
         const id = await c.suggest({ tool: tool.name, args: input, summary, detail: tried?.detail, preview: tried ? movePreview(tool.name, tried, c) : undefined });
         value = { waitingForGM: true, suggestion: id, summary, note: "This needs the GM's OK, so it hasn't happened yet: don't describe it as done. The GM approves or skips it in their AI panel. Carry on, and use check_suggestions to see what they decided." };
       } else value = (await c.commit(tool.name, change)).reply;
-    } else value = tool.run!(c, input);
+    } else value = await tool.run!(c, input);
     let body = JSON.stringify(value);
     if (body.length > RESULT_LIMIT) body = body.slice(0, RESULT_LIMIT) + "… [cut short; ask for less, such as one page or one scene]";
     return { content: [{ type: "text", text: tool.write ? body : `${NOTE}\n${body}` }], isError: false };

@@ -45,7 +45,7 @@ test('tools take names, refuse unknown arguments and explain mistakes',async()=>
  assert.match((await call(c,'read_calendar')).text,/no calendar/);
  assert.match((await call(context('read',false),'list_scenes')).text,/no Maptable campaign/);
  assert.ok(listTools('read').every(t=>t.annotations.readOnlyHint));
- assert.deepEqual(listTools('read').map(t=>t.name),['campaign_overview','search','read_page','list_quests','read_quest','list_codex','read_calendar','list_scenes','read_scene','view_scene','measure']);
+ assert.deepEqual(listTools('read').map(t=>t.name),['campaign_overview','search','read_page','list_names','read_transcript','list_quests','read_quest','list_codex','read_calendar','list_scenes','read_scene','view_scene','measure']);
 });
 
 test('maps read as text with squares, HP, conditions, fog and the combat order',async()=>{
@@ -70,7 +70,7 @@ test('the protocol negotiates a version, answers requests and ignores notificati
  assert.equal((await handleMcp(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'}),load)).status,202);
  assert.equal((await handleMcp('{oops',load)).body.error.code,-32700);
  assert.equal((await handleMcp(JSON.stringify({jsonrpc:'2.0',id:3,method:'sampling/x'}),load)).body.error.code,-32601);
- const list=await handleMcp(JSON.stringify({jsonrpc:'2.0',id:4,method:'tools/list'}),load);assert.equal(list.body.result.tools.length,11);
+ const list=await handleMcp(JSON.stringify({jsonrpc:'2.0',id:4,method:'tools/list'}),load);assert.equal(list.body.result.tools.length,13);
  const batch=await handleMcp(JSON.stringify([{jsonrpc:'2.0',id:5,method:'ping'},{jsonrpc:'2.0',method:'notifications/x'}]),load);assert.equal(batch.body.length,1);
  let loads=0;await handleMcp(JSON.stringify([{jsonrpc:'2.0',id:6,method:'tools/list'},{jsonrpc:'2.0',id:7,method:'tools/list'}]),async()=>{loads++;return context();});assert.equal(loads,1,'one read per request');
  assert.equal((await handleMcp('x'.repeat(70000),load)).status,413);
@@ -124,7 +124,7 @@ test('real MCP clients work over HTTP with the key in the URL, and through the l
   const remote=new Client({name:'test',version:'1'});
   await remote.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/api/mcp/${key}`)));
   assert.equal(remote.getServerVersion().name,'rpg-tools');
-  assert.equal((await remote.listTools()).tools.length,11);
+  assert.equal((await remote.listTools()).tools.length,13);
   assert.match((await remote.callTool({name:'campaign_overview',arguments:{}})).content[0].text,/The Salt Road/);
   await remote.close();
   const local=new Client({name:'test',version:'1'});

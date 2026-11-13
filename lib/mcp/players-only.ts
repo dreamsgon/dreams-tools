@@ -5,20 +5,23 @@
  * Only what the AI reads is narrowed: changes still go to the whole campaign, so nothing is lost.
  */
 import { playerText, type Workspace as Book } from "../encyclopedia/world-model.ts";
+import { playerRecapTabs } from "../encyclopedia/recap-schema.ts";
 import type { Scene, Workspace as Maps } from "../model.ts";
 import { fogged, permsFor, type McpContext } from "./tools.ts";
 
 export function playersBook(book: Book, campaignId: string): Book {
   const entries = book.entries.flatMap(e => {
     if (e.kind === "folder") return [e];
+    if (e.recap?.status === "draft") return []; // A draft recap never reaches players.
     const overview = e.overviewVisibility === "players";
-    const tabs = (e.tabs ?? []).filter(t => t.visibility === "players").map(t => ({ ...t, body: playerText(t.body) }));
+    const tabs = [...(e.tabs ?? []).filter(t => t.visibility === "players").map(t => ({ ...t, body: playerText(t.body) })),
+      ...(overview ? playerRecapTabs(e.recap, playerText).map(t => ({ ...t, visibility: "players" as const })) : [])];
     const found = e.codex?.found[campaignId];
     const map = e.mapData?.visibility === "players";
     if (!overview && !tabs.length && !found && !map) return [];
     const quest = e.quest && overview ? { ...e.quest, objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
     const character = e.character ? { ...e.character, statblock: undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
-    return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined }];
+    return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined }];
   });
   const campaigns = book.campaigns.map(c => ({ ...c, calendars: c.calendars?.filter(x => x.visibility === "players") }));
   return { ...book, campaigns, entries };

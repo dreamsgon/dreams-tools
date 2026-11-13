@@ -142,7 +142,7 @@ test('a save in between is retried on the newer copy',async()=>{
 test('prompts list and fill in',async()=>{
  const s=await setup(),load=()=>s.ctx();
  const list=(await handleMcp(JSON.stringify({jsonrpc:'2.0',id:1,method:'prompts/list'}),load)).body.result.prompts;
- assert.deepEqual(list.map(p=>p.name),['prep_session','recap_session','run_scene','run_combat']);
+ assert.deepEqual(list.map(p=>p.name),['prep_session','recap_session','recap_from_source','run_scene','run_combat']);
  const got=(await handleMcp(JSON.stringify({jsonrpc:'2.0',id:2,method:'prompts/get',params:{name:'prep_session',arguments:{focus:'the drowned chapel'}}}),load)).body.result;
  assert.match(got.messages[0].content.text,/The Salt Road/);assert.match(got.messages[0].content.text,/the drowned chapel/);assert.match(got.messages[0].content.text,/create_page/);
  const read=(await handleMcp(JSON.stringify({jsonrpc:'2.0',id:3,method:'prompts/get',params:{name:'recap_session'}}),async()=>({...(await s.ctx()),level:'read'}))).body.result;
