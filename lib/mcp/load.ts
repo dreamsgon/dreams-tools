@@ -9,6 +9,7 @@ import { readActivity } from "./activity.ts";
 import { makeCommit } from "./commit.ts";
 import { sendDiscordRoll } from "../encyclopedia/discord-send.ts";
 import type { McpContext } from "./tools.ts";
+import { scenePicture } from "./scene-picture.ts";
 
 /**
  * Accepts a new rpg_ key, and the older single-purpose keys so existing setups keep working:
@@ -52,7 +53,9 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
       catch { maps = null; } // The paired Maptable campaign was removed.
     }
   }
-  const base = { maps, level: grant.level };
+  const prefix = `users/${encodeURIComponent(grant.owner)}/`;
+  const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(bucket, prefix, maps!.workspace, s, mode) : undefined;
+  const base = { maps, level: grant.level, picture };
   if (grant.level === "read") return { ...base, book, campaign: book.campaigns[0] };
   const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
   const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
