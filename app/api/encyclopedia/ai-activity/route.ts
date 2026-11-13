@@ -7,17 +7,11 @@ import {listConnections} from '@/lib/mcp/connections';
 import {undoTable} from '@/lib/mcp/table';
 import {loadWorkspace,saveWorkspace} from '@/lib/workspace-storage';
 import {decideSuggestion} from '@/lib/mcp/suggestions';
-import type {S3Bucket} from '@/lib/storage';
+import {campaignFor} from '@/lib/mcp/campaign-for';
+import {providerOf} from '@/lib/ai/providers';
 export const dynamic='force-dynamic';
 const campaignId=z.string().min(1).max(100);
 const ACTIVE_MS=15*60_000;
-/** Maptable asks by its own campaign id: find the Encyclopedia campaign paired with it. */
-async function campaignFor(bucket:S3Bucket,owner:string,params:{campaignId?:string|null;maptableCampaignId?:string|null}){
- if(params.campaignId)return campaignId.parse(params.campaignId);
- const pair=campaignId.parse(params.maptableCampaignId);
- const {data}=await new EncyclopediaStore(bucket).read(owner);
- return data.campaigns.find(c=>c.maptableCampaignId===pair)?.id??null;
-}
 // The signed-in GM's AI activity log for one campaign, and which AI app is connected right now.
 export async function GET(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
@@ -27,7 +21,9 @@ export async function GET(request:Request){
   if(!id)return json({paused:false,entries:[],connected:[],hasConnections:false});
   const [log,connections]=await Promise.all([readActivity(bucket,owner,id),listConnections(bucket,owner,id)]);
   const now=Date.now(),active=connections.filter(c=>c.lastUsedAt&&now-Date.parse(c.lastUsedAt)<ACTIVE_MS).sort((a,b)=>b.lastUsedAt!.localeCompare(a.lastUsedAt!));
-  return json({...publicActivity(log),connected:active.map(c=>c.name),hasConnections:connections.length>0});
+  // Connections made with an API key can be asked from the panel.
+  const chat=connections.flatMap(c=>c.api?[{id:c.id,name:c.name,provider:providerOf(c.api.provider).name,model:c.api.model}]:[]);
+  return json({...publicActivity(log),connected:active.map(c=>c.name),hasConnections:connections.length>0,chat});
  }catch{return json({error:'Could not load the AI activity.'},400);}
 }
 export async function POST(request:Request){
