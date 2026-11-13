@@ -18,19 +18,40 @@ export type BookCampaign = { id: string; name: string; description: string; worl
   maps: number;
   /** Its most recently changed pages, newest first (at most three). */
   latest: RecentPage[] };
-export type CampaignRow = { key: string; name: string; maptable: MapCampaign | null; encyclopedia: BookCampaign | null };
+export type CampaignRow = { key: string; name: string; maptable: MapCampaign | null; encyclopedia: BookCampaign | null;
+  /** The campaign folder it sits in on the Campaigns page, or null at the top level. */
+  folderId: string | null };
+/** A folder on the Campaigns page. These are Maptable collections of kind "folder" whose ancestors are all folders, never scene folders inside a campaign. */
+export type CampaignFolder = { id: string; name: string; parentId: string | null };
 /** A recently changed Encyclopedia page, for the home page. */
 export type RecentPage = { id: string; title: string; kind: string; campaignId: string | null; campaignName: string | null; worldName: string;
   /** The folders it sits in, outermost first, e.g. "Places › The Fens". Empty at the top level. */
   path: string; updatedAt: string };
 export type CampaignSummary = {
   rows: CampaignRow[];
+  /** Campaign folders, in no particular order. See `campaignLayout` for the display order. */
+  folders: CampaignFolder[];
   /** The most recently changed Encyclopedia pages, newest first. */
   recent: RecentPage[];
   worlds: { id: string; name: string; archived: boolean }[];
   /** Scenes that are not inside any Maptable campaign. */
   loose: number;
 };
+
+/** Folders whose whole chain of parents is folders (no campaign above them). */
+export function campaignFolders(collections: MapWorkspace["collections"] | undefined | null): CampaignFolder[] {
+  const all = new Map((collections ?? []).map(c => [c.id, c]));
+  const ok = (id: string): boolean => {
+    const seen = new Set<string>();
+    for (let c = all.get(id); c; c = c.parentId ? all.get(c.parentId) : undefined) {
+      if (c.kind !== "folder" || seen.has(c.id)) return false;
+      seen.add(c.id);
+      if (!c.parentId) return true;
+    }
+    return false;
+  };
+  return (collections ?? []).filter(c => c.kind === "folder" && ok(c.id)).map(c => ({ id: c.id, name: c.name, parentId: c.parentId }));
+}
 
 const mapCampaigns = (w: Pick<MapWorkspace, "collections" | "scenes"> | null): MapCampaign[] =>
   (w?.collections ?? []).filter(c => c.kind === "campaign").map(c => ({ id: c.id, name: c.name, scenes: scenesInOrder(w!, c.id).length }));
@@ -56,19 +77,67 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"> | null, book: BookWorkspace): CampaignSummary {
   const maps = mapCampaigns(map), books = bookCampaigns(book);
   const mapById = new Map(maps.map(m => [m.id, m])), used = new Set<string>();
+  const folders = campaignFolders(map?.collections), folderIds = new Set(folders.map(f => f.id));
+  const parentOf = new Map((map?.collections ?? []).map(c => [c.id, c.parentId]));
+  const inFolder = (id: string | null | undefined) => id && folderIds.has(id) ? id : null;
+  const bookFolders = new Map(book.campaigns.map(c => [c.id, c.folderId]));
   const rows: CampaignRow[] = books.map(b => {
     const paired = b.maptableCampaignId ? mapById.get(b.maptableCampaignId) ?? null : null;
     if (paired) used.add(paired.id);
-    return { key: `e:${b.id}`, name: b.name, maptable: paired, encyclopedia: b };
+    return { key: `e:${b.id}`, name: b.name, maptable: paired, encyclopedia: b, folderId: inFolder(paired ? parentOf.get(paired.id) : bookFolders.get(b.id)) };
   });
-  for (const m of maps) if (!used.has(m.id)) rows.push({ key: `m:${m.id}`, name: m.name, maptable: m, encyclopedia: null });
+  for (const m of maps) if (!used.has(m.id)) rows.push({ key: `m:${m.id}`, name: m.name, maptable: m, encyclopedia: null, folderId: inFolder(parentOf.get(m.id)) });
   const inCampaign = new Set(maps.flatMap(m => scenesInOrder(map!, m.id).map(item => item.scene.id)));
   return {
-    rows: rows.sort(byName),
+    rows: rows.sort(byName), folders,
     worlds: book.worlds.filter(w => !w.isTemplate).map(w => ({ id: w.id, name: w.name, archived: w.archived })),
     loose: (map?.scenes ?? []).filter(s => !inCampaign.has(s.id)).length,
     recent: recentPages(book),
   };
+}
+
+export type LayoutItem =
+  | { type: "folder"; folder: CampaignFolder; depth: number; count: number; open: boolean }
+  | { type: "row"; row: CampaignRow; depth: number };
+
+/**
+ * The Campaigns table in display order, like Maptable's organizer: inside each level
+ * folders come first, then campaigns, each by name. `rows` are the campaigns to show
+ * (after any filters). Folders that are in `collapsed` hide their contents unless
+ * `filtered` is set, which shows only folders holding a match, all expanded.
+ */
+export function campaignLayout(folders: CampaignFolder[], rows: CampaignRow[], collapsed: ReadonlySet<string> = new Set(), filtered = false): LayoutItem[] {
+  const ids = new Set(folders.map(f => f.id));
+  const subs = new Map<string | null, CampaignFolder[]>(), inside = new Map<string | null, CampaignRow[]>();
+  for (const f of folders) { const k = f.parentId && ids.has(f.parentId) ? f.parentId : null; subs.set(k, [...(subs.get(k) ?? []), f]); }
+  for (const r of rows) { const k = r.folderId && ids.has(r.folderId) ? r.folderId : null; inside.set(k, [...(inside.get(k) ?? []), r]); }
+  const total = (id: string): number => (inside.get(id)?.length ?? 0) + (subs.get(id) ?? []).reduce((n, f) => n + total(f.id), 0);
+  const out: LayoutItem[] = [];
+  const walk = (parent: string | null, depth: number) => {
+    for (const f of [...(subs.get(parent) ?? [])].sort(byName)) {
+      const count = total(f.id);
+      if (filtered && !count) continue;
+      const open = filtered || !collapsed.has(f.id);
+      out.push({ type: "folder", folder: f, depth, count, open });
+      if (open) walk(f.id, depth + 1);
+    }
+    for (const r of [...(inside.get(parent) ?? [])].sort(byName)) out.push({ type: "row", row: r, depth });
+  };
+  walk(null, 0);
+  return out;
+}
+
+/** Every folder with its path (for example "Lantern Coast / Old games"), in display order, for pickers. */
+export function folderChoices(folders: CampaignFolder[]): { id: string; path: string; depth: number }[] {
+  const ids = new Set(folders.map(f => f.id)), out: { id: string; path: string; depth: number }[] = [];
+  const walk = (parent: string | null, prefix: string, depth: number) => {
+    for (const f of folders.filter(x => (x.parentId && ids.has(x.parentId) ? x.parentId : null) === parent).sort(byName)) {
+      out.push({ id: f.id, path: prefix + f.name, depth });
+      walk(f.id, `${prefix}${f.name} / `, depth + 1);
+    }
+  };
+  walk(null, "", 0);
+  return out;
 }
 
 type BookEntry = BookWorkspace["entries"][number];
@@ -139,7 +208,7 @@ function withPair<T extends { maptableCampaignId?: string }>(c: T, maptableId: s
   return maptableId ? { ...next, maptableCampaignId: maptableId } : next;
 }
 
-export const cleanName = (name: unknown) => {
-  if (typeof name !== "string" || !name.trim()) throw new Error("Give the campaign a name.");
+export const cleanName = (name: unknown, what = "campaign") => {
+  if (typeof name !== "string" || !name.trim()) throw new Error(`Give the ${what} a name.`);
   return name.trim().replace(/\s+/g, " ").slice(0, 120);
 };

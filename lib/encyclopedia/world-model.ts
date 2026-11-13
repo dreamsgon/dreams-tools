@@ -41,6 +41,8 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),
   // Optional (added later): the Maptable campaign that holds this campaign's maps, set on the Campaigns page.
   maptableCampaignId:z.string().min(1).max(120).optional(),
+  // Optional (added later): the Campaigns page folder (a Maptable campaign folder id) this campaign sits in when it has no Maptable campaign of its own.
+  folderId:z.string().min(1).max(120).optional(),
   // Optional (added later): the widgets on the campaign front page players see first.
   frontPage:frontPageSchema.optional(),
   // Optional (added later): the codex category order and quick notes from the table waiting to be filed.

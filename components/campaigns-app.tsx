@@ -1,14 +1,18 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronRight, Download, Link2, Map as MapIcon, Plus, Search, Tag as TagIcon, X } from "lucide-react";
-import { suggestPairs, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
+import { BookOpen, Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
 import "./campaigns.css";
 
-type Dialog = null | { kind: "new" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
+type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const mapsHref = (id: string) => `/maptable?campaign=${encodeURIComponent(id)}`;
+const COLLAPSED_KEY = "campaigns-collapsed-folders";
+/** What is being dragged: a campaign row by key, or a folder by id. */
+type Drag = { type: "campaign"; key: string } | { type: "folder"; id: string };
+const readCollapsed = (): Set<string> => { try { const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]"); return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []); } catch { return new Set(); } };
 const notesHref = (id: string) => `/encyclopedia?campaign=${encodeURIComponent(id)}`;
 
 export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
@@ -17,6 +21,15 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const [query, setQuery] = useState(""), [world, setWorld] = useState<string | null>(null), [archived, setArchived] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null), [dialog, setDialog] = useState<Dialog>(null);
   const { library } = useTags(), [tagFilter, setTagFilter] = useState<string | null>(null), [tagsOpen, setTagsOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => typeof window === "undefined" ? new Set() : readCollapsed()), [drag, setDrag] = useState<Drag | null>(null), [over, setOver] = useState<string | null>(null);
+  // The table only shows after the list loads in the browser, so reading storage here cannot change the server render.
+  const [renaming, setRenaming] = useState<string | null>(null), [removing, setRemoving] = useState<string | null>(null);
+  function toggleFolder(id: string) {
+    const next = new Set(collapsed);
+    if (!next.delete(id)) next.add(id);
+    setCollapsed(next);
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* Storage is optional. */ }
+  }
   const rowTags = (r: CampaignRow) => library ? tagsOn(library, ...campaignTargets(r)) : [];
   const filterTag = library?.tags.find(t => t.id === tagFilter) ?? null;
 
@@ -52,6 +65,34 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     (!world || r.encyclopedia?.worldId === world) &&
     (!filterTag || (library ? tagsOn(library, ...campaignTargets(r)) : []).some(t => t.id === filterTag.id)) &&
     (!query.trim() || r.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))), [summary, archived, world, query, filterTag, library]);
+  const filtered = !!(query.trim() || world || filterTag);
+  const folders = useMemo(() => summary?.folders ?? [], [summary]);
+  const layout = useMemo(() => campaignLayout(folders, rows, collapsed, filtered), [folders, rows, collapsed, filtered]);
+  const descendants = (id: string): Set<string> => {
+    const out = new Set([id]);
+    for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && out.has(f.parentId) && !out.has(f.id)) { out.add(f.id); grew = true; } }
+    return out;
+  };
+  const canDrop = (target: string | null) => !!drag && (drag.type === "campaign"
+    ? summary?.rows.find(r => r.key === drag.key)?.folderId !== target
+    : !(target && descendants(drag.id).has(target)) && folders.find(f => f.id === drag.id)?.parentId !== target);
+  function drop(target: string | null) {
+    const d = drag;
+    setDrag(null); setOver(null);
+    if (!d || !canDrop(target)) return;
+    const where = target ? `“${folders.find(f => f.id === target)?.name}”` : "the top level";
+    if (d.type === "campaign") void send({ action: "moveCampaign", key: d.key, folderId: target }, `Moved to ${where}.`);
+    else void send({ action: "moveFolder", folderId: d.id, parentId: target }, `Moved the folder to ${where}.`);
+  }
+  const dropProps = (target: string | null, id: string) => ({
+    onDragOver: (e: React.DragEvent) => { if (canDrop(target)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (over !== id) setOver(id); } },
+    onDragLeave: () => { if (over === id) setOver(null); },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); drop(target); },
+  });
+  const dragProps = (d: Drag) => ({
+    draggable: !busy, onDragStart: (e: React.DragEvent) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", d.type === "campaign" ? d.key : d.id); setDrag(d); },
+    onDragEnd: () => { setDrag(null); setOver(null); },
+  });
   const archivedCount = (summary?.rows ?? []).filter(r => r.encyclopedia?.archived).length;
   const worldsInUse = (summary?.worlds ?? []).filter(w => !w.archived && summary!.rows.some(r => r.encyclopedia?.worldId === w.id));
   const unpairedMaps = (summary?.rows ?? []).filter(r => r.maptable && !r.encyclopedia);
@@ -68,6 +109,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     <div className="campaigns-main">
       <div className="campaigns-head">
         <div><h1>Campaigns</h1><p>Each campaign has its maps in Maptable and its notes in the Encyclopedia. Manage both here.</p></div>
+        <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "folder" })} disabled={!summary}><FolderPlus size={16} aria-hidden="true" />New folder</button>
         <button type="button" className="campaigns-primary" onClick={() => setDialog({ kind: "new" })} disabled={!summary}><Plus size={16} aria-hidden="true" />New campaign</button>
       </div>
       {error && <p className="campaigns-error" role="alert">{error}</p>}
@@ -87,9 +129,15 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
           </div>}
           {filterTag && <span className={`tag-chip tag-${filterTag.color} campaigns-tag-filter`}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
         </div>
+        {drag && <div className={`campaigns-drop-top${over === "top" ? " over" : ""}`} {...dropProps(null, "top")}><Folder size={15} aria-hidden="true" />Drop here for the top level</div>}
         <div className="campaigns-table" role="table" aria-label="Campaigns">
           <div className="campaigns-row campaigns-row-head" role="row"><span role="columnheader">Campaign</span><span role="columnheader"><MapIcon size={14} aria-hidden="true" />Maptable</span><span role="columnheader"><BookOpen size={14} aria-hidden="true" />Encyclopedia</span><span role="columnheader"><span className="sr-only">Open</span></span></div>
-          {rows.map(r => <div key={r.key} role="row" className={`campaigns-row${r.key === selectedKey ? " selected" : ""}`}>
+          {layout.map(item => item.type === "folder" ? <FolderRow key={`f:${item.folder.id}`} item={item} busy={busy} renaming={renaming === item.folder.id} removing={removing === item.folder.id}
+            over={over === `f:${item.folder.id}`} dragging={drag?.type === "folder" && drag.id === item.folder.id}
+            toggle={() => toggleFolder(item.folder.id)} startRename={() => { setRenaming(item.folder.id); setRemoving(null); }} startRemove={() => { setRemoving(item.folder.id); setRenaming(null); }}
+            stop={() => { setRenaming(null); setRemoving(null); }} send={send} filtered={filtered}
+            drag={dragProps({ type: "folder", id: item.folder.id })} drops={dropProps(item.folder.id, `f:${item.folder.id}`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
+            className={`campaigns-row${r.key === selectedKey ? " selected" : ""}${drag?.type === "campaign" && drag.key === r.key ? " dragging" : ""}`} style={{ "--depth": item.depth } as React.CSSProperties}>
             <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
             <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add maps</button>}</span>
@@ -98,7 +146,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             <span role="cell" className="campaigns-open">
               <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
             </span>
-          </div>)}
+          </div>)(item.row))}
           {!rows.length && <p className="campaigns-muted campaigns-none">{summary.rows.length ? "No campaigns match." : "No campaigns yet. Make one with New campaign."}</p>}
         </div>
         <div className="campaigns-foot">
@@ -112,6 +160,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     {tagsOpen && <TagsManager onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
+    {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "match" && summary && <Match summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {notice && <div className="campaigns-toast" role="status"><Check size={16} aria-hidden="true" />{notice}</div>}
@@ -149,6 +198,12 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
       <div><dt>World</dt><dd>{row.encyclopedia?.worldName || "None yet"}</dd></div>
       <div><dt>Maps</dt><dd>{row.maptable ? plural(row.maptable.scenes, "scene") : "Not in Maptable"}</dd></div>
       <div><dt>Pages</dt><dd>{row.encyclopedia ? `${plural(row.encyclopedia.pages, "page")}, ${plural(row.encyclopedia.characters, "character")}` : "Not in the Encyclopedia"}</dd></div>
+      {summary.folders.length > 0 && <div className="campaigns-pair"><dt><label htmlFor="campaign-folder">Folder</label></dt><dd>
+        <select id="campaign-folder" value={row.folderId ?? ""} disabled={busy} onChange={e => send({ action: "moveCampaign", key: row.key, folderId: e.target.value || null }, "Moved.")}>
+          <option value="">Top level</option>
+          {folderChoices(summary.folders).map(f => <option key={f.id} value={f.id}>{f.path}</option>)}
+        </select>
+      </dd></div>}
       <div className="campaigns-pair"><dt><label htmlFor="campaign-pair">{row.encyclopedia ? "Maptable campaign" : "Encyclopedia campaign"}</label></dt><dd>
         <select id="campaign-pair" value={pairedId} disabled={busy} onChange={e => pair(e.target.value)}>
           <option value="">{row.encyclopedia ? "Not paired" : "Choose one to pair"}</option>
@@ -163,6 +218,50 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
   </aside>;
+}
+
+function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, startRename, startRemove, stop, send, filtered, drag, drops }: {
+  item: { folder: CampaignFolder; depth: number; count: number; open: boolean }; busy: boolean; renaming: boolean; removing: boolean; over: boolean; dragging: boolean; filtered: boolean;
+  toggle: () => void; startRename: () => void; startRemove: () => void; stop: () => void; send: Send; drag: React.HTMLAttributes<HTMLDivElement>; drops: React.HTMLAttributes<HTMLDivElement>;
+}) {
+  const { folder, depth, count, open } = item, [name, setName] = useState(folder.name);
+  const Icon = open ? FolderOpen : Folder;
+  return <div role="row" className={`campaigns-row campaigns-folder-row${over ? " over" : ""}${dragging ? " dragging" : ""}`} style={{ "--depth": depth } as React.CSSProperties} {...drag} {...drops}>
+    <span role="cell" className="campaigns-folder-main">
+      <button type="button" className="campaigns-icon campaigns-chevron" onClick={toggle} disabled={filtered} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>
+      <Icon size={18} aria-hidden="true" className="campaigns-folder-icon" />
+      {renaming ? <form className="campaigns-folder-rename" onSubmit={e => { e.preventDefault(); if (name.trim() && name.trim() !== folder.name) void send({ action: "renameFolder", folderId: folder.id, name }, "Folder renamed.", stop); else stop(); }}>
+        <input autoFocus aria-label={`New name for ${folder.name}`} value={name} maxLength={120} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Escape") stop(); }} />
+        <button type="submit" className="campaigns-icon" disabled={busy || !name.trim()} aria-label="Save folder name"><Check size={16} /></button>
+        <button type="button" className="campaigns-icon" onClick={stop} aria-label="Cancel rename"><X size={16} /></button>
+      </form> : <strong className="campaigns-folder-name">{folder.name}</strong>}
+      <small className="campaigns-folder-count">{plural(count, "campaign")}</small>
+    </span>
+    {removing ? <span role="cell" className="campaigns-folder-actions campaigns-folder-confirm">
+      <span>Remove this folder? Its campaigns move up a level; none are deleted.</span>
+      <button type="button" className="campaigns-danger" disabled={busy} onClick={() => void send({ action: "removeFolder", folderId: folder.id }, "Folder removed. Its campaigns moved up a level.", stop)}>Remove folder</button>
+      <button type="button" className="campaigns-secondary" onClick={stop}>Keep it</button>
+    </span> : <span role="cell" className="campaigns-folder-actions">
+      <button type="button" className="campaigns-mini" disabled={busy} onClick={() => { setName(folder.name); startRename(); }} aria-label={`Rename ${folder.name}`}><Pencil size={13} aria-hidden="true" />Rename</button>
+      <button type="button" className="campaigns-mini" disabled={busy} onClick={startRemove} aria-label={`Remove ${folder.name}`}><Trash2 size={13} aria-hidden="true" />Remove</button>
+    </span>}
+  </div>;
+}
+
+function NewFolder({ summary, busy, close, send }: { summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
+  const [name, setName] = useState(""), [parentId, setParentId] = useState("");
+  return <Modal title="New folder" intro="Folders group campaigns here and in Maptable's campaign list." close={close} footer={<>
+    <button type="button" className="campaigns-secondary" onClick={close}>Cancel</button>
+    <button type="submit" form="new-folder" className="campaigns-primary" disabled={busy || !name.trim()}>Create folder</button>
+  </>}>
+    <form id="new-folder" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (name.trim()) void send({ action: "newFolder", name, parentId: parentId || null }, `Created the folder “${name.trim()}”.`, close); }}>
+      <label>Name<input autoFocus value={name} maxLength={120} onChange={e => setName(e.target.value)} placeholder="For example, Lantern Coast" /></label>
+      <label>Inside<select value={parentId} onChange={e => setParentId(e.target.value)}>
+        <option value="">Top level</option>
+        {folderChoices(summary.folders).map(f => <option key={f.id} value={f.id}>{f.path}</option>)}
+      </select></label>
+    </form>
+  </Modal>;
 }
 
 function Modal({ title, intro, children, footer, close, wide }: { title: string; intro?: string; children: React.ReactNode; footer: React.ReactNode; close: () => void; wide?: boolean }) {
