@@ -5,7 +5,7 @@ import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ExternalLink, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ExternalLink, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
@@ -97,6 +97,11 @@ type Props = {
   brushSize: number;
   fogShape: "brush" | "rect" | "polygon" | "edit";
   fogControlsHost?: HTMLElement | null;
+  /** Where the saved-crop controls go on wider screens: the bar above the map. */
+  cropControlsHost?: HTMLElement | null;
+  /** The empty map card's buttons. */
+  onUploadMap?: () => void;
+  onAddToken?: () => void;
   fogSelectionRequest?: { index: number; nonce: number } | null;
   fogSelectedIndices?: number[];
   onFogSelection?: (indices: number[]) => void;
@@ -127,6 +132,8 @@ export default function Board(p: Props) {
   const [newCrop,setNewCrop]=useState(false);
   const [cropEditing,setCropEditing]=useState(false);
   const [cropMenuOpen,setCropMenuOpen]=useState(false);
+  /** The scene whose empty-map card was closed (first click on the map, or ×). */
+  const [hintGone,setHintGone]=useState<string|null>(null);
   const [pageDrop,setPageDrop]=useState(false);
   const cropFocus = Boolean(p.scene.crop && p.scene.cropFocus && !cropEditing);
   const setCropFocus = (value:boolean|((current:boolean)=>boolean)) => p.update(s=>{s.cropFocus=typeof value==="function"?value(Boolean(s.crop && s.cropFocus)):value;});
@@ -1113,6 +1120,17 @@ export default function Board(p: Props) {
     setEffectDraft(null);
   };
   const fogControls = (node: React.ReactNode) => p.fogControlsHost ? createPortal(node, p.fogControlsHost) : null;
+  // Saved crops sit in the bar above the map (handoff 2.6); phones keep them behind the Crops button on the map.
+  const cropActions = (
+        <div className="crop-control-actions">
+        <select aria-label="Saved map crops" style={{width:180,pointerEvents:"auto"}} value={p.scene.activeCropId??""} onChange={e=>{const id=e.target.value;const saved=p.scene.savedCrops.find(c=>c.id===id);if(saved){p.update(s=>{s.activeCropId=id;s.crop={x:saved.x,y:saved.y,width:saved.width,height:saved.height};s.cropFocus=true;});}else setCropFocus(false);}}>
+          <option value="" disabled>{p.scene.crop&&!p.scene.activeCropId?"Current crop (unsaved name)":"Choose a saved crop"}</option>
+          {p.scene.savedCrops.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <button style={{pointerEvents:"auto"}} disabled={p.scene.savedCrops.length>=100} onClick={()=>{setNewCrop(true);setCropEditing(true);}}>New crop</button>
+        {p.scene.crop&&<><button style={{pointerEvents:"auto"}} onClick={()=>{setNewCrop(false);setCropEditing(true);}}>Edit crop</button><button style={{pointerEvents:"auto"}} onClick={()=>setCropFocus(value=>!value)}>{cropFocus?"Show full map":"Focus crop"}</button><button style={{pointerEvents:"auto"}} onClick={()=>{p.update(s=>{s.cropFocus=false;s.savedCrops=s.savedCrops.filter(c=>c.id!==s.activeCropId);s.activeCropId=null;s.crop=null;});}}>Delete crop</button></>}
+        </div>
+  );
   const menuItem = contextMenu?.kind === "token" ? p.scene.tokens.find(item => item.id === contextMenu.id)
     : contextMenu?.kind === "effect" ? p.scene.effects.find(item => item.id === contextMenu.id)
     : contextMenu?.kind === "poi" ? p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)
@@ -1166,7 +1184,7 @@ export default function Board(p: Props) {
   };
   const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span></button>;
   return (
-    <div className={"board tool-" + p.tool + (pageDrop ? " page-drop-target" : "")} ref={host}>
+    <div className={"board tool-" + p.tool + (pageDrop ? " page-drop-target" : "")} ref={host} onPointerDownCapture={e => { if (hintGone !== p.scene.id && !(e.target as HTMLElement).closest?.(".board-hint")) setHintGone(p.scene.id); }}>
       <canvas
         onDoubleClick={e=>{
           if(p.player || p.gridAdjust || p.tool!=="select")return;
@@ -1246,14 +1264,12 @@ export default function Board(p: Props) {
         <hr />
         {menuAction("Delete", () => changeMenuTarget("delete"), { icon: <Trash2 size={15} />, danger: true })}
       </div>, document.body)}
-      {!p.scene.mapId && !p.scene.drawing && !p.scene.pointsOfInterest.length && p.scene.tokens.length === 0 && !p.scene.effects.length && !p.scene.measurements.length && !p.scene.fog.strokes.length && ["select","pan"].includes(p.tool) && (
-        <div className="board-hint">
-          <strong>Your next encounter starts here.</strong>
-          <span>
-            Import a map, or use this blank board.
-            <br />
-            Add a token to begin.
-          </span>
+      {!p.scene.mapId && !p.scene.drawing && !p.scene.pointsOfInterest.length && p.scene.tokens.length === 0 && !p.scene.effects.length && !p.scene.measurements.length && !p.scene.fog.strokes.length && ["select","pan"].includes(p.tool) && hintGone !== p.scene.id && (
+        <div className="board-hint" role="note">
+          <button type="button" className="board-hint-close" aria-label="Dismiss" title="Dismiss" onClick={() => setHintGone(p.scene.id)}><X size={16} /></button>
+          <strong>Your next encounter starts here</strong>
+          <span>Upload a map picture or start with this blank grid, then add the party and the monsters.</span>
+          {(p.onUploadMap || p.onAddToken) && <span className="board-hint-actions">{p.onUploadMap && <button type="button" className="primary" onClick={() => { setHintGone(p.scene.id); p.onUploadMap?.(); }}><Upload size={15} />Upload a map</button>}{p.onAddToken && <button type="button" onClick={() => { setHintGone(p.scene.id); p.onAddToken?.(); }}><Plus size={15} />Add token</button>}</span>}
         </div>
       )}
       <div className="board-info">
@@ -1266,6 +1282,7 @@ export default function Board(p: Props) {
           {p.scene.width} × {p.scene.height}
         </span>
       </div>
+      {!p.player && p.cropControlsHost && createPortal(<div className="crop-bar">{cropActions}</div>, p.cropControlsHost)}
       {!p.player && <div className="crop-controls" data-open={cropMenuOpen}>
         <div className="crop-quick-actions">
           {!validMovePlan && selectedMoveToken && <button onClick={() => {
@@ -1276,14 +1293,7 @@ export default function Board(p: Props) {
           }}>Plan move</button>}
         <button className="mobile-only crop-menu-toggle" aria-expanded={cropMenuOpen} onClick={()=>setCropMenuOpen(v=>!v)}>{cropMenuOpen?"Close crops":cropFocus?"Crops (focused)":"Crops"}</button>
         </div>
-        <div className="crop-control-actions">
-        <select aria-label="Saved map crops" style={{width:180,pointerEvents:"auto"}} value={p.scene.activeCropId??""} onChange={e=>{const id=e.target.value;const saved=p.scene.savedCrops.find(c=>c.id===id);if(saved){p.update(s=>{s.activeCropId=id;s.crop={x:saved.x,y:saved.y,width:saved.width,height:saved.height};s.cropFocus=true;});}else setCropFocus(false);}}>
-          <option value="" disabled>{p.scene.crop&&!p.scene.activeCropId?"Current crop (unsaved name)":"Choose a saved crop"}</option>
-          {p.scene.savedCrops.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <button style={{pointerEvents:"auto"}} disabled={p.scene.savedCrops.length>=100} onClick={()=>{setNewCrop(true);setCropEditing(true);}}>New crop</button>
-        {p.scene.crop&&<><button style={{pointerEvents:"auto"}} onClick={()=>{setNewCrop(false);setCropEditing(true);}}>Edit crop</button><button style={{pointerEvents:"auto"}} onClick={()=>setCropFocus(value=>!value)}>{cropFocus?"Show full map":"Focus crop"}</button><button style={{pointerEvents:"auto"}} onClick={()=>{p.update(s=>{s.cropFocus=false;s.savedCrops=s.savedCrops.filter(c=>c.id!==s.activeCropId);s.activeCropId=null;s.crop=null;});}}>Delete crop</button></>}
-        </div>
+        {cropActions}
       </div>}
       {cropEditing && !p.player && <MapCropEditor scene={newCrop?{...p.scene,crop:null}:p.scene} initialName={newCrop?`Area ${p.scene.savedCrops.length+1}`:p.scene.savedCrops.find(c=>c.id===p.scene.activeCropId)?.name??"Area 1"} view={view} close={()=>setCropEditing(false)} save={(crop,name)=>{p.update(s=>{const id=!newCrop&&s.savedCrops.some(c=>c.id===s.activeCropId)?s.activeCropId!:uid();const entry={...crop,id,name};const index=s.savedCrops.findIndex(c=>c.id===id);if(index>=0)s.savedCrops[index]=entry;else s.savedCrops.push(entry);s.activeCropId=id;s.crop=crop;s.cropFocus=true;});setCropEditing(false);}}/>}
       <div className="zoom-controls">

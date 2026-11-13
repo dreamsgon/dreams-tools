@@ -547,6 +547,18 @@ small {
   margin-top: 9px;
   color: var(--ui-text-829078);
 }
+/* The empty map card takes clicks for its buttons and closes on the first click on the map (handoff 2.6). */
+.board-hint { pointer-events: auto; text-align: left; max-width: 420px; padding: 22px 24px; box-shadow: 0 8px 24px rgba(15,23,42,.18); }
+.board-hint strong { padding-right: 28px; font-size: 17px; }
+.board-hint span.board-hint-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.board-hint-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.board-hint-close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--muted); }
+.board-hint-close:hover { background: var(--hover); color: var(--ink); }
+/* Saved crops in the bar above the map; phones keep the Crops button on the map instead. */
+.crop-bar .crop-control-actions { flex-wrap: nowrap; align-items: center; }
+.crop-bar select { width: 180px; }
+.board .crop-controls .crop-control-actions { display: none; }
+@media (max-width: 799px) { .crop-host { display: none; } .app-shell .board .crop-controls[data-open="true"] .crop-control-actions { display: grid; } }
 .board-info {
   position: absolute;
   bottom: 19px;
@@ -2229,3 +2241,9 @@ button.primary, .rpg-open { font-weight:500; }
 .add-map-type[aria-checked="true"] svg { color:var(--accent); }
 @media(max-width:600px) { .add-map-types { grid-template-columns:minmax(0,1fr); } }
 .add-map-type svg { flex:none; width:22px; height:22px; }
+/* Maptable with no campaigns yet: one sentence and one button (handoff 2.2). */
+.dashboard-first-campaign { display:flex; flex-direction:column; align-items:center; gap:8px; max-width:440px; margin:40px auto; padding:0 16px; text-align:center; }
+.dashboard-first-campaign > span { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:50%; background:var(--accent-soft); color:var(--accent); }
+.dashboard-first-campaign h3 { margin:6px 0 0; font-size:20px; }
+.dashboard-first-campaign p { margin:0 0 10px; color:var(--muted); font-size:13px; line-height:1.5; }
+.dashboard-first-campaign button { display:inline-flex; align-items:center; gap:6px; }
