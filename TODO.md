@@ -128,6 +128,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Libraries/folders/campaign transfers, token names/HP/conditions/borders, auras/AoEs, movement, initiative and dice.
 - [ ] Player previews/exports conceal hidden tokens and use opaque fog.
 - [ ] Large-library performance and storage costs; design safe collection of unreferenced immutable segments without breaking recovery.
+- [x] Faster loading, server: `proxy.ts` refreshes session cookies with `getClaims()` instead of a second `getUser()` call, so signed-in pages and API calls (including Maptable's 2-second sync check) make one Supabase Auth round trip instead of two when the project uses asymmetric JWT signing keys. `getAppUser()` still verifies every protected request with Supabase Auth. Player link pages stop polling while the tab is hidden.
 - [ ] Review the remaining starter dependencies/styles and trim unused ones with visual regression checks.
 
 ## Optional future work
