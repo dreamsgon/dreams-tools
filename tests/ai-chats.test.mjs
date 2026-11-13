@@ -4,9 +4,9 @@ process.env.AI_KEY_SECRET='test-secret-for-ai-keys';
 const {demoWorkspace}=await import('../lib/encyclopedia/world-model.ts');
 const {EncyclopediaStore}=await import('../lib/encyclopedia/store.ts');
 const {cleanApi,createApiConnection}=await import('../lib/mcp/connections.ts');
-const {chatTurn}=await import('../lib/ai/run.ts');
-const {CHAT_LIMIT,chatMarkdown,chatRecap,chatSessionBody,chatTitle,cleanTitle,deleteChat,listChats,readChat,renameChat,saveExchange}=await import('../lib/ai/chats.ts');
-const {chatFileName}=await import('../lib/ai/chat-text.ts');
+const {chatTurn,cleanHistory}=await import('../lib/ai/run.ts');
+const {CHAT_LIMIT,PART_SIZE,TURN_LIMIT,chatMarkdown,chatRecap,chatSessionBody,chatTitle,cleanTitle,deleteChat,listChats,readChat,renameChat,saveExchange}=await import('../lib/ai/chats.ts');
+const {chatFileName,CONTEXT_TURNS}=await import('../lib/ai/chat-text.ts');
 
 function bucket(){
  const data=new Map();let n=0;
@@ -44,7 +44,7 @@ test('each exchange is saved to its chat, and a new chat is named after its firs
  assert.deepEqual(await listChats(b,OWNER,'other-campaign'),[]);
 });
 
-test('chats can be renamed and deleted, and the newest 200 are kept',async()=>{
+test('chats can be renamed and deleted, and chats past the newest 200 are kept, not deleted',async()=>{
  const b=bucket(),newId=ids();
  const a=await saveExchange(b,OWNER,CAMPAIGN,{...base,question:'Who runs Greyfen?',answer:'The Bog Hag, mostly.',steps:[],newId,now:new Date('2026-10-01T00:00:00Z')});
  await renameChat(b,OWNER,CAMPAIGN,a.id,'  Greyfen   politics ');
@@ -56,10 +56,48 @@ test('chats can be renamed and deleted, and the newest 200 are kept',async()=>{
  await assert.rejects(readChat(b,OWNER,CAMPAIGN,a.id),/That chat is gone/);
  for(let i=0;i<CHAT_LIMIT+2;i++)await saveExchange(b,OWNER,CAMPAIGN,{...base,question:`Q${i}`,answer:'A',steps:[],newId,now:new Date(Date.UTC(2026,10,1,0,i))});
  const list=await listChats(b,OWNER,CAMPAIGN);
- assert.equal(list.length,CHAT_LIMIT);
- assert.equal(list[0].title,`Q${CHAT_LIMIT+1}`);
- assert.ok(!list.some(c=>c.title==='Q0'||c.title==='Q1'));
- assert.equal([...b.data.keys()].filter(k=>k.includes('/ai-chats/')&&!k.endsWith('index.json')).length,CHAT_LIMIT);
+ assert.equal(list.length,CHAT_LIMIT+2);
+ assert.deepEqual(list.map(c=>c.title).slice(0,1).concat(list.slice(-2).map(c=>c.title)),[`Q${CHAT_LIMIT+1}`,'Q1','Q0']);
+ // The quick index stays small; the two oldest moved to the older list, and every chat file is still there.
+ const indexKey=[...b.data.keys()].find(k=>k.endsWith('/index.json')),olderKey=[...b.data.keys()].find(k=>k.endsWith('/older.json'));
+ assert.equal(JSON.parse(b.data.get(indexKey).text).chats.length,CHAT_LIMIT);
+ assert.deepEqual(JSON.parse(b.data.get(olderKey).text).chats.map(c=>c.title),['Q1','Q0']);
+ assert.equal([...b.data.keys()].filter(k=>k.includes('/ai-chats/')&&!/(index|older)\.json$/.test(k)).length,CHAT_LIMIT+2);
+ // An older chat can be reopened, renamed, continued (it moves back to the index) and deleted.
+ const q0=list.at(-1);
+ assert.equal((await readChat(b,OWNER,CAMPAIGN,q0.id)).turns[0].text,'Q0');
+ await renameChat(b,OWNER,CAMPAIGN,q0.id,'First question');
+ assert.equal((await listChats(b,OWNER,CAMPAIGN)).at(-1).title,'First question');
+ await saveExchange(b,OWNER,CAMPAIGN,{...base,id:q0.id,question:'Back again',answer:'Welcome back.',steps:[],newId,now:new Date('2026-12-01T00:00:00Z')});
+ const back=await listChats(b,OWNER,CAMPAIGN);
+ assert.equal(back.length,CHAT_LIMIT+2);
+ assert.deepEqual([back[0].title,back[0].count],['First question',4]);
+ assert.equal(new Set(back.map(c=>c.id)).size,back.length);
+ await deleteChat(b,OWNER,CAMPAIGN,list.at(-2).id);
+ assert.equal((await listChats(b,OWNER,CAMPAIGN)).length,CHAT_LIMIT+1);
+});
+
+test('a long chat keeps every turn: older turns move to part files and exports read them all',async()=>{
+ const b=bucket(),newId=ids();let id;
+ const exchanges=TURN_LIMIT/2+PART_SIZE/2+5;
+ for(let i=0;i<exchanges;i++)id=(await saveExchange(b,OWNER,CAMPAIGN,{...base,id,question:`Q${i}`,answer:`A${i}`,steps:[],newId,now:new Date(Date.UTC(2026,10,1,0,i))})).id;
+ const meta=(await listChats(b,OWNER,CAMPAIGN))[0];
+ assert.equal(meta.count,exchanges*2);
+ // The panel gets the latest turns only; the chat file never passes the limit.
+ const recent=await readChat(b,OWNER,CAMPAIGN,id);
+ assert.ok(recent.turns.length<=TURN_LIMIT);
+ assert.equal(recent.earlier+recent.turns.length,exchanges*2);
+ assert.equal(recent.turns.at(-1).text,`A${exchanges-1}`);
+ // A full read has every turn in order, so Markdown, session pages and recaps include the start.
+ const full=await readChat(b,OWNER,CAMPAIGN,id,{full:true});
+ assert.equal(full.turns.length,exchanges*2);
+ assert.deepEqual(full.turns.slice(0,2).map(t=>t.text),['Q0','A0']);
+ assert.ok(full.turns.every((t,i)=>t.text===`${i%2?'A':'Q'}${Math.floor(i/2)}`));
+ assert.match(chatMarkdown(full),/\*\*You:\*\* Q0\n/);
+ // Deleting the chat removes its parts too.
+ assert.ok([...b.data.keys()].some(k=>k.includes('.part-1.json')));
+ await deleteChat(b,OWNER,CAMPAIGN,id);
+ assert.deepEqual([...b.data.keys()].filter(k=>k.includes(id)),[]);
 });
 
 test('a chat exports as Markdown, a Discord recap and a GM-secret session page',()=>{
@@ -95,4 +133,12 @@ test('the AI panel saves each turn of a chat with an API key connection',async()
  assert.equal(r2.chat.id,r1.chat.id);assert.equal(r2.chat.count,4);
  const saved=await readChat(b,OWNER,CAMPAIGN,r1.chat.id);
  assert.deepEqual(saved.turns.map(t=>t.text),['Name an innkeeper','Old Tamsin.','And her inn?','The Drowned Lamp.']);
+ // Only the latest messages go to the AI, whatever the browser sends.
+ let sent;
+ const watch=async(url,init)=>{sent=JSON.parse(init.body);return say('Noted.')();};
+ const long=Array.from({length:59},(_,i)=>({role:i%2?'assistant':'user',text:`m${i}`}));
+ await chatTurn(b,OWNER,CAMPAIGN,connection.id,cleanHistory(long),undefined,watch,r1.chat.id);
+ const said=sent.messages.filter(m=>m.role!=='system').map(m=>m.content);
+ assert.ok(said.length<=CONTEXT_TURNS);
+ assert.equal(said.at(-1),'m58');
 });
