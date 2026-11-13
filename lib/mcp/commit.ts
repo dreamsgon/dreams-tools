@@ -3,6 +3,9 @@ import type { S3Bucket } from "../storage.ts";
 import { EncyclopediaStore } from "../encyclopedia/store.ts";
 import { campaignExport, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
 import { logActivity, pageChanges, stable } from "./activity.ts";
+import { loadWorkspace, saveWorkspace } from "../workspace-storage.ts";
+import { campaignScenes } from "../agent-maps.ts";
+import { checkTableScope, tableParts } from "./table.ts";
 import { ToolError, type Change, type McpContext, type WriteOut } from "./tools.ts";
 
 type Who = { owner: string; campaignId: string; connectionId: string | null; connection: string };
@@ -34,8 +37,13 @@ export function makeCommit(bucket: S3Bucket, who: Who, base: Omit<McpContext, "b
       const { data, revision } = await store.read(who.owner);
       if (!data.campaigns.some(c => c.id === who.campaignId)) throw new ToolError("This campaign no longer exists.");
       const book = campaignExport(data, who.campaignId), now = new Date();
-      const out = change(data, { ...base, book, campaign: book.campaigns[0] }, now);
-      let changes: ReturnType<typeof pageChanges> | undefined;
+      // The latest Maptable scenes, so a table change starts from what the GM sees now.
+      const pair = book.campaigns[0].maptableCampaignId, prefix = `users/${encodeURIComponent(who.owner)}/`;
+      const stored = pair ? await loadWorkspace(bucket, prefix) : null;
+      let maps: McpContext["maps"] = null;
+      if (pair && stored) try { maps = { workspace: stored.workspace, campaignId: pair, scenes: campaignScenes(stored.workspace, pair) }; } catch { maps = null; }
+      const out = change(data, { ...base, maps, book, campaign: book.campaigns[0] }, now);
+      let changes: ReturnType<typeof pageChanges> | undefined, table: ReturnType<typeof tableParts> | undefined;
       if (out.next) {
         checkScope(data, out.next, who.campaignId);
         changes = pageChanges(data, out.next);
@@ -46,6 +54,16 @@ export function makeCommit(bucket: S3Bucket, who: Who, base: Omit<McpContext, "b
           if (saved === null) continue; // Someone saved in between: run the change again on their version.
         }
       }
+      if (out.maps && maps && stored) {
+        checkTableScope(stored.workspace, out.maps, maps.scenes.map(s => s.id));
+        table = tableParts(stored.workspace, out.maps);
+        if (table.length) {
+          let saved: { revision: string } | null;
+          try { saved = await saveWorkspace(bucket, prefix, out.maps, stored.revision); }
+          catch (e) { throw new ToolError(e instanceof Error ? e.message : "Could not save the change to the table."); }
+          if (saved === null) continue; // The GM saved the table in between: run the change again on theirs.
+        }
+      }
       let reply = out.reply;
       if (out.discord && send) {
         try { await send(out.discord); }
@@ -53,7 +71,7 @@ export function makeCommit(bucket: S3Bucket, who: Who, base: Omit<McpContext, "b
       }
       await logActivity(bucket, who.owner, who.campaignId, {
         id: crypto.randomUUID(), at: now.toISOString(), connection: who.connection, connectionId: who.connectionId, tool,
-        summary: out.summary, ...(out.detail ? { detail: out.detail } : {}), ...(changes?.length ? { changes } : {}),
+        summary: out.summary, ...(out.detail ? { detail: out.detail } : {}), ...(changes?.length ? { changes } : {}), ...(table?.length ? { table } : {}),
       }).catch(() => {}); // The change is saved either way; a missing log line must not report it as failed.
       return { ...out, reply };
     }
