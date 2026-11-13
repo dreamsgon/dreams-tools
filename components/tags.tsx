@@ -4,6 +4,7 @@ import { Check, Merge, MoreVertical, Pencil, Plus, Tag as TagIcon, Trash2, X } f
 import { usePopover } from "./popover-menu";
 import { TAG_COLORS, TAG_COLOR_NAMES, applyTagAction, cleanTagName, findTag, kindsLabel, newTagId, nextColor, suggestTags, tagUses, tagsOn, type Tag, type TagAction, type TagColor, type TagLibrary, type TaggedItem, type TargetKind } from "@/lib/tags";
 import "./tags.css";
+import { confirmDialog } from "./confirm-dialog";
 
 /*
  * Tags in the browser. Every component on a page shares one copy of the tags, so a
@@ -214,7 +215,7 @@ function ManagerRow({ tag, library, uses, onShow }: { tag: Tag; library: TagLibr
         {menuOpen && <div className="tags-pop tags-pop-menu" role="menu">
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setName(tag.name); setMode("rename"); }}><Pencil size={14} />Rename</button>
           <button type="button" role="menuitem" disabled={!others.length} onClick={() => { setMenuOpen(false); setInto(""); setMode("merge"); }}><Merge size={14} />Merge into…</button>
-          <button type="button" role="menuitem" className="tags-danger" onClick={() => { setMenuOpen(false); if (confirm(`Delete the tag “${tag.name}”? It is removed from ${plural(uses?.count ?? 0, "thing")}. The pages and maps stay.`)) void changeTags({ action: "delete", tagId: tag.id }); }}><Trash2 size={14} />Delete</button>
+          <button type="button" role="menuitem" className="tags-danger" onClick={async () => { setMenuOpen(false); if (await confirmDialog({ title: `Delete the tag “${tag.name}”?`, message: `It is removed from ${plural(uses?.count ?? 0, "thing")}. The pages and maps stay.`, confirm: "Delete tag", danger: true })) void changeTags({ action: "delete", tagId: tag.id }); }}><Trash2 size={14} />Delete</button>
         </div>}
       </div>
     </>}

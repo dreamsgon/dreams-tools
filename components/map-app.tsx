@@ -39,7 +39,6 @@ import {
   Ruler,
   Eye,
   EyeOff,
-  Cloud,
   Undo2,
   Redo2,
   Circle,
@@ -54,7 +53,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
-  Check,
   HelpCircle,
   UserRound,
   Dices,
@@ -65,6 +63,9 @@ import {
   LayoutGrid,
   FolderPlus,
 } from "lucide-react";
+import { confirmDialog } from "./confirm-dialog";
+import SaveChip from "./save-chip";
+import PanelTip from "./panel-tip";
 import Board, { type View } from "./board";
 import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
@@ -994,11 +995,12 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     });
     setLocation(id); setPanel("scenes"); setSidebar(true); setDashboard(false); setSearch("");
   };
+  const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()}/>;
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
   if (dashboard) return <main className="campaign-dashboard">
-    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions"><span className="save-state" role="status">{saveStatus}</span><button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button><AppearanceMenu /><AccountLink /></div></header>
+    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions">{saveChip}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
     {overviewOpen ? <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={overview.id}
       lastSceneId={campaignFor(scene.containerId) === overview.id ? scene.id : null} open={enterScene} back={() => setOverview(null)}
       addScenes={() => { const target = campaignFor(scene.containerId) === overview.id ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === overview.id); if (target) { enterScene(target.id); setNewMapType("encounter"); setDialog("add-scenes"); } }} /></div> :
@@ -1027,22 +1029,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <Breadcrumbs items={sceneTrail()} />
         </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
+        {saveChip}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
           <AppearanceMenu />
           <button aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}>Token gallery</button>
-          <button title="Save workspace (Ctrl/Cmd+S)" onClick={()=>void manualSave()}>Save</button>
-          <span
-            className={"save-state " + (saveError ? "warning" : "")}
-            title={saveError || saveStatus}
-          >
-            {saveStatus === "Saved to cloud" ? (
-              <Check size={14} />
-            ) : (
-              <Cloud size={14} />
-            )}
-            <span>{saveStatus}</span>
-          </span>
           <button
             className="icon-button"
             title="Connections"
@@ -1270,8 +1261,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   </>}
                   {settingsTab==="map" && <>
                     <p className="muted">{scene.mapId ? "This scene uses an uploaded map. Replacing it keeps tokens, fog and pins." : scene.drawing ? "This scene uses a drawn map." : "This scene is a blank grid. Upload a map image to put under it."}</p>
-                  <button onClick={()=>{
-                    if(scene.drawing && !window.confirm("Replace this scene’s drawing with an uploaded map? Tokens, fog, and other scene settings will be kept."))return;
+                  <button onClick={async()=>{
+                    if(scene.drawing && !await confirmDialog({title:"Replace this scene’s drawing?",message:"The uploaded map takes the drawing’s place. Tokens, fog and other scene settings are kept.",confirm:"Replace drawing"}))return;
                     setDialog("scene-map");
                   }}>{scene.mapId || scene.drawing ? "Replace map" : "Upload map"}</button>
                     <p className="muted">Grid size and offset are under Grid in the tool rail.</p>
@@ -1509,7 +1500,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       <div className="button-row">{(["npc","party"] as const).map(role=><button key={role} disabled={!campaignId} onClick={()=>{commit(w=>{const copy={...structuredClone(token),id:uid(),sourceLibraryId:undefined,conditionRounds:undefined,attachedToId:null,rosterRole:role};w.tokenLibrary.push(copy);const placed=w.scenes.flatMap(s=>s.tokens).find(t=>t.id===token.id);if(placed)placed.sourceLibraryId=copy.id;w.libraryCampaigns[copy.id]=campaignId;});setNotice(role==="npc"?"Saved to campaign NPCs.":"Saved to party.");}}>Save as {role==="npc"?"NPC":"party member"}</button>)}</div>
                         </>},
                       ]}/>
-                      <div className="manual-save-controls"><button onClick={()=>void manualSave()}>Save token changes</button><small role="status">{saveError || saveStatus}</small></div>
+                      
                     </TokenOptions>
                   ) : effect ? (
                     <>
@@ -1619,6 +1610,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               )}
               {panel === "grid" && (
                 <>
+                  <PanelTip more={<>
+                    <p>Change the size and offsets until the grid sits on the one printed on your map. Press Enter or leave a field to apply it. Values use map pixels, whatever the zoom.</p>
+                    <p>Grid adjust mode lets you drag the map to move the grid and use the arrow keys or the scroll wheel for fine changes.</p>
+                    <p>The map background shows on blank maps and through transparent images. Drawn maps use their Map Creator colours.</p>
+                  </>}>Line the grid up with the one printed on your map.</PanelTip>
                   <Field label="Grid type">
                     <select
                       aria-label="Grid type"
@@ -1706,10 +1702,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     Escape exits. Keys work when you are
                     not editing a field or slider.
                   </p>}
-                  <p className="muted">
-                    Adjust size and offsets to align with a grid already printed
-                    on your map. Press Enter or leave a field to apply it. Values use map pixels, regardless of zoom.
-                  </p>
                   <Toggle
                     label="Snap tokens to grid"
                     checked={scene.grid.snap}
@@ -1734,7 +1726,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     <select value={scene.background==="#202925"?"dark":scene.background==="#e3e6d8"?"light":"custom"} onChange={e=>{if(e.target.value!=="custom")updateScene(s=>{s.background=e.target.value==="dark"?"#202925":"#e3e6d8";});}}><option value="light">Light</option><option value="dark">Dark</option><option value="custom">Custom color</option></select>
                     <TokenColor label="Map background color" value={scene.background} onChange={background=>updateScene(s=>{s.background=background;})}/>
                   </Field>
-                  <p className="muted">Map background shows on blank maps and through transparent images. Drawn maps use their Map Creator floor/background colors.</p>
                   <Field
                     label={`Grid opacity · ${Math.round(scene.grid.opacity * 100)}%`}
                   >
@@ -1756,7 +1747,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   </Field>
                   <hr />
                   <h3>Scale & measurement</h3>
-                  <p className="muted">Set distances for this map. New maps start at 5 feet per tile.</p>
+                  <PanelTip more={<p>Hex grids count adjacent hexes. With no grid, distance uses the cell size as a pixel scale.</p>}>New maps start at 5 feet per tile.</PanelTip>
                   <Field label="Measurement units"><select value={["ft","m","mi","km","spaces"].includes(scene.grid.unit)?scene.grid.unit:"custom"} onChange={e=>patchGrid({unit:e.target.value==="custom"?"units":e.target.value})}><option value="ft">Feet (ft)</option><option value="m">Meters (m)</option><option value="mi">Miles (mi)</option><option value="km">Kilometers (km)</option><option value="spaces">Spaces</option><option value="custom">Custom</option></select></Field>
                   <div className="form-row">
                     <NumberField
@@ -1790,12 +1781,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       <option value="euclidean">Straight-line distance</option>
                     </select>
                   </Field>
-                  <p className="muted">
-                    Hex movement counts adjacent hexes. With no grid, distance
-                    uses the cell size as a pixel scale.
-                  </p>
                   <Toggle label="Measure token movement" checked={measureTokenMovement} onChange={changeMeasureTokenMovement} />
-                  <p className="muted">While enabled, token drags measure movement. Press Q or Space during a drag to add waypoints. On phones, select a token and tap Plan move, then tap map waypoints and Move token. Turn measuring off here or in the map toolbar.</p>
+                  <PanelTip more={<p>Press Q or Space during a drag to add waypoints. On phones, select a token and tap Plan move, then tap map waypoints and Move token. Turn measuring off here or in the map toolbar.</p>}>While this is on, dragging a token measures how far it moves.</PanelTip>
                   <button onClick={() => chooseTool("measure")}>
                     <Ruler size={16} />
                     Measure a path
@@ -1815,11 +1802,12 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     }
                   />
                   <Toggle label="Temporarily hide fog (GM only)" checked={hideFog} onChange={setHideFog}/>
-                  <p className="muted">Temporary visibility affects only your GM view. Player view and map exports keep the fog.</p>
-                  <p className="muted">
-                    The GM sees a translucent cover. Players and exported images
-                    see solid fog. Switching it off preserves your edits.
-                  </p>
+                  <PanelTip more={<>
+                    <p>Hiding fog for yourself only changes your GM view. The player view and map exports keep it.</p>
+                    <p>Switching fog off keeps your edits for next time.</p>
+                    <p>Polygon: click the corners, then finish the shape. Edit regions: select a region to move its points; the edge handles add points. Use the map controls to finish, cancel or delete.</p>
+                    <p>Undo takes back fog edits, including Cover all and Reveal all.</p>
+                  </>}>You see a see-through cover. Players and exports see solid fog.</PanelTip>
                   <div className="segmented">
                     <button className={tool==="select"?"active":""} onClick={()=>{chooseTool("select");setFogShape("edit");}}>Select / edit</button>
                     <button
@@ -1860,7 +1848,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       onChange={(e) => setBrushSize(+e.target.value)}
                     />
                   </Field>}
-                  <p className="muted">Polygon: click corners, then finish the shape. Edit regions: select a region to move its points; edge handles add points. Use the map controls to finish, cancel, or delete.</p>
                   <div className="fog-sidebar-actions" ref={setFogControlsHost}/>
                   <FogRegions scene={scene} update={updateScene} selected={fogSelectedIndices} onSelectionChange={selectFog} onSelect={index=>{selectFog([index]);setFogSelectionRequest(r=>({index,nonce:(r?.nonce??0)+1}));}}/>
                   <div className="button-row">
@@ -1883,10 +1870,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       Reveal all
                     </button>
                   </div>
-                  <p className="muted">
-                    Undo restores previous fog edits, including Cover all and
-                    Reveal all.
-                  </p>
                 </>
               )}
               {panel === "effects" && <EffectsPanel workspace={workspace} commit={commit} onUsePreset={preset=>{chooseTool(preset.type);setEffectTemplate(preset);setSelected(null);setEffectSize(preset.size);setEffectColor(preset.color);setEffectLabel(preset.label||preset.name);setEffectPersistent(preset.persistent);setEffectHidden(preset.hidden);setEffectWidth(preset.width);}} scene={scene} tool={tool} chooseTool={chooseTool} selected={selected} select={select} update={updateScene}
@@ -1944,7 +1927,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 </>
               )}
             </div>
-            {panel !== "scenes" && panel !== "scene" && <div className="manual-save-controls"><button onClick={()=>void manualSave()}>Save changes</button><small role="status">{saveError || saveStatus}</small></div>}
+            
           </ResizableSidebar>
         )}
         <section className="map-workspace">

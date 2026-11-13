@@ -1,0 +1,8 @@
+/* A one-line hint with a "?" fold for the rest (components/panel-tip.tsx). */
+.panel-tip { margin:0; }
+.panel-tip > p { display:flex; align-items:flex-start; gap:6px; margin:0; font-size:12px; line-height:1.5; color:var(--muted); }
+.panel-tip-toggle { flex:none; display:inline-grid; place-items:center; width:22px; height:22px; min-width:0; min-height:0 !important; margin:-2px 0 0 auto; padding:0; border:0; border-radius:50%; background:none; color:var(--muted); cursor:pointer; }
+.panel-tip-toggle:hover, .panel-tip-toggle[aria-expanded="true"] { color:var(--accent); background:var(--accent-soft); }
+.panel-tip-more { margin-top:6px; padding:8px 10px; border-left:2px solid var(--accent-soft); font-size:12px; line-height:1.55; color:var(--muted); }
+.panel-tip-more p { margin:0 0 6px; }
+.panel-tip-more p:last-child { margin-bottom:0; }

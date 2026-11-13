@@ -8,6 +8,7 @@ import { resolveEffect, isOneOffArea } from "@/lib/effects";
 import type { Scene, Tool, Workspace, EffectPreset } from "@/lib/model";
 import { Field, NumberField, Toggle, Modal } from "./dialogs";
 import EffectPresets from "./effect-presets";
+import PanelTip from "./panel-tip";
 export type EffectDefaults = {
     size: number;
     color: string;
@@ -87,11 +88,11 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
   <h3>Objects &amp; map labels</h3>
   <Field label="Object shape"><select value={objectShape} onChange={e=>setObjectShape(e.target.value)}><option value="square">Square</option><option value="rectangle">Rectangle</option><option value="circle">Circle</option><option value="triangle">Triangle</option><option value="custom">Freehand</option></select></Field>
   <div className="button-row"><button disabled={scene.effects.length>=300||objectShape==="custom"} onClick={()=>addObject()}>Add object</button><button disabled={scene.effects.length>=300} onClick={()=>addObject(false,true)}>Draw object</button><button disabled={scene.effects.length>=300} onClick={()=>addObject(true)}>Add map label</button></div>
-  <p className="muted">Add places an editable object or label in the center of your focused crop or map. Draw lets you drag its size on the map. Objects remain when one-off AoEs are cleared.</p>
+  <PanelTip more={<p>Add places it in the middle of the map (or of your focused crop). Draw lets you drag its size on the map. Objects stay when one-off AoEs are cleared.</p>}>Add drops one in the middle; Draw lets you size it.</PanelTip>
   <h3>Auras &amp; AoEs</h3>
   <button className={tool === "select" ? "active" : ""} aria-pressed={tool === "select"} onClick={() => chooseTool("select")}>Select &amp; edit an area</button>
   <div className="button-row effect-shapes" role="group" aria-label="Draw an area of effect">{shapes.map(shape => <button key={shape} className={tool === shape ? "active" : ""} aria-pressed={tool === shape} onClick={() => { select(null); chooseTool(shape); }}>{names[shape]}</button>)}</div>
-  <p className="muted">Drag on the map to draw. Custom draws a freehand area; release to close it. Choose Select &amp; edit, then click an area on the map or in the list below.</p>
+  <PanelTip more={<p>Custom draws a freehand area; let go to close it. To change an area, choose Select &amp; edit, then click it on the map or in the list below.</p>}>Pick a shape, then drag on the map to draw it.</PanelTip>
   {effect && <>
    <button className="primary" onClick={()=>setEditorOpen(true)}>Edit {effect.kind==="label"?"map label":effect.kind==="object"?"object":"selected area"}</button>
    {editorOpen && createPortal(<Modal title={effect.kind==="label"?"Edit map label":effect.kind==="object"?"Edit object":"Edit aura / AoE"} close={()=>setEditorOpen(false)}>
@@ -125,7 +126,7 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
    <div className="form-row"><NumberField label="Default size (cells)" value={defaults.size} min={0.25} max={200} step={0.25} onChange={size => setDefaults({ size })}/><Field label="New area color"><input type="color" value={defaults.color} onChange={e => setDefaults({ color: e.target.value })}/></Field></div>
    <NumberField label="Default line width (cells)" value={defaults.width} min={0.05} max={200} step={0.25} onChange={width => setDefaults({ width })}/>
    <Toggle label="New areas are persistent auras" checked={defaults.persistent} onChange={persistent => setDefaults({ persistent })}/><Toggle label="Hide new areas from players" checked={defaults.hidden} onChange={hidden => setDefaults({ hidden })}/>
-   <p className="muted">Persistent auras remain until removed. One-off AoEs can be cleared together. Hidden areas are visible only to the GM.</p>
+   <PanelTip more={<p>One-off AoEs can be cleared together with Clear one-off AoEs. Hidden areas are visible only to you.</p>}>Persistent auras stay until you remove them.</PanelTip>
   </details>
   <EffectPresets workspace={workspace} commit={commit} onUsePreset={onUsePreset} selectedEffect={effect}/>
   {["objects", "auras", "areas"].map(group => { const persistent=group==="auras"; const items = scene.effects.filter(item => group==="objects" ? item.kind==="object"||item.kind==="label" : (!item.kind||item.kind==="area")&&item.persistent===persistent); return <div key={group}><div className="section-heading"><h3>{group==="objects"?"Objects & map labels":persistent ? "Persistent auras" : "One-off AoEs"}</h3><span className="count">{items.length}</span></div><div className="token-list">{items.map(item => <div className="token-list-row" key={item.id}><button className={selected === item.id ? "active" : ""} aria-label={`Select and edit ${item.label || names[item.type]}`} aria-pressed={selected === item.id} onClick={() => selectEffect(item.id)}><span className="token-avatar" style={{ background: item.color }}/>{item.label || names[item.type]}{item.locked?" (locked)":""}</button><button className="token-visibility" aria-label={`${item.hidden ? "Show" : "Hide"} ${item.label || names[item.type]} ${item.hidden ? "to" : "from"} players`} title={item.hidden ? "Hidden from players" : "Visible to players"} aria-pressed={item.hidden} onClick={() => update(s => { const area = s.effects.find(candidate => candidate.id === item.id); if (area)

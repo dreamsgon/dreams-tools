@@ -1,0 +1,23 @@
+/* Maptable's save status chip (components/save-chip.tsx). */
+.save-chip { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:4px 10px; border:1px solid transparent; border-radius:999px; background:transparent; color:var(--chrome-muted, var(--muted)); font:inherit; font-size:12px; font-weight:500; line-height:1.2; white-space:nowrap; cursor:pointer; flex:none; }
+.save-chip:hover:not(:disabled) { background:var(--chrome-hover, var(--hover)); color:var(--chrome-text, var(--ink)); }
+.save-chip:disabled { cursor:default; opacity:.8; }
+.save-chip svg { flex:none; }
+.save-chip.saved svg { color:var(--accent); }
+.save-chip.unsaved { color:var(--chrome-text, var(--ink)); }
+.save-chip.unsaved svg { color:var(--warning, #b7791f); }
+.save-chip.failed, .save-chip.conflict { color:var(--danger); border-color:color-mix(in srgb, var(--danger) 45%, transparent); background:color-mix(in srgb, var(--danger) 10%, transparent); }
+.save-chip.failed:hover, .save-chip.conflict:hover { color:var(--danger); background:color-mix(in srgb, var(--danger) 18%, transparent); }
+.save-chip-spin { animation:save-chip-spin 1s linear infinite; }
+@keyframes save-chip-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .save-chip-spin { animation:none; } }
+/* On the board the chip sits just before the header buttons. */
+.app-header .save-chip { margin-left:auto; }
+.app-header .save-chip ~ .header-actions { margin-left:0; }
+/* On a phone it stays in the header as an icon, outside the Map menu. */
+@media (max-width:799px) {
+  .app-header .save-chip { min-width:36px; min-height:36px; padding:0; justify-content:center; }
+  .app-header .save-chip span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .app-header .save-chip.failed span, .app-header .save-chip.conflict span { position:static; width:auto; height:auto; clip:auto; }
+  .app-header .save-chip.failed, .app-header .save-chip.conflict { padding:0 10px; }
+}
