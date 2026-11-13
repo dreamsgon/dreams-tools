@@ -9,6 +9,7 @@ import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
 import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
 import { unlock } from "./secret.ts";
+import { saveExchange } from "./chats.ts";
 
 const MAX_TURNS = 20, MAX_TEXT = 8000;
 
@@ -25,7 +26,8 @@ export function cleanHistory(v: unknown): ChatTurn[] {
   return turns;
 }
 
-export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, connectionId: unknown, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch) {
+/** One turn of the AI panel's chat. The question and answer are saved to chat `chatId` (a new chat when it has none). */
+export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, connectionId: unknown, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch, chatId?: unknown) {
   const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === connectionId);
   if (!c?.api) throw Error("That AI connection was removed.");
   if (overLimit(c.api)) throw Error(`${c.name} has used this month's ${c.api.limit!.toLocaleString("en-US")} tokens. Raise the limit under What it may do.`);
@@ -47,5 +49,7 @@ export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: stri
   ].join("\n\n");
   const result = await runChat({ provider: c.api.provider, baseUrl: c.api.baseUrl, key: unlock(c.api.key), model: c.api.model }, system, history, tools, run, fetchImpl);
   const after = await addUsage(bucket, owner, campaignId, c.id, result.tokens);
-  return { ...result, api: after?.api ? publicApi(after.api) : undefined };
+  const reply = result.reply || "(No answer.)";
+  const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model: c.api.model, scene, question: history[history.length - 1]!.text, answer: reply, steps: result.steps });
+  return { ...result, api: after?.api ? publicApi(after.api) : undefined, chat };
 }

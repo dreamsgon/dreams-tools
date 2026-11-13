@@ -4,6 +4,7 @@ import {useRef,useState,type ReactNode} from "react";
 import {Lock,Map as MapIcon,ArrowUpRight} from "lucide-react";
 import {rollTarget,plainExcerpt,INLINE_TOKENS} from "@/lib/encyclopedia/inline";
 import {RollChip} from "./rolls";
+import {OPEN_CHAT_EVENT} from "@/lib/ai/chat-text";
 import {resolveLink,SECRET_OPEN,SECRET_CLOSE,type Entry,type Workspace} from "@/lib/encyclopedia/world-model";
 export const maptableHref = (sceneId: string) => `/maptable?scene=${encodeURIComponent(sceneId)}`;
 export function ArticleBody({ entry, data, onOpen, onChange }: {
@@ -26,6 +27,8 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
         const [target, label] = part.slice(2, -2).split("|");
         const scene = target.match(/^maptable:([A-Za-z0-9_-]{1,120})$/);
         if (scene) return <a key={i} className="wiki-link maptable-inline" href={maptableHref(scene[1])} target="_blank" rel="noopener" title="Open this battle map in Maptable">{label?.trim() || "Battle map"}<ArrowUpRight size={13} aria-hidden="true"/></a>;
+        const chat = target.match(/^ai-chat:([A-Za-z0-9-]{8,64})$/);
+        if (chat) return <button key={i} className="wiki-link" title="Open this chat in the AI panel" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT, { detail: chat[1] }))}>{label?.trim() || "Open the chat"}</button>;
         const roll = rollTarget(part.slice(2, -2));
         if (roll) return <RollChip key={i} title={entry.title} formula={roll.formula} label={roll.label}/>;
         const found = resolveLink(data, entry, target);
