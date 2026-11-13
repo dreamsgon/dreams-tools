@@ -5,7 +5,7 @@ import {locationWeather} from '@/lib/encyclopedia/map-weather';
 import {formatDate,type Calendar} from '@/lib/encyclopedia/calendar-model';
 import {fahrenheit,lunarWeatherText} from '@/lib/encyclopedia/weather-model';
 import type {MapPin} from '@/lib/encyclopedia/map-model';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {WeatherPanel} from './weather-panel';
 
 export function MapWeather({pin,campaignId,calendars,onChange}:{pin?:MapPin;campaignId?:string;calendars:Calendar[];onChange?:(c:Calendar)=>boolean}) {

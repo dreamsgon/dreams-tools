@@ -4,7 +4,7 @@ import {ImagePlus,Crop,Trash2,ArrowUpRight,Check} from 'lucide-react';
 import type {Entry,Picture} from '@/lib/encyclopedia/world-model';
 import {newPicture,fitCircle,circleStyle,ringColors,tokenSizes} from '@/lib/encyclopedia/picture';
 import {uploadMapImage} from './map-transfer';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
 
 /** Loads a picture from the Encyclopedia's image store (or a player link) as an object URL. */
