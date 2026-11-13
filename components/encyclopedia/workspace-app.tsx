@@ -1,5 +1,6 @@
 "use client";
 import EncyclopediaAgentAccess from "./agent-access";
+import { readRemembered, remember } from "@/lib/navigation-state";
 import { AiConnectionDialog } from "./ai-connection";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
@@ -97,11 +98,11 @@ export default function WorkspaceApp() {
         etag.current = body.etag ?? null;
         const first = checked.worlds.find(w => !w.archived&&!w.isTemplate) ?? checked.worlds.find(w=>!w.isTemplate);
         // The address says where you were (?entry=, ?campaign=, ?world=&view=), so a refresh or Back returns there.
-        // Links from Maptable tokens and the Campaigns page use the same address. Without one, this tab's last place is used.
+        // Links from Maptable tokens and the Campaigns page use the same address. Without one, the last place is used (this tab's, else this browser's).
         // Read the address once: a second load must not lose it.
         const query = (linkQuery.current ??= new URLSearchParams(window.location.search));
         let stored: URLSearchParams | null = null;
-        try { stored = new URLSearchParams(sessionStorage.getItem(PLACE_KEY) ?? ""); } catch { /* Storage is optional. */ }
+        stored = new URLSearchParams(readRemembered(PLACE_KEY) ?? "");
         const place = placeFromQuery(query, checked) ?? (stored ? placeFromQuery(stored, checked) : null);
         if (place) { setWorldId(place.worldId); setCampaignId(place.campaignId); setView(place.view); setSelected(place.entryId); }
         else { setWorldId(first?.id ?? ""); setCampaignId(null); }
@@ -118,7 +119,7 @@ export default function WorkspaceApp() {
     useEffect(() => {
         if (!loaded) return;
         const search = placeQuery({ worldId, campaignId, view, entryId: view === "overview" ? selected : null });
-        try { sessionStorage.setItem(PLACE_KEY, search); } catch { /* Storage is optional. */ }
+        remember(PLACE_KEY, search);
         if (search !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + search + window.location.hash);
     }, [loaded, worldId, campaignId, view, selected]);
     useEffect(() => { if (toast) {
