@@ -13,7 +13,8 @@ import TokenBorder from "./token-border";
 import TokenOptions from "./token-options";
 import TokenEditorTabs from "./token-editor-tabs";
 import SaveGalleryStats from "./save-gallery-stats";
-import {syncConditionRounds,conditionAge} from "@/lib/initiative-tracker";
+import {syncConditionRounds,conditionAge,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
+import { AiActivity } from "./encyclopedia/ai-activity";
 import TokenPosition from "./token-position";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
@@ -126,6 +127,7 @@ import {
   type Point,
 } from "@/lib/model";
 import type { Images } from "@/lib/render";
+import { mergeMaptable } from "@/lib/maptable-merge";
 import { drawingStampAssets } from "@/lib/map-stamps";
 
 type Panel = NavigationPanel;
@@ -366,6 +368,42 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   useEffect(() => {
     void load();
   }, [load]);
+  const [syncNote, setSyncNote] = useState("");
+  useEffect(() => { if (!syncNote) return; const t = setTimeout(() => setSyncNote(""), 6000); return () => clearTimeout(t); }, [syncNote]);
+  /**
+   * Takes in a cloud save made somewhere else (an AI running the table saves often), joined token by token
+   * with unsaved edits here. When both changed the same thing, this tab's version is kept and named.
+   */
+  const takeIn = useCallback((incoming: Workspace, incomingRevision: string | null) => {
+    const base = acknowledged.current, mine = state.current;
+    let next = incoming;
+    if (generation.current !== savedGeneration.current) {
+      const joined = base && mine ? mergeMaptable(base, mine, incoming) : null;
+      if (!joined) return false;
+      next = joined.merged;
+      if (joined.both.length) setSyncNote(`Kept your changes to ${joined.both.slice(0, 3).join(", ")}${joined.both.length > 3 ? " and more" : ""}: they also changed somewhere else.`);
+    } else if (mine) next = preserveActiveScene(incoming, mine.activeId);
+    acknowledged.current = incoming;
+    revision.current = incomingRevision;
+    state.current = next;
+    setWorkspace(next);
+    // Undo steps are whole snapshots: replaying one now would quietly take back the other side's changes.
+    history.current = [];
+    future.current = [];
+    setHistoryVersion(value => value + 1);
+    return true;
+  }, []);
+  const rebase = useCallback(async () => {
+    try {
+      const response = await fetch("/api/workspace", { cache: "no-store" });
+      if (!response.ok) return false;
+      const result = await readJsonResponse(response) as { workspace: Workspace | null; revision: string | null };
+      if (!result.workspace || !takeIn(workspaceSchema.parse(result.workspace), result.revision)) return false;
+      generation.current++;
+      return true;
+    } catch { return false; }
+  }, [takeIn]);
+  const scheduleRef = useRef<() => void>(() => {});
   useEffect(() => {
     let disposed = false;
     let pending = false;
@@ -398,6 +436,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         const decision = workspaceSyncDecision(start, snapshot(), result.revision, interacting());
         if (decision === "ignore") return;
         if (decision === "conflict") {
+          if (result.workspace && takeIn(workspaceSchema.parse(result.workspace), result.revision)) { scheduleRef.current(); return; }
           blocked.current = true;
           setSaveStatus("Not saved");
           setSaveError("Another device saved changes. Download a backup, then reload to get the latest cloud version.");
@@ -445,10 +484,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [creatorOpen, busy, dialog, tool]);
+  }, [creatorOpen, busy, dialog, tool, takeIn]);
   const save = useCallback(() => saveWorkspace({
-    state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus, setSaveError,
-  }), []);
+    state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus, setSaveError, rebase,
+  }), [rebase]);
   const manualSave = useCallback(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
@@ -469,6 +508,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void save(), 700);
   }, [save]);
+  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
   const commit = useCallback(
     (fn: (w: Workspace) => void) => {
       const previous = state.current;
@@ -995,6 +1035,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     });
     setLocation(id); setPanel("scenes"); setSidebar(true); setDashboard(false); setSearch("");
   };
+  const aiTurn=scene?getCurrentInitiativeEntry(scene):null,aiOrder=scene&&aiTurn?getInitiativeEntries(scene).filter(isInitiativeEntryActive):[];
+  // The AI panel's combat line; "focus" above asks the sync loop to fetch now (it listens for focus).
+  const aiCombat=scene&&aiTurn?{round:scene.initiativeState?.round??1,turn:aiTurn.label,next:aiOrder[(aiOrder.findIndex(e=>e.id===aiTurn.id)+1)%aiOrder.length]?.label}:null;
   const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()}/>;
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
@@ -1029,7 +1072,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <Breadcrumbs items={sceneTrail()} />
         </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
-        {saveChip}
+        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} onChanged={() => window.dispatchEvent(new Event("focus"))}/>}
+        {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
           <AppearanceMenu />

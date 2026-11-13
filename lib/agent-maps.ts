@@ -1,9 +1,9 @@
-import {syncConditionRounds} from "./initiative-tracker";
-import { applyWorkspaceHpStates } from "./token-hp-state";
+import {syncConditionRounds} from "./initiative-tracker.ts";
+import { applyWorkspaceHpStates } from "./token-hp-state.ts";
 import { z } from "zod";
-import { newScene, sceneSchema, workspaceSchema, type Workspace, type Scene } from "./model";
-import { sceneCampaign, requireCampaign } from "./campaign-settings";
-import { syncTokenAttachments } from "./token-attachments";
+import { newScene, sceneSchema, workspaceSchema, type Workspace, type Scene } from "./model.ts";
+import { sceneCampaign, requireCampaign } from "./campaign-settings.ts";
+import { syncTokenAttachments } from "./token-attachments.ts";
 
 export function campaignScenes(workspace:Workspace, campaignId:string) {
   requireCampaign(workspace,campaignId);

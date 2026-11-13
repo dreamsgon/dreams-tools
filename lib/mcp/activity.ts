@@ -5,12 +5,13 @@
 import type { S3Bucket } from "../storage.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import type { Entry, Workspace } from "../encyclopedia/world-model.ts";
+import type { TablePart } from "./table.ts";
 
 /** One page as it was before the change (null: the AI made it), and a fingerprint of it after (null: removed). */
 export type PageChange = { id: string; title: string; before: Entry | null; after: string | null };
 export type ActivityEntry = {
   id: string; at: string; connection: string; connectionId: string | null; tool: string;
-  summary: string; detail?: string; changes?: PageChange[]; undone?: string;
+  summary: string; detail?: string; changes?: PageChange[]; table?: TablePart[]; undone?: string;
 };
 export type ActivityLog = { paused: boolean; entries: ActivityEntry[] };
 
@@ -82,5 +83,5 @@ export const logActivity = (bucket: S3Bucket, owner: string, campaignId: string,
 /** What the panel shows: everything except the stored copies of pages. */
 export const publicActivity = (log: ActivityLog) => ({
   paused: log.paused,
-  entries: log.entries.map(({ changes, ...e }) => ({ ...e, canUndo: !!changes?.length && !e.undone })),
+  entries: log.entries.map(({ changes, table, ...e }) => ({ ...e, canUndo: !!(changes?.length || table?.length) && !e.undone })),
 });

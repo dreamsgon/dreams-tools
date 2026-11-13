@@ -10,6 +10,8 @@ import { rollDice } from "../rolls.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
 import { address, distance, hexCenter, type Grid, type Point, type Scene, type Token, type Workspace as Maps } from "../model.ts";
 import { fogRegionContains } from "../fog.ts";
+import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isInitiativeEntryActive } from "../initiative-tracker.ts";
+import { editScene } from "./table.ts";
 
 export type Level = "read" | "assist" | "run";
 export const levels: Level[] = ["read", "assist", "run"];
@@ -34,8 +36,11 @@ export type McpContext = {
 };
 
 /** What a change did: the new workspace (if it changed), a line for the activity log, and the reply for the AI. */
-export type WriteOut = { next?: Book; summary: string; detail?: string; reply: unknown; discord?: { title: string; formula: string; total: number; detail: string } };
-/** A change, run on the latest whole workspace. `scoped` is the same campaign narrowed for lookups. */
+export type WriteOut = { next?: Book; maps?: Maps; summary: string; detail?: string; reply: unknown; discord?: { title: string; formula: string; total: number; detail: string } };
+/**
+ * A change, run on the latest whole workspace. `scoped` is the same campaign narrowed for lookups, with the
+ * latest Maptable scenes; a table change returns the whole new Maptable workspace as `maps`.
+ */
 export type Change = (full: Book, scoped: McpContext, now: Date) => WriteOut;
 
 type JsonSchema = Record<string, unknown>;
@@ -468,6 +473,152 @@ const tools: Tool[] = [
       };
     },
   },
+  // ---- Run the game: the table. Each change is logged in the AI activity log, where the GM can undo it. ----
+  {
+    name: "move_token", title: "Move a token", level: "run", readOnly: false,
+    description: "Move a token to a square, such as D5. Says how far it moved. Doesn't check speed or walls: you decide what's allowed.",
+    inputSchema: obj({ token: str("The token's name or id.", 120), to: str("The square to move to, such as D5.", 12), scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["token", "to"]),
+    write: a => {
+      const q = text(a, "token", true, 120)!, to = text(a, "to", true, 12)!;
+      return table(a, (s, maps) => {
+        if (!gridOn(s)) fail("This scene has no grid, so squares can't be named.");
+        const t = tokenOn(s, q), at = squareAt(s, to);
+        if (!at || at.x > s.width || at.y > s.height) return fail(`${to} isn't a square on this scene. Squares look like C4.`);
+        const half = (Math.max(1, Math.round(t.size)) - 1) / 2 * s.grid.size, dest = { x: at.x + half, y: at.y + half };
+        if (dest.x > s.width || dest.y > s.height) fail(`${t.name} doesn't fit there.`);
+        const from = tokenSquare(s, t), moved = distance(t, dest, s.grid);
+        const next = editScene(maps, s.id, d => { const x = d.tokens.find(y => y.id === t.id)!; x.x = dest.x; x.y = dest.y; });
+        return { maps: next, summary: `${t.name} moved to ${to.toUpperCase()} (${feet(moved, s.grid)})`, detail: from ? `From ${from}` : undefined, reply: { token: t.name, from, to: to.toUpperCase(), moved: feet(moved, s.grid), underFog: fogged(s, dest) || undefined } };
+      });
+    },
+  },
+  {
+    name: "damage", title: "Damage a token", level: "run", readOnly: false,
+    description: "Take hit points off a token. Temporary HP goes first. At 0 HP the campaign's rule marks it unconscious or dead.",
+    inputSchema: obj({ token: str("The token's name or id.", 120), amount: { type: "integer", minimum: 0, maximum: 100000, description: "Hit points to take off." }, type: str("The damage type, such as slashing, for the log.", 40), scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["token", "amount"]),
+    write: a => {
+      const q = text(a, "token", true, 120)!, amount = whole(a, "amount"), kind = text(a, "type", false, 40);
+      return table(a, (s, maps) => {
+        const t = tokenOn(s, q), temp = t.tempHp ?? 0, fromTemp = Math.min(temp, amount), hp = Math.max(0, t.hp - (amount - fromTemp));
+        const next = editScene(maps, s.id, d => { const x = d.tokens.find(y => y.id === t.id)!; x.hp = hp; if (temp) x.tempHp = temp - fromTemp || null; });
+        const after = next.scenes.find(x => x.id === s.id)!.tokens.find(y => y.id === t.id)!;
+        return { maps: next, summary: `${t.name} takes ${amount}${kind ? ` ${kind}` : ""} damage`, detail: `HP ${t.hp} → ${hp}${fromTemp ? ` (${fromTemp} from temporary HP)` : ""}${after.status && after.status !== "active" ? ` · ${after.status}` : ""}`, reply: { token: t.name, hp: `${hp}/${t.maxHp}`, tempHp: after.tempHp || undefined, status: after.status && after.status !== "active" ? after.status : undefined } };
+      });
+    },
+  },
+  {
+    name: "heal", title: "Heal a token", level: "run", readOnly: false,
+    description: "Give a token back hit points, up to its maximum. Or set temporary HP with tempHp.",
+    inputSchema: obj({ token: str("The token's name or id.", 120), amount: { type: "integer", minimum: 0, maximum: 100000, description: "Hit points to give back." }, tempHp: { type: "integer", minimum: 0, maximum: 100000, description: "Set temporary HP to this (it doesn't stack)." }, scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["token"]),
+    write: a => {
+      const q = text(a, "token", true, 120)!, amount = a.amount === undefined ? 0 : whole(a, "amount"), temp = a.tempHp === undefined ? null : whole(a, "tempHp");
+      if (!amount && temp === null) fail("Give an amount to heal, or tempHp.");
+      return table(a, (s, maps) => {
+        const t = tokenOn(s, q), hp = Math.min(t.maxHp, t.hp + amount);
+        const next = editScene(maps, s.id, d => { const x = d.tokens.find(y => y.id === t.id)!; x.hp = hp; if (temp !== null) x.tempHp = temp || null; });
+        return { maps: next, summary: amount ? `${t.name} heals ${amount}` : `${t.name} gets ${temp} temporary HP`, detail: `HP ${t.hp} → ${hp}${temp !== null && amount ? ` · ${temp} temporary HP` : ""}`, reply: { token: t.name, hp: `${hp}/${t.maxHp}`, tempHp: temp || undefined } };
+      });
+    },
+  },
+  {
+    name: "set_condition", title: "Add or remove a condition", level: "run", readOnly: false,
+    description: "Add a condition to a token, such as Frightened, or take one off with on: false. Uses the conditions set up in Maptable.",
+    inputSchema: obj({ token: str("The token's name or id.", 120), condition: str("The condition's name.", 80), on: { type: "boolean", description: "true adds it (the default), false removes it." }, scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["token", "condition"]),
+    write: a => {
+      const q = text(a, "token", true, 120)!, name = text(a, "condition", true, 80)!, on = a.on === undefined ? true : bool(a, "on");
+      return table(a, (s, maps) => {
+        const t = tokenOn(s, q), cond = pick(maps.conditions, name, x => x.id, x => x.name, "condition");
+        if (t.conditions.includes(cond.id) === on) fail(`${t.name} ${on ? "already has" : "doesn't have"} ${cond.name}.`);
+        const next = editScene(maps, s.id, d => { const x = d.tokens.find(y => y.id === t.id)!; x.conditions = on ? [...x.conditions, cond.id] : x.conditions.filter(id => id !== cond.id); });
+        return { maps: next, summary: on ? `${t.name} is ${cond.name}` : `${t.name} is no longer ${cond.name}`, reply: { token: t.name, condition: cond.name, on } };
+      });
+    },
+  },
+  {
+    name: "show_token", title: "Show or hide a token", level: "run", readOnly: false,
+    description: "Show a hidden token to the players (an ambush springs), or hide one from them with visible: false.",
+    inputSchema: obj({ token: str("The token's name or id.", 120), visible: { type: "boolean", description: "true shows it to players, false hides it." }, scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["token", "visible"]),
+    write: a => {
+      const q = text(a, "token", true, 120)!; if (typeof a.visible !== "boolean") fail("visible must be true or false.");
+      const visible = a.visible === true;
+      return table(a, (s, maps) => {
+        const t = tokenOn(s, q);
+        if (!t.hidden === visible) fail(`${t.name} is already ${visible ? "shown" : "hidden"}.`);
+        const next = editScene(maps, s.id, d => { d.tokens.find(y => y.id === t.id)!.hidden = !visible; });
+        return { maps: next, summary: visible ? `Showed ${t.name} to the players` : `Hid ${t.name} from the players`, reply: { token: t.name, visible } };
+      });
+    },
+  },
+  {
+    name: "reveal_fog", title: "Reveal or cover fog", level: "run", readOnly: false,
+    description: "Clear the fog of war in a square area around a token or square so players see it, or cover it again with cover: true.",
+    inputSchema: obj({ around: str("A token name or a square such as F7.", 120), radius: { type: "integer", minimum: 0, maximum: 30, description: "Squares out from the centre (default 2, which clears a 5 × 5 area)." }, cover: { type: "boolean", description: "true covers the area instead." }, scene: str("The scene's name or id. Leave out for the open scene.", 120) }, ["around"]),
+    write: a => {
+      const q = text(a, "around", true, 120)!, r = a.radius === undefined ? 2 : whole(a, "radius"), cover = bool(a, "cover");
+      return table(a, (s, maps) => {
+        if (!gridOn(s)) fail("This scene has no grid, so the area can't be measured in squares.");
+        if (!s.fog.enabled) fail("Fog of war is off on this scene.");
+        const at = pointOn(s, q, "around"), half = (r + 0.5) * s.grid.size;
+        const a1 = { x: Math.max(0, at.point.x - half), y: Math.max(0, at.point.y - half) }, a2 = { x: Math.min(s.width, at.point.x + half), y: Math.min(s.height, at.point.y + half) };
+        const next = editScene(maps, s.id, d => { d.fog.strokes.push({ mode: cover ? "cover" : "reveal", shape: "rect", size: 20, points: [a1, a2] }); });
+        const side = 2 * r + 1;
+        return { maps: next, summary: `${cover ? "Covered" : "Revealed"} fog around ${at.label}`, detail: `${side} × ${side} squares`, reply: { around: at.label, squares: `${side} × ${side}`, revealed: !cover } };
+      });
+    },
+  },
+  {
+    name: "start_combat", title: "Start combat", level: "run", readOnly: false,
+    description: "Start combat on a scene: set each fighter's initiative and begin round 1 with the highest. Give initiative you or the players rolled, or leave a token out of `initiative` and it rolls 1d20 plus its bonus.",
+    inputSchema: obj({
+      tokens: { type: "array", minItems: 1, maxItems: 60, items: { type: "string", maxLength: 120 }, description: "Who fights, by token name. Leave out for every token on the scene that isn't hidden." },
+      initiative: { type: "object", additionalProperties: { type: "number" }, description: "Initiative already rolled, by token name, such as {\"Bram\": 15}." },
+      bonus: { type: "object", additionalProperties: { type: "integer" }, description: "Initiative bonus for tokens the server rolls for, by token name, such as {\"Bog Hag\": 1}." },
+      scene: str("The scene's name or id. Leave out for the open scene.", 120),
+    }),
+    write: a => {
+      const names = list(a, "tokens"), given = numbers(a, "initiative"), bonus = numbers(a, "bonus");
+      return table(a, (s, maps) => {
+        if (s.initiativeState && getCurrentInitiativeEntry(s)) fail("Combat is already running on this scene. Use next_turn, or end_combat first.");
+        const fighters = names ? names.map(n => tokenOn(s, n)) : placedTokens(s).filter(t => !t.hidden && t.status !== "dead");
+        if (!fighters.length) fail("There's nobody on this scene to fight.");
+        const byName = (m: Record<string, number>, t: Token) => Object.entries(m).find(([k]) => k.toLowerCase() === t.name.toLowerCase() || k === t.id)?.[1];
+        for (const k of [...Object.keys(given), ...Object.keys(bonus)]) tokenOn(s, k);
+        const rolled = new Map(fighters.map(t => { const g = byName(given, t); return [t.id, g ?? Math.floor(secureRandom() * 20) + 1 + (byName(bonus, t) ?? 0)]; }));
+        const next = editScene(maps, s.id, d => {
+          for (const t of d.tokens) if (!t.pieceOf) t.initiative = rolled.get(t.id) ?? null;
+          d.initiativeState = { round: 1, currentId: null, order: [] };
+          advanceInitiative(d, 1);
+        });
+        const ns = next.scenes.find(x => x.id === s.id)!, order = getInitiativeEntries(ns).filter(isInitiativeEntryActive);
+        const line = order.map(e => `${e.label} ${e.initiative}`).join(", ");
+        return { maps: next, summary: `Started combat in ${s.name}`, detail: `Initiative: ${line}`, reply: { round: 1, turn: getCurrentInitiativeEntry(ns)?.label, order: order.map(e => ({ name: e.label, initiative: e.initiative, rolled: !e.tokens.some(t => byName(given, t) !== undefined) || undefined })) } };
+      });
+    },
+  },
+  {
+    name: "next_turn", title: "Next turn", level: "run", readOnly: false,
+    description: "End the current turn and move to the next one in initiative order, starting a new round after the last.",
+    inputSchema: obj({ scene: str("The scene's name or id. Leave out for the open scene.", 120) }),
+    write: a => table(a, (s, maps, c) => {
+      if (!getCurrentInitiativeEntry(s)) fail("Combat isn't running on this scene. Use start_combat.");
+      const was = getCurrentInitiativeEntry(s)!.label;
+      const next = editScene(maps, s.id, d => advanceInitiative(d, 1));
+      const ns = next.scenes.find(x => x.id === s.id)!, now = getCurrentInitiativeEntry(ns), round = ns.initiativeState!.round;
+      const after = getInitiativeEntries(ns).filter(isInitiativeEntryActive), at = after.findIndex(e => e.id === now?.id);
+      return { maps: next, summary: `Round ${round} · ${now?.label}'s turn`, detail: `After ${was}`, reply: { round, turn: now?.label, next: after[(at + 1) % after.length]?.label, tokens: now?.tokens.map(t => describeToken(c, ns, t)) } };
+    }),
+  },
+  {
+    name: "end_combat", title: "End combat", level: "run", readOnly: false,
+    description: "End combat on a scene and clear the initiative order.",
+    inputSchema: obj({ scene: str("The scene's name or id. Leave out for the open scene.", 120) }),
+    write: a => table(a, (s, maps) => {
+      if (!s.initiativeState && !s.tokens.some(t => t.initiative != null)) fail("Combat isn't running on this scene.");
+      const rounds = s.initiativeState?.round;
+      const next = editScene(maps, s.id, d => { delete d.initiativeState; for (const t of d.tokens) t.initiative = null; });
+      return { maps: next, summary: `Ended combat in ${s.name}`, detail: rounds ? `After ${rounds} round${rounds === 1 ? "" : "s"}` : undefined, reply: { ended: true, rounds } };
+    }),
+  },
 ];
 
 // ---- Helpers for changes ----------------------------------------------------------------------
@@ -481,6 +632,31 @@ function optionalText(a: Record<string, unknown>, key: string, max: number, requ
 function bool(a: Record<string, unknown>, key: string) {
   if (a[key] !== undefined && typeof a[key] !== "boolean") fail(`${key} must be true or false.`);
   return a[key] === true;
+}
+function whole(a: Record<string, unknown>, key: string) {
+  const v = a[key];
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 100000) return fail(`${key} must be a whole number from 0 to 100000.`);
+  return v;
+}
+function list(a: Record<string, unknown>, key: string): string[] | null {
+  const v = a[key];
+  if (v === undefined) return null;
+  if (!Array.isArray(v) || !v.length || v.length > 60 || v.some(x => typeof x !== "string" || !x.trim() || x.length > 120)) return fail(`${key} must be a list of names.`);
+  return v as string[];
+}
+function numbers(a: Record<string, unknown>, key: string): Record<string, number> {
+  const v = a[key];
+  if (v === undefined) return {};
+  if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).length > 60 || Object.values(v).some(x => typeof x !== "number" || !Number.isFinite(x) || Math.abs(x) > 1000)) return fail(`${key} must map token names to numbers, such as {"Bram": 15}.`);
+  return v as Record<string, number>;
+}
+const tokenOn = (s: Scene, q: string) => pick(placedTokens(s), q, x => x.id, x => x.name, `token on ${s.name}`);
+/** A table change: finds the scene on the latest Maptable workspace and runs the edit there. */
+function table(a: Record<string, unknown>, edit: (s: Scene, maps: Maps, c: McpContext) => WriteOut): Change {
+  return (_full, c) => {
+    const s = sceneFor(c, a), maps = c.maps!.workspace;
+    return edit(maps.scenes.find(x => x.id === s.id)!, maps, c);
+  };
 }
 const snippet = (s: string) => { const t = s.replace(/\s+/g, " ").trim(); return t.length > 120 ? t.slice(0, 117) + "…" : t; };
 const own = (e: Entry) => e.campaignId === null ? fail(`“${e.title}” is shared world lore, used by every campaign in this world. The AI can only change this campaign's own pages.`) : e;
@@ -546,6 +722,8 @@ export const serverInstructions = (c: McpContext) => [
   ...(c.level === "read" ? ["You can't change anything: draft text in the chat for the GM to copy."] : [
     "Every change you make is shown to the GM in the AI activity log, where they can undo it. Say what you changed.",
     "New pages and log entries are GM-only unless you set playersSee: true. Only share with players what the GM asked for.",
+
+    ...(c.level === "run" ? ["You can run the table: move tokens, change HP and conditions, reveal fog and run combat turns. The GM sees each change on the map as it happens. Don't act for the players: ask them what they do."] : []),
   ]),
 ].join(" ");
 

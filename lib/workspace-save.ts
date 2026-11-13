@@ -8,6 +8,8 @@ type SaveState = {
   saving: Ref<boolean>; blocked: Ref<boolean>; savePromise: Ref<Promise<boolean> | null>;
   setSaveStatus: (status: string) => void; setSaveError: (error: string) => void;
   request?: typeof fetch;
+  /** Takes in a save made somewhere else since, joined with this tab's edits. True when it did, so saving can go on. */
+  rebase?: () => Promise<boolean>;
 };
 export type WorkspacePatch = Partial<Omit<Workspace, 'scenes'>> & {scenes?:{upsert:Workspace['scenes'];remove:string[];order?:string[]}};
 /** Compare with the last acknowledged snapshot, never with the current in-flight draft. */
@@ -23,7 +25,7 @@ export function workspacePatch(before:Workspace, after:Workspace):WorkspacePatch
   for(const key of Object.keys(after) as (keyof Workspace)[])if(key!=='scenes'&&JSON.stringify(before[key])!==JSON.stringify(after[key]))Object.assign(patch,{[key]:after[key]});
   return patch;
 }
-export function saveWorkspace({state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus, setSaveError, request = fetch}: SaveState): Promise<boolean> {
+export function saveWorkspace({state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus, setSaveError, request = fetch, rebase}: SaveState): Promise<boolean> {
     if (savePromise.current) return savePromise.current;
     if (blocked.current || !state.current) return Promise.resolve(false);
     if (savedGeneration.current === generation.current) return Promise.resolve(true);
@@ -32,6 +34,7 @@ export function saveWorkspace({state, revision, acknowledged, loadEpoch, generat
     setSaveStatus("Saving…");
     const pending = Promise.resolve().then(async () => {
       try {
+        let rebases = 0;
         while (savedGeneration.current !== generation.current && !blocked.current) {
           const gen = generation.current;
           const epoch=loadEpoch?.current;
@@ -49,6 +52,8 @@ export function saveWorkspace({state, revision, acknowledged, loadEpoch, generat
           const result = (await response.json()) as { error?: string; revision: string };
           // A reload starts a new editing session; its baseline wins over an old request.
           if(loadEpoch&&loadEpoch.current!==epoch)return false;
+          // Saved somewhere else since (an AI running the table, another device): join the two and save again.
+          if (response.status === 409 && rebase && rebases < 3) { rebases++; if (await rebase()) continue; }
           if (!response.ok) {
             if (response.status === 409) blocked.current = true;
             throw new Error(result.error || "Cloud save failed.");
