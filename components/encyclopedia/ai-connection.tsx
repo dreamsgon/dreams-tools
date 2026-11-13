@@ -8,7 +8,7 @@ type Level='read'|'assist'|'run';
 type Connection={id:string;name:string;level:Level;createdAt:string;lastUsedAt?:string};
 const levels:{id:Level;name:string;about:string;ready:boolean}[]=[
  {id:'read',name:'Read',about:'Reads the campaign, pages, quests and maps. Changes nothing.',ready:true},
- {id:'assist',name:'Assist',about:'Also writes pages, quest logs and session notes, and rolls dice.',ready:false},
+ {id:'assist',name:'Assist',about:'Also writes pages, quest logs and session notes, and rolls dice. Every change can be undone.',ready:true},
  {id:'run',name:'Run the game',about:'Also runs the table: tokens, fog, initiative, HP and conditions.',ready:false},
 ];
 const levelName=(l:Level)=>levels.find(x=>x.id===l)?.name??l;

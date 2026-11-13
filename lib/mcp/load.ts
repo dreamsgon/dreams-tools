@@ -4,7 +4,10 @@ import { EncyclopediaStore, hashToken } from "../encyclopedia/store.ts";
 import { campaignExport } from "../encyclopedia/world-model.ts";
 import { loadWorkspace } from "../workspace-storage.ts";
 import { campaignScenes } from "../agent-maps.ts";
-import { grantFor, type KeyGrant } from "./connections.ts";
+import { grantFor, listConnections, type KeyGrant } from "./connections.ts";
+import { readActivity } from "./activity.ts";
+import { makeCommit } from "./commit.ts";
+import { sendDiscordRoll } from "../encyclopedia/discord-send.ts";
 import type { McpContext } from "./tools.ts";
 
 /**
@@ -49,5 +52,11 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
       catch { maps = null; } // The paired Maptable campaign was removed.
     }
   }
-  return { book, campaign: book.campaigns[0], maps, level: grant.level };
+  const base = { maps, level: grant.level };
+  if (grant.level === "read") return { ...base, book, campaign: book.campaigns[0] };
+  const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
+  const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
+  const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, base,
+    roll => sendDiscordRoll(bucket, grant.owner, { campaignId: campaign.id, ...roll }));
+  return { ...base, book, campaign: book.campaigns[0], paused: activity.paused, commit };
 }

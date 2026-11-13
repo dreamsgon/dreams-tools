@@ -1,6 +1,8 @@
 "use client";
 import EncyclopediaAgentAccess from "./agent-access";
 import { AiConnectionDialog } from "./ai-connection";
+import { AiActivity } from "./ai-activity";
+import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, githubSchema, defaultCharacter, searchableText, compareEntries, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
@@ -44,7 +46,7 @@ export default function WorkspaceApp() {
     const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
     const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"quests"|"codex"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0);
-    const current = useRef(data), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
+    const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
@@ -55,6 +57,7 @@ export default function WorkspaceApp() {
             error?: string;
             data: unknown;
             revision: number;
+            etag?: string | null;
         };
         if (res.status === 401) {
             setSignedOut(true);
@@ -66,6 +69,8 @@ export default function WorkspaceApp() {
         current.current = checked;
         setData(checked);
         revision.current = body.revision;
+        base.current = checked;
+        etag.current = body.etag ?? null;
         const first = checked.worlds.find(w => !w.archived&&!w.isTemplate) ?? checked.worlds.find(w=>!w.isTemplate);
         // The address says where you were (?entry=, ?campaign=, ?world=&view=), so a refresh or Back returns there.
         // Links from Maptable tokens and the Campaigns page use the same address. Without one, this tab's last place is used.
@@ -97,15 +102,21 @@ export default function WorkspaceApp() {
         return () => clearTimeout(t);
     } }, [toast]);
     async function save() { if (busy.current || blocked.current || version.current === savedVersion.current)
-        return; busy.current = true; const sent = version.current; setStatus("Saving…"); try {
-        const response = await fetch("/api/encyclopedia/workspace", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: current.current, revision: revision.current }) });
+        return; busy.current = true; const sent = version.current, payload = current.current; setStatus("Saving…"); try {
+        const response = await fetch("/api/encyclopedia/workspace", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: payload, revision: revision.current }) });
         const value = await response.json() as {
             error?: string;
             revision: number;
+            etag?: string | null;
         };
+        // Saved somewhere else since (an AI connection, another tab): join the two and save again.
+        if (response.status === 409 && conflicts.current < 3) { conflicts.current++; if (await pull()) return; }
         if (!response.ok)
             throw new Error(value.error ?? "Save failed");
+        conflicts.current = 0;
         revision.current = value.revision;
+        etag.current = value.etag ?? null;
+        base.current = payload;
         savedVersion.current = sent;
         setStatus(sent === version.current ? "All changes saved" : "Saving…");
     }
@@ -119,6 +130,38 @@ export default function WorkspaceApp() {
         if (!blocked.current && version.current !== savedVersion.current)
             void save();
     } }
+    /**
+     * Takes in the latest saved copy when it changed somewhere else. Unsaved edits in this tab are joined onto it
+     * page by page; when both changed the same page, this tab's version is kept and named in a toast. False when it can't.
+     */
+    async function pull() {
+        const res = await fetch("/api/encyclopedia/workspace", { cache: "no-store", headers: etag.current ? { "If-None-Match": `"${etag.current}"` } : {} });
+        if (res.status === 304) return true;
+        if (!res.ok) return false;
+        const body = await res.json() as { data: unknown; revision: number; etag?: string | null };
+        const theirs = workspaceSchema.safeParse(body.data);
+        if (!theirs.success) return false;
+        if (body.revision <= revision.current) { if (body.revision === revision.current) etag.current = body.etag ?? null; return true; }
+        let next = theirs.data;
+        if (version.current !== savedVersion.current) {
+            const joined = mergeWorkspaces(base.current, current.current, theirs.data);
+            if (!joined) return false;
+            next = joined.merged;
+            if (joined.both.length) setToast(`Kept your version of ${joined.both.slice(0, 3).join(", ")}${joined.both.length > 3 ? " and more" : ""}: it also changed somewhere else.`);
+        }
+        revision.current = body.revision; etag.current = body.etag ?? null; base.current = theirs.data;
+        current.current = next; setData(next);
+        return true;
+    }
+    /** Checks for changes made somewhere else, between saves. */
+    async function poll() { if (busy.current || blocked.current || document.hidden)
+        return; busy.current = true; try { await pull(); } catch { /* Try again at the next poll. */ } finally {
+        busy.current = false;
+        if (version.current !== savedVersion.current) { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(save, 600); }
+    } }
+    const pollRef = useRef(poll);
+    useEffect(() => { pollRef.current = poll; });
+    useEffect(() => { if (!loaded) return; const tick = setInterval(() => void pollRef.current(), 8000), look = () => { if (!document.hidden) void pollRef.current(); }; document.addEventListener("visibilitychange", look); window.addEventListener("focus", look); return () => { clearInterval(tick); document.removeEventListener("visibilitychange", look); window.removeEventListener("focus", look); }; }, [loaded]);
     /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
     function change(input: Workspace | ((latest: Workspace) => Workspace)) { const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setStatus("Unsaved changes"); if (timer.current)
         clearTimeout(timer.current); timer.current = setTimeout(save, 600); return true; }
@@ -210,7 +253,7 @@ export default function WorkspaceApp() {
    <SidebarResize width={sidebar.width} maxWidth={sidebar.maxWidth} onChange={sidebar.setWidth}/>
   </aside>
   <main className="main-panel">
-   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail()}/><div className="top-actions"><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button><ThemeToggle/><AccountLink/></div></header>
+   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail()}/><div className="top-actions"><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button>{campaign && <AiActivity campaignId={campaign.id} onChanged={() => void pollRef.current()}/>}<ThemeToggle/><AccountLink/></div></header>
    <FogImageSync data={data} change={change}/>{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))
         location.reload(); }}>Reload</button><button onClick={() => { blocked.current = false; setError(""); void save(); }}>Retry save</button></div>}
    {view==='dashboard'&&!query ? <WorkspaceDashboard data={data} worldId={worldId} change={change} onWorld={selectWorld} onCampaign={(wid,cid)=>{setWorldId(wid);selectCampaign(cid);}} onLore={wid=>{setWorldId(wid);selectCampaign(null);navigation.open('lore');}} onNewCampaign={()=>setModal({type:'campaign'})} onEdit={id=>setModal({type:'rename',id})}/> : !world ? <div className="empty-world"><span className="eyebrow">EVERY WORLD STARTS WITH A PAGE</span><h1>Make room for<br />your next adventure.</h1><p>Keep the world you imagine and the campaigns you play in one thoughtful workspace.</p><div className="button-row"><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={17}/> Create a world</button><button className="button" onClick={() => { change(demoWorkspace()); setWorldId("demo-world"); setCampaignId("demo-campaign"); }}>Explore a sample world <ArrowUpRight size={16}/></button></div><button className="text-button" onClick={() => fileInput.current?.click()}><Upload size={15}/> Bring an existing backup</button><div className="empty-illustration"><Compass size={120} strokeWidth={.7}/><span>WORLDS / CAMPAIGNS / STORIES</span></div></div> :
