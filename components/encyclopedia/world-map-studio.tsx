@@ -14,6 +14,7 @@ import { MapCanvas, useMapImage } from './map-canvas';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
 import { WorldGenerateDialog } from './world-generate-dialog';
+import { confirmDialog } from '../confirm-dialog';
 
 type Tool = 'select' | 'terrain' | 'river' | 'road' | 'border' | 'place' | 'label' | 'fog';
 type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels'>;
@@ -71,10 +72,10 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const setStyle = (patch: NonNullable<MapData['mapStyle']>) => setMap({ mapStyle: { ...map.mapStyle, ...patch } });
   const setPath = (id: string, patch: Partial<MapPath>) => setMap({ paths: map.paths?.map(p => p.id === id ? { ...p, ...patch } : p) });
   const setLabel = (id: string, patch: Partial<MapLabel>) => setMap({ labels: map.labels?.map(l => l.id === id ? { ...l, ...patch } : l) });
-  const removeSelected = () => {
+  const removeSelected = async () => {
     if (path) edit({ paths: map.paths!.filter(p => p.id !== path.id) });
     else if (label) edit({ labels: map.labels!.filter(l => l.id !== label.id) });
-    else if (pin) { if (!confirm('Remove this place and any routes that use it?')) return; edit({ pins: map.pins.filter(p => p.id !== pin.id), routes: map.routes?.filter(r => !r.stops.includes(pin.id)) }); }
+    else if (pin) { if (!await confirmDialog({ title: `Remove “${pin.title}”?`, message: 'Routes that use this place are removed too.', confirm: 'Remove place', danger: true })) return; edit({ pins: map.pins.filter(p => p.id !== pin.id), routes: map.routes?.filter(r => !r.stops.includes(pin.id)) }); }
     setSelected('');
   };
   const drawing = tool === 'river' || tool === 'road' || tool === 'border';
@@ -145,7 +146,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = tools.find(x => x.key.toLowerCase() === e.key.toLowerCase());
       if (t && (t.id !== 'terrain' || painted)) { setTool(t.id); setPlayerView(false); return; }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); removeSelected(); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); void removeSelected(); return; }
       if (e.key === '[') setRadius(r => Math.max(1, r - 1));
       if (e.key === ']') setRadius(r => Math.min(20, r + 1));
     };

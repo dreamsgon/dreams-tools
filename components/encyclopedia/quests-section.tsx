@@ -5,6 +5,7 @@ import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/
 import {column,moveQuest,newQuest,nextStep,questProgress,questsIn,questStates,questTypes,stateNames,typeNames,type Quest,type QuestState,type QuestType} from '@/lib/encyclopedia/quests';
 import {ArticleBody} from './article-body';
 import {PictureToken,usePictureSrc} from './character-picture';
+import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 type Filter=QuestType|'all';
@@ -149,7 +150,7 @@ export function QuestDetail({entry,data,update,onOpen,withTitle=false}:{entry:En
     <ol className="quest-log">{q.log.map(l=><li key={l.id}>
      <div className="quest-log-when"><strong>{l.label||new Date(l.at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</strong>{l.label&&<small>{new Date(l.at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}</small>}</div>
      <div className="quest-log-text"><div className="prose"><ArticleBody entry={{...entry,body:l.text}} data={data} onOpen={onOpen} onChange={text=>set({log:q.log.map(x=>x.id===l.id?{...x,text}:x)})}/></div>
-      <div className="quest-log-actions"><button className={`quest-share ${l.players?'on':'gm'}`} aria-pressed={l.players} onClick={()=>set({log:q.log.map(x=>x.id===l.id?{...x,players:!x.players}:x)})}>{l.players?<><Eye size={12}/> Players see this entry</>:<><EyeOff size={12}/> GM only entry</>}</button><button className="icon-button" aria-label="Delete log entry" onClick={()=>{if(confirm('Delete this log entry?'))set({log:q.log.filter(x=>x.id!==l.id)});}}><Trash2 size={13}/></button></div></div>
+      <div className="quest-log-actions"><button className={`quest-share ${l.players?'on':'gm'}`} aria-pressed={l.players} onClick={()=>set({log:q.log.map(x=>x.id===l.id?{...x,players:!x.players}:x)})}>{l.players?<><Eye size={12}/> Players see this entry</>:<><EyeOff size={12}/> GM only entry</>}</button><button className="icon-button" aria-label="Delete log entry" onClick={async()=>{if(await confirmDialog({title:'Delete this log entry?',confirm:'Delete entry',danger:true}))set({log:q.log.filter(x=>x.id!==l.id)});}}><Trash2 size={13}/></button></div></div>
     </li>)}</ol>
     {!q.log.length&&<p className="aside-hint">The log is empty. Write what the party learned or did, a session at a time.</p>}
    </div>

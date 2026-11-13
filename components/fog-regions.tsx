@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Scene } from "@/lib/model";
 import { fogMergeReason, fogUnionReason, fogRegionParts, mergeFogRegions, unionFogRegions, flattenFogRegions, splitFogRegion } from "@/lib/fog";
+import { confirmDialog } from "./confirm-dialog";
 
 export default function FogRegions({scene,update,onSelect,selected,onSelectionChange}: {
   scene:Scene; update:(fn:(scene:Scene)=>void)=>void; onSelect?:(index:number)=>void;
@@ -42,8 +43,8 @@ export default function FogRegions({scene,update,onSelect,selected,onSelectionCh
       <button disabled={!!groupReason} title={groupReason??"Keep shapes together without removing edges"} onClick={()=>merge(true)}>Group regions</button>
     </div>
     {unionReason&&<p className="muted">{unionReason}</p>}
-    <button className="fog-flatten" onClick={()=>{
-      if(!confirm("Flatten all fog regions on this map into one region? This preserves the current visibility and replaces every brush stroke and shape, including unselected ones. Undo restores them."))return;
+    <button className="fog-flatten" onClick={async()=>{
+      if(!await confirmDialog({title:"Flatten all fog into one region?",message:"What players can see stays the same, but every brush stroke and shape on this map is replaced, including unselected ones. Undo restores them.",confirm:"Flatten fog"}))return;
       const result=flattenFogRegions(scene.fog,scene.width,scene.height);
       if("reason" in result){setError(result.reason);return;}
       update(s=>{s.fog=result.fog;});choose(result.fog.strokes.length?[0]:[]);if(result.fog.strokes.length)onSelect?.(0);

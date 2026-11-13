@@ -7,6 +7,7 @@ import {codexCategories,codexIn,isCreatureCategory,isNewFind,setFound,type Codex
 import {newQuest} from '@/lib/encyclopedia/quests';
 import {ArticleBody} from './article-body';
 import {usePictureSrc} from './character-picture';
+import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const ALL='\u0000all',INBOX='\u0000inbox';
@@ -111,7 +112,7 @@ export function CodexDetail({entry,data,campaign,categories,update,onOpen,onClos
    <div className="button-row codex-actions">
     {onClose&&<button className="button small" onClick={()=>onOpen(entry.id)}><BookOpen size={14}/> Open full page <ArrowUpRight size={12}/></button>}
     {token&&<a className="button small" href={token}><CircleDot size={14}/> Add as token</a>}
-    <button className="text-button codex-remove" onClick={()=>{if(confirm(`Take “${entry.title}” out of the codex? The page stays.`))update({codex:undefined});}}><Trash2 size={13}/> Remove from codex</button>
+    <button className="text-button codex-remove" onClick={async()=>{if(await confirmDialog({title:`Take “${entry.title}” out of the codex?`,message:'The page stays.',confirm:'Remove from codex'}))update({codex:undefined});}}><Trash2 size={13}/> Remove from codex</button>
    </div>
   </div>
  </div>;

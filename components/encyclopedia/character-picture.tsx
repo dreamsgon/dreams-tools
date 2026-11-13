@@ -5,6 +5,7 @@ import type {Entry,Picture} from '@/lib/encyclopedia/world-model';
 import {newPicture,fitCircle,circleStyle,ringColors,tokenSizes} from '@/lib/encyclopedia/picture';
 import {uploadMapImage} from './map-transfer';
 import {ToolDialog} from './character-tools';
+import {confirmDialog} from '../confirm-dialog';
 
 /** Loads a picture from the Encyclopedia's image store (or a player link) as an object URL. */
 export function usePictureSrc(imageId:string|undefined,playerToken?:string){
@@ -40,7 +41,7 @@ export function PicturePanel({entry,update,maptableHref}:{entry:Entry;update:(p:
    <div className="picture-actions">
     <button className="button small" onClick={()=>setFraming(true)}><Crop size={14}/> Frame token</button>
     <button className="button small" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={14}/> {busy?'Uploading…':'Replace'}</button>
-    <button className="icon-button" aria-label="Remove picture" onClick={()=>{if(confirm('Remove this picture from the page? Tokens already in Maptable keep theirs.'))update({picture:undefined});}}><Trash2 size={14}/></button>
+    <button className="icon-button" aria-label="Remove picture" onClick={async()=>{if(await confirmDialog({title:'Remove this picture?',message:'Tokens already in Maptable keep theirs.',confirm:'Remove picture',danger:true}))update({picture:undefined});}}><Trash2 size={14}/></button>
    </div>
    {maptableHref?<a className="button small primary" href={maptableHref} target="_blank" rel="noopener">Add to Maptable <ArrowUpRight size={14}/></a>:<p className="aside-hint">Link this campaign to a Maptable campaign to add it as a token from here, or use Maptable’s token gallery.</p>}
    <p className="aside-hint">Players see the picture when they can see the Overview.</p>

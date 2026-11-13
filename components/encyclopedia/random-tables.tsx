@@ -6,6 +6,7 @@ import {newId} from '@/lib/encyclopedia/world-model';
 import {TABLE_CATEGORIES,DEFAULT_ODDS,librarySchema,inCampaign,rollTable,askOracle,rangeGaps,rangeLabel,parseTableText,findTable,parseCsvTable,tableToCsv,exportTables,importTables,bringToCampaign,rollGenerator,rollLine,generatorPage,LIBRARY_LIMIT,
  type GeneratorLine,type RandomTable,type TableLibrary,type TableCategory,type TableRoll,type TableRow} from '@/lib/encyclopedia/tables';
 import {addMissingStarters} from '@/lib/encyclopedia/starter-tables';
+import {confirmDialog} from '../confirm-dialog';
 
 export type TableCampaign={id:string;name:string;world:string};
 type LogItem=TableRoll&{at:number;n:number;question?:string;twist?:string};
@@ -50,7 +51,7 @@ export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter
  if(table)return <div className="tables-layout"><section className="page-content tables-page">{banner}
   <TableView key={table.id} table={table} lib={lib} campaigns={campaigns} campaignId={campaignId} editing={editing} setEditing={setEditing} onBack={()=>{setOpen(null);setEditing(false);}}
    update={patch=>updateTable(table.id,patch)} change={change} record={record} onOpen={id=>{setOpen(id);setEditing(false);}} onSaveCharacter={onSaveCharacter}
-   onDelete={()=>{const users=lib.tables.filter(t=>t.id!==table.id&&(t.pair?.includes(table.id)||t.twistTableId===table.id||[...(t.parts??[]),...(t.extras??[])].some(p=>p.tableId===table.id)));if(users.length){setError(`“${users[0].name}” uses this table. Change or delete it first.`);return;}if(!confirm(`Delete “${table.name}”? Export it first if you might want it back.`))return;change({...lib,tables:lib.tables.filter(t=>t.id!==table.id)});setOpen(null);}}
+   onDelete={async()=>{const users=lib.tables.filter(t=>t.id!==table.id&&(t.pair?.includes(table.id)||t.twistTableId===table.id||[...(t.parts??[]),...(t.extras??[])].some(p=>p.tableId===table.id)));if(users.length){setError(`“${users[0].name}” uses this table. Change or delete it first.`);return;}if(!await confirmDialog({title:`Delete “${table.name}”?`,message:'Export it first if you might want it back.',confirm:'Delete table',danger:true}))return;change({...lib,tables:lib.tables.filter(t=>t.id!==table.id)});setOpen(null);}}
    onDuplicate={()=>{const copy={...structuredClone(table),id:newId(),name:uniqueName(lib,table.name+' copy'),updatedAt:now(),rows:table.rows?.map(r=>({...r,id:newId()})),parts:table.parts?.map(p=>({...p,id:newId()})),extras:table.extras?.map(p=>({...p,id:newId()}))};if(change({...lib,tables:[...lib.tables,copy]})){setOpen(copy.id);setEditing(true);}}}/>
   <p className="tables-status">{status}</p></section>{logAside}</div>;
 
