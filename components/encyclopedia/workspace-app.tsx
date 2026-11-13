@@ -1,6 +1,8 @@
 "use client";
 import EncyclopediaAgentAccess from "./agent-access";
 import { readRemembered, remember } from "@/lib/navigation-state";
+import SaveChip from "../save-chip";
+import { useAutosave } from "../use-autosave";
 import { AiConnectionDialog } from "./ai-connection";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
@@ -126,8 +128,17 @@ export default function WorkspaceApp() {
         const t = setTimeout(() => setToast(""), 4000);
         return () => clearTimeout(t);
     } }, [toast]);
+    // Save automatically (per device, shared with Maptable), the edits waiting for a save and when the last one landed.
+    const autosave = useAutosave();
+    const [unsaved, setUnsaved] = useState(0), [lastSaved, setLastSaved] = useState<Date | null>(null);
+    /** Save now: the chip, its menu and Ctrl/Cmd+S. A failed save is tried again. */
+    function saveNow() { if (blocked.current) { blocked.current = false; setError(""); } if (timer.current) clearTimeout(timer.current); void save(); }
+    function setAutosave(on: boolean) { autosave.set(on); if (on && version.current !== savedVersion.current) saveNow(); }
+    const saveNowRef = useRef(saveNow);
+    useEffect(() => { saveNowRef.current = saveNow; });
+    useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") { e.preventDefault(); saveNowRef.current(); } }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, []);
     async function save() { if (busy.current || blocked.current || version.current === savedVersion.current)
-        return; busy.current = true; const sent = version.current, payload = current.current; setStatus("Saving…"); try {
+        return; busy.current = true; let again = false; const sent = version.current, payload = current.current; setStatus("Saving…"); try {
         const response = await fetch("/api/encyclopedia/workspace", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: payload, revision: revision.current }) });
         const value = await response.json() as {
             error?: string;
@@ -135,15 +146,15 @@ export default function WorkspaceApp() {
             etag?: string | null;
         };
         // Saved somewhere else since (an AI connection, another tab): join the two and save again.
-        if (response.status === 409 && conflicts.current < 3) { conflicts.current++; if (await pull()) return; }
+        if (response.status === 409 && conflicts.current < 3) { conflicts.current++; if (await pull()) { again = true; return; } }
         if (!response.ok)
             throw new Error(value.error ?? "Save failed");
         conflicts.current = 0;
         revision.current = value.revision;
         etag.current = value.etag ?? null;
         base.current = payload;
-        savedVersion.current = sent;
-        setStatus(sent === version.current ? "All changes saved" : "Saving…");
+        savedVersion.current = sent; setUnsaved(version.current - sent); setLastSaved(new Date());
+        setStatus(sent === version.current ? "All changes saved" : autosave.ref.current ? "Saving…" : "Unsaved changes");
     }
     catch (e) {
         blocked.current = true;
@@ -152,7 +163,8 @@ export default function WorkspaceApp() {
     }
     finally {
         busy.current = false;
-        if (!blocked.current && version.current !== savedVersion.current)
+        // Edits made during the save follow on their own, unless Save automatically is off (a joined conflict still finishes).
+        if (!blocked.current && version.current !== savedVersion.current && (again || autosave.ref.current))
             void save();
     } }
     /**
@@ -182,14 +194,14 @@ export default function WorkspaceApp() {
     async function poll() { if (busy.current || blocked.current || document.hidden)
         return; busy.current = true; try { await pull(); } catch { /* Try again at the next poll. */ } finally {
         busy.current = false;
-        if (version.current !== savedVersion.current) { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(save, 600); }
+        if (version.current !== savedVersion.current && autosave.ref.current) { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(save, 600); }
     } }
     const pollRef = useRef(poll);
     useEffect(() => { pollRef.current = poll; });
     useEffect(() => { if (!loaded) return; const tick = setInterval(() => void pollRef.current(), 8000), look = () => { if (!document.hidden) void pollRef.current(); }; document.addEventListener("visibilitychange", look); window.addEventListener("focus", look); return () => { clearInterval(tick); document.removeEventListener("visibilitychange", look); window.removeEventListener("focus", look); }; }, [loaded]);
     /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
-    function change(input: Workspace | ((latest: Workspace) => Workspace)) { const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setStatus("Unsaved changes"); if (timer.current)
-        clearTimeout(timer.current); timer.current = setTimeout(save, 600); return true; }
+    function change(input: Workspace | ((latest: Workspace) => Workspace)) { const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
+        clearTimeout(timer.current); timer.current = autosave.ref.current ? setTimeout(save, 600) : null; return true; }
     function updateEntry(id: string, patch: Partial<Entry>) { change({ ...current.current, entries: current.current.entries.map(e => e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e) }); }
     /** Clicking a tag opens search with that tag, across pages, scenes and campaigns. */
     const showTag = (t: Tag) => { setPaletteTags([t.id]); setPalette(true); };
@@ -274,11 +286,11 @@ export default function WorkspaceApp() {
    <div className="side-section dashboard-nav"><button className={`campaign-link ${view==='dashboard'?'active':''}`} onClick={openDashboard}><LayoutDashboard size={16}/><span>Dashboard</span></button>{campaign&&<button className={`campaign-link ${view==='overview'&&!selected?'active':''}`} aria-label={`Open current campaign ${campaign.name}`} onClick={()=>selectCampaign(campaign.id)}><Flag size={15}/><span>{campaign.name}</span></button>}</div>
    {world&&<div className="character-nav">{campaign&&<button className={`campaign-link ${view==='quests'?'active':''}`} onClick={()=>{setView('quests');setSelected(null);setQuery('');setMobile(false);}}><Goal size={16}/> Quests</button>}{campaign&&<button className={`campaign-link ${view==='codex'?'active':''}`} onClick={()=>{setView('codex');setSelected(null);setQuery('');setMobile(false);}}><Library size={16}/> Codex</button>}<button className={`campaign-link ${view==='characters'?'active':''}`} onClick={()=>{setView('characters');setSelected(null);setQuery('');setMobile(false);}}><Users size={16}/> Characters</button><button className={`campaign-link ${view==='maps'?'active':''}`} onClick={()=>{setView('maps');setSelected(null);setQuery('');setMobile(false);}}><MapIcon size={16}/> Maps</button>{campaign&&<button className={`campaign-link ${view==='calendar'?'active':''}`} onClick={()=>{setView('calendar');setSelected(null);setQuery('');setMobile(false);}}><CalendarDays size={16}/> Calendar</button>}<button className={`campaign-link ${view==='tables'?'active':''}`} onClick={()=>{setView('tables');setTablesHome(n=>n+1);setSelected(null);setQuery('');setMobile(false);}}><Dices size={16}/> Random tables</button><button className={`campaign-link ${view==='templates'?'active':''}`} onClick={()=>{setView('templates');setSelected(null);setQuery('');setMobile(false);}}><LayoutTemplate size={16}/> Templates</button>{campaign&&<div className="button-row"><button className="text-button" onClick={()=>{setTool('form');setMobile(false);}}>Stat form</button><button className="text-button" onClick={()=>{setTool('share');setMobile(false);}}>Player view</button><button className="text-button" onClick={()=>{setView('look');setSelected(null);setQuery('');setMobile(false);}}>Look</button></div>}</div>}
    <div className="navigation-trees">{world&&<section className="navigation-section"><div className="side-heading"><button className="section-toggle" aria-expanded={navigation.sections.lore} aria-controls="world-lore-tree" onClick={()=>navigation.toggle('lore')}>{navigation.sections.lore?<ChevronDown size={14}/>:<ChevronRight size={14}/>} World Lore</button><span className="shared-tag">shared</span></div>{navigation.sections.lore&&<div id="world-lore-tree"><button className="text-button section-overview" onClick={()=>selectCampaign(null)}>World overview <ArrowUpRight size={12}/></button>{tree(shown.filter(e=>e.campaignId===null))}{!shown.some(e=>e.campaignId===null)&&<p className="side-empty">Places, people, and possibilities.</p>}</div>}</section>}{campaign&&<section className="navigation-section"><div className="side-heading campaign-heading"><button className="section-toggle" aria-expanded={navigation.sections.notes} aria-controls="campaign-notes-tree" onClick={()=>navigation.toggle('notes')}>{navigation.sections.notes?<ChevronDown size={14}/>:<ChevronRight size={14}/>} Campaign Notes</button><button className="add-note" aria-label="New campaign note" onClick={()=>setModal({type:'entry'})}><Plus size={15}/></button></div>{navigation.sections.notes&&<div id="campaign-notes-tree">{tree(scope)}{!scope.length&&<p className="side-empty">Add the first page of this story.</p>}</div>}</section>}</div>
-   <div className="sidebar-bottom">{campaign && <button onClick={() => setAiOpen(true)}><Sparkles size={16}/> Connect an AI</button>}<button onClick={() => setModal({ type: "connections" })}><Github size={16}/> AI & GitHub <span className="tiny">BETA</span></button><button onClick={() => setModal({ type: "settings" })}><Settings size={16}/> Workspace & backups</button><div className="save-status"><span className={status === "All changes saved" ? "status-dot" : "status-dot pending"}/>{status}</div></div>
+   <div className="sidebar-bottom">{campaign && <button onClick={() => setAiOpen(true)}><Sparkles size={16}/> Connect an AI</button>}<button onClick={() => setModal({ type: "connections" })}><Github size={16}/> AI & GitHub <span className="tiny">BETA</span></button><button onClick={() => setModal({ type: "settings" })}><Settings size={16}/> Workspace & backups</button></div>
    <SidebarResize width={sidebar.width} maxWidth={sidebar.maxWidth} onChange={sidebar.setWidth}/>
   </aside>
   <main className="main-panel">
-   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail()}/><div className="top-actions"><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button>{campaign && <AiActivity campaignId={campaign.id} onChanged={() => void pollRef.current()} onSettings={() => setAiOpen(true)}/>}<ThemeToggle/><AccountLink/></div></header>
+   <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail()}/><div className="top-actions"><SaveChip status={status} error={error} conflict={false} onSave={saveNow} hints={{ saved: "All changes saved. Ctrl/Cmd+S saves now.", loading: "Loading your Encyclopedia.", offline: "Your Encyclopedia could not be loaded." }} autosave={{ on: autosave.on, set: setAutosave, changes: unsaved, lastSaved }}/><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button>{campaign && <AiActivity campaignId={campaign.id} onChanged={() => void pollRef.current()} onSettings={() => setAiOpen(true)}/>}<ThemeToggle/><AccountLink/></div></header>
    <FogImageSync data={data} change={change}/>{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))
         location.reload(); }}>Reload</button><button onClick={() => { blocked.current = false; setError(""); void save(); }}>Retry save</button></div>}
    {view==='dashboard'&&!query ? <WorkspaceDashboard data={data} worldId={worldId} change={change} onWorld={selectWorld} onCampaign={(wid,cid)=>{setWorldId(wid);selectCampaign(cid);}} onLore={wid=>{setWorldId(wid);selectCampaign(null);navigation.open('lore');}} onNewCampaign={()=>setModal({type:'campaign'})} onEdit={id=>setModal({type:'rename',id})}/> : !world ? <div className="empty-world"><span className="eyebrow">EVERY WORLD STARTS WITH A PAGE</span><h1>Make room for<br />your next adventure.</h1><p>Keep the world you imagine and the campaigns you play in one thoughtful workspace.</p><div className="button-row"><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={17}/> Create a world</button><button className="button" onClick={() => { change(demoWorkspace()); setWorldId("demo-world"); setCampaignId("demo-campaign"); }}>Explore a sample world <ArrowUpRight size={16}/></button></div><button className="text-button" onClick={() => fileInput.current?.click()}><Upload size={15}/> Bring an existing backup</button><div className="empty-illustration"><Compass size={120} strokeWidth={.7}/><span>WORLDS / CAMPAIGNS / STORIES</span></div></div> :

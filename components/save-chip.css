@@ -21,3 +21,40 @@
   .app-header .save-chip.failed span, .app-header .save-chip.conflict span { position:static; width:auto; height:auto; clip:auto; }
   .app-header .save-chip.failed, .app-header .save-chip.conflict { padding:0 10px; }
 }
+/* With the Save options arrow (Maptable board and the Encyclopedia): one bordered group. */
+.save-chip-group { position:relative; display:inline-flex; align-items:center; gap:6px; flex:none; }
+.app-header .save-chip-group { margin-left:auto; }
+.app-header .save-chip-group ~ .header-actions { margin-left:0; }
+.app-header .save-chip-group .save-chip { margin-left:0; }
+.save-chip-group > .save-chip { border-radius:999px 0 0 999px; padding-right:8px; }
+.save-chip-more { display:inline-flex; align-items:center; justify-content:center; width:26px; min-height:30px; margin-left:-6px; padding:0; border:0; border-left:1px solid var(--chrome-line, var(--line)); border-radius:0 999px 999px 0; background:transparent; color:var(--chrome-muted, var(--muted)); cursor:pointer; }
+.save-chip-more:hover, .save-chip-more[aria-expanded="true"] { background:var(--chrome-hover, var(--hover)); color:var(--chrome-text, var(--ink)); }
+.save-chip-group.manual.unsaved > .save-chip { color:var(--warning-ink, #8a5a12); }
+.save-chip-save { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:0 12px; border:1px solid var(--accent); border-radius:var(--radius, 4px); background:var(--accent); color:var(--on-accent, #fff); font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.save-chip-save:hover { filter:brightness(1.08); }
+.save-chip-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:var(--z-popover, 60); width:300px; padding:6px 0; border:1px solid var(--line); border-radius:var(--radius-lg, 6px); background:var(--panel); color:var(--ink); box-shadow:0 8px 24px rgba(15,23,42,.16); font-size:13px; text-align:left; white-space:normal; }
+.save-chip-menu hr { margin:6px 0; border:0; border-top:1px solid var(--line); }
+.save-chip-now { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:0 14px; border:0; background:transparent; color:var(--ink); font:inherit; font-weight:500; cursor:pointer; text-align:left; }
+.save-chip-now:hover:not(:disabled) { background:var(--hover); }
+.save-chip-now:disabled { opacity:.55; cursor:default; }
+.save-chip-now kbd { margin-left:auto; padding:1px 5px; border:1px solid var(--line); border-radius:3px; color:var(--muted); font-family:inherit; font-size:11px; font-weight:500; }
+.save-chip-switch { position:relative; display:flex; align-items:center; gap:10px; padding:6px 14px 2px; font-weight:500; cursor:pointer; }
+.save-chip-switch input { position:absolute; opacity:0; width:1px; height:1px; }
+.save-chip-switch span { position:relative; width:34px; height:18px; flex:none; border-radius:9px; background:var(--line-strong, #c9d0d5); transition:background .15s; }
+.save-chip-switch span::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left .15s; }
+.save-chip-switch input:checked + span { background:var(--accent); }
+.save-chip-switch input:checked + span::after { left:18px; }
+.save-chip-switch input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+.save-chip-menu p { margin:2px 14px 8px 58px; color:var(--muted); font-size:12px; line-height:1.45; }
+.save-chip-menu p.save-chip-when { margin:4px 14px 4px; color:var(--ink-soft, var(--muted)); }
+.save-chip-menu p.save-chip-note { margin:4px 14px 6px; font-size:11px; }
+@media (prefers-reduced-motion: reduce) { .save-chip-switch span, .save-chip-switch span::after { transition:none; } }
+@media (max-width:799px) {
+  .app-header .save-chip-group .save-chip { min-width:36px; min-height:36px; padding:0; justify-content:center; border-radius:999px 0 0 999px; }
+  .app-header .save-chip-group.manual.unsaved .save-chip[data-short]::after { content:attr(data-short); font-weight:600; }
+  .app-header .save-chip-group.manual.unsaved .save-chip { padding:0 8px; gap:5px; }
+  .save-chip-more { min-height:36px; }
+  .app-header .save-chip-save { min-width:36px; min-height:36px; padding:0; justify-content:center; }
+  .app-header .save-chip-save span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .save-chip-menu { position:fixed; left:12px; right:12px; top:60px; width:auto; }
+}
