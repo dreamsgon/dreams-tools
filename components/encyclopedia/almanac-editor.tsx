@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {Plus,Trash2} from 'lucide-react';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {DateFields} from './calendar-view';
 import {MoonGlyph} from './calendar-sky';
 import {calendarSchema,moonPhase,phaseNames,type Calendar,type CalendarMoon} from '@/lib/encyclopedia/calendar-model';
