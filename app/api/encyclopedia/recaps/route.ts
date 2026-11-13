@@ -4,10 +4,13 @@ import {EncyclopediaStore} from '@/lib/encyclopedia/store';
 import {sendEncyclopediaPost} from '@/lib/encyclopedia/discord-send';
 import {discordText,TRANSCRIPT_LIMIT,wordCount} from '@/lib/encyclopedia/recaps';
 import {getBucket} from '@/lib/storage';
+import {writeRecap,writeRecapAgain} from '@/lib/ai/recap-writer';
 export const dynamic='force-dynamic';
+// Writing a recap with the GM's own API key reads the whole transcript and waits on the AI twice.
+export const maxDuration=300;
 const id=z.string().min(1).max(120).regex(/^[A-Za-z0-9_-]+$/);
 const message=(e:unknown,fallback:string)=>e instanceof Error&&!(e instanceof z.ZodError)?e.message:fallback;
-// A session recap's transcript (kept outside the workspace) and its Discord post. The GM only.
+// A session recap's transcript (kept outside the workspace), writing it with the GM's API key, and its Discord post. The GM only.
 export async function GET(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  try{
@@ -19,6 +22,8 @@ export async function GET(request:Request){
 const action=z.discriminatedUnion('action',[
  z.object({action:z.literal('transcript'),entryId:id,text:z.string().max(TRANSCRIPT_LIMIT)}),
  z.object({action:z.literal('discord'),entryId:id}),
+ z.object({action:z.literal('write'),entryId:id,campaignId:id,connectionId:id}),
+ z.object({action:z.literal('again'),entryId:id,campaignId:id,connectionId:id,note:z.string().max(500)}),
 ]);
 export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
@@ -29,6 +34,8 @@ export async function POST(request:Request){
    await store.saveTranscript(owner,input.entryId,input.text);
    return json({ok:true,words:wordCount(input.text)});
   }
+  if(input.action==='write')return json(await writeRecap(bucket,owner,input.campaignId,input.connectionId,input.entryId));
+  if(input.action==='again')return json(await writeRecapAgain(bucket,owner,input.campaignId,input.connectionId,input.entryId,input.note));
   const {data}=await store.read(owner),page=data.entries.find(e=>e.id===input.entryId);
   if(!page?.recap||!page.campaignId)throw Error('That page has no recap.');
   if(page.recap.status!=='published')throw Error('Publish the recap to players before posting it.');

@@ -1,15 +1,18 @@
 "use client";
 /*
  * New session recap: pick where the session is (pasted text, a file, an RP thread, or a Notion, Google Drive or
- * GitHub link), say what to make, and hand it to the GM's AI app. The page and its transcript are saved here;
- * the AI fills the page with save_recap, and the draft shows up through the usual live sync.
+ * GitHub link), say what to make, and hand it to the GM's AI app, or have RPG Tools write it with the GM's own API
+ * key. The page and its transcript are saved here; the AI fills the page with save_recap, and the draft shows up
+ * through the usual live sync.
  */
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useMemo,useRef,useState} from 'react';
 import {ClipboardList,Upload,MessagesSquare,BookText,HardDrive,GitBranch,MessageCircle,Check,Copy,Clock,ArrowRight,Sparkles,KeyRound} from 'lucide-react';
 import type {Campaign,Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {recapParts,type RecapRequest} from '@/lib/encyclopedia/recap-schema';
 import {chatGroupsToText,discordJsonToText,guessCast,speakersIn,startRecap,waitingForAi} from '@/lib/encyclopedia/recap-request';
-import {openItems,sessionFolder,TRANSCRIPT_LIMIT,wordCount} from '@/lib/encyclopedia/recaps';
+import {compactTranscript,openItems,sessionFolder,TRANSCRIPT_LIMIT,wordCount} from '@/lib/encyclopedia/recaps';
+import {IN_APP_LIMIT,recapTokens} from '@/lib/encyclopedia/recap-prompts';
+import {useWriters,writeWithKey} from './recap-panel';
 import {ToolDialog} from './tool-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
@@ -52,11 +55,14 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [title,setTitle]=useState(page?.title??`Session ${sessions.length+1}`),[playedOn,setPlayedOn]=useState(page?.recap?.playedOn??today());
  const [length,setLength]=useState<RecapRequest['length']>('standard'),[depth,setDepth]=useState<RecapRequest['depth']>('balanced'),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(new Set());
  const [cast,setCast]=useState<NonNullable<RecapRequest['cast']>>([]),[made,setMade]=useState<{id:string;title:string;saved:boolean;link?:string}|null>(resume?{id:resume.id,title:resume.title,saved:true,link:resume.recap?.request?.link}:null);
- const [apps,setApps]=useState<string[]|null>(null),[copied,setCopied]=useState('');
+ const writers=useWriters(campaign.id),apps=writers?.apps??null,keys=writers?.keys??[];
+ const [writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
  const fileInput=useRef<HTMLInputElement>(null);
  const characters=useMemo(()=>data.entries.filter(e=>e.kind==='character'&&e.worldId===campaign.worldId&&(e.campaignId===campaign.id||e.campaignId===null)).sort((a,b)=>(a.character?.role==='pc'?0:1)-(b.character?.role==='pc'?0:1)||a.title.localeCompare(b.title)),[data.entries,campaign]);
  const isLink=kind==='notion'||kind==='drive'||kind==='github',words=wordCount(text);
- useEffect(()=>{let live=true;fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaign.id)}`).then(r=>r.ok?r.json():{connections:[]}).then(b=>{if(live)setApps((b.connections??[]).filter((c:{api?:unknown;level:string})=>!c.api&&c.level!=='read').map((c:{name:string})=>c.name));}).catch(()=>{if(live)setApps([]);});return()=>{live=false;};},[campaign.id]);
+ const compacted=useMemo(()=>step==='options'&&!isLink?compactTranscript(text).length:0,[step,isLink,text]);
+ const keyBlock=isLink?'Reads pasted text and files. Links need your AI app for now.':compacted>IN_APP_LIMIT?'This transcript is too long to write here in one go. Your AI app reads it in parts.':'';
+ const key=keyBlock?undefined:keys.find(k=>k.id===writer&&k.transcripts);
  const current=made?data.entries.find(e=>e.id===made.id):undefined,arrived=!!current?.recap&&!waitingForAi(current.recap);
 
  const toOptions=()=>{
@@ -87,9 +93,27 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
    saved=r;
   }
   setBusy(false);setMade({id,title:title.trim(),saved,...(isLink?{link:link.trim()}:{})});setStep('handoff');
+  if(key&&saved)void write(id);
+  else if(key){setWriting('failed');setError('The transcript didn’t save, so it can’t be written here. Paste it on the page’s Transcript tab, then try again.');}
+ };
+ const write=async(id:string)=>{
+  if(!key)return;
+  setWriting('busy');setError('');
+  try{setResult(await writeWithKey({action:'write',entryId:id,campaignId:campaign.id,connectionId:key.id}));setWriting('done');}
+  catch(e){setWriting('failed');setError(e instanceof Error?e.message:'Could not write the recap.');}
  };
  const copy=(what:string,t:string)=>void navigator.clipboard.writeText(t).then(()=>{setCopied(what);setTimeout(()=>setCopied(c=>c===what?'':c),2000);}).catch(()=>setError('Your browser didn’t allow copying. Select the text and copy it.'));
 
+ if(step==='handoff'&&made&&key&&writing!=='no'){
+  const done=writing==='done'||arrived;
+  return <ToolDialog title={done?'The draft is here':'Writing the recap'} onClose={onClose} wide><div className="recap-dialog">
+   <p className="modal-intro">{key.name} ({key.model}) reads the transcript once, then writes the recap from its timeline. Nothing reaches players until you publish it.</p>
+   <div className="handoff-done"><Check size={16}/><p><strong>{made.saved?'Transcript added':'Page ready'}</strong> to <button className="inline-link" onClick={()=>{onOpen(made.id);onClose();}}>{made.title}</button>{made.saved?', as a GM-only Transcript tab.':'.'}</p></div>
+   <div className={`handoff-wait ${done?'arrived':''}`}>{done?<><Sparkles size={15}/> The draft is here{result?.toCheck!==undefined?` with ${result.toCheck} thing${result.toCheck===1?'':'s'} to check`:''}.{result?` It used ${result.tokens.toLocaleString('en')} tokens.`:''}</>:writing==='busy'?<><Clock size={15}/> {key.name} is writing. This takes a minute or two. You can close this: the draft shows up on the page.</>:<><Clock size={15}/> It wasn’t written.</>}</div>
+   {error&&<p className="form-error">{error}</p>}
+   <div className="dialog-footer"><span/><div className="button-row">{writing==='failed'&&<><button className="button" onClick={()=>{setWriter('');setWriting('no');setError('');}}>Hand to my AI app instead</button><button className="button" onClick={()=>void write(made.id)}>Try again</button></>}<button className="button" onClick={onClose}>Close</button><button className="button primary" onClick={()=>{onOpen(made.id);onClose();}}>Open the page</button></div></div>
+  </div></ToolDialog>;
+ }
  if(step==='handoff'&&made){
   const ask=`Use the recap_from_source prompt in RPG Tools for "${campaign.name}" with page "${made.title}".\n${made.link?`Source: ${made.link} (read it with your own access).`:'Source: the transcript on that page.'}`;
   return <ToolDialog title="Hand it to your AI app" onClose={onClose} wide><div className="recap-dialog">
@@ -106,7 +130,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
 
  return <ToolDialog title="New session recap" onClose={onClose} wide><div className="recap-dialog">
   <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':isLink?`${linkName[kind as 'notion']} · ${link.trim()}`:`${kind==='file'?file:kind==='thread'?'RP thread':'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
-  <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> Hand it over</span></div>
+  <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key?'Write it':'Hand it over'}</span></div>
   {step==='source'?<>
    <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon,off=s.kind==='forum';return <button key={s.kind} role="radio" aria-checked={kind===s.kind} disabled={off} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(off)return;setKind(s.kind as Kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}{off&&<small className="soon">After the forum</small>}</strong><small>{s.hint}</small></span></button>;})}</div>
    <input ref={fileInput} type="file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.html,.htm,text/plain,text/markdown,application/json,text/html" onChange={e=>{void pick(e.target.files?.[0]);e.target.value='';}}/>
@@ -129,13 +153,14 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
     <div>
      <div className="field-title">What to make<div className="make-list">{recapParts.map(k=><label key={k}><input type="checkbox" checked={!skip.has(k)} onChange={e=>{const n=new Set(skip);if(e.target.checked)n.delete(k);else n.add(k);setSkip(n);}}/> <span>{partLabels[k][0]}</span><small>{partLabels[k][1]}</small></label>)}</div></div>
      <div className="field-title">Who writes it
-      <label className="writer-card on"><input type="radio" name="writer" defaultChecked/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
-      <label className="writer-card off"><input type="radio" name="writer" disabled/><span><strong><KeyRound size={13}/> An API key, here <small className="soon">Coming next</small></strong><small>Runs in RPG Tools with your own AI key. Works for pasted text and files.</small></span></label>
+      <label className={`writer-card ${!key?'on':''}`}><input type="radio" name="writer" checked={!key} onChange={()=>setWriter('')}/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
+      {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>setWriter(k.id)}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text and files.`}</small></span></label>;})
+      :<label className="writer-card off"><input type="radio" name="writer" disabled/><span><strong><KeyRound size={13}/> An API key, here</strong><small>Runs in RPG Tools with your own AI key. Add one with Connect an AI › Use an API key, with Help me run the game or Run the game.</small></span></label>}
      </div>
     </div>
    </div>
    {error&&<p className="form-error">{error}</p>}
-   <div className="dialog-footer"><span className="aside-hint">{page?`Fills “${page.title}”.${page.body.trim()&&!page.recap?' Its current text moves to a GM-only tab.':''} Players can’t see it until you publish.`:'Makes a new GM-only session page.'}</span><div className="button-row"><button className="button" onClick={()=>setStep('source')}>Back</button><button className="button primary" disabled={busy} onClick={handOver}><Sparkles size={14}/> {busy?'Saving…':'Hand to my AI app'}</button></div></div>
+   <div className="dialog-footer"><span className="aside-hint">{page?`Fills “${page.title}”.${page.body.trim()&&!page.recap?' Its current text moves to a GM-only tab.':''} Players can’t see it until you publish.`:'Makes a new GM-only session page.'}</span><div className="button-row"><button className="button" onClick={()=>setStep('source')}>Back</button><button className="button primary" disabled={busy} onClick={handOver}><Sparkles size={14}/> {busy?'Saving…':key?`Write it with ${key.name}`:'Hand to my AI app'}</button></div></div>
   </>}
  </div></ToolDialog>;
 }
