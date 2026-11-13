@@ -5,13 +5,14 @@ import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ExternalLink, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, ExternalLink, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { drawRulerCells, drawRulerPath, measureRuler } from "@/lib/drag-ruler-draw";
 import { dragRuler } from "@/lib/drag-ruler";
+import { TOKEN_CLIPBOARD_KEY, copyTokens, duplicateTokens, expandGroups, groupMembers, groupTokens, pasteTokens, readClipboard, toggleInSelection, ungroupTokens, type TokenClipboard } from "@/lib/token-clipboard";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
 import { effectContains, effectHandles, effectPolygon, resolveEffect } from "@/lib/effects";
@@ -140,7 +141,7 @@ export default function Board(p: Props) {
   const cropFocus = Boolean(p.scene.crop && p.scene.cropFocus && !cropEditing);
   const setCropFocus = (value:boolean|((current:boolean)=>boolean)) => p.update(s=>{s.cropFocus=typeof value==="function"?value(Boolean(s.crop && s.cropFocus)):value;});
   useEffect(()=>{setCropEditing(false);},[p.scene.id]);
-  type MenuTarget = { kind: "token" | "effect" | "poi" | "measurement" | "fog"; id: string | number; x: number; y: number };
+  type MenuTarget = { kind: "token" | "effect" | "poi" | "measurement" | "fog" | "map"; id: string | number; x: number; y: number; at?: Point };
   const [contextMenu, setContextMenu] = useState<MenuTarget | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -179,6 +180,7 @@ export default function Board(p: Props) {
     (allowMeasurements && p.scene.measurements.some(item => item.id === id));
   const scopedSelected = p.selected && inScope(p.selected) ? p.selected : null;
   const scopedSelectedIds = (p.selectedIds ?? (p.selected ? [p.selected] : [])).filter(inScope);
+  const currentSelection = () => scopedSelectedIds.length ? scopedSelectedIds : scopedSelected ? [scopedSelected] : [];
   const lastPoiDrag = useRef(0);
   const canvas = useRef<HTMLCanvasElement>(null),
     host = useRef<HTMLDivElement>(null);
@@ -191,7 +193,7 @@ export default function Board(p: Props) {
   });
   const [draft, setDraft] = useState<FogStroke | null>(null),
     [measurement, setMeasurement] = useState<Point[]>([]),
-    [drag, setDrag] = useState<{ id: string; p: Point } | null>(null);
+    [drag, setDrag] = useState<{ id: string; p: Point; others?: Record<string, Point> } | null>(null);
   const [movePlan, setMovePlan] = useState<TokenMovePlan | null>(null);
   const [marquee, setMarquee] = useState<Point[] | null>(null);
   const [polygon, setPolygon] = useState<Point[]>([]);
@@ -239,6 +241,8 @@ export default function Board(p: Props) {
     /** The last pointer position on the map, so pressing or releasing Alt can re-place the token. */
     pointer?: Point;
     free?: boolean;
+    /** Other selected tokens moving with the one being dragged, and where they started. */
+    group?: { id: string; original: Point }[];
   } | null>(null);
   const pointers = useRef(new Map<number, Point>()),
     pinch = useRef<{ distance: number; center: Point; view: View } | null>(
@@ -444,7 +448,7 @@ export default function Board(p: Props) {
       ? syncTokenAttachments(p.scene, {
           ...p.scene,
           tokens: p.scene.tokens.map((t) =>
-            t.id === previewDrag.id ? { ...t, ...previewDrag.p } : { ...t },
+            t.id === previewDrag.id ? { ...t, ...previewDrag.p } : "others" in previewDrag && previewDrag.others?.[t.id] ? { ...t, ...previewDrag.others[t.id] } : { ...t },
           ),
           pointsOfInterest: p.scene.pointsOfInterest.map(item => item.id === previewDrag.id ? { ...item, ...previewDrag.p } : item),
           effects: p.scene.effects.map((e) =>
@@ -488,8 +492,17 @@ export default function Board(p: Props) {
     const selectedIds = scopedSelectedIds;
     if (!p.player) {
       ctx.save(); ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 3 / view.scale;
-      for (const token of p.scene.tokens.filter(item => selectedIds.includes(item.id))) {
+      for (const token of scene.tokens.filter(item => selectedIds.includes(item.id))) {
         ctx.beginPath(); ctx.arc(token.x, token.y, tokenRadius(token, p.scene.grid) + 4 / view.scale, 0, Math.PI * 2); ctx.stroke();
+      }
+      // A dashed box around each selected group shows what moves together.
+      const groups = new Set(scene.tokens.filter(item => item.groupId && selectedIds.includes(item.id)).map(item => item.groupId));
+      for (const groupId of groups) {
+        const members = scene.tokens.filter(item => item.groupId === groupId), pad = 10 / view.scale;
+        const left = Math.min(...members.map(t => t.x - tokenRadius(t, p.scene.grid))) - pad, right = Math.max(...members.map(t => t.x + tokenRadius(t, p.scene.grid))) + pad;
+        const top = Math.min(...members.map(t => t.y - tokenRadius(t, p.scene.grid))) - pad, bottom = Math.max(...members.map(t => t.y + tokenRadius(t, p.scene.grid))) + pad;
+        ctx.save(); ctx.setLineDash([6 / view.scale, 4 / view.scale]); ctx.lineWidth = 1.5 / view.scale;
+        ctx.beginPath(); ctx.roundRect(left, top, right - left, bottom - top, 8 / view.scale); ctx.stroke(); ctx.restore();
       }
       for (const stored of p.scene.effects.filter(item => selectedIds.includes(item.id))) {
         const effect = resolveEffect(stored, p.scene.tokens); ctx.beginPath();
@@ -658,6 +671,12 @@ export default function Board(p: Props) {
     c.addEventListener("wheel", wheel, { passive: false });
     return () => c.removeEventListener("wheel", wheel);
   }, [view, p.gridAdjust, p.player, p.resizeGrid]);
+  /** The rest of a moving group keeps its spacing from the dragged token. */
+  const groupPositions = (g: NonNullable<typeof gesture.current>, q: Point) => {
+    if (!g.group?.length || !g.original) return undefined;
+    const dx = q.x - g.original.x, dy = q.y - g.original.y;
+    return Object.fromEntries(g.group.map(item => [item.id, clamp({ x: item.original.x + dx, y: item.original.y + dy })]));
+  };
   /** Move the dragged token to the pointer, on the grid or (Alt) off it, and extend the ruler. */
   const placeDrag = (g: NonNullable<typeof gesture.current>, free: boolean) => {
     if (!g.pointer || !g.original) return;
@@ -668,7 +687,7 @@ export default function Board(p: Props) {
       g.measure = [...g.measure.slice(0, -1), q];
       setMeasurement(g.measure);
     }
-    setDrag({ id: g.id!, p: q });
+    setDrag({ id: g.id!, p: q, others: groupPositions(g, q) });
   };
   const placeDragRef = useRef(placeDrag);
   useEffect(() => { placeDragRef.current = placeDrag; });
@@ -683,6 +702,82 @@ export default function Board(p: Props) {
     };
     window.addEventListener("keydown", alt, true); window.addEventListener("keyup", alt, true);
     return () => { window.removeEventListener("keydown", alt, true); window.removeEventListener("keyup", alt, true); };
+  }, []);
+  // Copy and paste: tokens go on a clipboard kept per browser, so they paste into other scenes and tabs too.
+  const lastPointer = useRef<Point | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const [clipboard, setClipboard] = useState<TokenClipboard | null>(null);
+  useEffect(() => {
+    const read = () => { try { setClipboard(readClipboard(JSON.parse(localStorage.getItem(TOKEN_CLIPBOARD_KEY) ?? "null"))); } catch { /* storage off: keep what this tab copied */ } };
+    read();
+    window.addEventListener("storage", read); window.addEventListener("focus", read);
+    return () => { window.removeEventListener("storage", read); window.removeEventListener("focus", read); };
+  }, []);
+  const plural = (count: number) => `${count} token${count === 1 ? "" : "s"}`;
+  const selectedTokenIds = () => currentSelection().filter(id => p.scene.tokens.some(token => token.id === id));
+  const copySelection = (ids = selectedTokenIds()) => {
+    const clip = copyTokens(p.scene, ids);
+    if (!clip) return false;
+    setClipboard(clip);
+    try { localStorage.setItem(TOKEN_CLIPBOARD_KEY, JSON.stringify(clip)); } catch { /* too big or storage off: this tab still has it */ }
+    setNotice(`Copied ${plural(clip.tokens.length)} · Ctrl V pastes at the pointer`);
+    return true;
+  };
+  const pasteAt = (point: Point | null) => {
+    if (!clipboard) return false;
+    const target = point ?? clamp(world({ x: view.width / 2, y: view.height / 2 }));
+    let ids: string[] = [];
+    p.update(scene => { ids = pasteTokens(scene, clipboard, target); });
+    if (!ids.length) { setNotice(`This map already has ${p.scene.tokens.length} tokens, the most it can hold`); return true; }
+    p.onFogSelection?.([]);
+    p.onMarqueeSelection?.(ids, []);
+    const from = clipboard.sceneId !== p.scene.id ? ` from ${clipboard.sceneName}` : "";
+    setNotice(`Pasted ${plural(ids.length)}${from}${ids.length < clipboard.tokens.length ? ` (the map is full)` : ""} · Ctrl Z undoes`);
+    return true;
+  };
+  const duplicateSelection = (ids = selectedTokenIds()) => {
+    if (!ids.length) return false;
+    let copies: string[] = [];
+    p.update(scene => { copies = duplicateTokens(scene, ids); });
+    if (copies.length) { p.onMarqueeSelection?.(copies, []); setNotice(`Duplicated ${plural(copies.length)}`); }
+    return true;
+  };
+  const groupSelection = (ids = selectedTokenIds()) => {
+    if (ids.length < 2) { setNotice("Select two or more tokens to group them"); return true; }
+    p.update(scene => { groupTokens(scene, ids); });
+    setNotice(`Grouped ${plural(ids.length)}: clicking one selects them all · Ctrl Shift G ungroups`);
+    return true;
+  };
+  const ungroupSelection = (ids = selectedTokenIds()) => {
+    if (!ids.some(id => p.scene.tokens.find(token => token.id === id)?.groupId)) return false;
+    p.update(scene => { ungroupTokens(scene, ids); });
+    setNotice("Ungrouped");
+    return true;
+  };
+  const clipboardKeys = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    clipboardKeys.current = (e: KeyboardEvent) => {
+      if (p.player || p.gridAdjust || !allowTokens || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (document.querySelector("[role=dialog], [aria-modal=true], [role=menu]")) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      const key = e.key.toLowerCase();
+      let done = false;
+      if (key === "c" && !e.shiftKey && !window.getSelection()?.toString()) done = copySelection();
+      else if (key === "v" && !e.shiftKey) done = pasteAt(lastPointer.current);
+      else if (key === "d" && !e.shiftKey) done = duplicateSelection();
+      else if (key === "g") done = e.shiftKey ? ungroupSelection() : groupSelection();
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+  });
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => clipboardKeys.current(e);
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
   }, []);
   const down = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
@@ -809,9 +904,22 @@ export default function Board(p: Props) {
       }
       const effect = [...(allowEffects ? p.scene.effects : [])].reverse().find((effect) => effectContains(resolveEffect(effect, p.scene.tokens), pos, p.scene.grid));
       const item = t || effect;
-      if (item) {
+      if (t && e.shiftKey) {
+        // Shift-click adds the token (and its group) to the selection, or takes it out.
         p.onFogSelection?.([]);
-        p.select(item.id);
+        p.onMarqueeSelection?.(toggleInSelection(p.scene, currentSelection(), t.id), []);
+        return;
+      }
+      let group: { id: string; original: Point }[] | undefined;
+      if (t) {
+        const selection = currentSelection();
+        const moving = selection.length > 1 && selection.includes(t.id) ? selection : groupMembers(p.scene, t.id);
+        group = p.scene.tokens.filter(token => token.id !== t.id && moving.includes(token.id)).map(token => ({ id: token.id, original: { x: token.x, y: token.y } }));
+      }
+      if (item) {
+        // Moving several tokens keeps them all selected (this also clears any fog selection).
+        if (group?.length) p.onMarqueeSelection?.([t!.id, ...group.map(member => member.id)], []);
+        else { p.onFogSelection?.([]); p.select(item.id); }
         if (!t && (effect?.tokenId || effect?.locked)) return;
         const movementPath = t && p.measureTokenMovement ? [{ x: t.x, y: t.y }, { x: t.x, y: t.y }] : undefined;
         if (t) setMeasurement(movementPath ?? []);
@@ -822,10 +930,18 @@ export default function Board(p: Props) {
           measure: movementPath,
           id: item.id,
           original: { x: item.x, y: item.y },
+          group,
         };
       } else {
         if (allowFog) editFogAt();
-        if (gesture.current || e.shiftKey) return;
+        if (gesture.current) return;
+        if (e.shiftKey && allowFog) return;
+        if (e.shiftKey && p.selectionScope !== "none") {
+          // Shift-drag on the map draws a selection box without switching to Drag select.
+          gesture.current = { ...g, kind: "marquee", additive: true };
+          setMarquee([pos, pos]);
+          return;
+        }
         gesture.current = { ...g, kind: "empty" };
       }
       return;
@@ -901,6 +1017,7 @@ export default function Board(p: Props) {
       return;
     }
     const g = gesture.current;
+    lastPointer.current = clamp(world(sp));
     if (p.fogShape === "polygon") setFogCursor(clamp(world(sp)));
     if (!g) return;
     if (g.kind === "poi") {
@@ -1074,7 +1191,7 @@ export default function Board(p: Props) {
       ];
       const fog = (allowFog ? p.scene.fog.strokes : []).flatMap((stroke, index) =>
         (stroke.shape === "brush" ? pathHits(stroke.points, false, stroke.size / 2) : (fogRegionParts(stroke).some(part => { const points=fogPolygon({ ...stroke, shape: part.shape, points: part.points }).points; return points.some((point,i)=>segmentHits(point,points[(i+1)%points.length])); }) || corners.some(corner=>fogRegionContains(stroke,corner)))) ? [index] : []);
-      const selection = g.additive ? [...new Set([...scopedSelectedIds, ...ids])] : ids;
+      const selection = expandGroups(p.scene, g.additive ? [...new Set([...scopedSelectedIds, ...ids])] : ids);
       const fogSelection = g.additive ? [...new Set([...fogSelected, ...fog])] : fog;
       p.onMarqueeSelection?.(selection, fogSelection); setFogIndex(fogSelection.at(-1) ?? null);
       setMarquee(null); return;
@@ -1125,11 +1242,16 @@ export default function Board(p: Props) {
       const finalPosition = clamp(tokenDragPosition(g.original!, g.start, clamp(world(screen(e))), p.scene.grid,
         p.scene.tokens.find(t => t.id === g.id)?.size, e.altKey));
       if (g.measure) setMeasurement([...g.measure.slice(0, -1), finalPosition]);
+      const others = groupPositions(g, finalPosition);
       p.update((s) => {
         const item =
           s.tokens.find((t) => t.id === g.id) ||
           s.effects.find((t) => t.id === g.id);
         if (item && !("locked" in item && item.locked)) Object.assign(item, finalPosition);
+        for (const [id, point] of Object.entries(others ?? {})) {
+          const token = s.tokens.find(t => t.id === id);
+          if (token) Object.assign(token, point);
+        }
       });
       setDrag(null);
     }
@@ -1175,6 +1297,7 @@ export default function Board(p: Props) {
   const editMenuTarget = () => {
     if (!contextMenu) return;
     const { kind, id } = contextMenu;
+    if (kind === "map") return;
     if (kind === "token") p.editToken(String(id));
     else {
       if (kind === "poi") p.selectPoi?.(String(id));
@@ -1182,6 +1305,11 @@ export default function Board(p: Props) {
       else p.select(String(id));
       p.onEditElement?.(kind, id);
     }
+  };
+  /** The tokens a token's menu acts on: the selection it is part of, else its group, else itself. */
+  const menuTokenIds = (id: string) => {
+    const selection = currentSelection();
+    return selection.length > 1 && selection.includes(id) ? selection.filter(item => p.scene.tokens.some(token => token.id === item)) : groupMembers(p.scene, id);
   };
   const changeMenuTarget = (action: "visibility" | "duplicate" | "delete" | "forward" | "backward") => {
     if (!contextMenu) return;
@@ -1219,7 +1347,7 @@ export default function Board(p: Props) {
       else p.select(null);
     }
   };
-  const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span></button>;
+  const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean; shortcut?: string } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span>{options.shortcut && <kbd className="context-menu-shortcut">{options.shortcut}</kbd>}</button>;
   return (
     <div className={"board tool-" + p.tool + (pageDrop ? " page-drop-target" : "")} ref={host} onPointerDownCapture={e => { if (hintGone !== p.scene.id && !(e.target as HTMLElement).closest?.(".board-hint")) setHintGone(p.scene.id); }}>
       <canvas
@@ -1252,6 +1380,7 @@ export default function Board(p: Props) {
         data-library-token-drop={!p.player && !cropEditing && !!p.onLibraryTokenDrop ? "true" : undefined}
         onPointerDown={down}
         onPointerMove={move}
+        onPointerLeave={() => { lastPointer.current = null; }}
         onPointerUp={up}
         onPointerCancel={cancel}
         onContextMenu={(e) => {
@@ -1280,7 +1409,9 @@ export default function Board(p: Props) {
           else if (saved) target = { kind: "measurement", id: saved.id };
           else if (effect) target = { kind: "effect", id: effect.id };
           const z = uiZoom();
-          setContextMenu(target ? { ...target, x: Math.max(8, e.clientX / z), y: Math.max(8, e.clientY / z) } : null);
+          // Right-click on empty map: Paste here, when there is something to paste.
+          if (!target && clipboard && allowTokens) target = { kind: "map", id: "" };
+          setContextMenu(target ? { ...target, x: Math.max(8, e.clientX / z), y: Math.max(8, e.clientY / z), at: clamp(pos) } : null);
         }}
         tabIndex={0}
         aria-label={`Interactive map: ${p.scene.name}. Use the token list to edit tokens and their coordinates.`}
@@ -1291,16 +1422,30 @@ export default function Board(p: Props) {
         return poi && (!p.player || !poi.hidden) ? p.renderNote(poi, { x: poi.x * view.scale + view.x, y: poi.y * view.scale + view.y, width: view.width, height: view.height }) : null;
       })()}
       {contextMenu && createPortal(<div ref={menuRef} className="context-menu" role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ left: contextMenu.x, top: contextMenu.y }}>
+        {contextMenu.kind === "map" ? menuAction(`Paste ${clipboard ? plural(clipboard.tokens.length) : "tokens"} here`, () => pasteAt(contextMenu.at ?? null), { icon: <ClipboardPaste size={15} />, shortcut: "Ctrl V" }) : <>
         {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{menuItem.name}</div>}
         {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget, { icon: contextMenu.kind === "measurement" ? <MousePointer2 size={15} /> : <Pencil size={15} /> })}
         {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"), { icon: menuItem.hidden ? <Eye size={15} /> : <EyeOff size={15} /> })}
-        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}
+        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && !(contextMenu.kind === "token" && menuTokenIds(String(contextMenu.id)).length > 1) && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}
+        {contextMenu.kind === "token" && (() => {
+          const id = String(contextMenu.id), selection = currentSelection(), inSelection = selection.length > 1 && selection.includes(id);
+          const ids = menuTokenIds(id);
+          const grouped = !!p.scene.tokens.find(token => token.id === id)?.groupId;
+          return <>
+            {menuAction(ids.length > 1 ? `Copy ${plural(ids.length)}` : "Copy", () => copySelection(ids), { icon: <Copy size={15} />, shortcut: "Ctrl C" })}
+            {ids.length > 1 && menuAction(`Duplicate ${plural(ids.length)}`, () => duplicateSelection(ids), { icon: <CopyPlus size={15} />, shortcut: "Ctrl D" })}
+            {grouped ? menuAction("Ungroup", () => ungroupSelection([id]), { icon: <Ungroup size={15} />, shortcut: "Ctrl Shift G" })
+              : inSelection && menuAction(`Group ${plural(ids.length)}`, () => groupSelection(ids), { icon: <Group size={15} />, shortcut: "Ctrl G" })}
+          </>;
+        })()}
         {contextMenu.kind === "poi" && "targetSceneId" in (menuItem ?? {}) && menuAction("Open linked map", () => { const poi = p.scene.pointsOfInterest.find(item => item.id === contextMenu.id); if (poi?.targetSceneId) p.openLinkedScene?.(poi.targetSceneId); }, { icon: <ExternalLink size={15} />, disabled: !p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)?.targetSceneId })}
         {contextMenu.kind === "token" && <><hr /><div className="context-menu-label" id="context-menu-status">Status</div><div role="group" aria-labelledby="context-menu-status">{(["active", "unconscious", "dead"] as const).map(status => <span key={status}>{menuAction(status === "active" ? "Active" : status === "unconscious" ? "Unconscious" : "Dead", () => p.update(scene => { const token = scene.tokens.find(t => t.id === contextMenu.id); if(token) token.status = status; }), { checked: (p.scene.tokens.find(t => t.id === contextMenu.id)?.status ?? "active") === status })}</span>)}</div></>}
         {contextMenu.kind === "token" && <><hr />{menuAction("Bring forward", () => changeMenuTarget("forward"), { icon: <ArrowUpToLine size={15} /> })}{menuAction("Send backward", () => changeMenuTarget("backward"), { icon: <ArrowDownToLine size={15} /> })}</>}
         <hr />
         {menuAction("Delete", () => changeMenuTarget("delete"), { icon: <Trash2 size={15} />, danger: true })}
+        </>}
       </div>, document.body)}
+      {notice && <div className="board-notice" role="status">{notice}</div>}
       {!p.scene.mapId && !p.scene.drawing && !p.scene.pointsOfInterest.length && p.scene.tokens.length === 0 && !p.scene.effects.length && !p.scene.measurements.length && !p.scene.fog.strokes.length && ["select","pan"].includes(p.tool) && hintGone !== p.scene.id && (
         <div className="board-hint" role="note">
           <button type="button" className="board-hint-close" aria-label="Dismiss" title="Dismiss" onClick={() => setHintGone(p.scene.id)}><X size={16} /></button>

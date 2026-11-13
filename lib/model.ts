@@ -58,6 +58,8 @@ export const tokenSchema = z.object({
   /** Walking speed in the scene's units; the drag ruler colours squares within it, a dash (twice it) and beyond. */
   speed: finite.min(0).max(100000).optional(),
   attachedToId: short.nullable().default(null),
+  /** Tokens sharing a group id are selected and moved together (Ctrl G). */
+  groupId: short.optional(),
   size: finite.min(0.25).max(20),
   color,
   textColor: color.optional(),
