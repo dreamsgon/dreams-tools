@@ -19,6 +19,10 @@ export class EncyclopediaStore {
     return { data: workspaceSchema.parse(saved.data), revision: saved.revision, etag: object.etag };
   }
   async save(owner: string, input: Workspace, revision: number) {
+    return (await this.saveTagged(owner, input, revision))?.revision ?? null;
+  }
+  /** Saves, and also returns the stored copy's etag so the app can ask "anything new?" cheaply. */
+  async saveTagged(owner: string, input: Workspace, revision: number) {
     const data=workspaceSchema.parse(input);
     if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Encyclopedia workspace exceeds the 2 MB limit. Export a backup before reducing content.');
     const previous=await this.read(owner);
@@ -28,7 +32,7 @@ export class EncyclopediaStore {
     if (!saved) return null;
     // Page history is a convenience copy: a failure here never fails or undoes the save.
     await this.recordHistory(owner, previous.data, data).catch(() => {});
-    return next;
+    return { revision: next, etag: saved.etag };
   }
   /** Random tables: one library per account, used across campaigns. Saved separately so the workspace limit is unaffected. */
   async readTables(owner: string) {
