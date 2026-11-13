@@ -5,6 +5,7 @@ import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 import {questSchema,playerQuest,newQuest} from './quests.ts';
+import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -39,7 +40,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the Maptable campaign that holds this campaign's maps, set on the Campaigns page.
   maptableCampaignId:z.string().min(1).max(120).optional(),
   // Optional (added later): the widgets on the campaign front page players see first.
-  frontPage:frontPageSchema.optional() });
+  frontPage:frontPageSchema.optional(),
+  // Optional (added later): the codex category order and quick notes from the table waiting to be filed.
+  codexCategories:z.array(codexCategory).max(40).optional(), codexInbox:z.array(inboxNoteSchema).max(200).optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -54,7 +57,7 @@ export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest"]),
-    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), updatedAt: z.string().datetime(),
+    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(), updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -73,6 +76,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
         if(e.kind==='map'&&!e.mapData)bad('Map entries need map data');
         if(e.mapData&&e.kind!=='map')bad('Map data requires a map entry');
         if(e.quest&&e.kind!=='quest')bad('Quest details require a quest entry');
+        if(e.codex)for(const cid of Object.keys(e.codex.found)){const c=campaigns.get(cid);if(!c||c.worldId!==e.worldId||(e.campaignId!==null&&e.campaignId!==cid))bad('A codex find belongs to a campaign that can see the page');}
         for(const ref of [e.quest?.giverId,e.quest?.placeId]){if(!ref)continue;const t=entries.get(ref);if(t&&(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId)))bad('A quest cannot point outside its world or campaign');}
         for(const pin of e.mapData?.pins??[]){if(pin.entryId){const target=entries.get(pin.entryId);if(target&&(target.worldId!==e.worldId||(target.campaignId!==null&&target.campaignId!==e.campaignId)))bad('A map pin cannot link outside its world or campaign');}}
 
@@ -135,7 +139,7 @@ export function campaignExport(s: Workspace, campaignId: string): Workspace {
     const c = s.campaigns.find(x => x.id === campaignId);
     if (!c)
         throw new Error("Campaign not found");
-    return workspaceSchema.parse({ schemaVersion: 1, worlds: s.worlds.filter(w => w.id === c.worldId), campaigns: [c], entries: visibleEntries(s, c.worldId, c.id).map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e) });
+    return workspaceSchema.parse({ schemaVersion: 1, worlds: s.worlds.filter(w => w.id === c.worldId), campaigns: [c], entries: visibleEntries(s, c.worldId, c.id).map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e).map(e=>e.codex?{...e,codex:{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).filter(([cid])=>cid===c.id))}}:e) });
 }
 export function importCopy(current: Workspace, input: unknown): Workspace {
     const incoming = workspaceSchema.parse(input);
@@ -145,7 +149,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
         campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; return copy; })],
-        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null}:undefined }))],
+        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null}:undefined, codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
@@ -225,9 +229,10 @@ export function playerCampaign(s:Workspace,campaignId:string){
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)}))];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
-   if(!tabs.length&&!(showStats&&fields.length)&&!mapData)return [];
+   const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
+   if(!tabs.length&&!(showStats&&fields.length)&&!mapData&&!codex)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"?e.picture:undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
