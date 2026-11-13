@@ -3,6 +3,7 @@ import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
 import {playerInline} from './inline.ts';
+import {infoRows,templateOf} from './templates.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 import {dashboardSchema} from './dashboard.ts';
 import {questSchema,playerQuest,newQuest,questCategoriesSchema,questCategories} from './quests.ts';
@@ -35,7 +36,24 @@ export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
 export type StatField=z.infer<typeof statFieldSchema>;
 export const defaultCharacter=():CharacterData=>({role:"npc",group:"",tags:[],location:"",faction:"",status:"active",statsVisibility:"gm",statsByCampaign:{}});
-export const worldSchema = z.object({ id, name, description: z.string().max(1000), archived: z.boolean(), isTemplate:z.boolean().optional() });
+/**
+ * A page template: the info box fields, tabs and starting text a new page gets. Templates belong to a world,
+ * so every campaign in it can use them. Pages remember theirs (templateId) and keep their values in `fields`.
+ */
+export const templateFieldSchema = z.object({
+  id, label:z.string().trim().min(1).max(60), type:z.enum(["text","number","choice","page","textarea"]),
+  options:z.array(z.string().trim().min(1).max(60)).max(30).optional(), visibility:visibilitySchema,
+}).superRefine((f,ctx)=>{if(f.type==="choice"&&!f.options?.length)ctx.addIssue({code:"custom",message:`“${f.label}” needs at least one choice`});});
+export const templateKinds = ["note","character","place","faction","lore","session","quest"] as const;
+export const pageTemplateSchema = z.object({
+  id, name, kind:z.enum(templateKinds), fields:z.array(templateFieldSchema).max(30), tabs:z.array(z.object({title:name, visibility:visibilitySchema})).max(20),
+  body:z.string().max(20000), parentId:id.nullable().optional(), overviewVisibility:visibilitySchema.optional(), updatedAt:z.string().datetime(),
+});
+export type PageTemplate=z.infer<typeof pageTemplateSchema>;
+export type TemplateField=z.infer<typeof templateFieldSchema>;
+export const worldSchema = z.object({ id, name, description: z.string().max(1000), archived: z.boolean(), isTemplate:z.boolean().optional(),
+  // Optional (added later): page templates for this world.
+  templates:z.array(pageTemplateSchema).max(60).optional() });
 export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),
@@ -65,7 +83,10 @@ export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
     kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest"]),
-    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(), updatedAt: z.string().datetime(),
+    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
+    // Optional (added later): the template this page was made from, and its info box values by field id.
+    templateId:id.optional(), fields:z.record(id, z.union([z.string().max(2000), z.number().finite()])).optional(),
+    updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -240,11 +261,13 @@ export function playerCampaign(s:Workspace,campaignId:string){
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData&&!codex)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
- for(const e of entries){if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null};if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
+ // An info box links only to pages players can read; a link to any other page is left out.
+ for(const e of entries){if(e.info)e.info=e.info.filter(r=>!r.pageId||readable.has(r.pageId));if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null};if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
  const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
  return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look)},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
