@@ -9,6 +9,7 @@ import {clearLocalRollLog,readLocalRollLog,recordLocalRoll,subscribeLocalRollLog
 import {physicalRoll,rollDice,takePhysicalDice} from '@/lib/rolls';
 import {unlockDiceAudio} from '@/lib/dice-audio';
 import type {PhysicalDie} from '@/lib/dice-physics';
+import {TrayOracle,TrayTables,useTrayTables,type TrayScene} from './tray-tables';
 import './standard-dice-tray.css';
 const sides=[4,6,8,10,12,20,100];
 type Entry={id:string;formula:string;total:number;detail:string;context?:MapRollContext;auto?:boolean};
@@ -22,7 +23,7 @@ function DieIcon({sides}:{sides:number}){return <svg viewBox="0 0 40 40" aria-hi
 export type DicePanel='dice'|'log'|null;
 /** The board owns which panel is open; the tray only renders it. `style` positions the dock above the board tool bar. */
 /** `scene` is the open scene, so plain tray rolls can be posted to its campaign's Discord too. */
-export default function StandardDiceTray({panel,onPanelChange,style,scene}:{panel:DicePanel;onPanelChange:(panel:DicePanel)=>void;style?:CSSProperties;scene?:{sceneId:string;campaignId:string|null}|null}){
+export default function StandardDiceTray({panel,onPanelChange,style,scene}:{panel:DicePanel;onPanelChange:(panel:DicePanel)=>void;style?:CSSProperties;scene?:TrayScene|null}){
  const panelChange=useRef(onPanelChange);useEffect(()=>{panelChange.current=onPanelChange;},[onPanelChange]);
  const open=panel==='dice',logOpen=panel==='log';
  const setOpen=(next:boolean)=>panelChange.current(next?'dice':null),setLogOpen=(next:boolean)=>{if(!next)panelChange.current(null);};
@@ -30,7 +31,7 @@ export default function StandardDiceTray({panel,onPanelChange,style,scene}:{pane
  const [rollLog,setRollLog]=useState<LocalRollEntry[]>([]);
  useEffect(()=>{const refresh=()=>setRollLog([...readLocalRollLog()]);refresh();return subscribeLocalRollLog(refresh);},[]);
  const [counts,setCounts]=useState<Record<number,number>>({}),[modifier,setModifier]=useState(0),[custom,setCustom]=useState<string|null>(null),[history,setHistory]=useState<Entry[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[muted,setMuted]=useState(false),[throwing,setThrowing]=useState<{dice:PhysicalDie[];entry:Entry}|null>(null);
- const canvas=useRef<HTMLCanvasElement>(null),alive=useRef(true);
+ const canvas=useRef<HTMLCanvasElement>(null),alive=useRef(true),[tab,setTab]=useState<'dice'|'tables'|'oracle'>('dice');
  useEffect(()=>{alive.current=true;try{const h=JSON.parse(localStorage.getItem(historyKey)||'[]');if(Array.isArray(h))setHistory(h.filter(e=>typeof e?.id==='string'&&typeof e?.formula==='string'&&typeof e?.detail==='string'&&Number.isFinite(e?.total)).slice(0,30));setMuted(localStorage.getItem('rpg-tray-muted')==='true');setAlways(localStorage.getItem(autoKey)==='true');}catch{}return()=>{alive.current=false;};},[]);
  const formula=custom!==null?custom.trim():sides.filter(s=>counts[s]).map(s=>`${counts[s]}d${s}`).join('+')+(modifier?(modifier>0?'+':'')+modifier:'');
  useEffect(()=>{if(!throwing)return;let active=true,dispose:(()=>void)|undefined;let timer:ReturnType<typeof setTimeout>;const finish=()=>{if(!active)return;recordLocalRoll({label:throwing.entry.formula,total:throwing.entry.total,breakdown:throwing.entry.detail});setHistory(old=>{const next=[throwing.entry,...old].slice(0,30);try{localStorage.setItem(historyKey,JSON.stringify(next));}catch{setError('Roll history could not be saved on this device.');}return next;});setThrowing(null);setBusy(false);
@@ -45,6 +46,8 @@ export default function StandardDiceTray({panel,onPanelChange,style,scene}:{pane
  <section id="local-roll-log" className="standard-dice-tray local-roll-log" hidden={!logOpen} aria-label="Local roll log"><header><div><strong>Roll log</strong><small>Last 100 rolls · stored on this device</small></div><button disabled={!rollLog.length} onClick={clearLocalRollLog}>Clear log</button><button aria-label="Close roll log" onClick={()=>setLogOpen(false)}><X size={18}/></button></header>{rollLog.length?<ol>{rollLog.map(entry=><li key={entry.id}><b>{entry.total}</b><div><strong>{entry.label}</strong><small>{entry.breakdown}</small>{entry.outcome&&<span className="roll-log-outcome">{entry.outcome}</span>}<time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleString()}</time></div></li>)}</ol>:<p>No rolls yet. Dice tray and character rolls appear here.</p>}</section>
  <section id="standard-dice-tray" className="standard-dice-tray" hidden={!open} aria-label="Standard dice tray">
  <header><div><strong>Dice tray</strong><small>Quick rolls · saved on this device</small></div><button title={muted?'Unmute dice':'Mute dice'} aria-label={muted?'Unmute dice':'Mute dice'} aria-pressed={muted} onClick={()=>setMuted(m=>{try{localStorage.setItem('rpg-tray-muted',String(!m));}catch{}return !m;})}>{muted?<VolumeX size={18}/>:<Volume2 size={18}/>}</button><button aria-label="Close dice tray" onClick={()=>setOpen(false)}><X size={18}/></button></header>
+ {open&&<TrayTabs tab={tab} setTab={setTab}/>}
+ {tab==='tables'?<TrayTables scene={scene}/>:tab==='oracle'?<TrayOracle scene={scene}/>:<>
  <div className="tray-dice">{sides.map(s=><button key={s} disabled={busy} title={`Add d${s}${counts[s]?` (${counts[s]} selected)`:''}`} aria-label={`Add d${s}`} onClick={()=>{setCustom(null);setCounts(c=>({...c,[s]:Math.min(20,(c[s]||0)+1)}));}}><DieIcon sides={s}/><span>d{s}</span>{!!counts[s]&&<b>{counts[s]}</b>}</button>)}</div>
  <div className="tray-modifier"><button disabled={busy||custom!==null} aria-label="Decrease modifier" onClick={()=>setModifier(m=>Math.max(-10000,m-1))}>−</button><label>Modifier<input disabled={busy||custom!==null} aria-label="Dice modifier" type="number" min={-10000} max={10000} value={modifier} onChange={e=>setModifier(Math.max(-10000,Math.min(10000,Math.trunc(Number(e.target.value))||0)))}/></label><button disabled={busy||custom!==null} aria-label="Increase modifier" onClick={()=>setModifier(m=>Math.min(10000,m+1))}>+</button><button disabled={busy} onClick={()=>{setCounts({});setModifier(0);setCustom(null);setError('');}}>Reset</button></div>
  {custom!==null&&<small>Edit modifiers in your custom formula, or Reset to use the dice buttons.</small>}<form onSubmit={e=>{e.preventDefault();void roll();}}><label>Roll formula<input aria-label="Tray roll formula" disabled={busy} value={custom??formula} placeholder="Choose dice or type 2d6+4" maxLength={200} onChange={e=>setCustom(e.target.value)}/></label><button className="tray-roll" disabled={busy||!formula}>{busy?'Rolling…':'Roll'}</button></form>
@@ -52,5 +55,12 @@ export default function StandardDiceTray({panel,onPanelChange,style,scene}:{pane
  {history[0]?.context&&<div className="tray-discord"><small>{history[0].context.label} · this scene</small><button disabled={busy||sharing||!history[0].context.campaignId} onClick={()=>void share(history[0])}>{sharing?'Posting…':'Post roll to Discord'}</button><p role="status">{shareStatus}</p></div>}
  {(scene?.campaignId||history[0]?.context?.campaignId)&&<label className="tray-always" title="Post every roll from a campaign scene to its Discord channel for rolls, without pressing Post"><input type="checkbox" checked={always} onChange={e=>{setAlways(e.target.checked);try{localStorage.setItem(autoKey,String(e.target.checked));}catch{}}}/>Always post rolls to Discord</label>}
  {history.length>0&&<details><summary>Recent rolls ({history.length})</summary><ol>{history.map(e=><li key={e.id}><b>{e.total}</b><span>{e.formula}<small>{e.detail}</small></span></li>)}</ol><button onClick={()=>{setHistory([]);try{localStorage.removeItem(historyKey);}catch{}}}>Clear tray history</button></details>}
+ </>}
  </section></div>;
+}
+/** Dice, Tables and Oracle. Tables and Oracle show only for the GM, who can read the random tables library. */
+function TrayTabs({tab,setTab}:{tab:'dice'|'tables'|'oracle';setTab:(t:'dice'|'tables'|'oracle')=>void}){
+ const tables=useTrayTables();
+ if(!tables)return null;
+ return <div className="tray-tabs" role="tablist" aria-label="Dice tray">{(['dice','tables','oracle'] as const).map(t=><button key={t} role="tab" aria-selected={tab===t} className={tab===t?'on':''} onClick={()=>setTab(t)}>{t==='dice'?'Dice':t==='tables'?'Tables':'Oracle'}</button>)}</div>;
 }

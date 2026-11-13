@@ -9,7 +9,8 @@ import { EncyclopediaStore } from "./store.ts";
 import { discordRollSchema, discordTarget } from "./discord-roll.ts";
 import { parseDice } from "../rolls.ts";
 import type { Workspace } from "./world-model.ts";
-import { rollPost, rollerName, textPost } from "../discord/cards.ts";
+import { oraclePost, rollPost, rollerName, tablePost, textPost } from "../discord/cards.ts";
+import { discordTableSchema, type TableResult } from "./discord-table.ts";
 import { postForCampaign } from "../discord/campaign.ts";
 import { pictureAvatar, tokenAvatar } from "../discord/avatar.ts";
 import type { DiscordFile, Post } from "../discord/send.ts";
@@ -17,7 +18,8 @@ import { campaignScenes } from "../agent-maps.ts";
 
 export type EncyclopediaPost =
   | { kind: "roll"; ai?: boolean; title: string; formula: string; total: number; detail: string; who?: string; natural?: number | null }
-  | { kind: "narration" | "recap"; text: string; title?: string };
+  | { kind: "narration" | "recap"; text: string; title?: string }
+  | { kind: "table"; result: TableResult };
 
 /** The picture for whoever rolled: a page in this campaign (or its world) with that title, or a token of that name on its maps. */
 async function avatarFor(bucket: S3Bucket, owner: string, data: Workspace, campaignId: string, who: string, maps: Awaited<ReturnType<typeof loadWorkspace>>, maptableCampaignId: string) {
@@ -49,8 +51,9 @@ export async function sendEncyclopediaPost(bucket: S3Bucket, owner: string, camp
     if (avatar) files = [avatar];
     const title = who && post.title.toLocaleLowerCase().startsWith(who.toLocaleLowerCase()) ? post.title.slice(who.length).replace(/^\s*[·—–:-]\s*/, "") || "Roll" : post.title;
     card = rollPost({ title, formula: post.formula, total: post.total, detail: post.detail, who, avatar: !!avatar, natural: post.natural, footer: post.ai ? "Rolled by the AI" : undefined });
-  } else card = textPost(post.kind, post.text, post.title);
-  const sent = await postForCampaign(bucket, prefix, target.maptableCampaignId, post.kind === "roll" ? (post.ai ? "aiRolls" : "rolls") : post.kind === "recap" ? "recaps" : "narration",
+  } else if (post.kind === "table") card = tableResultPost(post.result);
+  else card = textPost(post.kind, post.text, post.title);
+  const sent = await postForCampaign(bucket, prefix, target.maptableCampaignId, post.kind === "roll" ? (post.ai ? "aiRolls" : "rolls") : post.kind === "table" ? "rolls" : post.kind === "recap" ? "recaps" : "narration",
     { ...card, ...(files.length ? { files } : {}) }, { legacyRoute: target.route, campaignName: mapCampaign.name });
   return { skipped: sent.skipped };
 }
@@ -59,4 +62,20 @@ export async function sendEncyclopediaPost(bucket: S3Bucket, owner: string, camp
 export async function sendDiscordRoll(bucket: S3Bucket, owner: string, input: unknown) {
   const roll = discordRollSchema.parse(input);
   return sendEncyclopediaPost(bucket, owner, roll.campaignId, { kind: "roll", title: roll.title, formula: roll.formula, total: roll.total, detail: roll.detail });
+}
+
+const tableResultPost = (r: TableResult) => r.oracle ? oraclePost({ ...r.oracle, footer: r.footer }) : tablePost(r);
+
+/**
+ * A table or oracle result, posted to the rolls channel. From the Encyclopedia it goes through the campaign's
+ * chosen Maptable campaign; from the Maptable dice tray, straight to the open scene's campaign.
+ */
+export async function sendTableResult(bucket: S3Bucket, owner: string, input: unknown): Promise<{ skipped: boolean }> {
+  const v = discordTableSchema.parse(input);
+  if (v.campaignId) return sendEncyclopediaPost(bucket, owner, v.campaignId, { kind: "table", result: v.result });
+  const prefix = `users/${encodeURIComponent(owner)}/`, maptable = await loadWorkspace(bucket, prefix);
+  const campaign = maptable?.workspace.collections.find(c => c.id === v.maptableCampaignId && c.kind === "campaign");
+  if (!campaign) throw Error("This scene isn't in a campaign, so it has no Discord channel.");
+  const sent = await postForCampaign(bucket, prefix, campaign.id, "rolls", tableResultPost(v.result), { campaignName: campaign.name });
+  return { skipped: sent.skipped };
 }
