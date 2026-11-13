@@ -1,6 +1,6 @@
 import type { Bucket } from "./storage-types";
 import { loadWorkspace, saveWorkspace } from "./workspace-storage.ts";
-import { initialWorkspace, uid, type Workspace as MapWorkspace } from "./model.ts";
+import { canMoveCollection, initialWorkspace, uid, type Workspace as MapWorkspace } from "./model.ts";
 import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
 import { newId, playerCampaign, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
@@ -9,7 +9,7 @@ import { dashboardSchema, excerpt } from "./encyclopedia/dashboard.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
-import { applyPairs, campaignSummary, cleanName } from "./campaign-links.ts";
+import { applyPairs, campaignFolders, campaignSummary, cleanName } from "./campaign-links.ts";
 
 /*
  * The Campaigns page: one list of campaigns across Maptable and the Encyclopedia.
@@ -60,10 +60,29 @@ export type CampaignAction =
   | { action: "pair"; pairs: { encyclopediaId: string; maptableId: string | null }[] }
   | { action: "rename"; encyclopediaId?: string; maptableId?: string; name: string; description?: string }
   | { action: "create"; name: string; description?: string; maptable: boolean; encyclopedia: boolean; worldId?: string; newWorld?: string }
+  | { action: "newFolder"; name: string; parentId?: string | null }
+  | { action: "renameFolder"; folderId: string; name: string }
+  | { action: "removeFolder"; folderId: string }
+  | { action: "moveCampaign"; key: string; folderId: string | null }
+  | { action: "moveFolder"; folderId: string; parentId: string | null }
   | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
+
+/** A campaign folder that exists, from an id in a request. */
+function folderOf(map: MapWorkspace, id: unknown) {
+  const folder = campaignFolders(map.collections).find(f => f.id === str(id));
+  if (!folder) throw new Error("That folder no longer exists. Reload the page.");
+  return folder.id;
+}
+/** Where something may go: a campaign folder, or null for the top level. */
+const parentOf = (map: MapWorkspace, id: unknown) => id === null || id === undefined ? null : folderOf(map, id);
+function withFolder<T extends { folderId?: string }>(c: T, folderId: string | null): T {
+  const next = { ...c };
+  delete next.folderId;
+  return folderId ? { ...next, folderId } : next;
+}
 
 function addMapCampaign(map: MapWorkspace, name: string) {
   const id = uid();
@@ -124,6 +143,31 @@ export async function campaignAction(s: Session, body: CampaignAction) {
       if (both.book.data.campaigns.some(c => c.maptableCampaignId === mid)) throw new Error("This campaign already has Encyclopedia notes.");
       await saveBook(s, both.book.revision, addBookCampaign(both.book.data, body, campaign.name, "", mid).next);
     } else throw new Error("Choose a campaign.");
+  } else if (body.action === "newFolder") {
+    const name = cleanName(body.name, "folder"), parentId = parentOf(mapNow, body.parentId);
+    await saveMap(s, both.map, { ...mapNow, collections: [...mapNow.collections, { id: uid(), name, kind: "folder", parentId }] });
+  } else if (body.action === "renameFolder") {
+    const name = cleanName(body.name, "folder"), id = folderOf(mapNow, body.folderId);
+    await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === id ? { ...c, name } : c) });
+  } else if (body.action === "removeFolder") {
+    const id = folderOf(mapNow, body.folderId), up = mapNow.collections.find(c => c.id === id)!.parentId;
+    // Everything inside moves up a level; nothing is deleted.
+    await saveMap(s, both.map, {
+      ...mapNow,
+      collections: mapNow.collections.filter(c => c.id !== id).map(c => c.parentId === id ? { ...c, parentId: up } : c),
+      scenes: mapNow.scenes.map(sc => sc.containerId === id ? { ...sc, containerId: up } : sc),
+    });
+    if (both.book.data.campaigns.some(c => c.folderId === id)) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.folderId === id ? withFolder(c, up) : c) });
+  } else if (body.action === "moveCampaign") {
+    const key = str(body.key) ?? "", folderId = parentOf(mapNow, body.folderId);
+    const row = summaryOf(both).rows.find(r => r.key === key);
+    if (!row) throw new Error("That campaign no longer exists. Reload the page.");
+    if (row.maptable) await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === row.maptable!.id ? { ...c, parentId: folderId } : c) });
+    if (row.encyclopedia) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? withFolder(c, folderId) : c) });
+  } else if (body.action === "moveFolder") {
+    const id = folderOf(mapNow, body.folderId), parentId = parentOf(mapNow, body.parentId);
+    if (!canMoveCollection(mapNow.collections, id, parentId)) throw new Error("A folder can't go inside itself or one of its own folders.");
+    await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === id ? { ...c, parentId } : c) });
   } else throw new Error("Unknown action.");
   return summaryOf(await readBoth(s));
 }

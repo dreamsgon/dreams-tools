@@ -7,6 +7,7 @@ import { defaultCharacter, folderPath, searchableText, type Campaign, type Entry
 import { categoryOf, defaultCategory, moveQuest, newQuest, nextStep, questCategories, questProgress, questsIn, stateNames, type QuestState } from "../encyclopedia/quests.ts";
 import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
 import { rollDice } from "../rolls.ts";
+import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
 import { address, distance, hexCenter, type Grid, type Point, type Scene, type Token, type Workspace as Maps } from "../model.ts";
 import { fogRegionContains } from "../fog.ts";
@@ -38,7 +39,10 @@ export type McpContext = {
 };
 
 /** What a change did: the new workspace (if it changed), a line for the activity log, and the reply for the AI. */
-export type WriteOut = { next?: Book; maps?: Maps; summary: string; detail?: string; reply: unknown; discord?: { title: string; formula: string; total: number; detail: string } };
+/** Whether posts from this campaign have a Maptable campaign whose Discord channels they can use. */
+const hasDiscord = (c: McpContext) => !!(c.campaign.discord || c.campaign.maptableCampaignId);
+
+export type WriteOut = { next?: Book; maps?: Maps; summary: string; detail?: string; reply: unknown; discord?: EncyclopediaPost };
 /**
  * A change, run on the latest whole workspace. `scoped` is the same campaign narrowed for lookups, with the
  * latest Maptable scenes; a table change returns the whole new Maptable workspace as `maps`.
@@ -344,19 +348,33 @@ const tools: Tool[] = [
   // ---- Assist: dice and writing. Each change is logged in the AI activity log, where the GM can undo it. ----
   {
     name: "roll", title: "Roll dice", level: "assist", readOnly: false,
-    description: "Roll dice in the open, such as 1d20+5 or 2d6+3. The result is shown to the GM in the AI activity log and posted to the campaign's Discord channel when one is set up. Say what the roll is for.",
-    inputSchema: obj({ dice: str("Dice and modifiers, such as 1d20+5 or 2d6+1d4+3.", 200), for: str("What the roll is for, such as \"Bog Hag attacks Bram\".", 200), discord: { type: "boolean", description: "Post to Discord when the campaign has a channel (default true). Use false for a secret roll." } }, ["dice", "for"]),
+    description: "Roll dice in the open, such as 1d20+5 or 2d6+3. The result is shown to the GM in the AI activity log and posted to the campaign's Discord as a card when one is set up. Say what the roll is for, and who is rolling so their picture goes on the card.",
+    inputSchema: obj({ dice: str("Dice and modifiers, such as 1d20+5 or 2d6+1d4+3.", 200), for: str("What the roll is for, such as \"Claws against Bram\".", 200), as: str("Who is rolling: a creature, character or token name, such as \"Bog Hag\". Optional.", 120), discord: { type: "boolean", description: "Post to Discord when the campaign has a channel (default true). Use false for a secret roll." } }, ["dice", "for"]),
     write: a => {
-      const dice = text(a, "dice")!, label = text(a, "for")!;
+      const dice = text(a, "dice")!, label = text(a, "for")!, who = text(a, "as", false, 120);
       if (a.discord !== undefined && typeof a.discord !== "boolean") fail("discord must be true or false.");
       let roll: ReturnType<typeof rollDice>;
       try { roll = rollDice(dice, secureRandom); } catch (e) { return fail((e as Error).message); }
       const shown = roll.parts.filter(p => p.count).map(p => `${p.count}d${p.sides}: ${p.dice.join(", ")}`).join("; ");
+      const post = (c: McpContext) => a.discord !== false && hasDiscord(c);
       return (_full, c) => ({
-        summary: `Rolled ${dice} = ${roll.total} for ${label}`, detail: shown || undefined,
-        reply: { total: roll.total, dice: shown || undefined, natural: roll.natural ?? undefined, postedToDiscord: a.discord !== false && !!c.campaign.discord },
-        discord: a.discord !== false && c.campaign.discord ? { title: label, formula: dice, total: roll.total, detail: shown.slice(0, 380) } : undefined,
+        summary: `Rolled ${dice} = ${roll.total} for ${who ? `${who}: ` : ""}${label}`, detail: shown || undefined,
+        reply: { total: roll.total, dice: shown || undefined, natural: roll.natural ?? undefined, postedToDiscord: post(c) },
+        discord: post(c) ? { kind: "roll", ai: true, title: label, who, formula: dice, total: roll.total, detail: shown.slice(0, 380), natural: roll.natural ?? null } : undefined,
       });
+    },
+  },
+  {
+    name: "post_to_discord", title: "Post to Discord", level: "assist", readOnly: false,
+    description: "Post text to the campaign's Discord as a card: narration (read-aloud text, an NPC's lines, a scene description) or a session recap. The GM chooses which channel each kind goes to. Only post what players may see.",
+    inputSchema: obj({ text: str("What to post, in Markdown. Up to 4000 characters.", 4000), title: str("A short title, such as \"The reeds part\" or \"Session 4 recap\". Optional.", 200), kind: { type: "string", enum: ["narration", "recap"], description: "narration (default) or recap." } }, ["text"]),
+    write: a => {
+      const body = text(a, "text")!, title = text(a, "title"), kind = a.kind === undefined ? "narration" : a.kind;
+      if (kind !== "narration" && kind !== "recap") fail("kind must be narration or recap.");
+      return (_full, c) => {
+        if (!hasDiscord(c)) fail("This campaign has no Discord channel yet. The GM can add one in Maptable › Connections.");
+        return { summary: `Posted ${kind === "recap" ? "a recap" : "narration"} to Discord${title ? `: ${title}` : ""}`, detail: body.slice(0, 300), reply: { posted: true }, discord: { kind: kind as "narration" | "recap", text: body, title } };
+      };
     },
   },
   {

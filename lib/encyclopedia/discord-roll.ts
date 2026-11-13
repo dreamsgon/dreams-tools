@@ -11,12 +11,16 @@ export const discordRollSchema = z.object({
 });
 export type DiscordRoll = z.infer<typeof discordRollSchema>;
 
-/** Which Maptable campaign's Discord channel an Encyclopedia campaign's rolls go to. */
-export function discordTarget(data: Workspace, campaignId: string) {
+/**
+ * Whose Discord channels an Encyclopedia campaign posts through: the Maptable campaign chosen for it, or
+ * else its paired Maptable campaign. `route` is from older saves, where rolls went to one map type's channel.
+ */
+export function discordTarget(data: Workspace, campaignId: string): { maptableCampaignId: string; route?: 'combat' | 'exploration' | 'world' } {
   const campaign = data.campaigns.find(c => c.id === campaignId);
   if (!campaign) throw Error('This campaign is not saved yet.');
-  if (!campaign.discord) throw Error('Choose a Discord channel for this campaign in AI & campaign repositories first.');
-  return campaign.discord;
+  if (campaign.discord) return campaign.discord;
+  if (campaign.maptableCampaignId) return { maptableCampaignId: campaign.maptableCampaignId };
+  throw Error('Choose a Discord channel for this campaign in AI & campaign repositories first.');
 }
 
 /** The Discord message for a roll. The total is the roller's own; this only formats it. */

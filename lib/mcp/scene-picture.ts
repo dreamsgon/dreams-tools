@@ -6,10 +6,10 @@ import { sceneSvg, type SceneView } from "./scene-image.ts";
 
 const MAX = 1280, LIMIT = 25_000_000;
 
-/** The map image, from the GM's uploads or their own S3 only. Images on other sites are never fetched by the server. */
-async function mapBytes(bucket: S3Bucket, prefix: string, maps: Maps, s: Scene): Promise<{ bytes: Uint8Array; note?: string } | { bytes: null; note?: string }> {
-  const asset = s.mapId ? maps.assets.find(a => a.id === s.mapId) : null;
-  if (!asset) return { bytes: null, note: s.drawing ? "This map was drawn in the Map Creator; the picture shows the grid and tokens without the drawing." : undefined };
+/** An image from the GM's uploads or their own S3 only. Images on other sites are never fetched by the server. */
+export async function assetBytes(bucket: S3Bucket, prefix: string, maps: Maps, assetId: string | null | undefined): Promise<{ bytes: Uint8Array | null; note?: string }> {
+  const asset = assetId ? maps.assets.find(a => a.id === assetId) : null;
+  if (!asset) return { bytes: null };
   const url = new URL(asset.src, "https://maptable.local");
   if (asset.src.startsWith("/api/assets?")) {
     const id = url.searchParams.get("id");
@@ -24,6 +24,11 @@ async function mapBytes(bucket: S3Bucket, prefix: string, maps: Maps, s: Scene):
     return { bytes: new Uint8Array(await res.arrayBuffer()) };
   }
   return { bytes: null, note: "The map image is on another website, so it isn't in the picture." };
+}
+
+async function mapBytes(bucket: S3Bucket, prefix: string, maps: Maps, s: Scene) {
+  if (!s.mapId || !maps.assets.some(a => a.id === s.mapId)) return { bytes: null, note: s.drawing ? "This map was drawn in the Map Creator; the picture shows the grid and tokens without the drawing." : undefined };
+  return assetBytes(bucket, prefix, maps, s.mapId);
 }
 
 export async function scenePicture(bucket: S3Bucket, prefix: string, maps: Maps, s: Scene, mode: SceneView) {

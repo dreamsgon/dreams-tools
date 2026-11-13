@@ -2146,7 +2146,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         accept="application/json,.json"
         onChange={(e) => void restore(e.target.files?.[0])}
       />
-      <StandardDiceTray panel={dicePanel} onPanelChange={setDicePanel} style={diceDock} />
+      <StandardDiceTray panel={dicePanel} onPanelChange={setDicePanel} style={diceDock} scene={scene ? { sceneId: scene.id, campaignId } : null} />
       {notice && (
         <div className="toast" role="status">
           {notice}

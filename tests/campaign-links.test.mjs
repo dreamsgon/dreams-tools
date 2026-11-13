@@ -111,3 +111,66 @@ test('pages carry the folders they sit in, and each campaign lists its three new
   assert.equal(e1.maps,1);
   assert.deepEqual(s.rows.find(r=>r.encyclopedia?.id==='e2').encyclopedia.latest,[]);
 });
+
+// Campaign folders
+import {campaignFolders,campaignLayout,folderChoices} from '../lib/campaign-links.ts';
+const foldered={collections:[
+ {id:'fa',name:'Lantern Coast',kind:'folder',parentId:null},
+ {id:'fb',name:'Old games',kind:'folder',parentId:'fa'},
+ {id:'fz',name:'Archive',kind:'folder',parentId:null},
+ {id:'m1',name:'The Salt Road',kind:'campaign',parentId:'fb'},
+ {id:'sf',name:'Act 1',kind:'folder',parentId:'m1'},
+ {id:'m2',name:'Greyfen marsh',kind:'campaign',parentId:'fa'},
+ {id:'m3',name:'Loose end',kind:'campaign',parentId:'sf'},
+ {id:'m4',name:'10 Ships',kind:'campaign',parentId:null},
+ {id:'m5',name:'2 Ships',kind:'campaign',parentId:null},
+],scenes:[]};
+
+test('campaign folders are folders whose parents are all folders, never scene folders inside a campaign', () => {
+  assert.deepEqual(campaignFolders(foldered.collections).map(f=>f.id).sort(),['fa','fb','fz']);
+  assert.deepEqual(campaignFolders(null),[]);
+  const s=campaignSummary(foldered,book());
+  assert.deepEqual(s.folders.map(f=>f.id).sort(),['fa','fb','fz']);
+  assert.equal(campaignSummary(null,book()).folders.length,0);
+});
+
+test('rows carry their folder: Maptable parent for Maptable and paired rows, folderId for Encyclopedia-only rows', () => {
+  const b=book();
+  b.campaigns[0].maptableCampaignId='m1';b.campaigns[0].folderId='fz';
+  b.campaigns[1].folderId='fa';
+  b.campaigns[2].folderId='missing';
+  const rows=campaignSummary(foldered,b).rows,f=id=>rows.find(r=>r.maptable?.id===id||r.encyclopedia?.id===id).folderId;
+  assert.equal(f('m1'),'fb','a paired row follows its Maptable campaign');
+  assert.equal(f('e2'),'fa','an Encyclopedia-only row uses folderId');
+  assert.equal(f('e3'),null,'a folder that does not exist is ignored');
+  assert.equal(f('m2'),'fa');
+  assert.equal(f('m3'),null,'a campaign inside a campaign scene folder is not in a campaign folder');
+  assert.equal(f('m4'),null);
+  assert.doesNotThrow(()=>workspaceSchema.parse(b));
+  assert.equal(workspaceSchema.parse(book()).campaigns[0].folderId,undefined,'old data still loads');
+});
+
+test('layout lists folders before campaigns at every level, each by name, with counts that include nested folders', () => {
+  const s=campaignSummary(foldered,book());
+  const layout=campaignLayout(s.folders,s.rows);
+  const label=i=>i.type==='folder'?`${'-'.repeat(i.depth)}[${i.folder.name}:${i.count}]`:`${'-'.repeat(i.depth)}${i.row.name}`;
+  assert.deepEqual(layout.map(label),[
+    '[Archive:0]','[Lantern Coast:2]','-[Old games:1]','--The Salt Road','-Greyfen marsh',
+    '2 Ships','10 Ships','Curse of the Ashen Crown','Loose end','Retired','Sunless Citadel']);
+});
+
+test('layout hides a collapsed folder\'s contents, and shows only folders with matches, expanded, when filtering', () => {
+  const s=campaignSummary(foldered,book());
+  const collapsed=campaignLayout(s.folders,s.rows,new Set(['fa']));
+  assert.equal(collapsed.some(i=>i.type==='row'&&i.row.name==='Greyfen marsh'),false);
+  assert.equal(collapsed.find(i=>i.type==='folder'&&i.folder.id==='fa').open,false);
+  const hit=s.rows.filter(r=>r.name==='The Salt Road');
+  const found=campaignLayout(s.folders,hit,new Set(['fa','fb']),true);
+  assert.deepEqual(found.map(i=>i.type==='folder'?i.folder.name:i.row.name),['Lantern Coast','Old games','The Salt Road']);
+  assert.equal(campaignLayout(s.folders,[],new Set(),true).length,0);
+  assert.deepEqual(campaignLayout([],s.rows).map(i=>i.type==='row'&&i.row.name),s.rows.map(r=>r.name),'no folders: the plain list');
+});
+
+test('folder choices are paths in display order', () => {
+  assert.deepEqual(folderChoices(campaignSummary(foldered,book()).folders).map(f=>f.path),['Archive','Lantern Coast','Lantern Coast / Old games']);
+});

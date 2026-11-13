@@ -26,9 +26,10 @@ function bucket(){
  };
 }
 const OWNER='gm-1',CAMPAIGN='demo-campaign';
-async function setup({paused=false,send}={}){
- const b=bucket(),store=new EncyclopediaStore(b);
- await store.save(OWNER,demoWorkspace(),0);
+async function setup({paused=false,send,discord=false}={}){
+ const b=bucket(),store=new EncyclopediaStore(b),w=demoWorkspace();
+ if(discord)w.campaigns.find(c=>c.id===CAMPAIGN).maptableCampaignId='map-campaign';
+ await store.save(OWNER,w,0);
  if(paused)await updateActivity(b,OWNER,CAMPAIGN,l=>({...l,paused:true}));
  const sent=[];
  const base={maps:null,level:'assist'};
@@ -108,6 +109,18 @@ test('dice roll with a fair total, are logged, and only go to Discord when set u
  const line=(await s.log()).entries[0];assert.match(line.summary,/Rolled 2d6\+3 = \d+ for Bog Hag attacks Bram/);assert.equal(line.changes,undefined);
  assert.match((await s.call('roll',{dice:'banana',for:'x'})).text,/./);
  assert.ok((await s.call('roll',{dice:'banana',for:'x'})).isError);
+});
+
+test('the AI posts rolls as cards with who rolled, narration and recaps, and keeps secret rolls out of Discord',async()=>{
+ const s=await setup({discord:true}),call=s.call;
+ const r=await call('roll',{dice:'1d20+6',for:'Claws against Bram',as:'Bog Hag'});
+ assert.equal(r.isError,false,r.text);assert.equal(JSON.parse(r.text).postedToDiscord,true);
+ assert.deepEqual({...s.sent[0],total:0,detail:''},{kind:'roll',ai:true,title:'Claws against Bram',who:'Bog Hag',formula:'1d20+6',total:0,detail:'',natural:s.sent[0].natural});
+ assert.equal(JSON.parse((await call('roll',{dice:'1d20',for:'Perception',discord:false})).text).postedToDiscord,false);assert.equal(s.sent.length,1);
+ assert.equal((await call('post_to_discord',{text:'The reeds part.',title:'Greyfen marsh'})).isError,false);
+ assert.deepEqual(s.sent[1],{kind:'narration',text:'The reeds part.',title:'Greyfen marsh'});
+ assert.ok((await call('post_to_discord',{text:'x',kind:'gossip'})).isError);
+ assert.ok((await (await setup()).call('post_to_discord',{text:'x'})).isError,'no channel, no post');
 });
 
 test('pausing refuses every change but keeps reading',async()=>{

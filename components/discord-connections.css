@@ -1,0 +1,33 @@
+/* Connections › Discord (components/discord-connections.tsx). Uses the shared theme tokens. */
+.discord-connections h4 { margin:18px 0 6px; font-size:14px; font-weight:600; color:var(--ink); }
+.discord-connections .small { font-size:12.5px; margin:6px 0 0; }
+.discord-channels, .discord-routes { list-style:none; margin:0; padding:0; }
+.discord-channels li { display:grid; grid-template-columns:18px minmax(0,1fr); align-items:start; gap:4px 10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.discord-hash { text-align:center; font-size:17px; line-height:20px; color:var(--muted); }
+.discord-channel-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.discord-channel-text strong { font-weight:600; font-size:14px; overflow-wrap:anywhere; }
+.discord-main { margin-left:8px; padding:1px 7px; border-radius:var(--radius-sm, 4px); background:var(--accent-soft); color:var(--accent); font-size:11.5px; font-weight:500; vertical-align:1px; }
+.discord-state { font-size:12.5px; color:var(--muted); }
+.discord-state::before { content:""; display:inline-block; width:7px; height:7px; margin-right:6px; border-radius:50%; background:var(--line-strong, var(--muted)); vertical-align:1px; }
+.discord-state.ok { color:var(--green, #1f7a4d); }
+.discord-state.ok::before { background:var(--green, #1f7a4d); }
+.discord-state.deleted { color:var(--danger, #b42318); }
+.discord-state.deleted::before { background:var(--danger, #b42318); }
+.discord-channel-actions { grid-column:2; display:flex; flex-wrap:wrap; gap:4px; margin-left:-10px; }
+.discord-channel-actions button:first-child { margin-left:10px; }
+.discord-channel-actions button { min-height:30px; padding:4px 10px; font-size:13px; }
+.discord-channel-actions button.quiet { border-color:transparent; background:transparent; color:var(--muted); }
+.discord-channel-actions button.quiet:hover:not(:disabled) { color:var(--ink); background:var(--chrome-hover, #f1f3f5); }
+.discord-rename { display:flex; gap:6px; align-items:center; }
+.discord-rename input { flex:1; min-width:0; }
+.discord-add, .discord-post-as { display:flex; gap:8px; margin-top:12px; }
+.discord-add input, .discord-post-as input { flex:1; min-width:0; }
+.discord-add button, .discord-post-as button { flex:none; }
+.discord-routes li { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+.discord-routes li > div { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; font-size:14px; }
+.discord-routes small { font-size:12.5px; color:var(--muted); }
+.discord-routes select { flex:none; width:min(230px, 46%); }
+@media (max-width:560px) {
+  .discord-routes li { flex-direction:column; align-items:stretch; gap:6px; }
+  .discord-routes select { width:100%; }
+}
