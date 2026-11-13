@@ -28,6 +28,23 @@ export const recapItemSchema = z.object({
 export const beatSchema = z.object({ id, title: z.string().trim().min(1).max(200), big: z.boolean(), steps: z.array(z.string().trim().min(1).max(300)).max(12) });
 export const quoteSchema = z.object({ id, text: z.string().trim().min(1).max(500), who: z.string().trim().max(120), checked: z.boolean().optional() });
 
+/** What the GM asked for in the New session recap dialog. The AI reads it with the transcript. */
+export const recapParts = ["recap", "timeline", "quotes", "found", "quests", "gmNotes"] as const;
+export const requestSchema = z.object({
+  length: z.enum(["short", "standard", "detailed"]),
+  depth: z.enum(["main", "balanced", "everything"]),
+  steer: z.string().max(500).optional(),
+  /** Parts to leave out. Everything else is made. */
+  skip: z.array(z.enum(recapParts)).max(6).optional(),
+  /** Who each speaker in the transcript is: the GM, a character page, or just a player. */
+  cast: z.array(z.object({ speaker: z.string().trim().min(1).max(80), as: z.union([z.literal("gm"), z.literal(""), id]), name: z.string().max(160).optional() })).max(30).optional(),
+  /** A link the AI reads with its own access (Notion, Google Drive, GitHub). */
+  link: z.string().url().max(500).optional(),
+  /** When the GM handed it over (ISO). */
+  at: z.string().max(40),
+});
+export type RecapRequest = z.infer<typeof requestSchema>;
+
 export const recapSchema = z.object({
   /** A draft never reaches players, whatever its tabs say. */
   status: z.enum(["draft", "published"]),
@@ -44,6 +61,7 @@ export const recapSchema = z.object({
   review: z.array(recapItemSchema).max(80),
   /** Words in the stored transcript, when there is one. */
   transcriptWords: z.number().int().min(0).max(10_000_000).optional(),
+  request: requestSchema.optional(),
 });
 export type Recap = z.infer<typeof recapSchema>;
 export type RecapItem = z.infer<typeof recapItemSchema>;

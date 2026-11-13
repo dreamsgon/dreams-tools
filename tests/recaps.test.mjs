@@ -236,7 +236,7 @@ test('a players-only connection cannot read transcripts, and Ask me waits for th
 
 test('the recap prompt reads cheaply and saves a draft',()=>{
  assert.ok(listPrompts().some(p=>p.name==='recap_from_source'));
- const c={campaign:{name:'The Salt Road'},level:'assist'};
+ const c={campaign:{name:'The Salt Road'},level:'assist',book:{entries:[]}};
  const own=getPrompt(c,'recap_from_source',{page:'Session 13'}).messages[0].content.text;
  assert.match(own,/read_transcript \(page "Session 13"\)/);assert.match(own,/save_recap with page "Session 13"/);assert.match(own,/never read a part twice/);
  const notion=getPrompt(c,'recap_from_source',{source:'https://www.notion.so/Session-13'}).messages[0].content.text;

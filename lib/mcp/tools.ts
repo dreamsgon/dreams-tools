@@ -17,6 +17,7 @@ import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts"
 import type { MovePreview } from "./activity.ts";
 import { PART_SIZE, compactTranscript, draftRecap, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
 import { recapPageKinds } from "../encyclopedia/recap-schema.ts";
+import { requestNotes } from "../encyclopedia/recap-request.ts";
 
 export type Level = "read" | "assist" | "run";
 export const levels: Level[] = ["read", "assist", "run"];
@@ -286,7 +287,7 @@ const tools: Tool[] = [
       if (!raw?.trim()) return fail(`“${e.title}” has no transcript. ${ask}`);
       const parts = transcriptParts(compactTranscript(raw)), n = (a.part as number | undefined) ?? 1;
       if (n > parts.length) fail(`“${e.title}” has ${parts.length} part${parts.length > 1 ? "s" : ""}.`);
-      return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
+      return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), ...(n === 1 && e.recap?.request ? { gmAsked: requestNotes(e.recap.request) } : {}), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
     },
   },
   {

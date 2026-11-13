@@ -6,6 +6,7 @@
 import { defaultCharacter, newId, playerText, type Campaign, type Entry, type Workspace } from "./world-model.ts";
 import { defaultCategory, newQuest, questCategories, questsIn } from "./quests.ts";
 import { setFound } from "./codex.ts";
+import { honourSkips, keepNotes } from "./recap-request.ts";
 import { emptyRecap, recapPageKinds, type Beat, type Quote, type Recap, type RecapItem } from "./recap-schema.ts";
 
 // ---- Transcripts ------------------------------------------------------------------------------
@@ -100,6 +101,7 @@ export type AiRecap = {
  * every match waits in the review list. `existing` is a draft page to fill (from the New session recap dialog).
  */
 export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, opts: { by: string; now: Date; existing?: Entry; transcript?: string | null; folderId?: string | null }) {
+  input = honourSkips(input, opts.existing?.recap?.request);
   const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
   const review: RecapItem[] = [];
   for (const f of input.found ?? []) {
@@ -128,7 +130,7 @@ export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, op
     ...(input.source ? { source: input.source.slice(0, 200) } : {}), ...(input.playedOn ? { playedOn: input.playedOn } : {}),
   };
   const body = linkNames(input.recap, entries, c), at = opts.now.toISOString();
-  if (opts.existing) return { ...opts.existing, title: input.title, body, recap, overviewVisibility: undefined, updatedAt: at } satisfies Entry;
+  if (opts.existing) return { ...opts.existing, ...keepNotes(opts.existing), title: input.title, body, recap, overviewVisibility: undefined, updatedAt: at } satisfies Entry;
   return { id: newId(), worldId: campaign.worldId, campaignId: campaign.id, parentId: opts.folderId ?? null, title: input.title, kind: "session", body, recap, updatedAt: at } satisfies Entry;
 }
 
