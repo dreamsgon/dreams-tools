@@ -4,6 +4,7 @@ import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
+import {questSchema,playerQuest,newQuest} from './quests.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -52,8 +53,8 @@ export const pictureSchema = z.object({
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
-    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map"]),
-    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), updatedAt: z.string().datetime(),
+    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest"]),
+    order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -71,6 +72,8 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
     for (const e of s.entries) {
         if(e.kind==='map'&&!e.mapData)bad('Map entries need map data');
         if(e.mapData&&e.kind!=='map')bad('Map data requires a map entry');
+        if(e.quest&&e.kind!=='quest')bad('Quest details require a quest entry');
+        for(const ref of [e.quest?.giverId,e.quest?.placeId]){if(!ref)continue;const t=entries.get(ref);if(t&&(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId)))bad('A quest cannot point outside its world or campaign');}
         for(const pin of e.mapData?.pins??[]){if(pin.entryId){const target=entries.get(pin.entryId);if(target&&(target.worldId!==e.worldId||(target.campaignId!==null&&target.campaignId!==e.campaignId)))bad('A map pin cannot link outside its world or campaign');}}
 
         for(const pin of e.mapData?.pins??[])for(const link of pin.weatherLinks??[]){
@@ -142,7 +145,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
         campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; return copy; })],
-        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined }))],
+        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null}:undefined }))],
     });
 }
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
@@ -224,11 +227,11 @@ export function playerCampaign(s:Workspace,campaignId:string){
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"?e.picture:undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"?e.picture:undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
- for(const e of entries){if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
+ for(const e of entries){if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null};if(e.mapData)e.mapData={...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
  const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
  return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};

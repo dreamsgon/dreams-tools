@@ -605,3 +605,126 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 /* Narrower screens: search becomes one button that opens quick search, and New entry shows only its plus. */
 @media(max-width:1300px){.topbar-crumbs .crumbbar-full>li:first-child .crumbbar-name>span{display:none}.topbar .search-box{position:relative;padding-right:6px}.topbar .search-box input{display:none}.topbar .search-box .quick-hint::after{content:"";position:absolute;inset:0}.topbar .top-actions>.button.primary{font-size:0;gap:0;padding:0 9px}}
 @media(max-width:720px){.topbar .topbar-crumbs{padding-left:0;border-left:0}.topbar .search-box kbd{display:none}}
+
+/* Quests: board and journal */
+.quests-page{max-width:none}
+.quests-head{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.quests-head h1{font-variant:small-caps;letter-spacing:.5px}
+.quests-spacer{flex:1}
+.quests-filters{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:14px 0 18px}
+.quests-filters p{flex:1;text-align:right;font-size:13px;min-width:260px}
+.quest-chips{display:flex;gap:6px;flex-wrap:wrap}
+.quest-chips button{border:1px solid var(--line);border-radius:var(--radius-sm);padding:3px 9px;font-size:13px;color:var(--muted);background:var(--panel)}
+.quest-chips button b{font-weight:500;margin-left:3px}
+.quest-chips button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.quest-board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px;align-items:start;overflow-x:auto;padding-bottom:10px}
+.quest-column{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px;min-height:120px;display:flex;flex-direction:column;gap:9px;transition:border-color .15s}
+.quest-column.drop-target{border-color:var(--accent)}
+.quest-column-head{display:flex;align-items:center;gap:8px;padding:2px 2px 4px}
+.quest-column-head span{color:var(--muted);font-size:13px}
+.quest-column-head .icon-button{margin-left:auto;width:28px;height:28px}
+.quest-card-slot{display:flex;flex-direction:column;gap:9px}
+.quest-card{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%;background:var(--raised);border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px;cursor:grab;transition:border-color .15s,transform .15s}
+.quest-card:hover{border-color:var(--line-strong)}
+.quest-card.dragging{opacity:.45}
+.quest-card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.quest-grip{margin-left:auto;color:var(--muted);opacity:.6}
+.quest-type{display:inline-flex;align-items:center;border-radius:4px;padding:2px 7px;font-size:12px;background:var(--hover);color:var(--ink)}
+.quest-type.main{background:var(--accent-soft);color:var(--accent)}
+.quest-type.personal{background:color-mix(in srgb,#a678d8 22%,transparent);color:#c7a6ef}
+.quest-type select{background:transparent;border:0;color:inherit;font-size:12px;padding:0;cursor:pointer}
+.quest-shared,.quest-place{display:inline-flex;align-items:center;gap:3px}
+.quest-shared{color:var(--accent)}
+.quest-title{font-family:var(--font-display);font-size:18px;font-weight:400;line-height:1.25}
+.quest-step{font-size:13px;color:var(--muted);line-height:1.45}
+.quest-step.struck,.quest-card.closed .quest-step{text-decoration:line-through}
+.quest-card.closed .quest-title{opacity:.85}
+.quest-progress{height:3px;border-radius:2px;background:var(--line);overflow:hidden}
+.quest-progress span{display:block;height:100%;background:var(--accent)}
+.quest-card-foot{display:flex;align-items:center;gap:8px;font-size:13px;border-top:1px solid var(--line);padding-top:8px}
+.quest-reward{margin-left:auto;display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-size:12px}
+.quest-face{display:inline-grid;place-items:center;border-radius:50%;background:var(--hover);color:var(--muted);font-weight:600;flex-shrink:0;box-shadow:0 0 0 2px var(--line-strong)}
+.quest-drop-line{height:3px;border-radius:2px;background:var(--accent)}
+.quest-empty{border:1px dashed var(--line-strong);border-radius:var(--radius-sm);padding:22px 10px;text-align:center;color:var(--muted);font-size:13px}
+.quest-journal{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px;align-items:start}
+.quest-list{display:flex;flex-direction:column;gap:4px;position:sticky;top:76px}
+.quest-list .search-box{margin-bottom:8px}
+.quest-group{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.quest-group-head{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);padding:6px 4px}
+.quest-group-head b{margin-left:auto;font-weight:500}
+.quest-list-item{display:flex;align-items:flex-start;gap:9px;text-align:left;padding:8px 10px;border-radius:var(--radius-sm);border-left:2px solid transparent;color:var(--muted)}
+.quest-list-item strong{display:block;color:var(--ink);font-weight:500;font-size:14px}
+.quest-list-item small{display:block}
+.quest-list-item svg{margin-top:3px}
+.quest-list-item:hover{background:var(--hover)}
+.quest-list-item.on{background:var(--accent-soft);border-left-color:var(--accent)}
+.quest-detail{display:flex;flex-direction:column;gap:14px;margin:6px 0 18px}
+.quest-detail-chips{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.quest-state-pick select{background:var(--hover);border:0;border-radius:4px;padding:3px 6px;font-size:12px;color:var(--ink)}
+.quest-share{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:3px 8px;font-size:12px;background:var(--hover);color:var(--muted)}
+.quest-share.on{background:color-mix(in srgb,#5fae7a 18%,transparent);color:#7fc795}
+.quest-share.gm{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.quest-open{margin-left:auto}
+.quest-title-input{font-family:var(--font-display);font-size:40px;font-variant:small-caps;letter-spacing:.3px;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--ink);padding:0;width:100%}
+.quest-title-input:hover{border-bottom-color:var(--line)}
+.quest-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:28px;align-items:start}
+.quest-detail-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.quest-objectives{border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:var(--radius);padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+.quest-objectives-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.quest-objectives-head .eyebrow{color:var(--accent)}
+.quest-objective{display:flex;align-items:center;gap:10px;min-height:32px}
+.quest-objective input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);flex-shrink:0}
+.quest-objective-text{flex:1;background:transparent;border:0;color:var(--ink);font-size:15px;line-height:1.4;padding:3px 0;min-width:0;resize:none;field-sizing:content;font-family:inherit;overflow:hidden}
+.quest-objective.done .quest-objective-text{text-decoration:line-through;color:var(--muted)}
+.quest-hide{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:2px 6px;font-size:12px;color:var(--muted);opacity:0}
+.quest-hide.on{opacity:1;background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.quest-objective:hover .quest-hide,.quest-hide:focus-visible{opacity:1}
+.quest-remove{opacity:0;width:24px;height:24px}
+.quest-objective:hover .quest-remove,.quest-remove:focus-visible{opacity:1}
+.quest-add-step{display:flex;align-items:center;gap:10px;color:var(--muted);min-height:32px}
+.quest-add-step input{flex:1;background:transparent;border:0;color:var(--ink);font-size:14px}
+.quest-log-composer{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.quest-log-composer textarea{border:0;background:transparent;color:var(--ink);resize:vertical;font-size:15px;min-height:26px}
+.quest-log-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.quest-log-tools input{background:var(--hover);border:0;border-radius:4px;padding:4px 8px;font-size:12px;color:var(--ink);width:150px}
+.quest-log-tools .button{margin-left:auto}
+.quest-log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.quest-log li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:22px;padding:16px 0;border-top:1px solid var(--line)}
+.quest-log-when strong{display:block;color:var(--accent);font-weight:500;font-size:14px}
+.quest-log-when small{color:var(--muted)}
+.quest-log-text .prose{font-family:var(--font-reading);font-size:17px;line-height:1.55}
+.quest-log-text .prose p{margin:0}
+.quest-log-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
+.quest-log-actions .icon-button{width:26px;height:26px;opacity:.6}
+.quest-facts{display:flex;flex-direction:column;gap:8px}
+.quest-facts select,.quest-facts input{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--ink);padding:6px 8px;font-size:13px;width:100%}
+.quest-giver{display:flex;align-items:center;gap:10px;text-align:left}
+.quest-giver strong{display:block;font-weight:500}
+.quest-giver small{color:var(--muted)}
+.quest-place-link{display:inline-flex;align-items:center;gap:5px;color:var(--accent);text-align:left}
+.quest-empty-page{padding:40px 0}
+.article .quest-detail-grid{grid-template-columns:minmax(0,1fr) 200px}
+.player-quest{display:flex;flex-direction:column;gap:14px;margin:4px 0 18px}
+.player-quest-chips{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.player-quest-chips .quest-state{color:var(--muted)}
+.player-quest-steps{list-style:none;margin:0;padding:12px 16px;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:var(--radius);display:flex;flex-direction:column;gap:8px}
+.player-quest-steps li{display:flex;align-items:center;gap:10px}
+.player-quest-steps li span{width:16px;height:16px;border:1px solid var(--line-strong);border-radius:3px;display:grid;place-items:center;flex-shrink:0}
+.player-quest-steps li.done{color:var(--muted);text-decoration:line-through}
+.player-quest-steps li.done span{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+@media (max-width:1100px){.quest-board{grid-template-columns:repeat(4,260px)}.quest-detail-grid,.article .quest-detail-grid{grid-template-columns:1fr}}
+@media (max-width:760px){.quest-journal{grid-template-columns:1fr}.quest-list{position:static}.quest-log li{grid-template-columns:1fr;gap:6px}.quests-filters p{text-align:left}}
+.quest-card-foot>span:nth-child(2){flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quest-reward{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%;flex:0 1 auto}
+.quest-reward svg{flex-shrink:0}
+.article .quest-detail-grid{grid-template-columns:1fr;gap:16px}
+.quest-fact{display:flex;flex-direction:column;gap:8px}
+.quest-facts{gap:16px}
+.quest-facts .eyebrow,.quest-facts .eyebrow:first-child{margin-top:0}
+.article .quest-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));order:-1}
+@media (max-width:760px){.article .quest-facts{grid-template-columns:1fr}}
+.player-quest-chips>span{display:inline-flex;align-items:center;gap:4px}
+.player-quest .quest-log-text{white-space:pre-wrap}
+.quest-objective{align-items:flex-start;padding:2px 0}
+.quest-objective input[type=checkbox]{margin-top:5px}
+.quest-objective .quest-hide{margin-top:4px}

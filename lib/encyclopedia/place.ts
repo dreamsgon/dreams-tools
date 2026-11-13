@@ -1,7 +1,7 @@
 import type { Workspace } from "./world-model.ts";
 
 /** Where you are in the Encyclopedia, kept in the address so a refresh or Back returns there. */
-export const placeViews = ["dashboard", "overview", "characters", "maps", "calendar", "tables"] as const;
+export const placeViews = ["dashboard", "overview", "characters", "maps", "calendar", "tables", "quests"] as const;
 export type PlaceView = typeof placeViews[number];
 export type Place = { worldId: string; campaignId: string | null; view: PlaceView; entryId: string | null };
 
@@ -33,7 +33,7 @@ export function placeFromQuery(query: URLSearchParams, data: Workspace): Place |
   if (!world) return null;
   const asked = query.get("view");
   const view: PlaceView = asked === "lore" ? "overview"
-    : asked && (placeViews as readonly string[]).includes(asked) && asked !== "overview" && !(asked === "calendar" && !campaign) ? asked as PlaceView
+    : asked && (placeViews as readonly string[]).includes(asked) && asked !== "overview" && !((asked === "calendar" || asked === "quests") && !campaign) ? asked as PlaceView
     : campaign ? "overview" : "dashboard";
   return { worldId: world.id, campaignId: campaign?.id ?? null, view, entryId: null };
 }
