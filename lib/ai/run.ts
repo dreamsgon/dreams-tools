@@ -9,14 +9,14 @@ import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
 import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
 import { unlock } from "./secret.ts";
-import { saveExchange } from "./chats.ts";
+import { CONTEXT_TURNS, saveExchange } from "./chats.ts";
 
-const MAX_TURNS = 20, MAX_TEXT = 8000;
+const MAX_TEXT = 8000;
 
 /** The conversation from the browser: user and assistant lines only, newest last, kept short. */
 export function cleanHistory(v: unknown): ChatTurn[] {
   if (!Array.isArray(v)) throw Error("Send the conversation.");
-  const turns = v.slice(-MAX_TURNS).map(t => {
+  const turns = v.slice(-CONTEXT_TURNS).map(t => {
     const role = (t as ChatTurn)?.role, text = (t as ChatTurn)?.text;
     if ((role !== "user" && role !== "assistant") || typeof text !== "string" || !text.trim()) throw Error("Each message needs a role and some text.");
     return { role, text: text.slice(0, MAX_TEXT) };

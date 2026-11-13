@@ -6,8 +6,12 @@ import type { Step } from "./chat.ts";
 
 export type SavedTurn = { role: "user" | "assistant"; text: string; at: string; steps?: Step[] };
 export type ChatMeta = { id: string; title: string; connectionId: string; connectionName: string; model?: string; scene?: string; count: number; createdAt: string; updatedAt: string };
-export type SavedChat = ChatMeta & { turns: SavedTurn[] };
+/** `turns` are the latest turns; a long chat keeps `earlier` older turns in `parts` part files on the server. */
+export type SavedChat = ChatMeta & { turns: SavedTurn[]; parts?: number; earlier?: number };
 export type RecapPick = { answers: boolean; questions: boolean; steps: boolean };
+
+/** How many of the latest messages the AI sees each turn. The whole chat is still saved; only these are sent. */
+export const CONTEXT_TURNS = 20;
 
 /** A chat's first question, cut to a short title. */
 export function chatTitle(text: string) {

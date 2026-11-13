@@ -8,7 +8,7 @@ import {campaignFor} from '@/lib/mcp/campaign-for';
 import {chatRecap,chatSessionBody,deleteChat,listChats,readChat,renameChat} from '@/lib/ai/chats';
 export const dynamic='force-dynamic';
 const id=z.string().min(1).max(100);
-// The AI panel's saved chats for one campaign: list them, open one, rename, delete, or export one as a session page or a Discord recap.
+// The AI panel's saved chats for one campaign: list them, open one (full=1 includes a long chat's earlier turns), rename, delete, or export one as a session page or a Discord recap.
 export async function GET(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  const params=new URL(request.url).searchParams;
@@ -17,7 +17,7 @@ export async function GET(request:Request){
   if(!campaign)return json({chats:[]});
   const chatId=params.get('chatId');
   if(chatId){
-   const [chat,{data}]=await Promise.all([readChat(bucket,owner,campaign,chatId),new EncyclopediaStore(bucket).read(owner)]);
+   const [chat,{data}]=await Promise.all([readChat(bucket,owner,campaign,chatId,{full:params.get('full')==='1'}),new EncyclopediaStore(bucket).read(owner)]);
    return json({chat,campaign:data.campaigns.find(c=>c.id===campaign)?.name});
   }
   return json({chats:await listChats(bucket,owner,campaign)});
@@ -40,7 +40,7 @@ export async function POST(request:Request){
   if(!campaign)throw Error('This map has no Encyclopedia campaign paired with it.');
   if(input.action==='rename'){await renameChat(bucket,owner,campaign,where.chatId,input.title);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
   if(input.action==='delete'){await deleteChat(bucket,owner,campaign,where.chatId);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
-  const chat=await readChat(bucket,owner,campaign,where.chatId);
+  const chat=await readChat(bucket,owner,campaign,where.chatId,{full:true});
   if(input.action==='discord'){
    const text=(input.text??chatRecap(chat,input.pick??{answers:true,questions:false,steps:false})).trim();
    if(!text)throw Error('There is nothing to post. Choose what to include.');

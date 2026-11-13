@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Map as MapIcon, Pause, Pencil, Play, Plus, ScrollText, Search, Send, Trash2, Undo2, User, X } from "lucide-react";
-import { chatFileName, chatMarkdown, chatRecap, OPEN_CHAT_EVENT, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
+import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
 import "./ai-connection.css";
 
 type Line = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; undone?: string; canUndo: boolean };
@@ -113,8 +113,8 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       if (res.ok) setHistory({ key: campaignKey, list: body.chats ?? [] });
     } catch { /* The list loads again when the panel opens. */ }
   }
-  async function fetchChat(id: string) {
-    const res = await fetch(chatsUrl({ chatId: id }), { cache: "no-store" }), body = await res.json() as { chat?: SavedChat; campaign?: string; error?: string };
+  async function fetchChat(id: string, full = false) {
+    const res = await fetch(chatsUrl({ chatId: id, ...(full ? { full: "1" } : {}) }), { cache: "no-store" }), body = await res.json() as { chat?: SavedChat; campaign?: string; error?: string };
     if (!res.ok || !body.chat) throw Error(body.error ?? "Could not open that chat.");
     return { chat: body.chat, campaign: body.campaign };
   }
@@ -151,7 +151,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     const next: Said[] = [...said.filter(m => !m.error), { role: "user", text }];
     setChatLog({ ...current, turns: next }); setDraft(""); setThinking(true); setMenu(""); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: chat.id, scene, ...(current.id ? { chatId: current.id } : {}), messages: next.map(m => ({ role: m.role, text: m.text })) }) });
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: chat.id, scene, ...(current.id ? { chatId: current.id } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
       const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string; chat?: ChatMeta };
       if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
       const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");
@@ -181,7 +181,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     if (!current.id) return;
     setMenu(""); setChatNote(null); setBusy(how);
     try {
-      const { chat: full, campaign } = await fetchChat(current.id);
+      const { chat: full, campaign } = await fetchChat(current.id, true);
       if (how === "markdown" || how === "copy") {
         const text = chatMarkdown(full, { campaign });
         if (how === "copy") { await navigator.clipboard.writeText(text); setChatNote({ text: "Copied the whole chat." }); }
