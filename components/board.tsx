@@ -5,13 +5,14 @@ import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, ExternalLink, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, ExternalLink, FlipHorizontal2, FlipVertical2, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, Trash2, Upload, X } from "lucide-react";
 import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { drawRulerCells, drawRulerPath, measureRuler } from "@/lib/drag-ruler-draw";
 import { dragRuler } from "@/lib/drag-ruler";
+import { facingFromPointer, flipToken, footprint, resetTransform, resizeToken, sizeFromHandle, sizeLabel, stepSize, turnToken } from "@/lib/token-transform";
 import { TOKEN_CLIPBOARD_KEY, copyTokens, duplicateTokens, expandGroups, groupMembers, groupTokens, pasteTokens, readClipboard, toggleInSelection, ungroupTokens, type TokenClipboard } from "@/lib/token-clipboard";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
@@ -28,6 +29,7 @@ import {
   type Workspace,
   type Scene,
   type Point,
+  type Token,
   type Tool,
   type FogStroke,
   type Effect,
@@ -195,6 +197,8 @@ export default function Board(p: Props) {
     [measurement, setMeasurement] = useState<Point[]>([]),
     [drag, setDrag] = useState<{ id: string; p: Point; others?: Record<string, Point> } | null>(null);
   const [movePlan, setMovePlan] = useState<TokenMovePlan | null>(null);
+  /** A token being turned or resized with its handles, before the change is saved. */
+  const [tokenDraft, setTokenDraft] = useState<{ id: string; patch: Partial<Token> } | null>(null);
   const [marquee, setMarquee] = useState<Point[] | null>(null);
   const [polygon, setPolygon] = useState<Point[]>([]);
   const [fogIndex, setFogIndex] = useState<number | null>(null);
@@ -340,6 +344,13 @@ export default function Board(p: Props) {
   const selectedMoveToken = !p.player && !p.gridAdjust && !cropEditing && p.tool === "select" && allowTokens
     ? p.scene.tokens.find(token => token.id === p.selected) : undefined;
   const validMovePlan = movePlan && !p.player && !p.gridAdjust && !cropEditing && p.tool === "select" && allowTokens && tokenMovePlanValid(movePlan, p.scene) ? movePlan : null;
+  /** The one token that shows turn and resize handles: a single selected token, with Select, in the GM view. */
+  const handleToken = (scene: Scene = p.scene) => {
+    if (p.player || p.gridAdjust || p.tool !== "select" || !allowTokens || drag || validMovePlan) return undefined;
+    const ids = currentSelection();
+    return ids.length === 1 ? scene.tokens.find(token => token.id === ids[0]) : undefined;
+  };
+  const turnKnob = (token: Pick<Token, "x" | "y" | "size">) => ({ x: token.x, y: footprint(token, p.scene.grid).top - 28 / view.scale });
   const commitMovePlan = () => {
     if (!validMovePlan) return;
     // Recheck against the scene supplied by update, not only the rendered snapshot.
@@ -444,7 +455,7 @@ export default function Board(p: Props) {
     ctx.shadowColor = "transparent";
     const previewDrag = validMovePlan
       ? { id: validMovePlan.tokenId, p: validMovePlan.points.at(-1)! } : drag;
-    const scene = previewDrag
+    const moved = previewDrag
       ? syncTokenAttachments(p.scene, {
           ...p.scene,
           tokens: p.scene.tokens.map((t) =>
@@ -456,6 +467,7 @@ export default function Board(p: Props) {
           ),
         })
       : p.scene;
+    const scene = tokenDraft ? { ...moved, tokens: moved.tokens.map(t => t.id === tokenDraft.id ? { ...t, ...tokenDraft.patch } : t) } : moved;
     const effectScene = effectDraft ? {
       ...scene,
       effects: [...scene.effects.filter((effect) => effect.id !== effectDraft.id), effectDraft],
@@ -494,6 +506,29 @@ export default function Board(p: Props) {
       ctx.save(); ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 3 / view.scale;
       for (const token of scene.tokens.filter(item => selectedIds.includes(item.id))) {
         ctx.beginPath(); ctx.arc(token.x, token.y, tokenRadius(token, p.scene.grid) + 4 / view.scale, 0, Math.PI * 2); ctx.stroke();
+      }
+      // Turn and resize handles on a single selected token.
+      const handled = handleToken(scene);
+      if (handled) {
+        const box = footprint(handled, p.scene.grid), knob = turnKnob(handled);
+        ctx.save(); ctx.strokeStyle = "#1f6f68"; ctx.lineWidth = 1.5 / view.scale; ctx.setLineDash([5 / view.scale, 4 / view.scale]);
+        ctx.strokeRect(box.left, box.top, box.side, box.side); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(handled.x, box.top); ctx.lineTo(knob.x, knob.y); ctx.stroke();
+        const square = 12 / view.scale;
+        ctx.fillStyle = "#fff"; ctx.lineWidth = 2 / view.scale;
+        ctx.fillRect(box.left + box.side - square / 2, box.top + box.side - square / 2, square, square);
+        ctx.strokeRect(box.left + box.side - square / 2, box.top + box.side - square / 2, square, square);
+        ctx.beginPath(); ctx.arc(knob.x, knob.y, 8 / view.scale, 0, Math.PI * 2);
+        ctx.fillStyle = "#f6bb4b"; ctx.fill(); ctx.strokeStyle = "#1d2622"; ctx.stroke();
+        if (tokenDraft) {
+          const label = tokenDraft.patch.size !== undefined ? sizeLabel(tokenDraft.patch.size) : `${Math.round(tokenDraft.patch.facing ?? handled.facing ?? 0)}°`;
+          const at = tokenDraft.patch.size !== undefined ? { x: box.left + box.side + 14 / view.scale, y: box.top + box.side + 14 / view.scale } : { x: knob.x + 16 / view.scale, y: knob.y };
+          ctx.font = `600 ${12 / view.scale}px Inter, system-ui, sans-serif`;
+          const width = ctx.measureText(label).width + 16 / view.scale, height = 22 / view.scale;
+          ctx.fillStyle = "#1d2622"; ctx.beginPath(); ctx.roundRect(at.x, at.y - height / 2, width, height, height / 2); ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(label, at.x + 8 / view.scale, at.y);
+        }
+        ctx.restore();
       }
       // A dashed box around each selected group shows what moves together.
       const groups = new Set(scene.tokens.filter(item => item.groupId && selectedIds.includes(item.id)).map(item => item.groupId));
@@ -620,6 +655,7 @@ export default function Board(p: Props) {
     movePlan,
     validMovePlan,
     drag,
+    tokenDraft,
     gridDrag,
     effectDraft,
     p.images,
@@ -759,12 +795,32 @@ export default function Board(p: Props) {
     setNotice("Ungrouped");
     return true;
   };
+  /** Turn, flip or resize the selected tokens (the keys, the small bar and the right-click menu). */
+  const transformSelection = (change: (token: Token, grid: Scene["grid"]) => void, ids = selectedTokenIds()) => {
+    if (!ids.length) return false;
+    p.update(scene => { for (const token of scene.tokens) if (ids.includes(token.id)) change(token, scene.grid); });
+    return true;
+  };
   const clipboardKeys = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
     clipboardKeys.current = (e: KeyboardEvent) => {
-      if (p.player || p.gridAdjust || !allowTokens || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (p.player || p.gridAdjust || !allowTokens || e.altKey) return;
       if (document.querySelector("[role=dialog], [aria-modal=true], [role=menu]")) return;
       if (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!(e.ctrlKey || e.metaKey)) {
+        // [ ] turn 90° ({ } with Shift: 15°), H and V flip, - and = change the size.
+        if (gesture.current || !["select", "marquee"].includes(p.tool)) return;
+        const turns: Record<string, number> = { "[": -90, "]": 90, "{": -15, "}": 15 };
+        const sizes: Record<string, 1 | -1> = { "=": 1, "+": 1, "-": -1, "_": -1 };
+        const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        const done = key in turns ? transformSelection(token => turnToken(token, turns[key]))
+          : key === "h" ? transformSelection(token => flipToken(token, "x"))
+          : key === "v" ? transformSelection(token => flipToken(token, "y"))
+          : key in sizes ? transformSelection((token, grid) => resizeToken(token, grid, stepSize(token.size, sizes[key])))
+          : false;
+        if (done) { e.preventDefault(); e.stopPropagation(); }
+        return;
+      }
       const key = e.key.toLowerCase();
       let done = false;
       if (key === "c" && !e.shiftKey && !window.getSelection()?.toString()) done = copySelection();
@@ -882,6 +938,13 @@ export default function Board(p: Props) {
         return;
       }
       if (allowPois) p.selectPoi?.(null);
+      const handled = handleToken();
+      if (handled) {
+        const box = footprint(handled, p.scene.grid), knob = turnKnob(handled), reach = 12 / view.scale;
+        const corner = { x: box.left + box.side, y: box.top + box.side };
+        const kind = Math.hypot(pos.x - knob.x, pos.y - knob.y) <= reach ? "token-turn" : Math.hypot(pos.x - corner.x, pos.y - corner.y) <= reach ? "token-resize" : null;
+        if (kind) { gesture.current = { ...g, kind, id: handled.id }; return; }
+      }
       const t = [...(allowTokens ? p.scene.tokens : [])]
         .reverse()
         .find(
@@ -1027,6 +1090,18 @@ export default function Board(p: Props) {
       setDrag({ id: g.id!, p: clamp({ x: g.original!.x + pos.x - g.start.x, y: g.original!.y + pos.y - g.start.y }) });
       return;
     }
+    if (g.kind === "token-turn" || g.kind === "token-resize") {
+      const token = p.scene.tokens.find(item => item.id === g.id);
+      if (!token) return;
+      const pos = world(sp);
+      if (g.kind === "token-turn") setTokenDraft({ id: token.id, patch: { facing: facingFromPointer(token, pos, e.altKey) } });
+      else {
+        const size = sizeFromHandle(token, p.scene.grid, pos, e.altKey), preview = structuredClone(token);
+        resizeToken(preview, p.scene.grid, size, e.altKey);
+        setTokenDraft({ id: token.id, patch: { size, x: preview.x, y: preview.y } });
+      }
+      return;
+    }
     if (g.kind === "marquee") { setMarquee([g.start, clamp(world(sp))]); return; }
     if (g.kind === "fog-resize" && g.stroke) {
       const bounds = regionBounds(g.stroke.points), next = { ...bounds }, point = clamp(world(sp));
@@ -1163,6 +1238,12 @@ export default function Board(p: Props) {
         p.update(scene => { const item = scene.pointsOfInterest.find(item => item.id === g.id); if (item) Object.assign(item, point); });
       } else if (poi?.activation === "single" && poi.targetSceneId) p.openLinkedScene?.(poi.targetSceneId);
       setDrag(null);
+      return;
+    }
+    if (g.kind === "token-turn" || g.kind === "token-resize") {
+      const patch = tokenDraft && tokenDraft.id === g.id ? tokenDraft.patch : null;
+      if (patch) p.update(scene => { const token = scene.tokens.find(item => item.id === g.id); if (token) Object.assign(token, patch); });
+      setTokenDraft(null);
       return;
     }
     if (g.kind === "marquee") {
@@ -1347,7 +1428,7 @@ export default function Board(p: Props) {
       else p.select(null);
     }
   };
-  const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean; shortcut?: string } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span><span>{label}</span>{options.shortcut && <kbd className="context-menu-shortcut">{options.shortcut}</kbd>}</button>;
+  const menuAction = (label: string, action: () => void, options: { disabled?: boolean; icon?: ReactNode; checked?: boolean; danger?: boolean; shortcut?: string; swatch?: string } = {}) => <button type="button" role={options.checked === undefined ? "menuitem" : options.swatch ? "menuitemcheckbox" : "menuitemradio"} aria-checked={options.checked} disabled={options.disabled} className={options.danger ? "danger" : undefined} onClick={() => { setContextMenu(null); action(); }}><span className="context-menu-icon" aria-hidden="true">{options.checked === undefined ? options.icon : options.checked ? <Check size={15} /> : null}</span>{options.swatch && <span className="context-menu-swatch" style={{ background: options.swatch }} aria-hidden="true" />}<span>{label}</span>{options.shortcut && <kbd className="context-menu-shortcut">{options.shortcut}</kbd>}</button>;
   return (
     <div className={"board tool-" + p.tool + (pageDrop ? " page-drop-target" : "")} ref={host} onPointerDownCapture={e => { if (hintGone !== p.scene.id && !(e.target as HTMLElement).closest?.(".board-hint")) setHintGone(p.scene.id); }}>
       <canvas
@@ -1436,6 +1517,21 @@ export default function Board(p: Props) {
             {ids.length > 1 && menuAction(`Duplicate ${plural(ids.length)}`, () => duplicateSelection(ids), { icon: <CopyPlus size={15} />, shortcut: "Ctrl D" })}
             {grouped ? menuAction("Ungroup", () => ungroupSelection([id]), { icon: <Ungroup size={15} />, shortcut: "Ctrl Shift G" })
               : inSelection && menuAction(`Group ${plural(ids.length)}`, () => groupSelection(ids), { icon: <Group size={15} />, shortcut: "Ctrl G" })}
+            <hr /><div className="context-menu-label">Turn and flip</div>
+            {menuAction("Turn right 90°", () => transformSelection(t => turnToken(t, 90), ids), { icon: <RotateCw size={15} />, shortcut: "]" })}
+            {menuAction("Turn left 90°", () => transformSelection(t => turnToken(t, -90), ids), { icon: <RotateCcw size={15} />, shortcut: "[" })}
+            {menuAction("Flip horizontally", () => transformSelection(t => flipToken(t, "x"), ids), { icon: <FlipHorizontal2 size={15} />, shortcut: "H" })}
+            {menuAction("Flip vertically", () => transformSelection(t => flipToken(t, "y"), ids), { icon: <FlipVertical2 size={15} />, shortcut: "V" })}
+            {p.workspace.conditions.length > 0 && <><hr /><div className="context-menu-label" id="context-menu-conditions">Conditions</div><div role="group" aria-labelledby="context-menu-conditions">
+              {p.workspace.conditions.map(condition => {
+                const on = p.scene.tokens.find(token => token.id === id)?.conditions.includes(condition.id) ?? false;
+                return <span key={condition.id}>{menuAction(condition.name, () => p.update(scene => {
+                  const target = scene.tokens.find(token => token.id === id);
+                  if (!target) return;
+                  target.conditions = on ? target.conditions.filter(item => item !== condition.id) : [...target.conditions, condition.id].slice(0, 30);
+                }), { checked: on, swatch: condition.color })}</span>;
+              })}
+            </div></>}
           </>;
         })()}
         {contextMenu.kind === "poi" && "targetSceneId" in (menuItem ?? {}) && menuAction("Open linked map", () => { const poi = p.scene.pointsOfInterest.find(item => item.id === contextMenu.id); if (poi?.targetSceneId) p.openLinkedScene?.(poi.targetSceneId); }, { icon: <ExternalLink size={15} />, disabled: !p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)?.targetSceneId })}
@@ -1446,6 +1542,25 @@ export default function Board(p: Props) {
         </>}
       </div>, document.body)}
       {notice && <div className="board-notice" role="status">{notice}</div>}
+      {(() => {
+        const token = !tokenDraft && !contextMenu ? handleToken() : undefined;
+        if (!token) return null;
+        const box = footprint(token, p.scene.grid);
+        const left = Math.max(8, Math.min(view.width - 8, token.x * view.scale + view.x)), top = Math.max(8, box.top * view.scale + view.y - 40 - 52);
+        const act = (change: (token: Token, grid: Scene["grid"]) => void) => () => transformSelection(change, [token.id]);
+        return <div className="token-bar" role="toolbar" aria-label={`${token.name || "Token"}: turn, flip and size`} style={{ left, top }} onPointerDown={event => event.stopPropagation()}>
+          <button type="button" title="Turn left 90° ( [ )" aria-label="Turn left 90°" onClick={act(t => turnToken(t, -90))}><RotateCcw size={15} aria-hidden="true" /></button>
+          <button type="button" title="Turn right 90° ( ] )" aria-label="Turn right 90°" onClick={act(t => turnToken(t, 90))}><RotateCw size={15} aria-hidden="true" /></button>
+          <span className="token-bar-sep" />
+          <button type="button" title="Flip horizontally (H)" aria-pressed={!!token.flipX} onClick={act(t => flipToken(t, "x"))}><FlipHorizontal2 size={15} aria-hidden="true" />Flip</button>
+          <button type="button" title="Flip vertically (V)" aria-pressed={!!token.flipY} onClick={act(t => flipToken(t, "y"))}><FlipVertical2 size={15} aria-hidden="true" />Flip</button>
+          <span className="token-bar-sep" />
+          <button type="button" title="Smaller ( - )" aria-label="Smaller" disabled={token.size <= 0.25} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, -1)))}><Minus size={15} aria-hidden="true" /></button>
+          <span className="token-bar-value" aria-live="polite">{sizeLabel(token.size)}</span>
+          <button type="button" title="Bigger ( = )" aria-label="Bigger" disabled={token.size >= 20} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, 1)))}><Plus size={15} aria-hidden="true" /></button>
+          {(token.facing !== undefined || token.flipX || token.flipY) && <><span className="token-bar-sep" /><button type="button" className="token-bar-reset" title="Face up again, unflipped" onClick={act(t => resetTransform(t))}>Reset</button></>}
+        </div>;
+      })()}
       {!p.scene.mapId && !p.scene.drawing && !p.scene.pointsOfInterest.length && p.scene.tokens.length === 0 && !p.scene.effects.length && !p.scene.measurements.length && !p.scene.fog.strokes.length && ["select","pan"].includes(p.tool) && hintGone !== p.scene.id && (
         <div className="board-hint" role="note">
           <button type="button" className="board-hint-close" aria-label="Dismiss" title="Dismiss" onClick={() => setHintGone(p.scene.id)}><X size={16} /></button>

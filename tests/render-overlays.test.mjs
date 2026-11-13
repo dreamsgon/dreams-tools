@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-import {newScene, newToken, initialWorkspace, workspaceSchema, tokenSchema} from '../lib/model.ts';
+import {newScene, newToken, initialWorkspace, workspaceSchema, tokenSchema, tokenRadius} from '../lib/model.ts';
 const source=fs.readFileSync(new URL('../lib/render.ts',import.meta.url),'utf8');
 const javascript=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from "\.\/(model|effects|map-drawing|map-style|token-defaults|token-name|token-display-layout)"/g,(_,name)=>`from "${new URL('../lib/'+name+'.ts',import.meta.url).href}"`);
-const {drawSceneBackdrop,renderScene,strokeFog,drawGrid,drawPerimeterLabels}=await import('data:text/javascript;base64,'+Buffer.from(javascript).toString('base64'));
+const {drawSceneBackdrop,renderScene,strokeFog,drawGrid,drawPerimeterLabels,conditionBadgeRadius}=await import('data:text/javascript;base64,'+Buffer.from(javascript).toString('base64'));
 function context(){const calls=[];return new Proxy({calls,measureText:()=>({width:20})},{get:(o,k)=>k in o?o[k]:(...args)=>calls.push([k,...args]),set:(o,k,v)=>{o[k]=v;calls.push(['set',k,v]);return true;}});}
 
 test('campaign sizes and individual overrides reach GM and player screenshot rendering',()=>{
@@ -136,9 +136,9 @@ test('elevation is centered above the condition markers',()=>{
  const w=initialWorkspace();const t={...newToken('Rider'),x:100,y:100,elevation:10,conditions:[w.conditions[0].id]};scene.tokens=[t];
  const ctx=context();renderScene(ctx,scene,w,new Map());
  const label=ctx.calls.find(c=>c[0]==='fillText'&&c[1]==='+10 ft');
- const condition=ctx.calls.find(c=>c[0]==='arc'&&c[3]===10);
+ const badge=conditionBadgeRadius(tokenRadius(t,scene.grid)),condition=ctx.calls.find(c=>c[0]==='arc'&&c[3]===badge);
  assert.equal(label[2],t.x);
- assert.ok(label[3]+9<condition[2]-10,'badge bottom stays above condition top');
+ assert.ok(label[3]+9<condition[2]-badge,'badge bottom stays above condition top');
 });
 
 test('token status overlays follow portraits and borders, precede selection and HP, and respect visibility',()=>{

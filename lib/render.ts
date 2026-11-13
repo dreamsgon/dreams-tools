@@ -41,7 +41,8 @@ function drawPiece(ctx: CanvasRenderingContext2D, t: Token, side: number, img: C
   ctx.save();
   if (t.hidden) ctx.globalAlpha = 0.4;
   ctx.translate(t.x, t.y);
-  ctx.rotate((t.imageRotation ?? 0) * Math.PI / 180);
+  ctx.rotate(((t.imageRotation ?? 0) + (t.facing ?? 0)) * Math.PI / 180);
+  ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
   if (img) {
     ctx.shadowColor = "#00000040"; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
     ctx.drawImage(img, -side / 2, -side / 2, side, side);
@@ -51,6 +52,52 @@ function drawPiece(ctx: CanvasRenderingContext2D, t: Token, side: number, img: C
   if (selected) {
     ctx.shadowColor = "transparent"; ctx.setLineDash([6, 4]); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
     ctx.strokeRect(-side / 2 - 3, -side / 2 - 3, side + 6, side + 6);
+  }
+  ctx.restore();
+}
+/** A small arrow on the ring showing which way a turned token faces. */
+export function drawFacingNotch(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, facing: number, color: string) {
+  const size = Math.max(6, Math.min(14, radius * 0.28));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(facing * Math.PI / 180);
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.8, -radius - 1); ctx.lineTo(0, -radius - size * 1.2); ctx.lineTo(size * 0.8, -radius - 1); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+}
+/** Condition badges grow with the token so they read at any zoom. */
+export const conditionBadgeRadius = (tokenRadius: number) => Math.max(11, Math.min(22, tokenRadius * 0.38));
+/**
+ * Condition badges along the top of the ring, sized to the token so they read at any zoom.
+ * When they don't all fit over the top half, the last badge counts the rest (+3).
+ */
+export function drawTokenConditions(ctx: CanvasRenderingContext2D, t: Token, r: number, conditions: Workspace["conditions"], images: Images) {
+  const shown = t.conditions.map(id => conditions.find(c => c.id === id)).filter(c => !!c);
+  if (!shown.length) return;
+  const badge = conditionBadgeRadius(r), orbit = r + 2;
+  const step = 2 * Math.asin(Math.min(1, badge * 1.08 / orbit));
+  const fit = Math.max(1, Math.floor(Math.PI * 1.15 / step) + 1);
+  const count = Math.min(shown.length, fit), extra = shown.length - count + (shown.length > fit ? 1 : 0);
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + (i - (count - 1) / 2) * step, x = t.x + Math.cos(a) * orbit, y = t.y + Math.sin(a) * orbit;
+    const more = extra > 0 && i === count - 1, c = shown[i];
+    ctx.beginPath(); ctx.arc(x, y, badge, 0, Math.PI * 2);
+    ctx.fillStyle = more ? "#1d2622" : c.color; ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.max(1.5, badge * 0.14); ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff";
+    if (more) { ctx.font = `700 ${Math.round(badge * 0.95)}px system-ui`; ctx.fillText(`+${extra}`, x, y + 0.5, badge * 1.7); continue; }
+    const symbol = c.assetId ? images.get(c.assetId) : null;
+    if (symbol) {
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y, badge * 0.82, 0, Math.PI * 2); ctx.clip();
+      const scale = badge * 1.64 / Math.max(symbol.width, symbol.height);
+      ctx.drawImage(symbol, x - symbol.width * scale / 2, y - symbol.height * scale / 2, symbol.width * scale, symbol.height * scale); ctx.restore();
+    } else {
+      ctx.font = `700 ${Math.round(badge * 1.15)}px system-ui`;
+      ctx.fillText(c.icon || c.name[0], x, y + 0.5, badge * 1.6);
+    }
   }
   ctx.restore();
 }
@@ -336,7 +383,11 @@ export function renderScene(
       ctx.save();
       ctx.clip();
       const scale = Math.max(r*2/img.width, r*2/img.height) * (t.imageZoom ?? 1);
-      ctx.translate(t.x + (t.imageOffsetX ?? 0)*r*2, t.y + (t.imageOffsetY ?? 0)*r*2);
+      // Facing and flips turn the framed picture as a whole; the frame (offset, zoom, image rotation) goes with it.
+      ctx.translate(t.x, t.y);
+      ctx.rotate((t.facing ?? 0)*Math.PI/180);
+      ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
+      ctx.translate((t.imageOffsetX ?? 0)*r*2, (t.imageOffsetY ?? 0)*r*2);
       ctx.rotate((t.imageRotation ?? 0)*Math.PI/180);
       ctx.drawImage(img, -img.width*scale/2, -img.height*scale/2, img.width*scale, img.height*scale);
       ctx.restore();
@@ -348,6 +399,7 @@ export function renderScene(
       ctx.lineWidth = t.borderWidth ?? 4;
       ctx.stroke();
     }
+    if (t.facing !== undefined) drawFacingNotch(ctx, t.x, t.y, r, t.facing, t.borderColor ?? t.color);
     drawTokenStatus(ctx, t.x, t.y, r, t.status);
     if (t.id === options.selected && !options.player) {
       ctx.beginPath();
@@ -366,37 +418,13 @@ export function renderScene(
       const width = ctx.measureText(text).width + 10;
       const nameAbove = t.showName && (t.namePosition === "top" || t.namePosition === "wrap");
       const hpLayout = tokenHpLayout(t, r);
-      const x = t.x, y = t.y - r - (t.conditions.length ? 28 : 15) - hpLayout.top - (nameAbove ? tokenNameFontSize(t, r) + 20 : 0);
+      const x = t.x, y = t.y - r - (t.conditions.length ? 8 + conditionBadgeRadius(r) * 2 : 15) - hpLayout.top - (nameAbove ? tokenNameFontSize(t, r) + 20 : 0);
       ctx.fillStyle = "#15241ee8";
       ctx.fillRect(x - width / 2, y - 9, width, 18);
       ctx.fillStyle = "#fff";
       ctx.fillText(text, x, y);
     }
-    t.conditions.forEach((id, i) => {
-      const c = w.conditions.find((c) => c.id === id);
-      if (!c) return;
-      const a = -Math.PI / 2 + i * 0.6,
-        x = t.x + Math.cos(a) * (r + 3),
-        y = t.y + Math.sin(a) * (r + 3);
-      ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = c.color;
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.font = "bold 12px system-ui";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#fff";
-      const symbolImage=c.assetId?images.get(c.assetId):null;
-      if(symbolImage){
-        ctx.save();ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.clip();
-        const scale=16/Math.max(symbolImage.width,symbolImage.height);
-        const width=symbolImage.width*scale,height=symbolImage.height*scale;
-        ctx.drawImage(symbolImage,x-width/2,y-height/2,width,height);ctx.restore();
-      }else ctx.fillText(c.icon || c.name[0], x, y, 16);
-    });
+    drawTokenConditions(ctx, t, r, w.conditions, images);
     ctx.restore();
   }
   for (const point of s.pointsOfInterest ?? []) {

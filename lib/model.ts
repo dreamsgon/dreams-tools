@@ -70,6 +70,11 @@ export const tokenSchema = z.object({
   imageOffsetX: finite.min(-1).max(1).optional(),
   imageOffsetY: finite.min(-1).max(1).optional(),
   imageRotation: finite.min(-180).max(180).optional(),
+  /** Which way the token faces, in degrees clockwise from up. Turns the art and shows a notch on the ring. */
+  facing: finite.min(-360).max(360).optional(),
+  /** Mirrored left to right, or top to bottom. */
+  flipX: z.boolean().optional(),
+  flipY: z.boolean().optional(),
   assetId: short.nullable(),
   hp: finite.min(0).max(1000000),
   maxHp: finite.min(1).max(1000000),
