@@ -1,7 +1,7 @@
 "use client";
 /*
  * New session recap: pick where the session is (pasted text, a file, an RP thread, or a Notion, Google Drive or
- * GitHub link), say what to make, and hand it to the GM's AI app, or have RPG Tools write it with the GM's own API
+ * GitHub link, which RPG Tools reads when it's public), say what to make, and hand it to the GM's AI app, or have RPG Tools write it with the GM's own API
  * key. The page and its transcript are saved here; the AI fills the page with save_recap, and the draft shows up
  * through the usual live sync.
  */
@@ -21,9 +21,9 @@ const sources:{kind:Kind|'forum';title:string;hint:string;icon:typeof Upload}[]=
  {kind:'paste',title:'Paste a transcript',hint:'Text with a speaker name at the start of each line, such as “Mara: I open the door.”',icon:ClipboardList},
  {kind:'file',title:'Upload a file',hint:'.txt or .md, or a Discord chat export (.json or .html). For .docx or .pdf, copy the text and paste it.',icon:Upload},
  {kind:'thread',title:'An RP thread',hint:'A play-by-post thread you exported or copied, from Discord or another forum.',icon:MessagesSquare},
- {kind:'notion',title:'A Notion page',hint:'Paste its link. Your AI app reads it with its own Notion access.',icon:BookText},
- {kind:'drive',title:'A Google Drive file',hint:'A Google Doc or text file. Your AI app reads it with its own Drive access.',icon:HardDrive},
- {kind:'github',title:'A GitHub repository',hint:'A file or folder, such as sessions/session-13.md. Your AI app reads it with its own GitHub access.',icon:GitBranch},
+ {kind:'notion',title:'A Notion page',hint:'Paste its link. RPG Tools reads it when it’s published to the web; otherwise your AI app reads it.',icon:BookText},
+ {kind:'drive',title:'A Google Drive file',hint:'A Google Doc or text file. RPG Tools reads it when it’s shared with anyone with the link.',icon:HardDrive},
+ {kind:'github',title:'A GitHub repository',hint:'A file, such as sessions/session-13.md, or a gist. RPG Tools reads public ones; your AI app reads private ones.',icon:GitBranch},
  {kind:'forum',title:'A forum topic',hint:'A topic from this campaign’s forum.',icon:MessageCircle},
 ];
 const hosts:Record<'notion'|'drive'|'github',RegExp>={notion:/(^|\.)notion\.(so|site)$/,drive:/^(docs|drive)\.google\.com$/,github:/^(github\.com|gist\.github\.com|raw\.githubusercontent\.com)$/};
@@ -59,17 +59,29 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
  const fileInput=useRef<HTMLInputElement>(null);
  const characters=useMemo(()=>data.entries.filter(e=>e.kind==='character'&&e.worldId===campaign.worldId&&(e.campaignId===campaign.id||e.campaignId===null)).sort((a,b)=>(a.character?.role==='pc'?0:1)-(b.character?.role==='pc'?0:1)||a.title.localeCompare(b.title)),[data.entries,campaign]);
+ const [fetched,setFetched]=useState(''),[unread,setUnread]=useState(false);
  const isLink=kind==='notion'||kind==='drive'||kind==='github',words=wordCount(text);
- const compacted=useMemo(()=>step==='options'&&!isLink?compactTranscript(text).length:0,[step,isLink,text]);
- const keyBlock=isLink?'Reads pasted text and files. Links need your AI app for now.':compacted>IN_APP_LIMIT?'This transcript is too long to write here in one go. Your AI app reads it in parts.':'';
+ // A link RPG Tools couldn't read (or the GM chose not to): the AI app reads it with its own access.
+ const appReads=isLink&&fetched!==link.trim();
+ const compacted=useMemo(()=>step==='options'&&!appReads?compactTranscript(text).length:0,[step,appReads,text]);
+ const keyBlock=appReads?'RPG Tools couldn’t read this link, so your AI app reads it with its own access.':compacted>IN_APP_LIMIT?'This transcript is too long to write here in one go. Your AI app reads it in parts.':'';
  const key=keyBlock?undefined:keys.find(k=>k.id===writer&&k.transcripts);
  const current=made?data.entries.find(e=>e.id===made.id):undefined,arrived=!!current?.recap&&!waitingForAi(current.recap);
 
- const toOptions=()=>{
-  setError('');
+ const toOptions=async()=>{
+  setError('');setUnread(false);
   if(isLink){
    let host='';try{host=new URL(link.trim()).hostname;}catch{setError('Paste the whole link, starting with https://.');return;}
    if(!hosts[kind].test(host)){setError(`That doesn’t look like a ${linkName[kind]} link.`);return;}
+   if(fetched!==link.trim()){
+    setBusy(true);
+    const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'link',link:link.trim()})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+    setBusy(false);
+    if(!r.ok){setError(r.b.error??'Couldn’t read that link.');setUnread(true);return;}
+    setText(r.b.text);setFetched(link.trim());
+    setCast(guessCast(speakersIn(r.b.text),characters));
+    if(r.b.title&&!page)setTitle(t=>/^Session \d+$/.test(t)?r.b.title.slice(0,160):t);
+   }
   }else{
    if(!text.trim()){setError(kind==='file'?'Choose a file first.':'Paste the transcript first.');return;}
    if(text.length>TRANSCRIPT_LIMIT){setError('That’s over 2,000,000 characters. Split the session into two recaps.');return;}
@@ -82,17 +94,17 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const handOver=async()=>{
   if(!title.trim()){setError('Give the session a title.');return;}
   setError('');setBusy(true);
-  const request:RecapRequest={length,depth,...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(isLink?{link:link.trim()}:{}),at:new Date().toISOString()};
+  const request:RecapRequest={length,depth,...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
   const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':'A pasted transcript';
   let id='';
-  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:isLink?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
+  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
   if(ok===false||!id){setBusy(false);return;}
   let saved=true;
-  if(!isLink){
+  if(!appReads){
    const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transcript',entryId:id,text})}).then(r=>r.ok).catch(()=>false);
    saved=r;
   }
-  setBusy(false);setMade({id,title:title.trim(),saved,...(isLink?{link:link.trim()}:{})});setStep('handoff');
+  setBusy(false);setMade({id,title:title.trim(),saved,...(appReads?{link:link.trim()}:{})});setStep('handoff');
   if(key&&saved)void write(id);
   else if(key){setWriting('failed');setError('The transcript didn’t save, so it can’t be written here. Paste it on the page’s Transcript tab, then try again.');}
  };
@@ -129,17 +141,17 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  }
 
  return <ToolDialog title="New session recap" onClose={onClose} wide><div className="recap-dialog">
-  <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':isLink?`${linkName[kind as 'notion']} · ${link.trim()}`:`${kind==='file'?file:kind==='thread'?'RP thread':'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
+  <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
   <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key?'Write it':'Hand it over'}</span></div>
   {step==='source'?<>
    <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon,off=s.kind==='forum';return <button key={s.kind} role="radio" aria-checked={kind===s.kind} disabled={off} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(off)return;setKind(s.kind as Kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}{off&&<small className="soon">After the forum</small>}</strong><small>{s.hint}</small></span></button>;})}</div>
    <input ref={fileInput} type="file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.html,.htm,text/plain,text/markdown,application/json,text/html" onChange={e=>{void pick(e.target.files?.[0]);e.target.value='';}}/>
-   {isLink?<label className="field-title">Link to the {linkName[kind as 'notion']}<input className="recap-input" type="url" autoFocus value={link} placeholder={kind==='notion'?'https://www.notion.so/…/Session-13-notes':kind==='drive'?'https://docs.google.com/document/d/…':'https://github.com/you/campaign/blob/main/sessions/session-13.md'} onChange={e=>setLink(e.target.value)}/></label>
+   {isLink?<label className="field-title">Link to the {linkName[kind as 'notion']}<input className="recap-input" type="url" autoFocus value={link} placeholder={kind==='notion'?'https://www.notion.so/…/Session-13-notes':kind==='drive'?'https://docs.google.com/document/d/…':'https://github.com/you/campaign/blob/main/sessions/session-13.md'} onChange={e=>{setLink(e.target.value);setUnread(false);}}/>{fetched&&fetched===link.trim()&&<small className="link-read"><Check size={12}/> Read: {words.toLocaleString('en')} words · {playTime(words)}</small>}</label>
    :<label className="field-title"><span className="field-row"><span>{kind==='file'?(file?`From ${file}`:'The file’s text shows here'):kind==='thread'?'The thread':'Transcript'}</span>{words>0&&<small>{words.toLocaleString('en')} words · {playTime(words)}</small>}</span>
     {kind==='file'&&!text?<button className="drop-zone" onClick={()=>fileInput.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();void pick(e.dataTransfer.files[0]);}}>{busy?'Reading…':<><Upload size={16}/> Choose a file, or drop it here</>}</button>
     :<textarea className="recap-input transcript-paste" value={text} maxLength={TRANSCRIPT_LIMIT} placeholder={kind==='thread'?'Paste the thread. Each post’s author at the start of a line works best, such as “Mara: …”.':'GM: The ferry bumps against the Greyfen landing.\nMara (Bram): I keep my hand on my sword.'} onChange={e=>setText(e.target.value)}/>}</label>}
    {error&&<p className="form-error">{error}</p>}
-   <div className="dialog-footer"><span className="aside-hint">You provide the transcript. Audio isn’t transcribed here.</span><div className="button-row"><button className="button" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy} onClick={toOptions}>Next <ArrowRight size={14}/></button></div></div>
+   <div className="dialog-footer"><span className="aside-hint">{isLink?'Private links go to your AI app, which reads them with its own access.':'You provide the transcript. Audio isn’t transcribed here.'}</span><div className="button-row"><button className="button" onClick={onClose}>Cancel</button>{unread&&<button className="button" onClick={()=>{setError('');setUnread(false);setFetched('');setStep('options');}}>Let my AI app read it</button>}<button className="button primary" disabled={busy} onClick={()=>void toOptions()}>{busy&&isLink?'Reading…':isLink&&fetched!==link.trim()?'Read the link':'Next'} <ArrowRight size={14}/></button></div></div>
   </>:<>
    <div className="recap-options">
     <div>
@@ -154,7 +166,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
      <div className="field-title">What to make<div className="make-list">{recapParts.map(k=><label key={k}><input type="checkbox" checked={!skip.has(k)} onChange={e=>{const n=new Set(skip);if(e.target.checked)n.delete(k);else n.add(k);setSkip(n);}}/> <span>{partLabels[k][0]}</span><small>{partLabels[k][1]}</small></label>)}</div></div>
      <div className="field-title">Who writes it
       <label className={`writer-card ${!key?'on':''}`}><input type="radio" name="writer" checked={!key} onChange={()=>setWriter('')}/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
-      {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>setWriter(k.id)}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text and files.`}</small></span></label>;})
+      {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>setWriter(k.id)}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text, files and public links.`}</small></span></label>;})
       :<label className="writer-card off"><input type="radio" name="writer" disabled/><span><strong><KeyRound size={13}/> An API key, here</strong><small>Runs in RPG Tools with your own AI key. Add one with Connect an AI › Use an API key, with Help me run the game or Run the game.</small></span></label>}
      </div>
     </div>
