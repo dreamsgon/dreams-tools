@@ -4,6 +4,7 @@ import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
+import {dashboardSchema} from './dashboard.ts';
 import {questSchema,playerQuest,newQuest} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
 import {lookSchema,playerLook} from './look.ts';
@@ -45,7 +46,7 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the codex category order and quick notes from the table waiting to be filed.
   codexCategories:z.array(codexCategory).max(40).optional(), codexInbox:z.array(inboxNoteSchema).max(200).optional(),
   // Optional (added later): the campaign's accent, heading font, page surface and banner.
-  look:lookSchema.optional() });
+  look:lookSchema.optional(), dashboard:dashboardSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)

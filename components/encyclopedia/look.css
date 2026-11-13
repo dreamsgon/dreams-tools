@@ -1,0 +1,14 @@
+/* Campaign look accents (lib/encyclopedia/look.ts), shared by the Encyclopedia and the campaign hub. */
+[data-look-accent="verdigris"]{--accent:#1f6f68; --accent-hover:#185a54; --accent-soft:#e0eeec; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="verdigris"]{--accent:#5fc2b5; --accent-hover:#82d3c8; --accent-soft:#17302d; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+[data-look-accent="lapis"]{--accent:#2f5ea8; --accent-hover:#264d8a; --accent-soft:#e3ebf7; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="lapis"]{--accent:#86a8ea; --accent-hover:#a5bff0; --accent-soft:#1b2740; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+[data-look-accent="ember"]{--accent:#a94c27; --accent-hover:#8c3e1f; --accent-soft:#f6e6de; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="ember"]{--accent:#f0956b; --accent-hover:#f4ae8e; --accent-soft:#3a2219; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+[data-look-accent="amethyst"]{--accent:#6a4f9f; --accent-hover:#574184; --accent-soft:#ece6f5; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="amethyst"]{--accent:#b39be6; --accent-hover:#c8b6ee; --accent-soft:#2a2340; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+[data-look-accent="brass"]{--accent:#7d5f1a; --accent-hover:#654d15; --accent-soft:#f2ecdc; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="brass"]{--accent:#d9b25e; --accent-hover:#e4c482; --accent-soft:#352c17; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+[data-look-accent="crimson"]{--accent:#a33346; --accent-hover:#872a3a; --accent-soft:#f5e1e4; --on-accent:#ffffff;--green:var(--accent);--green-pale:var(--accent-soft)}
+:root[data-theme="dark"] [data-look-accent="crimson"]{--accent:#ef8a99; --accent-hover:#f4a8b3; --accent-soft:#3a1c22; --on-accent:#0c1214;--green:var(--accent);--green-pale:var(--accent-soft)}
+.look-banner{background:var(--hover) center/cover no-repeat;border-radius:var(--radius);position:relative}

@@ -5,6 +5,10 @@ import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
 import { newId, playerCampaign, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
 import { scenesInOrder } from "./scene-order.ts";
+import { dashboardSchema, excerpt } from "./encyclopedia/dashboard.ts";
+import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
+import { codexIn } from "./encyclopedia/codex.ts";
+import { formatDate } from "./encyclopedia/calendar-model.ts";
 import { applyPairs, campaignSummary, cleanName } from "./campaign-links.ts";
 
 /*
@@ -131,12 +135,30 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
   const map = both.map?.workspace ?? null, book = both.book.data;
   const campaign = row.encyclopedia ? book.campaigns.find(c => c.id === row.encyclopedia!.id) ?? null : null;
   const own = campaign ? book.entries.filter(e => e.campaignId === campaign.id && e.kind !== "folder") : [];
+  // Shared world pages count too, as they do inside the campaign in the Encyclopedia.
+  const seen = campaign ? book.entries.filter(e => e.worldId === campaign.worldId && (e.campaignId === null || e.campaignId === campaign.id) && e.kind !== "folder") : [];
   const player = campaign ? playerCampaign(book, campaign.id) : null;
+  const titleOf = (id: string | null) => id ? book.entries.find(e => e.id === id)?.title ?? "" : "";
+  const quests = campaign ? questsIn(book, campaign.worldId, campaign.id)
+    .sort((a, b) => (a.quest.rank ?? 1e9) - (b.quest.rank ?? 1e9) || b.entry.updatedAt.localeCompare(a.entry.updatedAt))
+    .map(({ entry, quest }) => ({ id: entry.id, title: entry.title, state: quest.state, type: quest.type, ...questProgress(quest), next: nextStep(quest) })) : [];
+  const codex = campaign ? codexIn(book.entries, campaign.worldId, campaign.id)
+    .map(e => ({ id: e.id, title: e.title, category: e.codex.category, foundAt: e.codex.found[campaign.id]?.at ?? null, at: e.codex.found[campaign.id]?.at ?? e.updatedAt }))
+    .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8) : [];
+  const session = seen.filter(e => e.kind === "session").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const calendar = campaign?.calendars?.find(c => c.visibility === "players") ?? campaign?.calendars?.[0];
   return {
     row,
-    scenes: map && row.maptable ? scenesInOrder(map, row.maptable.id).map(item => ({ id: item.scene.id, name: item.scene.name })) : [],
-    party: own.filter(e => e.kind === "character" && e.character?.role === "pc").map(e => ({ id: e.id, title: e.title })),
-    recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt })),
+    scenes: map && row.maptable ? scenesInOrder(map, row.maptable.id).map(({ scene: s }) => ({ id: s.id, name: s.name, mapType: s.mapType, tokens: s.tokens?.length ?? 0, src: s.mapId ? map.assets?.find(a => a.id === s.mapId)?.src ?? null : null })) : [],
+    party: seen.filter(e => e.kind === "character" && (e.character?.role === "pc" || e.character?.role === "companion"))
+      .sort((a, b) => (a.character?.role === "pc" ? 0 : 1) - (b.character?.role === "pc" ? 0 : 1) || a.title.localeCompare(b.title))
+      .map(e => ({ id: e.id, title: e.title, role: e.character!.role, group: e.character!.group, picture: e.picture ?? null })),
+    recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt, parent: titleOf(e.parentId) })),
+    quests, codex,
+    lastSession: session ? { id: session.id, title: session.title, updatedAt: session.updatedAt, excerpt: excerpt(session.body) } : null,
+    gameDate: calendar ? { name: calendar.name, date: formatDate(calendar, calendar.current) } : null,
+    dashboard: campaign?.dashboard ?? null,
+    look: campaign?.look ?? null,
     front: player?.frontPage ?? null,
     frontConfig: campaign ? campaign.frontPage ?? defaultFrontPage(campaign.calendars ?? []) : null,
     calendars: (campaign?.calendars ?? []).map(c => ({ id: c.id, name: c.name, shared: c.visibility === "players" })),
@@ -144,6 +166,17 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
   };
 }
 export type CampaignHub = ReturnType<typeof hubOf>;
+
+/** Saves the GM's dashboard layout (and its threads, notes and links) and returns the updated hub. */
+export async function saveDashboard(s: Session, key: string, input: unknown) {
+  const both = await readBoth(s);
+  const row = summaryOf(both).rows.find(r => r.key === key);
+  if (!row?.encyclopedia) throw new Error("Start Encyclopedia notes for this campaign to customize its dashboard.");
+  const parsed = dashboardSchema.safeParse(input);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That dashboard could not be saved.");
+  await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, dashboard: parsed.data } : c) });
+  return hubOf(await readBoth(s), key);
+}
 
 /** Saves the front page of an Encyclopedia campaign and returns the updated hub. */
 export async function saveFrontPage(s: Session, key: string, input: unknown) {
