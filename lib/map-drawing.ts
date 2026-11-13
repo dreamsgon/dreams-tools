@@ -33,7 +33,7 @@ export function dropLayers(d:MapDrawing,ids:string[],target:LayerDrop):boolean {
   if(parent && (!d.folders.some(f=>f.id===parent)||layerState(d,parent).locked))return false;
   if(target.id && moving.some(id=>within(target.id!,id)))return false;
   if(layerIds(d).some(id=>layerState(d,id).locked&&moving.some(root=>within(id,root))))return false;
-  let order=layerIds(d).filter(id=>!moving.includes(id));
+  const order=layerIds(d).filter(id=>!moving.includes(id));
   let index=order.length;
   if(target.mode!=="inside" && target.id){index=order.indexOf(target.id)+(target.mode==="before"?1:0);}
   order.splice(index,0,...moving);d.layerOrder=order;
@@ -78,7 +78,7 @@ export function openingPath(s:MapShape):string {
   const [a,b]=s.points,dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len,w=Math.max(5,s.thickness/2);
   const line=(p:Point,q:Point)=>`M ${p.x} ${p.y} L ${q.x} ${q.y} `;
   const offset=(p:Point,t:number)=>({x:p.x+nx*t,y:p.y+ny*t});
-  let path=line(offset(a,-w),offset(a,w))+line(offset(b,-w),offset(b,w));
+  const path=line(offset(a,-w),offset(a,w))+line(offset(b,-w),offset(b,w));
   if(s.type==="window")return path+line(offset(a,-3),offset(b,-3))+line(offset(a,3),offset(b,3));
   const end={x:a.x+nx*len,y:a.y+ny*len};
   return path+line(a,end)+`M ${b.x} ${b.y} A ${len} ${len} 0 0 1 ${end.x} ${end.y}`;

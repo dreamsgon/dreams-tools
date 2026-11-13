@@ -2,7 +2,7 @@ import {newWeatherRegion,generateWeather} from '../../lib/encyclopedia/weather-m
 import {makeCalendar} from '../../lib/encyclopedia/calendar-templates.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,symlink,mkdir} from 'node:fs/promises';
+import {mkdtemp,readFile,symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {demoWorkspace,campaignExport,workspaceSchema,defaultCharacter} from '../../lib/encyclopedia/world-model.ts';
