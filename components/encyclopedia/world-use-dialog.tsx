@@ -7,7 +7,7 @@ import { sceneForMap, tableImageSize, tablePicture } from '@/lib/encyclopedia/ma
 import { cellDistance } from '@/lib/encyclopedia/hex-crawl';
 import { uid, type Asset, type Workspace as TableWorkspace } from '@/lib/model';
 import { api, canvasBlob, download, uploadAsset } from '@/lib/api';
-import { ToolDialog } from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import { MapCanvas } from './map-canvas';
 import { maptableHref } from './article-body';
 

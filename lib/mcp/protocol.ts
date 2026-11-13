@@ -32,7 +32,7 @@ async function one(m: Message, load: () => Promise<McpContext>): Promise<unknown
       });
     }
     case "ping": return ok({});
-    case "tools/list": return ok({ tools: listTools((await load()).level) });
+    case "tools/list": { const c = await load(); return ok({ tools: listTools(c.level, c.perms) }); }
     case "tools/call": return ok(await callTool(await load(), params.name, params.arguments));
     case "prompts/list": return ok({ prompts: listPrompts() });
     case "prompts/get": {

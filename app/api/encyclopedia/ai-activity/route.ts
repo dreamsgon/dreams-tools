@@ -6,6 +6,7 @@ import {publicActivity,readActivity,undoChanges,updateActivity} from '@/lib/mcp/
 import {listConnections} from '@/lib/mcp/connections';
 import {undoTable} from '@/lib/mcp/table';
 import {loadWorkspace,saveWorkspace} from '@/lib/workspace-storage';
+import {decideSuggestion} from '@/lib/mcp/suggestions';
 import type {S3Bucket} from '@/lib/storage';
 export const dynamic='force-dynamic';
 const campaignId=z.string().min(1).max(100);
@@ -33,10 +34,20 @@ export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  if(!sameOrigin(request))return json({error:'Same-origin request required'},403);
  try{
-  const raw=await request.text();if(raw.length>2000)return json({error:'Request too large'},413);
-  const input=z.object({campaignId:campaignId.optional(),maptableCampaignId:campaignId.optional(),action:z.enum(['undo','pause','resume']),id:z.string().max(100).optional()}).parse(JSON.parse(raw));
+  const raw=await request.text();if(raw.length>12000)return json({error:'Request too large'},413);
+  const input=z.object({campaignId:campaignId.optional(),maptableCampaignId:campaignId.optional(),action:z.enum(['undo','pause','resume','approve','skip','approveAll']),id:z.string().max(100).optional(),args:z.record(z.string().max(40),z.unknown()).optional()}).parse(JSON.parse(raw));
   const bucket=getBucket(),found=await campaignFor(bucket,owner,input);if(!found)throw Error('This map has no Encyclopedia campaign paired with it.');
   const args={...input,campaignId:found};
+  // Suggestions from a helper AI: run it (as suggested or as the GM changed it), or drop it.
+  if(args.action==='approve'||args.action==='skip'){
+   const done=await decideSuggestion(bucket,owner,args.campaignId,args.id,args.action,args.args);
+   return json({...publicActivity(await readActivity(bucket,owner,args.campaignId)),done});
+  }
+  if(args.action==='approveAll'){
+   const waiting=(await readActivity(bucket,owner,args.campaignId)).entries.filter(e=>e.waiting&&!e.decided).reverse(),problems:string[]=[];
+   for(const e of waiting)try{await decideSuggestion(bucket,owner,args.campaignId,e.id,'approve');}catch(x){problems.push(`${e.summary}: ${x instanceof Error?x.message:'failed'}`);}
+   return json({...publicActivity(await readActivity(bucket,owner,args.campaignId)),...(problems.length?{problems}:{})});
+  }
   if(args.action!=='undo'){
    const log=await updateActivity(bucket,owner,args.campaignId,l=>({...l,paused:args.action==='pause'}));
    return json(publicActivity(log));

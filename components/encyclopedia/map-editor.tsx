@@ -9,7 +9,7 @@ import {MapWeather} from './map-weather';
 import type {Calendar} from '@/lib/encyclopedia/calendar-model';
 import type {Campaign} from '@/lib/encyclopedia/world-model';
 import {MapViewport} from './map-viewport';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {uploadMapImage,exportMapPackage} from './map-transfer';
 import {WorldMapStudio} from './world-map-studio';
 import {confirmDialog} from '../confirm-dialog';

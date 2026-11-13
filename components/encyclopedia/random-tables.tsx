@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Dices,Plus,Upload,Download,Search,ArrowLeft,Trash2,Copy,Pencil,Check,RotateCcw,X,ListOrdered,Lock,LockOpen,UserPlus,ArrowUp} from 'lucide-react';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {newId} from '@/lib/encyclopedia/world-model';
 import {TABLE_CATEGORIES,DEFAULT_ODDS,librarySchema,inCampaign,rollTable,askOracle,rangeGaps,rangeLabel,parseTableText,findTable,parseCsvTable,tableToCsv,exportTables,importTables,bringToCampaign,rollGenerator,rollLine,generatorPage,LIBRARY_LIMIT,
  type GeneratorLine,type RandomTable,type TableLibrary,type TableCategory,type TableRoll,type TableRow} from '@/lib/encyclopedia/tables';

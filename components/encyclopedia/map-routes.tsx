@@ -6,7 +6,7 @@ import {type Campaign} from '@/lib/encyclopedia/world-model';
 import {formatDate,type Calendar} from '@/lib/encyclopedia/calendar-model';
 import {convertDistance,measuredDistance,routeTotals,travelPlan,travelRegion,draftTravelWeather,completeTravel} from '@/lib/encyclopedia/travel-model';
 import {weatherOn,fahrenheit} from '@/lib/encyclopedia/weather-model';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
 
 export function MapRoutes({map,campaign,onMap,onCalendarChange}:{map:MapData;campaign?:Campaign;onMap:(p:Partial<MapData>)=>void;onCalendarChange:(c:Calendar)=>boolean}){

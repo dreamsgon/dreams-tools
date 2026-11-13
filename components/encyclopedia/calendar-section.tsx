@@ -1,7 +1,7 @@
 'use client';
 import {useRef,useState} from 'react';
 import {CalendarDays,Plus,Settings,Download,Upload,ArrowUp,ArrowDown,Trash2,Eye,EyeOff,Copy} from 'lucide-react';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {AlmanacEditor} from './almanac-editor';
 import {CalendarView,DateFields} from './calendar-view';
 import {calendarSchema,advanceDate,formatDate,yearDays,type Calendar,type CalendarDate,type CalendarEvent,type CalendarPeriod} from '@/lib/encyclopedia/calendar-model';

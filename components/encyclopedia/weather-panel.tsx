@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {CloudSun,CloudRain,Wind,Droplets,Sunrise,Sunset,Plus,Settings,RefreshCw,Download} from 'lucide-react';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {calendarSchema,formatDate,advanceDate,type Calendar,type CalendarDate} from '@/lib/encyclopedia/calendar-model';
 import {climates,terrains,conditions,weatherRegionSchema,weatherDaySchema,type WeatherRegion,type WeatherDay,type SeasonWeather} from '@/lib/encyclopedia/weather-schema';
 import {defaultSeasonProfile,newWeatherRegion,weatherOn,previousWeather,generateWeather,manualWeather,fahrenheit,lunarWeatherText,weatherMarkdown} from '@/lib/encyclopedia/weather-model';
