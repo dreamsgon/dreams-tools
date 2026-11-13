@@ -46,9 +46,12 @@ export default function MapStylePanel({ drawing, gridSize, setStyle }: {
       <button type="button" aria-pressed={active} onClick={onClick}><Sample style={cardStyle} background={background}/>{name}</button>
       {remove && <button type="button" className="creator-style-remove" aria-label={`Remove ${name}`} title="Remove this style" onClick={remove}><X size={12}/></button>}
     </div>;
+  // Naming happens in the panel itself rather than in a browser pop-up (handoff 3.4).
+  const [naming, setNaming] = useState<string | null>(null);
   const saveCurrent = () => {
     if (!style) return;
-    const name = window.prompt("Name this style", "My style")?.trim();
+    const name = naming?.trim();
+    setNaming(null);
     if (!name) return;
     const id = `saved-${Date.now().toString(36)}`;
     const next = [...saved, { id, name: name.slice(0, 40), background: drawing.background, style: { ...style, preset: id } }];
@@ -60,7 +63,12 @@ export default function MapStylePanel({ drawing, gridSize, setStyle }: {
       {card("plain", "Plain", null, plainBackground, () => setStyle(null, plainBackground), !style)}
       {mapStylePresets.map(p => card(p.id, p.name, p.style, p.background, () => pick(p), style?.preset === p.id))}
       {saved.map(p => card(p.id, p.name, p.style, p.background, () => pick(p), style?.preset === p.id, () => { const next = saved.filter(s => s.id !== p.id); setSaved(next); writeSaved(next); }))}
-      <div className="creator-style-card add"><button type="button" disabled={!style} onClick={saveCurrent} title={style ? "Keep this look to use on other maps" : "Pick a style first"}><Plus size={18}/>Save current as a style</button></div>
+      {naming === null
+        ? <div className="creator-style-card add"><button type="button" disabled={!style} onClick={() => setNaming("My style")} title={style ? "Keep this look to use on other maps" : "Pick a style first"}><Plus size={18}/>Save current as a style</button></div>
+        : <form className="creator-style-card naming" onSubmit={e => { e.preventDefault(); saveCurrent(); }}>
+          <label>Name this style<input autoFocus maxLength={40} value={naming} onFocus={e => e.currentTarget.select()} onChange={e => setNaming(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setNaming(null); } }}/></label>
+          <span><button type="submit" className="primary" disabled={!naming.trim()}>Save</button><button type="button" onClick={() => setNaming(null)}>Cancel</button></span>
+        </form>}
     </div>
     {style ? <>
       <h3>Fine-tune</h3>

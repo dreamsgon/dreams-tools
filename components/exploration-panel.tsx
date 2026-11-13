@@ -8,6 +8,7 @@ import { Field, Toggle } from "./dialogs";
 import { addNotePage, notePages, removeNotePage, MAX_NOTE_PAGES, type NotePage } from "@/lib/map-notes";
 import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/world-model";
 import { PageSearch } from "./map-note-card";
+import PanelTip from "./panel-tip";
 import "./exploration-panel.css";
 
 type Props = {workspace:Workspace;scene:Scene;pages:NotePage[];book:EncyclopediaWorkspace|null;bookError:string;update:(fn:(scene:Scene)=>void)=>void;selectedId:string|null;select:(id:string|null)=>void;place:(activation:"double"|"single")=>void;createMap:(type:Scene["mapType"])=>void;openScene:(id:string)=>void};
@@ -114,7 +115,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
 
   return <div className="explore">
     <h3>Exploration</h3>
-    <p className="muted explore-intro">Put markers on this map that open other maps, so players can travel from the world to a town to a fight.</p>
+    <PanelTip more={<p>Markers open other maps, so players can travel from the world to a town to a fight. Players double-click a marker to open its map; a doorway opens with one click, for exits and stairs.</p>}>Markers here open other maps.</PanelTip>
 
     <div className="field"><span>This map is a</span>
       <div className="explore-segments explore-types" role="group" aria-label="Kind of map">
@@ -133,7 +134,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
       <button disabled={scene.pointsOfInterest.length>=500} onClick={()=>{select(null);place("single");}}>Add doorway</button>
       <button className="explore-icon" aria-label="New folder" title="New folder" disabled={scene.poiFolders.length>=200} onClick={()=>update(current=>{current.poiFolders.push({id:uid(),name:"New folder",parentId:null});})}><FolderPlus size={16}/></button>
     </div>
-    <p className="muted explore-hint">Choose Add, then click the map. Players double-click a marker to open its map; a doorway opens with one click, for exits and stairs.</p>
+    <p className="muted explore-hint">Choose Add, then click the map.</p>
     {scene.pointsOfInterest.length>6&&<label className="explore-search"><Search size={14}/><input value={query} placeholder="Find a marker" aria-label="Find a marker" onChange={e=>setQuery(e.target.value)}/></label>}
     <div className="explore-tree" onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,null)}>
       {dragging&&scene.poiFolders.length>0&&<div className="explore-drop">Drop here to take it out of its folder</div>}
@@ -143,7 +144,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
     {q&&scene.pointsOfInterest.length>0&&!scene.pointsOfInterest.some(matches)&&<p className="empty-small">No markers match “{query}”.</p>}
 
     <div className="section-heading"><h3>Encyclopedia pages</h3></div>
-    <p className="muted explore-hint">Drag a page onto the map to pin it there as a note, or onto a marker to add it to that marker’s note.{selected?" Click a page to add it to the selected marker.":""}</p>
+    <PanelTip more={<p>Drag a page onto the map to pin it there as a note, or onto a marker to add it to that marker’s note. With a marker selected, click a page to add it.</p>}>Drag a page onto the map or a marker.</PanelTip>
     {bookError?<p className="muted" role="alert">{bookError}</p>:!book?<p className="muted">Loading your Encyclopedia…</p>:<PageSearch pages={pages} taken={selected?.pages} onPick={page=>{if(!selected){setPageHint("Select a marker first, or drag the page onto the map.");return;}let added=false;update(current=>{const p=current.pointsOfInterest.find(p=>p.id===selected.id);if(p)added=addNotePage(p,page.id);});setPageHint(added?`Added ${page.title} to ${pointName(selected)}.`:"That marker’s note is full.");}}/>}
     {pageHint&&<p className="muted explore-hint" role="status">{pageHint}</p>}
 

@@ -17,7 +17,7 @@ import { AiActivity, type SuggestedMove } from "./encyclopedia/ai-activity";
 import TokenPosition from "./token-position";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
-import { navigationStorageKey, parseNavigationState, type NavigationPanel } from "@/lib/navigation-state";
+import { navigationStorageKey, parseNavigationState, phoneWidth, readRemembered, remember, type NavigationPanel } from "@/lib/navigation-state";
 import SavedMeasurements from "./saved-measurements";
 import FogRegions from "./fog-regions";
 import {sceneTargets} from "@/lib/exploration";
@@ -290,12 +290,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   useEffect(() => {
     if (!navigationReady || !navigationScope || !workspace) return;
-    try {
-      sessionStorage.setItem(navigationStorageKey(navigationScope), JSON.stringify({
-        version: 1, dashboard, creatorOpen, panel, sidebar, activeId: workspace.activeId,
-        location, dashboardLocation, conditionLocation, overview,
-      }));
-    } catch { /* Browsers may disable session storage. Navigation still works. */ }
+    remember(navigationStorageKey(navigationScope), JSON.stringify({
+      version: 1, dashboard, creatorOpen, panel, sidebar, activeId: workspace.activeId,
+      location, dashboardLocation, conditionLocation, overview,
+    }));
   }, [navigationReady, navigationScope, workspace, dashboard, creatorOpen, panel, sidebar, location, dashboardLocation, conditionLocation, overview]);
   const scene =
     workspace?.scenes.find((s) => s.id === workspace.activeId) ||
@@ -355,7 +353,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       loadEpoch.current++;
       acknowledged.current=result.workspace?data:null;
       let saved = null;
-      try { saved = navigationScope ? parseNavigationState(sessionStorage.getItem(navigationStorageKey(navigationScope))) : null; } catch { /* Storage is optional. */ }
+      saved = navigationScope ? parseNavigationState(readRemembered(navigationStorageKey(navigationScope))) : null;
       // /maptable?scene=<id> (from an Encyclopedia link) opens that scene once, then the address is tidied.
       let requested: string | null = null, requestedCampaign: string | null = null;
       if (!navigationRestored.current) { try { const query = new URLSearchParams(window.location.search); requested = query.get("scene"); requestedCampaign = query.get("campaign"); } catch { requested = null; } }
@@ -369,13 +367,13 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           setDashboard(saved.dashboard);
           setCreatorOpen(saved.creatorOpen);
           setPanel(saved.panel);
-          setSidebar(saved.sidebar);
+          setSidebar(saved.sidebar && !phoneWidth());
           setLocation(validLocation(saved.location));
           setDashboardLocation(validLocation(saved.dashboardLocation));
           setConditionLocation(data.conditionFolders.some(c => c.id === saved.conditionLocation) ? saved.conditionLocation : null);
           // A campaign that was deleted since falls back to the dashboard's campaign list.
           if (saved.overview && (saved.overview.id === null || data.collections.some(c => c.id === saved.overview?.id && c.kind === "campaign"))) setOverview(saved.overview);
-        }
+        } else if (phoneWidth()) setSidebar(false); // Phones open on the map with the side sheet closed (handoff 2.7).
         // /maptable?campaign=<id> (from the Campaigns page) opens that campaign's scenes once.
         if (!linked && requestedCampaign && data.collections.some(c => c.id === requestedCampaign && c.kind === "campaign")) {
           setDashboard(true); setCreatorOpen(false);

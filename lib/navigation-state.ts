@@ -18,6 +18,21 @@ export function navigationStorageKey(scope: string) {
   return `maptable:navigation:v1:${encodeURIComponent(scope)}`;
 }
 
+/**
+ * Where you were is kept per tab (sessionStorage) and also per browser (localStorage), so a new tab or a
+ * browser restart opens the last scene or page again. The tab's own copy wins; storage is optional.
+ */
+export function readRemembered(key: string): string | null {
+  try { const tab = sessionStorage.getItem(key); if (tab !== null) return tab; } catch { /* Storage is optional. */ }
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+export function remember(key: string, value: string) {
+  try { sessionStorage.setItem(key, value); } catch { /* Storage is optional. */ }
+  try { localStorage.setItem(key, value); } catch { /* Storage is optional. */ }
+}
+/** Phones open on the map, never under a side sheet. */
+export const phoneWidth = () => typeof window !== "undefined" && window.innerWidth < 800;
+
 export function parseNavigationState(text: string | null): NavigationState | null {
   try {
     const value = JSON.parse(text ?? "null");

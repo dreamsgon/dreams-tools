@@ -38,3 +38,22 @@ test("restored map must still exist and does not mutate downloaded workspace", (
   assert.equal(workspace.activeId, "map-1");
   assert.equal(preserveActiveScene(workspace, "deleted"), workspace);
 });
+
+test("the last place is kept per tab and per browser, and the tab's copy wins", async () => {
+  const { readRemembered, remember } = await import("../lib/navigation-state.ts");
+  const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+  const before = { s: globalThis.sessionStorage, l: globalThis.localStorage };
+  try {
+    globalThis.sessionStorage = store(); globalThis.localStorage = store();
+    remember("k", "a");
+    assert.equal(readRemembered("k"), "a");
+    globalThis.sessionStorage = store(); // a new tab or a browser restart
+    assert.equal(readRemembered("k"), "a");
+    globalThis.sessionStorage.setItem("k", "tab");
+    assert.equal(readRemembered("k"), "tab");
+    globalThis.sessionStorage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+    globalThis.localStorage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+    assert.equal(readRemembered("k"), null);
+    remember("k", "x"); // storage is optional
+  } finally { globalThis.sessionStorage = before.s; globalThis.localStorage = before.l; }
+});
