@@ -635,6 +635,24 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .quest-type{display:inline-flex;align-items:center;border-radius:4px;padding:2px 7px;font-size:12px;background:var(--hover);color:var(--ink)}
 .quest-type.main{background:var(--accent-soft);color:var(--accent)}
 .quest-type.personal{background:color-mix(in srgb,#a678d8 22%,transparent);color:#c7a6ef}
+/* Quest category colours (lib/encyclopedia/quests.ts categoryColors): the chip, and the dot in filters and the categories dialog. */
+.quest-type.cat-accent{background:var(--accent-soft);color:var(--accent)}
+.quest-type.cat-grey{background:var(--hover);color:var(--ink)}
+.quest-type.cat-purple{background:color-mix(in srgb,#a678d8 22%,transparent);color:color-mix(in srgb,#a678d8 62%,var(--ink))}
+.quest-type.cat-teal{background:color-mix(in srgb,#2fae9c 22%,transparent);color:color-mix(in srgb,#2fae9c 62%,var(--ink))}
+.quest-type.cat-orange{background:color-mix(in srgb,#e0874a 22%,transparent);color:color-mix(in srgb,#e0874a 62%,var(--ink))}
+.quest-type.cat-gold{background:color-mix(in srgb,#c99a2e 22%,transparent);color:color-mix(in srgb,#c99a2e 62%,var(--ink))}
+.quest-type.cat-rose{background:color-mix(in srgb,#dd6278 22%,transparent);color:color-mix(in srgb,#dd6278 62%,var(--ink))}
+.quest-cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--muted)}
+.quest-cat-dot.cat-accent{background:var(--accent)}
+.quest-cat-dot.cat-purple{background:#a678d8}
+.quest-cat-dot.cat-teal{background:#2fae9c}
+.quest-cat-dot.cat-orange{background:#e0874a}
+.quest-cat-dot.cat-gold{background:#c99a2e}
+.quest-cat-dot.cat-rose{background:#dd6278}
+.quest-chips button{display:inline-flex;align-items:center;gap:6px}
+.quest-chips .quest-chips-edit{border-style:dashed}
+.quest-chips .quest-chips-edit:hover{color:var(--ink);border-color:var(--line-strong)}
 .quest-type select{background:transparent;border:0;color:inherit;font-size:12px;padding:0;cursor:pointer}
 .quest-shared,.quest-place{display:inline-flex;align-items:center;gap:3px}
 .quest-shared{color:var(--accent)}

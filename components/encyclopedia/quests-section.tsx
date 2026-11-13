@@ -1,14 +1,16 @@
 "use client";
 import {useRef,useState,type DragEvent} from 'react';
-import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,X,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2} from 'lucide-react';
+import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,X,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags} from 'lucide-react';
 import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
-import {column,moveQuest,newQuest,nextStep,questProgress,questsIn,questStates,questTypes,stateNames,typeNames,type Quest,type QuestState,type QuestType} from '@/lib/encyclopedia/quests';
+import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
+import {CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
 import {PictureToken,usePictureSrc} from './character-picture';
 import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
-type Filter=QuestType|'all';
+/** 'all', or a quest category id. */
+type Filter=string;
 
 /** A small round face for the quest giver: their picture when they have one, otherwise their initials. */
 function Face({entry,size=26}:{entry?:Entry;size?:number}){
@@ -22,7 +24,8 @@ const quest=(e:Entry)=>e.quest??newQuest();
 
 /** The quest board and journal for one campaign. */
 export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Workspace;worldId:string;campaign:Campaign;change:Change;onOpen:(id:string)=>void}){
- const [mode,setMode]=useState<'board'|'journal'>('board'),[filter,setFilter]=useState<Filter>('all'),[selected,setSelected]=useState<string|null>(null);
+ const [mode,setMode]=useState<'board'|'journal'>('board'),[picked,setFilter]=useState<Filter>('all'),[selected,setSelected]=useState<string|null>(null),[editing,setEditing]=useState(false);
+ const cats=questCategories(campaign),filter=picked==='all'||cats.some(c=>c.id===picked)?picked:'all';
  const [dragging,setDragging]=useState<string|null>(null),[dropAt,setDropAt]=useState<{state:QuestState;before:string|null}|null>(null);
  const all=questsIn(data,worldId,campaign.id),shown=(list:typeof all)=>list.filter(q=>filter==='all'||q.quest.type===filter);
  const byId=(id:string|null|undefined)=>id?data.entries.find(e=>e.id===id):undefined;
@@ -35,7 +38,7 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
    let folder=w.entries.find(e=>e.worldId===worldId&&e.campaignId===campaign.id&&e.parentId===null&&e.title.trim().toLowerCase()==='quests');
    const extra:Entry[]=[];
    if(!folder){folder={id:newId(),worldId,campaignId:campaign.id,parentId:null,title:'Quests',kind:'folder',body:'',updatedAt:now};extra.push(folder);}
-   const page:Entry={id,worldId,campaignId:campaign.id,parentId:folder.id,title:'New quest',kind:'quest',body:'',quest:{...newQuest(state,filter==='all'?'side':filter),rank:-1},updatedAt:now};
+   const page:Entry={id,worldId,campaignId:campaign.id,parentId:folder.id,title:'New quest',kind:'quest',body:'',quest:{...newQuest(state,filter==='all'?defaultCategory(cats):filter),rank:-1},updatedAt:now};
    return {...w,entries:[...w.entries,...extra,page]};
   });
   if(ok!==false){setSelected(id);setMode('journal');}
@@ -46,7 +49,6 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
  }
  const over=(e:DragEvent,state:QuestState,before:string|null)=>{if(!dragging)return;e.preventDefault();e.stopPropagation();if(dropAt?.state!==state||dropAt.before!==before)setDropAt({state,before});};
 
- const counts=Object.fromEntries(questTypes.map(t=>[t,all.filter(q=>q.quest.type===t).length]));
  return <section className="page-content quests-page">
   <div className="quests-head">
    <h1>Quests</h1>
@@ -57,7 +59,8 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
   <div className="quests-filters">
    <div className="quest-chips" role="group" aria-label="Show quests">
     <button className={filter==='all'?'on':''} aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>All <b>{all.length}</b></button>
-    {questTypes.map(t=><button key={t} className={filter===t?'on':''} aria-pressed={filter===t} onClick={()=>setFilter(t)}>{typeNames[t]} <b>{counts[t]}</b></button>)}
+    {cats.map(c=><button key={c.id} className={filter===c.id?'on':''} aria-pressed={filter===c.id} onClick={()=>setFilter(c.id)}><span className={`quest-cat-dot cat-${c.color}`} aria-hidden="true"/>{c.name} <b>{all.filter(q=>q.quest.type===c.id).length}</b></button>)}
+    <button className="quest-chips-edit" onClick={()=>setEditing(true)}><Tags size={14}/> Categories</button>
    </div>
    <p className="muted">{mode==='board'?'Drag a card to change its state. Players only see quests you share, and only the steps you haven’t hidden.':'Tick steps off and write what happened. Players see the entries you share.'}</p>
   </div>
@@ -67,7 +70,7 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
      return <div key={entry.id} className="quest-card-slot" onDragOver={e=>{const r=e.currentTarget.getBoundingClientRect();const i=cards.findIndex(c=>c.entry.id===entry.id);over(e,state,e.clientY<r.top+r.height/2?entry.id:cards[i+1]?.entry.id??null);}}>
       {dropAt?.state===state&&dropAt.before===entry.id&&dragging!==entry.id&&<div className="quest-drop-line"/>}
       <button className={`quest-card ${dragging===entry.id?'dragging':''} ${closed?'closed':''}`} draggable onDragStart={e=>{e.dataTransfer.setData('text/quest',entry.id);e.dataTransfer.effectAllowed='move';setDragging(entry.id);}} onDragEnd={()=>{setDragging(null);setDropAt(null);}} onClick={()=>{setSelected(entry.id);setMode('journal');}}>
-       <span className="quest-card-top"><span className={`quest-type ${q.type}`}>{typeNames[q.type]}</span>{entry.overviewVisibility==='players'?<span className="quest-shared"><Eye size={11}/> Shared</span>:null}{place&&<span className="quest-place"><MapPin size={11}/> {place.title}</span>}<GripVertical className="quest-grip" size={14} aria-hidden="true"/></span>
+       <span className="quest-card-top"><CategoryChip category={categoryOf(cats,q.type)}/>{entry.overviewVisibility==='players'?<span className="quest-shared"><Eye size={11}/> Shared</span>:null}{place&&<span className="quest-place"><MapPin size={11}/> {place.title}</span>}<GripVertical className="quest-grip" size={14} aria-hidden="true"/></span>
        <strong className="quest-title">{entry.title}</strong>
        {step&&<span className={`quest-step ${state==='failed'?'struck':''}`}>{step}</span>}
        {p.total>0&&<span className="quest-progress" role="img" aria-label={`${p.done} of ${p.total} steps done`}><span style={{width:`${p.done/p.total*100}%`}}/></span>}
@@ -77,14 +80,17 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
     {dropAt?.state===state&&dropAt.before===null&&<div className="quest-drop-line"/>}
     {!cards.length&&<p className="quest-empty">{dragging?`Drop to mark it ${stateNames[state].toLowerCase()}`:'Nothing here yet.'}</p>}
    </div>;})}</div>
-  :<QuestJournal data={data} quests={shown(all)} open={open?.entry} onSelect={setSelected} change={change} onOpen={onOpen} onNew={()=>create('active')}/>}
+  :<QuestJournal data={data} campaign={campaign} categories={cats} quests={shown(all)} open={open?.entry} onSelect={setSelected} change={change} onOpen={onOpen} onNew={()=>create('active')} onEditCategories={()=>setEditing(true)}/>}
+  {editing&&<QuestCategoriesDialog data={data} worldId={worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </section>;
 }
 
-function QuestJournal({data,quests,open,onSelect,change,onOpen,onNew}:{data:Workspace;quests:{entry:Entry;quest:Quest}[];open?:Entry;onSelect:(id:string)=>void;change:Change;onOpen:(id:string)=>void;onNew:()=>void}){
+function QuestJournal({data,campaign,categories,quests,open,onSelect,change,onOpen,onNew,onEditCategories}:{data:Workspace;campaign:Campaign;categories:QuestCategory[];quests:{entry:Entry;quest:Quest}[];open?:Entry;onSelect:(id:string)=>void;change:Change;onOpen:(id:string)=>void;onNew:()=>void;onEditCategories:()=>void}){
  const [query,setQuery]=useState(''),[closed,setClosed]=useState<Set<string>>(new Set(['done','failed']));
  const found=quests.filter(q=>q.entry.title.toLowerCase().includes(query.trim().toLowerCase()));
- const groups:[string,string,typeof found][]=[...questTypes.map(t=>[t,`${typeNames[t]} quests`,found.filter(q=>q.quest.type===t&&(q.quest.state==='active'||q.quest.state==='rumour'))] as [string,string,typeof found]),['done','Completed',found.filter(q=>q.quest.state==='done')],['failed','Failed',found.filter(q=>q.quest.state==='failed')]];
+ const going=found.filter(q=>q.quest.state==='active'||q.quest.state==='rumour'),known=new Set(categories.map(c=>c.id));
+ // Open quests are grouped by category in the campaign's order; closed ones by how they ended.
+ const groups:[string,string,typeof found][]=[...categories.map(c=>[`cat:${c.id}`,`${c.name} quests`,going.filter(q=>q.quest.type===c.id)] as [string,string,typeof found]),['cat:?','Uncategorised quests',going.filter(q=>!known.has(q.quest.type))],['done','Completed',found.filter(q=>q.quest.state==='done')],['failed','Failed',found.filter(q=>q.quest.state==='failed')]];
  const page=useRef<HTMLDivElement>(null);
  // On a phone the list sits above the quest, so picking one scrolls down to it.
  const pick=(id:string)=>{onSelect(id);if(window.matchMedia('(max-width:760px)').matches)requestAnimationFrame(()=>page.current?.scrollIntoView({behavior:'smooth',block:'start'}));};
@@ -98,7 +104,7 @@ function QuestJournal({data,quests,open,onSelect,change,onOpen,onNew}:{data:Work
    {!quests.length&&<p className="muted">No quests yet.</p>}
    <button className="text-button" onClick={onNew}><Plus size={14}/> New quest</button>
   </nav>
-  <div className="quest-journal-page" ref={page}>{open?<QuestDetail key={open.id} entry={open} data={data} update={patch=>update(open.id,patch)} onOpen={onOpen} withTitle/>:<div className="quest-empty-page"><h2>No quest chosen</h2><p className="muted">Pick one on the left, or start a new quest.</p></div>}</div>
+  <div className="quest-journal-page" ref={page}>{open?<QuestDetail key={open.id} entry={open} data={data} campaign={campaign} update={patch=>update(open.id,patch)} onOpen={onOpen} onEditCategories={onEditCategories} withTitle/>:<div className="quest-empty-page"><h2>No quest chosen</h2><p className="muted">Pick one on the left, or start a new quest.</p></div>}</div>
  </div>;
 }
 
@@ -106,7 +112,10 @@ function QuestJournal({data,quests,open,onSelect,change,onOpen,onNew}:{data:Work
  * One quest: its state, the steps, the journal log and who gave it.
  * Shown in the journal and at the top of a quest's own page.
  */
-export function QuestDetail({entry,data,update,onOpen,withTitle=false}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void;withTitle?:boolean}){
+export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCategories,withTitle=false}:{entry:Entry;data:Workspace;campaign?:Campaign;update:(p:Partial<Entry>)=>void;change?:Change;onOpen:(id:string)=>void;onEditCategories?:()=>void;withTitle?:boolean}){
+ const [editing,setEditing]=useState(false),cats=questCategories(campaign??data.campaigns.find(c=>c.id===entry.campaignId));
+ // The board passes its own dialog; a quest's own page shows one here.
+ const editCategories=onEditCategories??(campaign&&change?()=>setEditing(true):undefined);
  const q=quest(entry),[step,setStep]=useState(''),[log,setLog]=useState(''),[label,setLabel]=useState(''),[players,setPlayers]=useState(true),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
  const scope=data.entries.filter(e=>e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)&&e.id!==entry.id);
@@ -119,7 +128,7 @@ export function QuestDetail({entry,data,update,onOpen,withTitle=false}:{entry:En
  const progress=questProgress(q);
  return <div className="quest-detail">
   <div className="quest-detail-chips">
-   <label className={`quest-type ${q.type}`}><select aria-label="Quest type" value={q.type} onChange={e=>set({type:e.target.value as QuestType})}>{questTypes.map(t=><option key={t} value={t}>{typeNames[t]} quest</option>)}</select></label>
+   <CategoryPicker categories={cats} value={q.type} onChange={type=>set({type})} onEdit={editCategories}/>
    <label className="quest-state-pick"><select aria-label="Quest state" value={q.state} onChange={e=>set({state:e.target.value as QuestState,rank:-1})}>{questStates.map(s=><option key={s} value={s}>{s==='rumour'?'Rumour':stateNames[s]}</option>)}</select></label>
    <button className={`quest-share ${shared?'on':''}`} aria-pressed={shared} onClick={()=>update({overviewVisibility:shared?'gm':'players'})}>{shared?<><Eye size={12}/> Shared with players</>:<><EyeOff size={12}/> GM only</>}</button>
    {withTitle&&<button className="text-button quest-open" onClick={()=>onOpen(entry.id)}>Open page <ArrowUpRight size={13}/></button>}
@@ -165,5 +174,6 @@ export function QuestDetail({entry,data,update,onOpen,withTitle=false}:{entry:En
     <select aria-label="Place" value={q.placeId??''} onChange={e=>set({placeId:e.target.value||null})}><option value="">{place?'No place':'Choose a place…'}</option>{places.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
    </aside>
   </div>
+  {editing&&campaign&&change&&<QuestCategoriesDialog data={data} worldId={entry.worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </div>;
 }

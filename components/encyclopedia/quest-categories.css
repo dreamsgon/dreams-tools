@@ -1,0 +1,41 @@
+/* The quest category menu on a quest, and the Quest categories dialog (components/encyclopedia/quest-categories.tsx). Colours live with .quest-type in encyclopedia.css. */
+.quest-cat-picker{position:relative;display:inline-flex}
+.quest-cat-button{gap:4px;border:0;cursor:pointer;font:inherit;font-size:12px;line-height:1.4;padding:3px 6px 3px 8px}
+.quest-cat-button:hover{filter:brightness(1.12)}
+.quest-cat-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:220px;max-height:min(360px,calc(100vh / var(--ui-zoom, 1) - 160px));overflow:auto;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 12px 36px var(--shadow-color,rgba(0,0,0,.3));display:flex;flex-direction:column;gap:2px}
+.quest-cat-menu button{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 8px;border-radius:var(--radius-sm);text-align:left;color:var(--ink);font-size:13px}
+.quest-cat-menu button:hover,.quest-cat-menu button:focus-visible{background:var(--hover);outline:none}
+.quest-cat-menu button[aria-checked="true"]{background:var(--accent-soft)}
+.quest-cat-menu button svg{color:var(--accent)}
+.quest-cat-menu .quest-cat-edit{justify-content:flex-start;gap:7px;color:var(--accent);border-top:1px solid var(--line);border-radius:0 0 var(--radius-sm) var(--radius-sm);margin-top:4px;padding-top:10px}
+
+.quest-cat-dialog{box-sizing:border-box;width:min(560px,calc(100vw / var(--ui-zoom, 1) - 24px));max-height:calc(100vh / var(--ui-zoom, 1) - 40px);margin:auto;padding:22px 24px 20px;border:1px solid var(--line);border-radius:var(--radius-lg,8px);background:var(--panel);color:var(--ink);box-shadow:0 25px 80px var(--shadow-color,rgba(0,0,0,.35));font-family:var(--font-sans)}
+.quest-cat-dialog::backdrop{background:var(--overlay,rgba(10,14,18,.5))}
+.quest-cat-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.quest-cat-head h2{font-family:var(--font-sans);font-size:19px;font-weight:600;letter-spacing:0}
+.quest-cat-head .icon-button{border:0}
+.quest-cat-lead{font-size:13px;line-height:1.6;color:var(--muted);margin:6px 0 14px}
+.quest-cat-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.quest-cat-list li{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.quest-cat-list li.dragging{opacity:.5}
+.quest-cat-list input{flex:1;min-width:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--control,var(--panel));color:var(--ink);padding:7px 10px;font-size:14px}
+.quest-cat-list li.on input{border-color:var(--accent)}
+.quest-cat-handle{display:flex;padding:4px 2px;color:var(--muted);cursor:grab;border-radius:var(--radius-sm)}
+.quest-cat-handle:hover{color:var(--ink)}
+.quest-cat-list .quest-cat-dot,.quest-cat-swatches .quest-cat-dot{width:20px;height:20px;padding:0;border:2px solid transparent;cursor:pointer}
+.quest-cat-list li.on>.quest-cat-dot{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--line-strong,var(--muted))}
+.quest-cat-count{width:60px;flex-shrink:0;color:var(--muted);font-size:12px}
+.quest-cat-list .icon-button{border:0;padding:6px}
+.quest-cat-remove{flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.quest-cat-remove select{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--control,var(--panel));color:var(--ink);padding:6px 8px;font-size:13px}
+.quest-cat-danger{background:var(--danger,#b42318);color:var(--on-accent,#fff);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px}
+.quest-cat-swatches{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0 4px 34px}
+.quest-cat-swatches .quest-cat-dot{width:24px;height:24px}
+.quest-cat-swatches .quest-cat-dot[aria-checked="true"]{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--ink)}
+.quest-cat-swatches small{margin-left:auto;color:var(--muted)}
+.quest-cat-add{display:flex;gap:8px;margin-top:14px}
+.quest-cat-add input{flex:1;min-width:0;border:1px dashed var(--line-strong,var(--line));border-radius:var(--radius-sm);background:transparent;color:var(--ink);padding:9px 11px;font-size:14px}
+.quest-cat-add .button{padding:9px 14px}
+.quest-cat-note{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}
+.quest-cat-actions{display:flex;justify-content:flex-end;margin-top:16px}
+@media(max-width:540px){.quest-cat-dialog{padding:18px 16px}.quest-cat-count{display:none}.quest-cat-swatches{padding-left:0}.quest-cat-swatches small{margin-left:0;width:100%}}
