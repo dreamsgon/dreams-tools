@@ -22,10 +22,10 @@ const hints: Record<SavePhase, string> = {
   offline: "Your maps could not be loaded, so changes cannot be saved.",
 };
 
-export default function SaveChip({ status, error, conflict, onSave }: { status: string; error: string; conflict: boolean; onSave: () => void }) {
+export default function SaveChip({ status, error, conflict, onSave, hints: own }: { status: string; error: string; conflict: boolean; onSave: () => void; hints?: Partial<Record<SavePhase, string>> }) {
   const phase = savePhase(status, error, conflict);
   const Icon = phase === "saved" ? Check : phase === "unsaved" ? Circle : phase === "saving" || phase === "loading" ? Loader2 : phase === "offline" ? CloudOff : AlertTriangle;
-  const hint = phase === "failed" && error ? `${error} Click to try again.` : hints[phase];
+  const hint = phase === "failed" && error ? `${error} Click to try again.` : own?.[phase] ?? hints[phase];
   function click() {
     if (phase === "conflict") {
       const notice = document.querySelector<HTMLElement>(".save-conflict-notice");
