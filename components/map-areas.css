@@ -1,0 +1,52 @@
+/* Map notes, part 2: areas on Maptable maps, their cards, and drawing a new one. */
+.map-areas { position:absolute; inset:0; z-index:4; pointer-events:none; overflow:visible; }
+.map-area polygon { fill:transparent; stroke:#d4a12a; stroke-width:1.5; stroke-dasharray:6 4; pointer-events:stroke; cursor:pointer; }
+.map-areas.is-player .map-area polygon { stroke:#ffffffaa; stroke-dasharray:3 5; }
+.map-area.is-selected polygon { fill:color-mix(in srgb, var(--accent, #1f6f68) 22%, transparent); stroke:var(--accent, #1f6f68); stroke-width:2.5; stroke-dasharray:none; }
+.map-area-badge { pointer-events:all; cursor:pointer; outline:none; }
+.map-area-badge circle { fill:#d4a12a; stroke:#fff; stroke-width:2; }
+.map-area.is-selected .map-area-badge circle { fill:var(--accent, #1f6f68); }
+.map-area-badge:focus-visible circle { stroke:var(--ink, #111); stroke-width:3; }
+.map-area-badge text { fill:#fff; font:700 11px system-ui, sans-serif; pointer-events:none; }
+.map-area-draw { position:absolute; inset:0; z-index:7; cursor:crosshair; touch-action:none; }
+.map-area-hint { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px; margin:0; padding:6px 8px 6px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:12.5px; box-shadow:0 4px 14px #0000001f; white-space:nowrap; max-width:calc(100% - 20px); overflow:hidden; text-overflow:ellipsis; cursor:default; }
+.map-area-hint button { min-height:26px; padding:0 9px; font-size:12px; }
+.map-area-box { position:absolute; border:2px dashed var(--accent, #1f6f68); background:color-mix(in srgb, var(--accent, #1f6f68) 18%, transparent); pointer-events:none; }
+.map-area-card header { gap:6px; }
+.map-area-crumb { flex:1; min-width:0; color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.map-area-title { margin:0; font-size:18px; font-weight:650; line-height:1.25; overflow-wrap:anywhere; }
+.map-area-text { display:flex; flex-direction:column; gap:9px; font-size:13.5px; line-height:1.55; }
+.map-area-text p, .map-area-text ul { margin:0; overflow-wrap:anywhere; }
+.map-area-text ul { padding-left:18px; }
+.map-area-text h4 { margin:4px 0 0; font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.map-area-text code { font-size:12px; }
+.map-area-roll { display:inline-block; padding:0 6px; border-radius:4px; background:var(--accent-soft); color:var(--accent); font-size:12px; font-weight:600; }
+.map-area-link { color:var(--accent); }
+.map-area-secret { padding:8px 10px; border-radius:var(--radius); background:color-mix(in srgb, #d08245 14%, var(--panel)); color:color-mix(in srgb, #7a3f16 80%, var(--ink)); }
+.map-area-secret > span { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
+.map-area-secret p { margin:4px 0 0; }
+.map-area-card footer { flex-wrap:wrap; }
+.map-area-card footer > button:not(.note-icon) { display:inline-flex; align-items:center; gap:2px; }
+.map-area-open { display:inline-flex; align-items:center; gap:4px; min-height:30px; padding:0 9px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:12px; text-decoration:none; }
+.map-area-dialog { position:absolute; top:12px; right:12px; z-index:8; width:min(340px, calc(100% - 24px)); max-height:calc(100% - 24px); display:flex; flex-direction:column; border:1px solid var(--line); border-radius:var(--radius-lg, 10px); background:var(--panel); color:var(--ink); box-shadow:var(--shadow-md, 0 14px 40px #0000002e); font-size:13px; }
+.map-area-dialog header { display:flex; align-items:center; gap:8px; padding:12px 8px 8px 14px; }
+.map-area-dialog h3 { flex:1; margin:0; font-size:15px; font-weight:650; }
+.map-area-dialog-body { display:flex; flex-direction:column; gap:8px; padding:0 14px 14px; overflow:auto; min-height:0; }
+.map-area-page { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; border:1px solid var(--line); border-radius:var(--radius); }
+.map-area-sections { list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:var(--radius); max-height:260px; overflow:auto; }
+.map-area-sections li + li { border-top:1px solid var(--line); }
+.map-area-sections li.note-muted { padding:10px; }
+.map-area-sections button { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:34px; padding:4px 8px; border:0; border-radius:0; background:none; color:var(--ink); font-weight:400; text-align:left; }
+.map-area-sections button[aria-pressed="true"] { background:var(--accent-soft); font-weight:600; }
+.map-area-sections small { flex:none; padding:1px 6px; border-radius:4px; background:var(--accent-soft); color:var(--accent); font-size:11px; }
+.map-area-dialog .primary { align-self:flex-end; }
+.map-area-all { display:flex; flex-direction:column; gap:6px; padding-top:10px; border-top:1px solid var(--line); }
+.areas-panel { display:flex; flex-direction:column; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); }
+.areas-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.areas-panel h3 { margin:0; font-size:13px; font-weight:650; }
+.areas-panel ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.areas-panel li button { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:3px 6px; border:0; background:none; color:var(--ink); font-weight:400; text-align:left; justify-content:flex-start; }
+.areas-panel li button[aria-pressed="true"] { background:var(--accent-soft); }
+.areas-panel li b { flex:none; display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; background:#d4a12a; color:#fff; font-size:10.5px; }
+.areas-panel li span { flex:1; min-width:0; display:flex; flex-direction:column; }
+.areas-panel li small { color:var(--muted); font-size:11px; }

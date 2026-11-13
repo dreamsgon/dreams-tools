@@ -122,6 +122,8 @@ import { drawingStampAssets } from "@/lib/map-stamps";
 import { addNotePage, linkablePages, notePages, playerNote } from "@/lib/map-notes";
 import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/world-model";
 import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
+import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
+import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
 // Editors and panels that open on demand load as separate chunks; they are fetched while the
 // browser is idle (below) so the first open is still instant.
 const lazyParts = {
@@ -314,7 +316,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const [book,setBook]=useState<EncyclopediaWorkspace|null>(null),[bookError,setBookError]=useState(""),[playerNoteOpen,setPlayerNoteOpen]=useState<{id:string;key:string}|null>(null);
   // The player note closes when the view or the scene changes.
   const playerNoteKey=`${player}:${scene?.id}`,playerNoteId=playerNoteOpen?.key===playerNoteKey?playerNoteOpen.id:null,setPlayerNoteId=(id:string|null)=>setPlayerNoteOpen(id?{id,key:playerNoteKey}:null);
-  const wantsBook=panel==="exploration"||!!scene?.pointsOfInterest.some(p=>p.pages?.length);
+  // Map notes, part 2: the open area (closed when the view or scene changes), drawing a new one, and its dialog.
+  const [areaOpen,setAreaOpenState]=useState<{id:string;key:string}|null>(null),[areaDrawing,setAreaDrawing]=useState(false),[areaEdit,setAreaEdit]=useState<{id?:string;points:{x:number;y:number}[];pageId?:string;section?:string;playersSee?:boolean}|null>(null);
+  const openAreaId=areaOpen?.key===playerNoteKey?areaOpen.id:null,setOpenArea=(id:string|null)=>setAreaOpenState(id?{id,key:playerNoteKey}:null);
+  const wantsBook=panel==="exploration"||!!scene?.pointsOfInterest.some(p=>p.pages?.length)||!!scene?.areas?.length||areaDrawing;
   useEffect(()=>{if(!wantsBook||book)return;let active=true;
     loadEncyclopedia().then(raw=>{if(active){setBook(raw as unknown as EncyclopediaWorkspace);setBookError("");}}).catch(e=>{if(active)setBookError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
     return()=>{active=false;};},[wantsBook,book]);
@@ -1230,6 +1235,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   else setNotice("Previous map is no longer in this campaign.");
                 }}>Back to previous map</button>}
                 <ExplorationPanel workspace={workspace} scene={scene} update={updateScene} pages={linkable} book={book} bookError={bookError} selectedId={selectedPoiId} select={id=>{setSelectedPoiId(id);setTool("select");}} place={activation=>{setPoiActivation(activation);chooseTool("poi");}} openScene={openExplorationMap} createMap={type=>{setNewMapType(type);setDialog("add-scenes");}}/>
+                {scene.mapType!=="world"&&<AreasPanel areas={scene.areas??[]} book={book} selectedId={openAreaId} drawing={areaDrawing} onSelect={id=>setOpenArea(id)} onDraw={on=>{setAreaDrawing(on);if(on){setAreaEdit(null);setOpenArea(null);}}}/>}
               </>}
               {panel === "scenes" && (
                 <>
@@ -2090,6 +2096,25 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             }}
             selectedPoiId={selectedPoiId}
             notePoiId={player?playerNoteId:tool==="select"&&["exploration","scenes"].includes(selectionScope)?selectedPoiId:null}
+            renderOverlay={view=>{
+              const areas=scene.areas??[],shown=player?areas.filter(a=>!!playerAreaText(a,book,campaignId)):areas,open=shown.find(a=>a.id===openAreaId),shownText=player&&open?playerAreaText(open,book,campaignId):null;
+              const saveArea=(made:{pageId:string;section:string;playersSee:boolean})=>{const edit=areaEdit;if(!edit)return;const id=edit.id??uid();
+                if(!edit.id&&areas.length>=MAX_AREAS){setNotice(`A map holds up to ${MAX_AREAS} areas.`);return;}
+                updateScene(s=>{const list=s.areas??(s.areas=[]);const a=list.find(x=>x.id===id),next={id,points:edit.points,pageId:made.pageId,section:made.section,...(made.playersSee?{playersSee:true}:{})};if(a)Object.assign(a,next,made.playersSee?{}:{playersSee:undefined});else list.push(next);});
+                setAreaEdit(null);setOpenArea(id);};
+              return <>
+                {shown.length>0&&<AreaLayer areas={shown} view={view} player={player} selectedId={open?.id??null} onSelect={id=>setOpenArea(id===openAreaId?null:id)}/>}
+                {open&&(player?shownText&&<PlayerAreaCard shown={shownText} area={open} view={view} onClose={()=>setOpenArea(null)}/>
+                  :!areaEdit&&<GmAreaCard area={open} areas={areas} book={book} view={view} onSelect={id=>setOpenArea(id)} onEdit={()=>setAreaEdit({...open})} onClose={()=>setOpenArea(null)}
+                    onShare={on=>updateScene(s=>{const a=s.areas?.find(x=>x.id===open.id);if(a)a.playersSee=on||undefined;})}
+                    onRemove={()=>{updateScene(s=>{s.areas=(s.areas??[]).filter(x=>x.id!==open.id);});setOpenArea(null);}}/>)}
+                {!player&&areaDrawing&&<AreaDraw view={view} onCancel={()=>setAreaDrawing(false)}
+                  onBox={(a,b)=>{const c=(p:{x:number;y:number})=>({x:Math.round(Math.max(0,Math.min(scene.width,p.x))),y:Math.round(Math.max(0,Math.min(scene.height,p.y)))});setAreaDrawing(false);setAreaEdit({points:[c(a),c(b)]});}}
+                  onClick={pt=>{const room=roomAt(scene.drawing,pt);if(!room){setNotice("No room is drawn there. Drag a box instead.");return;}setAreaDrawing(false);setAreaEdit({points:room});}}/>}
+                {!player&&areaEdit&&<AreaDialog key={areaEdit.id??"new"} area={areaEdit} areas={areas} drawing={scene.drawing} pages={linkable} book={book} onClose={()=>setAreaEdit(null)} onSave={saveArea}
+                  onLinkAll={made=>{updateScene(s=>{(s.areas??(s.areas=[])).push(...made);});setAreaEdit(null);setNotice(`Linked ${made.length} rooms to their sections.`);}}/>}
+              </>;
+            }}
             renderNote={(poi,at)=>{
               if(player){const note=playerNote(poi,book,campaignId);return note?<PlayerNoteCard note={note} color={poi.color} at={at} onClose={()=>setPlayerNoteId(null)}/>:null;}
               return <GmNoteCard point={poi} at={at} pages={notePages(book,poi.pages)} linkable={linkable} loadError={bookError} onClose={()=>setSelectedPoiId(null)}

@@ -120,6 +120,8 @@ type Props = {
   onPlayerPoiTap?: (id: string | null) => void;
   /** An Encyclopedia page dropped on the map, with the marker it landed on. */
   onPageDrop?: (entryId: string, point: Point, poiId: string | null) => void;
+  /** Map notes: layers drawn over the map in screen space (areas, their cards, drawing a new area). */
+  renderOverlay?: (view: { x: number; y: number; scale: number; width: number; height: number }) => ReactNode;
 };
 export default function Board(p: Props) {
   const [newCrop,setNewCrop]=useState(false);
@@ -1228,6 +1230,7 @@ export default function Board(p: Props) {
         tabIndex={0}
         aria-label={`Interactive map: ${p.scene.name}. Use the token list to edit tokens and their coordinates.`}
       />
+      {p.renderOverlay?.({ x: view.x, y: view.y, scale: view.scale, width: view.width, height: view.height })}
       {p.notePoiId && p.renderNote && (() => {
         const poi = p.scene.pointsOfInterest.find(item => item.id === p.notePoiId);
         return poi && (!p.player || !poi.hidden) ? p.renderNote(poi, { x: poi.x * view.scale + view.x, y: poi.y * view.scale + view.y, width: view.width, height: view.height }) : null;
