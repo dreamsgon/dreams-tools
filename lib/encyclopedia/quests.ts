@@ -7,13 +7,35 @@ import { z } from "zod";
  */
 
 export const questStates = ["rumour", "active", "done", "failed"] as const;
-export const questTypes = ["main", "side", "personal"] as const;
 export type QuestState = typeof questStates[number];
-export type QuestType = typeof questTypes[number];
 export const stateNames: Record<QuestState, string> = { rumour: "Rumours", active: "Active", done: "Done", failed: "Failed" };
-export const typeNames: Record<QuestType, string> = { main: "Main", side: "Side", personal: "Personal" };
 
 const qid = z.string().min(1).max(100);
+
+/*
+ * Quest categories belong to a campaign. A quest's `type` is the id of one of them. A campaign that
+ * never edited its categories has Main, Side and Personal, whose ids are the old fixed quest types,
+ * so quests saved before categories existed keep theirs.
+ */
+export const categoryColors = ["accent", "grey", "purple", "teal", "orange", "gold", "rose"] as const;
+export type CategoryColor = typeof categoryColors[number];
+export const maxQuestCategories = 20;
+export const questCategorySchema = z.object({ id: qid.regex(/^[a-zA-Z0-9_-]+$/), name: z.string().trim().min(1).max(40), color: z.enum(categoryColors) });
+export type QuestCategory = z.infer<typeof questCategorySchema>;
+export const questCategoriesSchema = z.array(questCategorySchema).min(1).max(maxQuestCategories)
+  .refine(c => new Set(c.map(x => x.id)).size === c.length, "Each quest category needs its own id");
+export const defaultQuestCategories = (): QuestCategory[] => [
+  { id: "main", name: "Main", color: "accent" }, { id: "side", name: "Side", color: "grey" }, { id: "personal", name: "Personal", color: "purple" },
+];
+/** A campaign's categories in its order. */
+export const questCategories = (campaign?: { questCategories?: QuestCategory[] } | null) =>
+  campaign?.questCategories?.length ? campaign.questCategories : defaultQuestCategories();
+/** The category a quest is in. A quest whose category is gone shows as "Uncategorised" until it is moved. */
+export function categoryOf(categories: QuestCategory[], type: string): QuestCategory {
+  return categories.find(c => c.id === type) ?? { id: type, name: "Uncategorised", color: "grey" };
+}
+/** The category new quests go in: Side when the campaign has it, otherwise the first. */
+export const defaultCategory = (categories: QuestCategory[]) => (categories.find(c => c.id === "side") ?? categories[0])?.id ?? "side";
 export const objectiveSchema = z.object({ id: qid, text: z.string().trim().min(1).max(300), done: z.boolean(), hidden: z.boolean().optional() });
 export const questLogSchema = z.object({
   id: qid,
@@ -27,7 +49,8 @@ export const questLogSchema = z.object({
 });
 export const questSchema = z.object({
   state: z.enum(questStates),
-  type: z.enum(questTypes),
+  /** The id of one of the campaign’s quest categories. */
+  type: qid,
   /** Order of the card inside its board column. */
   rank: z.number().finite().optional(),
   giverId: qid.nullable().optional(),
@@ -40,7 +63,7 @@ export type Quest = z.infer<typeof questSchema>;
 export type Objective = z.infer<typeof objectiveSchema>;
 export type QuestLog = z.infer<typeof questLogSchema>;
 
-export const newQuest = (state: QuestState = "active", type: QuestType = "side"): Quest => ({ state, type, objectives: [], log: [] });
+export const newQuest = (state: QuestState = "active", type = "side"): Quest => ({ state, type, objectives: [], log: [] });
 
 /** Steps done and in total, counting every objective the GM wrote. */
 export function questProgress(q: Quest) {
@@ -79,13 +102,38 @@ export function moveQuest<E extends QuestEntry, S extends HasEntries<E>>(s: S, w
   }) };
 }
 
+type HasCampaigns<E> = HasEntries<E> & { campaigns: { id: string; questCategories?: QuestCategory[] }[] };
+const withCategories = <E, S extends HasCampaigns<E>>(s: S, campaignId: string, categories: QuestCategory[]): S =>
+  ({ ...s, campaigns: s.campaigns.map(c => c.id === campaignId ? { ...c, questCategories: categories } : c) });
+
+/** Saves a campaign's categories (renamed, recoloured, added or reordered). Blank names keep the old name. */
+export function setQuestCategories<E, S extends HasCampaigns<E>>(s: S, campaignId: string, categories: QuestCategory[]): S {
+  const clean = categories.map(c => ({ ...c, name: c.name.trim().slice(0, 40) })).filter(c => c.name).slice(0, maxQuestCategories);
+  return clean.length && new Set(clean.map(c => c.id)).size === clean.length ? withCategories(s, campaignId, clean) : s;
+}
+
+/**
+ * Removes a category and moves the quests in it (the ones this campaign sees) to another category.
+ * A campaign keeps at least one category.
+ */
+export function removeQuestCategory<E extends QuestEntry, S extends HasCampaigns<E>>(s: S, worldId: string, campaignId: string, id: string, moveTo: string, now = new Date().toISOString()): S {
+  const campaign = s.campaigns.find(c => c.id === campaignId);
+  if (!campaign) return s;
+  const categories = questCategories(campaign), rest = categories.filter(c => c.id !== id);
+  if (rest.length === categories.length || !rest.some(c => c.id === moveTo)) return s;
+  const moving = new Set(questsIn(s, worldId, campaignId).filter(q => q.quest.type === id).map(q => q.entry.id));
+  const next = withCategories(s, campaignId, rest);
+  return { ...next, entries: next.entries.map(e => moving.has(e.id) ? { ...e, quest: { ...(e.quest ?? newQuest()), type: moveTo }, updatedAt: now } : e) };
+}
+
 /** Links read as their words in the player journal. */
 const unlink = (t: string) => t.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g, (_, target: string, label?: string) => label?.trim() || target);
 
 /** What players get: never hidden objectives, GM-only log entries, or links to pages they can’t read. */
-export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: (text: string) => string) {
+export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: (text: string) => string, categories: QuestCategory[] = defaultQuestCategories()) {
+  const category = categoryOf(categories, q.type);
   return {
-    state: q.state, type: q.type, reward: q.reward ?? "",
+    state: q.state, type: q.type, category: { name: category.name, color: category.color }, reward: q.reward ?? "",
     giverId: q.giverId && readable(q.giverId) ? q.giverId : null,
     placeId: q.placeId && readable(q.placeId) ? q.placeId : null,
     objectives: q.objectives.filter(o => !o.hidden).map(o => ({ id: o.id, text: o.text, done: o.done })),

@@ -41,3 +41,39 @@ test('players get shared quests without hidden steps or GM-only log entries', ()
   const readable=p.entries.some(e=>e.id==='demo-mara');
   assert.equal(bell.quest.giverId,readable?'demo-mara':null);
 });
+
+test('a campaign has Main, Side and Personal until it makes its own quest categories', async () => {
+  const {questCategories,categoryOf,defaultCategory,setQuestCategories,removeQuestCategory}=await import('../lib/encyclopedia/quests.ts');
+  let s=world([quest('bell','active',{type:'main'}),quest('kesh','active',{type:'personal'}),quest('barge','rumour')]);
+  const campaign=()=>s.campaigns.find(c=>c.id==='demo-campaign');
+  assert.deepEqual(questCategories(campaign()).map(c=>c.name),['Main','Side','Personal']);
+  assert.equal(defaultCategory(questCategories(campaign())),'side');
+  // Adding, renaming and reordering.
+  s=workspaceSchema.parse(setQuestCategories(s,'demo-campaign',[{id:'order',name:'  Faction: the Order ',color:'gold'},...questCategories(campaign()).map(c=>c.id==='side'?{...c,name:'Errand'}:c)]));
+  assert.deepEqual(questCategories(campaign()).map(c=>c.name),['Faction: the Order','Main','Errand','Personal']);
+  s=workspaceSchema.parse(setQuestCategories(s,'demo-campaign',[...questCategories(campaign()),{id:'x',name:'   ',color:'teal'}]));
+  assert.equal(questCategories(campaign()).length,4,'blank names are dropped');
+  assert.equal(setQuestCategories(s,'demo-campaign',[{id:'a',name:'A',color:'teal'},{id:'a',name:'B',color:'teal'}]),s,'ids stay unique');
+  // A quest can be in a custom category.
+  s=workspaceSchema.parse({...s,entries:s.entries.map(e=>e.id==='barge'?{...e,quest:{...e.quest,type:'order'}}:e)});
+  assert.equal(categoryOf(questCategories(campaign()),'order').name,'Faction: the Order');
+  // Removing a category moves its quests.
+  s=workspaceSchema.parse(removeQuestCategory(s,'demo-world','demo-campaign','main','personal',now));
+  assert.equal(s.entries.find(e=>e.id==='bell').quest.type,'personal');
+  assert.ok(!questCategories(campaign()).some(c=>c.id==='main'));
+  assert.equal(removeQuestCategory(s,'demo-world','demo-campaign','order','main'),s,'quests only move to a category that is still there');
+  let one=setQuestCategories(s,'demo-campaign',[{id:'only',name:'Only',color:'grey'}]);
+  assert.equal(removeQuestCategory(one,'demo-world','demo-campaign','only','only'),one,'a campaign keeps one category');
+  assert.equal(categoryOf(questCategories(campaign()),'gone').name,'Uncategorised');
+  assert.equal(workspaceSchema.safeParse({...s,campaigns:s.campaigns.map(c=>c.id==='demo-campaign'?{...c,questCategories:[]}:c)}).success,false);
+  assert.equal(workspaceSchema.safeParse({...s,campaigns:s.campaigns.map(c=>c.id==='demo-campaign'?{...c,questCategories:[{id:'a',name:'A',color:'blue'}]}:c)}).success,false);
+});
+
+test('players see the quest category name and colour, not its id', () => {
+  let s=world([{...quest('barge','active',{type:'order'}),overviewVisibility:'players'}]);
+  s={...s,campaigns:s.campaigns.map(c=>c.id==='demo-campaign'?{...c,questCategories:[{id:'order',name:'Faction: the Order',color:'gold'}]}:c)};
+  const q=playerCampaign(workspaceSchema.parse(s),'demo-campaign').entries.find(e=>e.id==='barge').quest;
+  assert.deepEqual(q.category,{name:'Faction: the Order',color:'gold'});
+  const old=playerCampaign(world([{...quest('bell','active',{type:'main'}),overviewVisibility:'players'}]),'demo-campaign').entries.find(e=>e.id==='bell').quest;
+  assert.deepEqual(old.category,{name:'Main',color:'accent'});
+});

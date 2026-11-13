@@ -5,7 +5,7 @@ import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 import {dashboardSchema} from './dashboard.ts';
-import {questSchema,playerQuest,newQuest} from './quests.ts';
+import {questSchema,playerQuest,newQuest,questCategoriesSchema,questCategories} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
 import {lookSchema,playerLook} from './look.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -46,7 +46,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the codex category order and quick notes from the table waiting to be filed.
   codexCategories:z.array(codexCategory).max(40).optional(), codexInbox:z.array(inboxNoteSchema).max(200).optional(),
   // Optional (added later): the campaign's accent, heading font, page surface and banner.
-  look:lookSchema.optional(), dashboard:dashboardSchema.optional() });
+  look:lookSchema.optional(), dashboard:dashboardSchema.optional(),
+  // Optional (added later): the quest categories in their order. Without it a campaign has Main, Side and Personal.
+  questCategories:questCategoriesSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -236,7 +238,7 @@ export function playerCampaign(s:Workspace,campaignId:string){
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData&&!codex)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
