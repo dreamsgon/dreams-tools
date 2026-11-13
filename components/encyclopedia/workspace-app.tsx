@@ -272,7 +272,7 @@ export default function WorkspaceApp() {
   {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
   {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)})}/>}
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
-  <RollResults discord={campaign?.discord ? { campaignId: campaign.id, label: `#${campaign.discord.route}` } : null} onSetupDiscord={campaign ? () => setModal({ type: "connections" }) : undefined}/>
+  <RollResults discord={campaign && (campaign.discord || campaign.maptableCampaignId) ? { campaignId: campaign.id, label: "Discord" } : null} onSetupDiscord={campaign ? () => setModal({ type: "connections" }) : undefined}/>
   {palette && <QuickSearch entries={shown} icons={icons} labels={labels} canCreate={!!world} scopeName={e => e.campaignId ? data.campaigns.find(c => c.id === e.campaignId)?.name ?? "Campaign" : "World lore"} onOpen={openEntry} onCreate={name => setModal({ type: "entry", name })} onView={showView} onClose={() => setPalette(false)} initialTags={paletteTags} onManageTags={() => setTagsOpen(true)}/>}
   {aiOpen && campaign && <AiConnectionDialog campaignId={campaign.id} campaignName={campaign.name} onClose={() => setAiOpen(false)}/>}
   {tagsOpen && <TagsManager onClose={() => setTagsOpen(false)} onShow={showTag}/>}

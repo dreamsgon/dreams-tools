@@ -1,43 +1,36 @@
 import {loadWorkspace} from "@/lib/workspace-storage";
 import { context, failure, privateHeaders } from "@/lib/server";
 import { s3Configured } from "@/lib/s3";
-import { campaignSettingsKey, requireCampaign, validWebhook } from "@/lib/campaign-settings";
+import { requireCampaign } from "@/lib/campaign-settings";
+import { discordStatus, editDiscord } from "@/lib/discord/campaign";
+import type { DiscordEdit } from "@/lib/discord/settings";
+
+// Storage status, plus the selected campaign's Discord channels (never their webhook URLs). `check=1` looks each webhook up in Discord.
 export async function GET(request: Request) {
   try {
     const { bucket, prefix } = await context();
-    const campaignId = new URL(request.url).searchParams.get("campaignId");
-    let discordConfigured = false;
-    let discordRoutes: Record<string, boolean> = {};
+    const params = new URL(request.url).searchParams, campaignId = params.get("campaignId");
+    let discord = null;
     if (campaignId !== null) {
       const workspace = await loadWorkspace(bucket,prefix);
       if (!workspace) throw new Error("Save and select a campaign before configuring Discord.");
       requireCampaign(workspace.workspace, campaignId);
-      const settings = await bucket.get(campaignSettingsKey(prefix, campaignId));
-      const value = settings ? await settings.json<{ webhook?: string; webhooks?: Record<string,string> }>() : {};
-      discordRoutes = Object.fromEntries(["default","combat","exploration","world"].map(route => [route, validWebhook(route === "default" ? value.webhook : value.webhooks?.[route])]));
-      discordConfigured = Object.values(discordRoutes).some(Boolean);
+      discord = await discordStatus(bucket, prefix, campaignId, { check: params.get("check") === "1" });
     }
-    return Response.json({ discordConfigured, discordRoutes, s3Configured: s3Configured(), s3ObjectPrefix: (process.env.S3_PREFIX || "maptable/").replace(/^\/+|\/+$/g, "") + "/" + prefix }, { headers: privateHeaders });
-  } catch (e) { return failure(e); }
-}
-export async function PUT(request: Request) {
-  try {
-    const { bucket, prefix } = await context(request);
-    const { campaignId, webhook, route = "default" } = await request.json() as { campaignId: unknown; webhook: unknown; route?: string };
-    if (!["default","combat","exploration","world"].includes(route)) throw new Error("Choose a valid map destination.");
-    const workspace = await loadWorkspace(bucket,prefix);
-    if (!workspace) throw new Error("Save and select a campaign before configuring Discord.");
-    const id = requireCampaign(workspace.workspace, campaignId);
-    if (webhook !== "" && !validWebhook(webhook))
-      throw new Error("Use a Discord webhook URL beginning https://discord.com/api/webhooks/.");
-    const previous = await bucket.get(campaignSettingsKey(prefix, id));
-    const settings = previous ? await previous.json<{webhook?:string;webhooks?:Record<string,string>}>() : {};
-    if (route === "default") settings.webhook = webhook as string;
-    else settings.webhooks = {...settings.webhooks, [route]: webhook as string};
-    await bucket.put(campaignSettingsKey(prefix, id), JSON.stringify(settings), {
-      httpMetadata: { contentType: "application/json" },
-    });
-    return Response.json({ ok: true }, { headers: privateHeaders });
+    return Response.json({ discordConfigured: !!discord?.channels.length, discord, s3Configured: s3Configured(), s3ObjectPrefix: (process.env.S3_PREFIX || "maptable/").replace(/^\/+|\/+$/g, "") + "/" + prefix }, { headers: privateHeaders });
   } catch (e) { return failure(e); }
 }
 
+// One change to the campaign's Discord channels: { campaignId, action, ... } (see DiscordEdit).
+export async function PUT(request: Request) {
+  try {
+    const { bucket, prefix } = await context(request);
+    const body = await request.json() as { campaignId?: unknown; action?: unknown };
+    if (!body || typeof body.action !== "string") throw new Error("Unknown change.");
+    const workspace = await loadWorkspace(bucket,prefix);
+    if (!workspace) throw new Error("Save and select a campaign before configuring Discord.");
+    const id = requireCampaign(workspace.workspace, body.campaignId);
+    const discord = await editDiscord(bucket, prefix, id, body as unknown as DiscordEdit);
+    return Response.json({ ok: true, discord }, { headers: privateHeaders });
+  } catch (e) { return failure(e); }
+}

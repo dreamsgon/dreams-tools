@@ -4,6 +4,7 @@ import { drawingStampAssets } from "@/lib/map-stamps";
 import {stageTransfer} from "@/lib/transfer-client";
 
 import AgentAccess from "./agent-access";
+import DiscordConnections from "./discord-connections";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -1599,221 +1600,32 @@ export function ConnectionsDialog({
 
   campaignName: string | null;
 
-  onUpdated: (s: { s3Configured: boolean; discordConfigured: boolean; discordRoutes?: Record<string,boolean> }) => void;
+  onUpdated: (s: { s3Configured: boolean; discordConfigured: boolean }) => void;
 
 }) {
 
-  const [route,setRoute]=useState("default");
+  const [status, setStatus] = useState<{ s3Configured: boolean; s3ObjectPrefix?: string; discordConfigured: boolean } | null>(null);
 
-  const [testing,setTesting]=useState(false);
-
-  const [status, setStatus] = useState<{
-
-      s3Configured: boolean; s3ObjectPrefix?: string;
-
-      discordConfigured: boolean; discordRoutes?: Record<string,boolean>;
-
-    } | null>(null),
-
-    [webhook, setWebhook] = useState(""),
-
-    [error, setError] = useState(""),
-
-    [busy, setBusy] = useState(false),
-
-    [message, setMessage] = useState("");
+  const url = "/api/settings"+(campaignId?`?campaignId=${encodeURIComponent(campaignId)}`:"");
 
   useEffect(() => {
 
-    let active=true;
+    let active = true;
 
-    setStatus(null);setWebhook("");setMessage("");setError("");
+    api<{ s3Configured: boolean; s3ObjectPrefix?: string; discordConfigured: boolean }>(url).then(value => { if (active) setStatus(value); }).catch(() => {});
 
-    api<{ s3Configured: boolean; discordConfigured: boolean; discordRoutes?: Record<string,boolean> }>("/api/settings"+(campaignId?`?campaignId=${encodeURIComponent(campaignId)}`:""))
+    return () => { active = false; };
 
-      .then(value=>{if(active)setStatus(value);})
+  }, [url]);
 
-      .catch((e) => {if(active)setError(e.message);});
-
-    return ()=>{active=false;};
-
-  }, [campaignId]);
-
-  const save = async (value: string) => {
-
-    if(!campaignId)return;
-
-    setBusy(true);
-
-    setError("");
-
-    setMessage("");
-
-    try {
-
-      await api("/api/settings", {
-
-        method: "PUT",
-
-        headers: { "Content-Type": "application/json" },
-
-        body: JSON.stringify({ campaignId, route, webhook: value.trim() }),
-
-      });
-
-      const next = await api<{
-
-        s3Configured: boolean; s3ObjectPrefix?: string;
-
-        discordConfigured: boolean; discordRoutes?: Record<string,boolean>;
-
-      }>(`/api/settings?campaignId=${encodeURIComponent(campaignId)}`);
-
-      setStatus(next);
-
-      onUpdated(next);
-
-      setWebhook("");
-
-      setMessage(
-
-        value
-
-          ? "Webhook saved. You can now post from Share."
-
-          : "Webhook removed.",
-
-      );
-
-    } catch (e) {
-
-      setError((e as Error).message);
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  };
-
-  const configured = !!status?.discordRoutes?.[route];
-
-  const available = configured || !!status?.discordRoutes?.default;
-
-  const testWebhook = async () => {
-
-    if(!campaignId || busy || !available || webhook.trim())return;
-
-    setBusy(true);setTesting(true);setError("");setMessage("");
-
-    try {
-
-      await api("/api/discord/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({campaignId,route})});
-
-      setMessage(`Test sent for ${campaignName}. Check Discord for the campaign-named message to confirm the channel.`);
-
-    } catch(e) {setError((e as Error).message);}
-
-    finally {setBusy(false);setTesting(false);}
-
-  };
+  // After a Discord change, Maptable learns whether this campaign can post now.
+  const changed = () => void api<{ s3Configured: boolean; s3ObjectPrefix?: string; discordConfigured: boolean }>(url).then(value => { setStatus(value); onUpdated(value); }).catch(() => {});
 
   return (
 
     <Modal title="Connections" close={close}>
 
-      <h3>Discord</h3>
-
-      <Field label="Webhook destination"><select disabled={busy} value={route} onChange={e=>{setRoute(e.target.value);setWebhook("");setMessage("");setError("");}}><option value="default">Default / fallback</option><option value="combat">Combat maps</option><option value="exploration">Exploration / area maps</option><option value="world">World maps</option></select></Field>
-
-      <p className="muted">Each destination can use its own channel. Destinations without a saved URL use the default webhook. Share lets you choose the destination for mixed exploration/combat maps.</p>
-
-      <p><strong>{campaignName ? `Campaign: ${campaignName}` : "Open a campaign to configure its Discord webhook."}</strong></p>
-
-      <p className="muted">Each campaign has its own webhook. A webhook saved here is never used by another campaign.</p>
-
-      <p className="muted">
-
-        {configured
-
-          ? "A webhook is connected."
-
-          : available ? "Using the default webhook." : "No webhook connected."}{" "}
-
-        Messages are sent only when you press Post to Discord or Test webhook.
-
-      </p>
-
-      <Field
-
-        label={
-
-          configured ? "Replace webhook URL" : "Webhook URL"
-
-        }
-
-        hint="Create one in Discord → Channel settings → Integrations → Webhooks. The saved URL stays on the server."
-
-      >
-
-        <input
-
-          type="password"
-
-          disabled={!campaignId || busy}
-
-          autoComplete="off"
-
-          value={webhook}
-
-          onChange={(e) => setWebhook(e.target.value)}
-
-          placeholder="https://discord.com/api/webhooks/…"
-
-        />
-
-      </Field>
-
-      <div className="button-row">
-
-        <button
-
-          className="primary"
-
-          disabled={busy || !webhook.trim() || !campaignId || !status}
-
-          onClick={() => void save(webhook)}
-
-        >
-
-          Save webhook
-
-        </button>
-
-        <button disabled={busy || !campaignId || !available || !!webhook.trim()} onClick={()=>void testWebhook()}>
-
-          {testing ? "Testing…" : "Test webhook"}
-
-        </button>
-
-        {configured && (
-
-          <button disabled={busy} onClick={() => void save("")}>
-
-            Disconnect
-
-          </button>
-
-        )}
-
-      </div>
-
-      <p className="muted">Test webhook sends a short message naming this campaign to its saved Discord channel. Save any new URL before testing.</p>
-
-      {message && <p role="status" className="success">{message}</p>}
-
-      {error && <p role="alert" className="error">{error}</p>}
+      <DiscordConnections key={campaignId ?? ""} campaignId={campaignId} campaignName={campaignName} onChanged={changed} />
 
       <hr />
 

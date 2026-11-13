@@ -4,9 +4,10 @@ import {Send} from "lucide-react";
 import type {Campaign} from "@/lib/encyclopedia/world-model";
 
 type Discord=NonNullable<Campaign["discord"]>;
-const routes=[["combat","Combat"],["exploration","Exploration"],["world","World"]] as const;
-
-/** Chooses which Maptable campaign's Discord channel this Encyclopedia campaign's rolls go to. */
+/**
+ * Chooses which Maptable campaign's Discord channels this Encyclopedia campaign posts through. Which channel
+ * each kind of post goes to is chosen in Maptable › Connections. With no choice, the paired campaign is used.
+ */
 export function DiscordRollsSetting({campaign,onChange}:{campaign:Campaign;onChange:(d:Discord|undefined)=>void}){
  const [campaigns,setCampaigns]=useState<{id:string;name:string}[]|null>(null),[error,setError]=useState("");
  useEffect(()=>{const controller=new AbortController();
@@ -14,16 +15,16 @@ export function DiscordRollsSetting({campaign,onChange}:{campaign:Campaign;onCha
    .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load your Maptable campaigns.");});
   return()=>controller.abort();},[]);
  const d=campaign.discord,known=!d||!campaigns||campaigns.some(c=>c.id===d.maptableCampaignId);
+ const paired=campaign.maptableCampaignId?campaigns?.find(c=>c.id===campaign.maptableCampaignId):undefined;
  return <div className="discord-rolls-setting">
-  <div className="connection-label"><Send size={17}/>Rolls to Discord</div>
-  <p className="aside-hint">Rolls in this campaign can go to the Discord channels you set up for a Maptable campaign.</p>
+  <div className="connection-label"><Send size={17}/>Discord</div>
+  <p className="aside-hint">Your rolls, and the AI’s rolls, narration and recaps, go through the Discord channels of a Maptable campaign. Choose which channel each kind goes to in Maptable › Connections.</p>
   {error?<p className="info-note" role="alert">{error}</p>:<>
-   <label className="field-label">Maptable campaign<select aria-label="Maptable campaign for Discord rolls" value={d?.maptableCampaignId??""} disabled={!campaigns} onChange={e=>onChange(e.target.value?{maptableCampaignId:e.target.value,route:d?.route??"combat"}:undefined)}>
-    <option value="">{campaigns?"Don't send rolls to Discord":"Loading…"}</option>
+   <label className="field-label">Maptable campaign<select aria-label="Maptable campaign for Discord rolls" value={d?.maptableCampaignId??""} disabled={!campaigns} onChange={e=>onChange(e.target.value?{maptableCampaignId:e.target.value}:undefined)}>
+    <option value="">{!campaigns?"Loading…":paired?`The paired campaign (${paired.name})`:"Don't post to Discord"}</option>
     {!known&&d&&<option value={d.maptableCampaignId}>A campaign that no longer exists</option>}
-    {(campaigns??[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+    {(campaigns??[]).filter(c=>c.id!==paired?.id||!!d).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
    </select></label>
-   {d&&<div className="discord-route" role="radiogroup" aria-label="Discord channel">{routes.map(([value,label])=><label key={value}><input type="radio" name={`discord-route-${campaign.id}`} checked={d.route===value} onChange={()=>onChange({...d,route:value})}/> {label}</label>)}</div>}
    {campaigns&&!campaigns.length&&<p className="aside-hint">Create a campaign in Maptable and add its Discord webhook there first.</p>}
   </>}
  </div>;

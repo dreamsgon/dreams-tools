@@ -7,7 +7,7 @@ import { campaignScenes } from "../agent-maps.ts";
 import { grantFor, listConnections, type KeyGrant } from "./connections.ts";
 import { readActivity } from "./activity.ts";
 import { makeCommit } from "./commit.ts";
-import { sendDiscordRoll } from "../encyclopedia/discord-send.ts";
+import { sendEncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import type { McpContext } from "./tools.ts";
 import { scenePicture } from "./scene-picture.ts";
 
@@ -60,6 +60,6 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
   const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
   const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, base,
-    roll => sendDiscordRoll(bucket, grant.owner, { campaignId: campaign.id, ...roll }));
+    post => sendEncyclopediaPost(bucket, grant.owner, campaign.id, post).then(() => undefined));
   return { ...base, book, campaign: book.campaigns[0], paused: activity.paused, commit };
 }

@@ -6,8 +6,7 @@ import {tokenHealth,initiativeSummary} from '../lib/initiative-summary.ts';
 import {tokenSchema} from '../lib/model.ts';
 import {initialWorkspace,newToken} from '../lib/model.ts';
 import {readFile} from 'node:fs/promises';
-import ts from 'typescript';
-import {campaignSettingsKey,validWebhook} from '../lib/campaign-settings.ts';
+import {sendMapMessage} from '../lib/discord/map-posts.ts';
 test('plain notes preserve markup and only bounded supported dice become buttons',()=>{
  const text='<script>alert(1)</script> [[1d20+5]] [[alert(1)]] [[101d6]]';
  const parts=inlineRollParts(text);assert.equal(parts.map(p=>p.text).join(''),text);
@@ -26,24 +25,28 @@ test('roll route follows saved scene and rejects changed campaign or invalid for
  assert.throws(()=>mapDiscordMessage(w,{...input,formula:'process.exit()'}));
  assert.throws(()=>mapDiscordMessage(w,{...input,sceneId:'missing'}));
 });
-test('message endpoint routes saved campaign, suppresses mentions and rejects redirects without leaks',async()=>{
- const source=await readFile(new URL('../app/api/discord/message/route.ts',import.meta.url),'utf8');
- const code=ts.transpileModule(source.replace(/^import .*;\r?\n/gm,''),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace('export async function POST','async function POST');
- const make=new Function('context','failure','privateHeaders','loadWorkspace','campaignSettingsKey','validWebhook','mapDiscordMessage','fetch',code+';return POST;');
- let reads=0,sends=0;
- const denied=make(async()=>{throw Error('Forbidden');},e=>Response.json({error:e.message},{status:403}),{},async()=>{reads++;},campaignSettingsKey,validWebhook,mapDiscordMessage,async()=>{sends++;});
- assert.equal((await denied(new Request('https://site.test/api/discord/message',{method:'POST',body:'{}'}))).status,403);assert.equal(reads,0);assert.equal(sends,0);
+test('Maptable posts follow the saved campaign, turn mentions off and refuse redirects without leaks',async()=>{
  for(const status of [200,302,429]){
   const w=fixture(),calls=[];w.scenes[0].mapType='world';
-  const handler=make(async()=>({bucket:{put:async()=>{},get:async key=>({json:async()=>({webhooks:{world:'https://discord.com/api/webhooks/123/secret'}})})},prefix:'u/'}),e=>Response.json({error:e.message},{status:400}),{},async()=>({workspace:w}),campaignSettingsKey,validWebhook,mapDiscordMessage,async(url,options)=>{calls.push({url,options});return new Response(status===200?JSON.stringify({id:'12345'}):null,{status});});
-  const request=campaignId=>new Request('https://site.test/api/discord/message',{method:'POST',body:JSON.stringify({kind:'initiative',campaignId,sceneId:w.activeId})});
-  const result=await handler(request('campaign'));assert.equal(result.status,status===200?200:400);
-  assert.equal(calls[0].url,'https://discord.com/api/webhooks/123/secret?wait=true');assert.equal(calls[0].options.redirect,'manual');
-  assert.deepEqual(JSON.parse(calls[0].options.body).allowed_mentions,{parse:[]});assert.doesNotMatch(await result.text(),/secret|https:/);
-  assert.equal((await handler(request('foreign'))).status,400);assert.equal(calls.length,1);
+  const ctx={bucket:{put:async()=>{},get:async()=>({json:async()=>({webhooks:{world:'https://discord.com/api/webhooks/123456/secret'}})})},prefix:'u/',workspace:w,
+   fetcher:async(url,options)=>{calls.push({url,options});return new Response(status===200?JSON.stringify({id:'12345'}):null,{status});}};
+  const send=campaignId=>sendMapMessage(ctx,{kind:'initiative',campaignId,sceneId:w.activeId});
+  if(status===200)assert.deepEqual(await send('campaign'),{skipped:false});
+  else await assert.rejects(send('campaign'),e=>{assert.doesNotMatch(e.message,/secret|https:/);return true;});
+  assert.equal(calls[0].url,'https://discord.com/api/webhooks/123456/secret?wait=true');assert.equal(calls[0].options.redirect,'manual');
+  const body=JSON.parse(calls[0].options.body);assert.deepEqual(body.allowed_mentions,{parse:[]});assert.doesNotMatch(JSON.stringify(body),/Secret/);
+  await assert.rejects(send('foreign'),/campaign changed/);assert.equal(calls.length,1);
  }
 });
 
+test('a roll card names the visible token it came from and carries its picture, and hidden tokens stay anonymous',()=>{
+ const w=fixture(),[visible,secret]=w.scenes[0].tokens;visible.name='Bog Hag';visible.assetId='asset-1';visible.disposition='enemy';
+ const input={kind:'roll',sceneId:w.activeId,campaignId:'campaign',label:'Bog Hag · Claws',formula:'1d20+6',total:20,detail:'[14] +6'};
+ const named=mapDiscordMessage(w,input),card=named.post.embeds[0];
+ assert.equal(named.avatarTokenId,visible.id);assert.deepEqual(card.author,{name:'Bog Hag',icon_url:'attachment://avatar.png'});assert.equal(card.title,'Claws');assert.equal(card.footer.text,w.scenes[0].name);
+ const hidden=mapDiscordMessage(w,{...input,label:'Bite',tokenId:secret.id});
+ assert.equal(hidden.avatarTokenId,undefined);assert.equal(hidden.post.embeds[0].author,undefined);assert.doesNotMatch(JSON.stringify(hidden.post),/Secret/);
+});
 
 test('optional combat fields preserve legacy tokens and reject invalid numbers',()=>{
  const old=newToken();assert.equal(tokenSchema.parse(old).ac,undefined);
@@ -82,24 +85,23 @@ test('Discord summary uses aligned code rows and neutralizes fence and row injec
 
 
 test('initiative updates only patch the privately recorded message for this user, scene and destination',async()=>{
- const source=await readFile(new URL('../app/api/discord/message/route.ts',import.meta.url),'utf8');
- const code=ts.transpileModule(source.replace(/^import .*;\r?\n/gm,''),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace('export async function POST','async function POST');
- const make=new Function('context','failure','privateHeaders','loadWorkspace','campaignSettingsKey','validWebhook','mapDiscordMessage','fetch',code+';return POST;');
- const records=new Map(),calls=[];let prefix='users/one/',webhook='https://discord.com/api/webhooks/123/secret',status=200;
+ const records=new Map(),calls=[];let prefix='users/one/',webhook='https://discord.com/api/webhooks/123456/secret',status=200;
  const w=fixture();
- const handler=make(async()=>({prefix,bucket:{get:async key=>key.includes('campaign-settings/')?{json:async()=>({webhook})}:records.has(key)?{json:async()=>JSON.parse(records.get(key))}:null,put:async(key,value)=>records.set(key,value)}}),e=>Response.json({error:e.message},{status:400}),{},async()=>({workspace:w}),campaignSettingsKey,validWebhook,mapDiscordMessage,async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({id:'555'}),{status});});
- const request=action=>handler(new Request('https://site.test/api/discord/message',{method:'POST',body:JSON.stringify({kind:'initiative',action,sceneId:w.activeId,campaignId:'campaign'})}));
- assert.equal((await request('update')).status,400);assert.equal(calls.length,0);
- assert.equal((await request('post')).status,200);assert.equal(calls[0].options.method,'POST');
- assert.equal((await request('update')).status,200);assert.equal(calls[1].options.method,'PATCH');assert.equal(calls[1].url,webhook+'/messages/555');
- prefix='users/two/';assert.equal((await request('update')).status,400);assert.equal(calls.length,2);prefix='users/one/';
- const originalId=w.scenes[0].id;w.scenes[0].id='another-scene';w.activeId='another-scene';assert.equal((await request('update')).status,400);assert.equal(calls.length,2);w.scenes[0].id=originalId;w.activeId=originalId;
- w.scenes[0].containerId='foreign-campaign';w.collections.push({id:'foreign-campaign',name:'Other',kind:'campaign',parentId:null});assert.equal((await request('update')).status,400);assert.equal(calls.length,2);w.scenes[0].containerId='campaign';
- webhook='https://discord.com/api/webhooks/456/changed';assert.equal((await request('update')).status,400);assert.equal(calls.length,2);webhook='https://discord.com/api/webhooks/123/secret';
- status=404;assert.equal((await request('update')).status,400);assert.equal(calls.at(-1).options.method,'PATCH');assert.equal(calls.length,3);
- status=429;assert.equal((await request('update')).status,400);assert.equal(calls.length,4);assert.equal(calls.at(-1).options.method,'PATCH');
+ const bucket={get:async key=>key.includes('campaign-settings/')?{json:async()=>({webhook})}:records.has(key)?{json:async()=>JSON.parse(records.get(key))}:null,put:async(key,value)=>{records.set(key,value);},delete:async()=>{}};
+ const fetcher=async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({id:'555'}),{status});};
+ const request=action=>sendMapMessage({bucket,prefix,workspace:w,fetcher},{kind:'initiative',action,sceneId:w.activeId,campaignId:'campaign'});
+ await assert.rejects(request('update'),/Post initiative once/);assert.equal(calls.length,0);
+ await request('post');assert.equal(calls[0].options.method,'POST');
+ await request('update');assert.equal(calls[1].options.method,'PATCH');assert.equal(calls[1].url,webhook+'/messages/555');
+ prefix='users/two/';await assert.rejects(request('update'));assert.equal(calls.length,2);prefix='users/one/';
+ const originalId=w.scenes[0].id;w.scenes[0].id='another-scene';w.activeId='another-scene';await assert.rejects(request('update'));assert.equal(calls.length,2);w.scenes[0].id=originalId;w.activeId=originalId;
+ w.scenes[0].containerId='foreign-campaign';w.collections.push({id:'foreign-campaign',name:'Other',kind:'campaign',parentId:null});await assert.rejects(request('update'));assert.equal(calls.length,2);w.scenes[0].containerId='campaign';
+ webhook='https://discord.com/api/webhooks/456789/changed';await assert.rejects(request('update'));assert.equal(calls.length,2);webhook='https://discord.com/api/webhooks/123456/secret';
+ status=404;await assert.rejects(request('update'),/gone from Discord/);assert.equal(calls.at(-1).options.method,'PATCH');assert.equal(calls.length,3);
+ status=429;await assert.rejects(request('update'),/rate limiting/);assert.equal(calls.length,4);assert.equal(calls.at(-1).options.method,'PATCH');
  assert.doesNotMatch([...records.values()].join(''),/secret|webhook/);
 });
+
 test('initiative live sends are explicit handlers with a synchronous lock and saved optional toggle',async()=>{
  const source=await readFile(new URL('../components/map-initiative.tsx',import.meta.url),'utf8');
  assert.match(source,/if\(sending.current\)return;sending.current=true/);assert.doesNotMatch(source,/useEffect/);

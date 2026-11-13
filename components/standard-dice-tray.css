@@ -31,3 +31,6 @@
 .standard-dice-dock .standard-dice-tray li>b,.standard-dice-dock .local-roll-log li>b{font-family:var(--font-display);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .standard-dice-dock .local-roll-log li{padding:10px 0}
 .standard-dice-dock .local-roll-log header button:not([aria-label]){width:auto;padding:0 10px;font-size:12px}
+/* Posting a roll to Discord: by button, or every roll with Always on. */
+.standard-dice-tray .tray-discord{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px}.standard-dice-tray .tray-discord small{flex:1;margin:0}.standard-dice-tray .tray-discord p{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}.standard-dice-tray .tray-discord p:empty{display:none}
+.standard-dice-tray label.tray-always{display:flex;align-items:center;gap:7px;margin-top:8px;cursor:pointer}.standard-dice-tray label.tray-always input{display:inline-block;width:auto;margin:0;padding:0;accent-color:var(--accent)}

@@ -15,7 +15,7 @@ export default function TokenStatblock({token,sceneId,campaignId,onLink}:{token:
  const [raw,setRaw]=useState<EncyclopediaRaw|null>(null),[error,setError]=useState(""),[choosing,setChoosing]=useState(false);
  const load=useCallback((refresh=false)=>{setError("");loadEncyclopedia(refresh).then(setRaw).catch(e=>setError(e instanceof Error?e.message:"Could not load your Encyclopedia."));},[]);
  useEffect(()=>{load();},[load]);
- const roll=useCallback((title:string,formula:string)=>requestMapRoll({formula,context:{sceneId,campaignId,label:title.slice(0,120)}}),[sceneId,campaignId]);
+ const roll=useCallback((title:string,formula:string)=>requestMapRoll({formula,context:{sceneId,campaignId,label:title.slice(0,120),tokenId:token.id}}),[sceneId,campaignId,token.id]);
  if(error)return <div className="token-statblock"><p className="token-statblock-hint" role="alert">{error}</p><button className="text-button" onClick={()=>load(true)}>Try again</button></div>;
  if(!raw)return <div className="token-statblock"><p className="token-statblock-hint">Loading your Encyclopedia…</p></div>;
  const linkedId=token.encyclopediaEntryId,entry=linkedId?raw.entries?.find(e=>e.id===linkedId&&e.kind==="character"):undefined;

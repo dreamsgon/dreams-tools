@@ -1,5 +1,6 @@
 import {parseDice} from './rolls.ts';
-export type MapRollContext = {sceneId:string;campaignId:string|null;label:string};
+/** Where a Maptable roll came from. `tokenId` is the token whose picture goes on its Discord card. */
+export type MapRollContext = {sceneId:string;campaignId:string|null;label:string;tokenId?:string};
 export type MapRollRequest = {formula:string;context:MapRollContext};
 export function inlineRollParts(text:string):{text:string;formula?:string}[]{
  const parts:{text:string;formula?:string}[]=[];let end=0;
