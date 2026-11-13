@@ -109,6 +109,8 @@ type Props = {
   onLibraryTokenDrop?: (tokenId: string, point: Point) => void;
   onMeasure: (label: string) => void;
   onMeasurementChange?: (points: Point[]) => void;
+  /** Moves an AI helper suggested, waiting for the GM's OK: drawn as a dashed token with an arrow. Never shown to players. */
+  suggested?: { id: string; sceneId: string; tokenId: string; x: number; y: number }[];
 };
 export default function Board(p: Props) {
   const [newCrop,setNewCrop]=useState(false);
@@ -471,6 +473,30 @@ export default function Board(p: Props) {
       ctx.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
       ctx.strokeRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top); ctx.restore();
     }
+    if (!p.player) for (const move of (p.suggested ?? []).filter(m => m.sceneId === p.scene.id)) {
+      const token = p.scene.tokens.find(t => t.id === move.tokenId);
+      if (!token) continue;
+      const r = tokenRadius(token, p.scene.grid), dx = move.x - token.x, dy = move.y - token.y, length = Math.hypot(dx, dy);
+      ctx.save(); ctx.strokeStyle = "#a86d12"; ctx.fillStyle = "#fbf1dee6"; ctx.lineWidth = 2.5 / view.scale; ctx.setLineDash([7 / view.scale, 5 / view.scale]);
+      if (length > r * 2) {
+        // From the token's edge to the dashed token's edge, with an arrowhead.
+        const ux = dx / length, uy = dy / length, sx = token.x + ux * r, sy = token.y + uy * r, ex = move.x - ux * (r + 3 / view.scale), ey = move.y - uy * (r + 3 / view.scale), head = 12 / view.scale;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(ex - ux * head - uy * head * 0.6, ey - uy * head + ux * head * 0.6); ctx.lineTo(ex, ey); ctx.lineTo(ex - ux * head + uy * head * 0.6, ey - uy * head - ux * head * 0.6); ctx.stroke();
+        ctx.setLineDash([7 / view.scale, 5 / view.scale]);
+      }
+      ctx.beginPath(); ctx.arc(move.x, move.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+      const initials = token.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join("");
+      ctx.fillStyle = "#a86d12"; ctx.font = `600 ${Math.max(10, r * 0.7)}px Inter, system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(initials, move.x, move.y);
+      // The label sits above the dashed token, on a pale backing, so it never runs into the name under a neighbour.
+      const label = `${token.name}, suggested`, size = Math.max(10, 12 / view.scale), pad = 4 / view.scale;
+      ctx.font = `600 ${size}px Inter, system-ui, sans-serif`; ctx.textBaseline = "bottom";
+      const width = ctx.measureText(label).width, bottom = move.y - r - 4 / view.scale;
+      ctx.fillStyle = "#fbf1def2"; ctx.fillRect(move.x - width / 2 - pad, bottom - size - pad, width + pad * 2, size + pad * 2);
+      ctx.fillStyle = "#a86d12"; ctx.fillText(label, move.x, bottom + pad / 2);
+      ctx.restore();
+    }
     const savedSelection = p.scene.measurements.find(item => item.id === scopedSelected);
     if (!p.player && savedSelection) {
       ctx.save(); ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 4 / view.scale; ctx.setLineDash([6 / view.scale, 4 / view.scale]);
@@ -548,6 +574,7 @@ export default function Board(p: Props) {
     gridDrag,
     effectDraft,
     p.images,
+    p.suggested,
   ]);
   const screen = (e: { clientX: number; clientY: number }) => {
     const r = canvas.current!.getBoundingClientRect(), z = uiZoom();

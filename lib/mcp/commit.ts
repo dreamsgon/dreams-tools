@@ -7,6 +7,7 @@ import { loadWorkspace, saveWorkspace } from "../workspace-storage.ts";
 import { campaignScenes } from "../agent-maps.ts";
 import { checkTableScope, tableParts } from "./table.ts";
 import { ToolError, type Change, type McpContext, type WriteOut } from "./tools.ts";
+import { narrow } from "./players-only.ts";
 
 type Who = { owner: string; campaignId: string; connectionId: string | null; connection: string };
 
@@ -42,7 +43,8 @@ export function makeCommit(bucket: S3Bucket, who: Who, base: Omit<McpContext, "b
       const stored = pair ? await loadWorkspace(bucket, prefix) : null;
       let maps: McpContext["maps"] = null;
       if (pair && stored) try { maps = { workspace: stored.workspace, campaignId: pair, scenes: campaignScenes(stored.workspace, pair) }; } catch { maps = null; }
-      const out = change(data, { ...base, maps, book, campaign: book.campaigns[0] }, now);
+      // Lookups see what this connection may see; the change itself goes to the whole workspace.
+      const out = change(data, narrow({ ...base, maps, book, campaign: book.campaigns[0] }), now);
       let changes: ReturnType<typeof pageChanges> | undefined, table: ReturnType<typeof tableParts> | undefined;
       if (out.next) {
         checkScope(data, out.next, who.campaignId);

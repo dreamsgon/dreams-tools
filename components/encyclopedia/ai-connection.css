@@ -77,3 +77,52 @@
 .ai-panel-combat strong{flex:1;min-width:0;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Maptable: a short note when unsaved edits were joined with a save from somewhere else. */
 .map-sync-note{position:fixed;z-index:60;left:50%;bottom:88px;transform:translateX(-50%);max-width:min(520px,calc(100vw / var(--ui-zoom, 1) - 32px));padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius,6px);background:var(--panel);color:var(--ink);font-size:13px;line-height:1.5;box-shadow:0 10px 30px var(--shadow-color,rgba(0,0,0,.25))}
+/* Suggestions waiting for the GM's OK (helper mode). */
+.ai-chip.asking{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.ai-waiting{padding:12px 12px 4px;border-bottom:1px solid var(--line);overflow-y:auto;max-height:60%}
+.ai-waiting-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 10px}
+.ai-waiting-head h3,.ai-done-head{margin:0;font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--warning,#a86d12)}
+.ai-done-head{padding:12px 16px 4px;color:var(--muted)}
+.ai-waiting ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ai-waiting li{display:flex;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--radius,6px);background:var(--panel)}
+.ai-waiting li:first-child{border-color:var(--warning,#c98a2b);background:var(--warning-soft,#fbf1de)}
+.ai-waiting-icon{flex:none;color:var(--muted);padding-top:2px}
+.ai-waiting li>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.45}
+.ai-waiting strong{font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.ai-waiting span,.ai-waiting small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.ai-waiting small{font-size:11px}
+.ai-waiting-actions{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+.ai-waiting-actions .button.small{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font-size:12px}
+.ai-waiting-actions .button.quiet{border-color:transparent;background:transparent;color:var(--muted)}
+.ai-change{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ai-change label{display:grid;grid-template-columns:70px minmax(0,1fr);align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.ai-change input:not([type=checkbox]){min-width:0;border:1px solid var(--line);border-radius:var(--radius-sm,4px);background:var(--control,var(--panel));color:var(--ink);padding:5px 8px;font-size:13px}
+.ai-change input[type=checkbox]{justify-self:start;accent-color:var(--accent)}
+.ai-settings-link{display:inline-block;margin-left:10px;font-size:12px;color:var(--accent);text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
+.ai-settings-link small{color:var(--muted)}
+/* "What it may do": ready-made sets, then Do it / Ask me / Off for each action. */
+.ai-head-title{flex:1;min-width:0}
+.ai-level strong svg{color:var(--accent);flex-shrink:0}
+.ai-tune-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px}
+.ai-tune-head .ai-label{display:flex;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+.ai-tune-head p{margin:0;font-size:12px;color:var(--muted)}
+.ai-tune-head b{font-weight:600;color:var(--ink)}
+.ai-tune-head b.do{color:var(--accent)}
+.ai-tune-head b.ask{color:var(--warning,#a86d12)}
+.ai-tune{margin-top:12px}
+.ai-tune h4{display:flex;align-items:center;gap:7px;margin:0 0 2px;font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.ai-tune-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.ai-tune-row>span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ai-tune-row small{font-size:11.5px;color:var(--muted)}
+.ai-always{flex-direction:row!important;align-items:center;gap:5px!important;font-size:12px;color:var(--muted)}
+.ai-seg{flex:none;display:inline-flex;padding:2px;border:1px solid var(--line);border-radius:var(--radius,6px);background:var(--panel)}
+.ai-seg button{min-width:62px;padding:5px 10px;border:0;border-radius:calc(var(--radius,6px) - 2px);background:transparent;color:var(--muted);font-size:12px;font-weight:500;cursor:pointer}
+.ai-seg button:hover:not(:disabled):not(.on){color:var(--ink)}
+.ai-seg button:disabled{opacity:.35;cursor:default}
+.ai-seg button.do.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.ai-seg button.ask.on{background:var(--warning-soft,#fbf1de);color:var(--warning,#a86d12);font-weight:600}
+.ai-seg button.off.on{background:var(--raised,#eef0f2);color:var(--ink);font-weight:600}
+.ai-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.ai-tune-foot{align-items:center;flex-wrap:wrap}
+.ai-tune-foot p{flex:1;min-width:200px;margin:0;font-size:12px;color:var(--muted)}
+@media(max-width:640px){.ai-tune-row{flex-direction:column;align-items:stretch}.ai-seg{align-self:flex-start}}

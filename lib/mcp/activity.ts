@@ -9,9 +9,15 @@ import type { TablePart } from "./table.ts";
 
 /** One page as it was before the change (null: the AI made it), and a fingerprint of it after (null: removed). */
 export type PageChange = { id: string; title: string; before: Entry | null; after: string | null };
+/** Where a suggested move would put a token, so Maptable can show it on the map. */
+export type MovePreview = { sceneId: string; tokenId: string; x: number; y: number };
 export type ActivityEntry = {
   id: string; at: string; connection: string; connectionId: string | null; tool: string;
   summary: string; detail?: string; changes?: PageChange[]; table?: TablePart[]; undone?: string;
+  /** A suggestion waiting for the GM's OK: the tool and arguments to run when it is approved. */
+  waiting?: { args: Record<string, unknown>; preview?: MovePreview };
+  /** What the GM did with a suggestion, and what came of it. Decided suggestions leave the panel. */
+  decided?: "approved" | "skipped"; result?: string;
 };
 export type ActivityLog = { paused: boolean; entries: ActivityEntry[] };
 
@@ -80,8 +86,9 @@ export async function updateActivity(bucket: S3Bucket, owner: string, campaignId
 export const logActivity = (bucket: S3Bucket, owner: string, campaignId: string, entry: ActivityEntry) =>
   updateActivity(bucket, owner, campaignId, log => ({ ...log, entries: [entry, ...log.entries] }));
 
-/** What the panel shows: everything except the stored copies of pages. */
+/** What the panel shows: suggestions waiting for the GM, then what was done, without the stored copies of pages. */
 export const publicActivity = (log: ActivityLog) => ({
   paused: log.paused,
-  entries: log.entries.map(({ changes, table, ...e }) => ({ ...e, canUndo: !!(changes?.length || table?.length) && !e.undone })),
+  waiting: log.entries.filter(e => e.waiting && !e.decided).map(e => ({ id: e.id, at: e.at, connection: e.connection, tool: e.tool, summary: e.summary, detail: e.detail, args: e.waiting!.args, preview: e.waiting!.preview })),
+  entries: log.entries.filter(e => !e.waiting).map(({ changes, table, ...e }) => ({ ...e, canUndo: !!(changes?.length || table?.length) && !e.undone })),
 });
