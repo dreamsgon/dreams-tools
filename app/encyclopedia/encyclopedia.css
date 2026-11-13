@@ -1039,3 +1039,4 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .write-again.closed{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 0 0;border:0;border-top:1px solid var(--line);border-radius:0;max-width:none}
 .write-again.closed .aside-hint{margin:0}
 .write-again textarea,.write-again select{width:100%}
+.link-read{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--accent);font-weight:400}
