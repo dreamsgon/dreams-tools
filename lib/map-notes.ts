@@ -22,7 +22,7 @@ export const PAGE_GROUPS: PageGroup[] = ["Places", "Characters", "Factions and l
 export const pairedCampaign = (book: Workspace | null | undefined, maptableCampaignId: string | null) =>
   maptableCampaignId ? book?.campaigns?.find(c => c.maptableCampaignId === maptableCampaignId) ?? null : null;
 
-function kindLabel(e: Pick<Entry, "kind" | "character">) {
+export function kindLabel(e: Pick<Entry, "kind" | "character">) {
   if (e.kind === "character") return roleName[e.character?.role ?? "npc"] ?? "Character";
   return kindName[e.kind] ?? "Page";
 }

@@ -10,10 +10,10 @@ export type PlaceKind=typeof placeKinds[number]['id'];
 const point=z.object({x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1)});
 /** Rivers, roads and borders drawn on the map, with points as fractions of the map size. */
 export const pathKinds=[{id:'river',name:'River'},{id:'road',name:'Road'},{id:'border',name:'Border'}] as const;
-export const mapPathSchema=z.object({id,kind:z.enum(['river','road','border']),name:z.string().trim().max(100),points:z.array(point).min(2).max(400),visibility:z.enum(['gm','players'])});
+export const mapPathSchema=z.object({id,kind:z.enum(['river','road','border']),name:z.string().trim().max(100),points:z.array(point).min(2).max(400),visibility:z.enum(['gm','players']),entryId:id.nullable().optional()});
 export type MapPath=z.infer<typeof mapPathSchema>;
 /** Names written on the map itself: seas, regions, mountain ranges. */
-export const mapLabelSchema=z.object({id,text:z.string().trim().min(1).max(80),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),size:z.enum(['small','medium','large']),visibility:z.enum(['gm','players'])});
+export const mapLabelSchema=z.object({id,text:z.string().trim().min(1).max(80),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),size:z.enum(['small','medium','large']),visibility:z.enum(['gm','players']),entryId:id.nullable().optional()});
 export type MapLabel=z.infer<typeof mapLabelSchema>;
 export const pinSchema=z.object({kind:z.enum(placeKinds.map(k=>k.id) as [PlaceKind,...PlaceKind[]]).optional(),areaMapId:id.nullable().optional(),weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
 export const routeSchema=z.object({id,name:z.string().trim().min(1).max(100),unit:z.enum(['mi','km']),stops:z.array(id).min(2).max(20),distances:z.array(z.number().finite().positive().max(1000000)).min(1).max(19),speed:z.number().finite().min(.1).max(10000),hoursPerDay:z.number().finite().min(1).max(24),visibility:z.enum(['gm','players'])}).superRefine((r,ctx)=>{if(r.distances.length!==r.stops.length-1||r.stops.some((s,i)=>i>0&&s===r.stops[i-1]))ctx.addIssue({code:'custom',message:'Routes need a distance for each leg and different adjacent stops.'});});
