@@ -9,7 +9,7 @@ import { addUsage, listConnections, overLimit, permsOf, publicApi } from "../mcp
 import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, type McpContext } from "../mcp/tools.ts";
 import { compactTranscript } from "../encyclopedia/recaps.ts";
-import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, questsBlock, quoteLines, unlinkNames } from "../encyclopedia/recap-prompts.ts";
+import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, publishedRecaps, questsBlock, quoteLines, storyNow, storyPrompt, unlinkNames } from "../encyclopedia/recap-prompts.ts";
 import { runOnce, ProviderError, type OnceTool } from "./chat.ts";
 import { unlock } from "./secret.ts";
 
@@ -110,5 +110,23 @@ export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignI
     if (!out.text.trim()) throw new ProviderError("The AI sent an empty recap. Try again.");
     await save(ctx, "rewrite_recap", { page: page.id, recap: out.text.trim() });
     return { saved: { id: page.id, title: page.title }, by: c.name };
+  });
+}
+
+/**
+ * The story so far for the players' front page, from the recaps players can read. Nothing is saved: the
+ * text goes back to the front page editor, where the GM reads it before saving.
+ */
+export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+  const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
+  if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
+  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before: storyNow(ctx.campaign) });
+  return counted(bucket, owner, campaignId, c.id, async add => {
+    const out = await runOnce(target, RECAP_SYSTEM, prompt, null, 2_000, fetchImpl);
+    add(out.tokens);
+    const text = out.text.trim().slice(0, 6000);
+    if (!text) throw new ProviderError("The AI sent an empty story. Try again.");
+    return { text, from: recaps.length, by: c.name };
   });
 }

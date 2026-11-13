@@ -18,6 +18,7 @@ import type { MovePreview } from "./activity.ts";
 import { PART_SIZE, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
 import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
+import { publishedRecaps, storyNow } from "../encyclopedia/recap-prompts.ts";
 
 export type Level = "read" | "assist" | "run";
 export const levels: Level[] = ["read", "assist", "run"];
@@ -288,6 +289,20 @@ const tools: Tool[] = [
       const parts = transcriptParts(compactTranscript(raw)), n = (a.part as number | undefined) ?? 1;
       if (n > parts.length) fail(`“${e.title}” has ${parts.length} part${parts.length > 1 ? "s" : ""}.`);
       return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), ...(n === 1 && e.recap?.request ? { gmAsked: requestNotes(e.recap.request) } : {}), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
+    },
+  },
+  {
+    name: "read_recaps", title: "Read the published recaps", level: "read", readOnly: true,
+    description: "Read every session recap the GM has published to players, oldest first, as players read them (no drafts, GM notes or secrets), and the front page's current The story so far. For writing The story so far: call it once.",
+    inputSchema: obj({}),
+    run: c => {
+      const { recaps, left } = publishedRecaps(c.book.entries, c.campaign.id);
+      const now = storyNow(c.campaign).trim();
+      return {
+        campaign: c.campaign.name, recaps, ...(left ? { leftOut: `${left} older recap${left === 1 ? " is" : "s are"} left out to keep this short; the current story covers them.` } : {}),
+        storySoFar: now || null,
+        note: recaps.length ? "Players already know all of this. Write only from it." : "No recaps are published yet. Ask the GM to publish one first.",
+      };
     },
   },
   {

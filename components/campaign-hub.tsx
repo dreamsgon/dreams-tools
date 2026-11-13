@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, BookMarked, CalendarDays, Check, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, BookMarked, CalendarDays, Check, Copy, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
 import { dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, moveWidget, resizeWidget, toggleWidget, type Dashboard, type DashWidget } from "@/lib/encyclopedia/dashboard";
@@ -9,6 +9,7 @@ import { stateNames, questStates } from "@/lib/encyclopedia/quests";
 import { isNewFind } from "@/lib/encyclopedia/codex";
 import { lookAttributes } from "@/lib/encyclopedia/look";
 import { FrontPageView, sessionTime } from "./front-page-view";
+import { useWriters } from "./encyclopedia/recap-panel";
 import { when } from "./home-campaigns";
 import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
@@ -297,7 +298,7 @@ function Links({ layout, save, head }: Part) {
   </>;
 }
 
-const addable: FrontWidgetType[] = ["next", "date", "party", "recap", "text", "links"];
+const addable: FrontWidgetType[] = ["next", "date", "party", "recap", "story", "text", "links"];
 
 function FrontEditor({ hub, campaignKey, done }: { hub: CampaignHub; campaignKey: string; done: (next?: CampaignHub) => void }) {
   const [page, setPage] = useState<FrontPage>(hub.frontConfig!), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -358,6 +359,7 @@ function Fields({ widget: w, hub, update }: { widget: FrontWidget; hub: Campaign
     }
     case "party": return <p className="hub-muted">Shows player characters that players can see.</p>;
     case "recap": return <p className="hub-muted">Shows the newest session page that players can see.</p>;
+    case "story": return <StoryField widget={w} hub={hub} update={update} />;
     case "text": return <label>Text<textarea rows={5} maxLength={4000} value={w.body} placeholder="House rules, a welcome, or how to make a character." onChange={ev => update({ body: ev.target.value })} /></label>;
     case "links": return <div className="hub-links">
       {w.links.map((l, i) => <div className="hub-edit-row" key={i}>
@@ -372,4 +374,37 @@ function Fields({ widget: w, hub, update }: { widget: FrontWidget; hub: Campaign
       <button className="hub-text-button" disabled={w.links.length >= 12} onClick={() => update({ links: [...w.links, { label: "New link", url: "https://" }] })}><Plus size={14} aria-hidden="true" />Add a link</button>
     </div>;
   }
+}
+
+/**
+ * The story so far: a short summary of the campaign for players, written by the GM or by their AI from the
+ * recaps they've published (never drafts or GM notes). It lands in the box for the GM to read before saving.
+ */
+function StoryField({ widget: w, hub, update }: { widget: Extract<FrontWidget, { type: "story" }>; hub: CampaignHub; update: (w: Partial<FrontWidget>) => void }) {
+  const campaignId = hub.row.encyclopedia?.id, writers = useWriters(campaignId);
+  const [key, setKey] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [copied, setCopied] = useState(false);
+  const keys = writers?.keys ?? [], chosen = keys.find(k => k.id === key) ?? keys[0];
+  const ask = `In RPG Tools for "${hub.row.name}", use the story_so_far prompt: read the published recaps with read_recaps and write The story so far for the players' front page.`;
+  async function write() {
+    if (!chosen || !campaignId) return;
+    setBusy(true); setError("");
+    try {
+      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || "Could not write the story.");
+      update({ body: body.text, from: body.from, at: new Date().toISOString() });
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not write the story."); } finally { setBusy(false); }
+  }
+  const copy = () => void navigator.clipboard.writeText(ask).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => setError("Your browser didn’t allow copying."));
+  return <div className="hub-story-edit">
+    <label>Text<textarea rows={8} maxLength={6000} value={w.body} placeholder="What the party has done so far, in a few paragraphs." onChange={ev => update({ body: ev.target.value, at: undefined, from: undefined })} /></label>
+    {w.at && w.from ? <p className="hub-muted">Written from {w.from} published recap{w.from === 1 ? "" : "s"} on {new Date(w.at).toLocaleDateString("en", { month: "short", day: "numeric" })}. Read it, then save the front page.</p> : null}
+    <div className="hub-story-write">
+      <span className="hub-muted">Write it from the recaps you&apos;ve published. Drafts and GM notes are left out.</span>
+      {keys.length > 1 && <select aria-label="Written by" value={chosen?.id} onChange={ev => setKey(ev.target.value)}>{keys.map(k => <option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select>}
+      {chosen && <button className="hub-button hub-button-primary" disabled={busy} onClick={write}><Sparkles size={14} aria-hidden="true" />{busy ? "Writing…" : `Write it with ${chosen.name}`}</button>}
+      <button className={`hub-button${chosen ? "" : " hub-button-primary"}`} onClick={copy}>{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}{copied ? "Copied" : "Copy for my AI app"}</button>
+    </div>
+    {error && <p className="hub-error" role="alert">{error}</p>}
+  </div>;
 }

@@ -4,7 +4,7 @@ import {EncyclopediaStore} from '@/lib/encyclopedia/store';
 import {sendEncyclopediaPost} from '@/lib/encyclopedia/discord-send';
 import {discordText,TRANSCRIPT_LIMIT,wordCount} from '@/lib/encyclopedia/recaps';
 import {getBucket} from '@/lib/storage';
-import {writeRecap,writeRecapAgain} from '@/lib/ai/recap-writer';
+import {writeRecap,writeRecapAgain,writeStory} from '@/lib/ai/recap-writer';
 import {readLink} from '@/lib/encyclopedia/link-source';
 export const dynamic='force-dynamic';
 // Writing a recap with the GM's own API key reads the whole transcript and waits on the AI twice.
@@ -26,6 +26,7 @@ const action=z.discriminatedUnion('action',[
  z.object({action:z.literal('link'),link:z.string().max(1000)}),
  z.object({action:z.literal('write'),entryId:id,campaignId:id,connectionId:id}),
  z.object({action:z.literal('again'),entryId:id,campaignId:id,connectionId:id,note:z.string().max(500)}),
+ z.object({action:z.literal('story'),campaignId:id,connectionId:id}),
 ]);
 export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
@@ -40,6 +41,7 @@ export async function POST(request:Request){
   if(input.action==='link')return json(await readLink(input.link));
   if(input.action==='write')return json(await writeRecap(bucket,owner,input.campaignId,input.connectionId,input.entryId));
   if(input.action==='again')return json(await writeRecapAgain(bucket,owner,input.campaignId,input.connectionId,input.entryId,input.note));
+  if(input.action==='story')return json(await writeStory(bucket,owner,input.campaignId,input.connectionId));
   const {data}=await store.read(owner),page=data.entries.find(e=>e.id===input.entryId);
   if(!page?.recap||!page.campaignId)throw Error('That page has no recap.');
   if(page.recap.status!=='published')throw Error('Publish the recap to players before posting it.');

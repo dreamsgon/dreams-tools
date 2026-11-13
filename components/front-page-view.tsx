@@ -43,6 +43,8 @@ function Body({ widget: w, ...link }: { widget: ResolvedWidget } & Open) {
       : <p className="front-muted">No player characters shared yet.</p>;
     case "recap": return w.entryId ? <><strong className="front-heading">{w.heading}</strong>{w.excerpt && <p className="front-prose">{w.excerpt}</p>}<EntryLink id={w.entryId} className="front-more" {...link}>Read the recap <ArrowRight size={14} aria-hidden="true" /></EntryLink></>
       : <p className="front-muted">No session notes shared yet.</p>;
+    case "story": return <>{w.body.trim() ? <div className="front-prose front-text front-story-text">{w.body}</div> : <p className="front-muted">The story so far isn’t written yet.</p>}
+      {w.sessions.length > 0 && <ul className="front-list front-story-sessions">{w.sessions.map(x => <li key={x.id}><FileText size={15} aria-hidden="true" /><EntryLink id={x.id} {...link}>{x.title}</EntryLink></li>)}</ul>}</>;
     case "text": return w.body.trim() ? <div className="front-prose front-text">{w.body}</div> : <p className="front-muted">Nothing written here yet.</p>;
     case "links": return w.links.length ? <ul className="front-list">{w.links.map((l, i) => <li key={i}>
       {l.url ? <><ArrowUpRight size={15} aria-hidden="true" /><a className="front-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></>
