@@ -128,6 +128,7 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Libraries/folders/campaign transfers, token names/HP/conditions/borders, auras/AoEs, movement, initiative and dice.
 - [ ] Player previews/exports conceal hidden tokens and use opaque fog.
 - [ ] Large-library performance and storage costs; design safe collection of unreferenced immutable segments without breaking recovery.
+- [x] Cleanup: removed dice helpers left over from the old character-sheet app (`emitPhysicalDice`, `announceDiceResult`, `cancelDiceAnimation`, `skillRolls`, `modifierFormula`, `DICE_ROLL_MS` and an unheard `pf2e-dice-rolled` event), plus unused imports and `let`s flagged by ESLint.
 - [ ] Review the remaining starter dependencies/styles and trim unused ones with visual regression checks.
 
 ## Optional future work

@@ -1,5 +1,5 @@
 'use client';
-import {useRef,useState} from 'react';
+import {useState} from 'react';
 import {Map as MapIcon,Plus,Upload,Search,ArrowUpRight,Image as ImageIcon} from 'lucide-react';
 import {mapKinds,newMap,type MapData} from '@/lib/encyclopedia/map-model';
 import {defaultWorldOptions,generateWorld,worldKinds,type WorldKind} from '@/lib/encyclopedia/world-generator';

@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import type {DiceAppearance} from './dice-appearance';
-export const DICE_ROLL_MS=1900;
 type Die=import("./dice-physics").PhysicalDie;
 import {diceGeometry,diceFaces} from './dice-geometry.ts';
 export {diceGeometry,diceFaces} from './dice-geometry.ts';
