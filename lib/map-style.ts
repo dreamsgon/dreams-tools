@@ -149,6 +149,7 @@ function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">)
     const matrix = stampMatrix(s, stamp), ink = style?.ink ?? "#2b2b2b";
     return stamp.parts.map(part => ({ d: part.d, fill: part.fill, stroke: part.stroke === "ink" ? ink : part.stroke, width: part.width, matrix }));
   }
+  if (s.type === "opening") return [{ d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" }];
   if (s.type === "door" || s.type === "window") return [
     { d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" },
     { d: openingPath(s), stroke: s.stroke, width: 2 },

@@ -2,7 +2,7 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
+import { ArrowLeft, Eraser, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
 import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
@@ -16,9 +16,26 @@ import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
 import "./map-creator.css";
-import { creatorTools, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
+import SaveChip from "./save-chip";
+import { creatorTools, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, resizeMap, eraseWall, shiftSceneContents, type MapAnchor, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
-type Draft = { name:string; width:number; height:number; drawing:MapDrawing };
+/** `shift` is how far the drawing has moved since it was opened, from growing or shrinking on its top or left; the scene's tokens and fog follow it on save. */
+type Draft = { name:string; width:number; height:number; drawing:MapDrawing; shift?:{x:number;y:number} };
+const WALL_TOOLS:readonly CreatorTool[]=["line","curve","path"];
+const HANDLES=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]] as const;
+const ANCHORS:MapAnchor[]=[0,.5,1].flatMap(y=>[0,.5,1].map(x=>({x,y}) as MapAnchor));
+const anchorName=(a:MapAnchor)=>a.x===.5&&a.y===.5?"the centre":`the ${a.y===0?"top":a.y===1?"bottom":""}${a.y!==.5&&a.x!==.5?" ":""}${a.x===0?"left":a.x===1?"right":""}`.replace("the  ","the ");
+
+/** A size in squares that you can type freely; it applies on Enter or when you leave the box. */
+function SizeField({label,value,min,max,set}:{label:string;value:number;min:number;max:number;set:(n:number)=>void}){
+  const [text,setText]=useState<string|null>(null),n=Math.round(Number(text)),bad=text!==null&&(!text.trim()||!Number.isFinite(n)||n<min||n>max);
+  const commit=()=>{if(text!==null&&!bad&&n!==value)set(n);setText(null);};
+  return <label>{label}<span className="creator-size-field" data-invalid={bad||undefined}>
+    <button type="button" aria-label={`Fewer squares (${label})`} disabled={value<=min} onClick={()=>set(value-1)}><Minus size={14}/></button>
+    <input aria-label={label} inputMode="numeric" value={text??String(value)} onChange={e=>setText(e.target.value.replace(/[^0-9]/g,""))} onBlur={commit} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commit();}if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setText(null);}}}/>
+    <button type="button" aria-label={`More squares (${label})`} disabled={value>=max} onClick={()=>set(value+1)}><Plus size={14}/></button>
+  </span>{text!==null&&<small className="creator-size-hint">{bad?`Use ${min} to ${max} squares.`:"Press Enter to apply."}</small>}</label>;
+}
 const blank = ():Draft => ({name:"New drawn map",width:1400,height:980,drawing:{background:"#8b9b75",style:null,shapes:[],folders:[],layerOrder:[]}});
 const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,drawing:structuredClone(s.drawing!)});
 type Tool=CreatorTool;
@@ -35,6 +52,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const current=useRef(draft);current.current=draft;
   const [dirty,setDirty]=useState(false), [tool,setTool]=useState<Tool>("rect"), [selected,setSelected]=useState<string|null>(null);
   const [fill,setFill]=useState(initial?.drawing?.style?.floor??unstyledColours.floor),[stroke,setStroke]=useState(initial?.drawing?.style?.wall??unstyledColours.wall),[thickness,setThickness]=useState(14);
+  const [erase,setErase]=useState(false),[anchor,setAnchor]=useState<MapAnchor>({x:0,y:0});
+  const [sizeDrag,setSizeDrag]=useState<{hx:number;hy:number;x:number;y:number;scale:number;w:number;h:number;step:number;nw:number;nh:number}|null>(null);
   const [snap,setSnap]=useState(true),[join,setJoinState]=useState(()=>{try{return localStorage.getItem("map-creator-join")!=="off";}catch{return true;}}),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
   // Joining rooms that touch can be turned off; the choice is kept on this device.
   const setJoin=(on:boolean)=>{setJoinState(on);try{localStorage.setItem("map-creator-join",on?"on":"off");}catch{}};
@@ -61,7 +80,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [pending,setPending]=useState<(()=>void)|null>(null);
   const undo=useRef<Draft[]>([]),redo=useRef<Draft[]>([]);
   const svg=useRef<SVGSVGElement>(null);
-  const gesture=useRef<{before:Draft;id:string;start:Point;index:number|null;newShape:boolean;ids?:string[];wall?:WallSegment;raw?:Point}|null>(null);
+  const gesture=useRef<{before:Draft;id:string;start:Point;index:number|null;newShape:boolean;ids?:string[];wall?:WallSegment;raw?:Point;erase?:boolean}|null>(null);
   // Shaped rooms are drawn a corner at a time; doors look for the wall under the pointer.
   const [polyPoints,setPolyPoints]=useState<Point[]|null>(null),[polyHover,setPolyHover]=useState<Point|null>(null),[hoverWall,setHoverWall]=useState<WallSegment|null>(null);
   useEffect(()=>{setSelectedPoint(null);setPointMode("move");},[selected]);
@@ -90,7 +109,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if(savingRef.current)return null;
     if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
     savingRef.current=true;setSaving(true);
-    const id=source??uid(),data=structuredClone(current.current);
+    const id=source??uid(),{shift,...data}=structuredClone(current.current);
     let pieces:{looks:Record<string,string>;added:Asset[]}|null=null;
     if(use?.pieces){
       try{pieces=await pieceArt(data.drawing,grid.size,workspace.assets);}
@@ -100,10 +119,18 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       if(pieces)w.assets.push(...pieces.added);
       let scene=w.scenes.find(s=>s.id===id);
       if(!scene){scene=newScene(data.name);scene.id=id;scene.containerId=use?.destination??destination;w.scenes.push(scene);}
+      // Tokens, fog and notes already on the table move with a drawing that grew or shrank on its top or left.
+      else if(shift)shiftSceneContents(scene,shift.x,shift.y);
       Object.assign(scene,data,{mapId:null});
       if(use)setUpDrawnMapScene(scene,{fog:use.fog,markers:use.markers,grid,pieces:pieces?.looks??null});
     });
     setSource(id);setDirty(false);setMessage("");
+    // The scene now matches this drawing, so every step in the history is measured from here.
+    if(shift&&(shift.x||shift.y)){
+      const rebase=(d:Draft):Draft=>({...d,shift:{x:(d.shift?.x??0)-shift.x,y:(d.shift?.y??0)-shift.y}});
+      undo.current=undo.current.map(rebase);redo.current=redo.current.map(rebase);
+      const kept=rebase(current.current);current.current=kept;setDraft(kept);
+    }
     try {
       if(!await persist()){setDirty(true);setMessage("Map changes are waiting to save. Retry Save before leaving.");return null;}
       setMessage("Map saved to cloud. You can reopen it here or use it as a scene.");
@@ -220,6 +247,14 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
       return;
     }
+    if(erase&&WALL_TOOLS.includes(tool)){
+      // Erasing: press on a wall and drag along it; the stretch goes when you let go.
+      const raw=rawPoint(e),wall=nearestWall(walls(),raw,grid.size*.5);
+      if(!wall){if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);setMessage("Point at a wall to erase part of it.");return;}
+      const id=uid(),gap:MapShape={id,type:"opening",name:"Opening",roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,folderId:null,smooth:false,points:openingOnWall(wall,raw,raw,grid.size),fill:wall.floor??before.drawing.background,stroke,thickness:wall.thickness,closed:false};
+      gesture.current={before,id,start:p,index:null,newShape:true,wall,raw,erase:true};setDrawingId(id);setHoverWall(null);
+      const next=structuredClone(before);next.drawing.shapes.push(gap);current.current=next;setDraft(next);return;
+    }
     const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp"|"label">;
     const shape:MapShape={id,type,roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
     gesture.current={before,id,start:p,index:null,newShape:true};choose(id);setDrawingId(id);
@@ -264,6 +299,18 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if(!gesture.current)return;
     move(e);const g=gesture.current;gesture.current=null;setDrawingId(null);
     const s=current.current.drawing.shapes.find(s=>s.id===g.id)!;
+    if(g.erase&&g.wall){
+      const [a,b]=s.points,base=g.before,r=eraseWall(base.drawing.shapes,g.wall,a,b,uid,base.drawing.background);
+      if(!r.added.length&&!r.removed.length){current.current=base;setDraft(base);return;}
+      const next=structuredClone(base);next.drawing.shapes=r.shapes;
+      const order=layerIds(base.drawing).filter(id=>!r.removed.includes(id)),at=order.indexOf(g.wall.shapeId);
+      const pieces=r.added.filter(x=>x.type!=="opening").map(x=>x.id),gaps=r.added.filter(x=>x.type==="opening").map(x=>x.id);
+      if(at>=0)order.splice(at+1,0,...pieces);else order.push(...pieces);
+      next.drawing.layerOrder=[...order,...gaps];
+      apply(next,base);setSelected(null);
+      if(r.removed.length)setMessage("That whole wall was erased. Ctrl+Z brings it back.");
+      return;
+    }
     if(g.newShape && s.type==="path")s.points=simplifyPoints(s.points,3);
     const changed=JSON.stringify(g.before)!==JSON.stringify(current.current);
     if(g.newShape && s.type!=="stamp" && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
@@ -366,7 +413,15 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label className="creator-check"><input type="checkbox" checked={addSelection} onChange={e=>{setAddSelection(e.target.checked);setTool("select");}}/>Tapping adds to the selection (for touch screens; Shift-click does the same)</label>
   </div>;
   const maxSquares=Math.floor(8000/grid.size);
-  const squares=(key:"width"|"height")=><label>{key==="width"?"Width":"Length"} (squares)<input aria-label={`Map ${key} in squares`} type="number" min={3} max={maxSquares} value={Math.round(draft[key]/grid.size)} onChange={e=>{const n=Math.round(+e.target.value);if(n>=3&&n<=maxSquares)change(d=>{d[key]=n*grid.size;});}}/></label>;
+  /** Gives the map a new size, keeping the anchor's side in place; shapes past the new edge are trimmed. */
+  const resizeTo=(w:number,h:number,at:MapAnchor=anchor)=>{
+    const cur=current.current;if(w===cur.width&&h===cur.height)return;
+    const r=resizeMap(cur,w,h,at,grid.size);
+    apply({name:cur.name,width:r.width,height:r.height,drawing:r.drawing as MapDrawing,shift:{x:(cur.shift?.x??0)+r.dx,y:(cur.shift?.y??0)+r.dy}});
+    if(r.trimmed.length)setMessage(`${r.trimmed.length===1?"One shape went":`${r.trimmed.length} shapes went`} past the new edge and ${r.trimmed.length===1?"was":"were"} trimmed. Ctrl+Z puts ${r.trimmed.length===1?"it":"them"} back.`);
+  };
+  const squares=(key:"width"|"height")=><SizeField label={`${key==="width"?"Width":"Length"} (squares)`} value={Math.round(draft[key]/grid.size)} min={3} max={maxSquares} set={n=>{const v=Math.max(3,Math.min(maxSquares,n))*grid.size;resizeTo(key==="width"?v:draft.width,key==="height"?v:draft.height);}}/>;
+  const anchorPicker=<div className="creator-anchor"><div role="radiogroup" aria-label="Keep this part of the map in place">{ANCHORS.map(a=><button key={`${a.x}-${a.y}`} type="button" role="radio" aria-checked={anchor.x===a.x&&anchor.y===a.y} aria-label={`Keep ${anchorName(a)} in place`} title={`Keep ${anchorName(a)} in place`} onClick={()=>setAnchor(a)}/>)}</div><span>Keep {anchorName(anchor)} in place when the size changes.</span></div>;
   const mapPanel=<div className="creator-panel">
     <label>Open a saved map<select aria-label="Saved maps" value={source??""} onChange={e=>{const id=e.target.value;guard(()=>open(id));}}><option value="">New map</option>{workspace.scenes.filter(s=>s.drawing).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <button onClick={()=>setNewMap(true)}><Plus size={15}/> Start a new map</button>
@@ -384,6 +439,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <h3>This map</h3>
     <div className="creator-pair">{squares("width")}{squares("height")}</div>
     <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>
+    {anchorPicker}
+    <p className="muted">Or drag the handles on the map’s edges. Sizes snap to whole squares; hold Alt for half squares.</p>
     <label>Background<input type="color" value={draft.drawing.background} onChange={e=>change(d=>{d.drawing.background=e.target.value;})}/></label>
     <label className="creator-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to the grid (freehand always stays smooth)</label>
     <label className="creator-check"><input type="checkbox" checked={join} onChange={e=>setJoin(e.target.checked)}/>Join rooms that touch into one room (hold Alt to keep one apart)</label>
@@ -404,6 +461,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="d"){e.preventDefault();duplicate();return;}
     if(e.code==="Space"&&!(e.target as HTMLElement).closest("button")){e.preventDefault();setSpaceHeld(true);return;}
     if(tool==="select"&&single?.type==="stamp"&&e.key.toLowerCase()==="r"&&!e.ctrlKey&&!e.metaKey){e.preventDefault();turnStamp(e.shiftKey?-90:90);return;}
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.toLowerCase()==="e"){e.preventDefault();if(WALL_TOOLS.includes(tool))setErase(v=>!v);else{pickTool("line");setErase(true);}return;}
     if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){const next=toolForKey(e.key);if(next){pickTool(next);return;}}
     if((e.key==="Delete"||e.key==="Backspace") && selectedShape){e.preventDefault();e.stopPropagation();if(selectedIds.length===1&&selectedPoint!==null)removePoint(selectedShape.id,selectedPoint);else deleteShape();}
   }}>
@@ -412,7 +470,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <h1>Map Creator</h1>
       <input className="creator-name" aria-label="Map name" maxLength={120} value={draft.name} onChange={e=>change(d=>{d.name=e.target.value||"Untitled map";})}/>
       <span className="creator-spacer"/>
-      <span role="status" className="creator-status">{dirty?"Not saved yet":saveStatus}</span>
+      <SaveChip status={saving?"Saving…":dirty||!source?"Unsaved changes":saveStatus==="Not saved"?"Not saved":"Saved"} error="" conflict={false} onSave={()=>{if(!saving)void save();}} hints={{unsaved:"This map has changes that aren’t saved. Click or press Ctrl/Cmd+S to save it.",saved:"This map is saved. Ctrl/Cmd+S saves it again."}}/>
       <button className="creator-icon" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" disabled={!undo.current.length} onClick={()=>history(true)}><Undo2 size={17}/></button>
       <button className="creator-icon" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" disabled={!redo.current.length} onClick={()=>history(false)}><Redo2 size={17}/></button>
       <DesktopSidebars {...sidebars}/>
@@ -430,7 +488,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         onPointerUp={()=>{pan.current=null;}} onPointerCancel={()=>{pan.current=null;}}>
         <div className="creator-paper" style={{width:`${zoom*100}%`}}>
           <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerUp={finish} onPointerCancel={cancel} onDoubleClick={()=>{if(tool==="poly"&&polyPoints&&polyPoints.length>=3)finishPoly();}}
-            onPointerMove={e=>{if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window")setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
+            onPointerMove={e=>{if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window"||(erase&&WALL_TOOLS.includes(tool)))setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
             onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);}}
             onDragOver={e=>{if(e.dataTransfer.types.includes("application/x-map-stamp")){e.preventDefault();e.dataTransfer.dropEffect="copy";}}}
             onDrop={e=>{const stamp=stampById(e.dataTransfer.getData("application/x-map-stamp"));if(!stamp)return;e.preventDefault();
@@ -444,7 +502,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             {trace&&<image href={trace.url} x={trace.x} y={trace.y} width={trace.w} height={trace.h} opacity={trace.opacity} preserveAspectRatio="none" pointerEvents="none"/>}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
             {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"||single.type==="label"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
-            {hoverWall&&(tool==="door"||tool==="window")&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke="#2f80ed" strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
+            {erase&&drawingId&&(()=>{const s=draft.drawing.shapes.find(x=>x.id===drawingId);return s?.type==="opening"?<path d={shapePath(s)} stroke="#e5534b" strokeOpacity=".8" strokeWidth={s.thickness+6} strokeLinecap="round" pointerEvents="none"/>:null;})()}
+            {hoverWall&&(tool==="door"||tool==="window"||(erase&&WALL_TOOLS.includes(tool)))&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke={erase&&WALL_TOOLS.includes(tool)?"#e5534b":"#2f80ed"} strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
             {tool==="poly"&&polyPoints&&<g pointerEvents="none">
               <path d={`M ${polyPoints.map(p=>`${p.x} ${p.y}`).join(" L ")}${polyHover?` L ${polyHover.x} ${polyHover.y}`:""}`} fill={fill} fillOpacity=".55" stroke={stroke} strokeWidth={thickness} strokeLinejoin="round"/>
               {polyHover&&polyPoints.length>=2&&<path d={`M ${polyHover.x} ${polyHover.y} L ${polyPoints[0].x} ${polyPoints[0].y}`} stroke="#2684ff" strokeWidth={2} strokeDasharray="6 6"/>}
@@ -452,8 +511,25 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             </g>}
             {label}
           </svg>
+          {tab==="map"&&<>
+            {HANDLES.map(([hx,hy])=><button key={`${hx}${hy}`} type="button" className="creator-size-handle" aria-label={`Resize the map from its ${[hy<0?"top":hy>0?"bottom":"",hx<0?"left":hx>0?"right":""].filter(Boolean).join(" ")} ${hx&&hy?"corner":"edge"}`}
+              style={{left:`${(hx+1)*50}%`,top:`${(hy+1)*50}%`,cursor:hx&&hy?(hx===hy?"nwse-resize":"nesw-resize"):hx?"ew-resize":"ns-resize"}}
+              onPointerDown={e=>{if(e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);const r=svg.current!.getBoundingClientRect();setSizeDrag({hx,hy,x:e.clientX,y:e.clientY,scale:r.width/draft.width,w:draft.width,h:draft.height,step:grid.size,nw:draft.width,nh:draft.height});}}
+              onPointerMove={e=>{if(!sizeDrag)return;const step=e.altKey?grid.size/2:grid.size,lim=(v:number)=>Math.max(3*grid.size,Math.min(maxSquares*grid.size,Math.round(v/step)*step));
+                const dx=(e.clientX-sizeDrag.x)/sizeDrag.scale,dy=(e.clientY-sizeDrag.y)/sizeDrag.scale;
+                setSizeDrag({...sizeDrag,nw:sizeDrag.hx?lim(sizeDrag.w+dx*sizeDrag.hx):sizeDrag.w,nh:sizeDrag.hy?lim(sizeDrag.h+dy*sizeDrag.hy):sizeDrag.h});}}
+              onPointerUp={()=>{if(!sizeDrag)return;const d=sizeDrag;setSizeDrag(null);resizeTo(d.nw,d.nh,{x:d.hx<0?1:0,y:d.hy<0?1:0});}}
+              onPointerCancel={()=>setSizeDrag(null)}
+              onKeyDown={e=>{const k={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!k)return;e.preventDefault();e.stopPropagation();
+                const grow=(k[0]*hx+k[1]*hy),w=draft.width+(hx&&k[0]?grow*grid.size:0),h=draft.height+(hy&&k[1]?grow*grid.size:0);
+                if(w>=3*grid.size&&h>=3*grid.size&&w<=maxSquares*grid.size&&h<=maxSquares*grid.size)resizeTo(w,h,{x:hx<0?1:0,y:hy<0?1:0});}}/>)}
+            {sizeDrag&&(()=>{const d=sizeDrag,x0=d.hx<0?d.w-d.nw:0,y0=d.hy<0?d.h-d.nh:0,cut=resizeMap(draft,d.nw,d.nh,{x:d.hx<0?1:0,y:d.hy<0?1:0},grid.size).trimmed.length;
+              return <><div className="creator-size-ghost" style={{left:`${x0/d.w*100}%`,top:`${y0/d.h*100}%`,width:`${d.nw/d.w*100}%`,height:`${d.nh/d.h*100}%`}}/>
+              <div className="creator-size-badge" role="status" style={{left:`${(x0+d.nw/2)/d.w*100}%`,top:`${(y0+d.nh)/d.h*100}%`}}>{`${+(d.nw/grid.size).toFixed(1)} × ${+(d.nh/grid.size).toFixed(1)} squares · ${distance(d.nw,grid).replace(` ${grid.unit}`,"")} × ${distance(d.nh,grid)}`}{cut?` · ${cut} shape${cut===1?"":"s"} trimmed`:""}</div></>;})()}
+          </>}
         </div>
       </section>
+      {WALL_TOOLS.includes(tool)&&<div className="creator-overlay creator-wall-mode" role="group" aria-label="Wall tool mode"><span>{creatorTools.find(t=>t.id===tool)?.label}</span><span className="creator-wall-switch"><button type="button" aria-pressed={!erase} onClick={()=>setErase(false)}><PenLine size={14}/> Draw</button><button type="button" aria-pressed={erase} className="erase" onClick={()=>setErase(true)}><Eraser size={14}/> Erase</button></span><small>Press E to switch</small></div>}
       {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
       <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {grid.units} {grid.unit} squares, same as Maptable<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button><button className="creator-link" aria-pressed={join} title="Rooms that touch become one room with no wall between" onClick={()=>setJoin(!join)}><Combine size={15}/> Join rooms {join?"on":"off"}</button>{(snap||join)&&<span className="muted">Hold Alt to {snap&&join?"draw freely and keep rooms apart":snap?"draw freely":"keep rooms apart"}</span>}</div>
       <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>

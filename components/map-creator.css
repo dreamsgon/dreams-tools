@@ -105,7 +105,7 @@
   .creator-rail button:nth-child(1)::after, .creator-rail button:nth-child(8)::after { display:none; }
   .creator-tool-hint { display:none !important; }
   .creator-canvas { min-height:calc(45vh / var(--ui-zoom, 1)); }
-  .map-creator .creator-stage { padding:10px 10px 56px; }
+  .map-creator .creator-stage { padding:16px 16px 56px; }
   .creator-grid-status .muted, .creator-grid-status > span:empty { display:none; }
   .creator-grid-status { font-size:0; gap:4px; } .creator-grid-status .creator-link { font-size:12px; }
   .creator-overlay { bottom:8px; } .creator-grid-status { left:8px; } .creator-zoom { right:8px; }
@@ -146,3 +146,30 @@
 .creator-dialog > footer { flex-wrap:wrap; }
 .creator-dialog > footer button { display:inline-flex; align-items:center; gap:6px; }
 .creator-dialog > footer .creator-spacer { flex:1; }
+
+/* Map size: typed sizes, the corner that stays put, and handles on the map's edges. */
+.creator-size-field { display:flex; align-items:center; border:1px solid var(--line); border-radius:var(--radius); background:var(--control, var(--panel)); }
+.creator-size-field[data-invalid] { border-color:var(--danger, #c4473a); }
+.creator-size-field:focus-within { border-color:var(--accent); }
+.creator-panel .creator-size-field input { border:0; background:transparent; text-align:center; min-width:0; flex:1; padding:7px 2px; color:var(--ink); outline:none; }
+.creator-panel .creator-size-field button { display:grid; place-items:center; width:30px; min-height:32px; padding:0; border:0; background:none; color:var(--muted); }
+.creator-panel .creator-size-field button:hover:not(:disabled) { color:var(--ink); }
+.creator-size-hint { font-size:11px; color:var(--muted); }
+.creator-size-field[data-invalid] + .creator-size-hint { color:var(--danger, #c4473a); }
+.creator-anchor { display:flex; gap:12px; align-items:center; font-size:12px; color:var(--muted); line-height:1.45; }
+.creator-anchor > div { display:grid; grid-template-columns:repeat(3, 18px); gap:3px; flex-shrink:0; }
+.creator-panel .creator-anchor button { width:18px; height:18px; min-height:0; padding:0; border:1px solid var(--line); border-radius:3px; background:transparent; }
+.creator-panel .creator-anchor button[aria-checked="true"] { background:var(--accent); border-color:var(--accent); }
+.creator-paper { position:relative; }
+.creator-size-handle { position:absolute; width:14px; height:14px; padding:0; transform:translate(-50%, -50%); background:#fff; border:2px solid #2684ff; border-radius:3px; z-index:2; touch-action:none; }
+.creator-size-handle:hover, .creator-size-handle:focus-visible { background:#ffcf60; outline:none; }
+.creator-size-ghost { position:absolute; border:2px dashed #2684ff; background:#2684ff14; pointer-events:none; z-index:1; }
+.creator-size-badge { position:absolute; transform:translate(-50%, 12px); background:#16191c; color:#fff; font-size:13px; font-weight:500; padding:6px 10px; border-radius:5px; white-space:nowrap; pointer-events:none; z-index:3; box-shadow:0 4px 14px #00000059; }
+/* The wall tools' Draw / Erase switch. */
+.creator-wall-mode { top:10px; bottom:auto; left:50%; transform:translateX(-50%); color:var(--ink); padding:4px 6px 4px 10px; gap:10px; user-select:none; }
+.creator-wall-mode small { color:var(--muted); font-size:12px; padding-right:4px; }
+.creator-wall-switch { display:flex; gap:2px; padding:3px; border-radius:var(--radius); background:var(--control, var(--raised)); }
+.creator-wall-switch button { display:inline-flex; align-items:center; gap:5px; min-height:28px; padding:4px 10px; border:0; border-radius:var(--radius-sm, 4px); background:none; color:var(--muted); font-size:12px; }
+.creator-wall-switch button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
+.creator-wall-switch button.erase[aria-pressed="true"] { background:color-mix(in srgb, #e5534b 18%, transparent); color:#e5534b; }
+@media(max-width:700px) { .creator-wall-mode { top:auto; bottom:58px; } .creator-wall-mode small { display:none; } }

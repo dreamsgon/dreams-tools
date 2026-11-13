@@ -99,7 +99,7 @@ function outline(type: string, points: Point[], closed: boolean): [Point, Point]
 export function wallSegments(shapes: MapShape[]): WallSegment[] {
   const out: WallSegment[] = [];
   for (const s of shapes) {
-    if (s.type === "door" || s.type === "window" || s.type === "stamp" || s.type === "label") continue;
+    if (s.type === "door" || s.type === "window" || s.type === "opening" || s.type === "stamp" || s.type === "label") continue;
     // A merged room's wall is drawn twice as wide and half hidden under the floor.
     const thickness = s.type === "merged" ? s.thickness * 2 : s.thickness;
     const parts = s.type === "merged" ? s.roomParts.map(p => outline(p.type, s.points.slice(p.start, p.start + p.count), p.closed)) : [outline(s.type, s.points, s.closed)];
@@ -191,4 +191,82 @@ export function roomsTouch(a: Pick<MapShape, "type" | "closed" | "points" | "roo
 /** The rooms a new room joins: filled rooms it overlaps or shares a wall with. */
 export function touchingRooms<T extends Pick<MapShape, "id" | "type" | "closed" | "fill" | "points" | "roomParts">>(shape: T, others: T[], slack = 1): T[] {
   return others.filter(o => o.id !== shape.id && isRoom(o) && roomsTouch(shape, o, slack));
+}
+
+/** Which edge or corner stays put when the map changes size: 0 = left/top, .5 = centre, 1 = right/bottom. */
+export type MapAnchor = { x: 0 | 0.5 | 1; y: 0 | 0.5 | 1 };
+type Sized = { width: number; height: number; drawing: { shapes: MapShape[]; layerOrder?: string[] } };
+const clampPoint = (p: Point, w: number, h: number) => ({ x: Math.max(0, Math.min(w, p.x)), y: Math.max(0, Math.min(h, p.y)) });
+
+/**
+ * A map at a new size. The anchor's side stays where it is, so the drawing moves by whole squares
+ * (dx, dy) when the map grows or shrinks on the other side. Shapes past the new edge are trimmed to it,
+ * and shapes left wholly outside are removed; `trimmed` names both.
+ */
+export function resizeMap<T extends Sized>(d: T, width: number, height: number, anchor: MapAnchor, step: number): T & { dx: number; dy: number; trimmed: string[] } {
+  const w = Math.max(step, Math.round(width)), h = Math.max(step, Math.round(height));
+  const dx = Math.round((w - d.width) * anchor.x / step) * step, dy = Math.round((h - d.height) * anchor.y / step) * step;
+  const trimmed: string[] = [], gone = new Set<string>();
+  const shapes = d.drawing.shapes.flatMap(s => {
+    const points = s.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+    const b = shapeBounds({ points });
+    if (b.x >= w || b.y >= h || b.x + b.w <= 0 || b.y + b.h <= 0) { trimmed.push(s.id); gone.add(s.id); return []; }
+    const clamped = points.map(p => clampPoint(p, w, h));
+    if (clamped.some((p, i) => p.x !== points[i].x || p.y !== points[i].y)) trimmed.push(s.id);
+    return [{ ...s, points: clamped }];
+  });
+  const drawing = { ...d.drawing, shapes, ...(d.drawing.layerOrder ? { layerOrder: d.drawing.layerOrder.filter(id => !gone.has(id)) } : {}) };
+  return { ...d, width: w, height: h, drawing, dx, dy, trimmed };
+}
+
+/**
+ * Erases a stretch of wall, from a to b along it. A straight wall is shortened or split in two
+ * (or removed when the whole of it goes); a room's wall, a curved wall or a freehand wall gets an opening there.
+ * Returns the shapes and where the change goes in the layer order.
+ */
+export function eraseWall(shapes: MapShape[], wall: WallSegment, a: Point, b: Point, newId: () => string, background: string): { shapes: MapShape[]; added: MapShape[]; removed: string[] } {
+  const target = shapes.find(s => s.id === wall.shapeId);
+  if (!target || Math.hypot(b.x - a.x, b.y - a.y) < 1) return { shapes, added: [], removed: [] };
+  if (target.type === "line" && target.points.length === 2) {
+    const [p, q] = target.points, len = Math.hypot(q.x - p.x, q.y - p.y);
+    const t0 = Math.min(project(a, p, q).t, project(b, p, q).t), t1 = Math.max(project(a, p, q).t, project(b, p, q).t);
+    const at = (t: number) => ({ x: Math.round(p.x + (q.x - p.x) * t), y: Math.round(p.y + (q.y - p.y) * t) });
+    const pieces = [[0, t0], [t1, 1]].filter(([s, e]) => (e - s) * len >= 2).map(([s, e]) => [at(s), at(e)]);
+    if (!pieces.length) return { shapes: shapes.filter(s => s.id !== target.id), added: [], removed: [target.id] };
+    const first = { ...target, points: pieces[0] };
+    const added = pieces.slice(1).map(points => ({ ...target, id: newId(), name: `${target.name || "Wall"} (part)`.slice(0, 120), points }));
+    return { shapes: [...shapes.map(s => s.id === target.id ? first : s), ...added], added, removed: [] };
+  }
+  const opening: MapShape = { ...target, id: newId(), type: "opening", name: "Opening", roomParts: [], stamp: null, rotation: 0, flip: false, smooth: false,
+    points: [{ x: Math.round(a.x), y: Math.round(a.y) }, { x: Math.round(b.x), y: Math.round(b.y) }], fill: wall.floor ?? background, thickness: wall.thickness, closed: false };
+  return { shapes: [...shapes, opening], added: [opening], removed: [] };
+}
+
+/** Walls with the openings erased into them taken out, for line of sight. */
+export function cutOpenings(walls: WallSegment[], shapes: MapShape[]): WallSegment[] {
+  const openings = shapes.filter(s => s.type === "opening" && s.points.length >= 2);
+  if (!openings.length) return walls;
+  return walls.flatMap(w => {
+    const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (!len) return [w];
+    const cuts = openings.flatMap(o => {
+      const [p, q] = o.points, near = w.thickness / 2 + 2, pa = project(p, w.a, w.b), pb = project(q, w.a, w.b);
+      return pa.distance <= near && pb.distance <= near ? [[Math.min(pa.t, pb.t), Math.max(pa.t, pb.t)]] : [];
+    }).sort((x, y) => x[0] - y[0]);
+    if (!cuts.length) return [w];
+    const at = (t: number) => ({ x: w.a.x + (w.b.x - w.a.x) * t, y: w.a.y + (w.b.y - w.a.y) * t });
+    const out: WallSegment[] = []; let from = 0;
+    for (const [s, e] of cuts) { if ((s - from) * len >= 1) out.push({ ...w, a: at(from), b: at(s) }); from = Math.max(from, e); }
+    if ((1 - from) * len >= 1) out.push({ ...w, a: at(from), b: w.b });
+    return out;
+  });
+}
+
+/** Moves everything on a scene by dx, dy pixels, for a drawn map that grew or shrank on its top or left. */
+export function shiftSceneContents(scene: { tokens: { x: number; y: number }[]; effects: { x: number; y: number }[]; pointsOfInterest?: { x: number; y: number }[]; measurements?: { points: Point[] }[]; fog: { strokes: { points: Point[] }[] }; crop?: { x: number; y: number } | null; savedCrops?: { x: number; y: number }[] }, dx: number, dy: number) {
+  if (!dx && !dy) return;
+  const move = (p: { x: number; y: number }) => { p.x += dx; p.y += dy; };
+  scene.tokens.forEach(move); scene.effects.forEach(move); scene.pointsOfInterest?.forEach(move);
+  scene.measurements?.forEach(m => m.points.forEach(move)); scene.fog.strokes.forEach(s => s.points.forEach(move));
+  for (const c of [scene.crop, ...(scene.savedCrops ?? [])]) if (c) { c.x = Math.max(0, c.x + dx); c.y = Math.max(0, c.y + dy); }
 }

@@ -148,7 +148,8 @@ export const mapShapeSchema = z.object({
   smooth: z.boolean().default(false),
   hidden: z.boolean().default(false),
   locked: z.boolean().default(false),
-  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "stamp", "label"]),
+  // An opening is a stretch of wall erased in the Map Creator: a gap drawn over the wall, with no door.
+  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "opening", "stamp", "label"]),
   roomParts: z.array(z.object({type:z.enum(["rect","ellipse","path"]),start:z.number().int().min(0),count:z.number().int().min(2),smooth:z.boolean(),closed:z.boolean()})).max(1000).default([]),
   points: z.array(point).min(2).max(2000),
   fill: color.nullable(),

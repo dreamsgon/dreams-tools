@@ -29,7 +29,7 @@ export function DrawingBackground({ drawing, width, height }: { drawing: Pick<Ma
 }
 
 export default function DrawingShape({ shape: s, drawing, prefix = "shape" }: { shape: MapShape; drawing: Pick<MapDrawing, "background" | "style">; prefix?: string }) {
-  const opening = s.type === "door" || s.type === "window";
+  const opening = s.type === "door" || s.type === "window" || s.type === "opening";
   return <g data-shape={s.id}>
     <DrawOps ops={shapeOps(s, drawing)} id={`${prefix}-${s.id}`}/>
     {s.type === "stamp" || s.type === "label" ? <path d={shapePath(s)} fill="transparent" stroke="none"/>
