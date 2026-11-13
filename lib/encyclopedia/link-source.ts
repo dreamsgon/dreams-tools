@@ -12,7 +12,7 @@ export type LinkKind = "notion" | "drive" | "github";
 type Fetch = typeof fetch;
 export class LinkError extends Error {}
 
-const ALLOWED = /^(docs\.google\.com|drive\.google\.com|drive\.usercontent\.google\.com|raw\.githubusercontent\.com|gist\.githubusercontent\.com|github\.com|gist\.github\.com|www\.notion\.so|notion\.so|[a-z0-9-]+\.notion\.site)$/;
+const ALLOWED = /^(docs\.google\.com|drive\.google\.com|drive\.usercontent\.google\.com|raw\.githubusercontent\.com|gist\.githubusercontent\.com|github\.com|gist\.github\.com|www\.notion\.so|notion\.so|app\.notion\.com|www\.notion\.com|notion\.com|[a-z0-9-]+\.notion\.site)$/;
 const TIMEOUT = 20_000;
 const app = "or hand it to your AI app, which reads it with your own access.";
 
@@ -50,7 +50,7 @@ export function linkTarget(link: string): { kind: LinkKind; url: string; notionP
   const hex = /([0-9a-f]{32})(?:[^0-9a-f]|$)/i.exec(path.replace(/-/g, ""))?.[1] ?? u.searchParams.get("p")?.replace(/-/g, "");
   if (!hex || !/^[0-9a-f]{32}$/i.test(hex)) throw new LinkError("That Notion link has no page in it. Open the page and copy its link.");
   const id = hex.toLowerCase(), notionPage = `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
-  return { kind: "notion", url: "https://www.notion.so/api/v3/loadPageChunk", notionPage };
+  return { kind: "notion", url: `${host.endsWith("notion.com") ? "https://app.notion.com" : "https://www.notion.so"}/api/v3/loadPageChunk`, notionPage };
 }
 
 /** Fetches, following redirects only between the allowed hosts. */
@@ -108,11 +108,16 @@ export function notionText(pageId: string, blocks: Record<string, NotionRecord>)
   return { title: plain(block(pageId)?.properties?.title) || undefined, text: lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
 }
 
-async function readNotion(pageId: string, fetchImpl: Fetch) {
+const NOTION_APIS = ["https://www.notion.so/api/v3/loadPageChunk", "https://app.notion.com/api/v3/loadPageChunk"];
+
+async function readNotion(pageId: string, first: string, fetchImpl: Fetch) {
   const blocks: Record<string, NotionRecord> = {};
-  let cursor: unknown = { stack: [] };
+  let cursor: unknown = { stack: [] }, api = first;
   for (let chunk = 0; chunk < 20; chunk++) {
-    const res = await get("https://www.notion.so/api/v3/loadPageChunk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pageId, limit: 100, cursor, chunkNumber: chunk, verticalColumns: false }) }, fetchImpl);
+    const ask = (url: string) => get(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pageId, limit: 100, cursor, chunkNumber: chunk, verticalColumns: false }) }, fetchImpl);
+    let res: Response;
+    try { res = await ask(api); }
+    catch (e) { if (chunk) throw e; api = NOTION_APIS.find(x => x !== api)!; res = await ask(api); } // Notion answers on both of its addresses; try the other once.
     if (!res.ok) throw new LinkError("Notion didn’t share that page. Turn on Share › Publish to the web for it, " + app);
     const body = await res.json().catch(() => null) as { recordMap?: { block?: Record<string, NotionRecord> }; cursor?: { stack?: unknown[] } } | null;
     Object.assign(blocks, body?.recordMap?.block ?? {});
@@ -129,7 +134,7 @@ async function readNotion(pageId: string, fetchImpl: Fetch) {
 /** The text behind a public link, ready to use as a session's transcript. */
 export async function readLink(link: string, fetchImpl: Fetch = fetch): Promise<{ kind: LinkKind; text: string; title?: string }> {
   const t = linkTarget(link);
-  if (t.notionPage) return { kind: "notion", ...await readNotion(t.notionPage, fetchImpl) };
+  if (t.notionPage) return { kind: "notion", ...await readNotion(t.notionPage, t.url, fetchImpl) };
   const res = await get(t.url, { headers: { Accept: "text/plain, text/markdown, application/json;q=0.9, */*;q=0.5" } }, fetchImpl);
   if (res.status === 404 || res.status === 403 || res.status === 401) throw new LinkError(t.kind === "github" ? "GitHub says that file isn’t there, or it’s private. Check the link, " + app : "That file isn’t shared publicly. Share it as “Anyone with the link”, " + app);
   if (!res.ok) throw new LinkError(`That link answered with an error (${res.status}). Try again in a moment, ` + app);

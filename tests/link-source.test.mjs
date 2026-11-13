@@ -23,6 +23,8 @@ test('links become the file behind them, and anything else is refused with what 
  const n=linkTarget('https://www.notion.so/lantern/Session-13-notes-0123456789abcdef0123456789ABCDEF?pvs=4');
  assert.equal(n.kind,'notion');assert.equal(n.notionPage,'01234567-89ab-cdef-0123-456789abcdef');
  assert.equal(linkTarget('https://lantern.notion.site/01234567-89ab-cdef-0123-456789abcdef').notionPage,'01234567-89ab-cdef-0123-456789abcdef');
+ const now=linkTarget('https://app.notion.com/p/enigmaticlogs/Claude-Test-4179cb8aeab58005acdaf5c9c6ab8b2b');
+ assert.equal(now.notionPage,'4179cb8a-eab5-8005-acda-f5c9c6ab8b2b');assert.equal(now.url,'https://app.notion.com/api/v3/loadPageChunk');
  for(const [bad,why] of [
   ['https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit',/Only Google Docs/],
   ['https://drive.google.com/drive/folders/1AbCdEfGhIjK',/not a folder/],
@@ -84,6 +86,11 @@ test('a Notion page shared to the web is read in order, with headings and lists,
  const r=await readLink(`https://lantern.notion.site/Session-13-notes-${PAGE.replace(/-/g,'')}`,f);
  assert.equal(r.kind,'notion');assert.equal(r.title,'Session 13 notes');assert.match(r.text,/> Pay the toll first\./);
  assert.equal(f.sent[0].url,'https://www.notion.so/api/v3/loadPageChunk');assert.equal(f.sent[0].body.pageId,PAGE);assert.equal(f.sent[1].body.chunkNumber,1);
+ // When one of Notion's addresses can't be reached, the other is tried once.
+ const so=web([{type:'application/json',body:{recordMap:{block:blocks},cursor:{stack:[]}}}]);
+ const flaky=async(url,init)=>{if(String(url).includes('app.notion.com'))throw Error('unreachable');return so(url,init);};
+ assert.match((await readLink(`https://app.notion.com/p/team/Notes-${PAGE.replace(/-/g,'')}`,flaky)).text,/# The toll at Greyfen/);
+ assert.equal(so.sent[0].url,'https://www.notion.so/api/v3/loadPageChunk');
  const closed=web([{status:400,type:'application/json',body:{errorId:'x',name:'ValidationError'}}]);
  await assert.rejects(readLink(`https://www.notion.so/${PAGE.replace(/-/g,'')}`,closed),/Publish to the web/);
  const empty=web([{type:'application/json',body:{recordMap:{block:{}},cursor:{stack:[]}}}]);
