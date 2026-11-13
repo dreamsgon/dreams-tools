@@ -3,7 +3,7 @@ import {useState} from 'react';
 import {Globe,Flag,Plus,ArrowUpRight,BookOpen,Copy,Archive,Layers,Settings} from 'lucide-react';
 import {worldStarters,createStarter,copyWorld} from '@/lib/encyclopedia/world-templates';
 import type {Workspace} from '@/lib/encyclopedia/world-model';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 type Creation={kind:'starter'|'template'|'snapshot';id:string};
 export function WorkspaceDashboard({data,worldId,change,onWorld,onCampaign,onLore,onNewCampaign,onEdit}:{data:Workspace;worldId:string;change:(s:Workspace)=>boolean;onWorld:(id:string)=>void;onCampaign:(worldId:string,campaignId:string)=>void;onLore:(worldId:string)=>void;onNewCampaign:()=>void;onEdit:(id:string)=>void}){
  const [tab,setTab]=useState<'campaigns'|'templates'>('campaigns'),[creation,setCreation]=useState<Creation|null>(null),[showArchived,setShowArchived]=useState(false),[notice,setNotice]=useState('');

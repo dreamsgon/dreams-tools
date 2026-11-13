@@ -4,7 +4,7 @@ import {Map as MapIcon,Plus,Upload,Search,ArrowUpRight,Image as ImageIcon} from 
 import {mapKinds,newMap,type MapData} from '@/lib/encyclopedia/map-model';
 import {defaultWorldOptions,generateWorld,worldKinds,type WorldKind} from '@/lib/encyclopedia/world-generator';
 import {folderPath,newId,visibleEntries,type Workspace,type Entry} from '@/lib/encyclopedia/world-model';
-import {ToolDialog} from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import {MapCanvas,useMapImage} from './map-canvas';
 import {uploadMapImage,importMapPackage} from './map-transfer';
 export function MapsSection({data,worldId,campaignId,change,onOpen}:{data:Workspace;worldId:string;campaignId:string|null;change:(s:Workspace)=>void;onOpen:(id:string)=>void}){

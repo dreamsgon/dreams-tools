@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
 import {Map as MapIcon,Search} from "lucide-react";
-import {ToolDialog} from "./character-tools";
+import {ToolDialog} from "./tool-dialog";
 
 export type MaptableScene={id:string;name:string;mapType:string;path:string};
 

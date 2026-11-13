@@ -4,32 +4,52 @@ import { AiConnectionDialog } from "./ai-connection";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import { useIdlePreload } from "@/lib/idle-preload";
 import { LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, githubSchema, defaultCharacter, searchableText, compareEntries, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
-import {CharactersSection,StatFormBuilder,PlayerSharing} from "./character-tools";
 import {newMap} from "@/lib/encyclopedia/map-model";
 import {FogImageSync} from "./fog-image-sync";
-import {CalendarSection} from './calendar-section';
-import {MapsSection} from "./maps-section";
 import {WorkspaceDashboard} from "./workspace-dashboard";
 import {useNavigationSections,useSidebarLayout,SidebarResize} from "./sidebar-controls";
 import {ThemeToggle} from "./theme";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
-import {ArticleEditor} from "./article-editor";
-import {QuickSearch} from "./quick-search";
 import {TagsManager} from "@/components/tags";
 import type {Tag} from "@/lib/tags";
 import {RollResults} from "./rolls";
 import {DiscordRollsSetting} from "./discord-rolls";
-import {RandomTablesSection} from "./random-tables";
-import {QuestsSection} from "./quests-section";
-import {CodexSection} from "./codex-section";
 import {LookSection,LookBanner,LookFont} from "./look-section";
 import {lookAttributes} from "@/lib/encyclopedia/look";
 import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
 import {placeFromQuery,placeQuery} from "@/lib/encyclopedia/place";
 import { confirmDialog } from "../confirm-dialog";
+
+// Sections and the article editor load as separate chunks so the dashboard appears sooner;
+// they are fetched while the browser is idle, so opening one is still instant.
+const lazyParts = {
+  CalendarSection: () => import("./calendar-section").then(m => ({ default: m.CalendarSection })),
+  MapsSection: () => import("./maps-section").then(m => ({ default: m.MapsSection })),
+  ArticleEditor: () => import("./article-editor").then(m => ({ default: m.ArticleEditor })),
+  QuickSearch: () => import("./quick-search").then(m => ({ default: m.QuickSearch })),
+  RandomTablesSection: () => import("./random-tables").then(m => ({ default: m.RandomTablesSection })),
+  QuestsSection: () => import("./quests-section").then(m => ({ default: m.QuestsSection })),
+  CodexSection: () => import("./codex-section").then(m => ({ default: m.CodexSection })),
+  CharactersSection: () => import("./character-tools").then(m => ({ default: m.CharactersSection })),
+  StatFormBuilder: () => import("./character-tools").then(m => ({ default: m.StatFormBuilder })),
+  PlayerSharing: () => import("./character-tools").then(m => ({ default: m.PlayerSharing })),
+};
+const CalendarSection = dynamic(lazyParts.CalendarSection);
+const MapsSection = dynamic(lazyParts.MapsSection);
+const ArticleEditor = dynamic(lazyParts.ArticleEditor);
+const QuickSearch = dynamic(lazyParts.QuickSearch);
+const RandomTablesSection = dynamic(lazyParts.RandomTablesSection);
+const QuestsSection = dynamic(lazyParts.QuestsSection);
+const CodexSection = dynamic(lazyParts.CodexSection);
+const CharactersSection = dynamic(lazyParts.CharactersSection);
+const StatFormBuilder = dynamic(lazyParts.StatFormBuilder);
+const PlayerSharing = dynamic(lazyParts.PlayerSharing);
+const preloadParts = Object.values(lazyParts);
 const PLACE_KEY = "encyclopedia:place";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal };
 const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest" };
@@ -43,6 +63,7 @@ type Modal = {
 function excerpt(e: Entry, s: Workspace) { return e.body.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label ?? resolveLink(s, e, target)?.title ?? target).replace(/^[ \t]*- \[[ xX]\] /gm, "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim().slice(0, 150); }
 function download(value: unknown, name: string) { const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 export default function WorkspaceApp() {
+  useIdlePreload(preloadParts);
     const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
     const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"quests"|"codex"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0);

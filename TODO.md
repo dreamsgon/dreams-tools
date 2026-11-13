@@ -129,6 +129,8 @@ Updated 2026-11-11. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Libraries/folders/campaign transfers, token names/HP/conditions/borders, auras/AoEs, movement, initiative and dice.
 - [ ] Player previews/exports conceal hidden tokens and use opaque fog.
 - [ ] Large-library performance and storage costs; design safe collection of unreferenced immutable segments without breaking recovery.
+- [x] Faster loading, part 1: Maptable's Map Creator, help, import/export/connections dialogs and on-demand panels, and the Encyclopedia's sections, article editor, character tools and quick search load as separate chunks and are fetched while the browser is idle (`lib/idle-preload.ts`). `ToolDialog` moved to `components/encyclopedia/tool-dialog.tsx` so the player page no longer loads the character directory. First-load JavaScript: Maptable 1154 to 950 KB, Encyclopedia 1094 to 744 KB, player page 716 to 645 KB, campaign page 756 to 638 KB.
+- [ ] Faster loading, follow-ups: `lib/encyclopedia/merge.ts` imports `stable` from server-side `lib/mcp/activity.ts`, which pulls S3 store code into the browser bundle; move `stable` to a shared helper once the AI work in that file has merged.
 - [ ] Review the remaining starter dependencies/styles and trim unused ones with visual regression checks.
 
 ## Optional future work

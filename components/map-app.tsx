@@ -7,7 +7,6 @@ import { diceDockPosition } from "@/lib/dice-dock";
 import { attachSceneMap } from "@/lib/scene-map";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
-import HelpGuides from "./help-guides";
 import TokenColor from "./token-color";
 import TokenBorder from "./token-border";
 import TokenOptions from "./token-options";
@@ -21,10 +20,11 @@ import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync
 import { navigationStorageKey, parseNavigationState, type NavigationPanel } from "@/lib/navigation-state";
 import SavedMeasurements from "./saved-measurements";
 import FogRegions from "./fog-regions";
-import ExplorationPanel from "./exploration-panel";
 import {sceneTargets} from "@/lib/exploration";
 import TokenImage from "./token-image";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
+import { useIdlePreload } from "@/lib/idle-preload";
 import {
   Map as MapIcon,
   LayoutDashboard,
@@ -68,7 +68,6 @@ import { confirmDialog } from "./confirm-dialog";
 import SaveChip from "./save-chip";
 import PanelTip from "./panel-tip";
 import Board, { type View } from "./board";
-import CampaignAssets from "./campaign-assets";
 import AppearanceMenu from "./appearance-menu";
 import ToolSwitch, { AccountLink } from "./tool-switch";
 import { ActionMenu } from "./popover-menu";
@@ -77,19 +76,13 @@ import Breadcrumbs, { type Crumb } from "./breadcrumbs";
 import SceneSwitcher from "./scene-switcher";
 import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
-import ConditionOrganizer from "./condition-organizer";
 import ConditionEntry from "./condition-entry";
-import EffectsPanel from "./effects-panel";
-import TokenLibrary from "./token-library";
 import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter } from "./encyclopedia-tokens";
 import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import TokenNotesControl from "./token-notes-control";
 import TokenStatblock from "./token-statblock";
 import "./maptable-token-layout.css";
-import AddScenes from "./add-scenes";
-import MapSplitDialog from "./map-split-dialog";
-import MapCreator from "./map-creator";
 import { applyWorkspaceHpStates } from "@/lib/token-hp-state";
 import TokenStatusControl from "./token-status-control";
 import TokenDisplayControls from "./token-display-controls";
@@ -103,9 +96,6 @@ import {
   Field,
   Toggle,
   NumberField,
-  ImportDialog,
-  ExportDialog,
-  ConnectionsDialog,
   type MapImportSettings,
 } from "./dialogs";
 import { api, loadImage, uploadAsset, download } from "@/lib/api";
@@ -129,6 +119,35 @@ import {
 import type { Images } from "@/lib/render";
 import { mergeMaptable } from "@/lib/maptable-merge";
 import { drawingStampAssets } from "@/lib/map-stamps";
+// Editors and panels that open on demand load as separate chunks; they are fetched while the
+// browser is idle (below) so the first open is still instant.
+const lazyParts = {
+  HelpGuides: () => import("./help-guides"),
+  ExplorationPanel: () => import("./exploration-panel"),
+  CampaignAssets: () => import("./campaign-assets"),
+  ConditionOrganizer: () => import("./condition-organizer"),
+  EffectsPanel: () => import("./effects-panel"),
+  TokenLibrary: () => import("./token-library"),
+  AddScenes: () => import("./add-scenes"),
+  MapSplitDialog: () => import("./map-split-dialog"),
+  MapCreator: () => import("./map-creator"),
+  ImportDialog: () => import("./import-dialog").then(m => ({ default: m.ImportDialog })),
+  ExportDialog: () => import("./export-dialog").then(m => ({ default: m.ExportDialog })),
+  ConnectionsDialog: () => import("./connections-dialog").then(m => ({ default: m.ConnectionsDialog })),
+};
+const HelpGuides = dynamic(lazyParts.HelpGuides);
+const ExplorationPanel = dynamic(lazyParts.ExplorationPanel);
+const CampaignAssets = dynamic(lazyParts.CampaignAssets);
+const ConditionOrganizer = dynamic(lazyParts.ConditionOrganizer);
+const EffectsPanel = dynamic(lazyParts.EffectsPanel);
+const TokenLibrary = dynamic(lazyParts.TokenLibrary);
+const AddScenes = dynamic(lazyParts.AddScenes);
+const MapSplitDialog = dynamic(lazyParts.MapSplitDialog);
+const MapCreator = dynamic(lazyParts.MapCreator);
+const ImportDialog = dynamic(lazyParts.ImportDialog);
+const ExportDialog = dynamic(lazyParts.ExportDialog);
+const ConnectionsDialog = dynamic(lazyParts.ConnectionsDialog);
+const preloadParts = Object.values(lazyParts);
 
 type Panel = NavigationPanel;
 type Dialog = "scene-map" | "condition" | "split-map" | "add-scenes" | "map" | "token" | "export" | "connections" | "help" | null;
@@ -140,6 +159,7 @@ const tools = [
 ] as const;
 
 export default function MapApp(props: { navigationScope?: string } = {}) {
+  useIdlePreload(preloadParts);
   return <FolderPreferenceScope.Provider value={props.navigationScope ?? "local"}><MapAppContent {...props} /></FolderPreferenceScope.Provider>;
 }
 function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {

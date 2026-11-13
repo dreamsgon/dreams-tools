@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Dices } from 'lucide-react';
 import type { MapData } from '@/lib/encyclopedia/map-model';
 import { defaultWorldOptions, generateWorld, worldAcross, worldClimates, worldKinds, type WorldAcross, type WorldOptions } from '@/lib/encyclopedia/world-generator';
-import { ToolDialog } from './character-tools';
+import {ToolDialog} from './tool-dialog';
 import { MapCanvas } from './map-canvas';
 
 const words = ['amber', 'ash', 'briar', 'cinder', 'dusk', 'ember', 'frost', 'gale', 'harrow', 'iron', 'lantern', 'moss', 'raven', 'salt', 'thorn', 'willow'];
