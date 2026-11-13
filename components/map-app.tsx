@@ -1877,7 +1877,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     </select>
                   </Field>
                   <Toggle label="Measure token movement" checked={measureTokenMovement} onChange={changeMeasureTokenMovement} />
-                  <PanelTip more={<p>Press Q or Space during a drag to add waypoints. On phones, select a token and tap Plan move, then tap map waypoints and Move token. Turn measuring off here or in the map toolbar.</p>}>While this is on, dragging a token measures how far it moves.</PanelTip>
+                  <PanelTip more={<p>Press Q or Space during a drag to add waypoints; each waypoint shows its leg and the total sits beside the token. Hold Alt to move off the grid. Give a token a speed (Edit token, Movement) and the squares turn green within it, amber for a dash and red beyond. On phones, select a token and tap Plan move, then tap map waypoints and Move token. Turn measuring off here or in the map toolbar.</p>}>While this is on, dragging a token measures how far it moves.</PanelTip>
                   <button onClick={() => chooseTool("measure")}>
                     <Ruler size={16} />
                     Measure a path
@@ -2214,14 +2214,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 : tool === "poi" ? "Click the map to place a point of interest or transition"
                 : tool === "select"
                   ? selected
-                    ? (measureTokenMovement ? "Drag to measure movement | Q or Space adds a waypoint | Toolbar toggle turns measuring off" : "Drag to move | Q enables movement measuring | Toolbar toggle keeps it on")
+                    ? (measureTokenMovement ? "Drag to measure movement | Q or Space adds a waypoint | Alt moves off the grid" : "Drag to move | Alt moves off the grid | Q enables movement measuring")
                     : `Select ${selectionLabel} · Middle-drag to pan`
                   : tool === "marquee"
                     ? `Drag to select ${selectionLabel} · Shift adds · ${selectedIds.length + fogSelectedIndices.length} selected · Delete removes · Middle-drag pans`
                   : tool === "pan"
                     ? (gridAdjust ? "Grid adjust · drag or arrows to move · + / − or scroll to resize · Esc to exit" : "Drag to pan · pinch or scroll to zoom")
                     : tool === "measure"
-                      ? "Drag to measure · Q or Space adds a waypoint"
+                      ? "Drag to measure · Q or Space adds a waypoint · Alt measures off the grid"
                       : tool === "reveal" || tool === "cover"
                         ? "Drag across the map to paint fog"
                         : "Drag to size an area effect"}
@@ -2305,7 +2305,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </p>
             <p>
               <strong>4. Play.</strong> Reveal fog, measure paths, and place
-              effects. On touch screens, pinch to zoom. Drag a token to move it;
+              effects. On touch screens, pinch to zoom. Drag a token to move it (hold Alt to place it off the grid);
               click or tap empty space to deselect. For touch waypoints, select a token, tap Plan move, tap each corner and destination, then tap Move token. Undo point removes the last corner; Cancel leaves the token in place.
             </p>
             <p>

@@ -10,6 +10,8 @@ import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
+import { drawRulerCells, drawRulerPath, measureRuler } from "@/lib/drag-ruler-draw";
+import { dragRuler } from "@/lib/drag-ruler";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
 import { effectContains, effectHandles, effectPolygon, resolveEffect } from "@/lib/effects";
@@ -234,6 +236,9 @@ export default function Board(p: Props) {
     resizeHandle?: number;
     additive?: boolean;
     moved?: boolean;
+    /** The last pointer position on the map, so pressing or releasing Alt can re-place the token. */
+    pointer?: Point;
+    free?: boolean;
   } | null>(null);
   const pointers = useRef(new Map<number, Point>()),
     pinch = useRef<{ distance: number; center: Point; view: View } | null>(
@@ -404,17 +409,19 @@ export default function Board(p: Props) {
     window.addEventListener("keydown", keydown, true);
     return () => window.removeEventListener("keydown", keydown, true);
   }, [addWaypoint, allowFog, p.player, p.tool, p.fogShape, finishPolygon, fogIndex, fogVertices, fogEditing, p.fogSelectedIndices, p.onFogSelection, p.scene.fog.strokes, p.update, p.onMeasureTokenMovementChange, movePlan, cancelMovePlan]);
+  const dragSize = drag ? p.scene.tokens.find(token => token.id === drag.id)?.size ?? 1 : 1;
   useEffect(() => {
     p.onMeasurementChange?.(measurement);
     const points = measurement.filter((point, index) => index === 0 ||
       point.x !== measurement[index - 1].x || point.y !== measurement[index - 1].y);
-    const total = pathDistance(points, p.scene.grid);
+    // Same count as the ruler on the map, so legs dragged off the grid (Alt) measure as straight lines.
+    const total = dragRuler(points, p.scene.grid, { size: dragSize }).total;
     p.onMeasure(
       points.length > 1
         ? `${Number(total.toFixed(2))} ${p.scene.grid.unit} · ${points.length - 1} segment${points.length > 2 ? "s" : ""}`
         : "",
     );
-  }, [measurement, p.scene.grid, p.onMeasure, p.onMeasurementChange]);
+  }, [measurement, dragSize, p.scene.grid, p.onMeasure, p.onMeasurementChange]);
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
@@ -453,14 +460,24 @@ export default function Board(p: Props) {
       ? { ...effectScene, grid: { ...effectScene.grid, offsetX: gridDrag.x, offsetY: gridDrag.y } }
       : effectScene;
     const fogPreview = fogEdit && fogIndex !== null ? { ...preview, fog: { ...preview.fog, strokes: preview.fog.strokes.map((stroke, index) => index === fogIndex ? fogEdit : stroke) } } : preview;
+    // The drag ruler: squares coloured by the token's speed under the tokens, the path and distances on top.
+    const rulerTokenId = drag?.id ?? validMovePlan?.tokenId;
+    const rulerToken = rulerTokenId ? p.scene.tokens.find(token => token.id === rulerTokenId) : undefined;
+    const rulerInput = !p.player && measurement.length > 1 ? {
+      points: measurement, grid: p.scene.grid, scale: view.scale,
+      size: rulerToken?.size ?? 1, speed: rulerToken?.speed ?? null,
+      radius: rulerToken ? tokenRadius(rulerToken, p.scene.grid) : 0,
+    } : null;
+    const ruler = rulerInput ? measureRuler(rulerInput) : null;
     renderScene(ctx, p.hideFog && !p.player ? { ...fogPreview, fog: { ...fogPreview.fog, enabled: false } } : fogPreview, p.workspace, p.images, {
       crop,
       player: p.player,
       markerScale: Math.max(1,1/view.scale),
       selected: scopedSelected,
       draft,
-      measure: p.player ? [] : measurement,
+      underTokens: ruler ? c => drawRulerCells(c, ruler, p.scene.grid) : undefined,
     });
+    if (rulerInput && ruler) drawRulerPath(ctx, rulerInput, ruler);
     if (!p.player && allowPois && p.selectedPoiId) {
       const poi = scene.pointsOfInterest.find(item => item.id === p.selectedPoiId);
       if (poi) {
@@ -641,6 +658,32 @@ export default function Board(p: Props) {
     c.addEventListener("wheel", wheel, { passive: false });
     return () => c.removeEventListener("wheel", wheel);
   }, [view, p.gridAdjust, p.player, p.resizeGrid]);
+  /** Move the dragged token to the pointer, on the grid or (Alt) off it, and extend the ruler. */
+  const placeDrag = (g: NonNullable<typeof gesture.current>, free: boolean) => {
+    if (!g.pointer || !g.original) return;
+    const q = clamp(tokenDragPosition(g.original, g.start, g.pointer, p.scene.grid,
+      p.scene.tokens.find(t => t.id === g.id)?.size, free));
+    g.position = q; g.free = free;
+    if (g.measure) {
+      g.measure = [...g.measure.slice(0, -1), q];
+      setMeasurement(g.measure);
+    }
+    setDrag({ id: g.id!, p: q });
+  };
+  const placeDragRef = useRef(placeDrag);
+  useEffect(() => { placeDragRef.current = placeDrag; });
+  // Pressing or letting go of Alt mid-drag re-places the token without waiting for the pointer to move.
+  useEffect(() => {
+    const alt = (e: KeyboardEvent) => {
+      if (e.key !== "Alt") return;
+      const g = gesture.current;
+      if (g?.kind !== "drag" || !g.pointer || !g.position) return;
+      e.preventDefault();
+      if (g.free !== (e.type === "keydown")) placeDragRef.current(g, e.type === "keydown");
+    };
+    window.addEventListener("keydown", alt, true); window.addEventListener("keyup", alt, true);
+    return () => { window.removeEventListener("keydown", alt, true); window.removeEventListener("keyup", alt, true); };
+  }, []);
   const down = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
     e.preventDefault();
@@ -939,7 +982,7 @@ export default function Board(p: Props) {
       return;
     }
     if (g.kind === "measure" && g.measure) {
-      const q = snap(pos, { ...p.scene.grid, snap: true });
+      const q = e.altKey ? pos : snap(pos, { ...p.scene.grid, snap: true });
       g.measure = [...g.measure.slice(0, -1), q];
       setMeasurement(g.measure);
       return;
@@ -957,14 +1000,8 @@ export default function Board(p: Props) {
       });
     } else if (g.kind === "drag") {
       if (!drag && Math.hypot(sp.x - g.screen.x, sp.y - g.screen.y) < 4) return;
-      const q = clamp(tokenDragPosition(g.original!, g.start, pos, p.scene.grid,
-        p.scene.tokens.find(t => t.id === g.id)?.size));
-      g.position = q;
-      if (g.measure) {
-        g.measure = [...g.measure.slice(0, -1), q];
-        setMeasurement(g.measure);
-      }
-      setDrag({ id: g.id!, p: q });
+      g.pointer = pos;
+      placeDrag(g, e.altKey);
     } else if (g.kind === "fog" && g.stroke) {
       const prev = g.stroke.points[g.stroke.points.length - 1];
       if (Math.hypot(pos.x - prev.x, pos.y - prev.y) < 2) return;
@@ -1066,7 +1103,7 @@ export default function Board(p: Props) {
       return;
     }
     if (g.kind === "measure" && g.measure) {
-      const q = snap(clamp(world(screen(e))), { ...p.scene.grid, snap: true });
+      const q = e.altKey ? clamp(world(screen(e))) : snap(clamp(world(screen(e))), { ...p.scene.grid, snap: true });
       const points = [...g.measure.slice(0, -1), q];
       setMeasurement(points.filter((point, index) => index === 0 ||
         point.x !== points[index - 1].x || point.y !== points[index - 1].y));
@@ -1086,7 +1123,7 @@ export default function Board(p: Props) {
     }
     if (g.kind === "drag" && (drag || g.position)) {
       const finalPosition = clamp(tokenDragPosition(g.original!, g.start, clamp(world(screen(e))), p.scene.grid,
-        p.scene.tokens.find(t => t.id === g.id)?.size));
+        p.scene.tokens.find(t => t.id === g.id)?.size, e.altKey));
       if (g.measure) setMeasurement([...g.measure.slice(0, -1), finalPosition]);
       p.update((s) => {
         const item =
@@ -1350,7 +1387,7 @@ export default function Board(p: Props) {
       )}
       {!p.player && p.tool === "marquee" && <div className="measure-hint">Drag to select {p.selectionScope === "scenes" ? "tokens and effects" : p.selectionScope === "fog" ? "fog regions" : p.selectionScope === "none" ? "nothing in this panel" : p.selectionScope}. Hold Shift to add to the selection. Middle-drag to pan.</div>}
       {!p.player && !movePlan && drag && p.scene.tokens.some(token => token.id === drag.id) && (
-        <div className="measure-hint">{measurement.length ? "Q or Space: add waypoint | Escape: cancel move | Toolbar toggle: turn measuring off" : "Q: enable movement measuring | Escape: cancel move"}</div>
+        <div className="measure-hint">{measurement.length ? "Q or Space: add waypoint | Alt: off the grid | Escape: cancel move" : "Q: enable movement measuring | Alt: off the grid | Escape: cancel move"}</div>
       )}
       {!p.player && validMovePlan && (
         <div className="movement-planner" role="group" aria-label="Token movement planner">

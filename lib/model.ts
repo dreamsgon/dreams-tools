@@ -55,6 +55,8 @@ export const tokenSchema = z.object({
   x: finite,
   y: finite,
   elevation: finite.min(-100000).max(100000).default(0),
+  /** Walking speed in the scene's units; the drag ruler colours squares within it, a dash (twice it) and beyond. */
+  speed: finite.min(0).max(100000).optional(),
   attachedToId: short.nullable().default(null),
   size: finite.min(0.25).max(20),
   color,
