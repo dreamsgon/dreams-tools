@@ -29,7 +29,7 @@ export function playersScenes(scenes: Scene[], fogged: (s: Scene, p: { x: number
   return scenes.map(s => ({
     ...s,
     tokens: s.tokens.filter(t => !t.hidden && (t.pieceOf || !fogged(s, t))).map(t => ({ ...t, notes: undefined })),
-    pointsOfInterest: s.pointsOfInterest.filter(p => !p.hidden).map(p => ({ ...p, notes: undefined })),
+    pointsOfInterest: s.pointsOfInterest.filter(p => !p.hidden).map(p => ({ ...p, notes: undefined, ...(p.playersSee ? {} : { readAloud: undefined, pages: undefined }) })),
     effects: s.effects.filter(e => !e.hidden),
   }));
 }

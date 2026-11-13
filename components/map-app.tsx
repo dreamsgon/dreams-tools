@@ -22,7 +22,7 @@ import SavedMeasurements from "./saved-measurements";
 import FogRegions from "./fog-regions";
 import {sceneTargets} from "@/lib/exploration";
 import TokenImage from "./token-image";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
 import {
@@ -119,6 +119,9 @@ import {
 import type { Images } from "@/lib/render";
 import { mergeMaptable } from "@/lib/maptable-merge";
 import { drawingStampAssets } from "@/lib/map-stamps";
+import { addNotePage, linkablePages, notePages, playerNote } from "@/lib/map-notes";
+import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/world-model";
+import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 // Editors and panels that open on demand load as separate chunks; they are fetched while the
 // browser is idle (below) so the first open is still instant.
 const lazyParts = {
@@ -307,6 +310,15 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   };
   const campaignId = campaignFor(scene?.containerId ?? null);
   const campaign = workspace?.collections.find((c) => c.id === campaignId);
+  // Map notes: the GM's Encyclopedia, read once a marker links a page or the Exploration panel opens.
+  const [book,setBook]=useState<EncyclopediaWorkspace|null>(null),[bookError,setBookError]=useState(""),[playerNoteOpen,setPlayerNoteOpen]=useState<{id:string;key:string}|null>(null);
+  // The player note closes when the view or the scene changes.
+  const playerNoteKey=`${player}:${scene?.id}`,playerNoteId=playerNoteOpen?.key===playerNoteKey?playerNoteOpen.id:null,setPlayerNoteId=(id:string|null)=>setPlayerNoteOpen(id?{id,key:playerNoteKey}:null);
+  const wantsBook=panel==="exploration"||!!scene?.pointsOfInterest.some(p=>p.pages?.length);
+  useEffect(()=>{if(!wantsBook||book)return;let active=true;
+    loadEncyclopedia().then(raw=>{if(active){setBook(raw as unknown as EncyclopediaWorkspace);setBookError("");}}).catch(e=>{if(active)setBookError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
+    return()=>{active=false;};},[wantsBook,book]);
+  const linkable=useMemo(()=>linkablePages(book,campaignId),[book,campaignId]);
   useEffect(()=>{
     let active=true;
     setSettings(s=>({...s,discordConfigured:false}));
@@ -1217,7 +1229,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   if(sceneTargets(workspace,scene.id).some(s=>s.id===id)){activate(id);setPanel("exploration");setSidebar(true);}
                   else setNotice("Previous map is no longer in this campaign.");
                 }}>Back to previous map</button>}
-                <ExplorationPanel workspace={workspace} scene={scene} update={updateScene} selectedId={selectedPoiId} select={id=>{setSelectedPoiId(id);setTool("select");}} place={activation=>{setPoiActivation(activation);chooseTool("poi");}} openScene={openExplorationMap} createMap={type=>{setNewMapType(type);setDialog("add-scenes");}}/>
+                <ExplorationPanel workspace={workspace} scene={scene} update={updateScene} pages={linkable} book={book} bookError={bookError} selectedId={selectedPoiId} select={id=>{setSelectedPoiId(id);setTool("select");}} place={activation=>{setPoiActivation(activation);chooseTool("poi");}} openScene={openExplorationMap} createMap={type=>{setNewMapType(type);setDialog("add-scenes");}}/>
               </>}
               {panel === "scenes" && (
                 <>
@@ -2077,6 +2089,23 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               if(kind==="fog"){setPanel("fog");setFogShape("edit");setFogSelectedIndices([Number(id)]);setFogSelectionRequest(r=>({index:Number(id),nonce:(r?.nonce??0)+1}));}
             }}
             selectedPoiId={selectedPoiId}
+            notePoiId={player?playerNoteId:tool==="select"&&["exploration","scenes"].includes(selectionScope)?selectedPoiId:null}
+            renderNote={(poi,at)=>{
+              if(player){const note=playerNote(poi,book,campaignId);return note?<PlayerNoteCard note={note} color={poi.color} at={at} onClose={()=>setPlayerNoteId(null)}/>:null;}
+              return <GmNoteCard point={poi} at={at} pages={notePages(book,poi.pages)} linkable={linkable} loadError={bookError} onClose={()=>setSelectedPoiId(null)}
+                onEdit={()=>{setPanel("exploration");setSidebar(true);}}
+                onShare={on=>updateScene(s=>{const p=s.pointsOfInterest.find(x=>x.id===poi.id);if(p)p.playersSee=on;})}
+                onAdd={id=>updateScene(s=>{const p=s.pointsOfInterest.find(x=>x.id===poi.id);if(p)addNotePage(p,id);})}
+                onRemove={id=>updateScene(s=>{const p=s.pointsOfInterest.find(x=>x.id===poi.id);if(p)p.pages=(p.pages??[]).filter(x=>x!==id);})}/>;
+            }}
+            onPlayerPoiTap={id=>setPlayerNoteId(id&&scene.pointsOfInterest.some(p=>p.id===id&&playerNote(p,book,campaignId))?id:null)}
+            onPageDrop={(entryId,point,poiId)=>{
+              const page=linkable.find(p=>p.id===entryId);if(!page){setNotice("That page isn’t in this campaign’s Encyclopedia.");return;}
+              if(poiId){let added=false;updateScene(s=>{const p=s.pointsOfInterest.find(x=>x.id===poiId);if(p)added=addNotePage(p,entryId);});setSelectedPoiId(poiId);setTool("select");setNotice(added?`Added ${page.title} to the note.`:"That page is already on this note, or the note is full.");return;}
+              if(scene.pointsOfInterest.length>=500){setNotice("This map has 500 markers already.");return;}
+              const id=uid();updateScene(s=>{s.pointsOfInterest.push({id,name:page.title.slice(0,120),...point,color:"#d4a654",hidden:false,folderId:null,targetSceneId:null,activation:"double",notes:"",pages:[entryId]});});
+              setSelectedPoiId(id);setTool("select");setNotice(`Pinned ${page.title} to the map.`);
+            }}
             poiActivation={poiActivation}
             selectPoi={id=>{setSelectedPoiId(id);if(id){setTool("select");setSelected(null);setSelectedIds([]);}}}
             openLinkedScene={openExplorationMap}

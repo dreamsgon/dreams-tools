@@ -59,3 +59,7 @@
 .explore-map small { color:var(--muted); font-weight:400; }
 .explore-map.is-current { background:var(--accent-soft); color:var(--accent); }
 .explore-types button { gap:4px; padding:4px 2px; font-size:12px; }
+.explore-page { display:flex; align-items:center; gap:6px; padding:4px 0 4px 8px; border-left:3px solid var(--accent-soft); }
+.explore-page > span { flex:1; min-width:0; display:flex; flex-direction:column; }
+.explore-page strong { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.explore-page small { color:var(--muted); font-size:11px; }
