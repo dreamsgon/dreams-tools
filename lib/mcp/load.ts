@@ -5,7 +5,9 @@ import { campaignExport } from "../encyclopedia/world-model.ts";
 import { loadWorkspace } from "../workspace-storage.ts";
 import { campaignScenes } from "../agent-maps.ts";
 import { grantFor, listConnections, type KeyGrant } from "./connections.ts";
-import { readActivity } from "./activity.ts";
+import { logActivity, readActivity } from "./activity.ts";
+import { narrow } from "./players-only.ts";
+import { fromLevel } from "./permissions.ts";
 import { makeCommit } from "./commit.ts";
 import { sendEncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import type { McpContext } from "./tools.ts";
@@ -55,11 +57,20 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   }
   const prefix = `users/${encodeURIComponent(grant.owner)}/`;
   const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(bucket, prefix, maps!.workspace, s, mode) : undefined;
-  const base = { maps, level: grant.level, picture };
-  if (grant.level === "read") return { ...base, book, campaign: book.campaigns[0] };
+  const perms = grant.perms ?? fromLevel(grant.level);
+  const base = { maps, level: grant.level, perms, picture };
+  if (grant.level === "read") return narrow({ ...base, book, campaign: book.campaigns[0] });
   const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
   const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
   const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, base,
     post => sendEncyclopediaPost(bucket, grant.owner, campaign.id, post).then(() => undefined));
-  return { ...base, book, campaign: book.campaigns[0], paused: activity.paused, commit };
+  // A change set to "Ask me" waits in the GM's AI panel as a suggestion.
+  const suggest: McpContext["suggest"] = async s => {
+    const id = crypto.randomUUID();
+    await logActivity(bucket, grant.owner, campaign.id, { id, at: new Date().toISOString(), connection, connectionId: grant.connectionId, tool: s.tool, summary: s.summary, ...(s.detail ? { detail: s.detail } : {}), waiting: { args: s.args, ...(s.preview ? { preview: s.preview } : {}) } });
+    return id;
+  };
+  const suggestions = activity.entries.filter(e => e.waiting && e.connectionId === grant.connectionId)
+    .map(e => ({ id: e.id, at: e.at, summary: e.summary, state: e.decided ?? "waiting" as const, ...(e.result ? { result: e.result } : {}) }));
+  return narrow({ ...base, book, campaign: book.campaigns[0], paused: activity.paused, commit, suggest, suggestions });
 }

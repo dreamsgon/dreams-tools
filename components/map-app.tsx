@@ -14,7 +14,7 @@ import TokenOptions from "./token-options";
 import TokenEditorTabs from "./token-editor-tabs";
 import SaveGalleryStats from "./save-gallery-stats";
 import {syncConditionRounds,conditionAge,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
-import { AiActivity } from "./encyclopedia/ai-activity";
+import { AiActivity, type SuggestedMove } from "./encyclopedia/ai-activity";
 import TokenPosition from "./token-position";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
@@ -187,6 +187,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // Tokens and AoEs can be picked up whatever else is open; only the fog and grid panels pick their own things.
   const selectionScope = panel === "scenes" || panel === "tokens" || panel === "effects" || panel === "fog" || panel === "exploration" ? panel : panel === "grid" ? "measurements" : "scenes";
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
+  // Moves an AI helper suggested, waiting for the GM in the AI panel: drawn as dashed tokens.
+  const [suggestedMoves,setSuggestedMoves]=useState<SuggestedMove[]>([]);
   const [dicePanel,setDicePanel]=useState<DicePanel>(null);
   const [diceDock,setDiceDock]=useState<CSSProperties>();
   const toolbarRef=useRef<HTMLDivElement>(null);
@@ -1072,7 +1074,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <Breadcrumbs items={sceneTrail()} />
         </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
-        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} onChanged={() => window.dispatchEvent(new Event("focus"))}/>}
+        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
         {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
@@ -2045,6 +2047,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             measureTokenMovement={measureTokenMovement}
             onMeasureTokenMovementChange={changeMeasureTokenMovement}
             onLibraryTokenDrop={(id,point)=>{const item=workspace.tokenLibrary.find(t=>t.id===id);if(item)placeLibraryToken(item,point);}}
+            suggested={suggestedMoves}
             onEditElement={(kind,id)=>{
               setSidebar(true);setTool("select");setSelected(null);setSelectedIds([]);setFogSelectedIndices([]);setSelectedPoiId(null);
               if(kind==="token"){setPanel("tokens");setSelected(String(id));setTokenEditRequest(r=>({id:String(id),count:r.count+1}));}
