@@ -21,13 +21,19 @@ export default function TokenPosition({ scene, token, update }: {
   });
 
   return <section className="token-position-options">
-    <h3>Elevation, attachment & layers</h3>
+    <h3>Movement, attachment & layers</h3>
     <NumberField label={`Elevation (${scene.grid.unit})`} value={token.elevation ?? 0}
       min={-100000} max={100000} step={1} onChange={elevation => update(next => {
         const selected = next.tokens.find(item => item.id === token.id);
         if (selected) selected.elevation = elevation;
       })}/>
     <small>Elevation is descriptive only. It does not automatically change line of sight.</small>
+    <NumberField label={`Speed (${scene.grid.unit})`} value={token.speed ?? 0}
+      min={0} max={100000} step={5} onChange={speed => update(next => {
+        const selected = next.tokens.find(item => item.id === token.id);
+        if (selected) { if (speed > 0) selected.speed = speed; else delete selected.speed; }
+      })}/>
+    <small>With a speed, the ruler colours the squares you drag across: green within it, amber for a dash (twice it), red beyond. 0 means no colours.</small>
     <Field label="Attach to token" hint="A rider or carried token keeps its current relative offset and follows the attached token when it moves. Detaching keeps the current position.">
       <select value={token.attachedToId ?? ""} onChange={event => {
         const parentId = event.target.value || null;

@@ -26,7 +26,8 @@ export type RenderOptions = {
   selected?: string | null;
   draft?: FogStroke | null;
   measure?: Point[];
-
+  /** Drawn on the map after effects and before tokens, e.g. the squares a dragged token passes. */
+  underTokens?: (ctx: CanvasRenderingContext2D) => void;
 };
 /** The board backing follows the visible map, including coordinate gutters. */
 export function drawSceneBackdrop(ctx: CanvasRenderingContext2D, scene: Scene, crop?: MapCrop | null) {
@@ -310,6 +311,7 @@ export function renderScene(
     }
     ctx.restore();
   }
+  options.underTokens?.(ctx);
   // Map pieces lie on the floor, under everyone else.
   for (const storedToken of [...s.tokens.filter(t => t.pieceOf), ...s.tokens.filter(t => !t.pieceOf)]) {
     const t = resolvedToken(w, s.id, storedToken);

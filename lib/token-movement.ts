@@ -1,8 +1,8 @@
 import { snap, type Grid, type Point, type Scene, type Token } from "./model.ts";
 
-/** Measure and move the token center, preserving the pointer's original grab offset. */
-export function tokenDragPosition(original: Point, grab: Point, pointer: Point, grid: Grid, size = 1): Point {
-  return snap({ x: original.x + pointer.x - grab.x, y: original.y + pointer.y - grab.y }, grid, size);
+/** Measure and move the token center, preserving the pointer's original grab offset. `free` (Alt) skips the grid. */
+export function tokenDragPosition(original: Point, grab: Point, pointer: Point, grid: Grid, size = 1, free = false): Point {
+  return snap({ x: original.x + pointer.x - grab.x, y: original.y + pointer.y - grab.y }, free ? { ...grid, snap: false } : grid, size);
 }
 
 export type TokenMovePlan = {
