@@ -5,7 +5,7 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
@@ -154,6 +154,11 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
 }
 
 /** A session page with no recap yet: how to get one. */
-export function RecapStart({entry}:{entry:Entry}){
- return <div className="aside-section recap-check"><span className="eyebrow">AI RECAP</span><p className="aside-hint">Paste the transcript on the Transcript tab (or keep your notes in Notion, Google Drive, GitHub or a forum), then run “Recap a session from a transcript or notes” in your AI app connected to RPG Tools. It saves a draft here for you to check.</p>{entry.overviewVisibility==='players'&&<p className="aside-hint">Players can see this page now. A recap saved on it stays hidden until you publish it.</p>}</div>;
+export function RecapStart({entry,onStart}:{entry:Entry;onStart?:()=>void}){
+ return <div className="aside-section recap-check"><span className="eyebrow">AI RECAP</span><p className="aside-hint">Have your AI app draft a recap of this session from a transcript, an RP thread, or notes in Notion, Google Drive or GitHub. You check it before players see anything.</p>{onStart&&<button className="button primary small recap-start" onClick={onStart}><Sparkles size={13}/> New session recap</button>}{entry.overviewVisibility==='players'&&<p className="aside-hint">Players can see this page now. It’s hidden from them while the recap is a draft.</p>}</div>;
+}
+
+/** A recap asked for in the New session recap dialog that the AI hasn't saved yet. */
+export function RecapWaiting({recap,onShow}:{recap:Recap;onShow?:()=>void}){
+ return <div className="aside-section recap-check"><div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span></div><div className="handoff-wait"><Clock size={15}/> Waiting for your AI’s draft.</div><p className="aside-hint">Asked {new Date(recap.request!.at).toLocaleString('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}. When your AI app saves it, it shows up here with what it found.</p>{onShow&&<button className="button small" onClick={onShow}>Show the prompt again</button>}</div>;
 }

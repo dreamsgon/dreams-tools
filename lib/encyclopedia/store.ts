@@ -88,12 +88,13 @@ export class EncyclopediaStore {
     const object = await this.bucket.get(this.transcriptPath(owner, entryId));
     return object ? new TextDecoder().decode(await object.arrayBuffer()) : null;
   }
-  /** Saves (or with an empty text, deletes) a transcript. The session page must exist. */
+  /** Saves (or with an empty text, deletes) a transcript for a session page. */
   async saveTranscript(owner: string, entryId: string, text: string) {
     if (!historyEntryId(entryId)) throw Error('That page id is not valid.');
     if (text.length > TRANSCRIPT_LIMIT) throw Error('That transcript is over the 2,000,000 character limit. Split the session into two pages.');
-    const { data } = await this.read(owner);
-    if (data.entries.find(e => e.id === entryId)?.kind !== 'session') throw Error('A transcript belongs on a session page.');
+    // A page made a moment ago may not be saved yet; one that is saved must be a session page.
+    const { data } = await this.read(owner), page = data.entries.find(e => e.id === entryId);
+    if (page && page.kind !== 'session') throw Error('A transcript belongs on a session page.');
     if (!text.trim()) { await this.bucket.delete(this.transcriptPath(owner, entryId)).catch(() => {}); return; }
     await this.bucket.put(this.transcriptPath(owner, entryId), text, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
   }
