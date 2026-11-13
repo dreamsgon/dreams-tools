@@ -675,7 +675,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       if (["Delete","Backspace"].includes(e.key) && selectionScope==="exploration" && selectedPoiId){
         e.preventDefault();updateScene(s=>{s.pointsOfInterest=s.pointsOfInterest.filter(p=>p.id!==selectedPoiId);});setSelectedPoiId(null);return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && tool==="marquee" && (selectedIds.length || fogSelectedIndices.length)) {
+      if ((e.key === "Delete" || e.key === "Backspace") && (tool==="marquee" ? selectedIds.length || fogSelectedIndices.length : tool==="select" && selectedIds.length > 1)) {
         e.preventDefault();
         updateScene(s=>{
           s.tokens=s.tokens.filter(t=>!selectedIds.includes(t.id));
@@ -2213,9 +2213,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 ? "Player view · editing disabled"
                 : tool === "poi" ? "Click the map to place a point of interest or transition"
                 : tool === "select"
-                  ? selected
+                  ? selectedIds.length > 1
+                    ? `${selectedIds.length} selected · Drag one to move them all · Ctrl C copies · Ctrl G groups · Delete removes`
+                    : selected
                     ? (measureTokenMovement ? "Drag to measure movement | Q or Space adds a waypoint | Alt moves off the grid" : "Drag to move | Alt moves off the grid | Q enables movement measuring")
-                    : `Select ${selectionLabel} · Middle-drag to pan`
+                    : `Select ${selectionLabel} · Shift-click or Shift-drag selects several · Ctrl V pastes · Middle-drag to pan`
                   : tool === "marquee"
                     ? `Drag to select ${selectionLabel} · Shift adds · ${selectedIds.length + fogSelectedIndices.length} selected · Delete removes · Middle-drag pans`
                   : tool === "pan"
@@ -2305,7 +2307,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </p>
             <p>
               <strong>4. Play.</strong> Reveal fog, measure paths, and place
-              effects. On touch screens, pinch to zoom. Drag a token to move it (hold Alt to place it off the grid);
+              effects. On touch screens, pinch to zoom. Drag a token to move it (hold Alt to place it off the grid). Shift-click or Shift-drag selects several tokens, and dragging one moves them all. Ctrl C and Ctrl V copy and paste tokens, also into another scene, Ctrl D duplicates, and Ctrl G groups them so they select and move together (Ctrl Shift G ungroups);
               click or tap empty space to deselect. For touch waypoints, select a token, tap Plan move, tap each corner and destination, then tap Move token. Undo point removes the last corner; Cancel leaves the token in place.
             </p>
             <p>

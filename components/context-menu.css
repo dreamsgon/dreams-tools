@@ -13,3 +13,7 @@
 .context-menu button.danger .context-menu-icon { color:inherit; }
 .context-menu [role="menuitemradio"][aria-checked="true"] .context-menu-icon { color:var(--accent); }
 @media (pointer:coarse) { .context-menu button { min-height:40px; } }
+.context-menu-shortcut { margin-left:auto; padding-left:16px; font:500 11px/1 var(--font-ui, inherit); color:var(--muted); background:none; border:0; }
+@media (pointer:coarse) { .context-menu-shortcut { display:none; } }
+/* Short notes after copy, paste, duplicate and grouping. */
+.board-notice { position:absolute; left:50%; bottom:76px; transform:translateX(-50%); z-index:var(--z-toast, 250); max-width:calc(100% - 32px); padding:9px 14px; border-radius:var(--radius-lg); background:var(--ink); color:var(--panel); font-size:13px; box-shadow:var(--shadow-md); pointer-events:none; }
