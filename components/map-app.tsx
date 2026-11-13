@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { confirmDialog } from "./confirm-dialog";
 import SaveChip from "./save-chip";
+import { useAutosave } from "./use-autosave";
 import PanelTip from "./panel-tip";
 import Board, { type View } from "./board";
 import AppearanceMenu from "./appearance-menu";
@@ -184,6 +185,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     blocked = useRef(false),
     timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savePromise = useRef<Promise<boolean> | null>(null);
+  /** Edits waiting for a save, and when the last save landed (the save chip shows both). */
+  const [unsaved, setUnsaved] = useState(0), [lastSaved, setLastSaved] = useState<Date | null>(null);
   const history = useRef<Workspace[]>([]),
     future = useRef<Workspace[]>([]),
     [historyVersion, setHistoryVersion] = useState(0);
@@ -396,7 +399,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       history.current = [];
       future.current = [];
       setSaveError("");
-      setSaveStatus(result.workspace ? "Saved to cloud" : "Ready");
+      setSaveStatus(result.workspace ? "Saved to cloud" : "Ready"); setUnsaved(0);
     } catch (e) {
       setLoadError((e as Error).message);
       setSaveStatus("Unavailable");
@@ -495,7 +498,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         setFogSelectedIndices([]);
         setExplorationHistory([]);
         setSaveError("");
-        setSaveStatus(result.workspace ? "Saved to cloud" : "Ready");
+        setSaveStatus(result.workspace ? "Saved to cloud" : "Ready"); setUnsaved(0);
       } catch {
         // Background reads retry quietly; local data and the save status remain intact.
       } finally {
@@ -522,9 +525,15 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [creatorOpen, busy, dialog, tool, takeIn]);
+  // Save automatically (per device, shared with the Encyclopedia), how many edits wait, and when the last save landed.
+  const autosave = useAutosave();
+  const reportSave = useCallback((status: string) => {
+    setSaveStatus(status);
+    if (status === "Saved to cloud") { setUnsaved(0); setLastSaved(new Date()); }
+  }, []);
   const save = useCallback(() => saveWorkspace({
-    state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus, setSaveError, rebase,
-  }), [rebase]);
+    state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus: reportSave, setSaveError, rebase,
+  }), [rebase, reportSave]);
   const manualSave = useCallback(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
@@ -542,9 +551,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const schedule = useCallback(() => {
     generation.current++;
     setSaveStatus("Unsaved changes");
+    setUnsaved(n => n + 1);
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save(), 700);
-  }, [save]);
+    // With Save automatically off, edits wait for Save or Ctrl/Cmd+S.
+    timer.current = autosave.ref.current ? setTimeout(() => void save(), 700) : null;
+  }, [save, autosave.ref]);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
   const commit = useCallback(
     (fn: (w: Workspace) => void) => {
@@ -1075,7 +1086,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const aiTurn=scene?getCurrentInitiativeEntry(scene):null,aiOrder=scene&&aiTurn?getInitiativeEntries(scene).filter(isInitiativeEntryActive):[];
   // The AI panel's combat line; "focus" above asks the sync loop to fetch now (it listens for focus).
   const aiCombat=scene&&aiTurn?{round:scene.initiativeState?.round??1,turn:aiTurn.label,next:aiOrder[(aiOrder.findIndex(e=>e.id===aiTurn.id)+1)%aiOrder.length]?.label}:null;
-  const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()}/>;
+  const setAutosave=(on:boolean)=>{autosave.set(on);if(on&&generation.current!==savedGeneration.current)void save();};
+  const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()} autosave={{on:autosave.on,set:setAutosave,changes:unsaved,lastSaved}}/>;
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
