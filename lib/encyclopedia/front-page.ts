@@ -20,6 +20,8 @@ export const frontWidgetSchema = z.discriminatedUnion("type", [
   z.object({ ...common, type: z.literal("party") }),
   z.object({ ...common, type: z.literal("recap") }),
   z.object({ ...common, type: z.literal("text"), body: z.string().max(4000) }),
+  // The story so far: a short summary of the campaign, written (often by the GM's AI) from published recaps.
+  z.object({ ...common, type: z.literal("story"), body: z.string().max(6000), from: z.number().int().min(0).max(10000).optional(), at: z.string().max(40).optional() }),
   z.object({ ...common, type: z.literal("links"), links: z.array(z.object({ label: z.string().trim().min(1).max(80), url: url.optional(), entryId: id.optional() })
     .refine(l => !!l.url !== !!l.entryId, "Each link goes to a web address or a page")).max(12) }),
 ]);
@@ -31,7 +33,7 @@ export type FrontPage = z.infer<typeof frontPageSchema>;
 export type FrontWidgetType = FrontWidget["type"];
 
 export const widgetNames: Record<FrontWidgetType, string> = {
-  next: "Next session", date: "In the game", party: "The party", recap: "Last session", text: "Text", links: "Links",
+  next: "Next session", date: "In the game", party: "The party", recap: "Last session", story: "The story so far", text: "Text", links: "Links",
 };
 
 /** The page a campaign starts with before the GM customises it. */
@@ -51,6 +53,7 @@ export function newWidget(type: FrontWidgetType, wid: string, calendars: { id: s
     case "next": return { id: wid, type, when: "", where: "" };
     case "date": return { id: wid, type, calendarId: calendars[0]?.id ?? "" };
     case "text": return { id: wid, type, title: "House rules", body: "" };
+    case "story": return { id: wid, type, body: "" };
     case "links": return { id: wid, type, title: "Resources", links: [] };
     default: return { id: wid, type };
   }
@@ -63,6 +66,7 @@ export type ResolvedWidget = { id: string; type: FrontWidgetType; title: string;
   | { type: "party"; members: { id: string; title: string }[] }
   | { type: "recap"; entryId: string | null; heading: string; excerpt: string }
   | { type: "text"; body: string }
+  | { type: "story"; body: string; sessions: { id: string; title: string }[] }
   | { type: "links"; links: { label: string; url?: string; entryId?: string }[] }
 );
 export type ResolvedFrontPage = { widgets: ResolvedWidget[]; customised: boolean };
@@ -94,6 +98,7 @@ export function resolveFrontPage(page: FrontPage | undefined, input: {
         return [{ ...base, type: "recap", entryId: latest?.id ?? null, heading: latest?.title ?? "", excerpt: excerpt(text) }];
       }
       case "text": return [{ ...base, type: "text", body: input.clean(w.body) }];
+      case "story": return [{ ...base, type: "story", body: input.clean(w.body), sessions: input.sessionsNewestFirst.flatMap(id => { const e = readable.get(id); return e ? [{ id: e.id, title: e.title }] : []; }).slice(0, 3) }];
       case "links": return [{ ...base, type: "links", links: w.links.filter(l => l.url || (l.entryId && readable.has(l.entryId))).map(l => l.url ? { label: l.label, url: l.url } : { label: l.label, entryId: l.entryId }) }];
     }
   });

@@ -4,7 +4,7 @@
  * one writes the recap players read from that timeline. Write it again only repeats the second, so a
  * fixed beat or a note from the GM costs a few thousand tokens, not the whole transcript again. Pure.
  */
-import type { Entry, Workspace } from "./world-model.ts";
+import { playerText, type Campaign, type Entry, type Workspace } from "./world-model.ts";
 import type { RecapRequest } from "./recap-schema.ts";
 import { requestNotes } from "./recap-request.ts";
 import { questsIn } from "./quests.ts";
@@ -99,3 +99,44 @@ export function prosePrompt(h: Head & { timeline: string; quotes?: string; befor
 
 /** The notes the first request may send: save_recap's lists, without the page, title or recap. */
 export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes"] as const;
+
+// ---- The story so far ---------------------------------------------------------------------------
+
+/** Link markup to plain names: [[id|Name]] and [[Name]] both become Name. */
+const plainNames = (s: string) => s.replace(/\[\[(?:[^\]|\n]{1,120}\|)?([^\]\n]{1,160})\]\]/g, "$1");
+
+/**
+ * The campaign's published recaps as players read them (shared with players, secrets taken out), oldest first. The newest come
+ * first when there's more than `budget` characters, each cut to `each`; `left` counts the ones left out.
+ */
+export function publishedRecaps(entries: Entry[], campaignId: string, budget = 60_000, each = 2_500) {
+  const all = entries.filter(e => e.kind === "session" && e.campaignId === campaignId && e.recap?.status === "published" && e.overviewVisibility === "players" && e.body.trim())
+    .sort((a, b) => (b.recap!.playedOn ?? b.updatedAt).localeCompare(a.recap!.playedOn ?? a.updatedAt));
+  const out: { id: string; title: string; playedOn?: string; text: string }[] = [];
+  let used = 0;
+  for (const e of all) {
+    let text = plainNames(playerText(e.body)).replace(/\n{3,}/g, "\n\n").trim();
+    if (text.length > each) text = text.slice(0, each).replace(/\s+\S*$/, "") + "…";
+    if (used + text.length > budget) break;
+    used += text.length;
+    out.push({ id: e.id, title: e.title, ...(e.recap!.playedOn ? { playedOn: e.recap!.playedOn } : {}), text });
+  }
+  return { recaps: out.reverse(), left: all.length - out.length };
+}
+
+/** The text of the front page's The story so far, as it is saved now. */
+export const storyNow = (c: Campaign) => (c.frontPage?.widgets ?? []).flatMap(w => w.type === "story" ? [w.body] : [])[0] ?? "";
+
+/** The request for The story so far: a short summary for the players' front page, from published recaps only. */
+export function storyPrompt(h: { campaign: string; recaps: { title: string; playedOn?: string; text: string }[]; left: number; before?: string }) {
+  return [
+    `Write "The story so far" for the front page players see first in the campaign "${h.campaign}".`,
+    "About 150 to 300 words, past tense, warm, as one story: what the party has done, who they met, and where things stand now. End with the questions the party is left with.",
+    "Use only what is in the recaps below: they are what the players already know. No headings, no links, no lists.",
+    "Answer with only the text, with nothing before or after it.",
+    ...(h.before?.trim() ? [`The current version, which also covers sessions not listed below. Keep what still holds:\n${plainNames(h.before.trim())}`] : []),
+    ...(h.left ? [`${h.left} older recap${h.left === 1 ? " is" : "s are"} left out to keep this short.`] : []),
+    "Published recaps, oldest first:",
+    ...h.recaps.map(r => `## ${r.title}${r.playedOn ? ` (${r.playedOn})` : ""}\n${r.text}`),
+  ].join("\n");
+}

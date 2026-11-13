@@ -181,3 +181,6 @@
   .hub-actions { width:100%; }
 }
 .hub-tags { margin-top:10px; }
+.hub-story-edit { display:flex; flex-direction:column; gap:8px; }
+.hub-story-write { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.hub-story-write .hub-muted { flex:1 1 220px; }
