@@ -4,7 +4,7 @@ import { useFolderExpansion } from "./folder-expansion";
 import { countLabel } from "@/lib/plural";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Folder, Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Settings2 } from "lucide-react";
+import { Folder, Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Settings2, Map as MapIcon } from "lucide-react";
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 import { uid, collectionPath, canMoveCollection, type Workspace, type Collection } from "@/lib/model";
 
@@ -186,9 +186,12 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     </div>)}
     {!dashboard && w.scenes.filter((s) => s.containerId === parentId).map(sceneRow)}
   </>;
+  // With no campaign yet, one sentence and one button (handoff 2.2); New folder and Create a map wait for a campaign.
+  const noCampaigns = dashboard && !w.collections.some(c => c.kind === "campaign");
   return <section className={`organizer scene-organizer ${dashboard ? "dashboard-organizer" : ""}`} aria-label="Campaign and scene organizer">
     {dashboard && w.collections.some(c => c.kind === "campaign" && c.pinned) && <section className="pinned-campaigns" aria-label="Pinned campaigns"><h3><Pin size={16}/> Pinned campaigns</h3>{w.collections.filter(c => c.kind === "campaign" && c.pinned && (!query || collectionPath(w.collections,c.id).toLowerCase().includes(query))).map(c => <div key={c.id} className="organizer-row">{collectionButton(c)}</div>)}</section>}
-    {dashboard && <div className="button-row dashboard-actions"><button className="primary" onClick={() => {setCreating("campaign");setName("");}}><Plus size={16} aria-hidden="true" />New campaign</button><button onClick={() => {setCreating("folder");setName("");}}><Folder size={16} aria-hidden="true" />New folder</button>{extraActions}</div>}
+    {noCampaigns && !creating && <div className="dashboard-first-campaign"><span aria-hidden="true"><MapIcon size={22}/></span><h3>No campaigns yet</h3><p>A campaign holds your maps and tokens. Make one, then upload or draw its first map.{w.scenes.length ? " Maps you already have are under Maps not in a campaign." : ""}</p><button className="primary" onClick={() => {setCreating("campaign");setName("");}}><Plus size={16} aria-hidden="true" />Create your first campaign</button></div>}
+    {dashboard && !noCampaigns && <div className="button-row dashboard-actions"><button className="primary" onClick={() => {setCreating("campaign");setName("");}}><Plus size={16} aria-hidden="true" />New campaign</button><button onClick={() => {setCreating("folder");setName("");}}><Folder size={16} aria-hidden="true" />New folder</button>{extraActions}</div>}
     {(dashboard ? showFolderTools : !!moving) && <button {...dropProps(rootId)} className={(dashboard ? "organizer-root " : "scene-root-link ") + (location === rootId ? "active" : "")} onClick={() => setLocation(rootId)}>{dashboard ? "All campaigns" : "Move out of folders"}{dashboard && moving && <small>Drop here to move out of folders</small>}</button>}
     {moving && createPortal(<div ref={ghost} className="organizer-drag-ghost" aria-hidden="true"><GripVertical size={16}/>{moving.name}</div>,document.body)}
     {dashboard && moving && <p className="muted organizer-drag-help">Drag into a folder or onto {dashboard ? "Dashboard root" : "All scenes"} to move out of folders.</p>}
@@ -208,7 +211,6 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
       {w.collections.filter((c) => (dashboard || c.kind !== "campaign") && inScope(c.parentId) && collectionPath(w.collections, c.id).toLowerCase().includes(query)).map((c) => <div key={c.id} className="organizer-row" {...(c.kind === "folder" ? dropProps(c.id) : {})}>{grip({kind:"collection",id:c.id,name:c.name})}{collectionButton(c, true)}</div>)}
       {!dashboard && w.scenes.filter((s) => inScope(s.containerId) && `${s.name} ${collectionPath(w.collections, s.containerId)}`.toLowerCase().includes(query)).map(sceneRow)}
     </> : tree(rootId)}</div>
-    {dashboard && !w.collections.some((c) => c.kind === "campaign") && <p className="dashboard-empty">No campaigns yet. Choose <strong>New campaign</strong> to start one. Maps you already have are under <strong>Maps not in a campaign</strong>.</p>}
     {current && current.id !== rootId && <div className="organizer-editor">
       {dashboard && current.kind === "campaign" && <button className="primary" onClick={() => openCampaign?.(current.id)}>Open campaign</button>}
       <h3>{current.kind === "campaign" ? "Campaign" : "Folder"} details</h3>

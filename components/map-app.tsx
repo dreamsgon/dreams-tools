@@ -207,6 +207,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [sidebar, setSidebar] = useState(true);
   const [brushSize, setBrushSize] = useState(140),
     [fogControlsHost,setFogControlsHost]=useState<HTMLDivElement|null>(null),
+    [cropControlsHost,setCropControlsHost]=useState<HTMLDivElement|null>(null),
     [fogSelectionRequest,setFogSelectionRequest]=useState<{index:number;nonce:number}|null>(null),
     [fogSelectedIndices,setFogSelectedIndices]=useState<number[]>([]),
     [fogShape, setFogShape] = useState<"brush" | "rect" | "polygon" | "edit">("brush"),
@@ -2066,6 +2067,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               {measure ||
                 `${countLabel(scene.tokens.length,"token")} · ${countLabel(scene.effects.length,"effect")}`}
             </div>
+            {!player && <div className="crop-host" ref={setCropControlsHost}/>}
             {!player && <button aria-pressed={hideFog} onClick={()=>setHideFog(v=>!v)} aria-label={hideFog?"Restore fog":"Hide fog"} title="Temporarily hide fog in your GM view only">
               {hideFog ? <Eye size={17}/> : <EyeOff size={17}/>}
               <span>{hideFog ? "Restore fog" : "Hide fog"}</span>
@@ -2151,6 +2153,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             fogSelectedIndices={fogSelectedIndices}
             onFogSelection={selectFog}
             fogControlsHost={fogControlsHost}
+            cropControlsHost={cropControlsHost}
+            onUploadMap={()=>setDialog("scene-map")}
+            onAddToken={addToken}
             fogSelectionRequest={fogSelectionRequest}
             onMeasurementChange={setMeasurementPoints}
             editToken={id=>{setSelectedIds([]);setFogSelectedIndices([]);setSelected(id);setPanel("tokens");setTokenEditRequest(r=>({id,count:r.count+1}));}}
@@ -2190,7 +2195,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <div className="toolbar-divider" />
             <button onClick={addToken} title="Add token">
               <Plus size={20} />
-              <span>Token</span>
+              <span>Add token</span>
             </button>
             <div className="toolbar-divider dice-tool" />
             <button className={"dice-tool "+(dicePanel==="dice"?"active":"")} aria-expanded={dicePanel==="dice"} aria-controls="standard-dice-tray" onClick={()=>toggleDicePanel("dice")} title="Dice tray">
