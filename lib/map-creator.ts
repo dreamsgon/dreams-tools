@@ -263,10 +263,10 @@ export function cutOpenings(walls: WallSegment[], shapes: MapShape[]): WallSegme
 }
 
 /** Moves everything on a scene by dx, dy pixels, for a drawn map that grew or shrank on its top or left. */
-export function shiftSceneContents(scene: { tokens: { x: number; y: number }[]; effects: { x: number; y: number }[]; pointsOfInterest?: { x: number; y: number }[]; measurements?: { points: Point[] }[]; fog: { strokes: { points: Point[] }[] }; crop?: { x: number; y: number } | null; savedCrops?: { x: number; y: number }[] }, dx: number, dy: number) {
+export function shiftSceneContents(scene: { tokens: { x: number; y: number }[]; effects: { x: number; y: number }[]; pointsOfInterest?: { x: number; y: number }[]; measurements?: { points: Point[] }[]; areas?: { points: Point[] }[]; fog: { strokes: { points: Point[] }[] }; crop?: { x: number; y: number } | null; savedCrops?: { x: number; y: number }[] }, dx: number, dy: number) {
   if (!dx && !dy) return;
   const move = (p: { x: number; y: number }) => { p.x += dx; p.y += dy; };
   scene.tokens.forEach(move); scene.effects.forEach(move); scene.pointsOfInterest?.forEach(move);
-  scene.measurements?.forEach(m => m.points.forEach(move)); scene.fog.strokes.forEach(s => s.points.forEach(move));
+  scene.measurements?.forEach(m => m.points.forEach(move)); scene.areas?.forEach(a => a.points.forEach(move)); scene.fog.strokes.forEach(s => s.points.forEach(move));
   for (const c of [scene.crop, ...(scene.savedCrops ?? [])]) if (c) { c.x = Math.max(0, c.x + dx); c.y = Math.max(0, c.y + dy); }
 }

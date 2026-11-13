@@ -210,6 +210,17 @@ export const pointOfInterestSchema = z.object({
   playersSee: z.boolean().optional(),
 });
 export type PointOfInterest = z.infer<typeof pointOfInterestSchema>;
+/** Map notes: an area of the map (a box or an outline) that opens a section of an Encyclopedia page. */
+export const mapAreaSchema = z.object({
+  id: short,
+  points: z.array(point).min(2).max(400),
+  pageId: short,
+  /** The heading of the section it opens; empty for the whole page. */
+  section: z.string().max(200).default(""),
+  /** Players can click it and read the section, if they can already read the page. */
+  playersSee: z.boolean().optional(),
+});
+export type MapArea = z.infer<typeof mapAreaSchema>;
 export const sceneSchema = z.object({
   initiativeLiveDiscord: z.boolean().optional(),
   initiativeState: z.object({round: finite.int().min(1), currentId: z.string().max(160).nullable(), order: z.array(z.string().max(160)).max(500)}).optional(),
@@ -223,6 +234,7 @@ export const sceneSchema = z.object({
   activeCropId: short.nullable().default(null),
   cropFocus: z.boolean().optional(),
   pointsOfInterest: z.array(pointOfInterestSchema).max(500).default([]),
+  areas: z.array(mapAreaSchema).max(200).optional(),
   poiFolders: z.array(z.object({id:short,name:z.string().trim().min(1).max(120),parentId:short.nullable().default(null)})).max(500).default([]),
   width: finite.min(1).max(8000),
   height: finite.min(1).max(8000),

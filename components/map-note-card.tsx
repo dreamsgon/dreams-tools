@@ -5,12 +5,12 @@ import type { PointOfInterest } from "@/lib/model";
 import { MAX_NOTE_PAGES, PAGE_DRAG, pageHref, type NotePage, type PageGroup } from "@/lib/map-notes";
 import "./map-note-card.css";
 
-const groupColor: Record<PageGroup, string> = { Places: "#4f7f6a", Characters: "#8f5a3c", "Factions and lore": "#5f5a8a", Quests: "#a0782c", Notes: "#5f6870" };
+export const groupColor: Record<PageGroup, string> = { Places: "#4f7f6a", Characters: "#8f5a3c", "Factions and lore": "#5f5a8a", Quests: "#a0782c", Notes: "#5f6870" };
 const initial = (title: string) => title.trim().charAt(0).toUpperCase() || "?";
-type Spot = { x: number; y: number; width: number; height: number };
+export type Spot = { x: number; y: number; width: number; height: number };
 
 /** Places the card beside the marker, flipping left or up so it stays inside the board. */
-function place(at: Spot, w = 340) {
+export function place(at: Spot, w = 340) {
   const left = at.x + 26 + w > at.width - 8 ? Math.max(8, at.x - 26 - w) : at.x + 26;
   const top = Math.max(8, Math.min(at.y - 40, at.height - 120));
   return { left, top, maxHeight: Math.max(160, at.height - top - 12), width: Math.min(w, at.width - 16) };
