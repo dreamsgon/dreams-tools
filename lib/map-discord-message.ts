@@ -4,8 +4,7 @@ import type {Workspace} from './model';
 import {resolveTokenForCampaign,tokenZeroHpPolicy} from './token-defaults.ts';
 import {initiativeSummary,initiativeView} from './initiative-summary.ts';
 import {parseDice} from './rolls.ts';
-import {initiativePost,rollPost} from './discord/cards.ts';
-import {rollerName} from './discord/avatar.ts';
+import {initiativePost,rollPost,rollerName} from './discord/cards.ts';
 import type {Post} from './discord/send.ts';
 const base={sceneId:z.string().min(1).max(120),campaignId:z.string().min(1).max(120)};
 export const mapMessageSchema=z.discriminatedUnion('kind',[

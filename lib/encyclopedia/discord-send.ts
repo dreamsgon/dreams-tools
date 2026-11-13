@@ -9,9 +9,9 @@ import { EncyclopediaStore } from "./store.ts";
 import { discordRollSchema, discordTarget } from "./discord-roll.ts";
 import { parseDice } from "../rolls.ts";
 import type { Workspace } from "./world-model.ts";
-import { rollPost, textPost } from "../discord/cards.ts";
+import { rollPost, rollerName, textPost } from "../discord/cards.ts";
 import { postForCampaign } from "../discord/campaign.ts";
-import { pictureAvatar, rollerName, tokenAvatar } from "../discord/avatar.ts";
+import { pictureAvatar, tokenAvatar } from "../discord/avatar.ts";
 import type { DiscordFile, Post } from "../discord/send.ts";
 import { campaignScenes } from "../agent-maps.ts";
 

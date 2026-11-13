@@ -43,6 +43,3 @@ export async function pictureAvatar(bucket: S3Bucket, owner: string, picture: Pi
     return await square(bytes, { left, top, size });
   } catch { return null; }
 }
-
-/** The name before " · " or " — " in a roll title: "Bog Hag · Claws" → "Bog Hag". */
-export const rollerName = (title: string) => title.split(/\s+[·—–]\s+/)[0]?.trim() ?? "";

@@ -17,6 +17,9 @@ export function naturalD20(formula: string, detail: string): number | null {
   return n >= 1 && n <= 20 ? n : null;
 }
 
+/** The name before " · " or " — " in a roll title: "Bog Hag · Claws" → "Bog Hag". */
+export const rollerName = (title: string) => title.split(/\s+[·—–]\s+/)[0]?.trim() ?? "";
+
 export type RollCard = {
   /** What the roll is for, e.g. "Claws against Bram". */
   title: string; formula: string; total: number; detail: string;
