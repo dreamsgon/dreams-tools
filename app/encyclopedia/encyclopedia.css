@@ -879,3 +879,25 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 @media (max-width:600px){.look-preview-body{grid-template-columns:1fr}.look-preview-body nav{display:none}}
 .look-surface-chip.plain{background:#f5f6f7}
 :root[data-theme="dark"] .look-surface-chip.plain{background:#0f1316}
+/* Random tables on pages: [[table:Name]] as a chip, or on its own line as the whole table with Roll. */
+.roll-chip.table-chip svg{color:var(--accent)}
+.table-embed{margin:14px 0;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);font-family:var(--font-sans);overflow:hidden}
+.table-embed.loading,.table-embed.missing{display:flex;align-items:center;gap:10px;padding:12px 14px;color:var(--muted);font-size:13px}
+.table-embed.missing span{display:flex;flex-direction:column;gap:2px}.table-embed.missing strong{color:var(--ink);font-weight:500}
+.table-embed-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--raised)}
+.table-embed-head>svg{flex:none;color:var(--accent)}
+.table-embed-head>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.table-embed-head strong{font-size:14px;font-weight:600;color:var(--ink)}
+.table-embed-head small{font-size:12px;color:var(--muted)}
+.table-embed-head .button{display:inline-flex;align-items:center;gap:6px}
+.table-embed-desc{margin:0;padding:10px 14px 0;font-size:13px;line-height:1.5;color:var(--muted)}
+.table-embed-rows{list-style:none;margin:0;padding:6px 0}
+.table-embed-rows li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:baseline;gap:10px;padding:6px 14px;font-size:14px;line-height:1.5}
+.table-embed-rows li+li{border-top:1px solid var(--line)}
+.table-embed-rows li.rolled{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.table-embed-range{font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted);font-size:13px}
+.table-embed-text{color:var(--ink);overflow-wrap:anywhere}
+.table-embed-mark{padding:1px 8px;border-radius:999px;background:var(--accent);color:var(--on-accent,#fff);font-size:11px;font-weight:600;white-space:nowrap}
+.table-embed-more{margin:0 14px 10px;font-size:12px}
+.roll-result-text{margin:6px 0 0;font:500 16px/1.45 var(--font-serif,var(--font-sans));color:var(--ink);overflow-wrap:anywhere;animation:roll-in .25s ease-out}
+@media(prefers-reduced-motion:reduce){.roll-result-text{animation:none}}

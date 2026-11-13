@@ -48,6 +48,8 @@ export const tableSchema = z.object({
   parts: z.array(partSchema).max(20).optional(),
   /** generator: rolled on demand, such as a reaction during a conversation. */
   extras: z.array(partSchema).max(10).optional(),
+  /** Starred tables come first in the Maptable dice tray. */
+  starred: z.boolean().optional(),
   updatedAt: z.string().datetime(),
 });
 export const librarySchema = z.object({
@@ -85,6 +87,13 @@ export function diceFormula(text: string) {
 export function inCampaign(table: RandomTable, campaignId: string | null) {
   return table.campaignIds === null || (campaignId !== null && table.campaignIds.includes(campaignId));
 }
+/** The tables a campaign uses, starred first, then by name. Oracles are listed apart (`oracles`). */
+export function campaignTables(library: TableLibrary, campaignId: string | null) {
+  const here = library.tables.filter(t => inCampaign(t, campaignId)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || a.name.localeCompare(b.name));
+  return { tables: here.filter(t => t.kind !== 'oracle'), oracles: here.filter(t => t.kind === 'oracle') };
+}
+/** What a table rolls, in a few characters: "d8", "2d6", "list", "pair", "generator", "d100". */
+export const rollLabel = (t: RandomTable) => t.kind === 'generator' ? 'generator' : t.kind === 'pair' ? 'pair' : t.kind === 'oracle' ? 'd100' : t.mode === 'ranges' ? t.formula ?? '' : 'list';
 /** Lowest and highest totals a formula can roll. */
 export function formulaRange(formula: string): [number, number] {
   let lo = 0, hi = 0;
@@ -110,7 +119,8 @@ export function rangeGaps(table: RandomTable) {
 export const rangeLabel = (r: TableRow) => r.min === undefined ? '' : r.max !== undefined && r.max !== r.min ? `${r.min}–${r.max}` : String(r.min);
 
 export type RollStep = { table: string; roll: string; text: string };
-export type TableRoll = { tableId: string; title: string; roll: string; text: string; steps: RollStep[]; oracle?: OracleAnswer };
+/** `rowId`: the row that came up, for a plain table, so a table shown on a page can mark it. */
+export type TableRoll = { tableId: string; title: string; roll: string; text: string; steps: RollStep[]; oracle?: OracleAnswer; rowId?: string };
 type Random = () => number;
 const TABLE_REF = /\[\[table:([^\]|\n]{1,160})(?:\|[^\]\n]*)?\]\]/gi;
 const DICE_REF = /\[\[([^\]|\n]{1,200})(?:\|[^\]\n]*)?\]\]/g;
@@ -145,7 +155,7 @@ export function resolveText(library: TableLibrary, text: string, random: Random 
     try { return String(rollDice(diceFormula(inner), random).total); } catch { return whole; }
   });
 }
-function rollInner(library: TableLibrary, table: RandomTable, random: Random, steps: RollStep[], depth: number): { text: string; roll: string } {
+function rollInner(library: TableLibrary, table: RandomTable, random: Random, steps: RollStep[], depth: number): { text: string; roll: string; rowId?: string } {
   if (table.kind === 'pair') {
     const parts = depth < 6 ? (table.pair ?? []).map(pid => library.tables.find(t => t.id === pid)).filter((t): t is RandomTable => !!t) : [];
     const rolled = parts.map(t => rollInner(library, t, random, steps, depth + 1));
@@ -169,14 +179,14 @@ function rollInner(library: TableLibrary, table: RandomTable, random: Random, st
   const text = row ? resolveText(library, row.text, random, inner, depth) : 'No row for this roll';
   if (depth) steps.push({ table: table.name, roll, text });
   steps.push(...inner);
-  return { text, roll };
+  return { text, roll, ...(row ? { rowId: row.id } : {}) };
 }
 export function rollTable(library: TableLibrary, tableId: string, random: Random = Math.random): TableRoll {
   const table = library.tables.find(t => t.id === tableId);
   if (!table) throw Error('That table is no longer in your library.');
   const steps: RollStep[] = [];
   const r = rollInner(library, table, random, steps, 0);
-  return { tableId, title: table.name, roll: r.roll, text: r.text, steps };
+  return { tableId, title: table.name, roll: r.roll, text: r.text, steps, ...(r.rowId ? { rowId: r.rowId } : {}) };
 }
 
 /* ---------- Oracle ----------

@@ -1,4 +1,5 @@
 'use client';
+import {tablesSaved} from './table-library';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Dices,Plus,Upload,Download,Search,ArrowLeft,Trash2,Copy,Pencil,Check,RotateCcw,X,ListOrdered,Lock,LockOpen,UserPlus,ArrowUp} from 'lucide-react';
 import {ToolDialog} from './tool-dialog';
@@ -27,10 +28,10 @@ export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter
  const campaign=campaigns.find(c=>c.id===campaignId)??null;
  const [seenHome,setSeenHome]=useState(home);
  if(home!==seenHome){setSeenHome(home);setOpen(null);setEditing(false);}
- useEffect(()=>{let live=true;(async()=>{try{const res=await fetch('/api/encyclopedia/tables');const body=await res.json() as {data:unknown;revision:number;error?:string};if(!res.ok)throw new Error(body.error??'Could not load your tables.');if(!live)return;const data=librarySchema.parse(body.data);current.current=data;revision.current=body.revision;setLib(data);}catch(e){if(live)setError(e instanceof Error?e.message:'Could not load your tables.');}})();return()=>{live=false;};},[]);
+ useEffect(()=>{let live=true;(async()=>{try{const res=await fetch('/api/encyclopedia/tables');const body=await res.json() as {data:unknown;revision:number;error?:string};if(!res.ok)throw new Error(body.error??'Could not load your tables.');if(!live)return;const data=librarySchema.parse(body.data);current.current=data;revision.current=body.revision;setLib(data);tablesSaved(data,body.revision);}catch(e){if(live)setError(e instanceof Error?e.message:'Could not load your tables.');}})();return()=>{live=false;};},[]);
  useEffect(()=>{const leave=(e:BeforeUnloadEvent)=>{if(dirty.current)e.preventDefault();};window.addEventListener('beforeunload',leave);return()=>{window.removeEventListener('beforeunload',leave);if(timer.current){clearTimeout(timer.current);void saveRef.current?.();}};},[]);
  async function save(){if(busy.current||!dirty.current||!current.current)return;busy.current=true;dirty.current=false;setStatus('Saving…');const sent=current.current;
-  try{const res=await fetch('/api/encyclopedia/tables',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:sent,revision:revision.current})});const v=await res.json() as {revision:number;error?:string};if(!res.ok)throw new Error(v.error??'Could not save your tables.');revision.current=v.revision;setStatus(dirty.current?'Saving…':'Saved');}
+  try{const res=await fetch('/api/encyclopedia/tables',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:sent,revision:revision.current})});const v=await res.json() as {revision:number;error?:string};if(!res.ok)throw new Error(v.error??'Could not save your tables.');revision.current=v.revision;tablesSaved(sent,v.revision);setStatus(dirty.current?'Saving…':'Saved');}
   catch(e){dirty.current=true;blocked.current=true;setStatus('Not saved');setError(e instanceof Error?e.message:'Could not save your tables.');}
   finally{busy.current=false;if(dirty.current&&!blocked.current)timer.current=setTimeout(save,800);}}
  useEffect(()=>{saveRef.current=save;});

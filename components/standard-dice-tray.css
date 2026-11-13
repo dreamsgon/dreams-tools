@@ -34,3 +34,38 @@
 /* Posting a roll to Discord: by button, or every roll with Always on. */
 .standard-dice-tray .tray-discord{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px}.standard-dice-tray .tray-discord small{flex:1;margin:0}.standard-dice-tray .tray-discord p{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}.standard-dice-tray .tray-discord p:empty{display:none}
 .standard-dice-tray label.tray-always{display:flex;align-items:center;gap:7px;margin-top:8px;cursor:pointer}.standard-dice-tray label.tray-always input{display:inline-block;width:auto;margin:0;padding:0;accent-color:var(--accent)}
+/* Dice, Tables and Oracle tabs: random tables and the yes or no oracle from the Encyclopedia library. */
+.standard-dice-dock .tray-tabs{display:flex;gap:2px;margin:-4px 0 14px;padding:3px;border-radius:var(--radius);background:var(--raised)}
+.standard-dice-dock .standard-dice-tray .tray-tabs button{flex:1;padding:6px 8px;border:0;background:transparent;color:var(--muted);font-size:13px}
+.standard-dice-dock .standard-dice-tray .tray-tabs button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px var(--shadow-color,rgba(0,0,0,.12))}
+.tray-table-find{display:flex!important;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--control);color:var(--muted)}
+.standard-dice-tray .tray-table-find input{border:0;background:none;padding:8px 0}
+.tray-table-cats{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 4px}
+.standard-dice-dock .standard-dice-tray .tray-table-cats button{padding:3px 9px;border-radius:999px;font-size:12px;color:var(--muted)}
+.standard-dice-dock .standard-dice-tray .tray-table-cats button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.standard-dice-tray ul.tray-table-list{list-style:none;margin:8px 0 0;padding:0;max-height:240px;overflow:auto}
+.standard-dice-tray .tray-table-list li{display:flex;align-items:center;gap:4px;padding:2px 0;border:0}
+.standard-dice-dock .standard-dice-tray .tray-star{flex:none;width:30px;height:30px;padding:0;border:0;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}
+.standard-dice-dock .standard-dice-tray .tray-star.on{color:#d39b22}.tray-star.on svg{fill:currentColor}
+.standard-dice-dock .standard-dice-tray .tray-table-roll{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:7px 10px;border:0;background:transparent;text-align:left;font-size:13px}
+.standard-dice-dock .standard-dice-tray .tray-table-roll:hover{background:var(--hover)}
+.tray-table-roll span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.standard-dice-tray .tray-table-roll small{margin:0;font-variant-numeric:tabular-nums}
+.tray-table-none,.tray-table-empty{font-size:13px;line-height:1.5;color:var(--muted)}
+.tray-table-result{margin-top:12px;padding:12px 14px;border-radius:var(--radius-lg);background:var(--raised)}
+.standard-dice-tray .tray-table-result small{margin:0 0 4px}
+.tray-table-result>strong{display:block;font-size:15px;line-height:1.45;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.tray-table-twist{margin:8px 0 0;font-size:13px}.tray-table-twist span{margin-right:6px;padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--on-accent,#fff);font-size:11px;font-weight:600}
+.tray-table-actions{display:flex;gap:8px;margin-top:10px}
+.standard-dice-dock .standard-dice-tray .tray-table-actions button{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;font-size:12px}
+.tray-table-status{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.standard-dice-tray form.tray-oracle{display:flex;flex-direction:column;align-items:stretch;gap:10px}
+.standard-dice-tray .tray-oracle select{display:block;width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--control);color:var(--ink)}
+.tray-oracle-caption{font-size:12px;color:var(--muted)}.standard-dice-tray .tray-oracle-caption small{display:inline;margin-left:4px}
+.tray-oracle-odds{display:flex;flex-wrap:wrap;gap:4px;margin-top:-4px}
+.standard-dice-dock .standard-dice-tray .tray-oracle-odds button{padding:5px 9px;font-size:12px}
+.standard-dice-dock .standard-dice-tray .tray-oracle-odds button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tray-oracle-tension{display:flex;align-items:center;gap:8px}.tray-oracle-tension .tray-oracle-caption{flex:1}
+.standard-dice-dock .standard-dice-tray .tray-oracle-tension button{width:30px;height:30px;padding:0}
+.tray-oracle-tension b{min-width:18px;text-align:center;font-size:16px;font-variant-numeric:tabular-nums}
+.standard-dice-dock .standard-dice-tray .tray-oracle .tray-roll{display:inline-flex;align-items:center;justify-content:center;gap:6px}

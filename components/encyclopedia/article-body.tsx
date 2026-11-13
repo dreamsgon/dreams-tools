@@ -2,7 +2,8 @@
 import { uiZoom } from "@/lib/appearance";
 import {useRef,useState,type ReactNode} from "react";
 import {Lock,Map as MapIcon,ArrowUpRight} from "lucide-react";
-import {rollTarget,plainExcerpt,INLINE_TOKENS} from "@/lib/encyclopedia/inline";
+import {rollTarget,tableTarget,plainExcerpt,INLINE_TOKENS} from "@/lib/encyclopedia/inline";
+import {TableChip,TableEmbed} from "./table-library";
 import {RollChip} from "./rolls";
 import {OPEN_CHAT_EVENT} from "@/lib/ai/chat-text";
 import {resolveLink,SECRET_OPEN,SECRET_CLOSE,type Entry,type Workspace} from "@/lib/encyclopedia/world-model";
@@ -29,6 +30,8 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
         if (scene) return <a key={i} className="wiki-link maptable-inline" href={maptableHref(scene[1])} target="_blank" rel="noopener" title="Open this battle map in Maptable">{label?.trim() || "Battle map"}<ArrowUpRight size={13} aria-hidden="true"/></a>;
         const chat = target.match(/^ai-chat:([A-Za-z0-9-]{8,64})$/);
         if (chat) return <button key={i} className="wiki-link" title="Open this chat in the AI panel" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT, { detail: chat[1] }))}>{label?.trim() || "Open the chat"}</button>;
+        const table = tableTarget(part.slice(2, -2));
+        if (table) return <TableChip key={i} name={table.name} label={table.label} page={entry.title} campaignId={entry.campaignId}/>;
         const roll = rollTarget(part.slice(2, -2));
         if (roll) return <RollChip key={i} title={entry.title} formula={roll.formula} label={roll.label}/>;
         const found = resolveLink(data, entry, target);
@@ -36,7 +39,8 @@ export function ArticleBody({ entry, data, onOpen, onChange }: {
     } if (part.startsWith("**"))
         return <strong key={i}>{part.slice(2, -2)}</strong>; if (part.startsWith("`"))
         return <code key={i}>{part.slice(1, -1)}</code>; return part; }); }
-    function render(line: string, index: number): ReactNode { const card = !fenced && line.trim().match(/^\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]$/); if (card)
+    function render(line: string, index: number): ReactNode { const tableLine = !fenced && /^\[\[table:[^\]\n]+\]\]$/i.test(line.trim()) ? tableTarget(line.trim().slice(2, -2)) : null; if (tableLine)
+        return <TableEmbed key={index} name={tableLine.name} page={entry.title} campaignId={entry.campaignId}/>; const card = !fenced && line.trim().match(/^\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]$/); if (card)
         return <div className="maptable-card" key={index}><span className="maptable-card-thumb" aria-hidden="true"><MapIcon size={18}/></span><span className="maptable-card-text"><strong>{card[2]?.trim() || "Battle map"}</strong><small>Battle map in Maptable · only you can open it</small></span><a className="button" href={maptableHref(card[1])} target="_blank" rel="noopener">Open in Maptable <ArrowUpRight size={14} aria-hidden="true"/></a></div>;
         if (line.startsWith("```")) {
         fenced = !fenced;

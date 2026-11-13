@@ -4,7 +4,7 @@
  */
 import type { Embed, Post } from "./send.ts";
 
-export const colors = { roll: 0x1f6f68, enemy: 0xc0392b, crit: 0xe0a030, fumble: 0x80848e, initiative: 0x1f6f68, map: 0x3d6fb6, narration: 0x8e6cc4, recap: 0x5f6870, test: 0x1f6f68 };
+export const colors = { roll: 0x1f6f68, enemy: 0xc0392b, crit: 0xe0a030, fumble: 0x80848e, initiative: 0x1f6f68, map: 0x3d6fb6, narration: 0x8e6cc4, recap: 0x5f6870, test: 0x1f6f68, table: 0x3d6fb6, oracle: 0x8e6cc4 };
 const line = (s: string, max: number) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 /** Discord markdown would turn * _ ~ ` | > into styling; dice details should read as written. */
 const literal = (s: string) => s.replace(/([\\*_~`|>#[\]()-])/g, "\\$1");
@@ -72,4 +72,26 @@ export function textPost(kind: "narration" | "recap", text: string, title?: stri
 
 export function testPost(campaign: string, channel: string): Post {
   return { embeds: [{ color: colors.test, title: "RPG Tools is connected", description: `Posts for **${literal(line(campaign, 120))}** that you send to “${literal(line(channel, 80))}” will appear here.` }] };
+}
+
+/** A random table result: what came up, the roll, and any tables or dice it rolled along the way. */
+export type TableCard = { title: string; text: string; roll?: string; steps?: { table: string; roll?: string; text: string }[]; footer?: string };
+export function tablePost(r: TableCard): Post {
+  const steps = (r.steps ?? []).slice(0, 8).map(s => `› ${literal(line(s.table, 80))}${s.roll ? ` (${literal(line(s.roll, 40))})` : ""}: ${literal(line(s.text, 200))}`);
+  const roll = r.roll ? `\n\n\`${line(r.roll, 100).replace(/`/g, "'")}\`` : "";
+  return { embeds: [{
+    color: colors.table, title: `🎲 ${line(r.title, 200)}`,
+    description: (r.text.trim().slice(0, 3000) || "Nothing came up.") + roll + (steps.length ? `\n${steps.join("\n")}` : ""),
+    ...(r.footer ? { footer: { text: line(r.footer, 200) } } : {}),
+  }] };
+}
+
+/** A yes or no oracle answer, with its odds, the d100 and any twist. */
+export type OracleCard = { question?: string; answer: string; odds: string; chance: number; d100: number; twist?: string; tension: number; footer?: string };
+export function oraclePost(r: OracleCard): Post {
+  return { embeds: [{
+    color: colors.oracle, title: `🔮 ${line(r.question?.trim() || "The oracle", 200)}`,
+    description: `## ${literal(line(r.answer, 40))}\n${literal(line(r.odds, 60))} (${r.chance}%), d100 = ${r.d100}${r.twist ? `\n\n**Twist:** ${literal(line(r.twist, 600))}` : ""}`,
+    footer: { text: line([`Tension ${r.tension}`, r.footer].filter(Boolean).join(" · "), 200) },
+  }] };
 }
