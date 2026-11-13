@@ -91,7 +91,7 @@ export function toolAction(tool: string, args: Record<string, unknown> = {}): Ac
     case "post_to_discord": return "postDiscord";
     case "create_page": case "append_to_page": return "writePages";
     case "add_quest_log": case "set_objective": case "set_quest_state": case "add_codex_find": return "quests";
-    case "write_session_notes": case "save_recap": return "notes";
+    case "write_session_notes": case "save_recap": case "rewrite_recap": return "notes";
     case "move_token": return "moveTokens";
     case "damage": case "heal": case "set_condition": return "health";
     case "reveal_fog": case "show_token": return "reveal";

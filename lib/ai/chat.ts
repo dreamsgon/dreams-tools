@@ -149,3 +149,54 @@ async function openaiTurn(t: Target, system: string, history: ChatTurn[], tools:
   }
   return { reply: "I stopped after several steps. Ask me to carry on if there's more to do.", steps, tokens, ...(toolsOff ? { toolsOff } : {}) };
 }
+
+export type OnceTool = { name: string; description: string; inputSchema: Record<string, unknown> };
+export type OnceResult = { text: string; input?: Record<string, unknown>; tokens: number };
+const LONG_WAIT = 240_000;
+
+/**
+ * One request and one answer, for a long job such as a session recap. With `tool`, the AI must answer by
+ * calling it (its arguments come back as `input`); without, it answers in text. Streams from Anthropic so a
+ * long answer doesn't time out.
+ */
+export async function runOnce(t: Target, system: string, user: string, tool: OnceTool | null, maxTokens: number, fetchImpl: Fetch = fetch): Promise<OnceResult> {
+  if (providerOf(t.provider).kind === "anthropic") {
+    const client = new Anthropic({ apiKey: t.key, maxRetries: 1, timeout: LONG_WAIT, fetch: fetchImpl });
+    let res: Anthropic.Beta.BetaMessage;
+    try {
+      res = await client.beta.messages.stream({
+        model: t.model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }],
+        ...(tool ? { tools: [{ name: tool.name, description: tool.description, input_schema: tool.inputSchema as Anthropic.Beta.BetaTool.InputSchema }], tool_choice: { type: "tool" as const, name: tool.name } } : {}),
+        betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
+      }).finalMessage();
+    } catch (e) { anthropicError(e); }
+    const tokens = res.usage.input_tokens + res.usage.output_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
+    if (res.stop_reason === "refusal") throw Object.assign(new ProviderError("The AI declined to write this."), { tokens });
+    if (res.stop_reason === "max_tokens") throw Object.assign(new ProviderError("The AI's answer was too long and was cut off. Try a shorter length, or Main things."), { tokens });
+    const call = res.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+    return { text: res.content.flatMap(b => b.type === "text" ? [b.text] : []).join("\n").trim(), ...(call && typeof call.input === "object" && call.input ? { input: call.input as Record<string, unknown> } : {}), tokens };
+  }
+  const url = `${baseUrlFor(t.provider, t.baseUrl)}/chat/completions`;
+  const ask = async (withTool: boolean) => {
+    const asJson = tool && !withTool ? `\n\nAnswer with only a JSON object (no code fence) with these fields:\n${JSON.stringify(tool.inputSchema)}` : "";
+    let res: Response;
+    try {
+      res = await fetchImpl(url, { method: "POST", headers: { Authorization: `Bearer ${t.key}`, "Content-Type": "application/json" }, redirect: "error", signal: AbortSignal.timeout(LONG_WAIT),
+        body: JSON.stringify({ model: t.model, messages: [{ role: "system", content: system }, { role: "user", content: user + asJson }],
+          ...(tool && withTool ? { tools: [{ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } }], tool_choice: { type: "function", function: { name: tool.name } } } : {}) }) });
+    } catch { throw new ProviderError("Couldn't reach the provider. Try again in a moment."); }
+    return res;
+  };
+  let res = await ask(!!tool), viaTool = !!tool;
+  if (!res.ok && tool && (res.status === 400 || res.status === 404 || res.status === 422) && /tool|function/i.test(await res.clone().text().catch(() => ""))) { res = await ask(false); viaTool = false; }
+  if (!res.ok) await failed(res);
+  const body = await res.json() as { choices?: { message?: { content?: string | null; tool_calls?: OaCall[] }; finish_reason?: string }[]; usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } };
+  const tokens = body.usage?.total_tokens ?? (body.usage?.prompt_tokens ?? 0) + (body.usage?.completion_tokens ?? 0);
+  const choice = body.choices?.[0], said = (choice?.message?.content ?? "").trim();
+  if (choice?.finish_reason === "length") throw Object.assign(new ProviderError("The AI's answer was too long and was cut off. Try a shorter length, or Main things."), { tokens });
+  if (!tool) return { text: said, tokens };
+  const raw = viaTool ? choice?.message?.tool_calls?.find(c => c?.function?.name === tool.name)?.function.arguments : said.replace(/^```(?:json)?\s*|\s*```$/g, "");
+  let input: unknown;
+  try { input = raw ? JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) : undefined; } catch { input = undefined; }
+  return { text: viaTool ? said : "", ...(input && typeof input === "object" && !Array.isArray(input) ? { input: input as Record<string, unknown> } : {}), tokens };
+}

@@ -4,6 +4,9 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci",
   "functions": {
+    "app/api/encyclopedia/recaps/route.ts": {
+      "maxDuration": 300
+    },
     "app/api/**/route.ts": {
       "maxDuration": 60
     }

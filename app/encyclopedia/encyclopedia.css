@@ -1034,3 +1034,8 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .handoff-wait{display:flex;gap:9px;align-items:center;border:1px dashed var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--muted)}.handoff-wait.arrived{border-style:solid;color:var(--accent);background:var(--accent-soft)}
 .recap-check .handoff-wait{margin-top:12px;font-size:12px}.recap-check>.button{margin-top:12px}.recap-start{margin-top:12px}.folder-contents>.button.recap-start{padding:9px 13px;font-size:12px;margin:0 0 18px}
 @media(max-width:760px){.source-grid,.recap-options{grid-template-columns:1fr}}
+/* Write it again, under a draft recap */
+.write-again{display:grid;gap:8px;margin:28px 0 0;padding:14px;border:1px solid var(--line);border-radius:var(--radius);max-width:560px}
+.write-again.closed{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 0 0;border:0;border-top:1px solid var(--line);border-radius:0;max-width:none}
+.write-again.closed .aside-hint{margin:0}
+.write-again textarea,.write-again select{width:100%}

@@ -5,7 +5,7 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
@@ -31,6 +31,36 @@ function useTranscript(entryId:string){
   return ()=>{live=false;};
  },[entryId]);
  return {text:text??cache.get(entryId)??null,error,set:(t:string)=>{cache.set(entryId,t);setText(t);}};
+}
+
+// ---- Who can write a recap ---------------------------------------------------------------------
+
+export type KeyWriter={id:string;name:string;model:string;transcripts:boolean};
+/**
+ * The campaign's AI connections that can write a recap: AI apps over MCP, and API-key connections that
+ * RPG Tools runs itself (allowed to write session notes; `transcripts` when they may read GM-only things).
+ */
+export function useWriters(campaignId:string|null|undefined){
+ const [w,setW]=useState<{apps:string[];keys:KeyWriter[]}|null>(null);
+ useEffect(()=>{
+  if(!campaignId)return;
+  let live=true;
+  type C={id:string;name:string;level:string;api?:{model:string};perms?:Record<string,string>};
+  fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r=>r.ok?r.json():{connections:[]}).then((b:{connections?:C[]})=>{
+   if(!live)return;
+   const list=(b.connections??[]).filter(c=>c.level!=='read'&&c.perms?.notes!=='off');
+   setW({apps:list.filter(c=>!c.api).map(c=>c.name),keys:list.filter(c=>c.api).map(c=>({id:c.id,name:c.name,model:c.api!.model,transcripts:c.perms?.seeSecrets!=='off'}))});
+  }).catch(()=>{if(live)setW({apps:[],keys:[]});});
+  return ()=>{live=false;};
+ },[campaignId]);
+ return w;
+}
+
+/** Asks RPG Tools to write with an API-key connection. Returns the server's answer, or throws its message. */
+export async function writeWithKey(body:{action:'write'|'again';entryId:string;campaignId:string;connectionId:string;note?:string}){
+ const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+ if(!r.ok)throw Error(r.b.error??'Could not write the recap.');
+ return r.b as {tokens:number;by:string;toCheck?:number};
 }
 
 // ---- Under the title ---------------------------------------------------------------------------
@@ -150,6 +180,29 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
    <div className="check-actions">{recap.status==='draft'?<button className="button primary" onClick={()=>publish(true)}><Eye size={14}/> Publish to players</button>:<button className="button" onClick={()=>publish(false)}><EyeOff size={14}/> Unpublish</button>}{recap.status==='published'&&<button className="button" disabled={posting} onClick={post}><Send size={14}/> {posting?'Posting…':'Post to Discord'}</button>}</div>
    <p className="aside-hint">{recap.status==='draft'?'Publishing shares the recap text with players. Timeline and quotes go too when you set their tabs to Player visible.':'Players see the recap. Unpublish to hide it again.'}</p>
   </div>
+ </div>;
+}
+
+/** Write it again, under a draft recap: the recap players read, from the timeline as it is now, with a note from the GM. */
+export function WriteAgain({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotice:(s:string)=>void}){
+ const writers=useWriters(entry.campaignId),[open,setOpen]=useState(false),[note,setNote]=useState(''),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
+ const keys=writers?.keys??[],chosen=keys.find(k=>k.id===key)??keys.find(k=>k.name===entry.recap?.by)??keys[0];
+ const campaign=data.campaigns.find(c=>c.id===entry.campaignId);
+ const ask=`In RPG Tools for "${campaign?.name??'my campaign'}", write the recap on the session page "${entry.title}" again from its timeline.${note.trim()?` ${note.trim()}`:''}\nRead the page with read_page, then save only the new recap with rewrite_recap.`;
+ const run=async()=>{
+  if(!chosen||!entry.campaignId)return;
+  setBusy(true);setError('');
+  try{const r=await writeWithKey({action:'again',entryId:entry.id,campaignId:entry.campaignId,connectionId:chosen.id,note:note.trim()});setOpen(false);setNote('');setNotice(`${r.by} wrote the recap again (${r.tokens.toLocaleString('en')} tokens). It shows up in a moment.`);}
+  catch(e){setError(e instanceof Error?e.message:'Could not write it again.');}
+  finally{setBusy(false);}
+ };
+ if(!open)return <div className="write-again closed"><button className="button small" onClick={()=>setOpen(true)}><RotateCcw size={13}/> Write it again…</button><span className="aside-hint">Takes a note, such as “shorter” or “more about Bram”.</span></div>;
+ return <div className="write-again">
+  <label className="field-label">What to change<textarea className="check-text" autoFocus rows={3} maxLength={500} value={note} placeholder="Shorter, or more about Bram." onChange={e=>setNote(e.target.value)}/></label>
+  <p className="aside-hint">The recap is written again from the timeline, so fix a beat there first if it’s wrong. The timeline, quotes and this list stay as they are.</p>
+  {keys.length>1&&<label className="field-label">Written by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
+  {error&&<p className="form-error">{error}</p>}
+  <div className="check-actions">{chosen&&<button className="button primary small" disabled={busy} onClick={run}><Sparkles size={13}/> {busy?'Writing…':`Write it with ${chosen.name}`}</button>}<button className={`button small ${chosen?'':'primary'}`} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy for my AI app'}</button><button className="button small" disabled={busy} onClick={()=>{setOpen(false);setError('');}}>Cancel</button></div>
  </div>;
 }
 

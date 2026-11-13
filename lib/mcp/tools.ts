@@ -15,8 +15,8 @@ import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isI
 import { editScene } from "./table.ts";
 import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts";
 import type { MovePreview } from "./activity.ts";
-import { PART_SIZE, compactTranscript, draftRecap, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
-import { recapPageKinds } from "../encyclopedia/recap-schema.ts";
+import { PART_SIZE, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
+import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
 
 export type Level = "read" | "assist" | "run";
@@ -255,7 +255,7 @@ const tools: Tool[] = [
         children: children.length ? children : undefined,
         recap: e.recap ? {
           status: e.recap.status, playedOn: e.recap.playedOn, source: e.recap.source,
-          timeline: e.recap.timeline.map(b => b.big ? `## ${b.title}` : b.title), quotes: e.recap.quotes.length || undefined,
+          timeline: timelineMarkdown(e.recap.timeline) || undefined, quotes: e.recap.quotes.length || undefined,
           waitingForGM: openItems(e.recap).length || undefined, transcriptWords: e.recap.transcriptWords,
         } : undefined,
       };
@@ -588,6 +588,23 @@ const tools: Tool[] = [
           next, summary: `Drafted the recap “${entry.title}”`, detail: waiting.length ? `${waiting.length} thing${waiting.length > 1 ? "s" : ""} to check before publishing` : "Nothing else to check",
           reply: { saved: { id: entry.id, title: entry.title }, toCheck: waiting.map(r => `${r.kind}: ${r.name}`), note: "Saved as a draft: players can't see it. Tell the GM to open the page, check the list and publish it. Nothing else in the campaign has changed." },
         };
+      };
+    },
+  },
+  {
+    name: "rewrite_recap", title: "Write a recap again", level: "assist", readOnly: false,
+    description: "Replace the recap players will read on a draft session recap, such as after the GM fixed the timeline or asked for changes. Only the recap text changes: the timeline, quotes and the GM's check list stay as they are. Read the page with read_page first. Write [[Name]] around names; the server links the ones that have pages.",
+    inputSchema: obj({
+      page: str("The session page's title or id.", 200),
+      recap: { type: "string", minLength: 1, maxLength: 20000, description: "The new recap players will read, in Markdown: past tense, only what the players saw." },
+    }, ["page", "recap"]),
+    write: a => {
+      const q = text(a, "page", true, 200)!, recap = optionalText(a, "recap", 20000, true);
+      return (full, c, now) => {
+        const e = own(pick(pages(c).filter(x => x.kind === "session" && x.recap), q, x => x.id, x => x.title, "session recap"));
+        if (e.recap!.status !== "draft") fail(`“${e.title}” is published. Ask the GM to unpublish it before it is written again.`);
+        const body = linkNames(recap, c.book.entries, { worldId: c.campaign.worldId, campaignId: c.campaign.id });
+        return { next: patchEntry(full, e.id, { body, updatedAt: now.toISOString() }), summary: `Wrote the recap “${e.title}” again`, detail: `${wordCount(recap).toLocaleString("en")} words`, reply: { saved: { id: e.id, title: e.title }, note: "Still a draft: players can't see it. The timeline, quotes and check list didn't change." } };
       };
     },
   },
