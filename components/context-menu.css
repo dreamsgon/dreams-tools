@@ -17,3 +17,15 @@
 @media (pointer:coarse) { .context-menu-shortcut { display:none; } }
 /* Short notes after copy, paste, duplicate and grouping. */
 .board-notice { position:absolute; left:50%; bottom:76px; transform:translateX(-50%); z-index:var(--z-toast, 250); max-width:calc(100% - 32px); padding:9px 14px; border-radius:var(--radius-lg); background:var(--ink); color:var(--panel); font-size:13px; box-shadow:var(--shadow-md); pointer-events:none; }
+.context-menu [role="menuitemcheckbox"][aria-checked="true"] .context-menu-icon { color:var(--accent); }
+.context-menu-swatch { flex:0 0 10px; width:10px; height:10px; border-radius:50%; margin-left:-4px; }
+/* Turn, flip and size bar above a selected token. */
+.token-bar { position:absolute; z-index:var(--z-raised, 20); transform:translateX(-50%); display:flex; align-items:center; gap:2px; padding:3px; background:var(--panel); color:var(--ink); border:1px solid var(--line-strong); border-radius:var(--radius-lg); box-shadow:var(--shadow-md); font-size:13px; white-space:nowrap; }
+.token-bar button { display:inline-flex; align-items:center; gap:5px; min-height:30px; min-width:30px; justify-content:center; padding:4px 7px; border:0; border-radius:var(--radius); background:transparent; color:var(--ink); font:inherit; box-shadow:none; cursor:pointer; }
+.token-bar button:hover:not(:disabled), .token-bar button:focus-visible { background:var(--hover); outline:none; }
+.token-bar button[aria-pressed="true"] { background:var(--accent-soft, var(--hover)); color:var(--accent); }
+.token-bar button:disabled { opacity:.45; cursor:default; }
+.token-bar-sep { width:1px; height:20px; margin:0 3px; background:var(--line); }
+.token-bar-value { min-width:76px; text-align:center; font-weight:600; }
+.token-bar-reset { color:var(--muted) !important; }
+@media (pointer:coarse) { .token-bar button { min-height:40px; min-width:40px; } }

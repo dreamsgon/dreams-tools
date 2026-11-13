@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { stripTypeScriptTypes } from "node:module";
-import { initialWorkspace, newToken, workspaceSchema } from "../lib/model.ts";
+import { initialWorkspace, newToken, tokenRadius, workspaceSchema } from "../lib/model.ts";
 
 // The browser bundler resolves extensionless imports; give Node explicit file URLs.
 const renderSource = stripTypeScriptTypes(await readFile(new URL("../lib/render.ts", import.meta.url), "utf8"))
@@ -13,7 +13,7 @@ const renderSource = stripTypeScriptTypes(await readFile(new URL("../lib/render.
   .replaceAll('"./map-drawing"', JSON.stringify(new URL("../lib/map-drawing.ts", import.meta.url).href))
   .replaceAll('"./map-style"', JSON.stringify(new URL("../lib/map-style.ts", import.meta.url).href))
   .replaceAll('"./effects"', JSON.stringify(new URL("../lib/effects.ts", import.meta.url).href));
-const { renderScene } = await import(`data:text/javascript;base64,${Buffer.from(renderSource).toString("base64")}`);
+const { renderScene, conditionBadgeRadius } = await import(`data:text/javascript;base64,${Buffer.from(renderSource).toString("base64")}`);
 
 function fixture() {
   const workspace = initialWorkspace();
@@ -54,7 +54,9 @@ test("condition symbols render from image cache with their aspect ratio preserve
   const draws = calls.filter(call => call.name === "drawImage");
   assert.equal(draws.length, 1);
   assert.equal(draws[0].args[0], symbol);
-  assert.deepEqual(draws[0].args.slice(3), [16, 8]);
+  // Badges grow with the token; the symbol fills the badge and keeps its 2:1 shape.
+  const side = conditionBadgeRadius(tokenRadius(scene.tokens[0], scene.grid)) * 1.64;
+  assert.deepEqual(draws[0].args.slice(3).map(n => Math.round(n * 1000) / 1000), [side, side / 2].map(n => Math.round(n * 1000) / 1000));
   assert.ok(!calls.some(call => call.name === "fillText" && call.args[0] === "!"));
 });
 
