@@ -62,6 +62,7 @@ test('linking is refused without edit rights on that page, for other pages, othe
  refuses(()=>S.linkSheet(w,C,rights('mara'),MARA,{name:'Mara'},{entryId:'cael',sheet:gSheet()},NOW),/can’t change this character/);
  refuses(()=>S.linkSheet(w,C,rights('mara'),MARA,{name:'Mara'},{entryId:'borin',sheet:gSheet()},NOW),/can’t change this character/);
  refuses(()=>S.linkSheet(w,C,rights('mara'),MARA,{name:'Mara'},{entryId:'note',sheet:gSheet()},NOW),/Only a character page/);
+ refuses(()=>link(w,{source:'import',title:'Imported',mode:'cells',items:[{id:'h',name:'HP',kind:'hp',value:'9'}]}),/Only the GM can import/);
  // Another campaign: the page id is in Mara's rights but the workspace page belongs to a different campaign.
  const other={...w,entries:w.entries.map(e=>e.id==='ayla'?{...e,campaignId:'demo-campaign-two'}:e)};
  refuses(()=>link(other),/gone/);

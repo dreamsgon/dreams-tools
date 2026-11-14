@@ -32,7 +32,7 @@ export function hpTarget(sheet: Pick<Sheet, "source" | "spreadsheetId" | "tab" |
   if (requireOptIn && sheet.writeBack !== true) return { ok: false, reason: "Write HP back to the sheet is off for this sheet." };
   const item = sheet.items.find(i => i.kind === "hp");
   if (!item) return { ok: false, reason: "This sheet has no HP cell. Use Change cells to pick one." };
-  const cell = parseCell(item.cell);
+  const cell = parseCell(item.cell ?? "");
   if (!cell) return { ok: false, reason: "The HP cell isn't a single cell." };
   const tab = cell.tab ?? sheet.tab;
   if (!tab) return { ok: false, reason: "This sheet doesn't say which tab its HP cell is on. Use Change cells to pick it again." };
@@ -110,7 +110,7 @@ export function withWriteBack(sheet: Sheet, on: boolean): Sheet {
 export const storedHp = (sheet: Pick<Sheet, "items">) => { const v = sheet.items.find(i => i.kind === "hp")?.value; return v === undefined ? null : asNumber(v); };
 
 /** Whether a sheet read (tabs) shows the HP cell's text, for tests and for a refresh that wants to compare. */
-export const hpTextIn = (sheet: Sheet, tabs: SheetTab[]) => { const t = hpTarget(sheet, false); return t.ok ? cellText(tabs, t.item.cell, sheet.tab) : undefined; };
+export const hpTextIn = (sheet: Sheet, tabs: SheetTab[]) => { const t = hpTarget(sheet, false); return t.ok ? cellText(tabs, t.item.cell ?? "", sheet.tab) : undefined; };
 
 type Timers = { set: (f: () => void, ms: number) => unknown; clear: (h: unknown) => void };
 /** Many pushes, one run: `run` gets the latest value `wait` ms after the last push. flush() runs it now; cancel() drops it. */

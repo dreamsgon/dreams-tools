@@ -1,0 +1,48 @@
+.import-steps{list-style:none;margin:0 0 18px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.import-steps button{width:100%;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);padding:8px 10px;font-size:12px;color:var(--muted);text-align:left;min-width:0}
+.import-steps button b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1px solid currentColor;font-size:11px;flex-shrink:0}
+.import-steps button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.import-steps button[aria-current=step]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.import-steps button.done{color:var(--accent)}
+.import-body{display:flex;flex-direction:column;gap:12px}
+.import-body .modal-intro{margin-bottom:0}
+.import-body section{display:flex;flex-direction:column;gap:8px}
+.import-label{font-size:11px;color:var(--muted)}
+.import-input{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:10px 12px;font-size:13px;color:var(--ink);margin-top:-6px}
+.import-check{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.import-check input{margin-top:3px;accent-color:var(--accent)}
+.import-check small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.import-note{font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+.import-prompt summary{cursor:pointer;font-size:12px;color:var(--accent)}
+.import-prompt textarea,.import-paste{width:100%;min-height:200px;margin-top:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);padding:10px 12px;font:12px/1.55 var(--font-mono,ui-monospace,monospace);resize:vertical}
+.import-paste{min-height:260px;margin-top:0}
+.import-footer{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.import-footer label.button{cursor:pointer}
+.import-h{font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.2px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.import-h span{font-weight:400;color:var(--muted);font-size:11px}
+.import-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.import-tiles>div{border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);padding:8px 10px;min-width:0}
+.import-tiles small{display:block;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.import-tiles b{font-size:17px;font-variant-numeric:tabular-nums;font-weight:600}
+.import-fields td:first-child small{color:var(--muted)}
+.import-fields .import-roll{color:var(--accent)}
+.import-fields td:last-child{display:flex;gap:8px;align-items:center;min-width:220px}
+.import-fields td:last-child select{flex:1}
+.import-chip{font-size:10px;border-radius:999px;padding:2px 8px;white-space:nowrap;background:var(--raised);color:var(--muted)}
+.import-chip.match{background:var(--accent-soft);color:var(--accent)}
+.import-chip.new{background:var(--warning-soft);color:var(--warning)}
+.import-sum ul,.import-warn ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7}
+.import-warn{border:1px solid var(--line);border-radius:var(--radius);background:var(--warning-soft);padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:4px}
+.import-warn small{color:var(--muted)}
+@media (max-width:620px){
+ .import-steps button span{display:none}
+ .import-steps button{justify-content:center}
+ .import-fields thead{display:none}
+ .import-fields tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:8px 6px;border-top:1px solid var(--line)}
+ .import-fields td{border:0!important;padding:0!important}
+ .import-fields td:last-child{grid-column:1/-1;min-width:0}
+ .import-footer .button{flex:1 1 auto}
+}
+.import-done{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--radius);background:var(--accent-soft);color:var(--accent);padding:12px 14px}
+.import-done strong{display:block;color:var(--ink);font-size:13px;font-weight:600}
+.import-done small{display:block;color:var(--muted);font-size:12px;margin-top:3px}

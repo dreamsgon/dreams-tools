@@ -113,8 +113,8 @@ const itemId = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 export const sheetItemSchema = z.object({
   id: itemId,
   name: z.string().trim().min(1).max(80),
-  /** A1 reference, with the tab when it isn't the sheet's main one: B4 or 'RPG Tools'!B4. */
-  cell: z.string().max(130).refine(c => parseCell(c) !== null, "Use a cell such as B4 or Sheet1!B4"),
+  /** A1 reference, with the tab when it isn't the sheet's main one: B4 or 'RPG Tools'!B4. Absent only on an imported sheet. */
+  cell: z.string().max(130).refine(c => parseCell(c) !== null, "Use a cell such as B4 or Sheet1!B4").optional(),
   kind: z.enum(sheetKinds),
   /** What the GM calls a special slot, such as Stress for hit points or Armour for AC. */
   label: z.string().trim().min(1).max(40).optional(),
@@ -125,7 +125,8 @@ export const sheetItemSchema = z.object({
 export type SheetItem = z.infer<typeof sheetItemSchema>;
 
 export const sheetSchema = z.object({
-  source: z.enum(["google", "published"]),
+  /** "import": made by the sheet import (sheet-import.ts), with no spreadsheet behind it, so nothing to read again. */
+  source: z.enum(["google", "published", "import"]),
   spreadsheetId: z.string().regex(/^[\w-]{10,120}$/).optional(),
   publishedUrl: z.string().max(600).refine(isPublishedUrl, "Use a Publish to the web link").optional(),
   title: z.string().trim().min(1).max(200),
@@ -143,6 +144,7 @@ export const sheetSchema = z.object({
   if (s.source === "google" && !s.spreadsheetId) ctx.addIssue({ code: "custom", message: "A Google sheet needs its spreadsheetId" });
   if (s.source === "published" && !s.publishedUrl) ctx.addIssue({ code: "custom", message: "A published sheet needs its link" });
   if (s.writeBack && s.source !== "google") ctx.addIssue({ code: "custom", message: "Only a sheet linked with Google sign-in can be written to" });
+  if (s.source !== "import" && s.items.some(i => !i.cell)) ctx.addIssue({ code: "custom", message: "Every item of a linked sheet needs its cell" });
   if (new Set(s.items.map(i => i.id)).size !== s.items.length) ctx.addIssue({ code: "custom", message: "Sheet items need unique ids" });
 }).transform(s => {
   // Keep the cleaned link, never the pasted string.
@@ -249,7 +251,7 @@ export function refreshSheet(sheet: Sheet, tabs: SheetTab[], readAt: string): Re
   }
   const missing: string[] = [];
   const items = sheet.items.map(item => {
-    const text = cellText(tabs, item.cell, sheet.tab);
+    const text = cellText(tabs, item.cell ?? "", sheet.tab);
     if (text === undefined) { missing.push(item.name); return item; }
     const { value: _old, ...rest } = item;
     void _old;
@@ -327,7 +329,7 @@ export const withoutLinkDetails = (sheet: Sheet): Sheet => playerSheet(sheet) as
 export function refreshRanges(sheet: Pick<Sheet, "mode" | "tab" | "items">, firstTab = "Sheet1"): { name: string; range: string }[] {
   if (sheet.mode === "template") return [{ name: TEMPLATE_TAB, range: `A1:C${GRID_ROWS}` }];
   const names = new Map<string, string>();
-  for (const i of sheet.items) { const name = parseCell(i.cell)?.tab ?? sheet.tab ?? firstTab; names.set(name.toLowerCase(), name); }
+  for (const i of sheet.items) { const name = parseCell(i.cell ?? "")?.tab ?? sheet.tab ?? firstTab; names.set(name.toLowerCase(), name); }
   if (!names.size) names.set((sheet.tab ?? firstTab).toLowerCase(), sheet.tab ?? firstTab);
   return [...names.values()].map(name => ({ name, range: `A1:Z${GRID_ROWS}` }));
 }
