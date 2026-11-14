@@ -137,11 +137,12 @@ export const sheetSchema = z.object({
   readAt: z.string().max(40).refine(v => !Number.isNaN(Date.parse(v)), "Use an ISO date").optional(),
   mode: z.enum(["template", "cells"]),
   items: z.array(sheetItemSchema).max(MAX_SHEET_ITEMS),
-  /** Reserved: nothing is written back to the sheet yet. */
-  writeBack: z.literal(false).optional(),
+  /** Opt-in, off when absent: when HP changes here, write the HP cell of a Google-linked sheet (sheet-write.ts). Never for published links. */
+  writeBack: z.boolean().optional(),
 }).superRefine((s, ctx) => {
   if (s.source === "google" && !s.spreadsheetId) ctx.addIssue({ code: "custom", message: "A Google sheet needs its spreadsheetId" });
   if (s.source === "published" && !s.publishedUrl) ctx.addIssue({ code: "custom", message: "A published sheet needs its link" });
+  if (s.writeBack && s.source !== "google") ctx.addIssue({ code: "custom", message: "Only a sheet linked with Google sign-in can be written to" });
   if (new Set(s.items.map(i => i.id)).size !== s.items.length) ctx.addIssue({ code: "custom", message: "Sheet items need unique ids" });
 }).transform(s => {
   // Keep the cleaned link, never the pasted string.

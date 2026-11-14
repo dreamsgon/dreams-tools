@@ -94,7 +94,8 @@ import { roleSide } from "@/lib/token-gallery";
 import { encyclopediaEntryOf, type ArmedToken } from "@/lib/token-arming";
 import TokenSheetRolls from "./token-sheet-rolls";
 import { sheetRollGroups, type SheetRollGroup } from "@/lib/encyclopedia/sheet-rolls";
-import type { SheetKind } from "@/lib/encyclopedia/sheet-link";
+import type { Sheet, SheetKind } from "@/lib/encyclopedia/sheet-link";
+import { useTokenSheetHp } from "./use-token-sheet-hp";
 import { TOKEN_CLIPBOARD_KEY, copyTokens, placedName } from "@/lib/token-clipboard";
 import ResizableSidebar from "./resizable-sidebar";
 import { FolderPreferenceScope } from "./folder-expansion";
@@ -172,9 +173,10 @@ const tools = [
 ] as const;
 
 /** The roll lists of the linked characters' sheets, by Encyclopedia entry id. */
-function sheetsFrom(raw:EncyclopediaRaw,ids:string):Map<string,{name:string;groups:SheetRollGroup[]}>{
-  const found=new Map<string,{name:string;groups:SheetRollGroup[]}>();
-  for(const id of ids.split(",")){const e=raw.entries?.find(x=>x.id===id&&x.kind==="character"),items=e?.character?.sheet?.items;if(!e||!items)continue;const groups=sheetRollGroups({items:items.map(i=>({...i,kind:i.kind as SheetKind}))});if(groups.length)found.set(id,{name:e.title,groups});}
+type SheetInfo={name:string;groups:SheetRollGroup[];entryId:string;/** The stored sheet, for the Write HP back switch (GM only). */sheet?:Sheet};
+function sheetsFrom(raw:EncyclopediaRaw,ids:string):Map<string,SheetInfo>{
+  const found=new Map<string,SheetInfo>();
+  for(const id of ids.split(",")){const e=raw.entries?.find(x=>x.id===id&&x.kind==="character"),items=e?.character?.sheet?.items;if(!e||!items)continue;const groups=sheetRollGroups({items:items.map(i=>({...i,kind:i.kind as SheetKind}))});const sheet=e.character?.sheet as unknown as Sheet|undefined;if(groups.length||sheet?.source==="google")found.set(id,{name:e.title,groups,entryId:id,sheet});}
   return found;
 }
 export default function MapApp(props: { navigationScope?: string } = {}) {
@@ -346,7 +348,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     return()=>{active=false;};},[wantsBook,book]);
   const linkable=useMemo(()=>linkablePages(book,campaignId),[book,campaignId]);
   // Rolls from the sheets of Encyclopedia characters linked to this scene's tokens (GM only), read from the same cached Encyclopedia the statblock tab uses.
-  const [sheetRolls,setSheetRolls]=useState<Map<string,{name:string;groups:SheetRollGroup[]}>>(()=>new Map());
+  const [sheetRolls,setSheetRolls]=useState<Map<string,SheetInfo>>(()=>new Map());
   const [sheetPanel,setSheetPanel]=useState<{tokenId:string;sceneId:string;x:number;y:number}|null>(null);
   const linkedEntryIds=useMemo(()=>[...new Set((scene?.tokens??[]).map(t=>t.encyclopediaEntryId).filter((id):id is string=>!!id))].sort().join(","),[scene?.tokens]);
   useEffect(()=>{
@@ -480,6 +482,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     } catch { return false; }
   }, [takeIn]);
   const scheduleRef = useRef<() => void>(() => {});
+  // Token HP changes made in this tab are noticed where scene changes are applied (commit, undo, redo) to write a linked sheet's HP back. Changes that arrive from the cloud (another tab or device, or an AI over MCP) are not: only the tab that made a change writes it.
+  const observeHp = useRef<(before: Workspace | null, after: Workspace) => void>(() => {});
   useEffect(() => {
     let disposed = false;
     let pending = false;
@@ -620,6 +624,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       if (!joining) history.current = [...history.current.slice(-29), previous];
       burst.current = options?.burst ? { at: Date.now(), before: joining ? burst.current!.before : previous, after: next } : null;
       future.current = [];
+      observeHp.current(previous, next);
       state.current = next;
       setWorkspace(next);
       setHistoryVersion((v) => v + 1);
@@ -639,6 +644,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     if (!history.current.length || !state.current) return;
     future.current.push(state.current);
     const next = history.current.pop()!;
+    observeHp.current(state.current, next);
     state.current = next;
     setWorkspace(next);
     setExplorationHistory([]);
@@ -652,6 +658,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     if (!future.current.length || !state.current) return;
     history.current.push(state.current);
     const next = future.current.pop()!;
+    observeHp.current(state.current, next);
     state.current = next;
     setWorkspace(next);
     setExplorationHistory([]);
@@ -661,6 +668,13 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setHistoryVersion((v) => v + 1);
     schedule();
   }, [schedule]);
+  const sheetHp = useTokenSheetHp({
+    enabled: !player,
+    notify: setNotice,
+    setTokenHp: (entryId, hp) => commit((w) => { for (const sc of w.scenes) for (const t of sc.tokens) if (t.encyclopediaEntryId === entryId) t.hp = Math.max(0, Math.min(t.maxHp, hp)); }),
+    refreshSheets: () => { loadEncyclopedia(true).then(raw => setSheetRolls(sheetsFrom(raw, linkedEntryIds))).catch(() => { /* keep the list we have */ }); },
+  });
+  useEffect(() => { observeHp.current = sheetHp.observe; });
   const resizeGrid = useCallback((delta: number) => {
     updateScene((s) => {
       s.grid.size = Math.max(20, Math.min(500, Math.round((s.grid.size + delta) * 10) / 10));
@@ -2114,7 +2128,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             onView={setView}
             onMeasure={setMeasure}
           />
-          {sheetPanel&&!player&&scene&&sheetPanel.sceneId===scene.id&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)}/>}
+          {sheetPanel&&!player&&scene&&sheetPanel.sceneId===scene.id&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)} hp={(()=>{const info=sheetOfToken(sheetPanel.tokenId)!;return info.sheet&&!mapMemberRef()?{sheet:info.sheet,status:sheetHp.statuses[info.entryId],onSwitch:(on:boolean)=>{sheetHp.setWriteBack(info.entryId,on).catch(e=>setNotice(e instanceof Error?e.message:"Could not change write-back."));},onSignIn:()=>{void sheetHp.signIn(info.entryId);},onUseSheet:()=>sheetHp.useSheetValue(info.entryId),onWriteOurs:()=>sheetHp.writeOurs(info.entryId)}:undefined;})()}/>}
           <div className="toolbar" role="toolbar" aria-label="Map tools" ref={toolbarRef}>
             {tools.map(({ id, label, Icon }) => (
               <button

@@ -10,6 +10,7 @@ import {confirmDialog} from '../confirm-dialog';
 import {memberRef} from './member-view';
 import {readLinked,reopenLinked,type SheetRead} from './sheet-read';
 import {SheetView} from './sheet-view';
+import {SheetHp,SheetWriteBack} from './sheet-hp';
 import {SheetRolls,SheetRollLog} from './sheet-rolls';
 import {sheetRollGroups} from '@/lib/encyclopedia/sheet-rolls';
 import {rollInline} from './rolls';
@@ -33,11 +34,11 @@ const withSheet=(id:string,f:(old:Sheet|undefined)=>Sheet|undefined)=>(w:Workspa
 export function CharacterSheetSection({entry,change}:{entry:Entry;change:Change}){
  useIdlePreload(preload);
  const sheet=entry.character?.sheet,coGm=!!memberRef(),visible=entry.character?.statsVisibility==='players';
- const [dialog,setDialog]=useState<{read?:SheetRead}|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
+ const [dialog,setDialog]=useState<{read?:SheetRead}|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[holding,setHolding]=useState(false);
  const fail=(e:unknown)=>setNotice(e instanceof Error?e.message:'Something went wrong. Try again.');
 
  async function refresh(){
-  if(!sheet||busy)return;
+  if(!sheet||busy||holding)return;
   setBusy(true);setNotice('');
   try{
    const tabs=await readLinked(sheet),now=new Date().toISOString(),{missing}=refreshSheet(sheet,tabs,now); // Throws, with a message for the GM, when the RPG Tools tab is gone.
@@ -71,10 +72,14 @@ export function CharacterSheetSection({entry,change}:{entry:Entry;change:Change}
   <SheetView sheet={shown} note={rolls.length?'Values are copied here when the sheet is read. Rolls show in the roll card, where they can go to Discord.':undefined}
    rolling={rolls.length?<><SheetRolls groups={rolls} twice onRoll={(name,formula,mode)=>rollInline(`${entry.title} · ${name}`,formula,{mode,log:true})}/>
     <div className="sheet-log"><span className="eyebrow">ROLL LOG</span><SheetRollLog character={entry.title}/></div></>:undefined}
+   hpTools={coGm?undefined:<>
+    <SheetWriteBack sheet={sheet} linker={theirs?sheet.linkedBy??'The player':undefined} onChange={next=>{change(withSheet(entry.id,old=>old?{...old,writeBack:next.writeBack}:old));}}/>
+    {sheet.writeBack===true&&sheet.source==='google'&&!theirs&&<SheetHp sheet={sheet} onHold={setHolding} store={f=>change(withSheet(entry.id,old=>old?f(old):old))}/>}
+   </>}
    subtitle={`Linked by ${sheet.linkedBy??'the GM'} · ${reads}`}
    actions={<>
     {open&&<a className="button small" href={open} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> {sheet.source==='google'?'Open in Google Sheets':'Open published sheet'}</a>}
-    {!coGm&&<button type="button" className="button small" disabled={busy||needsGoogle} title={why} onClick={()=>void refresh()}><RefreshCw size={13}/> {busy?'Reading…':'Refresh'}</button>}
+    {!coGm&&<button type="button" className="button small" disabled={busy||holding||needsGoogle} title={holding?'HP is still being written to the sheet.':why} onClick={()=>void refresh()}><RefreshCw size={13}/> {busy?'Reading…':'Refresh'}</button>}
     {!coGm&&<details className="sheet-menu"><summary className="button small icon-button" aria-label="More for this sheet"><MoreHorizontal size={15}/></summary>
      <div className="sheet-menu-list"><button type="button" disabled={needsGoogle} title={why} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button><button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>Unlink</button></div></details>}
    </>}>

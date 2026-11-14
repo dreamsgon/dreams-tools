@@ -77,7 +77,9 @@ test('the saved sheet needs its source, unique item ids and valid cells and leng
  assert.equal(bad({...good,items:[{...item,formula:'x'.repeat(201)}]}),false);
  assert.equal(bad({...good,items:Array.from({length:201},(_,i)=>({...item,id:'i'+i}))}),false);
  assert.equal(bad({...good,items:Array.from({length:200},(_,i)=>({...item,id:'i'+i}))}),true);
- assert.equal(bad({...good,writeBack:true}),false,'nothing is written back yet');
+ assert.equal(bad({...good,writeBack:true}),true,'opt-in write back is allowed on a Google sheet');
+ assert.equal(bad({source:'published',publishedUrl:PUB_URL,title:'T',mode:'cells',items:[],writeBack:true}),false,'never on a published link');
+ assert.equal(bad({...good,writeBack:'yes'}),false);
  assert.equal(bad({...good,readAt:'yesterday'}),false);
  assert.equal(bad({...good,readAt:'2026-11-14T10:00:00.000Z'}),true);
  assert.equal(bad({...good,source:'dropbox'}),false);
@@ -242,7 +244,7 @@ test('Open goes to the sheet itself, or the published page, and never anywhere e
 
 // ---- Player safety ---------------------------------------------------------------------------
 
-const fullSheet=()=>sheetSchema.parse({source:'google',spreadsheetId:SHEET_ID,title:'Ayla - Salt Road',tab:'Sheet1',linkedBy:'Cael',readAt:'2026-11-14T10:00:00.000Z',mode:'cells',writeBack:false,items:[
+const fullSheet=()=>sheetSchema.parse({source:'google',spreadsheetId:SHEET_ID,title:'Ayla - Salt Road',tab:'Sheet1',linkedBy:'Cael',readAt:'2026-11-14T10:00:00.000Z',mode:'cells',writeBack:true,items:[
  {id:'a',name:'HP',cell:'Sheet1!E3',kind:'hp',value:'24'},{id:'b',name:'Stealth',cell:'Sheet1!B11',kind:'roll',value:'+5',formula:'1d20+5',label:'Sneaking'},
 ]});
 const SECRETS=[SHEET_ID,PUB_ID,'Cael','Sheet1!'];
@@ -282,7 +284,7 @@ test('players get cached values only when the character stats are player visible
 
 test('nothing that could open the sheet reaches the player payload, whatever the visibility', () => {
  for(const [stats,overview] of [['players','players'],['players','gm'],['gm','players']]){
-  for(const sheet of [fullSheet(),{...fullSheet(),source:'published',spreadsheetId:undefined,publishedUrl:PUB_URL}]){
+  for(const sheet of [fullSheet(),{...fullSheet(),source:'published',writeBack:false,spreadsheetId:undefined,publishedUrl:PUB_URL}]){
    const text=JSON.stringify(playerCampaign(world({statsVisibility:stats,sheet},overview),C));
    for(const s of [SHEET_ID,PUB_ID,'docs.google.com','Cael','spreadsheetId','publishedUrl','linkedBy'])assert.ok(!text.includes(s),`${s} (${stats}/${overview})`);
   }
@@ -414,7 +416,7 @@ test('a player save never changes the sheet', () => {
 });
 
 test('the older campaign-key reader also hides the sheet id, link and linker', () => {
- const full=world({statsVisibility:'gm',sheet:{...fullSheet(),source:'published',spreadsheetId:undefined,publishedUrl:PUB_URL}},'players');
+ const full=world({statsVisibility:'gm',sheet:{...fullSheet(),source:'published',writeBack:false,spreadsheetId:undefined,publishedUrl:PUB_URL}},'players');
  const scope=campaignExport(full,C);
  const all=JSON.stringify([callReadTool(scope,'read_campaign',{campaign_id:C}),callReadTool(scope,'read_article',{campaign_id:C,article_id:'demo-mara'})]);
  for(const x of [PUB_ID,'docs.google.com','Cael','spreadsheetId','publishedUrl','linkedBy','"cell"','"mode"','"source"'])assert.ok(!all.includes(x),x);

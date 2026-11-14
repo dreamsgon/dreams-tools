@@ -52,6 +52,20 @@ test('exploding dice roll again on their highest number and always stop', () => 
  assert.ok(rollDice('3d6!',seeded(7)).total>=3);
 });
 
+test('roll-under success counting (<=)', () => {
+ const r=rollDice('2d20<=14',faces(20,14,15));
+ assert.equal(r.total,1);assert.equal(r.parts[0].successes,1);assert.equal(describeParts(r.parts),'(14, 15) 1 success');
+ assert.equal(describeParts(rollDice('3d20<=10',faces(20,3,10,11)).parts),'(3, 10, 11) 2 successes');
+ assert.equal(rollDice('4d6<=6',faces(6,6,6,6,6)).total,4);assert.equal(rollDice('4d6<=1',faces(6,6,5,1,2)).total,1);
+ assert.equal(termLabel(parseDice('2d20<=14')[0]),'2d20<=14');assert.equal(termLabel(parseDice('5d10>=8')[0]),'5d10>=8');
+ for(const bad of ['2d20<=14+2','1d6+2d20<=14','2d20<=21','2d20<=0','2d20<=','2d20<14','2d20<=14!','2d20kh1<=14','2d20<=14<=3','2d20<=14>=3','-2d20<=14','4dF<=2']) assert.throws(()=>parseDice(bad),bad);
+ assert.deepEqual(termRange(parseDice('2d20<=14')[0]),[0,2]);
+ const random=seeded(11),a=rollDice('10d20<=10',random);assert.equal(a.total,a.parts[0].dice.filter(v=>v<=10).length);
+ assert.equal(rollDice('2d20<=14',seeded(3)).natural,null,'a success pool has no natural result');
+ const t0=Date.now();for(const evil of ['1d6<='+'9'.repeat(100000),'1d6<='.repeat(30000),'2d20'+'<='.repeat(50000)])assert.throws(()=>parseDice(evil));
+ assert.ok(Date.now()-t0<1000,'long input is cut off quickly');
+});
+
 test('success counting', () => {
  const r=rollDice('5d10>=8',faces(10,10,8,3,9,1));
  assert.equal(r.total,3);assert.equal(r.parts[0].successes,3);assert.equal(describeParts(r.parts),'(10, 8, 3, 9, 1) 3 successes');
@@ -109,7 +123,7 @@ test('part descriptions', () => {
  assert.equal(partText(rollDice('4d6kh3',faces(6,2,6,4,5)).parts[0],'['),'[6, 4, 5] (dropped 2)');
  assert.equal(partText(rollDice('1d6',faces(6,4)).parts[0],'['),'[4]');
  assert.equal(describeParts(rollDice('1d6-2',faces(6,4)).parts),'4 − 2');
- assert.match(diceHelpText,/4d6kh3/);assert.match(diceHelpText,/2d6!/);assert.match(diceHelpText,/5d10>=8/);assert.match(diceHelpText,/4dF/);
+ assert.match(diceHelpText,/4d6kh3/);assert.match(diceHelpText,/2d6!/);assert.match(diceHelpText,/5d10>=8/);assert.match(diceHelpText,/4dF/);assert.match(diceHelpText,/2d20<=14 count dice at or under/);
 });
 
 const SHEET_ID='1AbCdEfGhIjKlMnOpQrStUvWx';
@@ -161,7 +175,7 @@ test('rolling from a sheet never involves link details, and players get no rolli
 });
 
 test('random tables take plain dice, not exploding, success or plus/minus dice', () => {
- for(const bad of ['2d6!','5d10>=8','4dF'])assert.throws(()=>tableDice(bad),bad);
+ for(const bad of ['2d6!','5d10>=8','2d20<=14','4dF'])assert.throws(()=>tableDice(bad),bad);
  for(const good of ['d20','2d6+1','4d6kh3'])assert.doesNotThrow(()=>tableDice(good),good);
  assert.throws(()=>parseDice('-5d10>=8'),'a success count cannot be subtracted');
  const table={id:'t1',name:'Weather',kind:'table',category:'weather',campaignIds:[],updatedAt:'2026-01-01T00:00:00.000Z',mode:'ranges',formula:'2d6!',rows:[{id:'r1',text:'Rain',min:2,max:12}]};

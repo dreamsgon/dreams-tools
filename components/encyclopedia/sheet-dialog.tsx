@@ -65,7 +65,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
   const base=(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string):Sheet=>({
     source:r.source,...(r.spreadsheetId?{spreadsheetId:r.spreadsheetId}:{}),...(r.publishedUrl?{publishedUrl:r.publishedUrl}:{}),
     title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,...(keeps(r)?{linkedBy:current!.linkedBy??player?.name??'the GM',...(current!.linkedById?{linkedById:current!.linkedById}:{})}:{linkedBy:player?.name??'the GM'}),
-    readAt:new Date().toISOString(),mode,items,writeBack:false,
+    readAt:new Date().toISOString(),mode,items,writeBack:!player&&r.source==='google'&&keeps(r)&&current?.writeBack===true,
   });
   const chooseTemplate=(r:SheetRead)=>{
     const tab=findTemplateTab(r.tabs);if(!tab)return;
