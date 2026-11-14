@@ -10,6 +10,7 @@ import { isNewFind } from "@/lib/encyclopedia/codex";
 import { lookAttributes } from "@/lib/encyclopedia/look";
 import { FrontPageView, sessionTime } from "./front-page-view";
 import { useWriters } from "./encyclopedia/recap-panel";
+import { allStyles, isBuiltIn, styleFor, styleSummary } from "@/lib/encyclopedia/ai-styles";
 import { when } from "./home-campaigns";
 import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
@@ -409,14 +410,15 @@ function Fields({ widget: w, hub, update }: { widget: FrontWidget; hub: Campaign
 function StoryField({ widget: w, hub, update }: { widget: Extract<FrontWidget, { type: "story" }>; hub: CampaignHub; update: (w: Partial<FrontWidget>) => void }) {
   const campaignId = hub.row.encyclopedia?.id, writers = useWriters(campaignId);
   const [key, setKey] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [copied, setCopied] = useState(false);
-  const [note, setNote] = useState(""), [keep, setKeep] = useState(true), [draft, setDraft] = useState<{ text: string; from: number; by: string } | null>(null);
+  const [note, setNote] = useState(""), [keep, setKeep] = useState(true), [draft, setDraft] = useState<{ text: string; from: number; by: string } | null>(null), [styleId, setStyleId] = useState("");
+  const writing = hub.writing ?? undefined, style = styleFor(writing, "story", styleId || undefined), usual = styleFor(writing, "story");
   const keys = writers?.keys ?? [], chosen = keys.find(k => k.id === key) ?? keys[0], mine = w.body.trim();
-  const ask = `In RPG Tools for "${hub.row.name}", use the story_so_far prompt: read the published recaps with read_recaps and write The story so far for the players' front page.${keep ? "" : " Start fresh instead of keeping the current story."}${note.trim() ? ` ${note.trim()}` : ""}`;
+  const ask = `In RPG Tools for "${hub.row.name}", use the story_so_far prompt: read the published recaps with read_recaps and write The story so far for the players' front page.${style.id !== usual.id ? ` Use the "${style.name}" style instead: ${styleSummary(style, "story")}.` : ""}${keep ? "" : " Start fresh instead of keeping the current story."}${note.trim() ? ` ${note.trim()}` : ""}`;
   async function write() {
     if (!chosen || !campaignId) return;
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id, keep, before: w.body, ...(note.trim() ? { note: note.trim() } : {}) }) });
+      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id, keep, before: w.body, styleId: style.id, ...(note.trim() ? { note: note.trim() } : {}) }) });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || "Could not write the story.");
       // Nothing there yet: the draft goes straight in. Otherwise it waits beside the GM's own text.
@@ -441,6 +443,11 @@ function StoryField({ widget: w, hub, update }: { widget: Extract<FrontWidget, {
     </div>}
     <div className="hub-story-ai">
       <span className="hub-muted">Or have the AI write a draft from the recaps you&apos;ve published. Drafts and GM notes are left out.</span>
+      <div className="hub-story-style">
+        <label>Style<select value={style.id} onChange={ev => setStyleId(ev.target.value === usual.id ? "" : ev.target.value)}>{allStyles(writing).map(s => <option key={s.id} value={s.id}>{s.name}{isBuiltIn(s.id) ? "" : " (yours)"}{s.id === usual.id ? " · this campaign’s style" : ""}</option>)}</select></label>
+        <a className="hub-muted" href={`/encyclopedia?campaign=${encodeURIComponent(campaignId ?? "")}&styles=story`}>Edit styles</a>
+      </div>
+      <small className="hub-muted">{styleSummary(style, "story")}</small>
       <label className="hub-story-keep"><input type="checkbox" checked={keep} onChange={ev => setKeep(ev.target.checked)} /> Start from my text, keeping what still holds</label>
       <label>What to change <small className="hub-muted">optional</small><input maxLength={500} value={note} placeholder="Keep my first paragraph. End on the second bell." onChange={ev => setNote(ev.target.value)} /></label>
       <div className="hub-story-write">

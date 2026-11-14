@@ -14,6 +14,8 @@ import {compactTranscript,openItems,sessionFolder,TRANSCRIPT_LIMIT,wordCount} fr
 import {IN_APP_LIMIT,recapTokens} from '@/lib/encyclopedia/recap-prompts';
 import {useWriters,writeWithKey} from './recap-panel';
 import {ToolDialog} from './tool-dialog';
+import {AiWritingDialog,StylePicker} from './ai-writing';
+import {styleFor} from '@/lib/encyclopedia/ai-styles';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 type Kind='paste'|'file'|'thread'|'notion'|'drive'|'github';
@@ -53,7 +55,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [step,setStep]=useState<'source'|'options'|'handoff'>(resume?'handoff':'source');
  const [kind,setKind]=useState<Kind>('paste'),[text,setText]=useState(''),[file,setFile]=useState(''),[link,setLink]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [title,setTitle]=useState(page?.title??`Session ${sessions.length+1}`),[playedOn,setPlayedOn]=useState(page?.recap?.playedOn??today());
- const [length,setLength]=useState<RecapRequest['length']>('standard'),[depth,setDepth]=useState<RecapRequest['depth']>('balanced'),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(new Set());
+ const [style,setStyle]=useState(''),[editStyles,setEditStyles]=useState(false),[length,setLength]=useState<RecapRequest['length']>(()=>styleFor(campaign.aiWriting,'recap').length),[depth,setDepth]=useState<RecapRequest['depth']>('balanced'),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(new Set());
  const [cast,setCast]=useState<NonNullable<RecapRequest['cast']>>([]),[made,setMade]=useState<{id:string;title:string;saved:boolean;link?:string}|null>(resume?{id:resume.id,title:resume.title,saved:true,link:resume.recap?.request?.link}:null);
  const writers=useWriters(campaign.id),apps=writers?.apps??null,keys=writers?.keys??[];
  const [mine,setMine]=useState(false),[writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
@@ -94,7 +96,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const handOver=async()=>{
   if(!title.trim()){setError('Give the session a title.');return;}
   setError('');setBusy(true);
-  const request:RecapRequest|undefined=mine?undefined:{length,depth,...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
+  const request:RecapRequest|undefined=mine?undefined:{length,depth,...(style?{style}:{}),...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
   const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':'A pasted transcript';
   let id='';
   const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,mine,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
@@ -161,7 +163,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
      <label className="field-title">Title<input className="recap-input" maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label>
      <label className="field-title">Played on<input className="recap-input date" type="date" value={playedOn} onChange={e=>setPlayedOn(e.target.value)}/></label>
      {cast.length>0&&<div className="field-title">Who is who<div className="cast-rows">{cast.map((c,i)=><div key={c.speaker} className="cast-row"><code>{c.speaker}</code><ArrowRight size={13}/><select aria-label={`Who ${c.speaker} is`} value={c.as} onChange={e=>{const v=e.target.value,p=characters.find(x=>x.id===v);setCast(cast.map((x,j)=>j===i?{speaker:x.speaker,as:v,...(p?{name:p.title}:{})}:x));}}><option value="gm">The GM (you)</option><option value="">A player, no character</option>{characters.map(p=><option key={p.id} value={p.id}>{p.title}{p.character?.role==='pc'?' · player character':''}</option>)}</select></div>)}</div></div>}
-     {!mine&&<><div className="field-title">Recap length<div className="segmented wide">{(['short','standard','detailed'] as const).map(x=><button key={x} className={length===x?'on':''} onClick={()=>setLength(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</div></div>
+     {!mine&&<><StylePicker writing={campaign.aiWriting} kind="recap" value={style} onChange={id=>{setStyle(id);setLength(styleFor(campaign.aiWriting,'recap',id||undefined).length);}} onEdit={()=>setEditStyles(true)}/><div className="field-title">Recap length<div className="segmented wide">{(['short','standard','detailed'] as const).map(x=><button key={x} className={length===x?'on':''} onClick={()=>setLength(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</div></div>
      <div className="field-title">How much to pull out<div className="segmented wide">{([['main','Main things'],['balanced','Balanced'],['everything','Everything']] as const).map(([x,l])=><button key={x} className={depth===x?'on':''} onClick={()=>setDepth(x)}>{l}</button>)}</div></div>
      <label className="field-title">Anything to steer it<textarea className="recap-input" rows={3} maxLength={500} value={steer} placeholder="Warm and a little ominous. Name each player character at least once." onChange={e=>setSteer(e.target.value)}/></label></>}
     </div>
@@ -178,5 +180,6 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
    {error&&<p className="form-error">{error}</p>}
    <div className="dialog-footer"><span className="aside-hint">{page?`Fills “${page.title}”.${page.body.trim()&&!page.recap?' Its current text moves to a GM-only tab.':''} Players can’t see it until you publish.`:'Makes a new GM-only session page.'}</span><div className="button-row"><button className="button" onClick={()=>setStep('source')}>Back</button><button className="button primary" disabled={busy} onClick={handOver}>{mine?<PenLine size={14}/>:<Sparkles size={14}/>} {busy?'Saving…':mine?'Make the page':key?`Write it with ${key.name}`:'Hand to my AI app'}</button></div></div>
   </>}
+  {editStyles&&<AiWritingDialog data={data} campaign={campaign} change={change} onClose={()=>setEditStyles(false)}/>}
  </div></ToolDialog>;
 }

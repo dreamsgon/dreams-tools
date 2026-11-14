@@ -192,4 +192,6 @@
 .hub-story-draft .hub-muted svg { flex:none; }
 .hub-story-draft-text { white-space:pre-wrap; font-size:15px; line-height:1.6; color:var(--ink); }
 .hub-story-ai { display:flex; flex-direction:column; gap:8px; padding-top:10px; border-top:1px solid var(--line); }
+.hub-story-style { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+.hub-story-style a { color:var(--accent); text-decoration:underline; padding-bottom:8px; }
 .hub-story-keep { display:flex !important; flex-direction:row !important; align-items:center; gap:8px; font-size:14px; color:var(--ink); }

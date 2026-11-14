@@ -11,6 +11,7 @@ import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/e
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
 import {newId} from '@/lib/encyclopedia/world-model';
 import {confirmDialog} from '../confirm-dialog';
+import {AiWritingDialog,StylePicker} from './ai-writing';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const words=(n:number)=>`${n.toLocaleString('en')} word${n===1?'':'s'}`;
@@ -57,7 +58,7 @@ export function useWriters(campaignId:string|null|undefined){
 }
 
 /** Asks RPG Tools to write with an API-key connection. Returns the server's answer, or throws its message. */
-export async function writeWithKey(body:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string}){
+export async function writeWithKey(body:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string;styleId?:string}){
  const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
  if(!r.ok)throw Error(r.b.error??'Could not write the recap.');
  return r.b as {tokens:number;by:string;toCheck?:number;added?:number};
@@ -185,21 +186,28 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
 }
 
 /** Write it again, under a draft recap: the recap players read, from the timeline as it is now, with a note from the GM. */
-export function WriteAgain({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotice:(s:string)=>void}){
+const QUICK=['Shorter','Longer','More dialogue','Less detail','Darker','Lighter'];
+export function WriteAgain({entry,data,change,setNotice}:{entry:Entry;data:Workspace;change?:Change;setNotice:(s:string)=>void}){
  const writers=useWriters(entry.campaignId),[open,setOpen]=useState(false),[note,setNote]=useState(''),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
+ const [quick,setQuick]=useState<string[]>([]),[style,setStyle]=useState(entry.recap?.request?.style??''),[styles,setStyles]=useState(false);
  const keys=writers?.keys??[],chosen=keys.find(k=>k.id===key)??keys.find(k=>k.name===entry.recap?.by)??keys[0];
  const campaign=data.campaigns.find(c=>c.id===entry.campaignId);
- const ask=`In RPG Tools for "${campaign?.name??'my campaign'}", write the recap on the session page "${entry.title}" again from its timeline.${note.trim()?` ${note.trim()}`:''}\nRead the page with read_page, then save only the new recap with rewrite_recap.`;
+ const asked=[...quick.map(q=>`${q}.`),note.trim()].filter(Boolean).join(' ');
+ const styleName=style?campaign?.aiWriting?.styles?.find(s=>s.id===style)?.name??style.replace(/^builtin-/,''):'';
+ const ask=`In RPG Tools for "${campaign?.name??'my campaign'}", write the recap on the session page "${entry.title}" again from its timeline.${styleName?` Use the "${styleName}" style.`:''}${asked?` ${asked}`:''}\nRead the page with read_page, then save only the new recap with rewrite_recap.`;
  const run=async()=>{
   if(!chosen||!entry.campaignId)return;
   setBusy(true);setError('');
-  try{const r=await writeWithKey({action:'again',entryId:entry.id,campaignId:entry.campaignId,connectionId:chosen.id,note:note.trim()});setOpen(false);setNote('');setNotice(`${r.by} wrote the recap again (${r.tokens.toLocaleString('en')} tokens). It shows up in a moment.`);}
+  try{const r=await writeWithKey({action:'again',entryId:entry.id,campaignId:entry.campaignId,connectionId:chosen.id,note:asked.slice(0,500),...(style?{styleId:style}:{})});setOpen(false);setNote('');setQuick([]);setNotice(`${r.by} wrote the recap again (${r.tokens.toLocaleString('en')} tokens). It shows up in a moment.`);}
   catch(e){setError(e instanceof Error?e.message:'Could not write it again.');}
   finally{setBusy(false);}
  };
- if(!open)return <div className="write-again closed"><button className="button small" onClick={()=>setOpen(true)}><RotateCcw size={13}/> Write it again…</button><span className="aside-hint">Takes a note, such as “shorter” or “more about Bram”.</span></div>;
+ if(!open)return <div className="write-again closed"><button className="button small" onClick={()=>setOpen(true)}><RotateCcw size={13}/> Write it again…</button><span className="aside-hint">Quick changes, a note, or another style.</span></div>;
  return <div className="write-again">
-  <label className="field-label">What to change<textarea className="check-text" autoFocus rows={3} maxLength={500} value={note} placeholder="Shorter, or more about Bram." onChange={e=>setNote(e.target.value)}/></label>
+  <div className="field-label">Quick changes<div className="style-chips">{QUICK.map(q=><button type="button" key={q} className={`style-chip ${quick.includes(q)?'on':''}`} aria-pressed={quick.includes(q)} onClick={()=>setQuick(x=>x.includes(q)?x.filter(y=>y!==q):[...x,q])}>{q}</button>)}</div></div>
+  <label className="field-label">Anything else<textarea className="check-text" autoFocus rows={3} maxLength={400} value={note} placeholder="More about Bram. Open on the second bell." onChange={e=>setNote(e.target.value)}/></label>
+  {campaign&&<StylePicker writing={campaign.aiWriting} kind="recap" value={style} onChange={setStyle} onEdit={change?()=>setStyles(true):undefined}/>}
+  {styles&&campaign&&change&&<AiWritingDialog data={data} campaign={campaign} change={change} onClose={()=>setStyles(false)}/>}
   <p className="aside-hint">The recap is written again from the timeline, so fix a beat there first if it’s wrong. The timeline, quotes and this list stay as they are.</p>
   {keys.length>1&&<label className="field-label">Written by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
   {error&&<p className="form-error">{error}</p>}
