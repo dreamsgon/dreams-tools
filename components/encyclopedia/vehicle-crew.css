@@ -1,0 +1,46 @@
+/* A vehicle's seats and Crew tab (components/encyclopedia/vehicle-crew.tsx). */
+.crew-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.crew-head h3{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:15px}
+.crew-head small{display:inline-flex;align-items:center;gap:4px}
+.crew-cards{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.crew-card{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.crew-card-top{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:24px}
+.crew-card .text-button{align-self:flex-start;font-size:12px}
+.crew-open{font-size:13px}
+.crew-none{margin:0;font-size:13px}
+.crew-person{display:inline-flex;align-items:center;gap:7px;min-width:0;font-size:13px;font-weight:600;color:var(--ink);text-align:left;background:none;border:0;padding:0}
+button.crew-person{cursor:pointer}
+button.crew-person:hover span:last-child{text-decoration:underline}
+.crew-person span:last-child{overflow-wrap:anywhere}
+.crew-initials{display:inline-grid;place-items:center;flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:10px;font-weight:700}
+.is-hidden.crew-card,.is-hidden.crew-row,.is-hidden.crew-hand{border-style:dashed;border-color:var(--warning)}
+.vehicle-crew{display:flex;flex-direction:column;gap:22px;margin-top:4px}
+.crew-rows{display:flex;flex-direction:column;gap:6px}
+.crew-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.crew-seat-name{width:150px;flex-shrink:0;border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:4px 6px;font-size:12px;font-weight:700;color:var(--accent)}
+.crew-seat-label{width:150px;flex-shrink:0}
+.crew-seat-name:hover,.crew-seat-name:focus,.crew-role:hover,.crew-role:focus{border-color:var(--line);background:var(--raised,var(--hover))}
+.crew-row-who{flex:1;min-width:0}
+.crew-role{flex:1;min-width:0;border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:4px 6px;font-size:13px;color:var(--muted)}
+.crew-pin-toggle.on{color:var(--accent);background:var(--accent-soft)}
+.crew-add{margin-top:8px}
+.crew-split{display:grid;gap:22px;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+.crew-hands{display:flex;flex-direction:column;gap:6px}
+.crew-hand{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.crew-hand-name{flex:1;font-size:13px;font-weight:600}
+.crew-hand-num{width:56px;text-align:center;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised,var(--hover));padding:3px 4px;font-variant-numeric:tabular-nums}
+.vehicle-crew .icon-button{padding:5px}
+.crew-pins{position:absolute;inset:0;pointer-events:none}
+.crew-pin{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:5px;max-width:45%;border:1px solid var(--line-strong,var(--line));border-radius:999px;padding:2px 9px 2px 3px;background:var(--panel);font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0/.12)}
+.crew-pin .crew-initials{width:20px;height:20px;font-size:9px}
+.crew-pin.empty{padding-left:9px;border-style:dashed;color:var(--muted)}
+.crew-pin.is-hidden{color:var(--warning)}
+@media (max-width:760px){
+ .crew-pins{display:none}
+ .o-st{order:5}
+ .crew-split{grid-template-columns:minmax(0,1fr)}
+ .crew-row{flex-wrap:wrap}
+ .crew-seat-name,.crew-seat-label{width:100%}
+ .crew-row-who{flex:1 1 0}
+ .crew-member .crew-role{order:5;flex-basis:100%}
+}
