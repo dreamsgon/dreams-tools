@@ -16,6 +16,7 @@ import { facingFromPointer, flipToken, footprint, resetTransform, resizeToken, s
 import { TOKEN_CLIPBOARD_KEY, copyTokens, duplicateTokens, expandGroups, groupMembers, groupTokens, pasteTokens, readClipboard, toggleInSelection, ungroupTokens, type TokenClipboard } from "@/lib/token-clipboard";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
+import { WHEEL_IDLE_MS, accumulateWheel, wheelAmount, wheelResizeEffect, wheelResizeToken } from "@/lib/wheel-resize";
 import { effectContains, effectHandles, effectPolygon, resolveEffect } from "@/lib/effects";
 import {
   address,
@@ -95,7 +96,8 @@ type Props = {
   select: (id: string | null) => void;
   editToken: (id: string) => void;
   onEditElement?: (kind: "token" | "effect" | "poi" | "measurement" | "fog", id: string | number) => void;
-  update: (fn: (s: Scene) => void) => void;
+  /** `burst`: changes made in quick succession (the wheel) share one undo step. */
+  update: (fn: (s: Scene) => void, options?: { burst?: boolean }) => void;
   player: boolean;
   gridAdjust: boolean;
   resizeGrid: (delta: number) => void;
@@ -693,11 +695,39 @@ export default function Board(p: Props) {
         y: center.y - ((center.y - v.y) * scale) / v.scale,
       };
     });
+  const wheelCarry = useRef({ carry: 0, at: 0 });
+  /** Shift + wheel resizes the selected tokens and areas, or the token (else area) under the pointer. False when there is nothing to resize. */
+  const wheelResizeItems = (e: WheelEvent) => {
+    if (p.player || p.gridAdjust || cropEditing || gesture.current || !["select", "marquee"].includes(p.tool)) return false;
+    const resizableEffect = (id: string) => allowEffects && p.scene.effects.some(item => item.id === id && !item.locked);
+    const selected = currentSelection();
+    let tokenIds = selected.filter(id => allowTokens && p.scene.tokens.some(item => item.id === id));
+    let effectIds = selected.filter(resizableEffect);
+    if (!tokenIds.length && !effectIds.length) {
+      const pos = world(screen(e));
+      const token = allowTokens ? [...p.scene.tokens].reverse().find(item => Math.hypot(item.x - pos.x, item.y - pos.y) <= tokenRadius(item, p.scene.grid)) : undefined;
+      const area = token || !allowEffects ? undefined : [...p.scene.effects].reverse().find(item => !item.locked && effectContains(resolveEffect(item, p.scene.tokens), pos, p.scene.grid));
+      tokenIds = token ? [token.id] : [];
+      effectIds = area ? [area.id] : [];
+    }
+    if (!tokenIds.length && !effectIds.length) return false;
+    const now = Date.now(), before = wheelCarry.current;
+    const { steps, carry } = accumulateWheel(now - before.at > WHEEL_IDLE_MS ? 0 : before.carry, wheelAmount(e));
+    wheelCarry.current = { carry, at: now };
+    if (steps) p.update(scene => {
+      for (const token of scene.tokens) if (tokenIds.includes(token.id)) wheelResizeToken(token, scene.grid, steps);
+      for (const effect of scene.effects) if (effectIds.includes(effect.id) && !effect.locked) wheelResizeEffect(effect, steps);
+    }, { burst: true });
+    return true;
+  };
+  const wheelResizeRef = useRef(wheelResizeItems);
+  useEffect(() => { wheelResizeRef.current = wheelResizeItems; });
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && wheelResizeRef.current(e)) return;
       if (p.gridAdjust && !p.player && !e.ctrlKey && !e.metaKey) {
         if (e.deltaY) p.resizeGrid(-Math.sign(e.deltaY) * (e.altKey ? 0.1 : 1));
         return;
@@ -1555,9 +1585,9 @@ export default function Board(p: Props) {
           <button type="button" title="Flip horizontally (H)" aria-pressed={!!token.flipX} onClick={act(t => flipToken(t, "x"))}><FlipHorizontal2 size={15} aria-hidden="true" />Flip</button>
           <button type="button" title="Flip vertically (V)" aria-pressed={!!token.flipY} onClick={act(t => flipToken(t, "y"))}><FlipVertical2 size={15} aria-hidden="true" />Flip</button>
           <span className="token-bar-sep" />
-          <button type="button" title="Smaller ( - )" aria-label="Smaller" disabled={token.size <= 0.25} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, -1)))}><Minus size={15} aria-hidden="true" /></button>
-          <span className="token-bar-value" aria-live="polite">{sizeLabel(token.size)}</span>
-          <button type="button" title="Bigger ( = )" aria-label="Bigger" disabled={token.size >= 20} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, 1)))}><Plus size={15} aria-hidden="true" /></button>
+          <button type="button" title="Smaller ( - ) · Shift + scroll to resize" aria-label="Smaller" disabled={token.size <= 0.25} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, -1)))}><Minus size={15} aria-hidden="true" /></button>
+          <span className="token-bar-value" aria-live="polite" title="Shift + scroll to resize">{sizeLabel(token.size)}</span>
+          <button type="button" title="Bigger ( = ) · Shift + scroll to resize" aria-label="Bigger" disabled={token.size >= 20} onClick={act((t, grid) => resizeToken(t, grid, stepSize(t.size, 1)))}><Plus size={15} aria-hidden="true" /></button>
           {(token.facing !== undefined || token.flipX || token.flipY) && <><span className="token-bar-sep" /><button type="button" className="token-bar-reset" title="Face up again, unflipped" onClick={act(t => resetTransform(t))}>Reset</button></>}
         </div>;
       })()}
