@@ -768,6 +768,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setEffectTemplate(null);
     if(next!=="pan")setGridAdjust(false);
     setTool(next);
+    if(next!=="select")setArmed(null);
     if(next!=="marquee")setSelectedIds([]);
     setPlayer(false);
     if(next!=="select")setFogSelectedIndices([]);
@@ -858,7 +859,17 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     return id;
   };
   const pictureLook = (c: EncyclopediaCharacter, assetId: string) => c.picture ? { assetId, ...tokenImageFit(c.picture), borderColor: c.picture.ring ?? roleColor[c.role], size: c.picture.squares ?? 1 } : {};
-  const addEncyclopediaToken = async (c: EncyclopediaCharacter, point?: Point) => {
+  // Placing the same character twice quickly waits for the first run, so it finds the preset the first one made.
+  const encyclopediaRuns = useRef(new Map<string, Promise<void>>());
+  const addEncyclopediaToken = (c: EncyclopediaCharacter, point?: Point) => {
+    const runs = encyclopediaRuns.current;
+    const run = (runs.get(c.id) ?? Promise.resolve()).then(() => addEncyclopediaTokenNow(c, point));
+    const tail = run.catch(() => undefined);
+    runs.set(c.id, tail);
+    void tail.then(() => { if (runs.get(c.id) === tail) runs.delete(c.id); });
+    return run;
+  };
+  const addEncyclopediaTokenNow = async (c: EncyclopediaCharacter, point?: Point) => {
     if (!scene || player) return;
     const existing = state.current?.tokenLibrary.find(t => t.name === c.name && (state.current?.libraryCampaigns[t.id] ?? null) === campaignId);
     if (existing) {
@@ -891,8 +902,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // On a phone the gallery covers the map, so arming a token puts it away to leave the map free to tap.
   const armToken = (a: ArmedToken | null) => { setArmed(a); if (a && window.innerWidth <= 900) setTokenGalleryOpen(false); };
   const disarmPlacement = useCallback(() => setArmed(null), []);
-  const armedToken = armed?.source === "library" ? workspace?.tokenLibrary.find(t => t.id === armed.id) : undefined;
-  const armedFace = armed && workspace ? <TokenFace token={armedToken ?? { ...newToken(armed.name), disposition: armed.side ?? "neutral", sideColours: true }} workspace={workspace} campaignId={campaignId} initials={tokenInitials(armed.name)} size={40} /> : null;
+  // Only armed while it can be placed: on a scene, in GM view, with the select tool, and (for a saved token) still in the library.
+  const armedNow = armed && scene && !player && tool === "select" && (armed.source !== "library" || workspace?.tokenLibrary.some(t => t.id === armed.id)) ? armed : null;
+  const armedToken = armedNow?.source === "library" ? workspace?.tokenLibrary.find(t => t.id === armedNow.id) : undefined;
+  const armedFace = armedNow && workspace ? <TokenFace token={armedToken ?? { ...newToken(armedNow.name), disposition: armedNow.side ?? "neutral", sideColours: true }} workspace={workspace} campaignId={campaignId} initials={tokenInitials(armedNow.name)} size={40} /> : null;
   // Quick token asks which side it is on first; Enemy is picked to start.
   const startQuickToken = () => { setSelectedIds([]); setQuickSide("enemy"); setQuickOpen(true); setPanel("tokens"); setSidebar(true); setTool("select"); setPlayer(false); };
   const addToken = (side: TokenSide) => {
@@ -1971,6 +1984,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               className={player ? "active" : ""}
               onClick={() => {
                 setPlayer(!player);
+                setArmed(null);
                 setSelected(null);
               }}
               aria-label={player?"Player view":"GM view"} title="Preview exactly what players see"
@@ -1980,7 +1994,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </button>
           </div>
           {saveRecovery}
-          {!player && <ArmedPlacement armed={armed} disarm={disarmPlacement} face={armedFace}/>}
+          {!player && <ArmedPlacement armed={armedNow} active={tool === "select"} disarm={disarmPlacement} face={armedFace}/>}
           {imageError && (
             <div className="error-banner" role="alert">
               {imageError}
@@ -2130,7 +2144,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Any system. Your rules.</span>
           </footer>
         </section>
-        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-tabs" role="tablist" aria-label="Token sources"><button role="tab" aria-selected={galleryTab==="saved"} onClick={()=>setGalleryTab("saved")}>Saved tokens</button><button role="tab" aria-selected={galleryTab==="encyclopedia"} onClick={()=>setGalleryTab("encyclopedia")}>From the Encyclopedia</button></div><div className="token-gallery-content">{galleryTab==="saved"?<TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} armed={armed} setArmed={armToken} onMakeToken={()=>setDialog("token")} save={manualSave}/>:<EncyclopediaTokens disabled={!scene} onAdd={c=>addEncyclopediaToken(c)} campaignId={activeCampaignId} coGm={!!member} workspace={workspace} armed={armed} setArmed={armToken}/>}</div></ResizableSidebar>}
+        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-tabs" role="tablist" aria-label="Token sources"><button role="tab" aria-selected={galleryTab==="saved"} onClick={()=>setGalleryTab("saved")}>Saved tokens</button><button role="tab" aria-selected={galleryTab==="encyclopedia"} onClick={()=>setGalleryTab("encyclopedia")}>From the Encyclopedia</button></div><div className="token-gallery-content">{galleryTab==="saved"?<TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} armed={armedNow} setArmed={armToken} onMakeToken={()=>setDialog("token")} save={manualSave}/>:<EncyclopediaTokens disabled={!scene} onAdd={c=>addEncyclopediaToken(c)} campaignId={activeCampaignId} coGm={!!member} workspace={workspace} armed={armedNow} setArmed={armToken}/>}</div></ResizableSidebar>}
       </div>
       <input
         hidden

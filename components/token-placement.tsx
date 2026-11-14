@@ -63,7 +63,7 @@ export function TokenTile({ face, name, title, armed, gesture, tools, tint }: {
   face: ReactNode; name: string; title: string; armed: boolean; gesture: ReturnType<ReturnType<typeof usePlacementGesture>["bind"]>; tools?: ReactNode; tint?: string;
 }) {
   return <div className="token-tile" data-armed={armed || undefined} data-side={tint}>
-    <button type="button" className="token-tile-main" aria-pressed={armed} title={title} aria-label={`${armed ? "Stop placing" : "Place"} ${name}`} {...gesture}>
+    <button type="button" className="token-tile-main" aria-pressed={armed} title={title} aria-label={`Place ${name}`} {...gesture}>
       {face}<span className="token-tile-name">{name || "Unnamed"}</span>
     </button>
     {tools && <div className="token-tile-tools">{tools}</div>}
@@ -74,9 +74,9 @@ export function TokenTile({ face, name, title, armed, gesture, tools, tint }: {
  * Over the map while a token is armed: the pill that says what a click does, and a ghost that follows the pointer.
  * A click on the board places through the same drop channel as dragging; Shift keeps the token armed. Escape or Stop disarms.
  */
-export function ArmedPlacement({ armed, disarm, face }: { armed: ArmedToken | null; disarm: () => void; face: ReactNode }) {
+export function ArmedPlacement({ armed, disarm, face, active = true }: { armed: ArmedToken | null; disarm: () => void; face: ReactNode; active?: boolean }) {
   const ghost = useRef<HTMLDivElement>(null);
-  const armedId = armed?.id ?? null;
+  const armedId = active ? armed?.id ?? null : null;
   useEffect(() => {
     if (!armedId) return;
     const onBoard = (target: EventTarget | null) => target instanceof HTMLCanvasElement && target.dataset.libraryTokenDrop === "true";
@@ -86,7 +86,14 @@ export function ArmedPlacement({ armed, disarm, face }: { armed: ArmedToken | nu
       event.preventDefault(); event.stopPropagation();
       if (!event.shiftKey) disarm();
     };
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); disarm(); } };
+    // Escape belongs to an open dialog, menu or text field first; only take it when none of those is in use.
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const focus = document.activeElement;
+      if (focus instanceof HTMLElement && (focus.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName))) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [aria-modal="true"], dialog[open]')) return;
+      event.stopPropagation(); disarm();
+    };
     const move = (event: PointerEvent) => {
       const node = ghost.current; if (!node) return;
       const over = onBoard(event.target);
@@ -98,7 +105,7 @@ export function ArmedPlacement({ armed, disarm, face }: { armed: ArmedToken | nu
     window.addEventListener("pointermove", move); document.addEventListener("pointerleave", leave);
     return () => { window.removeEventListener("pointerdown", down, true); window.removeEventListener("keydown", key, true); window.removeEventListener("pointermove", move); document.removeEventListener("pointerleave", leave); };
   }, [armedId, disarm]);
-  if (!armed) return null;
+  if (!armed || !active) return null;
   return <>
     <div className="armed-pill" role="status">
       <span>Click the map to place <strong>{armed.name || "token"}</strong></span>

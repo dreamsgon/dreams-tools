@@ -14,7 +14,7 @@ import { MovementCard, RidingCard, LayerCard } from "./token-position";
 import { OnTheMapCard, FineLayout } from "./token-display-controls";
 import { HitPointsCard, StateCard, InitiativeCard, StatsCard } from "./token-combat";
 import { address, type Scene, type Token, type Workspace } from "@/lib/model";
-import { resolveTokenForCampaign, tokenDisposition, usesSideColours, type TokenSide } from "@/lib/token-defaults";
+import { resolveTokenForCampaign, tokenDisposition, sidePatch, usesSideColours, type TokenSide } from "@/lib/token-defaults";
 import { resizeToken, sizeLabel, stepSize } from "@/lib/token-transform";
 import { conditionAge } from "@/lib/initiative-tracker";
 
@@ -61,7 +61,7 @@ export default function TokenEditor(p: TokenEditorProps) {
     if (mode === "scene" && p.updateScene) p.updateScene(s => { const t = s.tokens.find(x => x.id === token.id); if (t) resizeToken(t, s.grid, size); });
     else p.patch({ size });
   };
-  const setSide = (next: TokenSide) => p.patch({ disposition: next, sideColours: true, ...(token.assetId ? { useDispositionColor: true } : {}) });
+  const setSide = (next: TokenSide) => p.patch(sidePatch(token, next));
   const setSideColours = (on: boolean) => p.patch(on ? { sideColours: true }
     : { sideColours: false, color: look.color, borderColor: look.borderColor ?? look.color, textColor: look.textColor ?? "#ffffff" });
 
@@ -116,7 +116,10 @@ export default function TokenEditor(p: TokenEditorProps) {
           {workspace.conditions.map(c => {
             const on = token.conditions.includes(c.id), age = conditionAge(token, c.id, round);
             return <button key={c.id} type="button" className={on ? "active" : ""} aria-pressed={on} onClick={() => p.patch({ conditions: on ? token.conditions.filter(id => id !== c.id) : [...token.conditions, c.id] })}>
-              <span style={{ background: c.color }}>{c.assetId ? /* eslint-disable-next-line @next/next/no-img-element */ <img className="condition-icon-image" src={workspace.assets.find(a => a.id === c.assetId)?.src} alt="" /> : c.icon}</span>
+              <span style={{ background: c.color }}>{c.assetId ? <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="condition-icon-image" src={workspace.assets.find(a => a.id === c.assetId)?.src} alt="" />
+              </> : c.icon}</span>
               {c.name}{on && <small> · {age === null ? "round added unknown" : `${age} rounds`}</small>}
             </button>;
           })}

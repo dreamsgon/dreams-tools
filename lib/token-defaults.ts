@@ -37,6 +37,11 @@ export function usesSideColours(token: Token): boolean {
   return token.color.toLowerCase() === LEGACY_DEFAULT_FILL && !token.borderColor && !token.textColor;
 }
 
+/** What changing a token's side patches: custom colours stay custom unless the token already follows its side's colours. */
+export function sidePatch(token: Token, next: TokenSide): Partial<Token> {
+  return { disposition: next, ...(usesSideColours(token) ? { sideColours: true } : {}), ...(token.assetId ? { useDispositionColor: true } : {}) };
+}
+
 /** Fill, ring and text for a token that uses side colours, else null. Campaign defaults may replace a side's fill (ring derived). */
 export function tokenSideLook(workspace: Workspace, campaignId: string | null | undefined, token: Token): { fill: string; ring: string; text: string } | null {
   if (!usesSideColours(token)) return null;

@@ -271,8 +271,9 @@ export default function Board(p: Props) {
       const z = uiZoom(), box = target.getBoundingClientRect();
       const point = libraryTokenDropPoint({ x: detail.clientX / z, y: detail.clientY / z }, { left: box.left / z, top: box.top / z }, view,
         bounds ?? { x: 0, y: 0, width: p.scene.width, height: p.scene.height });
-      if (!point || p.scene.tokens.length >= 500) return;
+      if (!point) return;
       event.preventDefault();
+      if (p.scene.tokens.length >= 500) { if (!detail.previewOnly) setNotice("This scene has the most tokens it can hold."); return; }
       if (!detail.previewOnly) p.onLibraryTokenDrop?.(detail.tokenId, point);
     };
     target.addEventListener(LIBRARY_TOKEN_DROP, drop);

@@ -4,7 +4,7 @@ import {initialWorkspace,newToken} from '../lib/model.ts';
 import {filterGalleryTokens,galleryGroups,GALLERY_SIDES,roleSide} from '../lib/token-gallery.ts';
 import {toggleArmed,armedAfterPlacing,encyclopediaPlacementId,encyclopediaEntryOf,armedPrompt} from '../lib/token-arming.ts';
 import {contrastRatio,formatContrast,readable} from '../lib/contrast.ts';
-import {SIDE_COLOURS} from '../lib/token-defaults.ts';
+import {SIDE_COLOURS,sidePatch} from '../lib/token-defaults.ts';
 
 function world(){
  const w=initialWorkspace();
@@ -44,7 +44,7 @@ test('groups: folders in tree order with counts, then loose tokens; narrowing hi
  assert.deepEqual(galleryGroups(folders,[],{},true),[]);
 });
 test('a token whose folder is not listed is still shown, in no folder',()=>{
- const {w,ayla}=world();
+ const {ayla}=world();
  const groups=galleryGroups([],[ayla],{[ayla.id]:'gone'},false);
  assert.deepEqual(groups.map(g=>[g.name,g.tokens.length]),[['Not in a folder',1]]);
 });
@@ -74,4 +74,12 @@ test('contrast helper matches known values and flags poor colours',()=>{
  assert.equal(formatContrast(4.49),'4.4 : 1');
  for(const c of Object.values(SIDE_COLOURS)) assert.ok(readable(contrastRatio('#ffffff',c.fill)));
  assert.equal(contrastRatio('white','#000000'),contrastRatio('#xyz','#000000'));
+});
+test('changing side keeps custom colours, and only keeps side colours that were already on',()=>{
+ const custom={...newToken('Custom'),sideColours:false,color:'#123456'};
+ assert.deepEqual(sidePatch(custom,'enemy'),{disposition:'enemy'});
+ const following={...newToken('Following'),sideColours:true};
+ assert.deepEqual(sidePatch(following,'ally'),{disposition:'ally',sideColours:true});
+ const picture={...newToken('Picture'),assetId:'a1'};
+ assert.deepEqual(sidePatch(picture,'party'),{disposition:'party',useDispositionColor:true});
 });

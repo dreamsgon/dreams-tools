@@ -32,7 +32,7 @@ export const roleColor={pc:"#3f6f9a",companion:"#5f7d4a",npc:"#8f5a3c",creature:
  */
 export default function EncyclopediaTokens({disabled,onAdd,campaignId,coGm,workspace,armed,setArmed}:{disabled:boolean;onAdd:(c:EncyclopediaCharacter)=>void|Promise<void>;campaignId?:string|null;coGm?:boolean;workspace:Workspace;armed:ArmedToken|null;setArmed:(a:ArmedToken|null)=>void}){
  const [raw,setRaw]=useState<EncyclopediaRaw|null>(null),[all,setAll]=useState(()=>{try{return localStorage.getItem(ALL_KEY)==="1";}catch{return false;}}),[error,setError]=useState(""),[query,setQuery]=useState(""),[added,setAdded]=useState("");
- const gesture=usePlacementGesture(token=>{if(!disabled)setArmed(toggleArmed(armed,token));});
+ const gesture=usePlacementGesture(token=>{if(disabled){setAdded("Open a scene to place tokens.");return;}setArmed(toggleArmed(armed,token));});
  useEffect(()=>{const controller=new AbortController();
   loadEncyclopedia(true).then(raw=>{if(!controller.signal.aborted)setRaw(raw);})
    .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
@@ -57,7 +57,7 @@ export default function EncyclopediaTokens({disabled,onAdd,campaignId,coGm,works
   {error?<p className="ency-token-hint" role="alert">{error}</p>:!list?<p className="ency-token-hint">Loading characters…</p>:!shown.length?<p className="ency-token-hint">{list.length?"No characters match.":scoped?"No characters in this campaign yet. Use “Show other campaigns and worlds” to bring in characters from elsewhere.":"No characters in your Encyclopedia yet."}</p>:
    worlds.map(w=><section className="gallery-group" key={w} aria-label={w}>{worlds.length>1&&<h3 className="ency-token-world-heading"><span>{w}</span></h3>}
     <div className="token-tile-grid">{shown.filter(c=>c.world===w).map(c=><TokenTile key={c.id} armed={armed?.id===encyclopediaPlacementId(c.id)} name={c.name} tint={roleSide[c.role]}
-     title={`${c.name}${c.origin?` (${c.origin})`:""}. ${c.detail}. Click, then click the map to place it, or drag it onto the map.`}
+     title={disabled?"Open a scene to place tokens":`${c.name}${c.origin?` (${c.origin})`:""}. ${c.detail}. Click, then click the map to place it, or drag it onto the map.`}
      gesture={gesture.bind({id:encyclopediaPlacementId(c.id),name:c.name,source:"encyclopedia",side:roleSide[c.role]})} face={face(c)}
      tools={<button type="button" disabled={disabled} aria-label={`Add ${c.name} token`} title="Add to the middle of the map" onClick={()=>void add(c)}><Plus size={12}/></button>}/>)}</div></section>)}
   <p className="gallery-hint">Click a character, then click the map. Or drag it straight on. A character&apos;s picture comes with it; the rest use their side&apos;s colours (player characters Party, companions Allies, NPCs Neutral, creatures Enemy). The token is also saved to your token library.</p>
