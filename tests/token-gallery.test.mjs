@@ -83,3 +83,12 @@ test('changing side keeps custom colours, and only keeps side colours that were 
  const picture={...newToken('Picture'),assetId:'a1'};
  assert.deepEqual(sidePatch(picture,'party'),{disposition:'party',useDispositionColor:true});
 });
+
+test('a saved token placed again gets the next number', async () => {
+  const { placedName } = await import('../lib/token-clipboard.ts');
+  assert.equal(placedName('Goblin', ['Bram']), 'Goblin');
+  assert.equal(placedName('Goblin', ['Goblin']), 'Goblin 2');
+  assert.equal(placedName('Goblin', ['Goblin', 'Goblin 2']), 'Goblin 3');
+  assert.equal(placedName('Dock Rat', ['Dock Rat 1', 'Dock Rat 2']), 'Dock Rat 3');
+  assert.equal(placedName('Dock Rat', ['Dock Rats 1']), 'Dock Rat');
+});

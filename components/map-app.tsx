@@ -92,7 +92,7 @@ import { resolvedToken, SIDE_COLOURS, type TokenSide } from "@/lib/token-default
 import { sceneInitials, tokenInitials } from "@/lib/token-initials";
 import { roleSide } from "@/lib/token-gallery";
 import { encyclopediaEntryOf, type ArmedToken } from "@/lib/token-arming";
-import { TOKEN_CLIPBOARD_KEY, copyTokens } from "@/lib/token-clipboard";
+import { TOKEN_CLIPBOARD_KEY, copyTokens, placedName } from "@/lib/token-clipboard";
 import ResizableSidebar from "./resizable-sidebar";
 import { FolderPreferenceScope } from "./folder-expansion";
 import SceneOrganizer, { LocationOptions } from "./scene-organizer";
@@ -846,7 +846,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const placeLibraryToken = (t: Workspace["tokenLibrary"][number], point?: Point) => {
     if (!scene || player) return;
     const copy={...structuredClone(t),id:uid(),sourceLibraryId:t.id,conditionRounds:{},attachedToId:null,...snap(point??{x:scene.width/2,y:scene.height/2},scene.grid,t.size)};
-    updateScene(s=>s.tokens.push(copy));setSelected(copy.id);setTool("select");setPlayer(false);
+    // Placing a saved token again numbers it (Goblin, Goblin 2), so every token keeps its own initials.
+    updateScene(s=>{copy.name=placedName(t.name,s.tokens.map(x=>x.name));s.tokens.push(copy);});setSelected(copy.id);setTool("select");setPlayer(false);
   };
   // Tokens from Encyclopedia characters live only in Maptable's data; a same-named library token in this campaign is reused.
   // A character's picture is copied into Maptable's assets once, framed the way its page frames the token.
