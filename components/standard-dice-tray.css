@@ -69,3 +69,7 @@
 .standard-dice-dock .standard-dice-tray .tray-oracle-tension button{width:30px;height:30px;padding:0}
 .tray-oracle-tension b{min-width:18px;text-align:center;font-size:16px;font-variant-numeric:tabular-nums}
 .standard-dice-dock .standard-dice-tray .tray-oracle .tray-roll{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+/* Right-click or long-press removes a die, so keep the browser's menu, callout and text selection off the dice buttons. */
+.tray-dice button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+/* The optional roll name sits on its own row above the formula and Roll button. */
+.standard-dice-tray form:has(.tray-roll-name){flex-wrap:wrap}.standard-dice-tray form label.tray-roll-name{flex:1 1 100%;order:-1}

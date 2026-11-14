@@ -155,6 +155,7 @@ Updated 2026-11-13. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Members and groups, part 3c: co-GMs who can edit pages add pictures in the Encyclopedia. The upload goes into the GM's storage, marked as added for that campaign, and a save only accepts new pictures marked for it.
 - [ ] Later for co-GMs: a limit on pictures they add to the GM's storage (Maptable and Encyclopedia), and clearing out ones never saved; the campaign hub page for co-GMs.
 - [ ] Members and groups, part 5: the campaign forum, using the forum permissions.
+- [x] Dice tray: right-click a die (or long-press it on a phone) to remove one, the reverse of clicking it (2d6 becomes 1d6). In a campaign scene, an optional Roll name for Discord ("Attack on goblin") becomes the title of the roll's Discord card, for Post and Always; a name typed after rolling applies when you press Post. The name shows in the tray history and roll log. Helpers and tests in `lib/dice-tray.ts` and `tests/dice-tray.test.mjs`; no saved-data change.
 
 ## Map acceptance and maintenance
 
