@@ -4,11 +4,11 @@ import { UserRound } from "lucide-react";
 type Tool = "maptable" | "encyclopedia";
 
 /** The RPG Tools wordmark and the Maptable / Encyclopedia tabs, shared by both tools' headers. */
-export default function ToolSwitch({ active, encyclopediaHref = "/encyclopedia" }: { active: Tool; encyclopediaHref?: string }) {
+export default function ToolSwitch({ active, maptableHref = "/maptable", encyclopediaHref = "/encyclopedia" }: { active: Tool; maptableHref?: string; encyclopediaHref?: string }) {
   return <div className="tool-switch">
     <Link href="/" className="tool-switch-brand" title="RPG Tools home"><span className="tool-switch-mark" aria-hidden="true" />RPG Tools</Link>
     <nav aria-label="RPG tools">
-      <a href="/maptable" aria-current={active === "maptable" ? "page" : undefined}>Maptable</a>
+      <a href={maptableHref} aria-current={active === "maptable" ? "page" : undefined}>Maptable</a>
       <a href={encyclopediaHref} aria-current={active === "encyclopedia" ? "page" : undefined}>Encyclopedia</a>
     </nav>
   </div>;

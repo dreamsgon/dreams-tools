@@ -42,3 +42,17 @@ test("deleted or unknown places fall back instead of opening nothing", () => {
   assert.deepEqual(read("?world=w1&view=calendar"), { worldId: "w1", campaignId: null, view: "dashboard", entryId: null });
   assert.deepEqual(read("?world=w1&view=nonsense"), { worldId: "w1", campaignId: null, view: "dashboard", entryId: null });
 });
+
+test("?maptable= opens the Encyclopedia campaign paired with that Maptable campaign", () => {
+  const paired = { ...data, campaigns: [{ id: "c0", worldId: "w1", name: "Other" }, { id: "c1", worldId: "w2", name: "Camp", maptableCampaignId: "m 1/x" }] };
+  const from = (search) => placeFromQuery(new URLSearchParams(search), paired);
+  assert.deepEqual(from(`?maptable=${encodeURIComponent("m 1/x")}`), { worldId: "w2", campaignId: "c1", view: "overview", entryId: null });
+  assert.deepEqual(from("?maptable=m%201%2Fx&campaign=c0"), { worldId: "w1", campaignId: "c0", view: "overview", entryId: null });
+  assert.deepEqual(from("?entry=e2&maptable=m%201%2Fx"), { worldId: "w1", campaignId: null, view: "overview", entryId: "e2" });
+});
+
+test("an unmatched ?maptable= is the same as no parameter", () => {
+  assert.equal(read("?maptable=nope"), null);
+  assert.deepEqual(read("?maptable=nope&world=w1"), read("?world=w1"));
+  assert.deepEqual(read("?maptable=nope&campaign=c1"), read("?campaign=c1"));
+});

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         const scoped = await coGmWorkspace(grant);
         if (!scoped)
             return json({ error: coGmGone }, 404);
-        return json({ ...scoped, member: { ownerName: grant.ownerName, role: grant.role, campaignId: grant.campaignId, edit: grant.edit } });
+        return json({ ...scoped, member: { ownerName: grant.ownerName, role: grant.role, campaignId: grant.campaignId, edit: grant.edit, maps: grant.maps } });
     }
     catch {
         return json({ error: "Could not open this campaign." }, 500);
