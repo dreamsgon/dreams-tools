@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, BookMarked, CalendarDays, Check, Copy, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, MessagesSquare, Users, BookMarked, CalendarDays, Check, Copy, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
 import { dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, moveWidget, resizeWidget, toggleWidget, type Dashboard, type DashWidget } from "@/lib/encyclopedia/dashboard";
@@ -15,9 +15,11 @@ import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
 import { campaignTargets } from "@/lib/tags";
+import CampaignMembers, { type MembersView } from "./campaign-members";
 import "./campaign-hub.css";
 
-type Tab = "dashboard" | "front";
+type Tab = "dashboard" | "front" | "members";
+const tabParam = (): Tab => { const t = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"); return t === "front" || t === "members" ? t : "dashboard"; };
 const notesHref = (id: string, view?: string) => `/encyclopedia?campaign=${encodeURIComponent(id)}${view ? `&view=${view}` : ""}`;
 const mapsHref = (id: string) => `/maptable?campaign=${encodeURIComponent(id)}`;
 const entryHref = (id: string) => `/encyclopedia?entry=${encodeURIComponent(id)}`;
@@ -31,7 +33,8 @@ const post = async (body: object, failed: string): Promise<CampaignHub> => {
 /** One campaign across both tools: a header, a Dashboard for the GM and the Front page players see. */
 export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const [hub, setHub] = useState<CampaignHub | null>(null), [error, setError] = useState("");
-  const [tab, setTab] = useState<Tab>(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "front" ? "front" : "dashboard"), [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<Tab>(tabParam), [editing, setEditing] = useState(false);
+  const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
   const [draft, setDraft] = useState<Dashboard | null>(null), [saveError, setSaveError] = useState("");
   const saves = useRef(0);
   useEffect(() => {
@@ -43,10 +46,22 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load this campaign."));
     return () => { live = false; };
   }, [campaignKey]);
+  // Members belong to the campaign's notes, so a Maptable-only campaign has none.
+  const notesId = hub?.row.encyclopedia?.id;
+  useEffect(() => {
+    if (!notesId) return;
+    let live = true;
+    fetch(`/api/members?campaignId=${encodeURIComponent(notesId)}`, { cache: "no-store" }).then(async r => {
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || "Could not load the members.");
+      if (live) setMembers(body);
+    }).catch(e => live && setMembersError(e instanceof Error ? e.message : "Could not load the members."));
+    return () => { live = false; };
+  }, [notesId]);
   function choose(next: Tab) {
     setTab(next); setEditing(false); setDraft(null);
     const url = new URL(window.location.href);
-    if (next === "front") url.searchParams.set("tab", "front"); else url.searchParams.delete("tab");
+    if (next !== "dashboard") url.searchParams.set("tab", next); else url.searchParams.delete("tab");
     window.history.replaceState(null, "", url);
   }
   /** Shows the change at once, then saves it. Only the newest save's answer is kept. */
@@ -91,13 +106,17 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       <div role="tablist" aria-label="Campaign">
         <button role="tab" aria-selected={tab === "dashboard"} onClick={() => choose("dashboard")}><LayoutDashboard size={16} aria-hidden="true" />Dashboard</button>
         <button role="tab" aria-selected={tab === "front"} onClick={() => choose("front")}><House size={16} aria-hidden="true" />Front page</button>
+        {e && <button role="tab" aria-selected={tab === "members"} onClick={() => choose("members")}><Users size={16} aria-hidden="true" />Members{members && <span className={`mem-count${members.requests.length ? " mem-count-warn" : ""}`} title={members.requests.length ? `${members.requests.length} asking to join` : undefined}>{members.requests.length ? members.requests.length : members.members.length + 1}</span>}</button>}
+        {e && <span className="hub-tab-later" aria-disabled="true"><MessagesSquare size={16} aria-hidden="true" />Forum<small>Coming later</small></span>}
         {m && <a href={mapsHref(m.id)}>Maps<ArrowUpRight size={13} aria-hidden="true" /></a>}
         {e && <a href={notesHref(e.id)}>Notes<ArrowUpRight size={13} aria-hidden="true" /></a>}
       </div>
     </div>
     {saveError && <p className="hub-error" role="alert">{saveError}</p>}
     <div className="hub-body" role="tabpanel">
-      {tab === "dashboard" ? draft
+      {tab === "members" ? !e ? <NoNotes /> : members ? <CampaignMembers campaignId={e.id} view={members} setView={setMembers} />
+        : <p className={membersError ? "hub-error" : "hub-muted"}>{membersError || "Loading members…"}</p>
+        : tab === "dashboard" ? draft
         ? <Customize hub={hub} draft={draft} setDraft={setDraft} />
         : <DashboardView hub={hub} layout={layout} save={save} saveFront={saveFront} customize={e ? () => setDraft(layout) : undefined} />
         : !hub.front || !hub.frontConfig ? <NoNotes /> : editing

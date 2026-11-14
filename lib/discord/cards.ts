@@ -4,7 +4,7 @@
  */
 import type { Embed, Post } from "./send.ts";
 
-export const colors = { roll: 0x1f6f68, enemy: 0xc0392b, crit: 0xe0a030, fumble: 0x80848e, initiative: 0x1f6f68, map: 0x3d6fb6, narration: 0x8e6cc4, recap: 0x5f6870, test: 0x1f6f68, table: 0x3d6fb6, oracle: 0x8e6cc4 };
+export const colors = { roll: 0x1f6f68, enemy: 0xc0392b, crit: 0xe0a030, fumble: 0x80848e, initiative: 0x1f6f68, map: 0x3d6fb6, narration: 0x8e6cc4, recap: 0x5f6870, members: 0xb8441f, test: 0x1f6f68, table: 0x3d6fb6, oracle: 0x8e6cc4 };
 const line = (s: string, max: number) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 /** Discord markdown would turn * _ ~ ` | > into styling; dice details should read as written. */
 const literal = (s: string) => s.replace(/([\\*_~`|>#[\]()-])/g, "\\$1");
@@ -66,7 +66,7 @@ export function mapPost(sceneName: string, caption: string, fileName: string): P
   return { embeds: [{ color: colors.map, title: line(sceneName, 200), ...(text ? { description: text } : {}), image: { url: `attachment://${fileName}` } }] };
 }
 
-export function textPost(kind: "narration" | "recap", text: string, title?: string): Post {
+export function textPost(kind: "narration" | "recap" | "members", text: string, title?: string): Post {
   return { embeds: [{ color: colors[kind], ...(title?.trim() ? { title: line(title, 200) } : {}), description: text.trim().slice(0, 4000) }] };
 }
 
