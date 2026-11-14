@@ -159,3 +159,33 @@ test('reward pages, the reward eye and GM prep: players never get prep or a hidd
   const far={id:'far',worldId:'demo-world',campaignId:'demo-campaign-two',parentId:null,title:'Far',kind:'note',body:'',updatedAt:now};
   assert.equal(workspaceSchema.safeParse({...s,entries:[...s.entries,far].map(e=>e.id==='bell'?{...e,quest:{...e.quest,rewardIds:['far']}}:e)}).success,false);
 });
+
+test('connections: worked out from the quest, one row per page with every reason, grouped and kept in the campaign', async () => {
+  const {questConnections}=await import('../lib/encyclopedia/quest-connections.ts');
+  const page=(id,title,kind,campaignId='demo-campaign',body='')=>({id,worldId:'demo-world',campaignId,parentId:null,title,kind,body,updatedAt:now});
+  const bell={...quest('bell','active',{giverId:'demo-mara',placeId:'demo-greyhaven',rewardIds:['amulet'],linkIds:['inn'],
+    objectives:[{id:'a',text:'Find Arin',done:false,verb:'Find',targetId:'arin',whereId:'demo-greyhaven'},{id:'b',text:'Meet Mara',done:false,verb:'Meet',targetId:'demo-mara'}],
+    log:[{id:'l',at:now,text:'They met [[arin|Arin]] at the inn.',players:true}],prep:'The [[choir|Choir]] is real.'}),body:'Ask at [[Loose threads]].'};
+  const s=world([bell,page('arin','Arin Vale','character'),page('amulet','Bell-ward amulet','note'),page('inn','The Gull','place'),page('choir','The Drowned Choir','faction'),
+    page('recap','Session 12','session','demo-campaign','We took on [[bell|the bell quest]].'),page('elsewhere','Elsewhere','note','demo-campaign-two','[[bell]]')]);
+  const got=questConnections(s,s.entries.find(e=>e.id==='bell'));
+  const rows=Object.fromEntries(got.map(c=>[c.entry.id,c.reasons.map(r=>r.label)]));
+  assert.deepEqual(rows['demo-mara'],['Gave it','Goal 2']);
+  assert.deepEqual(rows['demo-greyhaven'],['Goal 1','Where']);
+  assert.deepEqual(rows.arin,['Goal 1','In the log']);
+  assert.deepEqual(rows.amulet,['Reward']);
+  assert.deepEqual(rows.inn,['Linked']);
+  assert.deepEqual(rows.choir,['In GM prep']);
+  assert.deepEqual(rows['demo-threads'],['In the journal'],'a link by title resolves too');
+  assert.deepEqual(rows.recap,['Mentions it']);
+  assert.equal(rows.elsewhere,undefined,'another campaign’s page never shows');
+  assert.equal(rows.bell,undefined,'not itself');
+  assert.deepEqual([...new Set(got.map(c=>c.group))],['people','places','things']);
+  assert.deepEqual(got.filter(c=>c.group==='people').map(c=>c.entry.id),['demo-mara','arin','choir'],'who gave it first, then goals, then the rest');
+  // Linked pages stay in the campaign, and players and a players-only AI never get them.
+  assert.equal(workspaceSchema.safeParse({...s,entries:s.entries.map(e=>e.id==='bell'?{...e,quest:{...e.quest,linkIds:['elsewhere']}}:e)}).success,false);
+  const shared={...s,entries:s.entries.map(e=>e.id==='bell'?{...e,overviewVisibility:'players'}:e)};
+  assert.equal(playerCampaign(shared,'demo-campaign').entries.find(e=>e.id==='bell').quest.linkIds,undefined);
+  const {playersBook}=await import('../lib/mcp/players-only.ts');
+  assert.equal(playersBook(shared,'demo-campaign').entries.find(e=>e.id==='bell').quest.linkIds,undefined);
+});

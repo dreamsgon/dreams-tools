@@ -8,6 +8,8 @@ import {ArticleBody} from './article-body';
 import {Face,GoalBar,QuestGoals} from './quest-goals';
 import {QuestFacts,QuestPrep} from './quest-facts';
 import {QuestLogPanel} from './quest-log';
+import {QuestConnections} from './quest-connections';
+import {questConnections} from '@/lib/encyclopedia/quest-connections';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 /** 'all', or a quest category id. */
@@ -109,9 +111,10 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
  const [editing,setEditing]=useState(false),cats=questCategories(campaign??data.campaigns.find(c=>c.id===entry.campaignId));
  // The board passes its own dialog; a quest's own page shows one here.
  const editCategories=onEditCategories??(campaign&&change?()=>setEditing(true):undefined);
- const [tab,setTab]=useState<'overview'|'log'|'gm'>('overview');
+ const [tab,setTab]=useState<'overview'|'log'|'connections'|'gm'>('overview');
  const q=quest(entry),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
+ const connected=questConnections(data,{...entry,quest:q}).length;
  const shared=entry.overviewVisibility==='players';
  return <div className="quest-detail">
   <div className="quest-detail-chips">
@@ -125,6 +128,7 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
   <div className="quest-tabs" role="tablist" aria-label="Quest">
    <button role="tab" aria-selected={tab==='overview'} onClick={()=>setTab('overview')}>Overview</button>
    <button role="tab" aria-selected={tab==='log'} onClick={()=>setTab('log')}>Log{q.log.length>0&&<span className="count">{q.log.length}</span>}</button>
+   <button role="tab" aria-selected={tab==='connections'} onClick={()=>setTab('connections')}>Connections{connected>0&&<span className="count">{connected}</span>}</button>
    <button role="tab" aria-selected={tab==='gm'} onClick={()=>setTab('gm')}><Lock size={13} className="lock"/> GM</button>
   </div>
   {tab==='overview'&&<div className="quest-overview">
@@ -135,6 +139,7 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
    <QuestFacts entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>
   </div>}
   {tab==='log'&&<QuestLogPanel entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
+  {tab==='connections'&&<QuestConnections entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {tab==='gm'&&<QuestPrep entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {editing&&campaign&&change&&<QuestCategoriesDialog data={data} worldId={entry.worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </div>;
