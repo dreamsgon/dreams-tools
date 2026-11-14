@@ -276,7 +276,8 @@ export const maptableLinks=(text:string)=>[...text.matchAll(MAPTABLE_LINK)].map(
 export function playerText(text:string){return playerInline(stripSecrets(text).replace(MAPTABLE_LINK,(_,_id,label)=>(label??"").trim()));}
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
 // `mine` are pages a signed-in member may edit (their Who can edit): they read those as if shared with players.
-export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<string>){
+// `linker` is that member's key (player-sheet.ts linkerKey): they also see a sheet they linked themselves on their own page, even while the stats are GM only.
+export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<string>,linker?:string){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  // A draft recap never reaches players, whatever its tabs say.
  const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
@@ -287,7 +288,8 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
    const shareOrg=(e.kind==='faction'&&e.org?.visibility==='players')||(e.kind==='character'&&e.profile?.visibility==='players');
-   const sheet=showStats&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
+   const ownSheet=!!linker&&!!mine?.has(e.id)&&e.character?.sheet?.linkedById===linker;
+   const sheet=(showStats||ownSheet)&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];

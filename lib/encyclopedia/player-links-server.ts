@@ -4,6 +4,9 @@ import { MemberStore } from '../members-server';
 import { EncyclopediaStore } from './store';
 import { playerCampaign } from './world-model';
 import { myPages } from './player-edit';
+import { linkerKey, sheetStates } from './player-sheet';
+import { sendEncyclopediaPost } from './discord-send';
+import type { Deps as SheetDeps } from './player-sheet-request';
 export { hashToken } from './store';
 export const createPlayerLink = (owner:string,campaign:string) => new EncyclopediaStore(getBucket()).createLink(owner,campaign);
 export const revokePlayerLink = (owner:string,campaign:string) => new EncyclopediaStore(getBucket()).revokeLink(owner,campaign);
@@ -31,5 +34,14 @@ export type MemberRights = NonNullable<Awaited<ReturnType<MemberStore['rightsAs'
 export async function readMemberView(r:MemberRights) {
   const { data } = await new EncyclopediaStore(getBucket()).read(r.owner);
   if (!data.campaigns.some(c=>c.id===r.campaignId)) return null;
-  return { ...playerCampaign(data,r.campaignId,r.rights.edit), you:{ name:r.name, pages:myPages(data,r.campaignId,r.rights) } };
+  const linker = linkerKey(r.owner,r.campaignId,r.userId);
+  return { ...playerCampaign(data,r.campaignId,r.rights.edit,linker), you:{ name:r.name, pages:myPages(data,r.campaignId,r.rights), sheets:sheetStates(data,r.campaignId,r.rights,linker) } };
 }
+
+/** What the player sheet and player roll routes need: the signed-in member (rights read again), the stored workspace and the Discord post. */
+export const playerSheetDeps = (sameOrigin:(r:Request)=>boolean): SheetDeps => ({
+  sameOrigin,
+  member: async ref => { const { rights, signedOut } = await memberRights(ref); return signedOut ? 'signedOut' : rights },
+  store: { read: owner => new EncyclopediaStore(getBucket()).read(owner), save: (owner,data,revision,who) => new EncyclopediaStore(getBucket()).saveTagged(owner,data,revision,who) },
+  post: (m,post) => sendEncyclopediaPost(getBucket(),m.owner,m.campaignId,post),
+});

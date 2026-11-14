@@ -127,7 +127,7 @@ test('the roll list is built from a sheet: skills, saves, attacks, other', () =>
  assert.deepEqual(names(by('Skills')),['Initiative','Stealth','Perception'],'a +bonus value alone is not a roll unless its kind is roll');
  assert.deepEqual(names(by('Saves')),['Dexterity save']);
  const bow=by('Attacks').rows.find(r=>r.name==='Longbow');
- assert.deepEqual(bow.buttons,[{label:'Attack',formula:'1d20+7',rollName:'Longbow attack'},{label:'Damage',formula:'1d8+4',rollName:'Longbow damage'}]);
+ assert.deepEqual(bow.buttons,[{label:'Attack',itemId:'r11',formula:'1d20+7',rollName:'Longbow attack'},{label:'Damage',itemId:'r12',formula:'1d8+4',rollName:'Longbow damage'}]);
  assert.deepEqual(by('Attacks').rows.find(r=>r.name==='Sneak attack').buttons.map(b=>b.label),['Damage']);
  assert.deepEqual(names(by('Other')),['Heal']);
  assert.ok(!JSON.stringify(groups).includes('Broken'),'a formula that is not dice is left out');

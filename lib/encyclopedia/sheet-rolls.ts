@@ -6,7 +6,7 @@
 import { parseDice, isSingleD20 } from "../rolls.ts";
 import type { PlayerSheet } from "./sheet-link.ts";
 
-export type SheetRollButton = { label: string; formula: string; /** The name the roll goes by in the log and on Discord, such as "Longbow attack". */ rollName: string };
+export type SheetRollButton = { label: string; /** The sheet item it rolls, so the server can find the formula itself. */ itemId: string; formula: string; /** The name the roll goes by in the log and on Discord, such as "Longbow attack". */ rollName: string };
 export type SheetRollRow = { id: string; name: string; buttons: SheetRollButton[] };
 export type SheetRollGroup = { title: "Skills" | "Saves" | "Attacks" | "Other"; rows: SheetRollRow[] };
 
@@ -42,10 +42,10 @@ export function sheetRollGroups(sheet: Pick<PlayerSheet, "items">): SheetRollGro
       const key = pair[1].toLowerCase(), part = pair[2].toLowerCase() === "attack" ? "Attack" : "Damage";
       let row = pairs.get(key);
       if (!row) { row = { id: e.id, name: pair[1], buttons: [] }; pairs.set(key, row); groups.Attacks.push(row); }
-      if (!row.buttons.some(b => b.label === part)) row.buttons.push({ label: part, formula: e.formula, rollName: e.name });
+      if (!row.buttons.some(b => b.label === part)) row.buttons.push({ label: part, itemId: e.id, formula: e.formula, rollName: e.name });
       continue;
     }
-    const row: SheetRollRow = { id: e.id, name: e.name, buttons: [{ label: e.name, formula: e.formula, rollName: e.name }] };
+    const row: SheetRollRow = { id: e.id, name: e.name, buttons: [{ label: e.name, itemId: e.id, formula: e.formula, rollName: e.name }] };
     if (/\bsav(e|es|ing)\b/i.test(e.name)) groups.Saves.push(row);
     else if (/\b(strike|shot)\b/i.test(e.name)) groups.Attacks.push(row);
     else if (isSingleD20(e.formula)) groups.Skills.push(row);

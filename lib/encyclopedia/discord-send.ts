@@ -6,7 +6,7 @@
 import type { S3Bucket } from "../storage.ts";
 import { loadWorkspace } from "../workspace-storage.ts";
 import { EncyclopediaStore } from "./store.ts";
-import { discordRollSchema, discordTarget } from "./discord-roll.ts";
+import { discordRollSchema, discordTarget, ownPicture } from "./discord-roll.ts";
 import { parseDice } from "../rolls.ts";
 import type { Workspace } from "./world-model.ts";
 import { oraclePost, rollPost, rollerName, tablePost, textPost } from "../discord/cards.ts";
@@ -17,7 +17,7 @@ import type { DiscordFile, Post } from "../discord/send.ts";
 import { campaignScenes } from "../agent-maps.ts";
 
 export type EncyclopediaPost =
-  | { kind: "roll"; ai?: boolean; title: string; formula: string; total: number; detail: string; who?: string; natural?: number | null }
+  | { kind: "roll"; ai?: boolean; title: string; formula: string; total: number; detail: string; who?: string; natural?: number | null; /** A player's roll: the picture is this page's own, or none. Never looked up by name. */ avatarOf?: string }
   | { kind: "narration" | "recap" | "members"; text: string; title?: string }
   | { kind: "table"; result: TableResult };
 
@@ -47,7 +47,8 @@ export async function sendEncyclopediaPost(bucket: S3Bucket, owner: string, camp
   if (post.kind === "roll") {
     parseDice(post.formula);
     const who = post.who?.trim() || rollerName(post.title) || undefined;
-    const avatar = who ? await avatarFor(bucket, owner, data, campaignId, who, maptable, target.maptableCampaignId) : null;
+    const own = post.avatarOf === undefined ? undefined : ownPicture(data, campaignId, post.avatarOf);
+    const avatar = post.avatarOf !== undefined ? (own ? await pictureAvatar(bucket, owner, own) : null) : who ? await avatarFor(bucket, owner, data, campaignId, who, maptable, target.maptableCampaignId) : null;
     if (avatar) files = [avatar];
     const title = who && post.title.toLocaleLowerCase().startsWith(who.toLocaleLowerCase()) ? post.title.slice(who.length).replace(/^\s*[·—–:-]\s*/, "") || "Roll" : post.title;
     card = rollPost({ title, formula: post.formula, total: post.total, detail: post.detail, who, avatar: !!avatar, natural: post.natural, footer: post.ai ? "Rolled by the AI" : undefined });
