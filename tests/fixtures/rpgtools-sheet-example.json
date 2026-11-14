@@ -1,0 +1,61 @@
+{
+  "format": "rpgtools-sheet",
+  "version": 1,
+  "system": "D&D 5e (2014)",
+  "name": "Maren Ashford",
+  "role": "pc",
+  "summary": "Level 5 half-elf ranger who guards the Thornwood roads",
+  "tags": ["Ranger 5", "Half-elf"],
+  "traits": ["Stubborn", "Loyal", "Quiet"],
+  "location": "Thornwood",
+  "faction": "Wardens of the Road",
+  "core": {
+    "hp": { "value": 38, "max": 44, "label": "Hit points" },
+    "ac": { "value": 15, "label": "Armor Class" },
+    "initiative": { "formula": "1d20+3" },
+    "speed": "30 ft"
+  },
+  "fields": [
+    { "section": "Details", "label": "Class", "type": "text", "value": "Ranger" },
+    { "section": "Details", "label": "Level", "type": "number", "value": 5 },
+    { "section": "Details", "label": "Proficiency bonus", "type": "number", "value": 3 },
+    { "section": "Abilities", "label": "Strength", "type": "number", "value": 1, "roll": "d20" },
+    { "section": "Abilities", "label": "Dexterity", "type": "number", "value": 3, "roll": "d20" },
+    { "section": "Abilities", "label": "Constitution", "type": "number", "value": 2, "roll": "d20" },
+    { "section": "Abilities", "label": "Intelligence", "type": "number", "value": 0, "roll": "d20" },
+    { "section": "Abilities", "label": "Wisdom", "type": "number", "value": 2, "roll": "d20" },
+    { "section": "Abilities", "label": "Charisma", "type": "number", "value": -1, "roll": "d20" },
+    { "section": "Senses", "label": "Passive Perception", "type": "number", "value": 15 },
+    { "section": "Senses", "label": "Darkvision", "type": "text", "value": "60 ft" }
+  ],
+  "gauges": [
+    { "label": "Spell slots, 1st", "value": 3, "max": 4, "shape": "pips", "colour": "blue" },
+    { "label": "Spell slots, 2nd", "value": 2, "max": 2, "shape": "pips", "colour": "blue" },
+    { "label": "Hit dice (d10)", "value": 4, "max": 5, "shape": "pips", "colour": "amber" }
+  ],
+  "rolls": [
+    { "name": "Perception", "group": "skills", "formula": "1d20+5" },
+    { "name": "Stealth", "group": "skills", "formula": "1d20+6" },
+    { "name": "Survival", "group": "skills", "formula": "1d20+5" },
+    { "name": "Strength save", "group": "saves", "formula": "1d20+4" },
+    { "name": "Dexterity save", "group": "saves", "formula": "1d20+6" },
+    { "name": "Longbow", "group": "attacks", "attack": "1d20+8", "damage": "1d8+3", "damageType": "piercing", "notes": "150/600 ft, Archery style" },
+    { "name": "Shortsword", "group": "attacks", "attack": "1d20+6", "damage": "1d6+3", "damageType": "piercing" },
+    { "name": "Cure Wounds", "group": "spells", "damage": "1d8+2", "notes": "healing, touch, 1st-level slot" }
+  ],
+  "lists": [
+    { "title": "Features", "items": [
+      { "name": "Favored foe", "text": "Marks a creature she hits; the first hit each turn deals an extra [[1d4|Favored foe]].", "uses": { "value": 2, "max": 2, "per": "long rest" } },
+      { "name": "Extra Attack", "text": "Attacks twice when she takes the Attack action." }
+    ] },
+    { "title": "Inventory", "items": [
+      { "name": "Longbow", "equipped": true },
+      { "name": "Arrows", "quantity": 34 },
+      { "name": "Potion of healing", "quantity": 2, "text": "Drink to regain [[2d4+2|Healing]] HP." }
+    ] }
+  ],
+  "conditions": [],
+  "notes": "Grew up in a toll-keeper's house on the old Thornwood road. Owes a favour to the miller at Ashford.",
+  "unmapped": ["Languages: Common, Elvish, Sylvan (no field for this yet)"],
+  "source": { "from": "D&D Beyond PDF export", "filledBy": "ChatGPT" }
+}

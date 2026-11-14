@@ -73,6 +73,7 @@ export function linkSheet(s: Workspace, campaignId: string, rights: Rights, link
   mineOrNone(e, linker);
   const parsed = sheetSchema.safeParse(input.sheet);
   if (!parsed.success) return no(parsed.error.issues[0]?.message ?? 'That sheet can’t be saved.', 400);
+  if (parsed.data.source === 'import') no('Only the GM can import a sheet for now. Link a Google Sheet instead.', 400);
   if (!parsed.data.items.length) no('Pick at least one cell or row to read.', 400);
   let base = parsed.data;
   // A published link is read by the server, so the stored values and template rows come from the sheet, not from the browser.

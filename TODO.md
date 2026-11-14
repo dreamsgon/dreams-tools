@@ -62,6 +62,19 @@ Updated 2026-11-14. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Check part 4 in a browser with a real Google project (write, conflict message, sign-in prompt after the token ends).
 - [ ] Verify part 1 with a real Google Cloud project (consent screen, picker, Sheets API) and a real published sheet, including a published document with several tabs, and note any Content-Security-Policy needs if one is added.
 
+## Sheet import and VTT bridges
+
+Plan: one system-agnostic character format (`rpgtools-sheet`, version 1) that an AI app fills and every bridge converts to and from. Build order: AI import, export, bridge keys and API, Foundry module (characters and tokens, then the Encyclopedia, scenes, quests, tables and calendar), D&D Beyond link import (unofficial), Roll20 Mod script and Fantasy Grounds extension (copy and file routes). A future Unreal Engine VTT should use the same bridge API, so nothing there may be Foundry-only. Demiplane is out (no API or export).
+
+- [x] Part 1, character gauges: already done as character trackers (above).
+- [x] Part 2, AI sheet import: Characters › Import sheet (new character) and a character's sheet section › Import a sheet / Import again (update). The dialog copies a prompt for ChatGPT or Claude with the game system and the campaign's stat form, so the AI reuses the field names; reads the pasted reply or an uploaded .json (code fences and chat around the JSON ignored, numbers as text and long strings tolerated); and shows a check step: token slots, every field matched to the stat form by name (ignoring case and punctuation) with Use / Add as new / Don't import, trackers, rolls, tabs, traits, and what the AI couldn't place. Importing puts fields on the campaign's stat form (new ones in their section, player visible for a PC, GM only otherwise), gauges into trackers (pips over 20 become a bar; same name updates), HP, AC, initiative, speed and rolls into an imported sheet (`character.sheet` with the new `source: "import"`, items without cells; "X attack" and "X damage" pair up), lists into page tabs, traits into Profile chips, summary and notes into an empty overview, and unplaced items and conditions into a GM-only Not imported tab. An update changes only what the file has; a linked Google Sheet is never replaced. Dice the roller can't read are left out and listed. Players can't store an imported sheet (`linkSheet` refuses it). Logic in `lib/encyclopedia/sheet-import.ts`, UI in `components/encyclopedia/sheet-import-dialog.tsx`, tests in `tests/sheet-import.test.mjs` with the example in `tests/fixtures/rpgtools-sheet-example.json`. Checked in a browser with a local preview page at desktop and phone width (not with a signed-in account).
+- [ ] Imported sheet: HP − / + on the page and from Maptable tokens (today HP changes only by importing again), and conditions onto linked tokens.
+- [ ] Part 3: Export sheet (download a character as `rpgtools-sheet` JSON).
+- [ ] Part 4: Bridge keys and a bridge API (campaign-scoped, separate from AI keys; characters, pages, quests, scenes and tables by revision, HP and conditions, rolls).
+- [ ] Parts 5 and 6: Foundry module (characters, tokens, HP, initiative and rolls; then journals, quests, recaps, scenes, map notes, rollable tables and calendar). Ask the owner which Foundry calendar module they use and whether fog syncs.
+- [ ] Part 7: D&D Beyond link import, marked unofficial. Part 8: Roll20 Mod script and Fantasy Grounds extension.
+- [ ] Field references in formulas (version 2 of the format), so a skill can follow its ability.
+
 ## Owner setup and deployment
 
 - [x] Publish application source at the root of the owner's public `dreamsgon/dreams-tools` repository on `main`.

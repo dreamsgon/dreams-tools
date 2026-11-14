@@ -146,7 +146,7 @@ function CellPicker({read,current,base,onSave,onClose,onBack,player}:{read:Sheet
     requestAnimationFrame(()=>gridRef.current?.querySelector<HTMLElement>(`[data-r="${row}"][data-c="${col}"]`)?.focus());
   }
   const textAt=(s:Slot|null)=>s?cellText(read.tabs,cellRef(s.col,s.row,s.tab))??'':'';
-  const pickedAt=new Set(items.flatMap(i=>{const m=/^(?:'((?:[^']|'')+)'|([^'!]+))!([A-Z]+)(\d+)$/.exec(i.cell);return m?[`${(m[1]??m[2]).replace(/''/g,"'")}|${m[3]}${m[4]}`]:[];}));
+  const pickedAt=new Set(items.flatMap(i=>{const m=/^(?:'((?:[^']|'')+)'|([^'!]+))!([A-Z]+)(\d+)$/.exec(i.cell??"");return m?[`${(m[1]??m[2]).replace(/''/g,"'")}|${m[3]}${m[4]}`]:[];}));
 
   function click(col:number,row:number){
     const slot={tab:tab.name,col,row};
