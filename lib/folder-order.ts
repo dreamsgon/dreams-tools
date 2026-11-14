@@ -33,3 +33,18 @@ export function dropPlace(offsetY: number, height: number): "before" | "inside" 
   const ratio = height > 0 ? offsetY / height : .5;
   return ratio < .25 ? "before" : ratio > .75 ? "after" : "inside";
 }
+
+/**
+ * Sorts each group of folders that share a parent into `compare` order, keeping every group in the array slots it already had.
+ * Used once, to turn a name-sorted display into a saved order before the first manual move. Only folders passing `shown` are touched.
+ */
+export function sortSiblings<T extends Ordered>(list: T[], compare: (a: T, b: T) => number, shown: (f: T) => boolean = () => true): T[] {
+  const groups = new Map<string | null, number[]>();
+  list.forEach((f, i) => { if (shown(f)) { const k = f.parentId ?? null; groups.set(k, [...(groups.get(k) ?? []), i]); } });
+  const next = list.slice();
+  for (const slots of groups.values()) {
+    const sorted = slots.map(i => list[i]).sort(compare);
+    slots.forEach((slot, n) => { next[slot] = sorted[n]; });
+  }
+  return next;
+}

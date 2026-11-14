@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Folder, FolderOpen, Plus, BookOpen, ChevronDown, ChevronRight, ChevronUp, GripVertical, Pencil, Pin, Settings2, Map as MapIcon } from "lucide-react";
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 import { uid, collectionPath, canMoveCollection, type Workspace, type Collection } from "@/lib/model";
+import { altStep } from "./folder-reorder";
 import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "@/lib/folder-order";
 
 type Props = {
@@ -200,7 +201,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   </button>{onSettings && <button className="organizer-scene-settings" aria-label={`Settings for ${s.name}`} title="Scene settings" onClick={() => { setLocation(s.containerId); onSettings(s.id); }}><Settings2 size={15}/></button>}</div>;
   const toggle = (id: string) => setClosed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const collectionButton = (c: Collection, searched = false) => <>
-    <button className="collection-primary" aria-expanded={c.kind === "folder" ? !closed.has(c.id) : undefined} onClick={() => c.kind === "campaign" ? (dashboard ? openCampaign?.(c.id) : setLocation(c.id)) : toggle(c.id)}>
+    <button className="collection-primary" aria-expanded={c.kind === "folder" && !searched ? !closed.has(c.id) : undefined} onClick={() => c.kind === "campaign" ? (dashboard ? openCampaign?.(c.id) : setLocation(c.id)) : searched ? setLocation(c.id) : toggle(c.id)}>
       {c.kind === "campaign" ? <BookOpen size={18} /> : closed.has(c.id) ? <Folder size={18} /> : <FolderOpen size={18} />}
       <span><strong>{searched ? collectionPath(w.collections, c.id) : c.name}</strong>{dashboard && c.id === lastCampaignId && <em className="collection-badge">Last opened</em>}<small>{c.kind === "campaign" ? (dashboard ? countLabel(sceneCount(c.id), "scene") : "Open campaign →") : `${w.collections.filter(child => child.parentId === c.id).length + w.scenes.filter(scene => scene.containerId === c.id).length} items`}</small></span>
     </button>
@@ -211,7 +212,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     {w.collections.filter((c) => c.parentId === parentId && (dashboard || c.kind !== "campaign")).map((c) => <div key={c.id} data-kind={c.kind} {...(c.kind === "folder" ? dropProps(c.id) : {})} data-dragging={moving?.id===c.id || undefined}>
       <div {...(c.kind === "folder" ? dropProps(c.id) : {})} className={"organizer-row " + (location === c.id ? "active" : "")}
         onClick={c.kind === "folder" ? (e) => { if (!(e.target as HTMLElement).closest("button, input, a")) toggle(c.id); } : undefined}
-        onKeyDown={(e) => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); reorder(c.id, e.key === "ArrowUp" ? -1 : 1); } }}>
+        onKeyDown={(e) => { const d = altStep(e); if (d) reorder(c.id, d); }}>
         {grip({kind:"collection",id:c.id,name:c.name})}
         {c.kind === "folder" && <button aria-label={`${closed.has(c.id) ? "Expand" : "Collapse"} ${c.name}`} aria-expanded={!closed.has(c.id)} onClick={() => setClosed((old) => {
           const next = new Set(old); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next;

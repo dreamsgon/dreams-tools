@@ -1,5 +1,5 @@
 "use client";
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "@/lib/folder-order";
 import { altStep } from "./folder-reorder";
 import { ArrowUpRight, ChevronDown, ChevronRight, CornerDownRight, EyeOff, Folder, FolderPlus, Globe2, Map as MapIcon, MapPin, Mountain, Pencil, Search, ChevronUp, Swords, Trash2 } from "lucide-react";
@@ -40,7 +40,8 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
   // Markers on other maps in this campaign that open this one.
   const backLinks = targets.flatMap(map=>map.pointsOfInterest.filter(p=>p.targetSceneId===scene.id).map(p=>({map,point:p})));
   const patch = (values:Partial<PointOfInterest>) => { if(selected) update(current=>{const point=current.pointsOfInterest.find(p=>p.id===selected.id);if(point)Object.assign(point,values);}); };
-  const drag = (event:DragEvent,type:"point"|"folder",id:string) => {event.stopPropagation();event.dataTransfer.effectAllowed="move";event.dataTransfer.setData(DRAG_TYPE,JSON.stringify({sceneId:scene.id,type,id}));setDragging(true);};
+  const dragKind = useRef<"point"|"folder"|null>(null);
+  const drag = (event:DragEvent,type:"point"|"folder",id:string) => {dragKind.current=type;event.stopPropagation();event.dataTransfer.effectAllowed="move";event.dataTransfer.setData(DRAG_TYPE,JSON.stringify({sceneId:scene.id,type,id}));setDragging(true);};
   const drop = (event:DragEvent,folderId:string|null) => {
     event.preventDefault();event.stopPropagation();setDragging(false);
     try { const item=JSON.parse(event.dataTransfer.getData(DRAG_TYPE));if(item.sceneId!==scene.id)return;
@@ -50,7 +51,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
   const q = query.trim().toLowerCase();
   const matches = (point:PointOfInterest) => !q || pointName(point).toLowerCase().includes(q) || (linkedName(point)??"").toLowerCase().includes(q);
   // Dropping a folder on the top or bottom edge of another folder row puts it before or after that row; the middle puts it inside.
-  const edgeOf = (event:DragEvent,folder:{id:string;parentId:string|null}) => {const rect=event.currentTarget.getBoundingClientRect();const place=dropPlace(event.clientY-rect.top,rect.height);return place==="inside"?null:{id:folder.id,place};};
+  const edgeOf = (event:DragEvent,folder:{id:string;parentId:string|null}) => {if(dragKind.current!=="folder")return null;const rect=event.currentTarget.getBoundingClientRect();const place=dropPlace(event.clientY-rect.top,rect.height);return place==="inside"?null:{id:folder.id,place};};
   const rowOver = (event:DragEvent,folder:{id:string;parentId:string|null}) => {const next=edgeOf(event,folder);if(next?.id!==edge?.id||next?.place!==edge?.place)setEdge(next);};
   const rowDrop = (event:DragEvent,folder:{id:string;parentId:string|null}) => {
     const place=edgeOf(event,folder);setEdge(null);

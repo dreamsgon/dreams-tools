@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
+import { altStep } from "./folder-reorder";
 import { canMoveSibling, dropPlace } from "@/lib/folder-order";
 import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
@@ -175,7 +176,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             toggle={() => toggleFolder(item.folder.id)} startRename={() => { setRenaming(item.folder.id); setRemoving(null); }} startRemove={() => { setRemoving(item.folder.id); setRenaming(null); }}
             stop={() => { setRenaming(null); setRemoving(null); }} send={send} filtered={filtered}
             drag={dragProps({ type: "folder", id: item.folder.id })} drops={folderDrops(item.folder)} edge={edge?.id === item.folder.id ? edge.place : undefined}
-            canStep={d => canMoveSibling(folders, item.folder.id, d)} step={d => void send({ action: "stepFolder", folderId: item.folder.id, delta: d }, `Moved “${item.folder.name}” ${d < 0 ? "up" : "down"}.`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
+            canStep={d => !filtered && canMoveSibling(folders, item.folder.id, d)} step={d => void send({ action: "stepFolder", folderId: item.folder.id, delta: d }, `Moved “${item.folder.name}” ${d < 0 ? "up" : "down"}.`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
             className={`campaigns-row${r.key === selectedKey ? " selected" : ""}${drag?.type === "campaign" && drag.key === r.key ? " dragging" : ""}`} style={{ "--depth": item.depth } as React.CSSProperties}>
             <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
             <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
@@ -269,7 +270,7 @@ function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, sta
   const Icon = open ? FolderOpen : Folder;
   return <div role="row" className={`campaigns-row campaigns-folder-row${over ? " over" : ""}${dragging ? " dragging" : ""}`} style={{ "--depth": depth } as React.CSSProperties} data-drop-edge={edge} {...drag} {...drops}
     onClick={e => { if (!filtered && !renaming && !(e.target as HTMLElement).closest("button, input, a, form")) toggle(); }}
-    onKeyDown={e => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); const d = e.key === "ArrowUp" ? -1 : 1; if (canStep(d) && !busy) step(d); } }}>
+    onKeyDown={e => { const d = altStep(e); if (d && canStep(d) && !busy) step(d); }}>
     <span role="cell" className="campaigns-folder-main">
       <button type="button" className="campaigns-icon campaigns-chevron" onClick={toggle} disabled={filtered} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>
       <Icon size={18} aria-hidden="true" className="campaigns-folder-icon" />

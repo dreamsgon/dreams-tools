@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "../lib/folder-order.ts";
+import { moveSibling, canMoveSibling, placeBeside, dropPlace, sortSiblings } from "../lib/folder-order.ts";
 
 const f = (id, parentId = null) => ({ id, parentId, name: id });
 const ids = list => list.map(x => x.id).join(",");
@@ -43,4 +43,10 @@ test("moveSibling skips neighbours the list does not show", () => {
   const list = [{ id: "a", parentId: null, kind: "folder" }, { id: "camp", parentId: null, kind: "campaign" }, { id: "b", parentId: null, kind: "folder" }];
   const next = moveSibling(list, "b", -1, x => x.kind === "folder");
   assert.equal(ids(next), "b,camp,a");
+});
+test("sortSiblings sorts each group in the slots it already had and leaves the rest", () => {
+  const list = [f("z"), { id: "camp", parentId: null, kind: "campaign" }, f("a"), f("y", "a"), f("b", "a")];
+  const next = sortSiblings(list, (x, y) => x.id.localeCompare(y.id), x => x.kind !== "campaign");
+  assert.equal(ids(next), "a,camp,z,b,y");
+  assert.equal(ids(list), "z,camp,a,y,b", "the input is not changed");
 });

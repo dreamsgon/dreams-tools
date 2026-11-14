@@ -9,7 +9,13 @@ export function edgeAtPoint(x: number, y: number, attr: string, allowed: (target
   return place === "inside" ? null : { id, place };
 }
 
-/** Alt+Up / Alt+Down on a focused row. Returns -1 or 1, or 0 for any other key. */
-export function altStep(e: { altKey: boolean; key: string }): -1 | 0 | 1 {
-  return e.altKey ? (e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0) : 0;
+/**
+ * Alt+Up / Alt+Down on a focused folder row: returns -1 or 1 and claims the key (so the breadcrumbs' Alt+Up
+ * shortcut on the window does not also fire), or 0 for any other key or when the key came from a text field.
+ */
+export function altStep(e: { altKey: boolean; key: string; target: EventTarget | null; preventDefault: () => void; stopPropagation: () => void }): -1 | 0 | 1 {
+  const step = e.altKey ? (e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0) : 0;
+  if (!step || (e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable='true']")) return 0;
+  e.preventDefault(); e.stopPropagation();
+  return step;
 }

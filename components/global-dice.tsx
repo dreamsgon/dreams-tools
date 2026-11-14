@@ -11,7 +11,7 @@ const StandardDiceTray = dynamic(() => import("./standard-dice-tray"), { ssr: fa
 
 /** Pages that already carry their own dice tray or have no tools to roll with. */
 export function hasOwnDice(pathname: string | null) {
-  return !!pathname && (pathname === "/maptable" || pathname.startsWith("/maptable/") || pathname.startsWith("/auth"));
+  return !!pathname && (pathname === "/maptable" || pathname.startsWith("/maptable/") || pathname === "/auth" || pathname.startsWith("/auth/"));
 }
 
 /**
@@ -20,10 +20,13 @@ export function hasOwnDice(pathname: string | null) {
  */
 export default function GlobalDice() {
   const pathname = usePathname();
-  const [panel, setPanel] = useState<DicePanel>(null);
+  // The open panel belongs to the route it was opened on; on another route it reads as closed (no effect needed).
+  const [open, setOpen] = useState<{ panel: DicePanel; path: string | null }>({ panel: null, path: pathname });
+  const panel = open.path === pathname ? open.panel : null;
+  const setPanel = (next: DicePanel) => setOpen({ panel: next, path: pathname });
   const [used, setUsed] = useState(false);
   if (hasOwnDice(pathname)) return null;
-  const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(p => p === next ? null : next); };
+  const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(panel === next ? null : next); };
   return <>
     <div className="global-dice" role="group" aria-label="Dice">
       <button type="button" aria-expanded={panel === "dice"} aria-controls="standard-dice-tray" title="Dice tray" onClick={() => toggle("dice")}><Dices size={18} aria-hidden="true" /><span>Dice</span></button>

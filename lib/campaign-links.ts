@@ -1,6 +1,7 @@
 import type { Workspace as MapWorkspace } from "./model";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model";
 import { scenesInOrder } from "./scene-order.ts";
+import { sortSiblings } from "./folder-order.ts";
 
 /**
  * One campaign list across Maptable and the Encyclopedia.
@@ -74,10 +75,11 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"> | null, book: BookWorkspace): CampaignSummary {
+export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace): CampaignSummary {
   const maps = mapCampaigns(map), books = bookCampaigns(book);
   const mapById = new Map(maps.map(m => [m.id, m])), used = new Set<string>();
-  const folders = campaignFolders(map?.collections), folderIds = new Set(folders.map(f => f.id));
+  // Folders list by name until someone re-orders them by hand; after that the saved order is kept.
+  const found = campaignFolders(map?.collections), folders = map?.campaignFoldersOrdered ? found : sortSiblings(found, byName), folderIds = new Set(folders.map(f => f.id));
   const parentOf = new Map((map?.collections ?? []).map(c => [c.id, c.parentId]));
   const inFolder = (id: string | null | undefined) => id && folderIds.has(id) ? id : null;
   const bookFolders = new Map(book.campaigns.map(c => [c.id, c.folderId]));

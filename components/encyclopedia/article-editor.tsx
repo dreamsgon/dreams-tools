@@ -1,5 +1,5 @@
 "use client";
-import {useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {ArrowUp,ArrowDown,BookOpen,Pencil,Plus,Trash2,Eye,EyeOff,Users,Lock,History,LayoutTemplate,ListOrdered,Map as MapIcon,ArrowUpRight,Link as LinkIcon,Sparkles} from 'lucide-react';
 import {workspaceSchema,canParent,compareEntries,defaultCharacter,folderPath,newId,reorderEntry,maptableLinks,type Entry,type Workspace,type Campaign,type ArticleTab} from '@/lib/encyclopedia/world-model';
 import {MapEditor} from './map-editor';
@@ -29,7 +29,7 @@ import {OrgProfile} from './org-profile';
 import {orgOf} from '@/lib/encyclopedia/org-profile';
 import {CharacterProfile} from './character-profile';
 import {profileOf} from '@/lib/encyclopedia/character-profile';
-type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:(parent?:string)=>void;onForm:()=>void;onTag?:(tag:Tag)=>void;initialTab?:string;onTab?:(id:string)=>void};
+type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:(parent?:string)=>void;onForm:()=>void;onTag?:(tag:Tag)=>void;initialTab?:string;onTab?:(id:string|null)=>void};
 export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onRename,onDelete,onNew,onForm,onTag,initialTab,onTab}:Props){
  const [selected,setSelected]=useState(initialTab||(entry.kind==='map'?'map':entry.kind==='faction'?'profile':'overview')),[details,setDetails]=useState(false),[tabDialog,setTabDialog]=useState<'new'|'rename'|null>(null),[notice,setNotice]=useState('');
  const pick=(id:string)=>{setSelected(id);onTab?.(id);};
@@ -39,7 +39,10 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  const battleMaps=[entry.body,...custom.map(t=>t.body)].flatMap(maptableLinks).filter((m,i,all)=>all.findIndex(x=>x.sceneId===m.sceneId)===i);
  const world=data.worlds.find(w=>w.id===entry.worldId),org=entry.kind==='faction'?orgOf(entry,world):undefined,profile=entry.kind==='character'?profileOf(entry,world):undefined;
  const tabs=[...(entry.mapData?[{id:'map',title:'Map',visibility:entry.mapData.visibility}]:[]),...(org||profile?[{id:'profile',title:'Profile',visibility:(org??profile)!.visibility}]:[]),{id:'overview',title:recap?'Recap':'Overview',visibility:entry.overviewVisibility??'gm'},...(recap?[{id:'recap-timeline',title:'Timeline',visibility:recap.shareTimeline?'players' as const:'gm' as const},{id:'recap-quotes',title:'Quotes',visibility:recap.shareQuotes?'players' as const:'gm' as const},{id:'recap-gm',title:'GM notes',visibility:'gm' as const}]:[]),...(entry.kind==='session'?[{id:'recap-transcript',title:'Transcript',visibility:'gm' as const}]:[]),...(entry.kind==='character'?[{id:'statblock',title:'Statblock',visibility:'gm' as const},{id:'stats',title:'Stats',visibility:character.statsVisibility}]:[]),...custom];
- const active=tabs.find(t=>t.id===selected)??tabs[0],tab=custom.find(t=>t.id===active.id),isMap=active.id==='map',isProfile=!!(org||profile)&&active.id==='profile',isStats=active.id==='stats',isStatblock=active.id==='statblock',isGmNotes=!!recap&&active.id==='recap-gm',gmOnly=isStatblock||(!!recap&&active.id==='overview')||active.id==='recap-gm'||active.id==='recap-transcript',body=isGmNotes?recap!.gmNotes:tab?.body??entry.body,bodyLimit=isGmNotes?20000:100000;
+ const active=tabs.find(t=>t.id===selected)??tabs[0];
+ // A ?tab= from the address that this page does not have is dropped from it.
+ useEffect(()=>{if(initialTab&&!tabs.some(t=>t.id===initialTab))onTab?.(null);});
+ const tab=custom.find(t=>t.id===active.id),isMap=active.id==='map',isProfile=!!(org||profile)&&active.id==='profile',isStats=active.id==='stats',isStatblock=active.id==='statblock',isGmNotes=!!recap&&active.id==='recap-gm',gmOnly=isStatblock||(!!recap&&active.id==='overview')||active.id==='recap-gm'||active.id==='recap-transcript',body=isGmNotes?recap!.gmNotes:tab?.body??entry.body,bodyLimit=isGmNotes?20000:100000;
  const setBody=(body:string)=>isGmNotes?update({recap:{...recap!,gmNotes:body.slice(0,20000)}}):tab?update({tabs:custom.map(t=>t.id===tab.id?{...t,body}:t)}):update({body});
  const setVisibility=(visibility:'gm'|'players')=>isProfile&&org?update({org:{...org,visibility}}):isProfile&&profile?update({profile:{...profile,visibility}}):recap&&active.id==='recap-timeline'?update({recap:{...recap,shareTimeline:visibility==='players'}}):recap&&active.id==='recap-quotes'?update({recap:{...recap,shareQuotes:visibility==='players'}}):isMap&&entry.mapData?update({mapData:{...entry.mapData,visibility}}):isStats?update({character:{...character,statsVisibility:visibility}}):tab?update({tabs:custom.map(t=>t.id===tab.id?{...t,visibility}:t)}):update({overviewVisibility:visibility});
  // Wraps the selected lines (or a placeholder) in a "::: secret" block that players never receive.

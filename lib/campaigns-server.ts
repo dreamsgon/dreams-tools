@@ -9,7 +9,7 @@ import { dashboardSchema, excerpt } from "./encyclopedia/dashboard.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
-import { moveSibling, placeBeside } from "./folder-order.ts";
+import { moveSibling, placeBeside, sortSiblings } from "./folder-order.ts";
 import { applyPairs, campaignFolders, campaignSummary, cleanName } from "./campaign-links.ts";
 
 /*
@@ -73,6 +73,12 @@ export type CampaignAction =
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
 
+/** Before the first hand-made order the page lists folders by name: save that order so a move starts from what was on screen. */
+function namedOrder(map: MapWorkspace): MapWorkspace {
+  if (map.campaignFoldersOrdered) return map;
+  const ids = new Set(campaignFolders(map.collections).map(f => f.id));
+  return { ...map, collections: sortSiblings(map.collections, (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }), c => ids.has(c.id)) };
+}
 /** A campaign folder that exists, from an id in a request. */
 function folderOf(map: MapWorkspace, id: unknown) {
   const folder = campaignFolders(map.collections).find(f => f.id === str(id));
@@ -173,12 +179,13 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === id ? { ...c, parentId } : c) });
   } else if (body.action === "stepFolder") {
     const id = folderOf(mapNow, body.folderId), delta = body.delta === -1 ? -1 : 1;
-    await saveMap(s, both.map, { ...mapNow, collections: moveSibling(mapNow.collections, id, delta, c => c.kind === "folder") });
+    const { collections } = namedOrder(mapNow);
+    await saveMap(s, both.map, { ...mapNow, campaignFoldersOrdered: true, collections: moveSibling(collections, id, delta, c => c.kind === "folder") });
   } else if (body.action === "placeFolder") {
     const id = folderOf(mapNow, body.folderId), targetId = folderOf(mapNow, body.targetId), place = body.place === "before" ? "before" : "after";
     const target = mapNow.collections.find(c => c.id === targetId)!;
     if (!canMoveCollection(mapNow.collections, id, target.parentId)) throw new Error("A folder can't go inside itself or one of its own folders.");
-    await saveMap(s, both.map, { ...mapNow, collections: placeBeside(mapNow.collections, id, targetId, place) });
+    await saveMap(s, both.map, { ...mapNow, campaignFoldersOrdered: true, collections: placeBeside(namedOrder(mapNow).collections, id, targetId, place) });
   } else throw new Error("Unknown action.");
   return summaryOf(await readBoth(s));
 }

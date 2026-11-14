@@ -150,12 +150,12 @@ test('rows carry their folder: Maptable parent for Maptable and paired rows, fol
   assert.equal(workspaceSchema.parse(book()).campaigns[0].folderId,undefined,'old data still loads');
 });
 
-test('layout lists folders (in their saved order) before campaigns (by name) at every level, with counts that include nested folders', () => {
+test('layout lists folders before campaigns at every level, each by name, with counts that include nested folders', () => {
   const s=campaignSummary(foldered,book());
   const layout=campaignLayout(s.folders,s.rows);
   const label=i=>i.type==='folder'?`${'-'.repeat(i.depth)}[${i.folder.name}:${i.count}]`:`${'-'.repeat(i.depth)}${i.row.name}`;
   assert.deepEqual(layout.map(label),[
-    '[Lantern Coast:2]','-[Old games:1]','--The Salt Road','-Greyfen marsh','[Archive:0]',
+    '[Archive:0]','[Lantern Coast:2]','-[Old games:1]','--The Salt Road','-Greyfen marsh',
     '2 Ships','10 Ships','Curse of the Ashen Crown','Loose end','Retired','Sunless Citadel']);
 });
 
