@@ -157,6 +157,6 @@ export class EncyclopediaStore {
   }
   async playerImageOwnerOf(grant: {owner:string;campaignId:string},imageId:string) {
     const shared=await this.playerOf(grant);if(!shared)return null;
-    return shared.campaign.look?.banner?.imageId===imageId||shared.entries.some(e=>e.mapData?.imageId===imageId||e.picture?.imageId===imageId)?grant.owner:null;
+    return shared.campaign.look?.banner?.imageId===imageId||shared.entries.some(e=>e.mapData?.imageId===imageId||e.picture?.imageId===imageId||e.org?.emblem.imageId===imageId||e.org?.banner?.imageId===imageId)?grant.owner:null;
   }
 }

@@ -44,7 +44,7 @@ export async function tagsWithImport(bucket: Bucket, owner: string, book: () => 
 }
 
 
-const KIND_LABEL: Record<string, string> = { folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Tasks", map: "Map" };
+const KIND_LABEL: Record<string, string> = { folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Tasks", map: "Map" };
 
 /**
  * Names and links for everything that has a tag, in every place (the browser shows
