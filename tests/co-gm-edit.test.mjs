@@ -50,7 +50,7 @@ test('co-GMs can\'t reach outside the campaign, change the world, relink the cam
  mine=copy(full);mine.campaigns.push({...full.campaigns[1]});
  refuses(()=>applyCoGmEdit(full,C,mine),/only change the campaign/);
  mine=copy(full);mine.entries=mine.entries.map(e=>e.id==='demo-mara'?{...e,picture:{imageId:IMG,width:10,height:10,x:.5,y:.5,size:1}}:e);
- refuses(()=>applyCoGmEdit(full,C,mine),/pictures/);
+ refuses(()=>applyCoGmEdit(full,C,mine),/storage/);
 });
 
 test('campaign notes a co-GM may change, like its name and calendars, save; the rest of the campaign stays the owner\'s',()=>{
@@ -58,4 +58,12 @@ test('campaign notes a co-GM may change, like its name and calendars, save; the 
  const next=applyCoGmEdit(full,C,mine);
  assert.equal(next.campaigns.find(c=>c.id===C).description,'Now with more salt.');
  assert.equal(next.worlds.length,full.worlds.length);
+});
+
+test('a picture that is new to the copy is refused unless the server found it in the GM\'s storage',()=>{
+ const full=owner(),mine=copy(full);mine.entries=mine.entries.map(e=>e.id==='demo-mara'?{...e,picture:{imageId:IMG,width:10,height:10,x:.5,y:.5,size:1}}:e);
+ refuses(()=>applyCoGmEdit(full,C,mine),/isn't in this campaign's storage/);
+ refuses(()=>applyCoGmEdit(full,C,mine,new Set()),/isn't in this campaign's storage/);
+ const next=applyCoGmEdit(full,C,mine,new Set([IMG]));
+ assert.equal(next.entries.find(e=>e.id==='demo-mara').picture.imageId,IMG);
 });
