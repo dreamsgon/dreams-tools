@@ -58,20 +58,23 @@ export function pageTies(s: Workspace, entry: Entry, types = tieTypesOf(s.worlds
     .sort((a, b) => (titles.get(a.otherId) ?? "").localeCompare(titles.get(b.otherId) ?? "") || a.label.localeCompare(b.label));
 }
 
+/** The people an organization's Profile names: everyone in its spots (with the spot's title) and its members (with their role). */
+export function orgPeople(org: Entry): { id: string; detail?: string; gm?: boolean }[] {
+  const people: { id: string; detail?: string; gm?: boolean }[] = [];
+  for (const b of org.org?.blocks ?? []) {
+    if (b.kind === "spots") for (const sp of b.spots) for (const p of sp.people) people.push({ id: p.entryId, detail: sp.title || undefined, ...(b.gm || sp.gm || p.gm ? { gm: true } : {}) });
+    else if (b.kind === "members") for (const m of b.members) people.push({ id: m.entryId, detail: m.role || undefined, ...(b.gm || m.gm ? { gm: true } : {}) });
+  }
+  return people;
+}
+
 /** Ties worked out from other parts of the workspace: organizations, vehicles, quests and shared parents. */
 export function workedOutTies(s: Workspace, entry: Entry, types = tieTypesOf(s.worlds.find(w => w.id === entry.worldId)), campaignId: string | null = entry.campaignId): WorkedOutTie[] {
   const out: WorkedOutTie[] = [];
   const pages = tiePages(s, entry, campaignId), scope = new Set(pages.map(e => e.id)), world = s.worlds.find(w => w.id === entry.worldId);
   const add = (x: WorkedOutTie) => { if (scope.has(x.otherId) && !out.some(o => o.otherId === x.otherId && o.label === x.label && o.detail === x.detail)) out.push(x); };
   // Organizations: the people in its spots and members, and the organizations a character is in.
-  const membersOf = (org: Entry) => {
-    const people: { id: string; detail?: string }[] = [];
-    for (const b of org.org?.blocks ?? []) {
-      if (b.kind === "spots") for (const sp of b.spots) for (const p of sp.people) people.push({ id: p.entryId, detail: sp.title || undefined });
-      else if (b.kind === "members") for (const m of b.members) people.push({ id: m.entryId, detail: m.role || undefined });
-    }
-    return people;
-  };
+  const membersOf = orgPeople;
   if (entry.kind === "faction") for (const p of membersOf(entry)) add({ otherId: p.id, label: "Has member", detail: p.detail, source: "organization" });
   if (entry.kind === "character") for (const org of pages) if (org.kind === "faction") for (const p of membersOf(org)) if (p.id === entry.id) add({ otherId: org.id, label: "Member of", detail: p.detail, source: "organization" });
   // Vehicles: owner, commander, seats, crew and where it is.

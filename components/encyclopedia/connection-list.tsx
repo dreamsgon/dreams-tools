@@ -22,7 +22,7 @@ const cut=(t:string,n:number)=>t.length>n?t.slice(0,n-1).trimEnd()+'…':t;
 const NARROW='(max-width: 760px)';
 const subscribe=(change:()=>void)=>{const m=window.matchMedia(NARROW);m.addEventListener('change',change);return()=>m.removeEventListener('change',change);};
 /** Whether the screen is phone-sized, to draw the web tall instead of wide so its words stay readable. */
-const useNarrow=()=>useSyncExternalStore(subscribe,()=>window.matchMedia(NARROW).matches,()=>false);
+export const useNarrow=()=>useSyncExternalStore(subscribe,()=>window.matchMedia(NARROW).matches,()=>false);
 
 /** The page in the middle and up to twelve pages around it, on an ellipse from the top: wide on a computer, tall on a phone. */
 export function ConnectionWeb({title,rows,onOpen}:{title:string;rows:ConnectionRow[];onOpen:(id:string)=>void}){

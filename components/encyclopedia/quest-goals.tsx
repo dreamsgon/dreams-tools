@@ -71,7 +71,9 @@ function VerbPicker({current,onPick,onWrite,onClose}:{current?:string;onPick:(ve
 
 export const kindName=(e:Entry)=>e.kind==='character'?(e.character?.role==='creature'?'Creature':'Character'):e.kind==='faction'?'Organization':e.kind==='map'?'Map':e.kind==='place'?'Place':e.kind==='quest'?'Quest':e.kind==='session'?'Session':e.kind==='vehicle'?'Vehicle':'Page';
 
-export function TargetPicker({label,pages,current,onPage,onName,onClear,onClose}:{label:string;pages:Entry[];current?:string;onPage:(id:string)=>void;onName?:(name:string)=>void;onClear?:()=>void;onClose:()=>void}){
+export function TargetPicker({label,pages,current,onPage,onName,nameWords,onClear,onClose}:{label:string;pages:Entry[];current?:string;onPage:(id:string)=>void;onName?:(name:string)=>void;
+ /** How the choice to use typed words reads, when it doesn't just put a name in a goal. */
+ nameWords?:{title:(name:string)=>string;hint:string};onClear?:()=>void;onClose:()=>void}){
  const [query,setQuery]=useState(current??'');
  const q=query.trim().toLowerCase();
  const found=useMemo(()=>(q?pages.filter(e=>e.title.toLowerCase().includes(q)).sort((a,b)=>Number(!a.title.toLowerCase().startsWith(q))-Number(!b.title.toLowerCase().startsWith(q))):pages).slice(0,30),[pages,q]);
@@ -80,7 +82,7 @@ export function TargetPicker({label,pages,current,onPage,onName,onClear,onClose}
   <label className="goal-search"><Search size={14}/><input autoFocus aria-label="Search pages, or type a name" placeholder={onName?'Search pages, or type a name':'Search pages'} value={query} maxLength={160} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(found[0])onPage(found[0].id);else if(query.trim()&&onName)onName(query.trim());}}}/></label>
   <ul className="goal-pick-list">
    {found.map(e=><li key={e.id}><button type="button" onClick={()=>onPage(e.id)}>{e.kind==='character'||e.kind==='faction'?<Face entry={e} size={26}/>:<span className="goal-pick-icon"><MapPin size={14}/></span>}<span><strong>{e.title}</strong><small>{kindName(e)}</small></span></button></li>)}
-   {query.trim()&&!exact&&onName&&<li><button type="button" onClick={()=>onName(query.trim())}><span className="goal-pick-icon"><PenLine size={14}/></span><span><strong>Use “{query.trim()}” as a name</strong><small>No page, just words in the goal</small></span></button></li>}
+   {query.trim()&&!exact&&onName&&<li><button type="button" onClick={()=>onName(query.trim())}><span className="goal-pick-icon"><PenLine size={14}/></span><span><strong>{nameWords?nameWords.title(query.trim()):`Use “${query.trim()}” as a name`}</strong><small>{nameWords?.hint??'No page, just words in the goal'}</small></span></button></li>}
    {!found.length&&(!query.trim()||!onName)&&<li className="goal-pick-none">{query.trim()?'No pages match.':onName?'No pages in this campaign yet. Type a name.':'No pages in this campaign yet.'}</li>}
   </ul>
   {onClear&&<button type="button" className="text-button goal-write" onClick={onClear}><X size={14}/> Remove</button>}

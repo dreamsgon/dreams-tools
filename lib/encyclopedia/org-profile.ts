@@ -36,6 +36,7 @@ export const orgTypeGroups: { group: string; types: string[] }[] = [
   { group: "Faith", types: ["Church", "Cult", "Monastic order"] },
   { group: "Power", types: ["Noble house", "Council", "Army", "Knightly order"] },
   { group: "Hidden", types: ["Secret society", "Thieves' guild", "Spy network"] },
+  { group: "Kin", types: ["Family", "Clan", "Dynasty"] },
 ];
 export const orgTypeList = orgTypeGroups.flatMap(g => g.types);
 
