@@ -133,13 +133,21 @@ export function campaignLayout(folders: CampaignFolder[], rows: CampaignRow[], c
 export function folderChoices(folders: CampaignFolder[]): { id: string; path: string; depth: number }[] {
   const ids = new Set(folders.map(f => f.id)), out: { id: string; path: string; depth: number }[] = [];
   const walk = (parent: string | null, prefix: string, depth: number) => {
-    for (const f of folders.filter(x => (x.parentId && ids.has(x.parentId) ? x.parentId : null) === parent).sort(byName)) {
+    for (const f of folders.filter(x => (x.parentId && ids.has(x.parentId) ? x.parentId : null) === parent)) { // the folders' own order, the same order the Campaigns list shows
       out.push({ id: f.id, path: prefix + f.name, depth });
       walk(f.id, `${prefix}${f.name} / `, depth + 1);
     }
   };
   walk(null, "", 0);
   return out;
+}
+
+/** One line in the "Move to…" sheet: Top level (id null), then every folder with its path. `here` marks where the campaign is now. */
+export type MoveOption = { id: string | null; label: string; depth: number; here: boolean };
+
+export function moveOptions(folders: CampaignFolder[], currentFolderId: string | null): MoveOption[] {
+  const choices = folderChoices(folders), known = new Set(choices.map(f => f.id)), now = currentFolderId && known.has(currentFolderId) ? currentFolderId : null;
+  return [{ id: null, label: "Top level", depth: 0, here: now === null }, ...choices.map(f => ({ id: f.id, label: f.path, depth: f.depth, here: f.id === now }))];
 }
 
 type BookEntry = BookWorkspace["entries"][number];

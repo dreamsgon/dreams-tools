@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
-import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
+import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
 import { altStep } from "./folder-reorder";
 import { canMoveSibling, dropPlace } from "@/lib/folder-order";
@@ -29,6 +29,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const { library } = useTags("campaigns"), [tagFilter, setTagFilter] = useState<string | null>(null), [tagsOpen, setTagsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => typeof window === "undefined" ? new Set() : readCollapsed()), [drag, setDrag] = useState<Drag | null>(null), [over, setOver] = useState<string | null>(null);
   // The table only shows after the list loads in the browser, so reading storage here cannot change the server render.
+  const [moving, setMoving] = useState<CampaignRow | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null), [removing, setRemoving] = useState<string | null>(null);
   function toggleFolder(id: string) {
     const next = new Set(collapsed);
@@ -184,6 +185,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><span>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</span><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Start notes</button>}</span>
             <span role="cell" className="campaigns-open">
+              <button type="button" className="campaigns-mini campaigns-move" disabled={busy} onClick={() => setMoving(r)} aria-label={`Move ${r.name} to a folder`}>Move</button>
               <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
             </span>
           </div>)(item.row))}
@@ -200,11 +202,12 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     </div>
     {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
+    {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "match" && summary && <Match summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
-    {notice && <div className="campaigns-toast" role="status"><Check size={16} aria-hidden="true" />{notice}</div>}
+    {notice && !moving && <div className="campaigns-toast" role="status"><Check size={16} aria-hidden="true" />{notice}</div>}
   </div>;
 }
 
@@ -266,7 +269,7 @@ function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, sta
   toggle: () => void; startRename: () => void; startRemove: () => void; stop: () => void; send: Send; drag: React.HTMLAttributes<HTMLDivElement>; drops: React.HTMLAttributes<HTMLDivElement>;
   edge?: "before" | "after"; canStep: (delta: -1 | 1) => boolean; step: (delta: -1 | 1) => void;
 }) {
-  const { folder, depth, count, open } = item, [name, setName] = useState(folder.name);
+  const { folder, depth, count, open } = item, [name, setName] = useState(folder.name), [menu, setMenu] = useState(false);
   const Icon = open ? FolderOpen : Folder;
   return <div role="row" className={`campaigns-row campaigns-folder-row${over ? " over" : ""}${dragging ? " dragging" : ""}`} style={{ "--depth": depth } as React.CSSProperties} data-drop-edge={edge} {...drag} {...drops}
     onClick={e => { if (!filtered && !renaming && !(e.target as HTMLElement).closest("button, input, a, form")) toggle(); }}
@@ -286,12 +289,88 @@ function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, sta
       <button type="button" className="campaigns-danger" disabled={busy} onClick={() => void send({ action: "removeFolder", folderId: folder.id }, "Folder removed. Its campaigns moved up a level.", stop)}>Remove folder</button>
       <button type="button" className="campaigns-secondary" onClick={stop}>Keep it</button>
     </span> : <span role="cell" className="campaigns-folder-actions">
+      <span className="campaigns-folder-buttons">
       <button type="button" className="campaigns-mini" disabled={busy || !canStep(-1)} onClick={() => step(-1)} aria-label={`Move ${folder.name} up`}><ChevronUp size={13} aria-hidden="true" />Up</button>
       <button type="button" className="campaigns-mini" disabled={busy || !canStep(1)} onClick={() => step(1)} aria-label={`Move ${folder.name} down`}><ChevronDown size={13} aria-hidden="true" />Down</button>
       <button type="button" className="campaigns-mini" disabled={busy} onClick={() => { setName(folder.name); startRename(); }} aria-label={`Rename ${folder.name}`}><Pencil size={13} aria-hidden="true" />Rename</button>
       <button type="button" className="campaigns-mini" disabled={busy} onClick={startRemove} aria-label={`Remove ${folder.name}`}><Trash2 size={13} aria-hidden="true" />Remove</button>
+      </span>
+      <button type="button" className="campaigns-mini campaigns-folder-more" disabled={busy} aria-haspopup="dialog" aria-expanded={menu} onClick={() => setMenu(true)} aria-label={`Actions for ${folder.name}`}><MoreHorizontal size={18} aria-hidden="true" /></button>
     </span>}
+    {menu && <Sheet title={folder.name} close={() => setMenu(false)}>
+      <button type="button" className="campaigns-opt" disabled={busy || !canStep(-1)} onClick={() => { setMenu(false); step(-1); }} aria-label={`Move ${folder.name} up`}><ChevronUp size={16} aria-hidden="true" />Up</button>
+      <button type="button" className="campaigns-opt" disabled={busy || !canStep(1)} onClick={() => { setMenu(false); step(1); }} aria-label={`Move ${folder.name} down`}><ChevronDown size={16} aria-hidden="true" />Down</button>
+      <button type="button" className="campaigns-opt" disabled={busy} onClick={() => { setMenu(false); setName(folder.name); startRename(); }} aria-label={`Rename ${folder.name}`}><Pencil size={16} aria-hidden="true" />Rename</button>
+      <button type="button" className="campaigns-opt" disabled={busy} onClick={() => { setMenu(false); startRemove(); }} aria-label={`Remove ${folder.name}`}><Trash2 size={16} aria-hidden="true" />Remove</button>
+      <button type="button" className="campaigns-opt campaigns-opt-cancel" onClick={() => setMenu(false)}>Cancel</button>
+    </Sheet>}
   </div>;
+}
+
+/** A bottom sheet on phones and a small centred dialog on larger screens. Escape or a tap on the backdrop closes it, and focus goes back to the button that opened it. */
+function Sheet({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null), closeRef = useRef(close);
+  // Read while rendering, before the sheet moves focus, so a second effect run in development still knows the real opener.
+  const [opener] = useState(() => typeof document === "undefined" ? null : document.activeElement as HTMLElement | null);
+  useEffect(() => { closeRef.current = close; });
+  useEffect(() => {
+    ref.current?.focus();
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); closeRef.current(); } };
+    window.addEventListener("keydown", key, true);
+    return () => {
+      window.removeEventListener("keydown", key, true);
+      // Wait a tick: if the action that closed the sheet put focus somewhere new (a rename box), leave it there.
+      setTimeout(() => { const now = document.activeElement; if ((!now || now === document.body) && opener?.isConnected) opener.focus(); }, 0);
+    };
+  }, [opener]);
+  return <div className="campaigns-backdrop campaigns-sheet-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}
+    // The folder menu sits inside a folder row, and React passes events up through it: keep taps, keys and drags in the sheet from opening, closing or re-ordering that folder.
+    onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()} onDragOver={e => e.stopPropagation()} onDrop={e => e.stopPropagation()}>
+    <div className="campaigns-sheet" ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+      <span className="campaigns-grab" aria-hidden="true" />
+      <h2>{title}</h2>
+      <div className="campaigns-sheet-list">{children}</div>
+    </div>
+  </div>;
+}
+
+function MoveSheet({ row, summary, busy, error, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close: () => void; send: Send }) {
+  const [creating, setCreating] = useState(false), [name, setName] = useState("");
+  const options = moveOptions(summary.folders, row.folderId);
+  const title = `Move “${row.name}” to…`;
+  // On failure the sheet stays open and shows why, so the choice is not lost.
+  async function move(id: string | null, label: string) { if (await send({ action: "moveCampaign", key: row.key, folderId: id }, `Moved ${row.name} to ${label}.`)) close(); }
+  async function createAndMove() {
+    const clean = name.trim();
+    if (!clean) return;
+    const before = new Set(summary.folders.map(f => f.id));
+    let created: CampaignFolder | undefined;
+    // The server answers with the whole list, so pick out the folder this made: new, at the top level, and named as typed
+    // (falling back to the only new top-level folder, in case the server tidied the name).
+    const ok = await send({ action: "newFolder", name: clean, parentId: null }, undefined, next => {
+      const fresh = next.folders.filter(f => !before.has(f.id) && !f.parentId);
+      created = fresh.filter(f => f.name === clean).at(-1) ?? (fresh.length === 1 ? fresh[0] : undefined);
+    });
+    if (!ok) return; // stay on the name box with the error showing
+    setCreating(false);
+    if (created) await move(created.id, created.name);
+  }
+  return <Sheet title={title} close={close}>
+    {error && <p className="campaigns-sheet-error" role="alert">{error}</p>}
+    {creating ? <form className="campaigns-sheet-new" onSubmit={e => { e.preventDefault(); void createAndMove(); }}>
+      <label>Folder name<input autoFocus value={name} maxLength={120} disabled={busy} onChange={e => setName(e.target.value)} placeholder="For example, One-shots" /></label>
+      <div className="campaigns-sheet-new-actions">
+        <button type="button" className="campaigns-opt campaigns-opt-cancel" onClick={() => setCreating(false)}>Back</button>
+        <button type="submit" className="campaigns-opt campaigns-opt-go" disabled={busy || !name.trim()}>Create and move</button>
+      </div>
+    </form> : <>
+      {options.map(o => <button type="button" key={o.id ?? "top"} className={`campaigns-opt${o.here ? " here" : ""}`} disabled={busy || o.here} onClick={() => void move(o.id, o.label)}>
+        {o.id ? <Folder size={16} aria-hidden="true" /> : <House size={16} aria-hidden="true" />}<span>{o.label}</span>{o.here && <small>here now</small>}
+      </button>)}
+      <button type="button" className="campaigns-opt" disabled={busy} onClick={() => setCreating(true)}><FolderPlus size={16} aria-hidden="true" />New folder…</button>
+      <button type="button" className="campaigns-opt campaigns-opt-cancel" onClick={close}>Cancel</button>
+    </>}
+  </Sheet>;
 }
 
 function NewFolder({ summary, busy, close, send }: { summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
