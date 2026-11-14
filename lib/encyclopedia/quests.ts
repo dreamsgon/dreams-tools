@@ -89,6 +89,8 @@ export const questSchema = z.object({
   reward: z.string().trim().max(300).optional(),
   /** Pages the party gets (an item, a deed, a ship), beside the reward's words. */
   rewardIds: z.array(qid).max(20).optional(),
+  /** Pages the GM linked to the quest by hand, shown with the ones worked out from it on the Connections tab. */
+  linkIds: z.array(qid).max(50).optional(),
   /** Players don't see the reward until the GM shows it. */
   rewardHidden: z.boolean().optional(),
   /** The GM's private preparation: what is really going on. Never sent to players or a players-only AI. */
