@@ -21,7 +21,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [query, setQuery] = useState(""), [world, setWorld] = useState<string | null>(null), [archived, setArchived] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null), [dialog, setDialog] = useState<Dialog>(null);
-  const { library } = useTags(), [tagFilter, setTagFilter] = useState<string | null>(null), [tagsOpen, setTagsOpen] = useState(false);
+  const { library } = useTags("campaigns"), [tagFilter, setTagFilter] = useState<string | null>(null), [tagsOpen, setTagsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => typeof window === "undefined" ? new Set() : readCollapsed()), [drag, setDrag] = useState<Drag | null>(null), [over, setOver] = useState<string | null>(null);
   // The table only shows after the list loads in the browser, so reading storage here cannot change the server render.
   const [renaming, setRenaming] = useState<string | null>(null), [removing, setRemoving] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
       </>}
       <CampaignsJoined />
     </div>
-    {tagsOpen && <TagsManager onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
+    {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}

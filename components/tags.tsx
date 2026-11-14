@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { Check, Merge, MoreVertical, Pencil, Plus, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { usePopover } from "./popover-menu";
-import { TAG_COLORS, TAG_COLOR_NAMES, applyTagAction, cleanTagName, findTag, kindsLabel, newTagId, nextColor, suggestTags, tagUses, tagsOn, type Tag, type TagAction, type TagColor, type TagLibrary, type TaggedItem, type TargetKind } from "@/lib/tags";
+import { TAG_COLORS, TAG_COLOR_NAMES, TAG_SCOPE_NAMES, applyTagAction, cleanTagName, findTag, kindsLabel, newTagId, nextColor, scopeKind, scopedTags, suggestTags, tagUses, tagsOn, targetScope, type Tag, type TagAction, type TagColor, type TagLibrary, type TagScope, type TaggedItem, type TargetKind } from "@/lib/tags";
 import "./tags.css";
 import { confirmDialog } from "./confirm-dialog";
 
 /*
  * Tags in the browser. Every component on a page shares one copy of the tags, so a
  * tag added on a page shows up straight away in search and in the Tags manager.
+ * The copy holds all three lists; each component asks for just its own (`useTags(scope)`).
  * Each change is applied here first and then saved; if the save fails, the saved
  * tags are loaded again and the problem is shown.
  */
@@ -30,7 +31,7 @@ async function load(items = false) {
   } catch (e) { set({ error: e instanceof Error ? e.message : "Tags could not be loaded." }); }
 }
 
-/** Loads the tags once per page. With items, also loads what is tagged across both tools. */
+/** Loads the tags once per page. With items, also loads what is tagged, in every place. */
 export function loadTags(items = false) {
   if (items) return load(true);
   return (loading ??= load());
@@ -56,18 +57,21 @@ export async function changeTags(action: TagAction): Promise<boolean> {
   }
 }
 
-export function useTags() {
+/** The tags of one place (and what is tagged there). Other places' tags are never in it. */
+export function useTags(scope: TagScope) {
   const s = useSyncExternalStore(subscribe, () => state, () => SERVER);
   useEffect(() => { void loadTags(); }, []);
-  return s;
+  const library = useMemo(() => s.library && scopedTags(s.library, scope), [s.library, scope]);
+  const items = useMemo(() => s.items && s.items.filter(i => i.kind === scopeKind(scope)), [s.items, scope]);
+  return { library, items, error: s.error };
 }
 
-/** Creates a tag (or finds the one with that name) and puts it on a target. */
+/** Creates a tag (or finds the one with that name) in the target's own list and puts it on the target. */
 export async function addNewTag(target: string, name: string, color: TagColor) {
   const lib = state.library; if (!lib) return;
-  const existing = findTag(lib, name);
+  const scope = targetScope(target), existing = findTag(lib, name, scope);
   const id = existing?.id ?? newTagId();
-  if (!existing && !(await changeTags({ action: "create", id, name, color }))) return;
+  if (!existing && !(await changeTags({ action: "create", id, scope, name, color }))) return;
   await changeTags({ action: "add", target, tagId: id });
 }
 
@@ -94,20 +98,21 @@ export function TagList({ tags, max = 3, onClick }: { tags: Tag[]; max?: number;
  * `targets` lists every key the thing has been saved under; new tags go on the first.
  */
 export function TagRow({ targets, onTagClick, className = "" }: { targets: string[]; onTagClick?: (tag: Tag) => void; className?: string }) {
-  const { library, error } = useTags();
+  const scope = targetScope(targets[0]);
+  const { library, error } = useTags(scope);
   const { open, setOpen, wrapper } = usePopover();
   if (!library) return error ? <div className={`tag-row ${className}`}><span className="tag-error">{error}</span></div> : null;
   const tags = tagsOn(library, ...targets);
   return <div className={`tag-row ${className}`.trim()} ref={wrapper}>
     {tags.map(t => <TagChip key={t.id} tag={t} onClick={onTagClick ? () => onTagClick(t) : undefined} onRemove={() => void changeTags({ action: "remove", targets, tagId: t.id })} />)}
     <button type="button" className="tag-add" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(v => !v)}><Plus size={13} />Tag</button>
-    {open && <TagPicker library={library} applied={tags.map(t => t.id)} onPick={t => { void changeTags({ action: "add", target: targets[0], tagId: t.id }); setOpen(false); }} onCreate={(name, color) => { void addNewTag(targets[0], name, color); setOpen(false); }} />}
+    {open && <TagPicker scope={scope} library={library} applied={tags.map(t => t.id)} onPick={t => { void changeTags({ action: "add", target: targets[0], tagId: t.id }); setOpen(false); }} onCreate={(name, color) => { void addNewTag(targets[0], name, color); setOpen(false); }} />}
     {error && <span className="tag-error" role="alert">{error}</span>}
   </div>;
 }
 
 /** Type to find a tag, or create a new one in a colour you pick. */
-export function TagPicker({ library, applied, onPick, onCreate }: { library: TagLibrary; applied: string[]; onPick: (tag: Tag) => void; onCreate: (name: string, color: TagColor) => void }) {
+export function TagPicker({ scope, library, applied, onPick, onCreate }: { scope: TagScope; library: TagLibrary; applied: string[]; onPick: (tag: Tag) => void; onCreate: (name: string, color: TagColor) => void }) {
   const [text, setText] = useState(""), [active, setActive] = useState(0), [color, setColor] = useState<TagColor>(() => nextColor(library));
   const uses = useMemo(() => tagUses(library), [library]);
   const name = cleanTagName(text), exact = name ? findTag(library, name) : undefined;
@@ -131,7 +136,7 @@ export function TagPicker({ library, applied, onPick, onCreate }: { library: Tag
       </div>}
       {!found.length && !canCreate && <p className="tag-picker-empty">{exact ? `“${exact.name}” is already on this.` : library.tags.length ? "No more tags to add. Type a name to create one." : "Type a name to create your first tag."}</p>}
     </div>
-    <p className="tag-picker-foot">Tags are shared by Maptable and the Encyclopedia</p>
+    <p className="tag-picker-foot">Showing {TAG_SCOPE_NAMES[scope]} tags</p>
   </div>;
 }
 
@@ -143,9 +148,16 @@ function ColorDots({ value, onChange }: { value: TagColor; onChange: (c: TagColo
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-/** Rename, recolour, merge and delete tags. */
-export function TagsManager({ onClose, onShow }: { onClose: () => void; onShow?: (tag: Tag) => void }) {
-  const { library, items, error } = useTags();
+const MANAGER_TEXT: Record<TagScope, { title: string; intro: string; empty: string; foot: string }> = {
+  encyclopedia: { title: "Encyclopedia tags", intro: "Your own labels for pages and characters.", empty: "No tags yet. Add one here, or with “+ Tag” on any page.", foot: "Deleting a tag removes it from every page but never deletes the pages." },
+  campaigns: { title: "Campaign tags", intro: "Your own labels for campaigns.", empty: "No tags yet. Add one here, or with “+ Tag” on any campaign.", foot: "Deleting a tag removes it from every campaign but never deletes the campaigns." },
+  maptable: { title: "Maptable tags", intro: "Your own labels for scenes.", empty: "No tags yet. Add one here, or with “+ Tag” in a scene's settings.", foot: "Deleting a tag removes it from every scene but never deletes the scenes." },
+};
+
+/** Rename, recolour, merge and delete the tags of one place. */
+export function TagsManager({ scope, onClose, onShow }: { scope: TagScope; onClose: () => void; onShow?: (tag: Tag) => void }) {
+  const text = MANAGER_TEXT[scope];
+  const { library, items, error } = useTags(scope);
   const ref = useRef<HTMLDialogElement>(null);
   const [adding, setAdding] = useState(false);
   useEffect(() => { ref.current?.showModal(); void loadTags(true); }, []);
@@ -158,25 +170,25 @@ export function TagsManager({ onClose, onShow }: { onClose: () => void; onShow?:
   const tags = [...(library?.tags ?? [])].sort((a, b) => (counts.get(b.id)?.count ?? 0) - (counts.get(a.id)?.count ?? 0) || a.name.localeCompare(b.name));
   return <dialog ref={ref} className="tags-manager" aria-labelledby="tags-manager-title" onCancel={onClose} onClick={e => { if (e.target === ref.current) onClose(); }}>
     <div className="tags-manager-head">
-      <h2 id="tags-manager-title">Tags</h2>
+      <h2 id="tags-manager-title">{text.title}</h2>
       <button type="button" className="tags-button tags-button-primary" onClick={() => setAdding(true)} disabled={!library}><Plus size={15} />New tag</button>
       <button type="button" className="tags-icon" aria-label="Close" onClick={onClose}><X size={18} /></button>
     </div>
-    <p className="tags-manager-intro">Your own labels for pages, characters, scenes and campaigns. Click a colour to change it; the ⋮ menu renames, merges or deletes a tag.</p>
+    <p className="tags-manager-intro">{text.intro} Click a colour to change it; the ⋮ menu renames, merges or deletes a tag.</p>
     {error && <p className="tag-error" role="alert">{error}</p>}
     <div className="tags-manager-list">
-      {adding && library && <NewTagRow library={library} done={() => setAdding(false)} />}
+      {adding && library && <NewTagRow scope={scope} library={library} done={() => setAdding(false)} />}
       {tags.map(t => <ManagerRow key={t.id} tag={t} library={library!} uses={counts.get(t.id)} onShow={onShow ? () => { onClose(); onShow(t); } : undefined} />)}
-      {library && !tags.length && !adding && <p className="tags-manager-empty">No tags yet. Add one here, or with “+ Tag” on any page, scene or campaign.</p>}
+      {library && !tags.length && !adding && <p className="tags-manager-empty">{text.empty}</p>}
       {!library && !error && <p className="tags-manager-empty">Loading tags…</p>}
     </div>
-    <p className="tags-manager-foot">Deleting a tag removes it everywhere but never deletes the pages or maps.</p>
+    <p className="tags-manager-foot">{text.foot}</p>
   </dialog>;
 }
 
-function NewTagRow({ library, done }: { library: TagLibrary; done: () => void }) {
+function NewTagRow({ scope, library, done }: { scope: TagScope; library: TagLibrary; done: () => void }) {
   const [name, setName] = useState(""), [color, setColor] = useState<TagColor>(() => nextColor(library));
-  const save = async () => { const clean = cleanTagName(name); if (!clean) return done(); if (await changeTags({ action: "create", id: newTagId(), name: clean, color })) done(); };
+  const save = async () => { const clean = cleanTagName(name); if (!clean) return done(); if (await changeTags({ action: "create", id: newTagId(), scope, name: clean, color })) done(); };
   return <form className="tags-row tags-row-new" onSubmit={e => { e.preventDefault(); void save(); }}>
     <i className={`tag-dot tag-${color}`} aria-hidden="true" />
     <input autoFocus value={name} maxLength={60} placeholder="Tag name" aria-label="New tag name" onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); done(); } }} />
@@ -215,7 +227,7 @@ function ManagerRow({ tag, library, uses, onShow }: { tag: Tag; library: TagLibr
         {menuOpen && <div className="tags-pop tags-pop-menu" role="menu">
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setName(tag.name); setMode("rename"); }}><Pencil size={14} />Rename</button>
           <button type="button" role="menuitem" disabled={!others.length} onClick={() => { setMenuOpen(false); setInto(""); setMode("merge"); }}><Merge size={14} />Merge into…</button>
-          <button type="button" role="menuitem" className="tags-danger" onClick={async () => { setMenuOpen(false); if (await confirmDialog({ title: `Delete the tag “${tag.name}”?`, message: `It is removed from ${plural(uses?.count ?? 0, "thing")}. The pages and maps stay.`, confirm: "Delete tag", danger: true })) void changeTags({ action: "delete", tagId: tag.id }); }}><Trash2 size={14} />Delete</button>
+          <button type="button" role="menuitem" className="tags-danger" onClick={async () => { setMenuOpen(false); if (await confirmDialog({ title: `Delete the tag “${tag.name}”?`, message: `It is removed from ${plural(uses?.count ?? 0, "thing")}. Nothing else is deleted.`, confirm: "Delete tag", danger: true })) void changeTags({ action: "delete", tagId: tag.id }); }}><Trash2 size={14} />Delete</button>
         </div>}
       </div>
     </>}
