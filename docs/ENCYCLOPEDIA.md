@@ -14,6 +14,10 @@ Imported from the owner's [TTRPG World Manager GPT Site](https://ttrpg-world-man
 
 The encyclopedia workspace limit remains 2 MB; PNG/JPEG/WebP atlas images allow up to 8 MB each. Maptable and encyclopedia retain separate data formats; a map does not automatically synchronize between them. Data stays in the same configured private S3 bucket under separate per-account paths. Existing `MAPTABLE_` environment names serve both modules.
 
+## Ships and vehicles
+
+Choose **Vehicle** as the entry type to make a ship, airship, carriage, car or anything else the party rides in. A vehicle page opens on its **Overview**: pick its type (Starship, Sailing ship, Airship, Carriage or Car), write its model line, choose an owner (a character or organization) and its captain, coachman or driver (a character), add a picture or deck plan (otherwise the type's outline shows), set where it is (a place page or a few words), and keep its gauges (such as Hull, Shields and Fuel) up to date with − and +. Each type has its own stats and Right now fields. Every value has an eye: a hidden value never reaches the player site. Players see the Overview tab only when its tab visibility is Player visible. The page's text is the **Description** tab. Changing a vehicle's type keeps the values whose names match.
+
 ## Players and AI access
 
 Player links show only material explicitly shared with players, with private notes and unrevealed map areas filtered. Anyone holding a player link can read its shared content. Replace or revoke the link to stop subsequent access. Already issued signed image URLs can remain valid for up to five minutes; downloaded copies cannot be recalled.

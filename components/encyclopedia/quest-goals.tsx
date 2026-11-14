@@ -69,7 +69,7 @@ function VerbPicker({current,onPick,onWrite,onClose}:{current?:string;onPick:(ve
  </Popover>;
 }
 
-export const kindName=(e:Entry)=>e.kind==='character'?(e.character?.role==='creature'?'Creature':'Character'):e.kind==='faction'?'Organization':e.kind==='map'?'Map':e.kind==='place'?'Place':e.kind==='quest'?'Quest':e.kind==='session'?'Session':'Page';
+export const kindName=(e:Entry)=>e.kind==='character'?(e.character?.role==='creature'?'Creature':'Character'):e.kind==='faction'?'Organization':e.kind==='map'?'Map':e.kind==='place'?'Place':e.kind==='quest'?'Quest':e.kind==='session'?'Session':e.kind==='vehicle'?'Vehicle':'Page';
 
 export function TargetPicker({label,pages,current,onPage,onName,onClear,onClose}:{label:string;pages:Entry[];current?:string;onPage:(id:string)=>void;onName?:(name:string)=>void;onClear?:()=>void;onClose:()=>void}){
  const [query,setQuery]=useState(current??'');

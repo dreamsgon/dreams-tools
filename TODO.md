@@ -1,6 +1,6 @@
 # RPG Tools to-do list
 
-Updated 2026-11-13. Keep work scoped to Maptable and RPG Encyclopedia. Work on one feature at a time; deployment and live-service work happen only when requested.
+Updated 2026-11-14. Keep work scoped to Maptable and RPG Encyclopedia. Work on one feature at a time; deployment and live-service work happen only when requested.
 
 ## Completed source preparation
 
@@ -31,6 +31,17 @@ Updated 2026-11-13. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Test encyclopedia account isolation, concurrent saves, player filtering and fog-image access.
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
+
+## Ships and vehicles
+
+- [x] Part 1: vehicle pages. A new page kind, Vehicle (`kind: "vehicle"`, optional `vehicle` on the entry; logic in `lib/encyclopedia/vehicles.ts`, UI in `components/encyclopedia/vehicle-sheet.tsx`). Five ready-made types with fixed ids (Starship, Sailing ship, Airship, Carriage, Car), each with its own stats, gauges (bar or pips, with a maximum and unit), Right now fields and commander name (Captain, Coachman, Driver). A vehicle's Overview tab has a type picker and model line, Owner (character or organization page) and commander (character page), the picture or the type's silhouette, Current location (a page or words), Condition gauges with − and +, At a glance stats and Right now. Every value has its own eye; the Overview tab has the usual tab visibility, and the page text becomes Description. Changing the type keeps values whose names match. Players get an allowlist (`playerVehicle`): GM-only values are left out and owner, commander and location only when players can read those pages. Tests in `tests/vehicles.test.mjs`. Not checked against a real signed-in account (screenshots used the app with mocked API responses).
+- [ ] Part 2: stations (set per type, renamed, added or removed per vehicle, each on the picture or in the Crew tab only), crew manifest and unnamed counts; "Pilot of GDN-205" on character pages and the vehicle in its owner's Holdings.
+- [ ] Part 3: Hold (cargo with capacity) and Systems (rows with status and roll buttons that post to Discord).
+- [ ] Part 4: Vehicle types editor: make, copy and change a world's types (`vehicleTypesOf(world)` returns only the starter types for now).
+- [ ] Part 5: New vehicle generator with templates and name lists.
+- [ ] Part 6: Log tab, and Add to Maptable as a large token.
+- [ ] Character gauges: the same customizable gauges (Shields, Stress…) on character pages, which a player can change on their own character.
+- [ ] MCP: create and read vehicle pages (the create_page tool doesn't offer the vehicle kind yet).
 
 ## Google Sheets character sheets, next parts
 

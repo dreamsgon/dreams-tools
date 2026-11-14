@@ -3,7 +3,7 @@
  * The side of a quest's Overview: who gave it, the reward (with its own eye for players) and where it happens,
  * plus the GM prep tab. Pages are picked from a search (a sheet on a phone) or dragged from the sidebar.
  */
-import {useMemo,useState} from 'react';
+import {useMemo,useState,type ReactNode} from 'react';
 import {Eye,EyeOff,Gift,Lock,MapPin,Pencil,Plus,X} from 'lucide-react';
 import './quest-facts.css';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
@@ -27,14 +27,14 @@ function PageCard({page,onOpen,onChange,label}:{page:Entry;onOpen:()=>void;onCha
  </div>;
 }
 
-/** One slot that holds a page: the page, or an empty "+" slot. Takes a page dragged from the sidebar. */
-function PageSlot({title,label,empty,pageId,pages,first,onSet,onOpen}:{title:string;label:string;empty:string;pageId?:string|null;pages:Entry[];first:(e:Entry)=>boolean;onSet:(id:string|null)=>void;onOpen:(id:string)=>void}){
+/** One slot that holds a page: the page, or an empty "+" slot. Takes a page dragged from the sidebar. `tools` sit beside the title (an eye, say); `className` is added to the slot. */
+export function PageSlot({title,label,empty,pageId,pages,first,onSet,onOpen,tools,className,icon}:{title:string;label:string;empty:string;pageId?:string|null;pages:Entry[];first:(e:Entry)=>boolean;onSet:(id:string|null)=>void;onOpen:(id:string)=>void;tools?:ReactNode;className?:string;icon?:ReactNode}){
  const [picking,setPicking]=useState(false),[refused,setRefused]=useState('');
  const page=pageId?pages.find(e=>e.id===pageId):undefined;
  const sorted=useMemo(()=>[...pages.filter(first),...pages.filter(e=>!first(e))],[pages,first]);
  const check=(id:string)=>pages.some(e=>e.id===id)?null:'That page isn’t in this campaign.';
- return <section className="quest-fact-slot" aria-label={title}>
-  <div className="quest-fact-head"><span className="eyebrow">{title}</span></div>
+ return <section className={`quest-fact-slot${className?' '+className:''}`} aria-label={title}>
+  <div className="quest-fact-head"><span className="eyebrow">{icon}{title}</span>{tools}</div>
   <PageDrop className="quest-fact-drop goal-anchor" label={`Drop to set ${label}`} check={check} onPage={id=>{setRefused('');onSet(id);}} onRefuse={setRefused}>
    {page?<PageCard page={page} label={label} onOpen={()=>onOpen(page.id)} onChange={()=>setPicking(true)}/>
     :<button type="button" className="quest-fact-empty" onClick={()=>setPicking(true)}><Plus size={14}/> {empty}</button>}
