@@ -1,0 +1,75 @@
+/* A vehicle page's Overview tab (components/encyclopedia/vehicle-sheet.tsx). Three columns on a wide screen, two on a
+   middling one (owner and commander move under the picture), one on a phone, where the picture and gauges come first.
+   Media queries, not container queries, so the page pickers' bottom sheet is not trapped. */
+.vehicle-layout{grid-template-columns:minmax(0,max(var(--reading-width,760px),1040px)) 185px}
+.vehicle-sheet{--g-hull:#3f9a63;--g-shield:#4a7fd0;--g-fuel:#c58a2b;--g-other:#8a6cc9;display:flex;flex-direction:column;gap:16px;margin-top:4px}
+.vehicle-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.vehicle-type{display:inline-flex;align-items:center;gap:6px;padding:4px 8px 4px 6px;border:1px solid var(--line);border-radius:999px;background:var(--raised,var(--hover));color:var(--accent);font-size:13px;font-weight:600}
+.vehicle-type select{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:600;padding:2px 0;cursor:pointer}
+.vehicle-subtitle{flex:1;min-width:200px;border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:6px 8px;font-size:15px;font-weight:600;color:var(--muted)}
+.vehicle-subtitle:hover,.vehicle-subtitle:focus{border-color:var(--line);background:var(--panel)}
+.vehicle-ro-subtitle{font-size:15px;font-weight:600;color:var(--muted)}
+.vehicle-grid{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
+.vehicle-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media (min-width:761px){
+ .vehicle-grid{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+ .vehicle-left{grid-column:1;grid-row:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+ .vehicle-mid{grid-column:1;grid-row:1}
+ .vehicle-right{grid-column:2;grid-row:1/span 2}
+}
+@media (min-width:1400px){
+ .vehicle-grid{grid-template-columns:220px minmax(0,1fr) 300px}
+ .vehicle-left{grid-column:1;grid-row:1;display:flex}
+ .vehicle-mid{grid-column:2;grid-row:1}
+ .vehicle-right{grid-column:3;grid-row:1}
+}
+@media (max-width:760px){
+ .vehicle-grid{display:flex;flex-direction:column}
+ .vehicle-col{display:contents}
+ .vehicle-picture{order:1}.o-gauge{order:2}.o-now{order:3}.vehicle-location{order:4}.o-cmd{order:5}.o-spec{order:6}.o-own{order:7}
+}
+.vehicle-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.vehicle-sheet .eyebrow{display:inline-flex;align-items:center;gap:6px}
+.vehicle-now-title{color:var(--accent)}
+.vehicle-slot.is-hidden .quest-fact-card,.vehicle-spec.is-hidden,.vehicle-gauge.is-hidden,.vehicle-location.is-hidden{border-style:dashed;border-color:var(--warning)}
+.vehicle-gauge.is-hidden{border:1px dashed var(--warning);border-radius:var(--radius);padding:4px 6px}
+.vehicle-eye.off{color:var(--warning)}
+.vehicle-sheet .icon-button{padding:5px}
+.vehicle-picture{position:relative;display:grid;place-items:center;min-height:300px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:radial-gradient(ellipse at 50% 45%,var(--panel),var(--raised,var(--hover)) 75%);color:var(--muted);overflow:hidden}
+.vehicle-picture img{display:block;max-width:100%;max-height:440px;object-fit:contain}
+.vehicle-art{max-height:280px;width:auto;opacity:.85}
+.vehicle-picture-tools{position:absolute;top:8px;right:8px;display:flex;gap:4px}
+.vehicle-picture-tools .icon-button{background:var(--panel)}
+.vehicle-picture-note{position:absolute;left:10px;bottom:8px;margin:0;font-size:12px}
+.vehicle-picture-wait{font-size:12px}
+@media (max-width:760px){.vehicle-picture{min-height:200px}.vehicle-art{max-height:180px}}
+.vehicle-location{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.vehicle-location-icon{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:var(--radius);background:var(--accent-soft);color:var(--accent);flex-shrink:0}
+.vehicle-location-body{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.vehicle-location-name{font-size:14px;font-weight:600;text-align:left;overflow-wrap:anywhere}
+.vehicle-gauge{display:flex;flex-direction:column;gap:5px}
+.vehicle-gauge-top{display:flex;align-items:center;gap:4px}
+.vehicle-gauge-name{flex:1;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;min-width:0}
+.vehicle-gauge-num{font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap;margin-right:4px}
+.vehicle-gauge-num small{color:var(--muted)}
+.vehicle-low{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--danger-soft,var(--raised));color:var(--danger)}
+.vehicle-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.vehicle-bar i{display:block;height:100%;border-radius:4px;transition:width .2s}
+.vehicle-pips{display:flex;gap:4px}
+.vehicle-pips i{flex:1;height:8px;border-radius:2px;background:var(--line)}
+.g-hull{background:var(--g-hull)}.g-shield{background:var(--g-shield)}.g-fuel{background:var(--g-fuel)}.g-other{background:var(--g-other)}.g-low{background:var(--danger)}
+.vehicle-specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 0}
+.vehicle-card .vehicle-specs{margin:0}
+.vehicle-spec{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised,var(--hover));min-width:0}
+.vehicle-spec-label{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:11px;font-weight:700;color:var(--accent);min-height:22px}
+.vehicle-spec-label .icon-button{border:0;padding:3px}
+.vehicle-spec-input{width:100%;min-width:0;border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:2px 4px;margin:0 -4px;font-size:13px;font-weight:600;color:var(--ink)}
+.vehicle-spec-input:hover,.vehicle-spec-input:focus{border-color:var(--line);background:var(--panel)}
+.vehicle-spec dd{margin:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.vehicle-ro-who{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.vehicle-ro-who .wiki-link{font-size:15px;text-align:left}
+@media (prefers-reduced-motion:reduce){.vehicle-bar i{transition:none}}
+.vehicle-slot,.vehicle-slot .quest-fact-drop,.vehicle-slot .quest-fact-card{min-width:0;max-width:100%}
+.vehicle-slot .quest-fact-drop{width:100%}
+.vehicle-slot .quest-fact-card{width:100%;box-sizing:border-box}
+.vehicle-pips i.g-hull{background:var(--g-hull)}.vehicle-pips i.g-shield{background:var(--g-shield)}.vehicle-pips i.g-fuel{background:var(--g-fuel)}.vehicle-pips i.g-other{background:var(--g-other)}

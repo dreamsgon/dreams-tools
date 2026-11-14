@@ -1,0 +1,104 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {workspaceSchema,demoWorkspace,playerCampaign,importCopy,searchableText,defaultCharacter} from '../lib/encyclopedia/world-model.ts';
+import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema} from '../lib/encyclopedia/vehicles.ts';
+
+const C='demo-campaign',T='2026-11-14T10:00:00.000Z';
+const page=(id,title,kind,extra={})=>({id,worldId:'demo-world',campaignId:C,parentId:null,title,kind,body:'',updatedAt:T,...extra});
+const types=starterVehicleTypes(),ship=types.find(t=>t.id==='starship'),sail=types.find(t=>t.id==='sailing-ship');
+const ok=s=>workspaceSchema.safeParse(s);
+
+function world(vehicle){
+ const s=demoWorkspace();
+ s.entries.push(
+  page('cap','Ilsa Marrow','character',{character:defaultCharacter(),overviewVisibility:'players'}),
+  page('spy','Agent Vey','character',{character:defaultCharacter()}),
+  page('port','Port Authority','faction'),
+  page('vesh','Vesh Station','place',{overviewVisibility:'players'}),
+  page('gdn','GDN-205','vehicle',{vehicle}),
+ );
+ return s;
+}
+
+test('the five starter types are valid and keep fixed ids',()=>{
+ assert.deepEqual(types.map(t=>t.id),['starship','sailing-ship','airship','carriage','car']);
+ for(const t of types)assert.ok(vehicleTypeSchema.safeParse(t).success,t.name);
+ assert.equal(vehicleTypeSchema.safeParse({...ship,gauges:[...ship.gauges,{id:'big',label:'Big',shape:'pips',colour:'other',max:50}]}).success,false,'pips stop at 20');
+ assert.equal(vehicleTypeOf({typeId:'gone'}).id,'starship','a missing type falls back to the first');
+});
+
+test('a new vehicle starts GM only, with empty stats, full gauges and the type’s eyes',()=>{
+ const v=newVehicle(ship);
+ assert.ok(vehicleSchema.safeParse(v).success);
+ assert.equal(v.visibility,'gm');
+ assert.deepEqual(gaugeRows(v,ship).map(g=>[g.label,g.value,g.max]),[['Hull',40,40],['Shields',3,3],['Fuel',100,100]]);
+ assert.equal(nowRows(v,ship).find(r=>r.id==='objective').gm,true,'Objective is GM only by default');
+ assert.ok(specRows(v,ship).every(r=>r.value===''&&!r.gm));
+});
+
+test('values, eyes and gauges change one at a time and gauges stay in range',()=>{
+ let v=newVehicle(ship);
+ v=setValue(v,ship,'specs','model','  Liberator ');
+ v=setGm(v,ship,'specs','registry',true);
+ v=setGauge(v,ship,'hull',-5);
+ assert.equal(specRows(v,ship).find(r=>r.id==='model').value,'Liberator');
+ assert.equal(specRows(v,ship).find(r=>r.id==='registry').gm,true);
+ assert.equal(gaugeRows(v,ship).find(g=>g.id==='hull').value,0);
+ v=setGauge(v,ship,'shields',99);
+ assert.equal(gaugeRows(v,ship).find(g=>g.id==='shields').value,3);
+ v=setGm(v,ship,'gauges','fuel',true);v=setGauge(v,ship,'fuel',50);
+ assert.deepEqual(gaugeRows(v,ship).find(g=>g.id==='fuel'),{id:'fuel',label:'Fuel',shape:'bar',colour:'fuel',max:100,value:50,gm:true},'a moved gauge keeps its eye');
+ assert.equal(gaugeStep({shape:'pips',max:3}),1);assert.equal(gaugeStep({shape:'bar',max:100}),5);assert.equal(gaugeStep({shape:'bar',max:10}),1);
+});
+
+test('changing the type keeps values whose names match and drops the rest',()=>{
+ let v=newVehicle(ship);
+ v=setValue(v,ship,'specs','class','Frigate');v=setValue(v,ship,'specs','drive','Ion');v=setGauge(v,ship,'hull',30);
+ const s=changeType(v,ship,sail);
+ assert.equal(s.typeId,'sailing-ship');
+ assert.equal(specRows(s,sail).find(r=>r.id==='class').value,'Frigate');
+ assert.equal(gaugeRows(s,sail).find(g=>g.id==='hull').value,30,'Hull carries over');
+ assert.ok(!s.specs.some(x=>x.id==='drive'));
+ assert.ok(vehicleSchema.safeParse(s).success);
+});
+
+test('the workspace checks a vehicle’s links',()=>{
+ const good={...newVehicle(ship),ownerId:'port',commanderId:'cap',locationId:'vesh'};
+ assert.ok(ok(world(good)).success);
+ assert.equal(ok(world({...good,commanderId:'port'})).success,false,'a commander must be a character');
+ assert.equal(ok(world({...good,ownerId:'vesh'})).success,false,'an owner is a character or organization');
+ const s=world(good);s.entries.find(e=>e.id==='cap').kind='note';delete s.entries.find(e=>e.id==='cap').character;
+ assert.equal(ok(s).success,false);
+ const wrong=world(undefined);wrong.entries.find(e=>e.id==='vesh').vehicle=newVehicle(ship);
+ assert.equal(ok(wrong).success,false,'vehicle details only on a vehicle page');
+});
+
+test('players get only shown values and links to pages they can read',()=>{
+ let v={...newVehicle(ship),visibility:'players',subtitle:'Liberator · System frigate',ownerId:'port',commanderId:'cap',locationId:'vesh'};
+ v=setValue(v,ship,'specs','model','Liberator');v=setValue(v,ship,'specs','registry','Forged');v=setGm(v,ship,'specs','registry',true);
+ v=setValue(v,ship,'now','objective','Seize the Quiet Mercy');v=setGm(v,ship,'gauges','fuel',true);
+ const s=world(v);
+ const pv=playerCampaign(s,C).entries.find(e=>e.id==='gdn').vehicle;
+ assert.equal(pv.subtitle,'Liberator · System frigate');
+ assert.equal(pv.commanderId,'cap');assert.equal(pv.locationId,'vesh');
+ assert.equal(pv.ownerId,undefined,'the owner page is GM only');
+ assert.deepEqual(pv.specs.map(x=>x.label),['Model']);
+ assert.deepEqual(pv.gauges.map(x=>x.label),['Hull','Shields']);
+ assert.deepEqual(pv.now,[]);
+ const text=JSON.stringify(playerCampaign(s,C));
+ for(const secret of ['Forged','Quiet Mercy','Port Authority'])assert.ok(!text.includes(secret),secret);
+ const hidden=world({...v,visibility:'gm',commanderGm:true});
+ assert.equal(playerCampaign(hidden,C).entries.find(e=>e.id==='gdn'),undefined,'a GM-only vehicle is not shared at all');
+ assert.equal(playerVehicle({...v,commanderGm:true},ship,()=>true,x=>x).commanderId,undefined);
+});
+
+test('search, import and remapping carry vehicles across',()=>{
+ const v={...setValue(newVehicle(ship),ship,'specs','model','Liberator'),commanderId:'cap',locationText:'Kessin Gate'};
+ const s=world(v);
+ const e=s.entries.find(x=>x.id==='gdn');
+ assert.match(searchableText(e),/Liberator/);assert.match(searchableText(e),/Kessin Gate/);
+ const copy=importCopy(demoWorkspace(),s),moved=copy.entries.find(x=>x.title==='GDN-205'&&x.kind==='vehicle');
+ assert.ok(moved.vehicle.commanderId&&moved.vehicle.commanderId!=='cap');
+ assert.equal(copy.entries.find(x=>x.id===moved.vehicle.commanderId).title,'Ilsa Marrow');
+ assert.equal(remapVehicle({...v,ownerId:'x'},id=>id==='cap'?'c2':undefined).ownerId,undefined);
+});

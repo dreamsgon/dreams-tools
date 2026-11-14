@@ -8,7 +8,7 @@ export type Place = { worldId: string; campaignId: string | null; view: PlaceVie
 const TAB = /^[A-Za-z0-9_-]{1,80}$/;
 
 /** The tab a page opens on when none is named, so the address need not carry it. */
-export const defaultTab = (kind: string) => kind === "map" ? "map" : kind === "faction" ? "profile" : "overview";
+export const defaultTab = (kind: string) => kind === "map" ? "map" : kind === "faction" ? "profile" : kind === "vehicle" ? "vehicle" : "overview";
 
 /** Whether going from one place to another is a new place (push a history entry) rather than a small change in the same one (replace). */
 export function isNewPlace(a: Place | null, b: Place): boolean {
