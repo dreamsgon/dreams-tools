@@ -12,6 +12,7 @@ import { compactTranscript } from "../encyclopedia/recaps.ts";
 import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, checkPrompt, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, publishedRecaps, questsBlock, quoteLines, storyNow, storyPrompt, unlinkNames } from "../encyclopedia/recap-prompts.ts";
 import { runOnce, ProviderError, type OnceTool } from "./chat.ts";
 import { unlock } from "./secret.ts";
+import { styleFor, writingStyleSchema, type WritingStyle } from "../encyclopedia/ai-styles.ts";
 
 /** The connection that writes it, checked: an API key, allowed to write session notes, under its limit. */
 async function writer(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string) {
@@ -80,7 +81,8 @@ export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: st
     const notes = Object.fromEntries(notesKeys.filter(k => first.input![k] !== undefined).map(k => [k, first.input![k]]));
     let recap = "(Left out.)";
     if (!request.skip?.includes("recap")) {
-      const second = await runOnce(target, RECAP_SYSTEM, prosePrompt({ ...head, timeline: beatLines(notes.timeline), quotes: quoteLines(notes.quotes) }), null, 6_000, fetchImpl);
+      const style = styleFor(ctx.campaign.aiWriting, "recap", request.style);
+      const second = await runOnce(target, RECAP_SYSTEM, prosePrompt({ ...head, style, timeline: beatLines(notes.timeline), quotes: quoteLines(notes.quotes) }), null, 6_000, fetchImpl);
       add(second.tokens);
       recap = second.text.trim();
       if (!recap) throw new ProviderError("The AI sent an empty recap. Try again.");
@@ -92,16 +94,18 @@ export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: st
   });
 }
 
-/** Write it again: the recap players read, from the page's timeline as it is now, with the GM's note. */
-export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, note: string, fetchImpl: typeof fetch = fetch) {
+/** Write it again: the recap players read, from the page's timeline as it is now, with the GM's note, in the style picked (or the recap's own). */
+export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, note: string, fetchImpl: typeof fetch = fetch, styleId?: string) {
   const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
   const page = sessionPage(ctx, entryId);
   if (!page.recap) throw Error("That page has no recap.");
   if (page.recap.status !== "draft") throw Error("Unpublish the recap before writing it again.");
   if (!page.recap.timeline.length) throw Error("The recap is written from the timeline, and this one is empty. Add a beat first.");
   const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
+  const style = styleFor(ctx.campaign.aiWriting, "recap", styleId ?? page.recap.request?.style);
+  const request = { ...(page.recap.request ?? defaultRequest), ...(styleId ? { length: style.length } : {}) };
   const prompt = prosePrompt({
-    campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, request: page.recap.request ?? defaultRequest, names: namesBlock(ctx.book.entries, scope),
+    campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, request, style, names: namesBlock(ctx.book.entries, scope),
     timeline: beatLines(page.recap.timeline), quotes: quoteLines(page.recap.quotes), before: unlinkNames(page.body), note: note.slice(0, 500),
   });
   return counted(bucket, owner, campaignId, c.id, async add => {
@@ -150,17 +154,46 @@ function findsTool(): OnceTool {
  * text goes back to the front page editor, where it waits beside the GM's own text until they pick.
  * `keep` starts from the current text; `note` is what the GM asks for.
  */
-export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch, opts: { note?: string; keep?: boolean; before?: string } = {}) {
+export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch, opts: { note?: string; keep?: boolean; before?: string; styleId?: string; length?: WritingStyle["length"] } = {}) {
   const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
   const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
   if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
   const before = opts.keep === false ? "" : opts.before ?? storyNow(ctx.campaign);
-  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before, note: opts.note?.slice(0, 500) });
+  const chosen = styleFor(ctx.campaign.aiWriting, "story", opts.styleId), style = opts.length ? { ...chosen, length: opts.length } : chosen;
+  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before, note: opts.note?.slice(0, 500), style });
   return counted(bucket, owner, campaignId, c.id, async add => {
     const out = await runOnce(target, RECAP_SYSTEM, prompt, null, 2_000, fetchImpl);
     add(out.tokens);
     const text = out.text.trim().slice(0, 6000);
     if (!text) throw new ProviderError("The AI sent an empty story. Try again.");
     return { text, from: recaps.length, by: c.name };
+  });
+}
+
+/**
+ * A sample in a style the GM is setting up, before they save or use it: a recap of one session (from its
+ * timeline, or the recap text when there is none) or The story so far. Nothing is saved.
+ */
+export async function writeSample(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, input: { kind: "recap" | "story"; style: unknown; entryId?: string }, fetchImpl: typeof fetch = fetch) {
+  const style = writingStyleSchema.parse(input.style);
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+  const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
+  let prompt: string;
+  if (input.kind === "story") {
+    const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
+    if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
+    prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, style });
+  } else {
+    const page = ctx.book.entries.find(e => e.id === input.entryId && e.kind === "session" && e.campaignId === ctx.campaign.id && e.recap);
+    if (!page?.recap) throw Error(ctx.transcript ? "Pick a session with a recap to try it on." : `${c.name} can't read draft recaps, which are GM-only. Turn on “See GM-only things” for it under What it may do.`);
+    const timeline = beatLines(page.recap.timeline) || unlinkNames(page.body).trim();
+    if (!timeline) throw Error(`“${page.title}” has no timeline or recap text to write from yet.`);
+    prompt = prosePrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, request: { ...(page.recap.request ?? defaultRequest), length: style.length }, style, names: namesBlock(ctx.book.entries, scope), timeline, quotes: quoteLines(page.recap.quotes) });
+  }
+  return counted(bucket, owner, campaignId, c.id, async add => {
+    const out = await runOnce(target, RECAP_SYSTEM, prompt, null, 4_000, fetchImpl);
+    add(out.tokens);
+    if (!out.text.trim()) throw new ProviderError("The AI sent an empty sample. Try again.");
+    return { text: out.text.trim().slice(0, 8000), by: c.name };
   });
 }

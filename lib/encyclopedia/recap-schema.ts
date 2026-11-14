@@ -34,6 +34,8 @@ export const requestSchema = z.object({
   length: z.enum(["short", "standard", "detailed"]),
   depth: z.enum(["main", "balanced", "everything"]),
   steer: z.string().max(500).optional(),
+  /** The writing style picked for this recap (ai-styles.ts). Left out: the campaign's recap style. */
+  style: id.optional(),
   /** Parts to leave out. Everything else is made. */
   skip: z.array(z.enum(recapParts)).max(6).optional(),
   /** Who each speaker in the transcript is: the GM, a character page, or just a player. */

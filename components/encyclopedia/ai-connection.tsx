@@ -30,7 +30,7 @@ async function post(body:object){
 }
 
 /** "Connect an AI": named MCP connections for one campaign, each with a level, and the setup for each AI app. */
-export function AiConnectionDialog({campaignId,campaignName,onClose}:{campaignId:string;campaignName:string;onClose:()=>void}){
+export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{campaignId:string;campaignName:string;onClose:()=>void;onWriting?:()=>void}){
  const ref=useRef<HTMLDialogElement>(null);
  const [list,setList]=useState<Connection[]|null>(null),[level,setLevel]=useState<Mode>('helper'),[name,setName]=useState(''),[way,setWay]=useState<'app'|'key'>('app');
  const [now]=useState(()=>Date.now()),[busy,setBusy]=useState(false),[error,setError]=useState(''),[made,setMade]=useState<{name:string;mode:Mode|'custom';url:string}|null>(null),[editing,setEditing]=useState<string|null>(null);
@@ -58,7 +58,7 @@ export function AiConnectionDialog({campaignId,campaignName,onClose}:{campaignId
  return <dialog ref={ref} className="ai-dialog" aria-labelledby="ai-title" onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===ref.current)onClose();}}>
   {made?<Ready made={made} campaignName={campaignName} onDone={()=>setMade(null)} onClose={onClose}/>:open?<MayDo c={open} campaignId={campaignId} campaignName={campaignName} now={now} error={error} onChange={how=>void change(open,how)} onSaved={c=>setList(l=>l?.map(x=>x.id===c.id?c:x)??null)} onBack={()=>setEditing(null)} onClose={onClose}/>:<>
    <div className="ai-head"><h2 id="ai-title">Connect an AI</h2><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={16}/></button></div>
-   <p className="ai-lead">For {campaignName} and its Maptable maps. Two ways in, with the same modes, approvals and AI panel. The AI sees this campaign and nothing else.</p>
+   <p className="ai-lead">For {campaignName} and its Maptable maps. Two ways in, with the same modes, approvals and AI panel. The AI sees this campaign and nothing else.{onWriting&&<> <button type="button" className="inline-link" onClick={onWriting}>How the AI writes…</button></>}</p>
    <div className="ai-ways" role="radiogroup" aria-label="How to connect">
     <label className={`ai-level ${way==='app'?'on':''}`}><input type="radio" name="ai-way" checked={way==='app'} onChange={()=>setWay('app')}/><strong><Link2 size={16}/>From an AI app</strong><span>Add RPG Tools to Claude, ChatGPT, Cursor or any app that supports MCP, with a link. You talk to it there.</span></label>
     <label className={`ai-level ${way==='key'?'on':''}`}><input type="radio" name="ai-way" checked={way==='key'} onChange={()=>setWay('key')}/><strong><KeyRound size={16}/>With an API key</strong><span>Any AI with an API key works inside RPG Tools: ask it in the AI panel at the table. Billed to that account.</span></label>

@@ -91,7 +91,7 @@ test('the AI gets what the GM asked for, with the transcript and in the prompt',
  const part=JSON.parse(r.content[0].text.slice(r.content[0].text.indexOf('{')));
  assert.deepEqual(part.gmAsked,requestNotes(request));
  const text=getPrompt(c,'recap_from_source',{page:'Session 13'}).messages[0].content.text;
- assert.match(text,/the length below/);assert.match(text,/What I asked for in RPG Tools:\n- Recap length: about 150 to 300 words\./);assert.match(text,/read_transcript \(page "Session 13"\)/);
+ assert.match(text,/in the style below/);assert.match(text,/How to write the recap \("Warm storyteller"\): Length: about 150 to 300 words\./);assert.doesNotMatch(text,/- Recap length/);assert.match(text,/read_transcript \(page "Session 13"\)/);
  const linked=startRecap(next,{campaignId:C,title:'Session 14',source:'Notion page',request:{...request,link:'https://www.notion.so/Session-14'}},NOW);
  const book2=campaignExport(linked.next,C),c2={...c,book:book2,campaign:book2.campaigns[0]};
  const t2=getPrompt(c2,'recap_from_source',{page:'Session 14'}).messages[0].content.text;

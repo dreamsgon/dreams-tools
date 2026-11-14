@@ -5,6 +5,8 @@ import SaveChip from "../save-chip";
 import { altStep } from "../folder-reorder";
 import { useAutosave } from "../use-autosave";
 import { AiConnectionDialog } from "./ai-connection";
+import { AiWritingDialog } from "./ai-writing";
+import { writingKinds, type WritingKind } from "@/lib/encyclopedia/ai-styles";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
@@ -91,7 +93,7 @@ const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not ed
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
     const [member, setMember] = useState<CoGm | null>(null);
-    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
+    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [writing, setWriting] = useState<WritingKind | null>(null), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
     const pagesBtn = useRef<HTMLButtonElement>(null), moreBtn = useRef<HTMLButtonElement>(null), drawerWas = useRef(false);
     // Phone page sheet: focus moves into it when it opens and back to the Pages button when it closes.
@@ -134,6 +136,9 @@ export default function WorkspaceApp() {
         // Links from Maptable tokens and the Campaigns page use the same address. Without one, the last place is used (this tab's, else this browser's).
         // Read the address once: a second load must not lose it.
         const query = (linkQuery.current ??= new URLSearchParams(window.location.search));
+        // ?styles=story (from the Campaigns page's The story so far) opens How the AI writes.
+        const styles = query.get("styles");
+        if (styles) setWriting((writingKinds as readonly string[]).includes(styles) ? styles as WritingKind : "recap");
         // A co-GM opens the one campaign they were let into.
         const shared = body.member ? checked.campaigns.find(c => c.id === body.member!.campaignId) : undefined;
         if (body.member && shared) {
@@ -416,7 +421,8 @@ export default function WorkspaceApp() {
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
   <RollResults discord={campaign && (campaign.discord || campaign.maptableCampaignId) ? { campaignId: campaign.id, label: "Discord" } : null} onSetupDiscord={campaign ? () => setModal({ type: "connections" }) : undefined}/>
   {palette && <QuickSearch entries={shown} icons={icons} labels={labels} canCreate={!!world} scopeName={e => e.campaignId ? data.campaigns.find(c => c.id === e.campaignId)?.name ?? "Campaign" : "World lore"} onOpen={openEntry} onCreate={name => setModal({ type: "entry", name })} onView={showView} onClose={() => setPalette(false)} initialTags={paletteTags} onManageTags={() => setTagsOpen(true)}/>}
-  {aiOpen && campaign && <AiConnectionDialog campaignId={campaign.id} campaignName={campaign.name} onClose={() => setAiOpen(false)}/>}
+  {aiOpen && campaign && <AiConnectionDialog campaignId={campaign.id} campaignName={campaign.name} onClose={() => setAiOpen(false)} onWriting={() => { setAiOpen(false); setWriting("recap"); }}/>}
+  {writing && campaign && !member && <AiWritingDialog data={data} campaign={campaign} change={change} start={writing} onClose={() => setWriting(null)}/>}
   {tagsOpen && <TagsManager scope="encyclopedia" onClose={() => setTagsOpen(false)} onShow={showTag}/>}
   {modal && <ModalDialog title={{ world: "Create a world", campaign: "Begin a campaign", entry: "Create an entry", settings: "Workspace & backups", library: "Your world library", rename: "Edit details", connections: "AI & campaign repositories" }[modal.type]} onClose={() => setModal(null)}>
    {modal.type === "library" ? <><p className="modal-intro">A home for every world you imagine.</p><div className="world-list">{data.worlds.map(w => <div key={w.id}><button onClick={() => { selectWorld(w.id); setModal(null); }}><Globe size={20}/><span><strong>{w.name}</strong><small>{w.archived ? "Archived" : `${data.campaigns.filter(c => c.worldId === w.id).length} campaigns`}</small></span><ChevronRight size={16}/></button><button aria-label={`${w.archived ? "Restore" : "Archive"} ${w.name}`} title={w.archived ? "Restore world" : "Archive world"} onClick={() => change({ ...data, worlds: data.worlds.map(x => x.id === w.id ? { ...x, archived: !x.archived } : x) })}><Archive size={16}/></button></div>)}</div><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={16}/> Create a world</button></> :

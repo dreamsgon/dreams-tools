@@ -223,6 +223,8 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
     look: campaign?.look ?? null,
     front: player?.frontPage ?? null,
     frontConfig: campaign ? campaign.frontPage ?? defaultFrontPage(campaign.calendars ?? []) : null,
+    // How the AI writes (the GM's own styles), for the Style menu under The story so far.
+    writing: campaign?.aiWriting ?? null,
     calendars: (campaign?.calendars ?? []).map(c => ({ id: c.id, name: c.name, shared: c.visibility === "players" })),
     playerPages: (player?.entries ?? []).map(e => ({ id: e.id, title: e.title })),
   };

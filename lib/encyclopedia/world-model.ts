@@ -5,6 +5,7 @@ import { z } from "zod";
 import {playerInline} from './inline.ts';
 import {infoRows,templateOf} from './templates.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
+import {aiWritingSchema} from './ai-styles.ts';
 import {dashboardSchema} from './dashboard.ts';
 import {questSchema,playerQuest,newQuest,questCategoriesSchema,questCategories} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
@@ -88,7 +89,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the campaign's accent, heading font, page surface and banner.
   look:lookSchema.optional(), dashboard:dashboardSchema.optional(),
   // Optional (added later): the quest categories in their order. Without it a campaign has Main, Side and Personal.
-  questCategories:questCategoriesSchema.optional() });
+  questCategories:questCategoriesSchema.optional(),
+  // Optional (added later): how the AI writes recaps, The story so far and generator text (ai-styles.ts). Never sent to players.
+  aiWriting:aiWritingSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
