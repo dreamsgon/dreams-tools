@@ -84,3 +84,57 @@ test('a quest category colour can be a named colour or any picked #rrggbb, and n
   assert(ok('gold')); assert(ok('#a1b2c3')); assert(ok('#A1B2C3'));
   for(const bad of ['crimson','#abc','#a1b2c3d','a1b2c3','red;x:y']) assert(!ok(bad),bad);
 });
+
+test('a goal reads as a sentence from its verb, target and second part', async () => {
+  const {goalText,setGoalParts,whereLabel}=await import('../lib/encyclopedia/quests.ts');
+  const titles={mill:'the Old Mill',arin:'Arin Vale'},title=id=>titles[id];
+  let g={id:'g',text:'Find',done:false,verb:'Find'};
+  g=setGoalParts(g,{targetId:'arin',target:'Arin Vale'},title);
+  assert.equal(g.text,'Find Arin Vale');
+  g=setGoalParts(g,{whereId:'mill',where:'the Old Mill'},title);
+  assert.equal(g.text,'Find Arin Vale, last seen at the Old Mill');
+  // A renamed page reads with its new name.
+  titles.arin='Brother Arin';
+  assert.equal(goalText(g,title),'Find Brother Arin, last seen at the Old Mill');
+  // The verb's own words lead into the second part; a word of the GM's own gets "at".
+  assert.equal(setGoalParts(g,{verb:'Deliver'},title).text,'Deliver Brother Arin, to the Old Mill');
+  assert.equal(whereLabel({verb:'Bribe'}),'at');
+  assert.equal(whereLabel({verb:'Bribe',whereLabel:'behind'}),'behind');
+  // Clearing a part removes it, and a typed name needs no page.
+  g=setGoalParts(g,{whereId:null,where:undefined,targetId:null,target:'the chapel bell'},title);
+  assert.equal(g.text,'Find the chapel bell');
+  assert(!('whereId' in g)&&!('targetId' in g));
+  // A goal written by hand keeps its words.
+  assert.equal(goalText({id:'h',text:'Survive the night',done:false}),'Survive the night');
+});
+
+test('goal status: done, failed and dropped, and dropped goals leave the count', async () => {
+  const {goalStatus,withGoalStatus}=await import('../lib/encyclopedia/quests.ts');
+  const g={id:'g',text:'Find Arin',done:false};
+  assert.equal(goalStatus(g),'todo');
+  assert.deepEqual(withGoalStatus(g,'done'),{...g,done:true});
+  const failed=withGoalStatus(withGoalStatus(g,'done'),'failed');
+  assert.equal(failed.done,false);assert.equal(goalStatus(failed),'failed');
+  assert(!('status' in withGoalStatus(failed,'todo')));
+  const q={...newQuest(),objectives:[{id:'a',text:'A',done:true},{id:'b',text:'B',done:false,status:'failed'},{id:'c',text:'C',done:false,status:'dropped'},{id:'d',text:'D',done:false}]};
+  assert.deepEqual(questProgress(q),{done:1,total:3});
+  assert.equal(nextStep(q),'D');
+  // Saved quests from before goals had parts still load, and new goals save.
+  const s=world([quest('bell','active',q)]);
+  assert.equal(s.entries.find(e=>e.id==='bell').quest.objectives.length,4);
+  assert.equal(workspaceSchema.safeParse({...s,entries:s.entries.map(e=>e.id==='bell'?{...e,quest:{...e.quest,objectives:[{id:'x',text:'X',done:false,status:'lost'}]}}:e)}).success,false);
+});
+
+test('a goal can only point at pages in its campaign, and players only get links to pages they can read', () => {
+  const secret={id:'secret-npc',worldId:'demo-world',campaignId:'demo-campaign',parentId:null,title:'The Drowned Choir',kind:'character',body:'',updatedAt:now};
+  const goal={id:'g',text:'Rescue Arin, held at the Drowned Choir',done:false,verb:'Rescue',target:'Arin',targetId:'demo-mara',where:'The Drowned Choir',whereId:'secret-npc',note:'Start at the lake'};
+  const s=world([secret,{...quest('bell','active',{objectives:[goal]}),overviewVisibility:'players'}]);
+  const p=playerCampaign(s,'demo-campaign'),o=p.entries.find(e=>e.id==='bell').quest.objectives[0];
+  assert.equal(o.verb,'Rescue');assert.equal(o.whereLabel,'held at');assert.equal(o.status,'todo');assert.equal(o.note,'Start at the lake');
+  assert.equal(o.whereId,null,'the GM-only page is not linked');
+  assert.equal(o.targetId,p.entries.some(e=>e.id==='demo-mara')?'demo-mara':null);
+  const elsewhere={...s,entries:[...s.entries,{id:'far',worldId:'demo-world',campaignId:'demo-campaign-two',parentId:null,title:'Far',kind:'place',body:'',updatedAt:now}]};
+  const pointing={...elsewhere,entries:elsewhere.entries.map(e=>e.id==='bell'?{...e,quest:{...e.quest,objectives:[{...goal,whereId:'far'}]}}:e)};
+  assert.equal(workspaceSchema.safeParse(elsewhere).success,true);
+  assert.equal(workspaceSchema.safeParse(pointing).success,false);
+});

@@ -1,0 +1,100 @@
+/* A quest's goals as sentences (components/encyclopedia/quest-goals.tsx). */
+.quest-goals{display:flex;flex-direction:column;gap:10px}
+.quest-goals-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.quest-goals-head small{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:12px}
+.quest-goal{position:relative;display:flex;flex-direction:column;gap:10px;padding:10px 12px 12px 14px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.quest-goal::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:0 2px 2px 0;background:var(--line-strong)}
+.quest-goal.done::before{background:var(--goal-done)}
+.quest-goal.failed::before{background:var(--danger)}
+.quest-goal.dropped{background:var(--raised,var(--hover))}
+.quest-goal.dropped .quest-goal-sentence,.quest-goal.dropped .quest-goal-text{opacity:.6;text-decoration:line-through}
+.quest-goal.is-hidden{border-style:dashed;border-color:color-mix(in srgb,var(--warning) 45%,var(--line))}
+.quest-detail{--goal-done:#2e7d4f}
+:root[data-theme="dark"] .quest-detail{--goal-done:#7fcf9c}
+.quest-goal-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px}
+.quest-goal-n{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.quest-goal-hidden{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:color-mix(in srgb,var(--warning) 16%,transparent);color:var(--warning);white-space:nowrap}
+.quest-goal-tools{display:flex;align-items:center;gap:2px;margin-left:auto}
+.goal-anchor{position:relative;display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0}
+.goal-status{display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:2px 10px;border-radius:999px;border:1px solid var(--line-strong);background:var(--panel);color:var(--ink);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+.goal-status.done{border-color:var(--goal-done);color:var(--goal-done);background:color-mix(in srgb,var(--goal-done) 12%,transparent)}
+.goal-status.failed{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.goal-status.dropped{color:var(--muted)}
+.goal-dot{width:8px;height:8px;border-radius:50%;background:var(--line-strong);flex-shrink:0}
+.goal-dot.done{background:var(--goal-done)}.goal-dot.failed{background:var(--danger)}.goal-dot.dropped{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+.goal-eye.off{color:var(--warning)}
+.quest-goal-sentence{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:15px;min-width:0}
+.goal-verb{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:5px 10px;border:0;border-radius:var(--radius);background:var(--accent);color:var(--on-accent);font:inherit;font-family:var(--font-display,inherit);font-weight:700;font-size:15px;cursor:pointer}
+.goal-verb:hover{background:var(--accent-hover,var(--accent))}
+.goal-drop{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;border-radius:var(--radius)}
+.goal-drop.can-drop{outline:2px dashed color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:2px}
+.goal-drop.is-over{outline-style:solid;background:var(--accent-soft)}
+.goal-chip{display:inline-flex;align-items:center;gap:7px;min-height:34px;max-width:100%;padding:4px 10px 4px 5px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--raised,var(--hover));color:var(--ink);font:inherit;font-weight:600;cursor:pointer;text-align:left}
+.goal-chip>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.goal-chip:hover{border-color:var(--accent)}
+.goal-chip.named{padding-left:10px;border-style:dashed;font-style:italic;font-weight:500}
+.goal-chip.empty{padding-left:9px;border-style:dashed;background:transparent;color:var(--muted);font-weight:500;font-size:14px}
+.goal-chip-icon,.goal-pick-icon{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line);color:var(--muted);flex-shrink:0}
+.goal-pick-icon{width:26px;height:26px}
+.goal-joiner{color:var(--muted);font-size:13px;white-space:nowrap}
+.goal-where{flex-wrap:wrap}
+.goal-add-part{display:inline-flex;align-items:center;gap:4px;min-height:30px;padding:2px 8px;border:1px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.goal-add-part:hover{border-color:var(--accent);color:var(--accent)}
+.goal-refused{position:absolute;top:calc(100% + 4px);left:0;z-index:5;padding:4px 8px;border-radius:var(--radius);background:var(--danger-soft);color:var(--danger);font-size:12px;white-space:nowrap}
+.quest-goal-text{width:100%;background:transparent;border:0;color:var(--ink);font:inherit;font-size:15px;line-height:1.4;padding:3px 0;min-width:0;resize:none;field-sizing:content;overflow:hidden}
+.quest-goal-note{width:100%;background:transparent;border:0;border-top:1px dashed var(--line);color:var(--muted);font:inherit;font-size:13px;line-height:1.45;padding:6px 0 0;resize:none;field-sizing:content;overflow:hidden}
+.quest-goal-note:focus,.quest-goal-text:focus{outline:none;color:var(--ink)}
+.quest-goals-add{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.quest-goals-write{flex:1;min-width:160px}
+.quest-goals-write input{width:100%;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--ink);font:inherit;font-size:14px;padding:6px 0}
+.quest-goals-write input:focus{outline:none;border-bottom-color:var(--line-strong)}
+
+/* Menus and pickers */
+.goal-menu,.goal-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--radius-lg,6px);box-shadow:var(--shadow-md,0 12px 36px rgba(0,0,0,.25))}
+.goal-menu{min-width:190px;padding:6px;display:flex;flex-direction:column;gap:2px}
+.goal-menu.right{left:auto;right:0}
+.goal-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:6px 10px;border:0;border-radius:var(--radius);background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.goal-menu button:hover:not(:disabled){background:var(--hover)}
+.goal-menu button:disabled{opacity:.45;cursor:default}
+.goal-menu button svg:last-child:not(:first-child){margin-left:auto}
+.goal-menu .danger{color:var(--danger)}
+.goal-pop{width:320px;max-width:calc(100vw / var(--ui-zoom, 1) - 32px);padding:12px;display:flex;flex-direction:column;gap:10px}
+.goal-pop.wide{width:360px}
+.goal-pop.up{top:auto;bottom:calc(100% + 6px)}
+.goal-pop-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.goal-pop-head strong{font-family:var(--font-display,inherit);font-size:15px}
+.goal-pop-grab,.goal-scrim{display:none}
+.goal-verbs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.goal-verbs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:58px;padding:8px 4px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--raised,var(--hover));color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.goal-verbs button:hover{border-color:var(--accent)}
+.goal-verbs button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.goal-own-verb{display:flex;gap:6px}
+.goal-own-verb input{flex:1;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--control,var(--panel));color:var(--ink);font:inherit;font-size:14px}
+.goal-write{align-self:flex-start}
+.goal-search{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 10px;border:1px solid var(--line-strong);border-radius:var(--radius);color:var(--muted);background:var(--control,var(--panel))}
+.goal-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:15px}
+.goal-pick-list{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.goal-pick-list button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 8px;border:0;border-radius:var(--radius);background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.goal-pick-list button:hover{background:var(--hover)}
+.goal-pick-list strong{display:block;font-size:14px;font-weight:600}
+.goal-pick-list small{display:block;color:var(--muted);font-size:12px}
+.goal-pick-none{padding:8px;color:var(--muted);font-size:13px}
+
+/* The quest header's progress, one segment per goal that counts. */
+.goal-bar{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.goal-bar b{color:var(--ink);font-variant-numeric:tabular-nums}
+.goal-bar-cells{display:inline-flex;gap:3px}
+.goal-bar-cells i{display:block;width:22px;height:7px;border-radius:2px;background:var(--line-strong)}
+.goal-bar-cells i.done{background:var(--goal-done,#2e7d4f)}
+.goal-bar-cells i.failed{background:var(--danger)}
+.goal-bar-cells i.hidden{background:repeating-linear-gradient(135deg,var(--line-strong) 0 3px,transparent 3px 6px)}
+.goal-bar-cells i.hidden.done{background:repeating-linear-gradient(135deg,var(--goal-done,#2e7d4f) 0 3px,transparent 3px 6px)}
+
+@media (max-width:760px){
+  .goal-scrim{display:block;position:fixed;inset:0;z-index:90;background:var(--overlay,rgba(0,0,0,.35))}
+  .goal-pop,.goal-pop.wide{position:fixed;top:auto;left:0;right:0;bottom:0;z-index:91;width:auto;max-width:none;max-height:calc(85vh / var(--ui-zoom, 1));overflow:auto;border-radius:14px 14px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+  .goal-pop-grab{display:block;width:40px;height:4px;margin:0 auto 2px;border-radius:2px;background:var(--line-strong)}
+  .goal-pick-list{max-height:none}
+  .goal-bar-cells i{width:16px}
+  .quest-goal{padding:10px 10px 12px 12px}
+}
