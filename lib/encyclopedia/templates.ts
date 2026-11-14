@@ -4,6 +4,7 @@
  */
 import type { Entry, PageTemplate, TemplateField, Workspace } from "./world-model.ts";
 import type { Org } from "./org-profile.ts";
+import type { Profile } from "./character-profile.ts";
 
 export const FIELD_TYPES: [TemplateField["type"], string][] = [["text", "Text"], ["textarea", "Long text"], ["number", "Number"], ["choice", "Choice"], ["page", "Page link"]];
 export const KIND_NAMES: Record<PageTemplate["kind"], string> = { note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", quest: "Quest" };
@@ -52,12 +53,12 @@ export function cleanValues(t: PageTemplate, values: Record<string, unknown>) {
 }
 
 /** A new page from a template: its kind, tabs, starting text and info box values. */
-export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: string; worldId: string; campaignId: string | null; parentId: string | null; values?: Record<string, unknown>; newId: () => string; now?: string; /** An organization starts with this profile (defaultOrg(world)). */ org?: Org }): Entry {
+export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: string; worldId: string; campaignId: string | null; parentId: string | null; values?: Record<string, unknown>; newId: () => string; now?: string; /** An organization starts with this profile (defaultOrg(world)). */ org?: Org; /** A character starts with this profile (defaultProfile(world)). */ profile?: Profile }): Entry {
   const fields = cleanValues(t, opts.values ?? {});
   return {
     id: opts.id, worldId: opts.worldId, campaignId: opts.campaignId, parentId: opts.parentId, title: opts.title.trim().slice(0, 160), kind: t.kind,
     body: t.body, overviewVisibility: t.overviewVisibility ?? "gm", ...(t.tabs.length ? { tabs: t.tabs.map(x => ({ id: opts.newId(), title: x.title, body: "", visibility: x.visibility })) } : {}),
-    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {} } } : {}),
+    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && opts.profile ? { profile: opts.profile } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {} } } : {}),
     updatedAt: opts.now ?? new Date().toISOString(),
   };
 }

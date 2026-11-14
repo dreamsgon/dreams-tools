@@ -22,8 +22,8 @@ export function playersBook(book: Book, campaignId: string): Book {
     const quest = e.quest && overview ? { ...e.quest, objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
     const character = e.character ? { ...e.character, statblock: undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
-      // Organization profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
-      org: undefined }];
+      // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
+      org: undefined, profile: undefined }];
   });
   const campaigns = book.campaigns.map(c => ({ ...c, calendars: c.calendars?.filter(x => x.visibility === "players") }));
   return { ...book, campaigns, entries };
