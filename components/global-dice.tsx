@@ -1,8 +1,9 @@
 "use client";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { diceTargetStore } from "@/lib/dice-target";
+import { onOpenDiceTray } from "@/lib/dice-open";
 import { Dices, ScrollText } from "lucide-react";
 import type { DicePanel } from "./standard-dice-tray";
 import "./global-dice.css";
@@ -28,6 +29,8 @@ export default function GlobalDice() {
   const setPanel = (next: DicePanel) => setOpen({ panel: next, path: pathname });
   const [used, setUsed] = useState(false);
   const target = useSyncExternalStore(diceTargetStore.subscribe, diceTargetStore.get, diceTargetStore.getServer);
+  // Other parts of a page (the Encyclopedia's phone bar) can ask for the tray without these buttons.
+  useEffect(() => onOpenDiceTray(next => { setUsed(true); setOpen({ panel: next, path: pathname }); }), [pathname]);
   if (hasOwnDice(pathname)) return null;
   const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(panel === next ? null : next); };
   return <>

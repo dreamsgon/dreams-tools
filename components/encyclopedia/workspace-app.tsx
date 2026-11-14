@@ -11,7 +11,7 @@ import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
-import { LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
+import { UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, githubSchema, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
 import {newMap} from "@/lib/encyclopedia/map-model";
@@ -19,6 +19,8 @@ import {FogImageSync} from "./fog-image-sync";
 import {WorkspaceDashboard} from "./workspace-dashboard";
 import {useNavigationSections,useSidebarLayout,SidebarResize} from "./sidebar-controls";
 import {ThemeToggle} from "./theme";
+import {BottomBar,MoreSheet,type MoreGroup} from "./bottom-bar";
+import {openDiceTray} from "@/lib/dice-open";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
 import {TagsManager} from "@/components/tags";
 import type {Tag} from "@/lib/tags";
@@ -86,8 +88,11 @@ const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not ed
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
     const [member, setMember] = useState<CoGm | null>(null);
-    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
+    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
+    const pagesBtn = useRef<HTMLButtonElement>(null), moreBtn = useRef<HTMLButtonElement>(null), drawerWas = useRef(false);
+    // Phone page sheet: focus moves into it when it opens and back to the Pages button when it closes.
+    useEffect(() => { if (!sidebar.narrow) return; if (mobile) document.querySelector<HTMLElement>("#workspace-sidebar .sidebar-mobile-close")?.focus(); else if (drawerWas.current) pagesBtn.current?.focus(); drawerWas.current = mobile; }, [mobile, sidebar.narrow]);
     const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"templates"|"quests"|"codex"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0),[tabAt,setTabAt]=useState<{entry:string;tab:string}|null>(null);
     const lastPlace = useRef<Place | null>(null);
     // A remembered tab belongs to the page it was chosen on; opening another page forgets it.
@@ -340,10 +345,37 @@ export default function WorkspaceApp() {
     // The Maptable link opens the paired Maptable campaign. A co-GM whose group may run the maps opens the GM's Maptable.
     const maptableHref = member ? (member.maps ? `/maptable#m-${memberRef()}` : undefined) : campaign?.maptableCampaignId ? `/maptable?campaign=${encodeURIComponent(campaign.maptableCampaignId)}` : undefined;
     const look = lookAttributes(campaign?.look);
+    const overlay = mobile || moreOpen || palette || modal?.type === "entry", moreViews = ["dashboard", "quests", "calendar", "tables", "templates", "codex", "characters", "look"];
+    // Chosen items close the sheet first, then act; the dice tray is the shared one from global-dice.
+    const later = (fn: () => void) => () => { setTimeout(fn, 0); };
+    const moreGroups: MoreGroup[] = [
+      { heading: "Go to", items: [
+        { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={18}/>, current: view === "dashboard", onSelect: openDashboard },
+        ...(world ? [
+          ...(campaign ? [{ id: "quests", label: "Quests", icon: <Goal size={18}/>, current: view === "quests", onSelect: () => showSection("quests") }] : []),
+          ...(campaign ? [{ id: "calendar", label: "Calendar", icon: <CalendarDays size={18}/>, current: view === "calendar", onSelect: () => showSection("calendar") }] : []),
+          { id: "characters", label: "Characters", icon: <Users size={18}/>, current: view === "characters", onSelect: () => showSection("characters") },
+          ...(campaign ? [{ id: "codex", label: "Codex", icon: <Library size={18}/>, current: view === "codex", onSelect: () => showSection("codex") }] : []),
+          { id: "tables", label: "Random tables", icon: <ListChecks size={18}/>, current: view === "tables", onSelect: () => showSection("tables") },
+          { id: "templates", label: "Templates", icon: <LayoutTemplate size={18}/>, current: view === "templates", onSelect: () => showSection("templates") }] : [])] },
+      { heading: "Tools", items: [
+        { id: "dice", label: "Dice", icon: <Dices size={18}/>, onSelect: later(() => openDiceTray("dice")) },
+        { id: "log", label: "Roll log", icon: <ScrollText size={18}/>, onSelect: later(() => openDiceTray("log")) },
+        ...(campaign ? [
+          { id: "form", label: "Stat form", icon: <ListChecks size={18}/>, onSelect: () => setTool("form") },
+          { id: "share", label: "Player view", icon: <Users size={18}/>, onSelect: () => setTool("share") },
+          { id: "look", label: "Look", icon: <Palette size={18}/>, current: view === "look", onSelect: () => showSection("look") }] : [])] },
+      { heading: "Settings", items: [
+        ...(campaign ? [{ id: "ai", label: "Connect an AI", icon: <Sparkles size={18}/>, onSelect: () => setAiOpen(true) }] : []),
+        { id: "github", label: "AI & GitHub", icon: <Github size={18}/>, onSelect: () => setModal({ type: "connections" }) },
+        { id: "settings", label: "Workspace & backups", icon: <Settings size={18}/>, onSelect: () => setModal({ type: "settings" }) },
+        { id: "appearance", label: "Appearance", icon: <Palette size={18}/>, onSelect: later(() => document.querySelector<HTMLElement>(".topbar .appearance-trigger")?.click()) },
+        { id: "account", label: "Account", icon: <UserRound size={18}/>, href: "/account" }] },
+    ];
     return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}><LookFont look={campaign?.look}/>
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
-  <aside id="workspace-sidebar" aria-label="Workspace navigation" inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>
+  <aside id="workspace-sidebar" aria-label="Workspace navigation" role={sidebar.narrow&&mobile?"dialog":undefined} aria-modal={sidebar.narrow&&mobile?true:undefined} inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>
    <button className="sidebar-mobile-close icon-button" aria-label="Close navigation" onClick={()=>setMobile(false)}><X size={17}/></button>
    <div className="sidebar-tools"><ToolSwitch active="encyclopedia" maptableHref={maptableHref}/><AccountLink/></div>
    <button className="world-picker" onClick={openDashboard}><Globe size={18}/><span><small>YOUR WORLD</small><strong>{world?.name ?? "Choose a world"}</strong></span><ChevronDown size={15}/></button>
@@ -372,6 +404,8 @@ export default function WorkspaceApp() {
                     <section className="page-content dashboard">{campaign&&<LookBanner look={campaign.look} className="overview-banner"/>}<div className="dashboard-intro"><div><span className="eyebrow">{campaign ? "YOUR CAMPAIGN WORKSPACE" : "THE WORLD BETWEEN ADVENTURES"}</span><h1>{campaign?.name ?? world.name}</h1><p className="subtitle">{campaign?.description ?? world.description}</p></div><button className="icon-button" title="Edit details" aria-label="Edit details" onClick={() => setModal({ type: "rename", id: campaign?.id ?? world.id })}><Settings size={19}/></button></div><div className="overview-strip"><span><FileText size={16}/><strong>{scope.filter(e => e.kind !== "folder").length}</strong> {campaign ? "campaign entries" : "world articles"}</span><span><BookOpen size={16}/><strong>{data.entries.filter(e => e.worldId === worldId && e.campaignId === null && e.kind !== "folder").length}</strong> shared articles</span><span><Flag size={16}/><strong>{data.campaigns.filter(c => c.worldId === worldId).length}</strong> campaigns</span></div><div className="section-heading"><h2>Pick up the story</h2><span>Recently updated</span></div><div className="recent-grid">{scope.filter(e => e.kind !== "folder").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4).map(e => <button className="note-card" key={e.id} onClick={() => openEntry(e.id)}><span className="card-top"><span className={`entry-icon ${e.kind}`}><EntryIcon kind={e.kind}/></span><span className="eyebrow">{labels[e.kind]}</span><ArrowUpRight size={16}/></span><h3>{e.title}</h3><p>{excerpt(e, data) || "A page waiting to be written."}</p><span className="card-footer">Open entry <ChevronRight size={14}/></span></button>)}<button className="note-card add-card" onClick={() => setModal({ type: "entry" })}><Plus size={25}/><h3>Start a new page</h3><p>A session, a character,<br />or a thought worth keeping.</p></button></div><div className="dashboard-lower"><div><div className="section-heading"><h2>Shared world lore</h2><button className="text-button" onClick={() => selectCampaign(null)}>Explore world <ArrowUpRight size={14}/></button></div><div className="lore-list">{shown.filter(e => e.campaignId === null && e.kind !== "folder").slice(0, 5).map(e => <button key={e.id} onClick={() => openEntry(e.id)}><EntryIcon kind={e.kind}/><span>{e.title}<small>{labels[e.kind]}</small></span><ChevronRight size={15}/></button>)}{!shown.some(e => e.campaignId === null) && <p className="muted">Create shared lore to connect your campaigns.</p>}</div></div><div className="quiet-card"><Compass size={28} strokeWidth={1.3}/><h3>One world. Many stories.</h3><p>World lore travels with every campaign. Session notes and decisions stay with the story they belong to.</p><button className="text-button" onClick={() => setModal({ type: "campaign" })}>Begin another campaign <Plus size={14}/></button></div></div></section>}
    <footer className="main-footer"><span>YOUR WORLDS, THEIR STORIES.</span><span>Private workspace <span>·</span> v0.11</span></footer>
   </main>
+  <BottomBar pagesRef={pagesBtn} moreRef={moreBtn} pagesOpen={mobile} pagesCurrent={!overlay&&view==='overview'} onPages={()=>{setMoreOpen(false);setMobile(m=>!m);}} searchOpen={palette} onSearch={()=>{setMobile(false);openSearch();}} canCreate={!!world} newOpen={modal?.type==='entry'} onNew={()=>{setMobile(false);setModal({type:"entry"});}} mapsCurrent={!overlay&&view==='maps'} onMaps={()=>showSection("maps")} moreOpen={moreOpen} moreCurrent={!overlay&&moreViews.includes(view)} onMore={()=>{setMobile(false);setMoreOpen(true);}}/>
+  {moreOpen && <MoreSheet groups={moreGroups} onClose={restore=>{setMoreOpen(false);if(restore)setTimeout(()=>moreBtn.current?.focus(),0);}}/>}
   {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
   {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)})}/>}
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
