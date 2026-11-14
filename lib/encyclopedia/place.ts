@@ -28,7 +28,9 @@ export function placeQuery(place: Place): string {
 export function placeFromQuery(query: URLSearchParams, data: Workspace): Place | null {
   const entry = data.entries.find(e => e.id === query.get("entry"));
   if (entry) return { worldId: entry.worldId, campaignId: entry.campaignId ?? null, view: "overview", entryId: entry.id };
-  const campaign = data.campaigns.find(c => c.id === query.get("campaign"));
+  // ?maptable=<Maptable campaign id> (from Maptable's header) opens the paired campaign; no match is the same as no parameter.
+  const paired = query.get("maptable");
+  const campaign = data.campaigns.find(c => c.id === query.get("campaign")) ?? (paired ? data.campaigns.find(c => c.maptableCampaignId === paired) : undefined);
   const world = data.worlds.find(w => w.id === (campaign?.worldId ?? query.get("world")));
   if (!world) return null;
   const asked = query.get("view");

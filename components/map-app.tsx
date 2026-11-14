@@ -1108,7 +1108,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
   const coGmBar = member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true" /><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a co-GM here. Your changes save to their maps.</span><a href={`/encyclopedia#m-${mapMemberRef()}`}>Open the Encyclopedia</a><NextLink href="/campaigns">Back to Campaigns</NextLink></div>;
-  const encyclopediaHref = member ? `/encyclopedia#m-${mapMemberRef()}` : undefined;
+  // The Encyclopedia link follows the active campaign: the open overview, else the open scene's campaign. Co-GMs keep their own link.
+  const activeCampaignId = overviewOpen ? overview.id : campaignId;
+  const encyclopediaHref = member ? `/encyclopedia#m-${mapMemberRef()}` : activeCampaignId ? `/encyclopedia?maptable=${encodeURIComponent(activeCampaignId)}` : undefined;
+  // The menu's Campaigns item opens the active campaign's overview when it has scenes, else the list of campaigns.
+  const toActiveCampaign = () => { setGridAdjust(false); setDashboard(true); setOverview(campaignId && workspace.scenes.some(s => campaignFor(s.containerId) === campaignId) ? { id: campaignId } : null); };
   if (dashboard) return <main className={"campaign-dashboard" + (member ? " is-co-gm" : "")}>
     <header><ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions">{saveChip}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
     {coGmBar}
@@ -1224,7 +1228,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Help</span>
           </button>
           <button title="Map Creator" onClick={()=>{setGridAdjust(false);setCreatorOpen(true);}}><MapIcon size={21}/><span>Create map</span></button>
-          <button title="Campaigns" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><LayoutDashboard size={21}/><span>Campaigns</span></button>
+          <button title="Campaigns" onClick={toActiveCampaign}><LayoutDashboard size={21}/><span>Campaigns</span></button>
         </nav>
         <nav className="mobile-navigation" aria-label="Phone navigation">
           <button onClick={()=>{setSidebar(false);setMobileToolsOpen(false);}}>Map</button>
