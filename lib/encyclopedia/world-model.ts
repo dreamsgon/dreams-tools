@@ -12,6 +12,7 @@ import {lookSchema,playerLook} from './look.ts';
 import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
 import {sheetSchema,playerSheet} from './sheet-link.ts';
+import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
 import {vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -38,6 +39,8 @@ export const characterSchema = z.object({
   statblock:z.string().max(50000).optional(), statblockRolls:z.boolean().optional(),
   // Optional (added later): one linked Google Sheet and the cells read from it (see sheet-link.ts). GM data; players get playerSheet() only when stats are player visible.
   sheet:sheetSchema.optional(),
+  // Optional (added later): small gauges such as Shields or Stress (trackers.ts). Players get the shown ones when stats are shared or the page is theirs to edit.
+  trackers:trackersSchema.optional(),
 });
 export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
@@ -299,10 +302,12 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const shareOrg=(e.kind==='faction'&&e.org?.visibility==='players')||(e.kind==='character'&&e.profile?.visibility==='players')||(e.kind==='vehicle'&&e.vehicle?.visibility==='players');
    const ownSheet=!!linker&&!!mine?.has(e.id)&&e.character?.sheet?.linkedById===linker;
    const sheet=(showStats||ownSheet)&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
-   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg)return [];
+   // Trackers: on a character whose stats are shared, or one this member may edit (they change them there).
+   const trackers:PlayerTracker[]=e.kind==='character'&&(showStats||!!mine?.has(e.id))?playerTrackers(e.character?.trackers):[];
+   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));

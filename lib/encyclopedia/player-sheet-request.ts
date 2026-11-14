@@ -13,6 +13,8 @@ import { rollWithMode } from './roll-mode.ts';
 import { PROOF_MINUTES, checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
 import { addPlayerLog, editPlayerLog, removePlayerLog } from './quest-log.ts';
+import { changePlayerTrackers } from './player-trackers.ts';
+import { TrackerError, trackerColours } from './trackers.ts';
 import type { Rights } from './player-edit.ts';
 import type { Workspace } from './world-model.ts';
 
@@ -28,9 +30,9 @@ export type Deps = {
   now?: number;
 };
 
-export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000, LOG_BODY = 12_000;
-const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000), logThrottle = createThrottle(10, 10_000);
-export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); logThrottle.reset(); };
+export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000, LOG_BODY = 12_000, TRACKER_BODY = 1000;
+const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000), logThrottle = createThrottle(10, 10_000), trackerThrottle = createThrottle(30, 10_000);
+export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); logThrottle.reset(); trackerThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const ref = z.string().regex(/^[a-f0-9]{64}$/), id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -56,7 +58,7 @@ async function memberOf(deps: Deps, r: string, signIn = 'Sign in to use your cha
   return m ? { m } : { fail: json({ error: noLongerMember }, 404) };
 }
 const failure = (e: unknown, fallback: string) =>
-  e instanceof PlayerSheetError ? json({ error: e.message }, e.status)
+  e instanceof PlayerSheetError || e instanceof TrackerError ? json({ error: e.message }, e.status)
   : e instanceof SheetReadError ? json({ error: e.message }, 400)
   : e instanceof z.ZodError || e instanceof SyntaxError ? json({ error: 'That request isn’t valid.' }, 400)
   : json({ error: fallback }, 500);
@@ -199,4 +201,35 @@ export async function handlePlayerQuestLog(request: Request, deps: Deps) {
     }
     return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
   } catch (e) { return failure(e, 'Could not save to the log. Keep this tab open and try again.'); }
+}
+
+const trackerFields = { label: z.string().max(40), shape: z.enum(['bar', 'pips']), colour: z.enum(trackerColours), max: z.number().int().min(1).max(1000) };
+const trackerAction = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('add'), ref, entryId: id, tracker: z.object(trackerFields) }),
+  z.object({ action: z.literal('edit'), ref, entryId: id, trackerId: id, tracker: z.object(trackerFields).partial() }),
+  z.object({ action: z.literal('set'), ref, entryId: id, trackerId: id, value: z.number().int().min(0).max(1000) }),
+  z.object({ action: z.literal('remove'), ref, entryId: id, trackerId: id }),
+]);
+/**
+ * POST /api/encyclopedia/player-tracker: a signed-in member changing the shown trackers (Shields, Stress…) on a character
+ * they may edit (lib/encyclopedia/player-trackers.ts). GM-only trackers can't be reached from here.
+ */
+export async function handlePlayerTracker(request: Request, deps: Deps) {
+  try {
+    const got = await start(request, deps, TRACKER_BODY);
+    if (got.fail) return got.fail;
+    const body = trackerAction.parse(JSON.parse(got.text)), found = await memberOf(deps, body.ref, 'Sign in to change your trackers.');
+    if (found.fail) return found.fail;
+    const m = found.m, who = { name: m.name, as: 'player' as const };
+    if (trackerThrottle.hit(m.userId, deps.now)) return json({ error: 'Too many changes too quickly. Wait a few seconds and try again.' }, 429);
+    const { ref: _ref, entryId, ...change } = body;
+    void _ref;
+    // Changes only this character's trackers, on the newest copy, so a save that crossed someone else's tries again.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, revision } = await deps.store.read(m.owner);
+      const next = changePlayerTrackers(data, m.campaignId, m.rights, entryId, change);
+      if (await deps.store.save(m.owner, next, revision, who)) return json({ ok: true });
+    }
+    return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
+  } catch (e) { return failure(e, 'Could not save the tracker. Try again.'); }
 }
