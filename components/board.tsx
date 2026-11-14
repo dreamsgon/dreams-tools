@@ -1607,7 +1607,8 @@ export default function Board(p: Props) {
         <div className="board-hint" role="note">
           <button type="button" className="board-hint-close" aria-label="Dismiss" title="Dismiss" onClick={() => setHintGone(p.scene.id)}><X size={16} /></button>
           <strong>Your next encounter starts here</strong>
-          <span>Upload a map picture or start with this blank grid, then add the party and the monsters.</span>
+          <span className="board-hint-text">Upload a map picture or start with this blank grid, then add the party and the monsters.</span>
+          <span className="board-hint-short">New scene. Upload a map or add tokens.</span>
           {(p.onUploadMap || p.onAddToken) && <span className="board-hint-actions">{p.onUploadMap && <button type="button" className="primary" onClick={() => { setHintGone(p.scene.id); p.onUploadMap?.(); }}><Upload size={15} />Upload a map</button>}{p.onAddToken && <button type="button" onClick={() => { setHintGone(p.scene.id); p.onAddToken?.(); }}><Plus size={15} />Add token</button>}</span>}
         </div>
       )}
