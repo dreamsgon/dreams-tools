@@ -92,6 +92,9 @@ import { resolvedToken, SIDE_COLOURS, type TokenSide } from "@/lib/token-default
 import { sceneInitials, tokenInitials } from "@/lib/token-initials";
 import { roleSide } from "@/lib/token-gallery";
 import { encyclopediaEntryOf, type ArmedToken } from "@/lib/token-arming";
+import TokenSheetRolls from "./token-sheet-rolls";
+import { sheetRollGroups, type SheetRollGroup } from "@/lib/encyclopedia/sheet-rolls";
+import type { SheetKind } from "@/lib/encyclopedia/sheet-link";
 import { TOKEN_CLIPBOARD_KEY, copyTokens, placedName } from "@/lib/token-clipboard";
 import ResizableSidebar from "./resizable-sidebar";
 import { FolderPreferenceScope } from "./folder-expansion";
@@ -336,6 +339,20 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     loadEncyclopedia().then(raw=>{if(active){setBook(raw as unknown as EncyclopediaWorkspace);setBookError("");}}).catch(e=>{if(active)setBookError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
     return()=>{active=false;};},[wantsBook,book]);
   const linkable=useMemo(()=>linkablePages(book,campaignId),[book,campaignId]);
+  // Rolls from the sheets of Encyclopedia characters linked to this scene's tokens (GM only), read from the same cached Encyclopedia the statblock tab uses.
+  const [sheetRolls,setSheetRolls]=useState<Map<string,{name:string;groups:SheetRollGroup[]}>>(()=>new Map());
+  const [sheetPanel,setSheetPanel]=useState<{tokenId:string;x:number;y:number}|null>(null);
+  const linkedEntryIds=useMemo(()=>[...new Set((scene?.tokens??[]).map(t=>t.encyclopediaEntryId).filter((id):id is string=>!!id))].sort().join(","),[scene?.tokens]);
+  useEffect(()=>{
+   if(player||!linkedEntryIds)return;let live=true;
+   loadEncyclopedia().then(raw=>{
+    if(!live)return;const found=new Map<string,{name:string;groups:SheetRollGroup[]}>();
+    for(const id of linkedEntryIds.split(",")){const e=raw.entries?.find(x=>x.id===id&&x.kind==="character"),items=e?.character?.sheet?.items;if(!e||!items)continue;const groups=sheetRollGroups({items:items.map(i=>({...i,kind:i.kind as SheetKind}))});if(groups.length)found.set(id,{name:e.title,groups});}
+    setSheetRolls(found);
+   }).catch(()=>{/* Maptable works without the Encyclopedia */});
+   return()=>{live=false;};
+  },[player,linkedEntryIds]);
+  const sheetOfToken=(tokenId:string)=>{const id=scene?.tokens.find(t=>t.id===tokenId)?.encyclopediaEntryId;return id?sheetRolls.get(id):undefined;};
   useEffect(()=>{
     let active=true;
     setSettings(s=>({...s,discordConfigured:false}));
@@ -2084,6 +2101,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             select={select}
             update={updateScene}
             player={player}
+            sheetCharacterOf={player?undefined:id=>sheetOfToken(id)?.name}
+            onRollFromSheet={(tokenId,at)=>setSheetPanel({tokenId,...at})}
             brushSize={brushSize}
             fogShape={fogShape}
             effectSize={effectSize}
@@ -2093,6 +2112,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             onView={setView}
             onMeasure={setMeasure}
           />
+          {sheetPanel&&!player&&scene&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)}/>}
           <div className="toolbar" role="toolbar" aria-label="Map tools" ref={toolbarRef}>
             {tools.map(({ id, label, Icon }) => (
               <button

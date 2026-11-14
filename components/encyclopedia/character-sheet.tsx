@@ -10,6 +10,9 @@ import {confirmDialog} from '../confirm-dialog';
 import {memberRef} from './member-view';
 import {readLinked,reopenLinked,type SheetRead} from './sheet-read';
 import {SheetView} from './sheet-view';
+import {SheetRolls,SheetRollLog} from './sheet-rolls';
+import {sheetRollGroups} from '@/lib/encyclopedia/sheet-rolls';
+import {rollInline} from './rolls';
 import './character-sheet.css';
 
 const loadDialog=()=>import('./sheet-dialog');
@@ -61,10 +64,12 @@ export function CharacterSheetSection({entry,change}:{entry:Entry;change:Change}
   {dialogEl}
  </>;
 
- const open=sheetOpenUrl(sheet),needsGoogle=sheet.source==='google'&&!googleConfigured();
+ const shown=playerSheet(sheet),rolls=sheetRollGroups(shown),open=sheetOpenUrl(sheet),needsGoogle=sheet.source==='google'&&!googleConfigured();
  const reads=sheet.mode==='template'?`Reads the ${TEMPLATE_TAB} tab`:`Reads ${sheet.items.length} picked ${sheet.items.length===1?'cell':'cells'}`;
  return <>
-  <SheetView sheet={playerSheet(sheet)}
+  <SheetView sheet={shown} note={rolls.length?'Values are copied here when the sheet is read. Rolls show in the roll card, where they can go to Discord.':undefined}
+   rolling={rolls.length?<><SheetRolls groups={rolls} twice onRoll={(name,formula,mode)=>rollInline(`${entry.title} · ${name}`,formula,{mode,log:true})}/>
+    <div className="sheet-log"><span className="eyebrow">ROLL LOG</span><SheetRollLog character={entry.title}/></div></>:undefined}
    subtitle={`Linked by ${sheet.linkedBy??'the GM'} · ${reads}`}
    actions={<>
     {open&&<a className="button small" href={open} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> {sheet.source==='google'?'Open in Google Sheets':'Open published sheet'}</a>}

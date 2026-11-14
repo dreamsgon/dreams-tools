@@ -13,10 +13,10 @@ function useNow(){
 
 /**
  * The character sheet as a page shows it: hit points and the other special slots first, then stats, then the rolls
- * with their formulas. Used by the GM's Profile tab and, read only, by the player site. Rolls are listed, not
- * rollable yet.
+ * with their formulas. Used by the GM's Profile tab and, read only, by the player site. Rolls are listed for players; the GM's page
+ * passes `rolling` to make them rollable.
  */
-export function SheetView({sheet,subtitle,actions,note,children}:{sheet:PlayerSheet;subtitle?:ReactNode;actions?:ReactNode;note?:ReactNode;children?:ReactNode}){
+export function SheetView({sheet,subtitle,actions,note,rolling,children}:{sheet:PlayerSheet;subtitle?:ReactNode;actions?:ReactNode;note?:ReactNode;/** The GM's rollable rolls and roll log. Players never get this: they see the plain list. */rolling?:ReactNode;children?:ReactNode}){
  const now=useNow(),{tiles,stats,rolls,initFormula}=sheetLayout(sheet.items),groups=rollGroups(rolls),ago=timeAgo(sheet.readAt,now);
  return <section className="sheet-card" aria-label="Character sheet">
   <div className="sheet-head"><span className="eyebrow">CHARACTER SHEET</span>{ago&&<small>Read {ago}</small>}</div>
@@ -29,11 +29,11 @@ export function SheetView({sheet,subtitle,actions,note,children}:{sheet:PlayerSh
    {t.kind==='init'&&initFormula&&<code>{initFormula}</code>}
   </div>)}</div>}
   {stats.length>0&&<div className="sheet-stats">{stats.map(s=><div className="sheet-tile" key={s.id}><small>{s.name}</small><strong>{s.value||'—'}</strong></div>)}</div>}
-  {groups.length>0&&<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{groups.map(g=><div className="sheet-roll-group" key={g.title}>
+  {rolling?<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{rolling}</div>:groups.length>0&&<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{groups.map(g=><div className="sheet-roll-group" key={g.title}>
    {(groups.length>1||g.title!=='Rolls')&&<h4>{g.title}</h4>}
    <ul>{g.rolls.map(r=><li key={r.id}><span>{r.name}</span>{r.formula?<code>{r.formula}</code>:<em>no formula</em>}</li>)}</ul>
   </div>)}</div>}
   {!tiles.length&&!stats.length&&!groups.length&&<p className="sheet-empty">Nothing is picked from this sheet yet.</p>}
-  <p className="sheet-foot">{note??'Values are copied here when the sheet is read. Rolling comes next.'}</p>
+  <p className="sheet-foot">{note??'Values are copied here when the sheet is read.'}</p>
  </section>;
 }

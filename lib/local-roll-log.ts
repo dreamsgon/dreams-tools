@@ -17,6 +17,8 @@ export function recordLocalRoll(input:LocalRollInput){
  save([entry,...readLocalRollLog()].slice(0,100));
  return entry;
 }
+/** Adds a note to a roll already in the log, such as that it was posted to Discord. */
+export function markLocalRoll(id:string,outcome:string){if(typeof window==='undefined')return;const all=readLocalRollLog();if(all.some(e=>e.id===id))save(all.map(e=>e.id===id?{...e,outcome}:e));}
 export function clearLocalRollLog(){if(typeof window!=='undefined')save([]);}
 export function subscribeLocalRollLog(listener:()=>void){
  const onStorage=(event:StorageEvent)=>{if(event.key===storageKey||event.key===null){if(!dirty)memory=[];listener();}};

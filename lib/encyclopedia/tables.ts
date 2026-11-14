@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseDice, rollDice } from '../rolls.ts';
+import { parseDice, rollDice, termRange } from '../rolls.ts';
 
 /**
  * Random tables: one library per account, stored beside the Encyclopedia workspace.
@@ -98,7 +98,7 @@ export const rollLabel = (t: RandomTable) => t.kind === 'generator' ? 'generator
 export function formulaRange(formula: string): [number, number] {
   let lo = 0, hi = 0;
   for (const t of parseDice(diceFormula(formula))) {
-    const a = t.count ? t.count : t.constant, b = t.count ? t.count * t.sides : t.constant;
+    const [a, b] = termRange(t);
     if (t.sign > 0) { lo += a; hi += b; } else { lo -= b; hi -= a; }
   }
   return [lo, hi];
