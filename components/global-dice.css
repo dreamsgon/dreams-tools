@@ -1,0 +1,9 @@
+/* Dice buttons for pages without Maptable's tool bar. The tray itself is positioned by standard-dice-tray.css. */
+.global-dice { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-floating, 60); display: flex; gap: 6px; font-family: var(--font-sans, system-ui, sans-serif); }
+.global-dice button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; min-width: 40px; padding: 0 12px; border: 1px solid var(--line, #cfd6cf); border-radius: 999px; background: var(--panel, #fff); color: var(--ink, #1c2a24); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-md, 0 4px 14px rgb(0 0 0 / .18)); }
+.global-dice button:hover { border-color: var(--accent, #246c58); }
+.global-dice button[aria-expanded="true"] { background: var(--accent, #246c58); border-color: var(--accent, #246c58); color: var(--on-accent, #fff); }
+.global-dice button:focus-visible { outline: 2px solid var(--accent, #246c58); outline-offset: 2px; }
+.global-dice button:nth-child(2) { padding: 0; width: 40px; }
+@media (max-width: 799px) { .global-dice { right: 12px; bottom: 12px; } .global-dice button { min-height: 44px; min-width: 44px; } .global-dice button:nth-child(2) { width: 44px; } }
+@media print { .global-dice { display: none; } }
