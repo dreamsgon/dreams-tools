@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { discordTarget } from './discord-roll.ts';
+import { sheetSchema } from './sheet-link.ts';
 import { readPublishedSheet, SheetReadError } from './sheet-published.ts';
 import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
 import { rollWithMode } from './roll-mode.ts';
@@ -20,7 +21,7 @@ export type Deps = {
   sameOrigin: (r: Request) => boolean;
   store: { read: (owner: string) => Promise<{ data: Workspace; revision: number }>; save: (owner: string, data: Workspace, revision: number, who: { name: string; as: 'player' }) => Promise<unknown> };
   read?: typeof readPublishedSheet;
-  post?: (m: Member, post: { kind: 'roll'; title: string; formula: string; total: number; detail: string; who: string }) => Promise<{ skipped: boolean }>;
+  post?: (m: Member, post: { kind: 'roll'; title: string; formula: string; total: number; detail: string; who: string; avatarOf: string }) => Promise<{ skipped: boolean }>;
   random?: () => number;
   now?: number;
 };
@@ -66,7 +67,8 @@ export async function handlePlayerSheet(request: Request, deps: Deps) {
     if (found.fail) return found.fail;
     const m = found.m, linker = linkerKey(m.owner, m.campaignId, m.userId), who = { name: m.name, as: 'player' as const };
     // Reading a published link costs a trip to Google: that is the tight limit. Anything else is a save.
-    const reads = body.action === 'read' || (body.action === 'refresh' && !body.tabs);
+    const draft = body.action === 'link' ? sheetSchema.safeParse(body.sheet) : null, linkUrl = draft?.success && draft.data.source === 'published' ? draft.data.publishedUrl : undefined;
+    const reads = body.action === 'read' || (body.action === 'refresh' && !body.tabs) || !!linkUrl;
     if ((reads ? readThrottle : writeThrottle).hit(m.userId, deps.now)) return json({ error: 'Too many changes too quickly. Wait a few seconds and try again.' }, 429);
     const read = deps.read ?? readPublishedSheet;
 
@@ -80,12 +82,13 @@ export async function handlePlayerSheet(request: Request, deps: Deps) {
       if (!link) return json({ error: 'That sheet is read from your Google account. Press Refresh again after signing in.' }, 400);
       tabs = (await read(link)).tabs;
     }
+    const linkTabs = linkUrl ? (await read(linkUrl)).tabs : undefined;
     let missing: string[] = [];
     // Changes only this page's sheet, on the newest copy, so a save that crossed someone else's tries again.
     for (let attempt = 0; attempt < 4; attempt++) {
       const { data, revision } = await deps.store.read(m.owner);
       let next: Workspace;
-      if (body.action === 'link') next = linkSheet(data, m.campaignId, m.rights, linker, m, { entryId: body.entryId, sheet: body.sheet });
+      if (body.action === 'link') next = linkSheet(data, m.campaignId, m.rights, linker, m, { entryId: body.entryId, sheet: body.sheet, tabs: linkTabs });
       else if (body.action === 'unlink') next = unlinkSheet(data, m.campaignId, m.rights, linker, body.entryId);
       else { const r = refreshOwnSheet(data, m.campaignId, m.rights, linker, body.entryId, tabs ?? []); next = r.data; missing = r.missing; }
       if (await deps.store.save(m.owner, next, revision, who)) return json({ ok: true, ...(missing.length ? { missing } : {}) });
@@ -111,7 +114,7 @@ export async function handlePlayerRoll(request: Request, deps: Deps) {
     let channel = true;
     try { discordTarget(data, m.campaignId); } catch { channel = false; }
     if (channel && deps.post) {
-      try { discord = (await deps.post(m, { kind: 'roll', title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, who: target.character })).skipped ? 'skipped' : 'sent'; }
+      try { discord = (await deps.post(m, { kind: 'roll', title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, who: target.character, avatarOf: target.entryId })).skipped ? 'skipped' : 'sent'; }
       catch { discord = 'failed'; }
     }
     return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, discord });

@@ -60,9 +60,11 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
     finally{setBusy(false);}
   }
 
+  // Changing cells on the same sheet keeps whoever linked it; a different sheet becomes the linker's own.
+  const keeps=(r:SheetRead)=>!!current&&current.source===r.source&&(r.source==='google'?current.spreadsheetId===r.spreadsheetId:current.publishedUrl===r.publishedUrl);
   const base=(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string):Sheet=>({
     source:r.source,...(r.spreadsheetId?{spreadsheetId:r.spreadsheetId}:{}),...(r.publishedUrl?{publishedUrl:r.publishedUrl}:{}),
-    title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,linkedBy:current?.linkedBy??player?.name??'the GM',...(current?.linkedById?{linkedById:current.linkedById}:{}),
+    title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,...(keeps(r)?{linkedBy:current!.linkedBy??player?.name??'the GM',...(current!.linkedById?{linkedById:current!.linkedById}:{})}:{linkedBy:player?.name??'the GM'}),
     readAt:new Date().toISOString(),mode,items,writeBack:false,
   });
   const chooseTemplate=(r:SheetRead)=>{

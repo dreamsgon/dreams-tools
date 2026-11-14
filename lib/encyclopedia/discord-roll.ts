@@ -23,6 +23,13 @@ export function discordTarget(data: Workspace, campaignId: string): { maptableCa
   throw Error('Choose a Discord channel for this campaign in AI & campaign repositories first.');
 }
 
+/** A page's own picture in this campaign (or its world), or null. Player rolls use only this, never a lookup by title. */
+export function ownPicture(data: Workspace, campaignId: string, entryId: string) {
+  const campaign = data.campaigns.find(c => c.id === campaignId);
+  const e = data.entries.find(x => x.id === entryId && x.worldId === campaign?.worldId && (x.campaignId === campaignId || !x.campaignId));
+  return e?.picture ?? null;
+}
+
 /** The Discord message for a roll. The total is the roller's own; this only formats it. */
 export function discordRollMessage(input: unknown) {
   const roll = discordRollSchema.parse(input);

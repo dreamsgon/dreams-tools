@@ -32,8 +32,8 @@ export function rollInline(title:string,formula:string,options:RollOptions={}){
 }
 
 /** Shows a roll the server made (a player's roll from their sheet). `note` says where it went; Roll again runs `again`. */
-export function showServerRoll(r:{title:string;formula:string;total:number;detail:string;note:string;again:()=>void;logId?:string}){
- const result:RollResult={id:++sequence,title:r.title,formula:r.formula,total:r.total,detail:r.detail,at:Date.now(),server:{note:r.note,again:r.again},...(r.logId?{logId:r.logId}:{})};
+export function showServerRoll(r:{mode?:RollMode;title:string;formula:string;total:number;detail:string;note:string;again:()=>void;logId?:string}){
+ const result:RollResult={id:++sequence,title:r.title,formula:r.formula,total:r.total,detail:r.detail,at:Date.now(),server:{note:r.note,again:r.again},...(r.mode&&r.mode!=="normal"?{mode:r.mode}:{}),...(r.logId?{logId:r.logId}:{})};
  window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;
 }
 

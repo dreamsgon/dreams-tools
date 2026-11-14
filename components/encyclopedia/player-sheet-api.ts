@@ -31,5 +31,5 @@ const notes={sent:'Sent to the roll log and the campaign’s Discord channel',sk
 export async function rollFromSheet(ref:string,entryId:string,itemId:string,mode:RollMode){
  const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes}>('/api/encyclopedia/player-roll',{ref,entryId,itemId,mode});
  const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
- showServerRoll({title:r.title,formula:r.formula,total:r.total,detail:r.detail,note:notes[r.discord]??notes.none,logId:logged?.id,again:()=>{void rollFromSheet(ref,entryId,itemId,mode).catch(()=>{});}});
+ showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note:notes[r.discord]??notes.none,logId:logged?.id,again:()=>{void rollFromSheet(ref,entryId,itemId,mode).catch(()=>{});}});
 }

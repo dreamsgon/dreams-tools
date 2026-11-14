@@ -143,6 +143,10 @@ export const sheetSchema = z.object({
   if (s.source === "google" && !s.spreadsheetId) ctx.addIssue({ code: "custom", message: "A Google sheet needs its spreadsheetId" });
   if (s.source === "published" && !s.publishedUrl) ctx.addIssue({ code: "custom", message: "A published sheet needs its link" });
   if (new Set(s.items.map(i => i.id)).size !== s.items.length) ctx.addIssue({ code: "custom", message: "Sheet items need unique ids" });
+}).transform(s => {
+  // Keep the cleaned link, never the pasted string.
+  const clean = s.source === "published" && s.publishedUrl ? publishedLink(s.publishedUrl) : null;
+  return clean?.ok ? { ...s, publishedUrl: clean.url } : s;
 });
 export type Sheet = z.infer<typeof sheetSchema>;
 

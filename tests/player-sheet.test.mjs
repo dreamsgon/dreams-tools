@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+process.env.AI_KEY_SECRET='test-secret-for-sheets';
 const M=await import('../lib/members.ts');
 const {demoWorkspace,playerCampaign,campaignExport,defaultCharacter,workspaceSchema}=await import('../lib/encyclopedia/world-model.ts');
 const S=await import('../lib/encyclopedia/player-sheet.ts');
@@ -38,7 +39,8 @@ function list(){
 const rights=u=>M.pageRights(list(),u);
 const ent=(w,id)=>w.entries.find(e=>e.id===id);
 const refuses=(fn,re)=>assert.throws(fn,e=>e instanceof S.PlayerSheetError&&re.test(e.message));
-const link=(w,sheet=gSheet(),extra={})=>S.linkSheet(w,C,rights('mara'),MARA,{name:'Mara'},{entryId:'ayla',sheet,...extra},NOW);
+const TABS=[{name:'Sheet1',rows:[[],['HP','11'],['Max HP','31'],['Perception','+9']]}];
+const link=(w,sheet=gSheet(),extra={})=>S.linkSheet(w,C,rights('mara'),MARA,{name:'Mara'},{entryId:'ayla',sheet,tabs:TABS,...extra},NOW);
 /** Everything in the workspace except one page's sheet and timestamp. */
 const rest=(w,id)=>JSON.stringify({...w,entries:w.entries.map(e=>e.id===id?{...e,character:{...e.character,sheet:0},updatedAt:0}:e)});
 
@@ -182,7 +184,7 @@ test('player sheet route: link, refresh (published link read on the server), rea
  let r=await sheetCall(s,{action:'link',entryId:'ayla',sheet:pSheet()});
  assert.equal(r.status,200);assert.equal(ent(s.state.data,'ayla').character.sheet.linkedBy,'Mara');assert.deepEqual(s.state.saves[0],{name:'Mara',as:'player'});
  r=await sheetCall(s,{action:'refresh',entryId:'ayla'});
- assert.equal(r.status,200);assert.deepEqual(s.state.reads,[PUB_URL]);
+ assert.equal(r.status,200);assert.deepEqual(s.state.reads,[PUB_URL,PUB_URL],'link and refresh each read it');
  assert.equal(ent(s.state.data,'ayla').character.sheet.items.find(i=>i.id==='per').value,'+9');
  r=await sheetCall(s,{action:'read',link:PUB_URL});assert.equal(r.status,200);assert.equal((await r.json()).tabs.length,1);
  // A Google sheet refreshes with tabs from the member's browser; without them the server cannot read it.
@@ -213,7 +215,7 @@ test('player roll route rolls on the server from the stored formula and ignores 
  const d=await (await rollCall(s,{entryId:'ayla',itemId:'per',mode:'low'})).json();
  assert.equal(d.discord,'sent');assert.match(d.detail,/Disadvantage: rolled 11 and 11/);
  const sent=s.state.posts[0];
- assert.equal(sent.m.campaignId,C);assert.deepEqual(sent.post,{kind:'roll',title:'Ayla · Perception',formula:'2d20kl1+4',total:d.total,detail:d.detail,who:'Ayla'});
+ assert.equal(sent.m.campaignId,C);assert.deepEqual(sent.post,{kind:'roll',title:'Ayla · Perception',formula:'2d20kl1+4',total:d.total,detail:d.detail,who:'Ayla',avatarOf:'ayla'});
  assert.equal(JSON.stringify(d).includes(SHEET_ID),false);
  // Attack and damage are separate buttons with their own item.
  assert.equal((await (await rollCall(s,{entryId:'ayla',itemId:'dmg'})).json()).formula,'1d8+4');
@@ -247,4 +249,38 @@ test('a rolled sheet item is found by the same ids the buttons carry',()=>{
  const ids=sheetRollGroups(shown).flatMap(g=>g.rows.flatMap(r=>r.buttons.map(b=>b.itemId))).sort();
  assert.deepEqual(ids,['atk','dmg','per']);
  for(const id of ids)assert.ok(S.rollOf(w,C,rights('mara'),MARA,'ayla',id).formula);
+});
+
+test('a published link is read again on the server, so forged item values never get stored; the link is stored cleaned',async()=>{
+ R.resetThrottles();
+ const s=setup();s.state.data=world();
+ const forged=pSheet({publishedUrl:PUB_URL+'?gid=0&single=true#frag',items:items().map(i=>i.id==='per'?{...i,value:'+99',formula:'1d20+4'}:i.id==='hp'?{...i,value:'9999'}:i)});
+ const r=await sheetCall(s,{action:'link',entryId:'ayla',sheet:forged});
+ assert.equal(r.status,200);assert.equal(s.state.reads.length,1,'the server read the link');
+ const sheet=ent(s.state.data,'ayla').character.sheet;
+ assert.equal(sheet.items.find(i=>i.id==='per').value,'+9');assert.equal(sheet.items.find(i=>i.id==='hp').value,'11');
+ assert.match(sheet.publishedUrl,/^https:\/\/docs\.google\.com\/spreadsheets\/d\/e\/[^?#]+\/pubhtml(\?gid=0&single=true)?$/);assert.ok(!sheet.publishedUrl.includes('#'));
+ // The Google picker path accepts the member's own read values.
+ const g=setup();g.state.data=world();
+ await sheetCall(g,{action:'link',entryId:'ayla',sheet:gSheet({items:items().map(i=>i.id==='per'?{...i,value:'+3'}:i)})});
+ assert.equal(g.state.reads.length,0);assert.equal(ent(g.state.data,'ayla').character.sheet.items.find(i=>i.id==='per').value,'+3');
+});
+
+test('player rolls take the rolling page\'s own picture, never one found by title',async()=>{
+ const {ownPicture}=await import('../lib/encyclopedia/discord-roll.ts');
+ const pic={imageId:'0b5f6a8e-3c1d-4f2a-9b7e-1a2b3c4d5e6f',width:10,height:10};
+ const w=world();
+ const data={...w,entries:[...w.entries.map(e=>e.id==='cael'?{...e,picture:pic}:e),page('ayla2','Cael',{})].filter(e=>e.id!=='ayla2')};
+ assert.equal(ownPicture(data,C,'ayla'),null,'Ayla has none, even if she is renamed to match Cael');
+ assert.deepEqual(ownPicture(data,C,'cael'),pic);
+ assert.equal(ownPicture(data,'demo-campaign-two','cael'),null);
+ const s=setup();const w2=s.state.data;s.state.data={...w2,campaigns:w2.campaigns.map(c=>c.id===C?{...c,discord:{maptableCampaignId:'m'}}:c)};
+ await rollCall(s,{entryId:'ayla',itemId:'per'});
+ assert.equal(s.state.posts[0].post.avatarOf,'ayla');
+});
+
+test('the linker key is an HMAC with the server secret',()=>{
+ const a=S.linkerKey(OWNER,C,'mara',{AI_KEY_SECRET:'a'}),b=S.linkerKey(OWNER,C,'mara',{AI_KEY_SECRET:'b'});
+ assert.match(a,/^[a-f0-9]{32}$/);assert.notEqual(a,b);assert.notEqual(a,S.linkerKey(OWNER,C,'wren',{AI_KEY_SECRET:'a'}));
+ assert.throws(()=>S.linkerKey(OWNER,C,'mara',{}),/no secret/);
 });
