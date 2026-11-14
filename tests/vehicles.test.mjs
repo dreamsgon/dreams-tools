@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSchema,demoWorkspace,playerCampaign,importCopy,searchableText,defaultCharacter} from '../lib/encyclopedia/world-model.ts';
-import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf,vehicleTypesOf,saveVehicleTypes,copyVehicleType,blankVehicleType,typeUse,typeFieldId} from '../lib/encyclopedia/vehicles.ts';
+import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf,vehicleTypesOf,saveVehicleTypes,copyVehicleType,blankVehicleType,typeUse,typeFieldId,cargoOps,systemOps,cargoUsed,holdTitle,systemsTitle,validRoll} from '../lib/encyclopedia/vehicles.ts';
 
 const C='demo-campaign',T='2026-11-14T10:00:00.000Z';
 const page=(id,title,kind,extra={})=>({id,worldId:'demo-world',campaignId:C,parentId:null,title,kind,body:'',updatedAt:T,...extra});
@@ -217,4 +217,44 @@ test('deleting a type in use moves its vehicles to the first type and keeps matc
  assert.equal(gaugeRows(nv,vehicleTypeOf(nv,nw)).find(x=>x.id==='hull').value,30);
  const blank=blankVehicleType(['new-type']);assert.notEqual(blank.id,'new-type');assert.ok(vehicleTypeSchema.safeParse(blank).success);
  assert.equal(typeFieldId('Rail guns!'),'rail-guns');
+});
+
+test('the hold and systems lists add, change and remove lines, and rolls must be dice',()=>{
+ let v=newVehicle(ship);
+ v=cargoOps.add(v,{name:'Spice',qty:12.5});v=cargoOps.add(v,{name:'Contraband rifles',qty:3,gm:true});
+ assert.equal(cargoUsed(v),15.5);
+ const spice=v.cargo[0].id;
+ v=cargoOps.edit(v,spice,{note:'Sealed',qty:10});v=cargoOps.edit(v,spice,{note:undefined});
+ assert.deepEqual(v.cargo[0],{id:spice,name:'Spice',qty:10},'a blank note goes');
+ v=systemOps.add(v,{name:'Laser battery',state:'ok',roll:'2d6+1'});
+ v=systemOps.edit(v,v.systems[0].id,{state:'damaged',gm:false});
+ assert.equal(v.systems[0].state,'damaged');assert.ok(!('gm' in v.systems[0]));
+ assert.ok(vehicleSchema.safeParse(v).success);
+ assert.equal(vehicleSchema.safeParse({...v,systems:[{...v.systems[0],roll:'lots of dice'}]}).success,false,'a roll the roller can’t read');
+ assert.equal(vehicleSchema.safeParse({...v,systems:[{...v.systems[0],state:'exploded'}]}).success,false);
+ assert.equal(vehicleSchema.safeParse({...v,cargo:[v.cargo[0],v.cargo[0]]}).success,false,'ids are unique');
+ assert.ok(validRoll('1d20+5'));assert.ok(!validRoll('d'));
+ v=systemOps.remove(cargoOps.remove(cargoOps.remove(v,v.cargo[1].id),spice),v.systems[0].id);
+ assert.ok(!('cargo' in v)&&!('systems' in v),'an empty list is left off');
+ assert.deepEqual(types.map(t=>[holdTitle(t),t.holdUnit,systemsTitle(t)]),[['Cargo hold','t','Systems'],['Hold','casks','Guns and rigging'],['Gondola hold','crates','Envelope and engines'],['Luggage','trunks','Fittings'],['Boot','kg','Mods']]);
+ const old={...ship};delete old.hold;delete old.holdUnit;delete old.systems;
+ assert.ok(vehicleTypeSchema.safeParse(old).success,'types saved before the Hold existed still load');
+ assert.deepEqual([holdTitle(old),systemsTitle(old)],['Hold','Systems']);
+});
+
+test('players see the Hold and Systems only when shared, without GM-only lines',()=>{
+ let v={...newVehicle(ship),visibility:'players',capacity:40};
+ v=cargoOps.add(v,{name:'Spice',qty:12,note:'For Vesh'});v=cargoOps.add(v,{name:'Contraband rifles',qty:3,gm:true});
+ v=systemOps.add(v,{name:'Laser battery',state:'ok',roll:'2d6+1'});v=systemOps.add(v,{name:'Cloaking field',state:'offline',gm:true,note:'Secret prototype'});
+ const pv=s=>playerCampaign(world(s),C).entries.find(e=>e.id==='gdn').vehicle;
+ assert.equal(pv(v).holdTab,undefined);assert.equal(pv(v).systemsTab,undefined,'both tabs start GM only');
+ const shared=pv({...v,holdVisibility:'players',systemsVisibility:'players'});
+ assert.deepEqual(shared.holdTab,{title:'Cargo hold',unit:'t',capacity:40,used:12,cargo:[{id:v.cargo[0].id,name:'Spice',note:'For Vesh',qty:12}]},'the total counts only what players see');
+ assert.deepEqual(shared.systemsTab.systems.map(x=>[x.name,x.state,x.roll]),[['Laser battery','ok','2d6+1']]);
+ const text=JSON.stringify(playerCampaign(world({...v,holdVisibility:'players',systemsVisibility:'players'}),C));
+ for(const secret of ['Contraband','Cloaking','Secret prototype'])assert.ok(!text.includes(secret),secret);
+ assert.equal(playerCampaign(world({...v,visibility:'gm',holdVisibility:'players'}),C).entries.find(e=>e.id==='gdn'),undefined,'a GM-only vehicle shares no tab');
+ assert.ok(searchableText(world(v).entries.find(e=>e.id==='gdn')).includes('Cloaking field'),'the GM’s search finds systems');
+ const moved=changeType(v,ship,sail);
+ assert.deepEqual([moved.cargo.length,moved.systems.length,moved.capacity],[2,2,40],'changing the type keeps the hold and systems');
 });

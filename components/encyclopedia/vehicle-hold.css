@@ -1,0 +1,59 @@
+/* A vehicle's Hold and Systems tabs (components/encyclopedia/vehicle-hold.tsx). */
+.vehicle-hold,.vehicle-systems{display:flex;flex-direction:column;gap:14px;margin-top:4px}
+.hold-summary{display:grid;grid-template-columns:160px minmax(0,1fr);gap:16px;align-items:end;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.hold-capacity{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.hold-capacity small{color:var(--muted);font-weight:400}
+.hold-capacity>span{white-space:nowrap}
+.hold-capacity .hold-cell{border-color:var(--line);background:var(--raised,var(--panel));font-weight:700}
+.hold-meter{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hold-meter-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600}
+.hold-meter-num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.hold-meter-num small{color:var(--muted)}
+.hold-bar{height:10px;border-radius:999px;background:var(--hover);overflow:hidden}
+.hold-bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.hold-meter.over .hold-bar i{background:var(--danger,#c0392b)}
+.hold-over{color:var(--danger,#c0392b);font-weight:600}
+.hold-rows,.sys-rows{display:flex;flex-direction:column;gap:6px}
+.hold-row,.sys-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.hold-row.is-hidden,.sys-row.is-hidden{border-style:dashed;border-color:var(--warning)}
+.hold-cell{min-width:0;border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:4px 6px;font:inherit;font-size:13px;color:var(--ink)}
+.hold-cell:hover,.hold-cell:focus{border-color:var(--line);background:var(--raised,var(--hover))}
+.hold-add .hold-cell{border-color:var(--line);background:var(--raised,var(--panel))}
+.hold-qty{width:72px;flex-shrink:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.hold-unit{flex-shrink:0;font-size:12px;color:var(--muted);min-width:0}
+.hold-name,.sys-name{flex:1 1 0;font-weight:600}
+.hold-note,.sys-note{flex:1.3 1 0;color:var(--muted)}
+.hold-empty{margin:0;font-size:13px}
+.hold-add{display:flex;gap:8px;align-items:center}
+.hold-add .hold-name{flex:1}
+.vehicle-hold .icon-button,.vehicle-systems .icon-button{padding:5px}
+.hold-row.read,.sys-row.read{flex-wrap:wrap;padding:8px 10px}
+.hold-qty-read{width:84px;flex-shrink:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.hold-qty-read small{color:var(--muted);font-weight:400}
+.hold-row.read .hold-note,.sys-row.read .sys-note{font-size:13px}
+.sys-name{max-width:220px}
+.sys-row.read .sys-name{flex:0 1 auto;font-size:14px}
+.sys-state{flex-shrink:0;border:1px solid var(--line);border-radius:999px;padding:3px 9px;font:inherit;font-size:12px;font-weight:600;background:var(--panel);color:var(--ink)}
+.sys-state.s-ok{color:#2e7d4f;border-color:color-mix(in srgb,#2e7d4f 45%,transparent);background:color-mix(in srgb,#2e7d4f 10%,var(--panel))}
+.sys-state.s-damaged{color:#a86410;border-color:color-mix(in srgb,#d08a1c 50%,transparent);background:color-mix(in srgb,#d08a1c 12%,var(--panel))}
+.sys-state.s-offline{color:var(--danger,#c0392b);border-color:color-mix(in srgb,#c0392b 45%,transparent);background:color-mix(in srgb,#c0392b 10%,var(--panel))}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sys-state.s-ok{color:#7fd3a0}:root:not([data-theme="light"]) .sys-state.s-damaged{color:#f0b45a}}
+:root[data-theme="dark"] .sys-state.s-ok{color:#7fd3a0}
+:root[data-theme="dark"] .sys-state.s-damaged{color:#f0b45a}
+.sys-roll{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;width:210px}
+.sys-row.read .sys-roll{width:auto}
+.hold-add .sys-name{max-width:none}
+.sys-roll-input{width:100px;font-family:var(--mono,ui-monospace,monospace);font-size:12px}
+.sys-roll-input.bad{border-color:var(--danger,#c0392b)}
+.sys-tools{display:inline-flex;gap:2px;flex-shrink:0}
+@media (max-width:760px){
+ .hold-summary{grid-template-columns:minmax(0,1fr)}
+ .hold-row{flex-wrap:wrap}
+ .hold-row .hold-note{order:5;flex-basis:100%}
+ .sys-row{flex-wrap:wrap}
+ .sys-name{max-width:none;flex-basis:calc(100% - 130px)}
+ .sys-row .sys-note{order:5;flex-basis:100%}
+ .sys-row:not(.read) .sys-roll{flex:1;width:auto}
+ .sys-row:not(.read) .sys-roll-input{flex:1}
+ .hold-add .button{flex-shrink:0}
+}

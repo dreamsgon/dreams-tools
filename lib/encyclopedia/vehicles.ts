@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { oid, text, unique, visibility } from "./org-profile.ts";
+import { parseDice } from "../rolls.ts";
 
 /*
  * Vehicles: ships, airships, carriages, cars and anything else a party rides in. A vehicle page belongs to a vehicle type,
@@ -32,6 +33,8 @@ export const vehicleTypeSchema = z.object({
   id: oid, name: label(40), one: label(30), art: z.enum(vehicleArts), commander: label(30),
   /** What the Crew tab is called: Crew, Retinue, Passengers… */
   crew: label(30),
+  /** Optional (added later): what the Hold and Systems tabs are called, and the unit cargo is counted in. */
+  hold: label(30).optional(), holdUnit: text(16).optional(), systems: label(30).optional(),
   specs: z.array(typeSpecSchema).max(maxSpecs), gauges: z.array(typeGaugeSchema).max(maxGauges), now: z.array(typeNowSchema).max(maxNow),
   stations: z.array(typeStationSchema).max(maxStations), hands: z.array(typeHandSchema).max(maxHands),
 }).superRefine((t, ctx) => {
@@ -50,6 +53,16 @@ const whoFields = { characterId: oid.optional(), name: text(80).optional() };
 const stationSchema = z.object({ id: oid, label: label(40), pic: z.boolean(), ...whoFields, gm: z.boolean().optional() });
 const crewSchema = z.object({ id: oid, ...whoFields, role: text(80).optional(), gm: z.boolean().optional() })
   .refine(c => !!c.characterId || !!c.name, { message: "A crew member needs a page or a name" });
+/** A system’s roll must be dice the roller can read (lib/rolls.ts), like 2d6+1 or 1d20+5. */
+export const validRoll = (f: string) => { try { parseDice(f); return true; } catch { return false; } };
+export const maxCargo = 60, maxSystems = 30;
+export const systemStates = ["ok", "damaged", "offline"] as const;
+export type SystemState = typeof systemStates[number];
+export const systemStateNames: Record<SystemState, string> = { ok: "Working", damaged: "Damaged", offline: "Offline" };
+const cargoSchema = z.object({ id: oid, name: z.string().trim().min(1).max(80), note: text(160).optional(), qty: z.number().min(0).max(10_000_000), gm: z.boolean().optional() });
+const systemSchema = z.object({ id: oid, name: z.string().trim().min(1).max(60), state: z.enum(systemStates), note: text(160).optional(), roll: text(100).refine(f => !f || validRoll(f), { message: "That roll isn’t dice the roller understands, like 2d6+1" }).optional(), gm: z.boolean().optional() });
+export type Cargo = z.infer<typeof cargoSchema>;
+export type VehicleSystem = z.infer<typeof systemSchema>;
 export const vehicleSchema = z.object({
   /** Whether players get the vehicle's Overview tab. */
   visibility,
@@ -72,8 +85,15 @@ export const vehicleSchema = z.object({
   hands: z.array(gaugeValueSchema).max(8).optional(),
   /** Whether players get the Crew tab (only when they get the vehicle at all). */
   crewVisibility: visibility.optional(),
+  /** The Hold tab: what it can carry (in the type's unit) and what it carries. */
+  capacity: z.number().min(0).max(10_000_000).optional(),
+  cargo: z.array(cargoSchema).max(maxCargo).optional(),
+  holdVisibility: visibility.optional(),
+  /** The Systems tab: guns, engines, sails, spells… each with a state and an optional roll. */
+  systems: z.array(systemSchema).max(maxSystems).optional(),
+  systemsVisibility: visibility.optional(),
 }).superRefine((v, ctx) => {
-  if (!unique(v.specs.map(x => x.id)) || !unique(v.gauges.map(x => x.id)) || !unique(v.now.map(x => x.id)) || !unique((v.stations ?? []).map(x => x.id)) || !unique((v.crew ?? []).map(x => x.id)) || !unique((v.hands ?? []).map(x => x.id))) ctx.addIssue({ code: "custom", message: "Vehicle value ids must be unique" });
+  if (!unique(v.specs.map(x => x.id)) || !unique(v.gauges.map(x => x.id)) || !unique(v.now.map(x => x.id)) || !unique((v.stations ?? []).map(x => x.id)) || !unique((v.crew ?? []).map(x => x.id)) || !unique((v.hands ?? []).map(x => x.id)) || !unique((v.cargo ?? []).map(x => x.id)) || !unique((v.systems ?? []).map(x => x.id))) ctx.addIssue({ code: "custom", message: "Vehicle value ids must be unique" });
 });
 export type Vehicle = z.infer<typeof vehicleSchema>;
 
@@ -87,27 +107,27 @@ const hands = (...ls: string[]) => ls.map(l => ({ id: slug(l), label: l }));
 /** The ready-made types. Their ids are fixed, so a vehicle made from one keeps finding it. */
 export function starterVehicleTypes(): VehicleType[] {
   return [
-    { id: "starship", name: "Starship", one: "Ship", art: "starship", commander: "Captain", crew: "Crew",
+    { id: "starship", name: "Starship", one: "Ship", art: "starship", commander: "Captain", crew: "Crew", hold: "Cargo hold", holdUnit: "t", systems: "Systems",
       stations: st(["Pilot", "Gunner", "Engineer", "Sensors"], ["Medic", "Quartermaster"]), hands: hands("Crew", "Marines"),
       specs: [spec("model", "Model"), spec("class", "Class"), spec("role", "Role"), spec("drive", "Drive"), spec("registry", "Registry")],
       gauges: [gauge("hull", "Hull", "bar", "hull", 40), gauge("shields", "Shields", "pips", "shield", 3), gauge("fuel", "Fuel", "bar", "fuel", 100)],
       now: [now("activity", "Activity"), now("situation", "Situation"), now("objective", "Objective", true)] },
-    { id: "sailing-ship", name: "Sailing ship", one: "Ship", art: "sail", commander: "Captain", crew: "Crew",
+    { id: "sailing-ship", name: "Sailing ship", one: "Ship", art: "sail", commander: "Captain", crew: "Crew", hold: "Hold", holdUnit: "casks", systems: "Guns and rigging",
       stations: st(["Helm", "Bosun", "Navigator", "Quartermaster"], ["Surgeon", "Cook"]), hands: hands("Sailors", "Marines"),
       specs: [spec("class", "Class"), spec("masts", "Masts", "number"), spec("guns", "Guns", "number"), spec("home-port", "Home port"), spec("flag", "Flag")],
       gauges: [gauge("hull", "Hull", "bar", "hull", 60), gauge("sails", "Sails", "pips", "shield", 4), gauge("supplies", "Supplies", "bar", "fuel", 30, "days")],
       now: [now("heading", "Heading"), now("weather", "Weather"), now("orders", "Orders", true)] },
-    { id: "airship", name: "Airship", one: "Airship", art: "airship", commander: "Captain", crew: "Crew",
+    { id: "airship", name: "Airship", one: "Airship", art: "airship", commander: "Captain", crew: "Crew", hold: "Gondola hold", holdUnit: "crates", systems: "Envelope and engines",
       stations: st(["Helm", "Engineer", "Lookout"], ["Rigger"]), hands: hands("Crew", "Riggers"),
       specs: [spec("class", "Class"), spec("lift", "Lift gas"), spec("ceiling", "Ceiling"), spec("home-dock", "Home dock")],
       gauges: [gauge("envelope", "Envelope", "bar", "hull", 30), gauge("ballast", "Ballast", "pips", "shield", 5), gauge("fuel", "Fuel", "bar", "fuel", 50)],
       now: [now("heading", "Heading"), now("weather", "Weather"), now("orders", "Orders", true)] },
-    { id: "carriage", name: "Carriage", one: "Coach", art: "carriage", commander: "Coachman", crew: "Retinue",
+    { id: "carriage", name: "Carriage", one: "Coach", art: "carriage", commander: "Coachman", crew: "Retinue", hold: "Luggage", holdUnit: "trunks", systems: "Fittings",
       stations: st(["Box seat", "Footman", "Guard"], ["Outrider"]), hands: hands("Outriders", "Servants"),
       specs: [spec("make", "Make"), spec("team", "Team"), spec("seats", "Seats", "number"), spec("livery", "Livery")],
       gauges: [gauge("frame", "Frame", "bar", "hull", 20), gauge("team", "Team", "pips", "shield", 4, "horses"), gauge("fodder", "Fodder", "bar", "fuel", 10, "days")],
       now: [now("bound-for", "Bound for"), now("passengers", "Passengers"), now("hurry", "Hurry", true)] },
-    { id: "car", name: "Car", one: "Car", art: "car", commander: "Driver", crew: "Passengers",
+    { id: "car", name: "Car", one: "Car", art: "car", commander: "Driver", crew: "Passengers", hold: "Boot", holdUnit: "kg", systems: "Mods",
       stations: st(["Navigator", "Gunner"], ["Mechanic"]), hands: hands("Riders"),
       specs: [spec("make", "Make"), spec("model", "Model"), spec("year", "Year", "number"), spec("plate", "Plate"), spec("engine", "Engine")],
       gauges: [gauge("body", "Body", "bar", "hull", 30), gauge("tyres", "Tyres", "pips", "shield", 4), gauge("fuel", "Fuel", "bar", "fuel", 16, "gal")],
@@ -237,6 +257,22 @@ export function setHands(v: Vehicle, t: VehicleType, id: string, patch: { value?
   return { ...v, hands: x ? list.map(s => s.id === id ? row : s) : [...list, row] };
 }
 
+export const holdTitle = (t: VehicleType) => t.hold ?? "Hold";
+export const systemsTitle = (t: VehicleType) => t.systems ?? "Systems";
+/** The cargo carried, all of it (GM) or only the shown lines (players get theirs from playerVehicle). */
+export const cargoUsed = (v: Vehicle) => (v.cargo ?? []).reduce((n, c) => n + c.qty, 0);
+const listOps = <K extends "cargo" | "systems">(key: K, max: number) => ({
+  add: (v: Vehicle, row: Omit<NonNullable<Vehicle[K]>[number], "id">): Vehicle => ({ ...v, [key]: [...(v[key] ?? []), { ...row, id: freshId() }].slice(0, max) }),
+  edit: (v: Vehicle, id: string, patch: Partial<NonNullable<Vehicle[K]>[number]>): Vehicle => ({ ...v, [key]: (v[key] ?? []).map(x => {
+    if (x.id !== id) return x;
+    const next: Record<string, unknown> = { ...x, ...patch, id };
+    for (const k of Object.keys(next)) if (next[k] === undefined || next[k] === "" || (k === "gm" && next[k] === false)) delete next[k];
+    return next;
+  }) }),
+  remove: (v: Vehicle, id: string): Vehicle => { const rest = (v[key] ?? []).filter(x => x.id !== id), out: Vehicle = { ...v, [key]: rest }; if (!rest.length) delete out[key]; return out; },
+});
+export const cargoOps = listOps("cargo", maxCargo), systemOps = listOps("systems", maxSystems);
+
 /** How a character page is tied to a vehicle, for the links back from that page. */
 export function vehicleRolesOf(v: Vehicle, t: VehicleType, pageId: string): string[] {
   const roles: string[] = [];
@@ -290,7 +326,7 @@ export function remapVehicle(v: Vehicle, map: (id: string) => string | undefined
   if (v.crew) { const crew = v.crew.map(who).filter(c => c.characterId || c.name); if (crew.length) out.crew = crew; else delete out.crew; }
   return out;
 }
-export const vehicleSearchText = (v?: Vehicle) => v ? [v.subtitle, v.locationText, ...v.specs.map(s => s.value), ...v.now.map(s => s.value), ...(v.stations ?? []).map(s => s.name), ...(v.crew ?? []).flatMap(c => [c.name, c.role])].filter(Boolean).join(" ") : "";
+export const vehicleSearchText = (v?: Vehicle) => v ? [v.subtitle, v.locationText, ...v.specs.map(s => s.value), ...v.now.map(s => s.value), ...(v.stations ?? []).map(s => s.name), ...(v.crew ?? []).flatMap(c => [c.name, c.role]), ...(v.cargo ?? []).flatMap(c => [c.name, c.note]), ...(v.systems ?? []).flatMap(x => [x.name, x.note])].filter(Boolean).join(" ") : "";
 
 export type PlayerVehicle = {
   type: { name: string; one: string; art: VehicleArt; commander: string };
@@ -302,6 +338,8 @@ export type PlayerVehicle = {
   /** Shown seats. Without the Crew tab, only the ones on the picture. `unknown`: someone players can't read about. */
   stations: { id: string; label: string; pic: boolean; characterId?: string; name?: string; unknown?: true }[];
   /** The Crew tab, when it is shared. */
+  holdTab?: { title: string; unit: string; capacity?: number; used: number; cargo: { id: string; name: string; note?: string; qty: number }[] };
+  systemsTab?: { title: string; systems: { id: string; name: string; state: SystemState; note?: string; roll?: string }[] };
   crewTab?: { title: string; crew: { id: string; characterId?: string; name?: string; role?: string }[]; hands: { id: string; label: string; value: number }[] };
 };
 /** What players see of a shared vehicle: nothing marked GM only, links only to pages they can read, and no empty rows. */
@@ -320,6 +358,11 @@ export function playerVehicle(v: Vehicle, t: VehicleType, readable: (id: string)
     gauges: gaugeRows(v, t).filter(r => !r.gm).map(r => ({ id: r.id, label: r.label, shape: r.shape, colour: r.colour, max: r.max, ...(r.unit ? { unit: r.unit } : {}), value: r.value })),
     now: nowRows(v, t).filter(r => !r.gm).map(r => ({ id: r.id, label: r.label, value: clean(r.value) })).filter(r => r.value),
     stations: stationList(v, t).filter(st => !st.gm && (crewShared || st.pic)).map(st => ({ id: st.id, label: clean(st.label) || "Station", pic: st.pic, ...who(st) })),
+    ...(v.holdVisibility === "players" ? { holdTab: (() => {
+      const cargo = (v.cargo ?? []).filter(c => !c.gm).map(c => ({ id: c.id, name: clean(c.name) || "Cargo", ...(c.note && clean(c.note) ? { note: clean(c.note) } : {}), qty: c.qty }));
+      return { title: holdTitle(t), unit: t.holdUnit ?? "", ...(v.capacity !== undefined ? { capacity: v.capacity } : {}), used: cargo.reduce((n, c) => n + c.qty, 0), cargo };
+    })() } : {}),
+    ...(v.systemsVisibility === "players" ? { systemsTab: { title: systemsTitle(t), systems: (v.systems ?? []).filter(x => !x.gm).map(x => ({ id: x.id, name: clean(x.name) || "System", state: x.state, ...(x.note && clean(x.note) ? { note: clean(x.note) } : {}), ...(x.roll ? { roll: x.roll } : {}) })) } } : {}),
     ...(crewShared ? { crewTab: {
       title: t.crew,
       crew: (v.crew ?? []).filter(c => !c.gm).flatMap(c => { const w = who(c); return w.characterId || w.name ? [{ id: c.id, ...w, ...(c.role && clean(c.role) ? { role: clean(c.role) } : {}) }] : []; }),
@@ -335,7 +378,7 @@ export const typeFieldId = (label: string, taken: Iterable<string> = []) => {
   for (;;) { const id = `${base}-${Math.random().toString(36).slice(2, 6)}`; if (!used.has(id)) return id; }
 };
 /** A blank type to start from. */
-export const blankVehicleType = (taken: string[]): VehicleType => ({ id: typeFieldId("new-type", taken), name: "New type", one: "Vehicle", art: "car", commander: "Captain", crew: "Crew", specs: [], gauges: [], now: [], stations: [], hands: [] });
+export const blankVehicleType = (taken: string[]): VehicleType => ({ id: typeFieldId("new-type", taken), name: "New type", one: "Vehicle", art: "car", commander: "Captain", crew: "Crew", hold: "Hold", systems: "Systems", specs: [], gauges: [], now: [], stations: [], hands: [] });
 /** A copy of a type under a new id and name. */
 export const copyVehicleType = (t: VehicleType, taken: string[]): VehicleType => ({ ...structuredClone(t), id: typeFieldId(`${t.id}-copy`, taken), name: `${t.name} (copy)`.slice(0, 40) });
 
