@@ -6,6 +6,7 @@
  */
 import { playerText, type Workspace as Book } from "../encyclopedia/world-model.ts";
 import { playerRecapTabs } from "../encyclopedia/recap-schema.ts";
+import { withoutLinkDetails } from "../encyclopedia/sheet-link.ts";
 import type { Scene, Workspace as Maps } from "../model.ts";
 import { fogged, permsFor, type McpContext } from "./tools.ts";
 
@@ -20,7 +21,7 @@ export function playersBook(book: Book, campaignId: string): Book {
     const map = e.mapData?.visibility === "players";
     if (!overview && !tabs.length && !found && !map) return [];
     const quest = e.quest && overview ? { ...e.quest, objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
-    const character = e.character ? { ...e.character, statblock: undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
+    const character = e.character ? { ...e.character, statblock: undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
       // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
       org: undefined, profile: undefined }];

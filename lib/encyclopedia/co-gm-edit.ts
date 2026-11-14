@@ -18,7 +18,10 @@ function restore(edited: Entry, full: Entry, campaignId: string): Entry {
   const next = { ...edited };
   if (edited.character && full.character) {
     const others = Object.fromEntries(Object.entries(full.character.statsByCampaign).filter(([cid]) => cid !== campaignId));
-    next.character = { ...edited.character, statsByCampaign: { ...others, ...Object.fromEntries(Object.entries(edited.character.statsByCampaign).filter(([cid]) => cid === campaignId)) } };
+    // The linked sheet is the owner's: a co-GM neither links nor changes it (and the sheet id and link stay out of reach).
+    const { sheet: _sheet, ...character } = edited.character;
+    void _sheet;
+    next.character = { ...character, ...(full.character.sheet ? { sheet: full.character.sheet } : {}), statsByCampaign: { ...others, ...Object.fromEntries(Object.entries(edited.character.statsByCampaign).filter(([cid]) => cid === campaignId)) } };
   }
   if (edited.codex && full.codex) {
     const others = Object.fromEntries(Object.entries(full.codex.found).filter(([cid]) => cid !== campaignId));

@@ -31,6 +31,32 @@ Available tools: `list_worlds`, `read_campaign`, `search_campaign`, `read_articl
 
 The optional `scripts/campaign-sync.mjs` exports campaign JSON and Markdown to a local Git checkout. Run with `node --experimental-strip-types`; consult its `--help` and the encyclopedia Connections panel. Saving in the browser does not push to GitHub. Campaign exports may contain private GM notes: keep them separate from this application's source repository.
 
+## Character sheets (Google Sheets)
+
+A character page can link one Google Sheet. Its Profile tab then shows a Character sheet section with chosen cells copied from it: hit points (with a maximum and your own label, such as Stress), AC, Initiative, other stats, and rolls listed with their formulas. The copy is stored on the character (`character.sheet`); rolling, Maptable, Discord and writing back to the sheet are not part of this yet.
+
+- **Published link (no setup).** In Google Sheets choose File, Share, Publish to the web, pick the tab and Comma-separated values (.csv), and paste the link under Link a character sheet. Publishing makes the sheet readable by anyone with the link. The server reads only `docs.google.com`, up to 2 MB.
+- **Sign in with Google (needs one-time setup below).** The browser signs in with Google Identity Services, Google's own file picker lets the GM choose one sheet, and the browser reads it with the Sheets API. The scope is `drive.file`, which can open only files picked in the app. No token or sheet is stored on our server.
+- **Which cells.** A tab named `RPG Tools` whose first row is Name, Value, Roll is read row by row (a Roll makes a roll; HP, Max HP, AC and Initiative fill their slots). Otherwise the GM clicks label and value cells in a grid. The dialog's Download template link gives an example CSV to import as that tab.
+- **Players.** When the character's Stats tab is player visible, players see the copied title, values and formulas, read only. They never receive the spreadsheet id, the published link, who linked it or the cell references, and a players-only AI connection follows the same rule.
+
+### One-time Google setup (site owner)
+
+1. In the Google Cloud console create a project. Note its **project number** (Project settings).
+2. Enable the **Google Sheets API**, **Google Picker API** and **Google Drive API**.
+3. OAuth consent screen: user type **External**, add only the scope `.../auth/drive.file`. While in Testing, add each GM as a test user; publish the app when ready for others.
+4. Credentials, Create OAuth client ID, type **Web application**. Add the site's origins as Authorized JavaScript origins (for example `https://dreams-tools-sable.vercel.app` and `http://localhost:5173`). No redirect URI is needed.
+5. Credentials, Create API key. Restrict it to the **Google Picker API** and **Google Sheets API**, and to the site's HTTP referrers.
+6. Set these in the deployment's environment (they are `NEXT_PUBLIC_`, so they are visible in the browser by design) and redeploy:
+
+```text
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<the OAuth client ID>
+NEXT_PUBLIC_GOOGLE_API_KEY=<the restricted API key>
+NEXT_PUBLIC_GOOGLE_APP_ID=<the project number>
+```
+
+Until all three are set, the dialog shows Sign in with Google disabled with "The site owner hasn't set up Google sign-in yet. Use a published link for now." The app sends no Content-Security-Policy header today, so nothing needs allowing. If one is added later, the Google option loads scripts from `accounts.google.com` and `apis.google.com`, frames the picker from `docs.google.com`, opens a sign-in pop-up on `accounts.google.com`, and calls `sheets.googleapis.com` and `www.googleapis.com`. Check the browser console for refusals after adding a policy, because the picker may also load assets from other Google hosts.
+
 ## Remaining acceptance checks
 
 Source/model tests and production build checks are documented in VALIDATION.md. Real account/email/S3 setup, authenticated desktop/mobile interactions, deployed MCP access, and migration of your live content remain owner setup tasks in TODO.md. No external service was deployed by this integration.
