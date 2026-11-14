@@ -67,10 +67,10 @@ test('the recap and story prompts carry the style; the recap keeps the length th
  assert.match(recap,/Write in German\./);assert.match(recap,/Never name the Bog Hag/);
  assert.doesNotMatch(recap,/Recap length/);
  const plain=prosePrompt({...head,request:defaultRequest});
- assert.match(plain,/Past tense, warm, as a story of what the party did\./);assert.match(plain,/Write it in paragraphs\./);
+ assert.match(plain,/Past tense, warm, as a story of what the party did\./);assert.match(plain,/Write it in paragraphs, with no lists\./);
  const story=storyPrompt({campaign:'C',recaps:[],left:0,style:{...grim,shape:'bullets'}});
  assert.match(story,/Use short bullet points/);assert.doesNotMatch(story,/no lists/);
- assert.match(storyPrompt({campaign:'C',recaps:[],left:0}),/No headings and no links, no lists\./);
+ assert.match(storyPrompt({campaign:'C',recaps:[],left:0}),/Write it in paragraphs, with no lists\.\nUse only what is in the recaps below: they are what the players already know\. No headings and no links\./);
 });
 
 function world(aiWriting){
