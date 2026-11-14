@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 import {
  colNumber,colLetters,parseCell,cellRef,cellText,parseCsv,toCsv,rowsFromValues,publishedLink,sheetSchema,kindForName,isDice,guessFormula,guessPick,looksD20,
  findTemplateTab,templateItems,templateCsv,templateRows,refreshSheet,refreshRanges,sheetLayout,rollGroups,timeAgo,sheetOpenUrl,playerSheet,withoutLinkDetails,
- labelFromRangeName,namedRangeCell,clipRows,
+ labelFromRangeName,namedRangeCell,clipRows,GRID_ROWS,
 } from '../lib/encyclopedia/sheet-link.ts';
 import {pagedTabs,readPublishedSheet,SheetReadError} from '../lib/encyclopedia/sheet-published.ts';
 import {workspaceSchema,demoWorkspace,playerCampaign,campaignExport} from '../lib/encyclopedia/world-model.ts';
 import {callTool} from '../lib/mcp/tools.ts';
 import {narrow} from '../lib/mcp/players-only.ts';
+import {applyCoGmEdit} from '../lib/encyclopedia/co-gm-edit.ts';
+import {savePlayerEdit} from '../lib/encyclopedia/player-edit.ts';
+import {callReadTool} from '../lib/encyclopedia/mcp.ts';
+import {handleSheetRead,resetThrottle,throttled,MAX_BODY} from '../lib/encyclopedia/sheet-request.ts';
 import {presets} from '../lib/mcp/permissions.ts';
 
 const SHEET_ID='1AbCdEfGhIjKlMnOpQrStUvWx';
@@ -40,7 +44,7 @@ test('CSV handles quotes, commas, line breaks, CRLF and a BOM, and drops empty t
  assert.deepEqual(parseCsv(toCsv(rows)),rows);
  assert.deepEqual(rowsFromValues([['Ayla',5,true,null],[]]),[['Ayla','5','true',''],[]]);
  assert.deepEqual(rowsFromValues(undefined),[]);
- assert.equal(clipRows(Array.from({length:300},()=>Array(60).fill('x'))).length,200);
+ assert.equal(clipRows(Array.from({length:300},()=>Array(60).fill('x'))).length,GRID_ROWS);
  assert.equal(clipRows([Array(60).fill('x')])[0].length,40);
 });
 
@@ -185,8 +189,8 @@ test('template mode follows the tab: new rows appear, removed rows go, and a mis
 test('the ranges asked of the Sheets API are the template tab, or each tab with a picked cell', () => {
  assert.deepEqual(refreshRanges({mode:'template',items:[]}),[{name:'RPG Tools',range:'A1:C201'}]);
  assert.deepEqual(refreshRanges(cellsSheet()).map(r=>r.name).sort(),['Sheet1','Sheet9']);
- assert.deepEqual(refreshRanges({mode:'cells',tab:'Combat',items:[]}),[{name:'Combat',range:'A1:Z100'}]);
- assert.deepEqual(refreshRanges({mode:'cells',items:[{cell:'B3'}]},'Main'),[{name:'Main',range:'A1:Z100'}]);
+ assert.deepEqual(refreshRanges({mode:'cells',tab:'Combat',items:[]}),[{name:'Combat',range:'A1:Z201'}]);
+ assert.deepEqual(refreshRanges({mode:'cells',items:[{cell:'B3'}]},'Main'),[{name:'Main',range:'A1:Z201'}]);
 });
 
 test('named ranges become one cell and a readable label', () => {
@@ -362,4 +366,101 @@ test('the reader refuses other hosts, private sheets, web pages and oversized re
  // A redirect that stays on docs.google.com is followed.
  const hop=web([{match:'/pubhtml',status:500,body:''},{match:'output=csv&single',status:307,location:'https://docs.google.com/spreadsheets/u/0/d/e/'+PUB_ID+'/pub?output=csv&hop=1'},{match:'hop=1',body:'a,b\n'}]);
  assert.deepEqual((await readPublishedSheet(link,hop)).tabs[0].rows,[['a','b']]);
+});
+
+// ---- Review fixes ------------------------------------------------------------------------------
+
+test('dice matching stays fast on hostile input and still refuses non-dice', () => {
+ for(const bad of ['1d20'+'k'.repeat(30)+'x','1d20'+'kh'.repeat(2500)+'x','1d6'+'+1'.repeat(2500)+'x','d'.repeat(5000),'1d20'+'!'.repeat(5000)+'?','1d20'+'>='.repeat(2500)+'y']){
+  const t=performance.now();
+  assert.equal(isDice(bad),false);
+  assert.ok(performance.now()-t<50,`took ${performance.now()-t} ms for ${bad.length} chars`);
+ }
+ const t=performance.now();guessFormula('1d20'+'k'.repeat(5000)+'x',true);guessPick('Sneak','4d6'+'k'.repeat(5000)+'x',true);
+ assert.ok(performance.now()-t<50);
+ for(const bad of ['1d20x','d20d','1d','2d6kk!!x','1d6+','1d6 +d','abc','1d20 5','1d6++1'])assert.equal(isDice(bad),false,bad);
+ for(const good of ['2d6kh1kl1','4d6kh3+2','2d10!>=8','1d20 + 1d4 + 2'])assert.equal(isDice(good),true,good);
+});
+
+test('all routes read the same number of rows', () => {
+ assert.equal(clipRows(Array.from({length:500},()=>['x'])).length,GRID_ROWS);
+ assert.deepEqual(refreshRanges({mode:'template',items:[]}),[{name:'RPG Tools',range:`A1:C${GRID_ROWS}`}]);
+});
+
+const sheetWorld=()=>world({statsVisibility:'gm',sheet:fullSheet()},'players');
+test('a co-GM save cannot link, change or remove the owner\'s sheet', () => {
+ const full=sheetWorld(),mara=w=>w.entries.find(e=>e.id==='demo-mara');
+ const edit=f=>{const c=campaignExport(full,C);const e=mara(c);f(e);return c;};
+ const swapped=edit(e=>{e.character.sheet={...e.character.sheet,spreadsheetId:'ZZZZZZZZZZZZZZZZZZZZ',title:'Taken over'};e.character.role='pc';});
+ const out=mara(applyCoGmEdit(full,C,swapped)).character;
+ assert.deepEqual(out.sheet,fullSheet(),'the owner\'s sheet stays exactly as it was');
+ assert.equal(out.role,'pc','the co-GM\'s other character edits still apply');
+ assert.deepEqual(mara(applyCoGmEdit(full,C,edit(e=>{delete e.character.sheet;}))).character.sheet,fullSheet(),'removing it is undone');
+ const plain=world({statsVisibility:'gm'},'players');
+ assert.equal(mara(applyCoGmEdit(plain,C,edit.call(null,()=>{}) && (()=>{const c=campaignExport(plain,C);mara(c).character.sheet=fullSheet();return c;})())).character.sheet,undefined,'nor can a co-GM add one');
+});
+
+test('a player save never changes the sheet', () => {
+ const w=sheetWorld(),rights={edit:new Set(['demo-mara']),subPages:new Set(),made:new Set()};
+ const next=savePlayerEdit(w,C,rights,{entryId:'demo-mara',title:'Mara Venn, edited',tabs:[{id:'overview',body:'New text.'}]},{name:'Wren',as:'player'});
+ const mara=next.entries.find(e=>e.id==='demo-mara');
+ assert.equal(mara.body,'New text.');assert.deepEqual(mara.character.sheet,fullSheet());
+});
+
+test('the older campaign-key reader also hides the sheet id, link and linker', () => {
+ const full=world({statsVisibility:'gm',sheet:{...fullSheet(),source:'published',spreadsheetId:undefined,publishedUrl:PUB_URL}},'players');
+ const scope=campaignExport(full,C);
+ const all=JSON.stringify([callReadTool(scope,'read_campaign',{campaign_id:C}),callReadTool(scope,'read_article',{campaign_id:C,article_id:'demo-mara'})]);
+ for(const x of [PUB_ID,'docs.google.com','Cael','spreadsheetId','publishedUrl','linkedBy','"cell"','"mode"','"source"'])assert.ok(!all.includes(x),x);
+ assert.ok(all.includes('Ayla - Salt Road')&&all.includes('1d20+5'));
+});
+
+test('the players-only book holds the allow-list shape, nothing more', () => {
+ const full=campaignExport(world({statsVisibility:'players',sheet:fullSheet()},'players'),C);
+ const limited=narrow({book:full,campaign:full.campaigns[0],maps:null,level:'read',perms:{...presets.gm,seeSecrets:'off'}});
+ const sheet=limited.book.entries.find(e=>e.id==='demo-mara').character.sheet;
+ assert.deepEqual(Object.keys(sheet).sort(),['items','readAt','title']);
+ assert.deepEqual(Object.keys(sheet.items[0]).sort(),['id','kind','name','value']);
+});
+
+test('the sheet route checks sign-in, origin, size and pace, then reads', async () => {
+ const run=(r,d)=>{resetThrottle();return handleSheetRead(r,d);};
+ const req=(body='{"action":"read","link":"x"}',headers={})=>new Request('https://app.test/api/encyclopedia/sheet',{method:'POST',body,headers:{Origin:'https://app.test','content-type':'application/json',...headers}});
+ const deps=(over={})=>({owner:async()=>'u1',sameOrigin:r=>r.headers.get('Origin')==='https://app.test',read:async l=>({title:'T',url:l,tabs:[]}),...over});
+ assert.equal((await run(req(),deps({owner:async()=>null}))).status,401);
+ assert.equal((await run(req(undefined,{Origin:'https://evil.test'}),deps())).status,403);
+ assert.equal((await run(req(undefined,{'content-length':String(MAX_BODY+1)}),deps())).status,413);
+ assert.equal((await run(req('{"action":"read","link":"'+'x'.repeat(MAX_BODY)+'"}'),deps())).status,413);
+ assert.equal((await run(req('{"action":"nope"}'),deps())).status,400);
+ assert.equal((await run(req('not json'),deps())).status,400);
+ const ok=await run(req(),deps());
+ assert.equal(ok.status,200);assert.equal(ok.headers.get('cache-control'),'private, no-store');assert.equal((await ok.json()).title,'T');
+ const bad=await run(req(),deps({read:async()=>{throw new SheetReadError('That sheet isn\'t published.');}}));
+ assert.equal(bad.status,400);assert.match((await bad.json()).error,/isn't published/);
+ assert.equal((await run(req(),deps({read:async()=>{throw new Error('secret internals');}}))).status,400);
+});
+
+test('reads are throttled per owner over ten seconds', () => {
+ resetThrottle();
+ const t=1_000_000;
+ for(let i=0;i<5;i++)assert.equal(throttled('a',t+i),false);
+ assert.equal(throttled('a',t+6),true);
+ assert.equal(throttled('b',t+6),false,'another owner is unaffected');
+ assert.equal(throttled('a',t+10_001),false,'the window moves on');
+});
+
+test('the published reader has one deadline for the whole read, and refuses odd ports', async () => {
+ const slow=async(url,init)=>new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new Error('aborted'))));
+ const keep=setTimeout(()=>{},3000),t=performance.now(); // The deadline's own timer doesn't hold a process open, so this does.
+ await assert.rejects(()=>readPublishedSheet(`https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv`,slow,60),e=>e instanceof SheetReadError&&/too long/.test(e.message));
+ clearTimeout(keep);assert.ok(performance.now()-t<1000);
+ const port=web([{match:'/pubhtml',status:500,body:''},{match:'output=csv',status:302,location:'https://docs.google.com:8443/x'}]);
+ await assert.rejects(()=>readPublishedSheet(`https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv`,port),/somewhere RPG Tools doesn't read/);
+});
+
+test('published tab names decode numeric and named entities', () => {
+ const html='<title>Ayla&#39;s &amp; Borin&#x27;s sheet &#128512;</title><li id="sheet-button-1"><a href="#">Cael&#x27;s &lt;tab&gt;</a></li>';
+ const r=pagedTabs(html);
+ assert.equal(r.title,"Ayla's & Borin's sheet \u{1F600}");assert.equal(r.tabs[0].name,"Cael's <tab>");
+ assert.equal(pagedTabs('<title>&#9999999;x</title>').title,'x');
 });

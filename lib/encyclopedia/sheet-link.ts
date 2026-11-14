@@ -14,6 +14,8 @@ export const specialKinds = ["hp", "maxHp", "ac", "init"] as const satisfies rea
 export const kindNames: Record<SheetKind, string> = { stat: "Stat", roll: "Roll", hp: "HP", maxHp: "Max HP", ac: "AC", init: "Initiative" };
 export const MAX_SHEET_ITEMS = 200;
 export const TEMPLATE_TAB = "RPG Tools";
+/** Rows read from a tab, by every route (published, signed in, template or cells), so they all see the same cells. */
+export const GRID_ROWS = 201;
 
 // ---- A1 cell references ------------------------------------------------------------------------
 
@@ -81,7 +83,7 @@ export function parseCsv(text: string): string[][] {
 export const toCsv = (rows: string[][]) => rows.map(r => r.map(c => /[",\r\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c).join(",")).join("\r\n") + "\r\n";
 
 /** Keeps a grid to what the picker can show. */
-export const clipRows = (rows: string[][], maxRows = 200, maxCols = 40) => rows.slice(0, maxRows).map(r => r.slice(0, maxCols));
+export const clipRows = (rows: string[][], maxRows = GRID_ROWS, maxCols = 40) => rows.slice(0, maxRows).map(r => r.slice(0, maxCols));
 
 // ---- Published links ---------------------------------------------------------------------------
 
@@ -156,9 +158,10 @@ const slotNames: Record<string, SheetKind> = {
 /** The special kind a row name stands for (HP, Hit points, Max HP, AC, Armor class, Initiative…), or null. */
 export const kindForName = (name: string): SheetKind | null => slotNames[name.toLowerCase().replace(/[^a-z0-9]/g, "")] ?? null;
 
-const DICE = /^\d{0,3}d(?:\d{1,4}|f)(?:[khlKHL!<>=]{1,2}\d{0,3})*(?:\s*[+-]\s*(?:\d+|\d{0,3}d\d{1,4}))*$/i;
+// Every piece starts with its own letter or sign, so a string can be split only one way and matching stays linear.
+const DICE = /^\d{0,3}d(?:\d{1,4}|f)(?:(?:[khl]|!|[<>]=?|=)\d{0,3})*(?:\s*[+-]\s*(?:\d+|\d{0,3}d\d{1,4}))*$/i;
 /** Dice notation, such as 1d20+5, 4d6kh3, 5d10>=8 or 4dF. */
-export const isDice = (text: string) => DICE.test(text.trim());
+export const isDice = (text: string) => text.length <= 200 && DICE.test(text.trim());
 const BONUS = /^[+-]\s*\d{1,3}$/;
 const D20_WORDS = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma", "armorclass", "proficiencybonus", "savingthrows", "initiative", "perception", "stealth", "athletics", "acrobatics"];
 /** True when the sheet reads like a d20 game: at least four of the usual ability and skill words appear as cells. */
@@ -169,14 +172,14 @@ export function looksD20(tabs: SheetTab[]) {
 }
 /** A formula guess for a value cell: dice stay as they are, a +5 bonus becomes 1d20+5 only on a d20-looking sheet, anything else is left empty. */
 export function guessFormula(value: string, d20: boolean): string {
-  const v = value.trim();
+  const v = value.slice(0, 200).trim();
   if (isDice(v)) return v.replace(/\s+/g, "");
   if (d20 && BONUS.test(v)) return `1d20${v.replace(/\s+/g, "")}`;
   return "";
 }
 /** What a picked label and value probably are: name from the label, a kind and, for rolls, a formula. */
 export function guessPick(label: string, value: string, d20: boolean): { name: string; kind: SheetKind; formula: string } {
-  const name = cut(label.trim(), 80), special = kindForName(name), formula = guessFormula(value, d20);
+  const name = cut(label.trim(), 80), special = kindForName(name), formula = guessFormula(cut(value, 200), d20);
   return { name, kind: special ?? (formula ? "roll" : "stat"), formula: special === "init" || !special ? formula : "" };
 }
 
@@ -306,14 +309,18 @@ export function playerSheet(sheet: Sheet): PlayerSheet {
   };
 }
 
-/** The sheet with everything that could open it removed (id, published link, who linked it, tab), for the players-only view an AI reads. */
-export const withoutLinkDetails = (sheet: Sheet): Sheet => ({ ...sheet, spreadsheetId: undefined, publishedUrl: undefined, linkedBy: undefined, tab: undefined });
+/**
+ * For the players-only view an AI reads: the book's sheet replaced by the player allow-list (title, readAt, items with
+ * name, kind, label, value and formula), so no id, link, linker, tab, cell, source or mode survives. The result has the
+ * shape of playerSheet(), typed as Sheet only so it can sit in a Workspace; callers read it through playerSheet() again.
+ */
+export const withoutLinkDetails = (sheet: Sheet): Sheet => playerSheet(sheet) as unknown as Sheet;
 
 /** The ranges to ask the Sheets API for when a linked sheet is read again: the RPG Tools tab, or each tab that has a picked cell. */
 export function refreshRanges(sheet: Pick<Sheet, "mode" | "tab" | "items">, firstTab = "Sheet1"): { name: string; range: string }[] {
-  if (sheet.mode === "template") return [{ name: TEMPLATE_TAB, range: "A1:C201" }];
+  if (sheet.mode === "template") return [{ name: TEMPLATE_TAB, range: `A1:C${GRID_ROWS}` }];
   const names = new Map<string, string>();
   for (const i of sheet.items) { const name = parseCell(i.cell)?.tab ?? sheet.tab ?? firstTab; names.set(name.toLowerCase(), name); }
   if (!names.size) names.set((sheet.tab ?? firstTab).toLowerCase(), sheet.tab ?? firstTab);
-  return [...names.values()].map(name => ({ name, range: "A1:Z100" }));
+  return [...names.values()].map(name => ({ name, range: `A1:Z${GRID_ROWS}` }));
 }

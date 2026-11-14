@@ -15,7 +15,7 @@ export async function readPublished(link: string): Promise<SheetRead> {
   catch { throw new Error("Couldn't reach RPG Tools. Check your connection and try again."); }
   const body = await res.json().catch(() => null) as { error?: string; title?: string; url?: string; tabs?: SheetTab[] } | null;
   if (!res.ok || !body?.tabs) throw new Error(body?.error ?? 'Could not read that sheet.');
-  return { source: 'published', publishedUrl: body.url, title: body.title ?? 'Published sheet', tabs: body.tabs, named: [] };
+  return { source: 'published', publishedUrl: body.url, title: (body.title ?? 'Published sheet').slice(0, 200), tabs: body.tabs, named: [] };
 }
 
 /** Every tab of a Google sheet (the first 12) with its named ranges. */
@@ -26,9 +26,12 @@ export async function readGoogle(id: string, token: string): Promise<SheetRead> 
 }
 
 /** Sign in, let the person pick one spreadsheet in Google's own picker, and read it. Null when they close the picker. */
-export async function pickAndReadGoogle(): Promise<SheetRead | null> {
+export async function pickAndReadGoogle(around?: (open: boolean) => void): Promise<SheetRead | null> {
   const token = await googleToken();
-  const picked = await pickSpreadsheet(token);
+  // `around` lets the dialog step out of modal mode while Google's picker is on screen, then back.
+  around?.(true);
+  let picked: Awaited<ReturnType<typeof pickSpreadsheet>>;
+  try { picked = await pickSpreadsheet(token); } finally { around?.(false); }
   return picked ? readGoogle(picked.id, token) : null;
 }
 

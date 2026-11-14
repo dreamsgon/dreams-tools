@@ -1,14 +1,18 @@
 'use client';
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState,type KeyboardEvent} from 'react';
 import {AlertTriangle,Check,Download,Link as LinkIcon,X} from 'lucide-react';
 import {
-  MAX_SHEET_ITEMS,TEMPLATE_FILE,TEMPLATE_TAB,cellRef,cellText,colLetters,findTemplateTab,guessPick,kindNames,looksD20,newItemId,
+  GRID_ROWS,MAX_SHEET_ITEMS,TEMPLATE_FILE,TEMPLATE_TAB,cellRef,cellText,colLetters,findTemplateTab,guessPick,kindNames,looksD20,newItemId,
   refreshSheet,sheetKinds,sheetSchema,specialKinds,templateCsv,templateItems,type Sheet,type SheetItem,type SheetKind,
 } from '@/lib/encyclopedia/sheet-link';
-import {GOOGLE_NOT_SET_UP,googleConfigured} from '@/lib/encyclopedia/google-client';
+import {GOOGLE_NOT_SET_UP,googleConfigured,preloadGoogle} from '@/lib/encyclopedia/google-client';
+import {useIdlePreload} from '@/lib/idle-preload';
 import {ToolDialog} from './tool-dialog';
 import {pickAndReadGoogle,readPublished,type SheetRead} from './sheet-read';
 import './character-sheet.css';
+
+// Load Google's scripts while the dialog sits idle, so a click can open the sign-in pop-up straight away.
+const preload=[preloadGoogle];
 
 type Props={
   characterName:string;
@@ -31,7 +35,13 @@ function downloadTemplate(){
 export default function SheetDialog({characterName,current,read:initial,onSave,onClose}:Props){
   const [read,setRead]=useState<SheetRead|null>(initial??null),[step,setStep]=useState<'link'|'found'|'pick'>(initial?'pick':'link');
   const [link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const configured=googleConfigured();
+  const configured=googleConfigured(),wrap=useRef<HTMLDivElement>(null);
+  useIdlePreload(preload);
+  // Move focus into the new step (the first control marked data-first, or the picker's current cell).
+  useEffect(()=>{wrap.current?.querySelector<HTMLElement>('[data-first]')?.focus();},[step]);
+  // Google's picker is a frame added to the page, which a modal <dialog> would leave inert under its top layer.
+  // So the dialog steps out of modal mode while the picker is open and comes back after, keeping its state.
+  const modal=(open:boolean)=>{const d=wrap.current?.closest('dialog');if(!d)return;if(open&&d.open)d.close();else if(!open&&!d.open)d.showModal();};
 
   async function run(task:()=>Promise<SheetRead|null>){
     setBusy(true);setError('');
@@ -44,7 +54,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
 
   const base=(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string):Sheet=>({
     source:r.source,...(r.spreadsheetId?{spreadsheetId:r.spreadsheetId}:{}),...(r.publishedUrl?{publishedUrl:r.publishedUrl}:{}),
-    title:title.trim()||r.title,tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,linkedBy:current?.linkedBy??'the GM',
+    title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,linkedBy:current?.linkedBy??'the GM',
     readAt:new Date().toISOString(),mode,items,writeBack:false,
   });
   const chooseTemplate=(r:SheetRead)=>{
@@ -55,13 +65,13 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
   };
 
   return <ToolDialog title={step==='pick'?'Pick cells':'Link a character sheet'} wide={step==='pick'} onClose={onClose}>
-    <div className="sheet-dialog">
+    <div className="sheet-dialog" ref={wrap}>
       {step!=='pick'&&<p className="modal-intro">For {characterName}. Stats and rolls come from one Google Sheet.</p>}
       {step==='link'&&<>
         <div className="sheet-way is-main">
           <h3>1. Sign in with Google and pick the sheet <span className="sheet-pill">Recommended</span></h3>
           <p>Google opens its own file picker. You choose one sheet, and RPG Tools can open only that sheet. Nothing else in your Drive.</p>
-          <div className="sheet-link-row"><button type="button" className="button" disabled={!configured||busy} onClick={()=>void run(pickAndReadGoogle)}>{google} Sign in with Google and pick a sheet</button></div>
+          <div className="sheet-link-row"><button type="button" className="button" data-first={configured?'':undefined} disabled={!configured||busy} onClick={()=>void run(()=>pickAndReadGoogle(modal))}>{google} Sign in with Google and pick a sheet</button></div>
           {!configured&&<p className="sheet-error" role="note">{GOOGLE_NOT_SET_UP}</p>}
           {configured&&<p><Check size={12} aria-hidden="true"/> Stays private. Refresh reads it again whenever you choose.</p>}
         </div>
@@ -69,7 +79,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
           <h3>2. Paste a published link</h3>
           <p>No sign-in. Works for a sheet published to the web as CSV.</p>
           <div className="sheet-link-row">
-            <input className="sheet-input" type="url" aria-label="Published link" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv" value={link} onChange={e=>setLink(e.target.value)}/>
+            <input className="sheet-input" data-first={configured?undefined:''} type="url" aria-label="Published link" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv" value={link} onChange={e=>setLink(e.target.value)}/>
             <button className="button" type="submit" disabled={busy||!link.trim()}><LinkIcon size={14}/> Read link</button>
           </div>
           <div className="sheet-warn" role="note"><AlertTriangle size={14} aria-hidden="true"/><span><strong>Publishing makes the sheet readable by anyone who has the link.</strong> Only publish a sheet you are happy to share. You can stop publishing in Google Sheets at any time.</span></div>
@@ -90,7 +100,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
         <div className="sheet-way is-main">
           <h3>{read.title}</h3>
           <p>This sheet has a tab named {TEMPLATE_TAB}. RPG Tools can read every row of it: a row with a Roll becomes a roll, and HP, Max HP, AC and Initiative fill their own slots.</p>
-          <div className="sheet-link-row"><button type="button" className="button primary" onClick={()=>chooseTemplate(read)}>Use the {TEMPLATE_TAB} tab</button><button type="button" className="button" onClick={()=>setStep('pick')}>Pick cells instead</button></div>
+          <div className="sheet-link-row"><button type="button" className="button primary" data-first onClick={()=>chooseTemplate(read)}>Use the {TEMPLATE_TAB} tab</button><button type="button" className="button" onClick={()=>setStep('pick')}>Pick cells instead</button></div>
           {error&&<p className="sheet-error" role="alert">{error}</p>}
         </div>
         <div className="sheet-foot-row"><button type="button" className="button" onClick={()=>{setStep('link');setRead(null);}}>Back</button><button type="button" className="button" onClick={onClose}>Cancel</button></div>
@@ -112,8 +122,19 @@ function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;cu
   const tab=read.tabs.find(t=>t.name===tabName)??read.tabs[0];
   const rows=tab?.rows??[];
   // Show the used part of the tab, with a little room.
-  const lastRow=Math.min(100,Math.max(12,rows.reduce((n,r,i)=>r.some(c=>c.trim())?i+1:n,0)+2));
+  const lastRow=Math.min(GRID_ROWS,Math.max(12,rows.reduce((n,r,i)=>r.some(c=>c.trim())?i+1:n,0)+2));
   const lastCol=Math.min(26,Math.max(6,rows.reduce((n,r)=>Math.max(n,r.reduce((m,c,i)=>c.trim()?i+1:m,0)),0)+1));
+  // One tab stop for the whole grid: the current cell. Arrow keys move it.
+  const [cur,setCur]=useState({row:1,col:1}),gridRef=useRef<HTMLTableElement>(null);
+  const curRow=Math.min(cur.row,lastRow),curCol=Math.min(cur.col,lastCol);
+  function moveKey(e:KeyboardEvent<HTMLTableElement>){
+    const d:Record<string,[number,number]>={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]},step=d[e.key];
+    if(!step)return;
+    e.preventDefault();
+    const row=Math.max(1,Math.min(lastRow,curRow+step[0])),col=Math.max(1,Math.min(lastCol,curCol+step[1]));
+    setCur({row,col});
+    requestAnimationFrame(()=>gridRef.current?.querySelector<HTMLElement>(`[data-r="${row}"][data-c="${col}"]`)?.focus());
+  }
   const textAt=(s:Slot|null)=>s?cellText(read.tabs,cellRef(s.col,s.row,s.tab))??'':'';
   const pickedAt=new Set(items.flatMap(i=>{const m=/^(?:'((?:[^']|'')+)'|([^'!]+))!([A-Z]+)(\d+)$/.exec(i.cell);return m?[`${(m[1]??m[2]).replace(/''/g,"'")}|${m[3]}${m[4]}`]:[];}));
 
@@ -135,11 +156,12 @@ function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;cu
   }
   function addNamed(n:{label:string;cell:string}){
     const text=cellText(read.tabs,n.cell)??'',g=guessPick(n.label,text,d20);
-    add({name:n.label,cell:n.cell,kind:g.kind,...(text?{value:text.slice(0,200)}:{}),...(g.formula&&(g.kind==='roll'||g.kind==='init')?{formula:g.formula}:{})});
+    add({name:n.label.slice(0,80),cell:n.cell,kind:g.kind,...(text?{value:text.slice(0,200)}:{}),...(g.formula&&(g.kind==='roll'||g.kind==='init')?{formula:g.formula}:{})});
   }
   const patch=(id:string,f:Partial<SheetItem>)=>setItems(l=>l.map(i=>i.id===id?{...i,...f}:i));
   function save(){
-    const draft=base(read,'cells',items,title),fresh=refreshSheet(draft,read.tabs,draft.readAt!).sheet,checked=sheetSchema.safeParse(fresh);
+    if(items.some(i=>!i.name.trim())){setError('Give every picked item a name.');return;}
+    const draft=base(read,'cells',items.map(i=>({...i,name:i.name.trim()})),title),fresh=refreshSheet(draft,read.tabs,draft.readAt!).sheet,checked=sheetSchema.safeParse(fresh);
     if(!checked.success){setError(checked.error.issues[0]?.message??'That cannot be saved.');return;}
     onSave(checked.data);
   }
@@ -151,12 +173,13 @@ function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;cu
         <div className="sheet-status" aria-live="polite">
           {label?<>Selected: <b>{textAt(label)||cellRef(label.col,label.row)}</b>{value?<> then <b>{textAt(value)||cellRef(value.col,value.row)}</b></>:<> now click its value</>}</>:<>Click a label cell, then its value cell.</>}
         </div>
-        <div className="sheet-scroll"><table className="sheet-grid"><thead><tr><th/>{Array.from({length:lastCol},(_,c)=><th key={c} scope="col">{colLetters(c+1)}</th>)}</tr></thead>
+        <div className="sheet-scroll"><table className="sheet-grid" ref={gridRef} aria-label={`Cells of ${tab?.name??'the sheet'}. Arrow keys move, Enter picks.`} onKeyDown={moveKey}><thead><tr><th scope="col"><span className="sheet-sr">Row</span></th>{Array.from({length:lastCol},(_,c)=><th key={c} scope="col">{colLetters(c+1)}</th>)}</tr></thead>
           <tbody>{Array.from({length:lastRow},(_,r)=><tr key={r}><th className="row" scope="row">{r+1}</th>{Array.from({length:lastCol},(_,c)=>{
-            const slot={tab:tab?.name??'',col:c+1,row:r+1},text=rows[r]?.[c]??'';
-            const cls=['sheet-cell',same(slot,label)?'is-label':'',same(slot,value)?'is-value':'',pickedAt.has(`${slot.tab}|${colLetters(c+1)}${r+1}`)?'picked':''].filter(Boolean).join(' ');
-            return <td key={c}><button type="button" className={cls} aria-label={`${colLetters(c+1)}${r+1}${text?`, ${text}`:', empty'}`} onClick={()=>click(c+1,r+1)}>{text}</button></td>;})}</tr>)}</tbody></table></div>
-        <div className="sheet-tabs" role="tablist" aria-label="Tabs">{read.tabs.map(t=><button type="button" role="tab" key={t.name} aria-selected={t.name===tab?.name} onClick={()=>{setTab(t.name);setLabel(null);setValue(null);}}>{t.name}</button>)}</div>
+            const slot={tab:tab?.name??'',col:c+1,row:r+1},text=rows[r]?.[c]??'',isLabel=same(slot,label),isValue=same(slot,value),isPicked=pickedAt.has(`${slot.tab}|${colLetters(c+1)}${r+1}`),here=r+1===curRow&&c+1===curCol;
+            const cls=['sheet-cell',isLabel?'is-label':'',isValue?'is-value':'',isPicked?'picked':''].filter(Boolean).join(' ');
+            const state=isLabel?', chosen as the label':isValue?', chosen as the value':isPicked?', already picked':'';
+            return <td key={c}><button type="button" className={cls} tabIndex={here?0:-1} data-first={here?'':undefined} data-r={r+1} data-c={c+1} aria-pressed={isLabel||isValue} aria-label={`${colLetters(c+1)}${r+1}${text?`, ${text}`:', empty'}${state}`} onFocus={()=>setCur({row:r+1,col:c+1})} onClick={()=>click(c+1,r+1)}>{text}</button></td>;})}</tr>)}</tbody></table></div>
+        <div className="sheet-tabs" role="group" aria-label="Tabs">{read.tabs.map(t=><button type="button" key={t.name} aria-pressed={t.name===tab?.name} onClick={()=>{setTab(t.name);setLabel(null);setValue(null);}}>{t.name}</button>)}</div>
       </div>
       <div className="sheet-side">
         {read.named.length>0&&<div><h3>Named ranges found</h3><div className="sheet-chips">{read.named.map(n=><button type="button" key={n.cell+n.label} disabled={items.some(i=>i.cell===n.cell)} onClick={()=>addNamed(n)}>{n.label}<b>Add</b></button>)}</div></div>}
