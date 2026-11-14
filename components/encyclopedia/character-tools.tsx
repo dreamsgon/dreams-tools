@@ -10,7 +10,7 @@ import {tagsOn} from '@/lib/tags';
 import {ToolDialog} from './tool-dialog';
 export const roles={pc:'Player Characters',companion:'Companions / Sidekicks',npc:'NPCs',creature:'Creatures'};
 export function CharactersSection({data,worldId,campaignId,change,onOpen,onForm,onShare,onNewFolder}:{data:Workspace;worldId:string;campaignId:string|null;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onForm:()=>void;onShare:()=>void;onNewFolder:()=>void}){
- const {library}=useTags(),tagsFor=(e:Entry)=>library?tagsOn(library,`entry:${e.id}`):[];
+ const {library}=useTags("encyclopedia"),tagsFor=(e:Entry)=>library?tagsOn(library,`entry:${e.id}`):[];
  const [role,setRole]=useState<CharacterData['role']>('pc'),[query,setQuery]=useState(''),[group,setGroup]=useState(''),[status,setStatus]=useState(''),[tag,setTag]=useState(''),[location,setLocation]=useState(''),[faction,setFaction]=useState(''),[creating,setCreating]=useState(false),[collapsed,setCollapsed]=useState<Set<string>>(new Set);
  const all=visibleEntries(data,worldId,campaignId).filter(e=>e.kind==='character'),cast=all.filter(e=>(e.character?.role??'npc')===role);
  const get=(e:Entry)=>e.character??defaultCharacter();

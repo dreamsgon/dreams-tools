@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
  tagKey,cleanTagName,findTag,emptyTags,tagLibrarySchema,applyTagAction,importCharacterTags,
  tagsOn,campaignTargets,tagUses,kindsLabel,targetsWith,parseTagQuery,partialTag,suggestTags,
+ migrateTagLibrary,scopedTags,targetScope,TAG_SCOPES,
 } from '../lib/tags.ts';
 import {tagsKey,readTags,changeTags,tagAction,tagsWithImport,describeTagged} from '../lib/tags-server.ts';
 import {emptyWorkspace} from '../lib/encyclopedia/world-model.ts';
@@ -17,8 +18,14 @@ class Bucket {
 
 // Applies one action, checks the result is still a valid library, and returns it.
 const run=(lib,action)=>tagLibrarySchema.parse(applyTagAction(lib,action));
-const create=(lib,id,name,color='red')=>run(lib,{action:'create',id,name,color});
-const withTags=(...names)=>names.reduce((lib,n,i)=>create(lib,'t'+(i+1),n,['red','blue','green','amber'][i%4]),emptyTags());
+const create=(lib,id,name,color='red',scope='encyclopedia')=>run(lib,{action:'create',id,scope,name,color});
+const withTagsIn=(scope,...names)=>names.reduce((lib,n,i)=>create(lib,'t'+(i+1),n,['red','blue','green','amber'][i%4],scope),emptyTags());
+const withTags=(...names)=>withTagsIn('encyclopedia',...names);
+// One tag in each place; "Villain" exists in encyclopedia and campaigns, "Dungeon" in encyclopedia and maptable.
+const mixed=()=>({tags:[
+ {id:'t1',name:'Villain',color:'red',scope:'encyclopedia'},{id:'t2',name:'Dungeon',color:'blue',scope:'encyclopedia'},
+ {id:'c1',name:'Villain',color:'green',scope:'campaigns'},{id:'m1',name:'Dungeon',color:'amber',scope:'maptable'},
+],on:{}});
 
 test('tagKey and cleanTagName ignore case, extra spaces and a leading #', () => {
   assert.equal(tagKey('#Act   Two '),'act two');
@@ -37,14 +44,14 @@ test('findTag matches by tagKey', () => {
 
 test('create rejects duplicate names case-insensitively and empty names', () => {
   const lib=withTags('Villain');
-  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',name:'VILLAIN',color:'red'}),/already a tag called/);
-  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',name:'#   ',color:'red'}),/Give the tag a name/);
-  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',name:'',color:'red'}),/Give the tag a name/);
+  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',scope:'encyclopedia',name:'VILLAIN',color:'red'}),/already a tag called/);
+  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',scope:'encyclopedia',name:'#   ',color:'red'}),/Give the tag a name/);
+  assert.throws(()=>applyTagAction(lib,{action:'create',id:'t9',scope:'encyclopedia',name:'',color:'red'}),/Give the tag a name/);
 });
 
 test('create with the same id twice is a no-op', () => {
   const once=create(emptyTags(),'t1','Villain');
-  const twice=run(once,{action:'create',id:'t1',name:'Villain',color:'red'});
+  const twice=run(once,{action:'create',id:'t1',scope:'encyclopedia',name:'Villain',color:'red'});
   assert.deepEqual(twice,once);
   assert.equal(twice.tags.length,1);
 });
@@ -67,11 +74,13 @@ test('add stops at 30 tags on one item', () => {
 
 test('remove takes a tag off several targets and drops empty keys', () => {
   let lib=withTags('Villain','Act 2');
-  lib={...lib,on:{'entry:a':['t1','t2'],'scene:s1':['t1'],'campaign:e:e1':['t2']}};
-  lib=run(lib,{action:'remove',targets:['entry:a','scene:s1','campaign:e:e1'],tagId:'t1'});
-  assert.deepEqual(lib.on,{'entry:a':['t2'],'campaign:e:e1':['t2']});
+  lib={...lib,tags:[...lib.tags,{id:'c1',name:'Villain',color:'teal',scope:'campaigns'}],on:{'entry:a':['t1','t2'],'entry:b':['t1'],'campaign:e:e1':['c1'],'campaign:m:c1':['c1']}};
+  lib=run(lib,{action:'remove',targets:['entry:a','entry:b'],tagId:'t1'});
+  assert.deepEqual(lib.on,{'entry:a':['t2'],'campaign:e:e1':['c1'],'campaign:m:c1':['c1']});
+  lib=run(lib,{action:'remove',targets:['campaign:e:e1','campaign:m:c1','campaign:missing'],tagId:'c1'});
+  assert.deepEqual(lib.on,{'entry:a':['t2']});
   lib=run(lib,{action:'remove',targets:['entry:a','entry:missing'],tagId:'t2'});
-  assert.deepEqual(lib.on,{'campaign:e:e1':['t2']});
+  assert.deepEqual(lib.on,{});
 });
 
 test('rename refuses a clash and says to use Merge, allows keeping its own name', () => {
@@ -92,10 +101,10 @@ test('recolor changes the colour and rejects unknown tags', () => {
 
 test('merge moves assignments, avoids duplicates and removes the source tag', () => {
   let lib=withTags('Villain','Boss');
-  lib={...lib,on:{'entry:a':['t1'],'entry:b':['t1','t2'],'scene:s1':['t2']}};
+  lib={...lib,on:{'entry:a':['t1'],'entry:b':['t1','t2'],'entry:c':['t2']}};
   lib=run(lib,{action:'merge',from:'t1',into:'t2'});
   assert.deepEqual(lib.tags.map(t=>t.id),['t2']);
-  assert.deepEqual(lib.on,{'entry:a':['t2'],'entry:b':['t2'],'scene:s1':['t2']});
+  assert.deepEqual(lib.on,{'entry:a':['t2'],'entry:b':['t2'],'entry:c':['t2']});
   assert.throws(()=>applyTagAction(lib,{action:'merge',from:'t2',into:'t2'}),/different tag/);
 });
 
@@ -110,34 +119,41 @@ test('delete removes a tag everywhere and drops empty keys', () => {
 
 test('every action produces a library that passes tagLibrarySchema', () => {
   let lib=emptyTags();
-  lib=run(lib,{action:'create',id:'t1',name:'Villain',color:'red'});
-  lib=run(lib,{action:'create',id:'t2',name:'Boss',color:'blue'});
+  lib=run(lib,{action:'create',id:'t1',scope:'encyclopedia',name:'Villain',color:'red'});
+  lib=run(lib,{action:'create',id:'t2',scope:'encyclopedia',name:'Boss',color:'blue'});
+  lib=run(lib,{action:'create',id:'c1',scope:'campaigns',name:'Boss',color:'blue'});
+  lib=run(lib,{action:'create',id:'m1',scope:'maptable',name:'Boss',color:'blue'});
   lib=run(lib,{action:'add',target:'entry:p1',tagId:'t1'});
-  lib=run(lib,{action:'add',target:'campaign:e:e1',tagId:'t2'});
+  lib=run(lib,{action:'add',target:'campaign:e:e1',tagId:'c1'});
+  lib=run(lib,{action:'add',target:'scene:s1',tagId:'m1'});
   lib=run(lib,{action:'remove',targets:['entry:p1'],tagId:'t1'});
   lib=run(lib,{action:'rename',tagId:'t1',name:'Foe'});
   lib=run(lib,{action:'recolor',tagId:'t1',color:'pink'});
-  lib=run(lib,{action:'add',target:'scene:s1',tagId:'t1'});
+  lib=run(lib,{action:'add',target:'entry:p2',tagId:'t1'});
   lib=run(lib,{action:'merge',from:'t1',into:'t2'});
   lib=run(lib,{action:'delete',tagId:'t2'});
+  lib=run(lib,{action:'delete',tagId:'c1'});
+  lib=run(lib,{action:'delete',tagId:'m1'});
   assert.deepEqual(lib,{tags:[],on:{}});
 });
 
 test('tagsOn combines two keys without repeats, in the order tags were added', () => {
-  const lib={...withTags('Villain','Act 2','Shop'),on:{'campaign:e:e1':['t1','t2'],'campaign:m:c1':['t2','t3']}};
+  const lib={...withTagsIn('campaigns','Villain','Act 2','Shop'),on:{'campaign:e:e1':['t1','t2'],'campaign:m:c1':['t2','t3']}};
   assert.deepEqual(tagsOn(lib,'campaign:e:e1','campaign:m:c1').map(t=>t.name),['Villain','Act 2','Shop']);
   assert.deepEqual(tagsOn(lib,'entry:none'),[]);
 });
 
 test('tagUses counts targets and kinds per tag', () => {
-  const lib={...withTags('Villain','Act 2','Unused'),on:{'entry:p1':['t1','t2'],'scene:s1':['t1'],'campaign:e:e1':['t1']}};
+  const lib={...mixed(),on:{'entry:p1':['t1','t2'],'entry:p2':['t1'],'campaign:e:e1':['c1'],'campaign:m:c1':['c1']}};
   const uses=tagUses(lib);
-  assert.equal(uses.get('t1').count,3);
-  assert.deepEqual([...uses.get('t1').kinds].sort(),['campaign','entry','scene']);
+  assert.equal(uses.get('t1').count,2);
+  assert.deepEqual([...uses.get('t1').kinds],['entry']);
+  assert.equal(uses.get('c1').count,2);
+  assert.deepEqual([...uses.get('c1').kinds],['campaign']);
   assert.equal(uses.get('t2').count,1);
   assert.deepEqual([...uses.get('t2').kinds],['entry']);
-  assert.equal(uses.get('t3').count,0);
-  assert.equal(uses.get('t3').kinds.size,0);
+  assert.equal(uses.get('m1').count,0);
+  assert.equal(uses.get('m1').kinds.size,0);
 });
 
 test('kindsLabel names the kinds in a fixed order', () => {
@@ -148,9 +164,9 @@ test('kindsLabel names the kinds in a fixed order', () => {
 });
 
 test('targetsWith returns only targets that have every given tag', () => {
-  const lib={...withTags('Villain','Act 2'),on:{'entry:p1':['t1','t2'],'scene:s1':['t1'],'entry:p2':['t2']}};
+  const lib={...withTags('Villain','Act 2'),on:{'entry:p1':['t1','t2'],'entry:p3':['t1'],'entry:p2':['t2']}};
   assert.deepEqual(targetsWith(lib,['t1','t2']),['entry:p1']);
-  assert.deepEqual(targetsWith(lib,['t1']).sort(),['entry:p1','scene:s1']);
+  assert.deepEqual(targetsWith(lib,['t1']).sort(),['entry:p1','entry:p3']);
   assert.deepEqual(targetsWith(lib,[]),[]);
 });
 
@@ -185,14 +201,14 @@ test('importCharacterTags creates tags once, reuses existing ones case-insensiti
   const first=importCharacterTags(emptyTags(),entries,makeId);
   tagLibrarySchema.parse(first);
   assert.equal(first.imported,true);
-  assert.deepEqual(first.tags,[{id:'id1',name:'Goblin',color:'red'}]);
+  assert.deepEqual(first.tags,[{id:'id1',name:'Goblin',color:'red',scope:'encyclopedia'}]);
   assert.deepEqual(first.on,{'entry:e1':['id1'],'entry:e2':['id1']});
   assert.equal(n,1);
   const second=importCharacterTags(first,entries,makeId);
   assert.deepEqual(second,first);
   assert.equal(n,1);
 
-  const existing={tags:[{id:'x',name:'goblin',color:'blue'}],on:{}};
+  const existing={tags:[{id:'x',name:'goblin',color:'blue',scope:'encyclopedia'}],on:{}};
   const reused=importCharacterTags(existing,[{id:'e1',character:{tags:['GOBLIN']}}],makeId);
   assert.deepEqual(reused.tags,existing.tags);
   assert.deepEqual(reused.on,{'entry:e1':['x']});
@@ -203,8 +219,8 @@ test('tags-server: changeTags and tagAction save at tagsKey(owner) and read back
   const b=new Bucket();
   assert.equal(tagsKey('owner-1'),'users/owner-1/tags.json');
   assert.equal(tagsKey('a/b c'),'users/a%2Fb%20c/tags.json');
-  const lib=await tagAction(b,'owner-1',{action:'create',id:'t1',name:'Villain',color:'red'});
-  assert.deepEqual(lib.tags,[{id:'t1',name:'Villain',color:'red'}]);
+  const lib=await tagAction(b,'owner-1',{action:'create',id:'t1',scope:'encyclopedia',name:'Villain',color:'red'});
+  assert.deepEqual(lib.tags,[{id:'t1',name:'Villain',color:'red',scope:'encyclopedia'}]);
   const stored=JSON.parse(b.data.get(tagsKey('owner-1')).text);
   assert.deepEqual(stored,lib);
   const read=await readTags(b,'owner-1');
@@ -230,19 +246,19 @@ test('tags-server: tagsWithImport imports once and does not call the book loader
 
 test('tags-server: changeTags retries when the etag changed in between', async () => {
   const b=new Bucket();
-  await tagAction(b,'owner-1',{action:'create',id:'t1',name:'A',color:'red'});
+  await tagAction(b,'owner-1',{action:'create',id:'t1',scope:'encyclopedia',name:'A',color:'red'});
   const realPut=b.put.bind(b);
   let puts=0;
   b.put=async(key,text,options)=>{
     puts++;
     if(puts===1){
       // Another tab saves first, so this save's etag is out of date.
-      await realPut(key,JSON.stringify({tags:[{id:'t9',name:'Other',color:'green'}],on:{}}),{});
+      await realPut(key,JSON.stringify({tags:[{id:'t9',name:'Other',color:'green',scope:'encyclopedia'}],on:{}}),{});
       return null;
     }
     return realPut(key,text,options);
   };
-  const lib=await changeTags(b,'owner-1',l=>applyTagAction(l,{action:'create',id:'t2',name:'B',color:'blue'}));
+  const lib=await changeTags(b,'owner-1',l=>applyTagAction(l,{action:'create',id:'t2',scope:'encyclopedia',name:'B',color:'blue'}));
   assert.equal(puts,2);
   assert.deepEqual(lib.tags.map(t=>t.name),['Other','B']);
   assert.deepEqual((await readTags(b,'owner-1')).data,lib);
@@ -251,7 +267,7 @@ test('tags-server: changeTags retries when the etag changed in between', async (
 test('tags-server: changeTags gives up after repeated clashes', async () => {
   const b=new Bucket();
   b.put=async()=>null;
-  await assert.rejects(()=>changeTags(b,'owner-1',l=>applyTagAction(l,{action:'create',id:'t1',name:'A',color:'red'})),/Reload and try again/);
+  await assert.rejects(()=>changeTags(b,'owner-1',l=>applyTagAction(l,{action:'create',id:'t1',scope:'encyclopedia',name:'A',color:'red'})),/Reload and try again/);
 });
 
 test('tags-server: changeTags does not write when nothing changed', async () => {
@@ -274,11 +290,11 @@ const bookWs=(extra={})=>{
 };
 
 test('describeTagged describes entries, scenes and campaigns with the right links', () => {
-  const lib={...withTags('Villain','Dungeon'),on:{
+  const lib={...mixed(),on:{
     'entry:p1':['t1'],
     'entry:p2':['t2'],
-    'scene:s1':['t2'],
-    'campaign:e:e1':['t1'],
+    'scene:s1':['m1'],
+    'campaign:e:e1':['c1'],
   }};
   const items=describeTagged(lib,mapWs(),bookWs());
   assert.deepEqual(items.map(i=>i.title),['Cave','Goblin Lair','Gods','Sunless Citadel']);
@@ -295,21 +311,21 @@ test('describeTagged describes entries, scenes and campaigns with the right link
 });
 
 test('describeTagged skips missing targets and tags that are on nothing', () => {
-  const lib={...withTags('Villain'),on:{
+  const lib={...mixed(),on:{
     'entry:ghost':['t1'],
-    'scene:ghost':['t1'],
-    'campaign:e:ghost':['t1'],
-    'campaign:m:ghost':['t1'],
+    'scene:ghost':['m1'],
+    'campaign:e:ghost':['c1'],
+    'campaign:m:ghost':['c1'],
     'entry:p1':[],
   }};
   assert.deepEqual(describeTagged(lib,mapWs(),bookWs()),[]);
   // With no Maptable data, scene tags are skipped too.
-  const onlyScene={...withTags('Villain'),on:{'scene:s1':['t1']}};
+  const onlyScene={...mixed(),on:{'scene:s1':['m1']}};
   assert.deepEqual(describeTagged(onlyScene,null,bookWs()),[]);
 });
 
 test('describeTagged shows a campaign once, with tags from both of its keys', () => {
-  const lib={...withTags('Villain','Dungeon'),on:{
+  const lib={...withTagsIn('campaigns','Villain','Dungeon'),on:{
     'campaign:e:e1':['t1'],
     'campaign:m:c1':['t2','t1'],
   }};
@@ -323,4 +339,110 @@ test('describeTagged shows a campaign once, with tags from both of its keys', ()
 test('leading spaces before # are dropped', () => {
   assert.equal(cleanTagName('  #Act Two'), 'Act Two');
   assert.equal(tagKey('  #Act   Two '), 'act two');
+});
+
+const oldLib=(tags,on,extra={})=>({tags:tags.map(([id,name,color='red'])=>({id,name,color})),on,...extra});
+
+test('migration: a tag used on an entry and a campaign becomes two tags, targets moved to the right copy', () => {
+  const old=oldLib([['t1','Villain','red']],{'entry:p1':['t1'],'entry:p2':['t1'],'campaign:e:e1':['t1'],'campaign:m:c1':['t1']});
+  const lib=tagLibrarySchema.parse(migrateTagLibrary(old));
+  assert.deepEqual(lib.tags,[{id:'t1',name:'Villain',color:'red',scope:'encyclopedia'},{id:'t1-c',name:'Villain',color:'red',scope:'campaigns'}]);
+  assert.deepEqual(lib.on,{'entry:p1':['t1'],'entry:p2':['t1'],'campaign:e:e1':['t1-c'],'campaign:m:c1':['t1-c']});
+});
+
+test('migration: the first scope keeps the old id, a scene copy gets -m, and an unused tag appears in all three', () => {
+  const old=oldLib([['a','Camp','blue'],['b','Cave','green'],['u','Spare','amber']],{'campaign:e:e1':['a'],'scene:s1':['a','b']});
+  const lib=tagLibrarySchema.parse(migrateTagLibrary(old));
+  assert.deepEqual(lib.tags.map(t=>[t.id,t.scope,t.name,t.color]),[
+    ['a','campaigns','Camp','blue'],['a-m','maptable','Camp','blue'],
+    ['b','maptable','Cave','green'],
+    ['u','encyclopedia','Spare','amber'],['u-c','campaigns','Spare','amber'],['u-m','maptable','Spare','amber'],
+  ]);
+  assert.deepEqual(lib.on,{'campaign:e:e1':['a'],'scene:s1':['a-m','b']});
+  for(const s of TAG_SCOPES) assert.ok(findTag(lib,'Spare',s));
+});
+
+test('migration: new ids avoid existing ones, keep the imported flag, and do nothing to a library that already has scopes', () => {
+  const old=oldLib([['t1','Villain'],['t1-c','Other']],{'entry:p1':['t1'],'campaign:e:e1':['t1']},{imported:true});
+  const lib=tagLibrarySchema.parse(migrateTagLibrary(old));
+  assert.equal(lib.imported,true);
+  assert.deepEqual(lib.tags.filter(t=>t.name==='Villain').map(t=>t.id),['t1','t1-cx']);
+  assert.deepEqual(lib.on['campaign:e:e1'],['t1-cx']);
+  const again=migrateTagLibrary(lib);
+  assert.equal(again,lib);
+  assert.deepEqual(migrateTagLibrary(old),migrateTagLibrary(old));
+});
+
+test('migration: an id kept near the length limit still fits', () => {
+  const long='x'.repeat(60);
+  const lib=tagLibrarySchema.parse(migrateTagLibrary(oldLib([[long,'Long']],{'entry:a':[long],'scene:s':[long]})));
+  assert.ok(lib.tags.every(t=>t.id.length<=60));
+  assert.equal(lib.tags.length,2);
+});
+
+test('readTags migrates a file saved before scopes, and saving keeps it migrated', async () => {
+  const b=new Bucket();
+  b.data.set(tagsKey('o'),{etag:'0',text:JSON.stringify(oldLib([['t1','Villain']],{'entry:p1':['t1'],'scene:s1':['t1']}))});
+  const {data}=await readTags(b,'o');
+  assert.deepEqual(data.tags.map(t=>[t.id,t.scope]),[['t1','encyclopedia'],['t1-m','maptable']]);
+  const saved=await tagAction(b,'o',{action:'create',id:'n1',scope:'campaigns',name:'Villain',color:'teal'});
+  assert.equal(saved.tags.length,3);
+  assert.ok(JSON.parse(b.data.get(tagsKey('o')).text).tags.every(t=>t.scope));
+});
+
+test('scope: a tag can only go on targets of its own kind', () => {
+  const lib=mixed();
+  assert.throws(()=>applyTagAction(lib,{action:'add',target:'entry:p1',tagId:'c1'}),/Campaign tag can only go on campaigns/);
+  assert.throws(()=>applyTagAction(lib,{action:'add',target:'entry:p1',tagId:'m1'}),/Maptable tag/);
+  assert.throws(()=>applyTagAction(lib,{action:'add',target:'scene:s1',tagId:'t1'}),/Encyclopedia tag can only go on pages/);
+  assert.throws(()=>applyTagAction(lib,{action:'add',target:'campaign:e:e1',tagId:'m1'}),/Maptable tag/);
+  assert.deepEqual(run(lib,{action:'add',target:'campaign:e:e1',tagId:'c1'}).on,{'campaign:e:e1':['c1']});
+  assert.equal(targetScope('scene:s1'),'maptable');
+});
+
+test('scope: the schema rejects a library with a tag on the wrong kind of target', () => {
+  assert.equal(tagLibrarySchema.safeParse({...mixed(),on:{'entry:p1':['c1']}}).success,false);
+  assert.equal(tagLibrarySchema.safeParse({...mixed(),on:{'scene:s1':['t1']}}).success,false);
+  assert.equal(tagLibrarySchema.safeParse({...mixed(),on:{'entry:p1':['t1'],'scene:s1':['m1'],'campaign:m:c1':['c1']}}).success,true);
+});
+
+test('scope: the same name is allowed in two scopes, but not twice in one', () => {
+  let lib=emptyTags();
+  lib=create(lib,'a','Villain','red','encyclopedia');
+  lib=create(lib,'b','villain','blue','campaigns');
+  lib=create(lib,'c','VILLAIN','green','maptable');
+  assert.equal(lib.tags.length,3);
+  assert.throws(()=>applyTagAction(lib,{action:'create',id:'d',scope:'campaigns',name:'Villain',color:'red'}),/already a tag called/);
+  assert.equal(tagLibrarySchema.safeParse({tags:[{id:'x',name:'A',color:'red',scope:'campaigns'},{id:'y',name:'a',color:'red',scope:'campaigns'}],on:{}}).success,false);
+  // Renaming only clashes inside its own scope.
+  assert.equal(run(lib,{action:'rename',tagId:'a',name:'Boss'}).tags[0].name,'Boss');
+  lib=create(lib,'e','Boss','red','encyclopedia');
+  assert.throws(()=>applyTagAction(lib,{action:'rename',tagId:'a',name:'boss'}),/Merge/);
+  assert.equal(run(lib,{action:'rename',tagId:'b',name:'Boss'}).tags[1].name,'Boss');
+});
+
+test('scope: tags only merge within their own scope', () => {
+  const lib=mixed();
+  assert.throws(()=>applyTagAction(lib,{action:'merge',from:'t1',into:'c1'}),/same list/);
+  assert.throws(()=>applyTagAction(lib,{action:'merge',from:'m1',into:'t2'}),/same list/);
+  const merged=run({...lib,on:{'entry:p1':['t1'],'campaign:e:e1':['c1']}},{action:'merge',from:'t1',into:'t2'});
+  assert.deepEqual(merged.on,{'entry:p1':['t2'],'campaign:e:e1':['c1']});
+});
+
+test('scopedTags shows one list with only its own kind of targets', () => {
+  const lib={...mixed(),on:{'entry:p1':['t1'],'campaign:e:e1':['c1'],'scene:s1':['m1']}};
+  const enc=scopedTags(lib,'encyclopedia');
+  assert.deepEqual(enc.tags.map(t=>t.id),['t1','t2']);
+  assert.deepEqual(enc.on,{'entry:p1':['t1']});
+  assert.deepEqual(findTag(lib,'villain','campaigns').id,'c1');
+  assert.equal(findTag(scopedTags(lib,'maptable'),'villain'),undefined);
+  assert.deepEqual(suggestTags(scopedTags(lib,'campaigns'),'vil').map(t=>t.id),['c1']);
+});
+
+test('importCharacterTags only uses and creates Encyclopedia tags', () => {
+  const lib={tags:[{id:'c1',name:'Goblin',color:'blue',scope:'campaigns'}],on:{}};
+  const next=importCharacterTags(lib,[{id:'e1',character:{tags:['goblin']}}],()=>'new1');
+  tagLibrarySchema.parse(next);
+  assert.deepEqual(next.tags.map(t=>[t.id,t.scope]),[['c1','campaigns'],['new1','encyclopedia']]);
+  assert.deepEqual(next.on,{'entry:e1':['new1']});
 });

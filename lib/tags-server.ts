@@ -2,15 +2,15 @@ import type { Bucket } from "./storage-types";
 import { collectionPath, type Workspace as MapWorkspace } from "./model.ts";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { campaignSummary } from "./campaign-links.ts";
-import { applyTagAction, emptyTags, importCharacterTags, tagLibrarySchema, targetKind, type TagAction, type TagLibrary, type TaggedItem } from "./tags.ts";
+import { applyTagAction, emptyTags, importCharacterTags, migrateTagLibrary, tagLibrarySchema, targetKind, type TagAction, type TagLibrary, type TaggedItem } from "./tags.ts";
 
-/** Tags live in one small file per account, next to (not inside) the two tools' saved data. */
+/** Tags live in one small file per account, next to (not inside) the two tools' saved data. It holds a separate list for each place. */
 export const tagsKey = (owner: string) => `users/${encodeURIComponent(owner)}/tags.json`;
 
 export async function readTags(bucket: Bucket, owner: string): Promise<{ data: TagLibrary; etag: string | null }> {
   const object = await bucket.get(tagsKey(owner));
   if (!object) return { data: emptyTags(), etag: null };
-  const parsed = tagLibrarySchema.safeParse(await object.json());
+  const parsed = tagLibrarySchema.safeParse(migrateTagLibrary(await object.json()));
   if (!parsed.success) throw new Error("Your tags could not be read. Nothing was changed.");
   return { data: parsed.data, etag: object.etag };
 }
@@ -47,8 +47,8 @@ export async function tagsWithImport(bucket: Bucket, owner: string, book: () => 
 const KIND_LABEL: Record<string, string> = { folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Tasks", map: "Map" };
 
 /**
- * Names and links for everything that has a tag, across both tools. Things that no
- * longer exist are left out (and not counted), but their tags are kept in case a
+ * Names and links for everything that has a tag, in every place (the browser shows
+ * each place its own). Things that no longer exist are left out (and not counted), but their tags are kept in case a
  * save is still on its way.
  */
 export function describeTagged(lib: TagLibrary, map: Pick<MapWorkspace, "collections" | "scenes"> | null, book: BookWorkspace): TaggedItem[] {

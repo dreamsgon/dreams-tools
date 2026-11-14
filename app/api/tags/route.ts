@@ -6,7 +6,7 @@ import { tagActionSchema } from "@/lib/tags";
 import { describeTagged, tagAction, tagsWithImport } from "@/lib/tags-server";
 export const dynamic = "force-dynamic";
 
-// Tags shared by Maptable and the Encyclopedia. See lib/tags.ts.
+// Tags: a separate list for the Encyclopedia, Campaigns and Maptable. See lib/tags.ts.
 async function session(request?: Request) {
   const user = await getAppUser();
   if (!user) throw new Error("Unauthorized");
@@ -14,7 +14,7 @@ async function session(request?: Request) {
   return campaignSession(getBucket(), user.userId);
 }
 
-/** The tags. With ?items=1, also the names and links of everything tagged, across both tools. */
+/** The tags. With ?items=1, also the names and links of everything tagged (each place shows only its own). */
 export async function GET(request: Request) {
   try {
     const s = await session();

@@ -1,4 +1,4 @@
-/* Tags, shared by Maptable, the Encyclopedia and the Campaigns pages. */
+/* Tag styles, used by Maptable, the Encyclopedia and the Campaigns pages. */
 .tag-red { --tag:#b8443a; } .tag-orange { --tag:#c2622a; } .tag-amber { --tag:#a87a14; }
 .tag-green { --tag:#4f7a3a; } .tag-teal { --tag:#22806f; } .tag-blue { --tag:#3a6a9e; }
 .tag-purple { --tag:#7a52a8; } .tag-pink { --tag:#b2477a; } .tag-slate { --tag:#66717b; }
