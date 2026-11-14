@@ -11,6 +11,7 @@ import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts'
 import {lookSchema,playerLook} from './look.ts';
 import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
+import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
@@ -57,7 +58,9 @@ export const worldSchema = z.object({ id, name, description: z.string().max(1000
   // Optional (added later): page templates for this world.
   templates:z.array(pageTemplateSchema).max(60).optional(),
   // Optional (added later): the organization profile layout new organizations start with, and the organization types typed in for this world.
-  orgLayout:orgLayoutSchema.optional(), orgTypes:orgTypesSchema.optional() });
+  orgLayout:orgLayoutSchema.optional(), orgTypes:orgTypesSchema.optional(),
+  // Optional (added later): the character profile layout new characters start with.
+  characterLayout:characterLayoutSchema.optional() });
 export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),
@@ -90,6 +93,8 @@ export const entrySchema = z.object({
     order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
     // Optional (added later): on an organization (faction) page, its Profile tab.
     org:orgSchema.optional(),
+    // Optional (added later): on a character page, its Profile tab (traits, beliefs, ties and Right now). Organizations are worked out from the organizations' own profiles.
+    profile:profileSchema.optional(),
     // Optional (added later): the template this page was made from, and its info box values by field id.
     templateId:id.optional(), fields:z.record(id, z.union([z.string().max(2000), z.number().finite()])).optional(),
     // Optional (added later): on a session page, the recap an AI drafted (timeline, quotes, GM notes, things to check).
@@ -120,6 +125,8 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
         if(e.org){const refs=orgRefs(e.org);
           for(const ref of [...refs.characters,...refs.pages]){const t=entries.get(ref);if(t&&(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId)))bad('A profile cannot point outside its world or campaign');}
           for(const ref of refs.characters){const t=entries.get(ref);if(t&&t.kind!=='character')bad('People and members in a profile must be character pages');}}
+        if(e.profile&&e.kind!=='character')bad('A character profile requires a character entry');
+        if(e.profile)for(const ref of profileRefs(e.profile)){const t=entries.get(ref);if(!t)continue;if(ref===e.id)bad('A character cannot have a tie to themselves');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A profile cannot point outside its world or campaign');if(t.kind!=='character'&&t.kind!=='faction')bad('Ties must point at character or organization pages');}
         if(e.codex)for(const cid of Object.keys(e.codex.found)){const c=campaigns.get(cid);if(!c||c.worldId!==e.worldId||(e.campaignId!==null&&e.campaignId!==cid))bad('A codex find belongs to a campaign that can see the page');}
         for(const ref of [e.quest?.giverId,e.quest?.placeId]){if(!ref)continue;const t=entries.get(ref);if(t&&(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId)))bad('A quest cannot point outside its world or campaign');}
         for(const pin of e.mapData?.pins??[]){if(pin.entryId){const target=entries.get(pin.entryId);if(target&&(target.worldId!==e.worldId||(target.campaignId!==null&&target.campaignId!==e.campaignId)))bad('A map pin cannot link outside its world or campaign');}}
@@ -193,7 +200,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
         campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; return copy; })],
-        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null}:undefined, org:e.org?remapOrg(e.org,ids):undefined, codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
+        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null}:undefined, org:e.org?remapOrg(e.org,ids):undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
@@ -276,11 +283,11 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
-   const shareOrg=e.kind==='faction'&&e.org?.visibility==='players';
+   const shareOrg=(e.kind==='faction'&&e.org?.visibility==='players')||(e.kind==='character'&&e.profile?.visibility==='players');
    if(!tabs.length&&!(showStats&&fields.length)&&!mapData&&!codex&&!shareOrg)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,profile:undefined as PlayerProfile|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -289,6 +296,9 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='faction'||src.org?.visibility!=='players')continue;
   const subgroups=candidates.filter(x=>x.parentId===src.id&&x.kind==='faction'&&readable.has(x.id)).map(x=>({id:x.id,title:x.title,members:x.org?.visibility!=='players'?[]:orgMembersOf(x.org,(id,gm)=>!gm&&readable.has(id)).map(id=>({id,title:title(id)}))}));
   e.org=playerOrg(src.org,id=>readable.has(id),playerText,{title,subgroups,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});}
+ // A shared character Profile: organizations only where the page and its own Profile are shared and the character's place isn't GM only.
+ for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='character'||src.profile?.visibility!=='players')continue;
+  e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});}
  // An info box links only to pages players can read; a link to any other page is left out.
  for(const e of entries){if(e.info)e.info=e.info.filter(r=>!r.pageId||readable.has(r.pageId));if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null};if(e.mapData)e.mapData={...e.mapData,paths:e.mapData.paths?.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null})),labels:e.mapData.labels?.map(l=>({...l,entryId:l.entryId&&readable.has(l.entryId)?l.entryId:null})),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
@@ -301,4 +311,4 @@ function playerLinkedPages(s:Workspace,target:Entry,pages:Entry[]){
  const link=/\[\[([^\]|\n]+)(?:\|[^\]\n]*)?\]\]/g;
  return pages.filter(e=>e.id!==target.id).filter(e=>[...(e.overviewVisibility==='players'?[e.body]:[]),...(e.tabs??[]).filter(t=>t.visibility==='players').map(t=>t.body)].some(t=>[...stripSecrets(t).matchAll(link)].some(m=>resolveLink(s,e,m[1])?.id===target.id))).map(e=>({id:e.id,title:e.title}));
 }
-export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
+export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),profileSearchText(e.profile),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}

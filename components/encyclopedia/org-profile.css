@@ -191,3 +191,29 @@ textarea.org-input{resize:vertical;line-height:1.5}
 .org-player-preview{max-height:calc(70vh / var(--ui-zoom, 1));overflow:auto}
 .org-profile.is-readonly .org-block-body{gap:0}
 .org-panel:focus{outline:none}
+
+/* Character profiles: the Profile tab of a character page (components/encyclopedia/character-*.tsx). It reuses the board,
+   Arrange mode, beliefs, people lines and bar above. */
+.char-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.char-tools .button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.char-traits-wrap{display:flex;flex-direction:column;gap:10px}
+.char-traits{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.char-traits>[role="listitem"]{display:inline-flex}
+.char-trait{position:relative;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--line-strong);border-radius:999px;background:var(--raised);color:var(--ink);font-size:13px;line-height:1.4;max-width:100%}
+.char-trait>svg{color:var(--accent);flex:none}
+.char-trait-label{overflow-wrap:anywhere}
+.char-trait.is-gm{background:color-mix(in srgb,var(--warning-soft) 55%,var(--panel));border-color:var(--warning)}
+.char-trait .org-item-tools{display:none;position:absolute;z-index:5;top:calc(100% + 2px);left:0;margin:0;padding:2px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-md)}
+.char-trait:hover .org-item-tools,.char-trait:focus-within .org-item-tools{display:inline-flex}
+@media (hover:none){.char-trait .org-item-tools{display:inline-flex;position:static;border:0;box-shadow:none;background:none;padding:0}}
+.char-trait-add{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border:1px dashed var(--line-strong);border-radius:999px;color:var(--accent);font-size:13px;background:none}
+.char-trait-add:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.char-trait-form{display:flex;flex-direction:column;gap:10px;max-width:440px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);padding:12px}
+.char-gallery{grid-template-columns:repeat(8,minmax(0,1fr))}
+.char-no-symbol{font-size:10px}
+.char-trait-form-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.char-org-role{color:var(--ink);font-weight:500}
+.char-org .org-pill{flex:none}
+.org-edit-row .org-hint{flex:1 1 100%;margin:0}
+.org-picker-standing .org-input{flex:1;min-width:0;max-width:170px}
+.char-profile.is-readonly .char-traits{margin-bottom:2px}

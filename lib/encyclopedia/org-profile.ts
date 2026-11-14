@@ -12,9 +12,9 @@ import type { Entry, Workspace, World } from "./world-model.ts";
  * Kept queryable for later: people in spots and members are lists of `entryId`s (a character's page).
  */
 
-const oid = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
-const visibility = z.enum(["gm", "players"]);
-const text = (max: number) => z.string().trim().max(max);
+export const oid = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
+export const visibility = z.enum(["gm", "players"]);
+export const text = (max: number) => z.string().trim().max(max);
 const label = (max: number) => z.string().trim().min(1).max(max);
 
 export const standings = ["hostile", "wary", "neutral", "friendly", "loyal"] as const;
@@ -59,24 +59,24 @@ const personSchema = z.object({ id: oid, entryId: oid, note: text(200).optional(
 const spotSchema = z.object({ id: oid, title: text(80), gm: z.boolean().optional(), people: z.array(personSchema).max(maxPeople) });
 const memberSchema = z.object({ id: oid, entryId: oid, role: text(80).optional(), standing: z.enum(standings).optional(), gm: z.boolean().optional() });
 const factSchema = z.object({ id: oid, label: text(60), value: text(200), entryId: oid.optional(), gm: z.boolean().optional() });
-const beliefSchema = z.object({ id: oid, topic: text(60), stance: text(100), detail: text(400), gm: z.boolean().optional() });
+export const beliefSchema = z.object({ id: oid, topic: text(60), stance: text(100), detail: text(400), gm: z.boolean().optional() });
 const holdingSchema = z.object({ id: oid, entryId: oid, gm: z.boolean().optional() });
-const base = { id: oid, title: text(80), gm: z.boolean().optional(), column: z.enum(["left", "right"]), full: z.boolean().optional() };
+export const blockBase = { id: oid, title: text(80), gm: z.boolean().optional(), column: z.enum(["left", "right"]), full: z.boolean().optional() };
 export const blockSchema = z.discriminatedUnion("kind", [
-  z.object({ ...base, kind: z.literal("spots"), spots: z.array(spotSchema).max(maxSpots) }),
-  z.object({ ...base, kind: z.literal("subgroups") }),
-  z.object({ ...base, kind: z.literal("members"), members: z.array(memberSchema).max(maxMembers) }),
-  z.object({ ...base, kind: z.literal("facts"), facts: z.array(factSchema).max(30) }),
-  z.object({ ...base, kind: z.literal("beliefs"), beliefs: z.array(beliefSchema).max(20) }),
-  z.object({ ...base, kind: z.literal("holdings"), holdings: z.array(holdingSchema).max(40) }),
-  z.object({ ...base, kind: z.literal("text"), text: text(4000) }),
-  z.object({ ...base, kind: z.literal("linked") }),
+  z.object({ ...blockBase, kind: z.literal("spots"), spots: z.array(spotSchema).max(maxSpots) }),
+  z.object({ ...blockBase, kind: z.literal("subgroups") }),
+  z.object({ ...blockBase, kind: z.literal("members"), members: z.array(memberSchema).max(maxMembers) }),
+  z.object({ ...blockBase, kind: z.literal("facts"), facts: z.array(factSchema).max(30) }),
+  z.object({ ...blockBase, kind: z.literal("beliefs"), beliefs: z.array(beliefSchema).max(20) }),
+  z.object({ ...blockBase, kind: z.literal("holdings"), holdings: z.array(holdingSchema).max(40) }),
+  z.object({ ...blockBase, kind: z.literal("text"), text: text(4000) }),
+  z.object({ ...blockBase, kind: z.literal("linked") }),
 ]);
 export const barFieldSchema = z.object({ id: oid, label: text(40), value: text(300), gm: z.boolean().optional() });
 export const emblemSchema = z.object({
   shape: z.enum(emblemShapes), symbol: z.enum(emblemSymbols).optional(), imageId: imageIdSchema.optional(), colour: hexColour.optional(), mapColour: hexColour.optional(),
 });
-const unique = (ids: string[]) => new Set(ids).size === ids.length;
+export const unique = (ids: string[]) => new Set(ids).size === ids.length;
 export const orgSchema = z.object({
   /** Whether players get the Profile tab (the tab's own visibility). */
   visibility,
@@ -197,30 +197,42 @@ export function blockHasContent(b: OrgBlock): boolean {
  * at the end so nothing anyone wrote is lost. The bar is matched by field id, then by label, and keeps its values.
  */
 export function layOutOrg(org: Org, layout: OrgLayout): Org {
-  const used = new Set<string>(), blocks: OrgBlock[] = [];
-  const take = (pick: (b: OrgBlock) => boolean) => { const found = org.blocks.find(b => !used.has(b.id) && pick(b)); if (found) used.add(found.id); return found; };
+  return { ...org, blocks: layOutBlocks(org.blocks, layout.blocks, lb => emptyBlock(lb.kind, lb.id, lb.title, lb.column, lb), blockHasContent), bar: layOutBar(org.bar, layout.bar) };
+}
+
+/** A block as the board and the layout see it: any profile's blocks have these. */
+export type BoardBlock = { id: string; kind: string; title: string; gm?: boolean; column: "left" | "right"; full?: boolean };
+/** The block half of layOutOrg, for any profile's blocks (organizations and characters share it). */
+export function layOutBlocks<B extends BoardBlock, L extends BoardBlock>(have: readonly B[], layout: readonly L[], empty: (lb: L) => B, hasContent: (b: B) => boolean): B[] {
+  const used = new Set<string>(), blocks: B[] = [];
+  const take = (pick: (b: B) => boolean) => { const found = have.find(b => !used.has(b.id) && pick(b)); if (found) used.add(found.id); return found; };
   // Every exact id match is taken first, so a block matched only by kind can never steal the page of a later layout block.
-  const layoutIds = new Set(layout.blocks.map(b => b.id));
-  const matched = layout.blocks.map(lb => take(b => b.id === lb.id && b.kind === lb.kind));
-  layout.blocks.forEach((lb, i) => { matched[i] ??= take(b => b.kind === lb.kind); });
-  layout.blocks.forEach((lb, i) => {
+  const layoutIds = new Set(layout.map(b => b.id));
+  const matched = layout.map(lb => take(b => b.id === lb.id && b.kind === lb.kind));
+  layout.forEach((lb, i) => { matched[i] ??= take(b => b.kind === lb.kind); });
+  layout.forEach((lb, i) => {
     const found = matched[i], { id, title, column, gm, full } = lb;
-    if (!found) { blocks.push(emptyBlock(lb.kind, id, title, column, lb)); return; }
+    if (!found) { blocks.push(empty(lb)); return; }
     // A block keeps its own id unless that is another layout block's id (then it takes this one's), so ids stay unique.
     const rest: Record<string, unknown> = { ...found, id: found.id === id || !layoutIds.has(found.id) ? found.id : id, title, column };
     delete rest.gm; delete rest.full;
-    blocks.push({ ...rest, ...(gm ? { gm: true } : {}), ...(full ? { full: true } : {}) } as OrgBlock);
+    blocks.push({ ...rest, ...(gm ? { gm: true } : {}), ...(full ? { full: true } : {}) } as B);
   });
-  const leftovers = org.blocks.filter(b => !used.has(b.id) && blockHasContent(b));
+  const leftovers = have.filter(b => !used.has(b.id) && hasContent(b));
   const ids = new Set(blocks.map(b => b.id));
   for (const b of leftovers) if (blocks.length < maxBlocks && !ids.has(b.id)) blocks.push(b);
+  return blocks;
+}
+type BarOf = { title: string; hidden?: boolean; fields: OrgBarField[] };
+/** The bar half of layOutOrg: matched by field id, then by label, keeping the values. */
+export function layOutBar(bar: BarOf, layout: OrgLayout["bar"]): BarOf {
   const usedField = new Set<string>(), fields: OrgBarField[] = [];
-  const takeField = (pick: (f: OrgBarField) => boolean) => { const f = org.bar.fields.find(x => !usedField.has(x.id) && pick(x)); if (f) usedField.add(f.id); return f; };
-  const byId = layout.bar.fields.map(lf => takeField(x => x.id === lf.id));
-  layout.bar.fields.forEach((lf, i) => { byId[i] ??= takeField(x => x.label.trim().toLowerCase() === lf.label.trim().toLowerCase()); });
-  layout.bar.fields.forEach((lf, i) => { fields.push({ id: lf.id, label: lf.label, value: byId[i]?.value ?? "", ...(lf.gm ? { gm: true } : {}) }); });
-  for (const f of org.bar.fields) if (!usedField.has(f.id) && f.value.trim() && fields.length < maxBarFields && !fields.some(x => x.id === f.id)) fields.push(f);
-  return { ...org, blocks, bar: { title: layout.bar.title, ...(layout.bar.hidden ? { hidden: true } : {}), fields } };
+  const takeField = (pick: (f: OrgBarField) => boolean) => { const f = bar.fields.find(x => !usedField.has(x.id) && pick(x)); if (f) usedField.add(f.id); return f; };
+  const byId = layout.fields.map(lf => takeField(x => x.id === lf.id));
+  layout.fields.forEach((lf, i) => { byId[i] ??= takeField(x => x.label.trim().toLowerCase() === lf.label.trim().toLowerCase()); });
+  layout.fields.forEach((lf, i) => { fields.push({ id: lf.id, label: lf.label, value: byId[i]?.value ?? "", ...(lf.gm ? { gm: true } : {}) }); });
+  for (const f of bar.fields) if (!usedField.has(f.id) && f.value.trim() && fields.length < maxBarFields && !fields.some(x => x.id === f.id)) fields.push(f);
+  return { title: layout.title, ...(layout.hidden ? { hidden: true } : {}), fields };
 }
 
 /**
@@ -249,11 +261,12 @@ export function addOrgType(s: Workspace, worldId: string, type: string): Workspa
 
 /* ---- The board: blocks laid out in rows, and moving blocks around ---- */
 
-export type Segment = { full: OrgBlock } | { left: OrgBlock[]; right: OrgBlock[]; endsBefore: string | null };
+export type BoardPlace = { id: string; column: "left" | "right"; full?: boolean };
+export type Segment<B extends BoardPlace = OrgBlock> = { full: B } | { left: B[]; right: B[]; endsBefore: string | null };
 /** The blocks in reading order as rows: a full-width block is a row, the others stack in two columns between them. */
-export function boardSegments(blocks: readonly OrgBlock[]): Segment[] {
-  const out: Segment[] = [];
-  let open: { left: OrgBlock[]; right: OrgBlock[]; endsBefore: string | null } | null = null;
+export function boardSegments<B extends BoardPlace>(blocks: readonly B[]): Segment<B>[] {
+  const out: Segment<B>[] = [];
+  let open: { left: B[]; right: B[]; endsBefore: string | null } | null = null;
   for (const b of blocks) {
     if (b.full) { if (open) open.endsBefore = b.id; open = null; out.push({ full: b }); continue; }
     if (!open) { open = { left: [], right: [], endsBefore: null }; out.push(open); }
@@ -262,16 +275,16 @@ export function boardSegments(blocks: readonly OrgBlock[]): Segment[] {
   return out;
 }
 /** Takes a block out and puts it before another (or last), in a column. */
-export function placeBlock(blocks: readonly OrgBlock[], id: string, beforeId: string | null, column?: "left" | "right"): OrgBlock[] {
+export function placeBlock<B extends BoardPlace>(blocks: readonly B[], id: string, beforeId: string | null, column?: "left" | "right"): B[] {
   const moving = blocks.find(b => b.id === id);
   if (!moving || beforeId === id) return [...blocks];
   const rest = blocks.filter(b => b.id !== id), at = beforeId ? rest.findIndex(b => b.id === beforeId) : -1;
-  const next = column ? ({ ...moving, column } as OrgBlock) : moving;
+  const next = column ? ({ ...moving, column } as B) : moving;
   rest.splice(at < 0 ? rest.length : at, 0, next);
   return rest;
 }
 /** Moves a block up or down past the next block that shares its column (or a full-width one). */
-export function moveBlockBy(blocks: readonly OrgBlock[], id: string, delta: -1 | 1): OrgBlock[] {
+export function moveBlockBy<B extends BoardPlace>(blocks: readonly B[], id: string, delta: -1 | 1): B[] {
   const at = blocks.findIndex(b => b.id === id);
   if (at < 0) return [...blocks];
   const me = blocks[at];
@@ -282,7 +295,7 @@ export function moveBlockBy(blocks: readonly OrgBlock[], id: string, delta: -1 |
   [next[at], next[to]] = [next[to], next[at]];
   return next;
 }
-export const switchColumn = (blocks: readonly OrgBlock[], id: string): OrgBlock[] => blocks.map(b => b.id === id ? ({ ...b, column: b.column === "left" ? "right" : "left" } as OrgBlock) : b);
+export const switchColumn = <B extends BoardPlace>(blocks: readonly B[], id: string): B[] => blocks.map(b => b.id === id ? ({ ...b, column: b.column === "left" ? "right" : "left" } as B) : b);
 
 /* ---- References ---- */
 

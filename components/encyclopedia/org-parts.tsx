@@ -48,8 +48,8 @@ export function BottomBar({title,fields,children}:{title:string;fields:{id:strin
 }
 
 /** One person: picture initials, name, note and standing. */
-export function PersonLine({title,note,role,standing,gm,open,id,children}:{title:string;note?:string;role?:string;standing?:Standing;gm?:boolean;open?:(id:string)=>void;id:string;children?:ReactNode}){
- return <div className="org-person"><Avatar title={title}/><span className="org-person-text"><strong><PageLink id={id} open={open}>{title||'Missing page'}</PageLink></strong>{(role||note)&&<small>{role||note}</small>}</span>{gm&&<GmChip/>}<StandingPill standing={standing}/>{children}</div>;
+export function PersonLine({title,note,role,standing,gm,open,id,lead,children}:{title:string;note?:string;role?:string;standing?:Standing;gm?:boolean;open?:(id:string)=>void;id:string;/** Replaces the initials, for example an organization's emblem. */lead?:ReactNode;children?:ReactNode}){
+ return <div className="org-person">{lead??<Avatar title={title}/>}<span className="org-person-text"><strong><PageLink id={id} open={open}>{title||'Missing page'}</PageLink></strong>{(role||note)&&<small>{role||note}</small>}</span>{gm&&<GmChip/>}<StandingPill standing={standing}/>{children}</div>;
 }
 
 type Board=PlayerOrgBlock;
