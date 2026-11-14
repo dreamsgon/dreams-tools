@@ -20,7 +20,7 @@ export function playersBook(book: Book, campaignId: string): Book {
     const found = e.codex?.found[campaignId];
     const map = e.mapData?.visibility === "players";
     if (!overview && !tabs.length && !found && !map) return [];
-    const quest = e.quest && overview ? { ...e.quest, objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
+    const quest = e.quest && overview ? { ...e.quest, prep: undefined, ...(e.quest.rewardHidden ? { reward: undefined, rewardIds: undefined } : {}), objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
     const character = e.character ? { ...e.character, statblock: undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
       // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).

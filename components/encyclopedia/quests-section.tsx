@@ -1,11 +1,12 @@
 "use client";
 import {useRef,useState,type DragEvent} from 'react';
-import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags} from 'lucide-react';
+import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags,Lock} from 'lucide-react';
 import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
 import {categoryLook,CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
 import {Face,GoalBar,QuestGoals} from './quest-goals';
+import {QuestFacts,QuestPrep} from './quest-facts';
 import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
@@ -108,11 +109,10 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
  const [editing,setEditing]=useState(false),cats=questCategories(campaign??data.campaigns.find(c=>c.id===entry.campaignId));
  // The board passes its own dialog; a quest's own page shows one here.
  const editCategories=onEditCategories??(campaign&&change?()=>setEditing(true):undefined);
+ const [tab,setTab]=useState<'overview'|'log'|'gm'>('overview');
  const q=quest(entry),[log,setLog]=useState(''),[label,setLabel]=useState(''),[players,setPlayers]=useState(true),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
  const scope=data.entries.filter(e=>e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)&&e.id!==entry.id);
- const people=scope.filter(e=>e.kind==='character').sort((a,b)=>a.title.localeCompare(b.title)),places=scope.filter(e=>e.kind==='place'||e.kind==='map').sort((a,b)=>a.title.localeCompare(b.title));
- const giver=q.giverId?data.entries.find(e=>e.id===q.giverId):undefined,place=q.placeId?data.entries.find(e=>e.id===q.placeId):undefined;
  const shared=entry.overviewVisibility==='players';
  const sessions=scope.filter(e=>e.kind==='session'&&e.campaignId===entry.campaignId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
  function addLog(){const text=log.trim();if(!text)return;set({log:[{id:newId(),at:new Date().toISOString(),label:label.trim().slice(0,80)||undefined,text:text.slice(0,4000),players},...q.log].slice(0,500)});setLog('');}
@@ -125,10 +125,19 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
    {withTitle&&<button className="text-button quest-open" onClick={()=>onOpen(entry.id)}>Open page <ArrowUpRight size={13}/></button>}
   </div>
   {withTitle&&<input className="quest-title-input" aria-label="Quest name" value={title} maxLength={160} onChange={e=>{setTitle(e.target.value);if(e.target.value.trim())update({title:e.target.value.trim()});}} onBlur={()=>setTitle(entry.title)}/>}
-  <div className="quest-detail-grid">
+  <div className="quest-tabs" role="tablist" aria-label="Quest">
+   <button role="tab" aria-selected={tab==='overview'} onClick={()=>setTab('overview')}>Overview</button>
+   <button role="tab" aria-selected={tab==='log'} onClick={()=>setTab('log')}>Log{q.log.length>0&&<span className="count">{q.log.length}</span>}</button>
+   <button role="tab" aria-selected={tab==='gm'} onClick={()=>setTab('gm')}><Lock size={13} className="lock"/> GM</button>
+  </div>
+  {tab==='overview'&&<div className="quest-overview">
    <div className="quest-detail-main">
     {withTitle&&entry.body.trim()&&<div className="prose quest-summary"><ArticleBody entry={entry} data={data} onOpen={onOpen} onChange={body=>update({body})}/></div>}
     <QuestGoals entry={entry} data={data} quest={q} setGoals={objectives=>set({objectives})}/>
+   </div>
+   <QuestFacts entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>
+  </div>}
+  {tab==='log'&&<div className="quest-detail-main">
     <form className="quest-log-composer" onSubmit={e=>{e.preventDefault();addLog();}}>
      <textarea aria-label="Add to the log" placeholder="Add to the log. What happened?" value={log} maxLength={4000} rows={log?3:1} onChange={e=>setLog(e.target.value)}/>
      <div className="quest-log-tools">
@@ -144,18 +153,8 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
       <div className="quest-log-actions"><button className={`quest-share ${l.players?'on':'gm'}`} aria-pressed={l.players} onClick={()=>set({log:q.log.map(x=>x.id===l.id?{...x,players:!x.players}:x)})}>{l.players?<><Eye size={12}/> Players see this entry</>:<><EyeOff size={12}/> GM only entry</>}</button><button className="icon-button" aria-label="Delete log entry" onClick={async()=>{if(await confirmDialog({title:'Delete this log entry?',confirm:'Delete entry',danger:true}))set({log:q.log.filter(x=>x.id!==l.id)});}}><Trash2 size={13}/></button></div></div>
     </li>)}</ol>
     {!q.log.length&&<p className="aside-hint">The log is empty. Write what the party learned or did, a session at a time.</p>}
-   </div>
-   <aside className="quest-facts">
-    <div className="quest-fact"><span className="eyebrow">Given by</span>
-    {giver?<button className="quest-giver" onClick={()=>onOpen(giver.id)}><Face entry={giver} size={40}/><span><strong>{giver.title}</strong><small>{giver.character?.group||giver.character?.faction||'Character'}</small></span></button>:null}
-    <select aria-label="Given by" value={q.giverId??''} onChange={e=>set({giverId:e.target.value||null})}><option value="">{giver?'Nobody':'Choose a character…'}</option>{people.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
-    <div className="quest-fact"><span className="eyebrow">Reward</span>
-    <input aria-label="Reward" placeholder="120 gp, a favour…" defaultValue={q.reward??''} maxLength={300} onBlur={e=>{const reward=e.target.value.trim();if(reward!==(q.reward??''))set({reward:reward||undefined});}}/></div>
-    <div className="quest-fact"><span className="eyebrow">Place</span>
-    {place&&<button className="quest-place-link" onClick={()=>onOpen(place.id)}><MapPin size={13}/> {place.title}</button>}
-    <select aria-label="Place" value={q.placeId??''} onChange={e=>set({placeId:e.target.value||null})}><option value="">{place?'No place':'Choose a place…'}</option>{places.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
-   </aside>
-  </div>
+  </div>}
+  {tab==='gm'&&<QuestPrep entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {editing&&campaign&&change&&<QuestCategoriesDialog data={data} worldId={entry.worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </div>;
 }
