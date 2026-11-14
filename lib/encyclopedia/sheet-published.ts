@@ -1,7 +1,7 @@
 /*
  * Reads a Google Sheet that was published to the web (File, Share, Publish to the web), on the server, so the
- * browser never has to talk to Google for it. Only docs.google.com is fetched, redirects are followed only on that
- * host, a private sheet is reported as such, replies are capped, and nothing is sent but the request for the page.
+ * browser never has to talk to Google for it. Only docs.google.com is fetched, and redirects are followed only on that
+ * host or to the googleusercontent.com host Google serves published CSV from; a private sheet is reported as such, replies are capped, and nothing is sent but the request for the page.
  * The tab names and the sheet's title come from the published page when it lists them; each tab is read as CSV.
  */
 import { clipRows, parseCsv, publishedLink, type SheetTab } from "./sheet-link.ts";
@@ -12,6 +12,9 @@ export const SHEET_BYTE_LIMIT = 2_000_000;
 /** Each request gets 15 s; the whole read (page, tabs and redirects together) gets one shared deadline. */
 const TIMEOUT = 15_000, DEADLINE = 25_000, MAX_TABS = 12, HOP_LIMIT = 4;
 const HOST = "docs.google.com";
+/** Google answers a published CSV with a redirect to a host such as doc-04-9s-sheets.googleusercontent.com. */
+const CSV_HOST = /^doc-[a-z0-9-]{1,40}-sheets\.googleusercontent\.com$/;
+const allowedHost = (host: string) => host === HOST || CSV_HOST.test(host);
 const ask = "In Google Sheets choose File, Share, Publish to the web, pick the tab and Comma-separated values (.csv), and paste that link.";
 
 async function get(url: string, fetchImpl: Fetch, deadline: AbortSignal): Promise<Response> {
@@ -25,7 +28,7 @@ async function get(url: string, fetchImpl: Fetch, deadline: AbortSignal): Promis
     let to: URL;
     try { to = new URL(next, url); } catch { throw new SheetReadError("Google Sheets sent an odd reply. Try again in a moment."); }
     if (to.hostname === "accounts.google.com") throw new SheetReadError(`That sheet isn't published. ${ask}`);
-    if (to.protocol !== "https:" || to.port !== "" || to.hostname.toLowerCase() !== HOST) throw new SheetReadError("That link went somewhere RPG Tools doesn't read.");
+    if (to.protocol !== "https:" || to.port !== "" || !allowedHost(to.hostname.toLowerCase())) throw new SheetReadError("That link went somewhere RPG Tools doesn't read.");
     url = to.toString();
   }
   throw new SheetReadError("That link redirected too many times.");
