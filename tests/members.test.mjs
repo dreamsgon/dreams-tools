@@ -134,7 +134,7 @@ test('members open the player pages signed in, and can leave',async()=>{
  const [mine]=await store.memberships(mara.userId);
  assert.match(mine.ref,/^[a-f0-9]{64}$/);assert.equal(mine.ref,await memberRef(gm.userId,C));assert.equal(mine.open,true);
  assert.doesNotMatch(JSON.stringify(mine),/supabase:gm/,'the owner\'s account id stays on the server');
- assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C,ownerName:'the GM',role:'Player'});
+ assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C,ownerName:'the GM',role:'Player',edit:false});
  const shown=JSON.stringify(await enc.playerOf(await store.openAs(mara.userId,mine.ref)));
  assert.match(shown,/The Salt Road/);assert.doesNotMatch(shown,/secret-GM-notes/);
  assert.equal(await store.openAs('supabase:stranger',mine.ref),null,'someone else can\'t use the ref');
@@ -168,7 +168,9 @@ test('co-GMs open the whole campaign, and only that campaign; players don\'t',as
  const [mine]=await store.memberships(mara.userId);
  assert.equal(mine.gm,true);assert.equal(mine.role,'Co-GM');
  const grant=await store.openAs(mara.userId,mine.ref,'seeGm');
- assert.equal(grant.role,'Co-GM');
+ assert.equal(grant.role,'Co-GM');assert.equal(grant.edit,true,'Co-GMs start with Edit Encyclopedia pages');
+ await store.change(gm.userId,C,l=>M.setPermission(l,'cogms','editPages','no'));
+ assert.equal((await store.openAs(mara.userId,mine.ref,'seeGm')).edit,false,'the grid decides, every time');
  const {data}=await enc.read(grant.owner),scoped=campaignExport(data,grant.campaignId);
  assert.deepEqual(scoped.campaigns.map(c=>c.id),[C]);
  assert.equal(scoped.entries.some(e=>e.id==='other-secret'),false,'other campaigns stay out');

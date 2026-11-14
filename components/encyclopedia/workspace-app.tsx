@@ -6,6 +6,7 @@ import { useAutosave } from "../use-autosave";
 import { AiConnectionDialog } from "./ai-connection";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
+import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
@@ -30,7 +31,7 @@ import { confirmDialog } from "../confirm-dialog";
 import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
-import {memberRef,memberRefFromHash,setMemberRef,workspaceUrl} from "./member-view";
+import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,workspaceUrl} from "./member-view";
 import Link from "next/link";
 
 // Sections and the article editor load as separate chunks so the dashboard appears sooner;
@@ -71,8 +72,8 @@ type Modal = {
 function excerpt(e: Entry, s: Workspace) { return e.body.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label ?? resolveLink(s, e, target)?.title ?? target).replace(/^[ \t]*- \[[ xX]\] /gm, "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim().slice(0, 150); }
 function download(value: unknown, name: string) { const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 /** A co-GM in someone else's campaign: whose it is and their role, for the bar at the top. */
-type CoGm = { ownerName: string; role: string; campaignId: string };
-const CO_GM_READ_ONLY = "Co-GMs can read this campaign for now. Editing it comes in a later update.";
+type CoGm = { ownerName: string; role: string; campaignId: string; edit?: boolean };
+const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not edit it.";
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
     const [member, setMember] = useState<CoGm | null>(null);
@@ -114,10 +115,10 @@ export default function WorkspaceApp() {
         // A co-GM opens the one campaign they were let into.
         const shared = body.member ? checked.campaigns.find(c => c.id === body.member!.campaignId) : undefined;
         if (body.member && shared) {
-            setMember(body.member);
+            setMember(body.member); setMemberEdit(!!body.member.edit);
             const place = placeFromQuery(query, checked);
             setWorldId(shared.worldId); setCampaignId(shared.id); setView(place?.view ?? "overview"); setSelected(place?.entryId ?? null);
-            setLoaded(true); setStatus("Read only");
+            setLoaded(true); setStatus(body.member.edit ? "All changes saved" : "Read only");
             return;
         }
         let stored: URLSearchParams | null = null;
@@ -154,9 +155,9 @@ export default function WorkspaceApp() {
     const saveNowRef = useRef(saveNow);
     useEffect(() => { saveNowRef.current = saveNow; });
     useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") { e.preventDefault(); saveNowRef.current(); } }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, []);
-    async function save() { if (memberRef() || busy.current || blocked.current || version.current === savedVersion.current)
+    async function save() { if (memberReadOnly() || busy.current || blocked.current || version.current === savedVersion.current)
         return; busy.current = true; let again = false; const sent = version.current, payload = current.current; setStatus("Saving…"); try {
-        const response = await fetch("/api/encyclopedia/workspace", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: payload, revision: revision.current }) });
+        const response = await fetch(workspaceUrl(), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: payload, revision: revision.current }) });
         const value = await response.json() as {
             error?: string;
             revision: number;
@@ -192,7 +193,9 @@ export default function WorkspaceApp() {
         const res = await fetch(workspaceUrl(), { cache: "no-store", headers: etag.current ? { "If-None-Match": `"${etag.current}"` } : {} });
         if (res.status === 304) return true;
         if (!res.ok) return false;
-        const body = await res.json() as { data: unknown; revision: number; etag?: string | null };
+        const body = await res.json() as { data: unknown; revision: number; etag?: string | null; member?: CoGm };
+        // The GM may have changed what this co-GM's group can do since the page opened.
+        if (body.member && memberRef() && !!body.member.edit !== !memberReadOnly()) { setMemberEdit(!!body.member.edit); setMember(body.member); setStatus(body.member.edit ? "All changes saved" : "Read only"); }
         const theirs = workspaceSchema.safeParse(body.data);
         if (!theirs.success) return false;
         if (body.revision <= revision.current) { if (body.revision === revision.current) etag.current = body.etag ?? null; return true; }
@@ -217,7 +220,7 @@ export default function WorkspaceApp() {
     useEffect(() => { pollRef.current = poll; });
     useEffect(() => { if (!loaded) return; const tick = setInterval(() => void pollRef.current(), 8000), look = () => { if (!document.hidden) void pollRef.current(); }; document.addEventListener("visibilitychange", look); window.addEventListener("focus", look); return () => { clearInterval(tick); document.removeEventListener("visibilitychange", look); window.removeEventListener("focus", look); }; }, [loaded]);
     /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
-    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberRef()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
+    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberReadOnly()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const refused = memberRef() ? coGmRefusal(current.current, next) : null; if (refused) { setToast(refused); return false; } const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
         clearTimeout(timer.current); timer.current = autosave.ref.current ? setTimeout(save, 600) : null; return true; }
     function updateEntry(id: string, patch: Partial<Entry>) { change({ ...current.current, entries: current.current.entries.map(e => e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e) }); }
     /** Clicking a tag opens search with that tag, across pages, scenes and campaigns. */
@@ -293,7 +296,7 @@ export default function WorkspaceApp() {
     if (!loaded)
         return <div className="welcome"><div className="welcome-theme"><ThemeToggle/></div><Compass size={40}/><h1>{error ? "Couldn’t open your worlds" : "Opening your worlds…"}</h1>{error ? <><p>{error}</p><button onClick={() => location.reload()}>Try again</button></> : <LoaderCircle className="spin"/>}</div>;
     const look = lookAttributes(campaign?.look);
-    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}><LookFont look={campaign?.look}/>
+    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}><LookFont look={campaign?.look}/>
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
   <aside id="workspace-sidebar" aria-label="Workspace navigation" inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>
@@ -307,7 +310,7 @@ export default function WorkspaceApp() {
    <SidebarResize width={sidebar.width} maxWidth={sidebar.maxWidth} onChange={sidebar.setWidth}/>
   </aside>
   <main className="main-panel">
-   {member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true"/><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a {member.role} here. Read only for now.</span><Link href="/campaigns">Back to Campaigns</Link></div>}
+   {member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true"/><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a {member.role} here. {member.edit ? "Your changes save to their Encyclopedia." : "Your group can read it, not edit it."}</span><Link href="/campaigns">Back to Campaigns</Link></div>}
    <header className="topbar"><div className="crumbs"><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button><ToolSwitch active="encyclopedia"/></div><Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail()}/><div className="top-actions"><SaveChip status={status} error={error} conflict={false} onSave={saveNow} hints={{ saved: "All changes saved. Ctrl/Cmd+S saves now.", loading: "Loading your Encyclopedia.", offline: "Your Encyclopedia could not be loaded." }} autosave={{ on: autosave.on, set: setAutosave, changes: unsaved, lastSaved }}/><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search notes"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button>{campaign && <AiActivity campaignId={campaign.id} onChanged={() => void pollRef.current()} onSettings={() => setAiOpen(true)}/>}<ThemeToggle/><AccountLink/></div></header>
    {!member && <FogImageSync data={data} change={change}/>}{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))
         location.reload(); }}>Reload</button><button onClick={() => { blocked.current = false; setError(""); void save(); }}>Retry save</button></div>}

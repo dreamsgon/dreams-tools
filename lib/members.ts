@@ -12,15 +12,16 @@ export const permissionKeys = [
   "forumRead", "forumStart", "forumReply", "forumPictures", "forumModerate", "forumBoards",
 ] as const;
 export type Permission = (typeof permissionKeys)[number];
-export const permissionInfo: Record<Permission, { name: string; forum?: true }> = {
+/** `soon` marks a permission that is kept now and does nothing yet; `hint` says what else it needs. */
+export const permissionInfo: Record<Permission, { name: string; forum?: true; soon?: true; hint?: string }> = {
   seePlayer: { name: "See the front page and player pages" },
   seeGm: { name: "See GM-only pages, secrets and hidden tokens" },
-  editPages: { name: "Edit Encyclopedia pages" },
-  editOwnCharacter: { name: "Edit their own character page" },
-  addSubPages: { name: "Add sub-pages under their own character page" },
-  editMaps: { name: "Edit maps and run the table in Maptable" },
-  invite: { name: "Invite people (to their own groups or lower)" },
-  manage: { name: "Manage members, groups and permissions" },
+  editPages: { name: "Edit Encyclopedia pages", hint: "Also needs “See GM-only pages” for now." },
+  editOwnCharacter: { name: "Edit their own character page", soon: true },
+  addSubPages: { name: "Add sub-pages under their own character page", soon: true },
+  editMaps: { name: "Edit maps and run the table in Maptable", soon: true },
+  invite: { name: "Invite people (to their own groups or lower)", soon: true },
+  manage: { name: "Manage members, groups and permissions", soon: true },
   forumRead: { name: "Read the forum", forum: true },
   forumStart: { name: "Start topics", forum: true },
   forumReply: { name: "Reply", forum: true },

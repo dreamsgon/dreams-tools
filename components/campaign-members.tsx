@@ -152,7 +152,7 @@ function Groups({ view, act, busy }: Part) {
   const [editing, setEditing] = useState<string | null>(null);
   const rows = (forum: boolean) => permissionKeys.filter(k => !!permissionInfo[k].forum === forum);
   const table = (keys: Permission[]) => keys.map(k => <tr key={k}>
-    <th scope="row">{permissionInfo[k].name}</th>
+    <th scope="row">{permissionInfo[k].name}{permissionInfo[k].soon && <span className="mem-soon">Coming soon</span>}{permissionInfo[k].hint && <small className="mem-row-hint">{permissionInfo[k].hint}</small>}</th>
     <td><span className="mem-always">Always</span></td>
     {view.groups.map(g => <td key={g.id}><div className="mem-seg" role="radiogroup" aria-label={`${g.name}: ${permissionInfo[k].name}`}>
       {choices.map(c => <button key={c} role="radio" aria-checked={g.perms[k] === c} className={`mem-seg-${c}`} disabled={busy} onClick={() => g.perms[k] !== c && void act({ action: "permission", groupId: g.id, permission: k, choice: c })}>{choiceNames[c]}</button>)}

@@ -219,13 +219,14 @@ export class MemberStore {
 
   /**
    * The owner and campaign a signed-in member may open, or null: the player pages (seePlayer) or, for co-GMs,
-   * the whole campaign in the Encyclopedia (seeGm). `ownerName` and `role` are for the bar saying whose it is.
+   * the whole campaign in the Encyclopedia (seeGm). `ownerName` and `role` are for the bar saying whose it is, and
+   * `edit` is whether their groups let them edit Encyclopedia pages.
    */
   async openAs(userId: string, ref: string, permission: "seePlayer" | "seeGm" = "seePlayer") {
     const found = await this.byRef(userId, ref);
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
-    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member" } : null;
+    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", edit: can(list, userId, "editPages") } : null;
   }
 
   /** Leave campaign, or stop asking to join. The GM hears about a member leaving the way they hear about joins. */

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { workspaceSchema } from "@/lib/encyclopedia/world-model";
 import { json, ownerFrom, readWorkspace, sameOrigin, saveWorkspace, workspaceTag } from "@/lib/encyclopedia/workspace-server";
-import { coGmGone, coGmGrant, coGmReadOnly, coGmWorkspace } from "@/lib/encyclopedia/member-workspace-server";
+import { coGmGone, coGmGrant, coGmReadOnly, coGmSave, coGmWorkspace } from "@/lib/encyclopedia/member-workspace-server";
+import { CoGmEditError } from "@/lib/encyclopedia/co-gm-edit";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
     const owner = await ownerFrom(request);
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
         const scoped = await coGmWorkspace(grant);
         if (!scoped)
             return json({ error: coGmGone }, 404);
-        return json({ ...scoped, member: { ownerName: grant.ownerName, role: grant.role, campaignId: grant.campaignId } });
+        return json({ ...scoped, member: { ownerName: grant.ownerName, role: grant.role, campaignId: grant.campaignId, edit: grant.edit } });
     }
     catch {
         return json({ error: "Could not open this campaign." }, 500);
@@ -41,19 +42,26 @@ export async function PUT(request: Request) {
         return json({ error: "Sign in to save your worlds." }, 401);
     if (!sameOrigin(request))
         return json({ error: "A same-origin request is required." }, 403);
-    if (new URL(request.url).searchParams.has("member"))
-        return json({ error: coGmReadOnly }, 403);
+    const member = new URL(request.url).searchParams.get("member");
     try {
+        // A co-GM saving the campaign they were invited to: checked against the member list now, not when they opened it.
+        const grant = member === null ? null : await coGmGrant(owner, member);
+        if (member !== null && !grant)
+            return json({ error: coGmGone }, 404);
+        if (grant && !grant.edit)
+            return json({ error: coGmReadOnly }, 403);
         const text = await request.text();
         if (text.length > 2100000)
             return json({ error: "Workspace is too large." }, 413);
         const body = z.object({ data: workspaceSchema, revision: z.number().int().nonnegative() }).parse(JSON.parse(text));
-        const saved = await saveWorkspace(owner, body.data, body.revision);
+        const saved = grant ? await coGmSave(grant, body.data, body.revision) : await saveWorkspace(owner, body.data, body.revision);
         if (saved === null)
             return json({ error: "This workspace changed somewhere else. Export your unsaved draft, then reload before continuing." }, 409);
         return json(saved);
     }
     catch (error) {
+        if (error instanceof CoGmEditError)
+            return json({ error: error.message }, 403);
         return json({ error: error instanceof z.ZodError ? error.issues[0]?.message : "Could not save. Keep this tab open and export a backup of your draft." }, 400);
     }
 }
