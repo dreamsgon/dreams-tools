@@ -403,32 +403,51 @@ function Fields({ widget: w, hub, update }: { widget: FrontWidget; hub: Campaign
 
 /**
  * The story so far: a short summary of the campaign for players, written by the GM or by their AI from the
- * recaps they've published (never drafts or GM notes). It lands in the box for the GM to read before saving.
+ * recaps they've published (never drafts or GM notes). The AI's draft waits beside the GM's own text until
+ * they pick: use it instead, add it below, or discard it.
  */
 function StoryField({ widget: w, hub, update }: { widget: Extract<FrontWidget, { type: "story" }>; hub: CampaignHub; update: (w: Partial<FrontWidget>) => void }) {
   const campaignId = hub.row.encyclopedia?.id, writers = useWriters(campaignId);
   const [key, setKey] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [copied, setCopied] = useState(false);
-  const keys = writers?.keys ?? [], chosen = keys.find(k => k.id === key) ?? keys[0];
-  const ask = `In RPG Tools for "${hub.row.name}", use the story_so_far prompt: read the published recaps with read_recaps and write The story so far for the players' front page.`;
+  const [note, setNote] = useState(""), [keep, setKeep] = useState(true), [draft, setDraft] = useState<{ text: string; from: number; by: string } | null>(null);
+  const keys = writers?.keys ?? [], chosen = keys.find(k => k.id === key) ?? keys[0], mine = w.body.trim();
+  const ask = `In RPG Tools for "${hub.row.name}", use the story_so_far prompt: read the published recaps with read_recaps and write The story so far for the players' front page.${keep ? "" : " Start fresh instead of keeping the current story."}${note.trim() ? ` ${note.trim()}` : ""}`;
   async function write() {
     if (!chosen || !campaignId) return;
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id }) });
+      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id, keep, before: w.body, ...(note.trim() ? { note: note.trim() } : {}) }) });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || "Could not write the story.");
-      update({ body: body.text, from: body.from, at: new Date().toISOString() });
+      // Nothing there yet: the draft goes straight in. Otherwise it waits beside the GM's own text.
+      if (!mine) update({ body: body.text, from: body.from, at: new Date().toISOString() });
+      else setDraft({ text: body.text, from: body.from, by: body.by ?? chosen.name });
     } catch (e) { setError(e instanceof Error ? e.message : "Could not write the story."); } finally { setBusy(false); }
   }
+  const use = (how: "replace" | "add") => {
+    if (!draft) return;
+    const body = how === "replace" ? draft.text : `${w.body.trimEnd()}\n\n${draft.text}`.slice(0, 6000);
+    update(how === "replace" ? { body, from: draft.from, at: new Date().toISOString() } : { body, from: undefined, at: undefined });
+    setDraft(null);
+  };
   const copy = () => void navigator.clipboard.writeText(ask).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => setError("Your browser didn’t allow copying."));
   return <div className="hub-story-edit">
-    <label>Text<textarea rows={8} maxLength={6000} value={w.body} placeholder="What the party has done so far, in a few paragraphs." onChange={ev => update({ body: ev.target.value, at: undefined, from: undefined })} /></label>
-    {w.at && w.from ? <p className="hub-muted">Written from {w.from} published recap{w.from === 1 ? "" : "s"} on {new Date(w.at).toLocaleDateString("en", { month: "short", day: "numeric" })}. Read it, then save the front page.</p> : null}
-    <div className="hub-story-write">
-      <span className="hub-muted">Write it from the recaps you&apos;ve published. Drafts and GM notes are left out.</span>
-      {keys.length > 1 && <select aria-label="Written by" value={chosen?.id} onChange={ev => setKey(ev.target.value)}>{keys.map(k => <option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select>}
-      {chosen && <button className="hub-button hub-button-primary" disabled={busy} onClick={write}><Sparkles size={14} aria-hidden="true" />{busy ? "Writing…" : `Write it with ${chosen.name}`}</button>}
-      <button className={`hub-button${chosen ? "" : " hub-button-primary"}`} onClick={copy}>{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}{copied ? "Copied" : "Copy for my AI app"}</button>
+    <label>Text<textarea rows={8} maxLength={6000} value={w.body} placeholder="What the party has done so far, in a few paragraphs. Write it yourself, or have the AI draft it below." onChange={ev => update({ body: ev.target.value, at: undefined, from: undefined })} /></label>
+    {w.at && w.from ? <p className="hub-muted">Written from {w.from} published recap{w.from === 1 ? "" : "s"} on {new Date(w.at).toLocaleDateString("en", { month: "short", day: "numeric" })}. Read it, then save the front page.</p> : mine ? <p className="hub-muted">Written by you.</p> : null}
+    {draft && <div className="hub-story-draft">
+      <p className="hub-muted"><Sparkles size={13} aria-hidden="true" /> {draft.by}’s draft, from {draft.from} published recap{draft.from === 1 ? "" : "s"}. Your text stays as it is until you pick.</p>
+      <div className="hub-story-draft-text">{draft.text}</div>
+      <div className="hub-story-write"><button className="hub-button hub-button-primary" onClick={() => use("replace")}>Use this instead</button><button className="hub-button" onClick={() => use("add")}>Add below mine</button><button className="hub-button" onClick={() => setDraft(null)}>Discard</button></div>
+    </div>}
+    <div className="hub-story-ai">
+      <span className="hub-muted">Or have the AI write a draft from the recaps you&apos;ve published. Drafts and GM notes are left out.</span>
+      <label className="hub-story-keep"><input type="checkbox" checked={keep} onChange={ev => setKeep(ev.target.checked)} /> Start from my text, keeping what still holds</label>
+      <label>What to change <small className="hub-muted">optional</small><input maxLength={500} value={note} placeholder="Keep my first paragraph. End on the second bell." onChange={ev => setNote(ev.target.value)} /></label>
+      <div className="hub-story-write">
+        {keys.length > 1 && <select aria-label="Written by" value={chosen?.id} onChange={ev => setKey(ev.target.value)}>{keys.map(k => <option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select>}
+        {chosen && <button className="hub-button hub-button-primary" disabled={busy} onClick={write}><Sparkles size={14} aria-hidden="true" />{busy ? "Writing…" : `Write a draft with ${chosen.name}`}</button>}
+        <button className={`hub-button${chosen ? "" : " hub-button-primary"}`} onClick={copy}>{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}{copied ? "Copied" : "Copy for my AI app"}</button>
+      </div>
     </div>
     {error && <p className="hub-error" role="alert">{error}</p>}
   </div>;

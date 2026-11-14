@@ -50,6 +50,8 @@ export const recapSchema = z.object({
   status: z.enum(["draft", "published"]),
   /** Who wrote it, such as the AI connection's name. */
   by: z.string().max(80).optional(),
+  /** The GM wrote the recap text themselves (Write it myself). An AI draft saved over it clears this. */
+  mine: z.boolean().optional(),
   /** Where it came from, in a few words, such as "Notion page: Session 13". */
   source: z.string().max(200).optional(),
   playedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

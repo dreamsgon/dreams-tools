@@ -97,6 +97,24 @@ export function prosePrompt(h: Head & { timeline: string; quotes?: string; befor
   ].filter(Boolean).join("\n");
 }
 
+/**
+ * Check it with AI, for a recap the GM wrote: read it and send what it mentions (new people, places and things,
+ * quest moves, codex finds) with the save_finds tool. The recap itself is never written again.
+ */
+export function checkPrompt(h: { campaign: string; title: string; playedOn?: string; names: string; quests: string; recap: string }) {
+  return [
+    `Campaign: "${h.campaign}". Session: "${h.title}"${h.playedOn ? `, played on ${h.playedOn}` : ""}.`,
+    "The GM wrote the recap below themselves. Don't rewrite it or comment on it. Read it once and call save_finds once with:",
+    "- found: people, places, factions, lore and things that are new or changed, a sentence or two each. Use the names below where they fit. playersSee: true only for new pages about what the players learned.",
+    "- codex: codex pages the party found, by title.",
+    "- quests: quests that moved, with a line for the log, and tick for an objective that is now done (copy its text from the list below). An unknown quest becomes a new rumour.",
+    "Only what the recap says. Send empty lists when it mentions nothing new.",
+    h.names ? `Page names in this campaign (spell names this way):\n${h.names}` : "This campaign has no pages yet.",
+    ...(h.quests ? [`Open quests, with objectives not done yet:\n${h.quests}`] : []),
+    `<recap>\n${h.recap}\n</recap>`,
+  ].join("\n");
+}
+
 /** The notes the first request may send: save_recap's lists, without the page, title or recap. */
 export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes"] as const;
 
@@ -128,12 +146,13 @@ export function publishedRecaps(entries: Entry[], campaignId: string, budget = 6
 export const storyNow = (c: Campaign) => (c.frontPage?.widgets ?? []).flatMap(w => w.type === "story" ? [w.body] : [])[0] ?? "";
 
 /** The request for The story so far: a short summary for the players' front page, from published recaps only. */
-export function storyPrompt(h: { campaign: string; recaps: { title: string; playedOn?: string; text: string }[]; left: number; before?: string }) {
+export function storyPrompt(h: { campaign: string; recaps: { title: string; playedOn?: string; text: string }[]; left: number; before?: string; note?: string }) {
   return [
     `Write "The story so far" for the front page players see first in the campaign "${h.campaign}".`,
     "About 150 to 300 words, past tense, warm, as one story: what the party has done, who they met, and where things stand now. End with the questions the party is left with.",
     "Use only what is in the recaps below: they are what the players already know. No headings, no links, no lists.",
     "Answer with only the text, with nothing before or after it.",
+    ...(h.note?.trim() ? [`The GM asks: ${h.note.trim()}`] : []),
     ...(h.before?.trim() ? [`The current version, which also covers sessions not listed below. Keep what still holds:\n${plainNames(h.before.trim())}`] : []),
     ...(h.left ? [`${h.left} older recap${h.left === 1 ? " is" : "s are"} left out to keep this short.`] : []),
     "Published recaps, oldest first:",

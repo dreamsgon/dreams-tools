@@ -9,7 +9,7 @@ import { addUsage, listConnections, overLimit, permsOf, publicApi } from "../mcp
 import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, type McpContext } from "../mcp/tools.ts";
 import { compactTranscript } from "../encyclopedia/recaps.ts";
-import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, publishedRecaps, questsBlock, quoteLines, storyNow, storyPrompt, unlinkNames } from "../encyclopedia/recap-prompts.ts";
+import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, checkPrompt, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, publishedRecaps, questsBlock, quoteLines, storyNow, storyPrompt, unlinkNames } from "../encyclopedia/recap-prompts.ts";
 import { runOnce, ProviderError, type OnceTool } from "./chat.ts";
 import { unlock } from "./secret.ts";
 
@@ -34,7 +34,7 @@ async function save(ctx: McpContext, name: string, args: Record<string, unknown>
   const out = await callTool(ctx, name, args, { approved: true }) as { content: { type: string; text?: string }[]; isError: boolean };
   const text = out.content.map(x => x.text ?? "").join("\n");
   if (out.isError) throw Error(text);
-  return JSON.parse(text) as { saved?: { id: string; title: string }; toCheck?: string[] };
+  return JSON.parse(text) as { saved?: { id: string; title: string }; toCheck?: string[]; added?: string[] };
 }
 
 /** save_recap's lists, as the tool the first request must call. */
@@ -114,14 +114,48 @@ export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignI
 }
 
 /**
- * The story so far for the players' front page, from the recaps players can read. Nothing is saved: the
- * text goes back to the front page editor, where the GM reads it before saving.
+ * Check it with AI, on a recap the GM wrote: the AI reads the recap and lists what it mentions in the check
+ * list (through add_recap_finds, so it shows in the AI activity log). The recap text is never changed.
  */
-export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch) {
+export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, fetchImpl: typeof fetch = fetch) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+  const page = ctx.book.entries.find(e => e.id === entryId && e.kind === "session" && e.campaignId === ctx.campaign.id);
+  if (!page) throw Error(ctx.transcript ? "That session page is gone." : `${c.name} can't read draft recaps, which are GM-only. Turn on “See GM-only things” for it under What it may do.`);
+  if (!page.recap) throw Error("That page has no recap.");
+  const recap = unlinkNames(page.body).trim();
+  if (!recap) throw Error("Write the recap first, then check it.");
+  const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
+  const prompt = checkPrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, names: namesBlock(ctx.book.entries, scope), quests: questsBlock(ctx.book, scope), recap });
+  return counted(bucket, owner, campaignId, c.id, async add => {
+    const out = await runOnce(target, RECAP_SYSTEM, prompt, findsTool(), 6_000, fetchImpl);
+    add(out.tokens);
+    if (!out.input) throw new ProviderError("The AI didn't send what it found. Try again.");
+    const lists = Object.fromEntries((["found", "quests", "codex"] as const).filter(k => out.input![k] !== undefined).map(k => [k, out.input![k]]));
+    let saved;
+    try { saved = await save(ctx, "add_recap_finds", { page: page.id, ...lists }); }
+    catch (e) { throw Error(`What the AI found didn't fit: ${e instanceof Error ? e.message : "it was malformed"} Try again.`); }
+    return { saved: saved.saved, added: saved.added?.length ?? 0, by: c.name };
+  });
+}
+
+/** add_recap_finds' lists, as the tool Check it with AI must call. */
+function findsTool(): OnceTool {
+  const full = listTools("run").find(t => t.name === "add_recap_finds")!.inputSchema as { properties: Record<string, unknown> };
+  const { page: _page, ...properties } = full.properties;
+  return { name: "save_finds", description: "Send what the recap mentions: new or changed people, places and things, quests that moved, and codex finds.", inputSchema: { type: "object", properties, additionalProperties: false } };
+}
+
+/**
+ * The story so far for the players' front page, from the recaps players can read. Nothing is saved: the
+ * text goes back to the front page editor, where it waits beside the GM's own text until they pick.
+ * `keep` starts from the current text; `note` is what the GM asks for.
+ */
+export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch, opts: { note?: string; keep?: boolean; before?: string } = {}) {
   const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
   const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
   if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
-  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before: storyNow(ctx.campaign) });
+  const before = opts.keep === false ? "" : opts.before ?? storyNow(ctx.campaign);
+  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before, note: opts.note?.slice(0, 500) });
   return counted(bucket, owner, campaignId, c.id, async add => {
     const out = await runOnce(target, RECAP_SYSTEM, prompt, null, 2_000, fetchImpl);
     add(out.tokens);

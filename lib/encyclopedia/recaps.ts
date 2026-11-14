@@ -103,6 +103,25 @@ export type AiRecap = {
 export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, opts: { by: string; now: Date; existing?: Entry; transcript?: string | null; folderId?: string | null }) {
   input = honourSkips(input, opts.existing?.recap?.request);
   const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
+  const review = findItems(ws, campaign, input);
+  const timeline: Beat[] = input.timeline.map(b => ({ id: newId(), title: b.title.trim(), big: !!b.big, steps: (b.steps ?? []).map(s => s.trim()).filter(Boolean) }));
+  const quotes: Quote[] = (input.quotes ?? []).map(q => ({ id: newId(), text: q.text.trim(), who: (q.who ?? "").trim(), ...(opts.transcript ? { checked: quoteInTranscript(q.text, opts.transcript) } : {}) }));
+  const before = opts.existing?.recap ?? emptyRecap();
+  const recap: Recap = {
+    ...before, status: "draft", by: opts.by.slice(0, 80), mine: undefined, timeline, quotes, gmNotes: input.gmNotes ?? "", review: [...before.review.filter(r => r.state !== "open"), ...review].slice(-80),
+    ...(input.source ? { source: input.source.slice(0, 200) } : {}), ...(input.playedOn ? { playedOn: input.playedOn } : {}),
+  };
+  const body = linkNames(input.recap, entries, c), at = opts.now.toISOString();
+  if (opts.existing) return { ...opts.existing, ...keepNotes(opts.existing), title: input.title, body, recap, overviewVisibility: undefined, updatedAt: at } satisfies Entry;
+  return { id: newId(), worldId: campaign.worldId, campaignId: campaign.id, parentId: opts.folderId ?? null, title: input.title, kind: "session", body, recap, updatedAt: at } satisfies Entry;
+}
+
+/** What the AI found: people, places and things, quest moves and codex finds, matched to pages. Each waits in the check list. */
+export type AiFinds = Pick<AiRecap, "found" | "quests" | "codex">;
+
+/** Turns what the AI found into check list items: a match to an existing page is an update, anything else is new. */
+export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
+  const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
   const review: RecapItem[] = [];
   for (const f of input.found ?? []) {
     const page = findPage(entries, f.name, c, ["character", "place", "faction", "lore", "note", "quest"]);
@@ -122,16 +141,18 @@ export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, op
     const page = findPage(entries, k.page, c);
     if (page?.codex) review.push({ id: newId(), kind: "codex", name: page.title, pageId: page.id, text: k.label ?? "", state: "open" });
   }
-  const timeline: Beat[] = input.timeline.map(b => ({ id: newId(), title: b.title.trim(), big: !!b.big, steps: (b.steps ?? []).map(s => s.trim()).filter(Boolean) }));
-  const quotes: Quote[] = (input.quotes ?? []).map(q => ({ id: newId(), text: q.text.trim(), who: (q.who ?? "").trim(), ...(opts.transcript ? { checked: quoteInTranscript(q.text, opts.transcript) } : {}) }));
-  const before = opts.existing?.recap ?? emptyRecap();
-  const recap: Recap = {
-    ...before, status: "draft", by: opts.by.slice(0, 80), timeline, quotes, gmNotes: input.gmNotes ?? "", review: [...before.review.filter(r => r.state !== "open"), ...review].slice(-80),
-    ...(input.source ? { source: input.source.slice(0, 200) } : {}), ...(input.playedOn ? { playedOn: input.playedOn } : {}),
-  };
-  const body = linkNames(input.recap, entries, c), at = opts.now.toISOString();
-  if (opts.existing) return { ...opts.existing, ...keepNotes(opts.existing), title: input.title, body, recap, overviewVisibility: undefined, updatedAt: at } satisfies Entry;
-  return { id: newId(), worldId: campaign.worldId, campaignId: campaign.id, parentId: opts.folderId ?? null, title: input.title, kind: "session", body, recap, updatedAt: at } satisfies Entry;
+  return review;
+}
+
+/**
+ * Check it with AI: adds what the AI found in a recap to its check list, leaving the recap text, timeline and
+ * quotes as they are. Something already waiting in the list (the same kind and name) isn't added twice.
+ */
+export function addFinds(ws: Workspace, campaign: Campaign, page: Entry, input: AiFinds) {
+  if (!page.recap) throw Error(`“${page.title}” has no recap.`);
+  const waiting = new Set(openItems(page.recap).map(r => `${r.kind}:${r.name.toLowerCase()}`));
+  const added = findItems(ws, campaign, input).filter(r => { const k = `${r.kind}:${r.name.toLowerCase()}`; if (waiting.has(k)) return false; waiting.add(k); return true; });
+  return { added, entry: { ...page, recap: { ...page.recap, review: [...page.recap.review, ...added].slice(-80) } } satisfies Entry };
 }
 
 /** The campaign's session notes folder, if it has one. */
