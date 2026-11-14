@@ -1,13 +1,13 @@
 "use client";
 import {useRef,useState,type DragEvent} from 'react';
-import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags,Lock} from 'lucide-react';
+import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Tags,Lock} from 'lucide-react';
 import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
 import {categoryLook,CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
 import {Face,GoalBar,QuestGoals} from './quest-goals';
 import {QuestFacts,QuestPrep} from './quest-facts';
-import {confirmDialog} from '../confirm-dialog';
+import {QuestLogPanel} from './quest-log';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 /** 'all', or a quest category id. */
@@ -110,12 +110,9 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
  // The board passes its own dialog; a quest's own page shows one here.
  const editCategories=onEditCategories??(campaign&&change?()=>setEditing(true):undefined);
  const [tab,setTab]=useState<'overview'|'log'|'gm'>('overview');
- const q=quest(entry),[log,setLog]=useState(''),[label,setLabel]=useState(''),[players,setPlayers]=useState(true),[title,setTitle]=useState(entry.title);
+ const q=quest(entry),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
- const scope=data.entries.filter(e=>e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)&&e.id!==entry.id);
  const shared=entry.overviewVisibility==='players';
- const sessions=scope.filter(e=>e.kind==='session'&&e.campaignId===entry.campaignId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
- function addLog(){const text=log.trim();if(!text)return;set({log:[{id:newId(),at:new Date().toISOString(),label:label.trim().slice(0,80)||undefined,text:text.slice(0,4000),players},...q.log].slice(0,500)});setLog('');}
  return <div className="quest-detail">
   <div className="quest-detail-chips">
    <CategoryPicker categories={cats} value={q.type} onChange={type=>set({type})} onEdit={editCategories}/>
@@ -137,23 +134,7 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
    </div>
    <QuestFacts entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>
   </div>}
-  {tab==='log'&&<div className="quest-detail-main">
-    <form className="quest-log-composer" onSubmit={e=>{e.preventDefault();addLog();}}>
-     <textarea aria-label="Add to the log" placeholder="Add to the log. What happened?" value={log} maxLength={4000} rows={log?3:1} onChange={e=>setLog(e.target.value)}/>
-     <div className="quest-log-tools">
-      <input aria-label="When" placeholder={sessions[0]?.title??'Session or date'} list={`quest-when-${entry.id}`} value={label} maxLength={80} onChange={e=>setLabel(e.target.value)}/>
-      <datalist id={`quest-when-${entry.id}`}>{sessions.slice(0,8).map(s=><option key={s.id} value={s.title}/>)}</datalist>
-      <button type="button" className={`quest-share ${players?'on':''}`} aria-pressed={players} onClick={()=>setPlayers(!players)}>{players?<><Eye size={12}/> Players see this</>:<><EyeOff size={12}/> GM only</>}</button>
-      <button className="button small primary" type="submit" disabled={!log.trim()}>Add to log</button>
-     </div>
-    </form>
-    <ol className="quest-log">{q.log.map(l=><li key={l.id}>
-     <div className="quest-log-when"><strong>{l.label||new Date(l.at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</strong>{l.label&&<small>{new Date(l.at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}</small>}</div>
-     <div className="quest-log-text"><div className="prose"><ArticleBody entry={{...entry,body:l.text}} data={data} onOpen={onOpen} onChange={text=>set({log:q.log.map(x=>x.id===l.id?{...x,text}:x)})}/></div>
-      <div className="quest-log-actions"><button className={`quest-share ${l.players?'on':'gm'}`} aria-pressed={l.players} onClick={()=>set({log:q.log.map(x=>x.id===l.id?{...x,players:!x.players}:x)})}>{l.players?<><Eye size={12}/> Players see this entry</>:<><EyeOff size={12}/> GM only entry</>}</button><button className="icon-button" aria-label="Delete log entry" onClick={async()=>{if(await confirmDialog({title:'Delete this log entry?',confirm:'Delete entry',danger:true}))set({log:q.log.filter(x=>x.id!==l.id)});}}><Trash2 size={13}/></button></div></div>
-    </li>)}</ol>
-    {!q.log.length&&<p className="aside-hint">The log is empty. Write what the party learned or did, a session at a time.</p>}
-  </div>}
+  {tab==='log'&&<QuestLogPanel entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {tab==='gm'&&<QuestPrep entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {editing&&campaign&&change&&<QuestCategoriesDialog data={data} worldId={entry.worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </div>;

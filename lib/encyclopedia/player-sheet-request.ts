@@ -12,6 +12,7 @@ import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, ref
 import { rollWithMode } from './roll-mode.ts';
 import { PROOF_MINUTES, checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
+import { addPlayerLog, editPlayerLog, removePlayerLog } from './quest-log.ts';
 import type { Rights } from './player-edit.ts';
 import type { Workspace } from './world-model.ts';
 
@@ -27,9 +28,9 @@ export type Deps = {
   now?: number;
 };
 
-export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000;
-const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000);
-export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); };
+export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000, LOG_BODY = 12_000;
+const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000), logThrottle = createThrottle(10, 10_000);
+export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); logThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const ref = z.string().regex(/^[a-f0-9]{64}$/), id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -49,9 +50,9 @@ async function start(request: Request, deps: Deps, cap: number) {
   if (text.length > cap) return { fail: json({ error: 'That request is too large.' }, 413) };
   return { text };
 }
-async function memberOf(deps: Deps, r: string) {
+async function memberOf(deps: Deps, r: string, signIn = 'Sign in to use your character sheet.') {
   const m = await deps.member(r);
-  if (m === 'signedOut') return { fail: json({ error: 'Sign in to use your character sheet.' }, 401) };
+  if (m === 'signedOut') return { fail: json({ error: signIn }, 401) };
   return m ? { m } : { fail: json({ error: noLongerMember }, 404) };
 }
 const failure = (e: unknown, fallback: string) =>
@@ -168,4 +169,34 @@ export async function handlePlayerDice(request: Request, deps: Deps) {
     catch { sent.delete(p.sig); return json({ error: 'Could not post to Discord. Try again.' }, 502); }
     return json({ discord: result.skipped ? 'skipped' : 'sent' });
   } catch (e) { return failure(e, 'Could not roll. Try again.'); }
+}
+
+const logAction = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('add'), ref, entryId: id, text: z.string().max(4000) }),
+  z.object({ action: z.literal('edit'), ref, entryId: id, logId: id, text: z.string().max(4000) }),
+  z.object({ action: z.literal('remove'), ref, entryId: id, logId: id }),
+]);
+/**
+ * POST /api/encyclopedia/player-quest-log: a signed-in member writing in the Log of a quest they can read on the player
+ * pages (lib/encyclopedia/quest-log.ts). Their own entries only, always shared, with the member's name from the member list.
+ */
+export async function handlePlayerQuestLog(request: Request, deps: Deps) {
+  try {
+    const got = await start(request, deps, LOG_BODY);
+    if (got.fail) return got.fail;
+    const body = logAction.parse(JSON.parse(got.text)), found = await memberOf(deps, body.ref, 'Sign in to write in the log.');
+    if (found.fail) return found.fail;
+    const m = found.m, linker = linkerKey(m.owner, m.campaignId, m.userId), who = { name: m.name, as: 'player' as const };
+    if (logThrottle.hit(m.userId, deps.now)) return json({ error: 'Writing too quickly. Wait a few seconds and try again.' }, 429);
+    const now = new Date(deps.now ?? Date.now());
+    // Changes only this quest's log, on the newest copy, so a save that crossed someone else's tries again.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, revision } = await deps.store.read(m.owner);
+      const next = body.action === 'add' ? addPlayerLog(data, m.campaignId, m.rights, linker, m, body.entryId, body.text, now)
+        : body.action === 'edit' ? editPlayerLog(data, m.campaignId, m.rights, linker, body.entryId, body.logId, body.text, now)
+        : removePlayerLog(data, m.campaignId, m.rights, linker, body.entryId, body.logId);
+      if (await deps.store.save(m.owner, next, revision, who)) return json({ ok: true });
+    }
+    return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
+  } catch (e) { return failure(e, 'Could not save to the log. Keep this tab open and try again.'); }
 }

@@ -72,6 +72,11 @@ export const questLogSchema = z.object({
   text: z.string().max(4000),
   /** Players see this entry when the quest is shared. */
   players: z.boolean(),
+  /** Who wrote it when it wasn't the GM: a member's name, and a keyed hash that says it was them (see `linkerKey`). */
+  author: z.string().trim().min(1).max(80).optional(),
+  authorId: z.string().regex(/^[a-f0-9]{32}$/).optional(),
+  /** When a member last changed their own entry. */
+  editedAt: z.string().max(40).optional(),
 });
 export const questSchema = z.object({
   state: z.enum(questStates),
@@ -200,7 +205,7 @@ export function removeQuestCategory<E extends QuestEntry, S extends HasCampaigns
 const unlink = (t: string) => t.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g, (_, target: string, label?: string) => label?.trim() || target);
 
 /** What players get: never hidden objectives, GM-only log entries, or links to pages they can’t read. */
-export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: (text: string) => string, categories: QuestCategory[] = defaultQuestCategories()) {
+export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: (text: string) => string, categories: QuestCategory[] = defaultQuestCategories(), linker?: string) {
   const category = categoryOf(categories, q.type);
   return {
     state: q.state, type: q.type, category: { name: category.name, color: category.color },
@@ -212,7 +217,8 @@ export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: 
       ...(o.verb ? { verb: o.verb, target: o.target ?? "", targetId: o.targetId && readable(o.targetId) ? o.targetId : null, where: o.where ?? "", whereId: o.whereId && readable(o.whereId) ? o.whereId : null, whereLabel: o.where || o.whereId ? whereLabel(o) : "" } : {}),
       ...(o.note ? { note: clean(o.note) } : {}),
     })),
-    log: q.log.filter(l => l.players).map(l => ({ id: l.id, at: l.at, label: l.label ?? "", text: unlink(clean(l.text)) })),
+    // The author's name, never their hash; `mine` marks the asking member's own entries so they can change them.
+    log: q.log.filter(l => l.players).map(l => ({ id: l.id, at: l.at, label: l.label ?? "", text: unlink(clean(l.text)), author: l.author ?? "", edited: !!l.editedAt, mine: !!linker && l.authorId === linker })),
   };
 }
 export type PlayerQuest = ReturnType<typeof playerQuest>;

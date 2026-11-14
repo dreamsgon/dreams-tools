@@ -1,0 +1,41 @@
+/* A quest's Log as a conversation (components/encyclopedia/quest-log.tsx), for the GM and on the player pages. */
+.qlog-panel{display:flex;flex-direction:column;gap:12px;max-width:760px}
+.qlog{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.qlog-end{scroll-margin-bottom:calc(var(--enc-bar-h, 0px) + 140px)}
+.qlog-empty{margin:4px 0}
+.qlog-divider{display:flex;align-items:center;gap:10px;margin:6px 0 10px;color:var(--muted);font-size:12px;font-weight:600}
+.qlog-divider::before,.qlog-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.qlog-divider span{max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qlog-msg{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.qlog-face{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;flex-shrink:0;font-size:11px;font-weight:700;color:#fff;margin-top:2px}
+.qlog-face.gm{background:var(--ink);color:var(--panel)}
+.qlog-tint-0{background:#2f5ea8}.qlog-tint-1{background:#1f6f68}.qlog-tint-2{background:#6a4f9f}.qlog-tint-3{background:#a94c27}.qlog-tint-4{background:#a33346}.qlog-tint-5{background:#7d5f1a}
+.qlog-bubble{flex:1;min-width:0;max-width:640px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:4px 12px 12px 12px;background:var(--raised,var(--hover))}
+.qlog-item.gm-only .qlog-bubble{background:color-mix(in srgb,var(--warning) 10%,var(--panel));border-color:color-mix(in srgb,var(--warning) 40%,var(--line))}
+.qlog-who{display:flex;align-items:center;gap:8px;min-height:24px;font-size:12px}
+.qlog-who strong{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.qlog-item.gm-only .qlog-who strong{color:var(--warning)}
+.qlog-who time,.qlog-who small{color:var(--muted)}
+.qlog-tools{position:relative;margin-left:auto}
+.qlog-tools .icon-button{width:30px;height:30px;min-height:30px}
+.qlog-text{font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.qlog-text .prose,.qlog-text .player-prose{margin:0}
+.qlog-text .prose p:first-child,.qlog-text .player-prose p:first-child{margin-top:0}
+.qlog-text .prose p:last-child,.qlog-text .player-prose p:last-child{margin-bottom:0}
+.qlog-edit{display:flex;flex-direction:column;gap:8px}
+.qlog-edit textarea{width:100%;padding:8px 10px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--control,var(--panel));color:var(--ink);font:inherit;font-size:15px;resize:vertical;field-sizing:content}
+.qlog-composer{position:sticky;bottom:var(--enc-bar-h,0px);z-index:5;display:flex;flex-direction:column;gap:8px;padding:10px 0 12px;background:var(--panel,var(--bg));border-top:1px solid var(--line)}
+.qlog-composer-row{display:flex;align-items:flex-end;gap:8px}
+.qlog-composer textarea{flex:1;min-width:0;min-height:42px;max-height:calc(40vh / var(--ui-zoom, 1));padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--control,var(--panel));color:var(--ink);font:inherit;font-size:15px;line-height:1.4;resize:none;field-sizing:content}
+.qlog-send{width:44px;min-width:44px;height:42px;padding:0;justify-content:center}
+.qlog-composer-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qlog-composer-tools input{flex:0 1 220px;min-width:0;min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--control,var(--panel));color:var(--ink);font:inherit;font-size:13px}
+.qlog-toggle{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:3px 12px;border:1px solid var(--line-strong);border-radius:999px;background:var(--panel);color:var(--ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.qlog-toggle.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.qlog-toggle.gm{border-color:color-mix(in srgb,var(--warning) 45%,var(--line));color:var(--warning);background:color-mix(in srgb,var(--warning) 12%,transparent)}
+.qlog-composer-note{margin:0;font-size:12px;color:var(--muted)}
+.qlog-error{margin:0;font-size:13px;color:var(--danger)}
+.player-quest-log{margin-top:28px}
+.player-quest-log>h2{margin:0 0 12px}
+.player-quest-log .qlog-composer{background:var(--bg,var(--panel))}
+@media (max-width:760px){.qlog-face{width:26px;height:26px;font-size:10px}.qlog-bubble{padding:7px 10px 9px}.qlog-composer textarea{font-size:16px}}
