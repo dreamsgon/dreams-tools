@@ -63,14 +63,16 @@ export async function POST(request: Request) {
     if (origin && origin !== new URL(request.url).origin) return json({ error: "Same-origin request required" }, 403);
     const text = await request.text();
     if (text.length > 5000) return json({ error: "Request is too large." }, 413);
-    const body = action.parse(JSON.parse(text)), user = await getAppUser(), store = new MemberStore(getBucket());
+    const body = action.parse(JSON.parse(text)), user = await getAppUser();
     const who: Who | null = user ? { userId: user.userId, displayName: user.displayName, email: user.email, ip: requestIp(request) } : null;
     // Anyone with the link sees where it leads; joining needs an account.
     if (body.action === "invite") {
+      const store = new MemberStore(getBucket());
       const found = await store.describe(body.token, who);
       return found ? json(found) : json({ error: "This invite link has been turned off or has expired. Ask the GM for a new one." }, 404);
     }
     if (!who) return json({ error: "Sign in required" }, 401);
+    const store = new MemberStore(getBucket());
     if (body.action === "join") return json(await store.join(body.token, who, body.name));
     // Everything else is the owner's, on their own campaign.
     await store.campaign(who.userId, body.campaignId);
