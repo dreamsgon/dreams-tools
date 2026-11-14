@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Globe, Grid3x3, Map as MapIcon, Search, Settings2 } from "lucide-react";
 import { countLabel } from "@/lib/plural";
 import { neighbourScene, scenesInOrder } from "@/lib/scene-order";
@@ -12,25 +12,34 @@ export function SceneKindIcon({ type, size = 16 }: { type: Scene["mapType"]; siz
 export const sceneKindLabel = (s: Scene) => s.mapType === "world" ? "World map" : s.mapType === "area" ? `Area map · ${countLabel(s.tokens.length, "token")}` : countLabel(s.tokens.length, "token");
 
 /** The scene name in the header: opens a quick list of the campaign's scenes, with previous and next. */
-export default function SceneSwitcher({ workspace, campaignId, scene, open: openScene, settings }: {
+export default function SceneSwitcher({ workspace, campaignId, scene, open: openScene, settings, phone = false }: {
   workspace: Workspace; campaignId: string | null; scene: Scene; open: (id: string) => void; settings: () => void;
+  /** Phone header: the name fills the row, the list opens as a bottom sheet, and there are no previous/next buttons. */
+  phone?: boolean;
 }) {
   const { open, setOpen, wrapper } = usePopover();
+  const trigger = useRef<HTMLButtonElement>(null), wasOpen = useRef(false);
+  // Closing the list (Escape, a pick, a tap outside) hands focus back to the name that opened it.
+  useEffect(() => {
+    if (wasOpen.current && !open) { const at = document.activeElement; if (!at || at === document.body || wrapper.current?.contains(at)) trigger.current?.focus(); }
+    wasOpen.current = open;
+  }, [open, wrapper]);
   const [query, setQuery] = useState("");
   const list = useMemo(() => scenesInOrder(workspace, campaignId), [workspace, campaignId]);
   const q = query.trim().toLowerCase();
   const shown = q ? list.filter(i => `${i.scene.name} ${i.folders.map(f => f.name).join(" ")}`.toLowerCase().includes(q)) : list;
   const go = (step: 1 | -1) => { const next = neighbourScene(workspace, campaignId, scene.id, step); if (next) openScene(next.id); };
   const groupOf = (i: number) => shown[i].folders.map(f => f.name).join(" / ");
-  return <div className="scene-switcher" ref={wrapper}>
-    <button type="button" className="crumb scene-switcher-trigger" aria-haspopup="dialog" aria-expanded={open} title="Go to another scene" onClick={() => { setOpen(v => !v); setQuery(""); }}>
+  return <div className={phone ? "scene-switcher is-phone" : "scene-switcher"} ref={wrapper}>
+    <button type="button" ref={trigger} className="crumb scene-switcher-trigger" aria-haspopup="dialog" aria-expanded={open} title="Go to another scene" onClick={() => { setOpen(v => !v); setQuery(""); }}>
       <span>{scene.name}</span><ChevronDown size={13} aria-hidden="true" />
     </button>
-    {list.length > 1 && <span className="scene-step">
+    {!phone && list.length > 1 && <span className="scene-step">
       <button type="button" className="icon-button" aria-label="Previous scene" title="Previous scene" onClick={() => go(-1)}><ChevronLeft size={16} /></button>
       <button type="button" className="icon-button" aria-label="Next scene" title="Next scene" onClick={() => go(1)}><ChevronRight size={16} /></button>
     </span>}
-    {open && <div className="scene-switcher-panel" role="dialog" aria-label="Go to a scene">
+    {open && phone && <div className="scene-switcher-backdrop" aria-hidden="true" onClick={() => setOpen(false)} />}
+    {open && <div className="scene-switcher-panel" role="dialog" aria-label="Go to a scene">{phone && <span className="scene-switcher-grab" aria-hidden="true" />}
       <label className="scene-switcher-search"><Search size={14} aria-hidden="true" /><input autoFocus aria-label="Find a scene" placeholder="Go to a scene…" value={query} onChange={e => setQuery(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter" && shown[0]) { openScene(shown[0].scene.id); setOpen(false); } }} /></label>
       <div className="scene-switcher-list">

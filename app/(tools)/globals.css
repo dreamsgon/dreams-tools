@@ -2293,3 +2293,46 @@ button.primary, .rpg-open { font-weight:500; }
  .site-header .site-account-long { display:none; }
 }
 @media(max-width:480px) { .site-header .brand .brand-name { display:none; } }
+
+/* Maptable phone top bar: back, scene name, save chip and one more menu. The rest of the old header lives in that menu. */
+.header-scene-phone { display:none; }
+.board-hint-short { display:none !important; }
+@media(max-width:799px) {
+ .app-shell .app-header { gap:6px; padding:6px 8px; }
+ .app-shell .app-header .tool-switch, .app-shell .app-header .header-scene { display:none; }
+ .app-shell .app-header .header-campaigns-compact { display:inline-flex; align-items:center; justify-content:center; width:40px; min-width:40px; min-height:40px; padding:0; margin:0; border:0; border-radius:var(--radius); }
+ .app-shell .app-header .header-campaigns-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+ .app-shell .app-header .header-campaigns-compact svg { width:24px; height:24px; }
+ .app-shell .app-header > .header-scene-phone { display:flex; flex:1 1 0; min-width:0; }
+ .header-scene-phone .scene-switcher { flex:1; min-width:0; }
+ .app-shell .app-header .header-scene-phone .scene-switcher-trigger { flex:1; min-width:0; max-width:none; min-height:40px; padding:4px 10px; justify-content:flex-start; font-size:15px; border:1px solid var(--chrome-line); }
+ .app-shell .app-header .header-scene-phone .scene-switcher-trigger span { flex:0 1 auto; min-width:0; }
+ .app-shell .app-header .header-scene-phone .scene-switcher-trigger svg { flex:none; margin-left:auto; }
+ .app-shell .app-header > .save-chip-group, .app-shell .app-header > .save-chip { margin-left:0; }
+ .app-shell .app-header .mobile-menu-button { width:40px; min-width:40px; min-height:40px; padding:0; justify-content:center; align-items:center; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] { top:60px; flex-direction:column; align-items:stretch; gap:2px; padding:6px; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button, .appearance) { width:100%; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button), .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-trigger { display:flex; align-items:center; justify-content:flex-start; gap:12px; min-height:48px; height:auto; padding:0 12px; text-align:left; font-size:15px; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .icon-button::after { content:attr(aria-label); font-size:15px; font-weight:500; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-trigger { position:relative; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-dot { position:absolute; left:26px; top:12px; margin:0; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .share-button { justify-content:center; margin-top:4px; }
+ .app-shell .app-header .header-menu-link { align-items:center; min-height:44px; padding:0 12px; color:var(--chrome-text); font-weight:500; border-radius:var(--radius); text-decoration:none; }
+ .app-shell .app-header .header-menu-link:hover { background:var(--chrome-hover); }
+ /* The scene list opens as a bottom sheet. */
+ .app-shell .app-header .scene-switcher.is-phone .scene-switcher-panel { position:fixed; top:auto; left:0; right:0; bottom:0; width:auto; max-width:none; border-radius:16px 16px 0 0; border-width:1px 0 0; padding-bottom:env(safe-area-inset-bottom); z-index:var(--z-modal, 200); box-shadow:0 -12px 40px rgb(0 0 0 / .35); }
+ .app-shell .app-header .scene-switcher.is-phone .scene-switcher-list { max-height:min(60dvh / var(--ui-zoom, 1), 460px); }
+ .app-shell .app-header .scene-switcher.is-phone .scene-switcher-list button { min-height:48px; padding:8px 16px; }
+ .app-shell .app-header .scene-switcher.is-phone .scene-switcher-foot button { min-height:44px; }
+ .app-shell .app-header .scene-switcher.is-phone .scene-switcher-search { padding:6px 16px; }
+ .scene-switcher-grab { display:block; width:40px; height:4px; border-radius:2px; background:var(--line-strong, var(--line)); margin:8px auto 2px; }
+ .scene-switcher-backdrop { position:fixed; inset:0; z-index:calc(var(--z-modal, 200) - 1); background:rgb(0 0 0 / .5); }
+ /* The empty-scene card becomes a slim banner across the top of the board. */
+ .board-hint { top:8px; left:8px; right:8px; width:auto; max-width:none; transform:none; display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; padding:8px 8px 8px 12px; box-shadow:0 4px 14px rgba(15,23,42,.18); z-index:6; }
+ .board-hint > strong, .board-hint > .board-hint-text { display:none !important; }
+ .board-hint > .board-hint-short { display:block !important; flex:1 1 100%; margin:0; padding-right:36px; font-size:13px; line-height:1.35; color:var(--ink); }
+ .board-hint > span.board-hint-actions { margin:0; gap:6px; flex:1 1 100%; }
+ .board-hint-actions button { min-height:36px; padding:4px 12px; font-size:13px; }
+ .board-hint-close { top:4px; right:4px; width:40px; height:40px; }
+ .board:has(.board-hint) .crop-controls { top:112px; }
+}

@@ -64,6 +64,7 @@ import {
   LayoutGrid,
   FolderPlus,
   Users,
+  MoreHorizontal,
 } from "lucide-react";
 import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
@@ -1223,11 +1224,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <span className="divider" />
           <Breadcrumbs items={sceneTrail()} />
         </div>
-        <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
+        <button className="header-campaigns-compact" aria-label="Back to Campaigns" title="Back to Campaigns" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" /><span className="header-campaigns-label">Campaigns</span></button>
+        <div className="header-scene-phone"><SceneSwitcher phone workspace={workspace} campaignId={campaignId} scene={scene} open={(id) => { activate(id); setSelected(null); }} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} /></div>
         {campaignId && !member && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} scene={scene?.name} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
         {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
-        <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
-        <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
+        <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} aria-haspopup="menu" aria-label="Map menu" title="Map menu" onClick={()=>setMobileHeaderOpen(v=>!v)}><MoreHorizontal size={20} aria-hidden="true" /></button>
+        <div className="header-actions" data-mobile-open={mobileHeaderOpen} onKeyDown={(e)=>{if(e.key==="Escape"&&mobileHeaderOpen){setMobileHeaderOpen(false);(e.currentTarget.parentElement?.querySelector(".mobile-menu-button") as HTMLElement|null)?.focus();}}}>
+          <NextLink className="mobile-only header-menu-link" href="/">RPG Tools home</NextLink>
+          <a className="mobile-only header-menu-link" href={encyclopediaHref ?? "/encyclopedia"}>Encyclopedia</a>
           <AppearanceMenu />
           <button aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}>Token gallery</button>
           {!member && <button
