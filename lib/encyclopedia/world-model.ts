@@ -13,7 +13,7 @@ import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
 import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
-import {vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
+import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
@@ -67,7 +67,9 @@ export const worldSchema = z.object({ id, name, description: z.string().max(1000
   // Optional (added later): the organization profile layout new organizations start with, and the organization types typed in for this world.
   orgLayout:orgLayoutSchema.optional(), orgTypes:orgTypesSchema.optional(),
   // Optional (added later): the character profile layout new characters start with.
-  characterLayout:characterLayoutSchema.optional() });
+  characterLayout:characterLayoutSchema.optional(),
+  // Optional (added later): this world's own vehicle types (vehicles.ts). Left out, the five ready-made types.
+  vehicleTypes:vehicleTypesSchema.optional() });
 export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSchema,demoWorkspace,playerCampaign,importCopy,searchableText,defaultCharacter} from '../lib/encyclopedia/world-model.ts';
-import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf} from '../lib/encyclopedia/vehicles.ts';
+import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf,vehicleTypesOf,saveVehicleTypes,copyVehicleType,blankVehicleType,typeUse,typeFieldId} from '../lib/encyclopedia/vehicles.ts';
 
 const C='demo-campaign',T='2026-11-14T10:00:00.000Z';
 const page=(id,title,kind,extra={})=>({id,worldId:'demo-world',campaignId:C,parentId:null,title,kind,body:'',updatedAt:T,...extra});
@@ -183,4 +183,38 @@ test('imports carry seats and crew across and drop pages that didn’t come',()=
  const copy=importCopy(demoWorkspace(),world(seat(newVehicle(ship),ship,'pilot',{characterId:'cap'})));
  const moved=copy.entries.find(x=>x.title==='GDN-205'&&x.kind==='vehicle'),pilot=stationList(moved.vehicle,ship).find(s=>s.id==='pilot');
  assert.equal(copy.entries.find(x=>x.id===pilot.characterId).title,'Ilsa Marrow');
+});
+
+test('a world keeps its own vehicle types, and saving them tidies its vehicles',()=>{
+ let v=setGauge(setValue(newVehicle(ship),ship,'specs','drive','Ion'),ship,'hull',30);
+ v=setHands(v,ship,'marines',{value:8});
+ const s=world(v),w=s.worlds.find(x=>x.id==='demo-world');
+ assert.deepEqual(vehicleTypesOf(w).map(t=>t.id),types.map(t=>t.id),'a world starts with the ready-made types');
+ const mech={...copyVehicleType(ship,types.map(t=>t.id)),name:'Walker',art:'mech'};
+ assert.notEqual(mech.id,'starship');assert.equal(mech.name,'Walker');
+ const mine=[{...ship,specs:ship.specs.filter(f=>f.id!=='drive'),gauges:ship.gauges.map(g=>g.id==='hull'?{...g,max:20}:g),hands:ship.hands.filter(h=>h.id!=='marines')},mech,...types.filter(t=>t.id!=='starship'&&t.id!=='car')];
+ const r=saveVehicleTypes(s.worlds,s.entries,'demo-world',mine);
+ const next={...s,worlds:r.worlds,entries:r.entries};
+ assert.ok(workspaceSchema.safeParse(next).success);
+ const nv=next.entries.find(e=>e.id==='gdn').vehicle,nw=next.worlds.find(x=>x.id==='demo-world');
+ assert.deepEqual(vehicleTypesOf(nw).map(t=>t.name),['Starship','Walker','Sailing ship','Airship','Carriage']);
+ assert.ok(!nv.specs.some(x=>x.id==='drive'),'a removed stat’s value goes');
+ assert.equal(gaugeRows(nv,vehicleTypeOf(nv,nw)).find(g=>g.id==='hull').value,20,'a gauge stays inside its new maximum');
+ assert.equal(nv.hands,undefined);
+ assert.throws(()=>saveVehicleTypes(s.worlds,s.entries,'demo-world',[]),/./,'a world keeps at least one type');
+ assert.throws(()=>saveVehicleTypes(s.worlds,s.entries,'demo-world',[ship,ship]),/unique/);
+ assert.equal(workspaceSchema.safeParse({...s,worlds:s.worlds.map(x=>x.id==='demo-world'?{...x,vehicleTypes:[{...ship,name:''}]}:x)}).success,false);
+});
+
+test('deleting a type in use moves its vehicles to the first type and keeps matching values',()=>{
+ const v=setValue(setGauge(newVehicle(ship),ship,'hull',30),ship,'specs','class','Frigate');
+ const s=world(v);
+ assert.deepEqual(typeUse(s.entries,'demo-world',types),{starship:1});
+ const r=saveVehicleTypes(s.worlds,s.entries,'demo-world',[sail]);
+ const nv=r.entries.find(e=>e.id==='gdn').vehicle,nw=r.worlds.find(x=>x.id==='demo-world');
+ assert.equal(nv.typeId,'sailing-ship');
+ assert.equal(specRows(nv,vehicleTypeOf(nv,nw)).find(x=>x.id==='class').value,'Frigate');
+ assert.equal(gaugeRows(nv,vehicleTypeOf(nv,nw)).find(x=>x.id==='hull').value,30);
+ const blank=blankVehicleType(['new-type']);assert.notEqual(blank.id,'new-type');assert.ok(vehicleTypeSchema.safeParse(blank).success);
+ assert.equal(typeFieldId('Rail guns!'),'rail-guns');
 });
