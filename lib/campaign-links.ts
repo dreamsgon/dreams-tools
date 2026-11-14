@@ -142,6 +142,14 @@ export function folderChoices(folders: CampaignFolder[]): { id: string; path: st
   return out;
 }
 
+/** One line in the "Move to…" sheet: Top level (id null), then every folder with its path. `here` marks where the campaign is now. */
+export type MoveOption = { id: string | null; label: string; depth: number; here: boolean };
+
+export function moveOptions(folders: CampaignFolder[], currentFolderId: string | null): MoveOption[] {
+  const choices = folderChoices(folders), known = new Set(choices.map(f => f.id)), now = currentFolderId && known.has(currentFolderId) ? currentFolderId : null;
+  return [{ id: null, label: "Top level", depth: 0, here: now === null }, ...choices.map(f => ({ id: f.id, label: f.path, depth: f.depth, here: f.id === now }))];
+}
+
 type BookEntry = BookWorkspace["entries"][number];
 const newestFirst = (entries: BookEntry[]) => [...entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 

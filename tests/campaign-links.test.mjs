@@ -174,3 +174,14 @@ test('layout hides a collapsed folder\'s contents, and shows only folders with m
 test('folder choices are paths in display order', () => {
   assert.deepEqual(folderChoices(campaignSummary(foldered,book()).folders).map(f=>f.path),['Archive','Lantern Coast','Lantern Coast / Old games']);
 });
+
+import {moveOptions} from '../lib/campaign-links.ts';
+test('moveOptions lists Top level then folder paths and marks where the campaign is now',()=>{
+  const folders=[{id:'a',name:'One-shots',parentId:null},{id:'b',name:'Finished',parentId:null},{id:'c',name:'Old',parentId:'b'}];
+  const at=id=>moveOptions(folders,id).filter(o=>o.here).map(o=>o.id);
+  assert.deepEqual(moveOptions(folders,null).map(o=>o.label),['Top level','Finished','Finished / Old','One-shots']);
+  assert.deepEqual(at(null),[null]);
+  assert.deepEqual(at('c'),['c']);
+  assert.deepEqual(at('gone'),[null]);
+  assert.equal(moveOptions([],null).length,1);
+});
