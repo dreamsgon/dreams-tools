@@ -96,6 +96,11 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   });
   const archivedCount = (summary?.rows ?? []).filter(r => r.encyclopedia?.archived).length;
   const worldsInUse = (summary?.worlds ?? []).filter(w => !w.archived && summary!.rows.some(r => r.encyclopedia?.worldId === w.id));
+  const campaignTags = useMemo(() => {
+    if (!library || !summary) return [];
+    const used = new Set(summary.rows.filter(r => !r.encyclopedia?.archived).flatMap(r => tagsOn(library, ...campaignTargets(r)).map(x => x.id)));
+    return library.tags.filter(x => used.has(x.id)).sort((x, y) => x.name.localeCompare(y.name));
+  }, [library, summary]);
   const unpairedMaps = (summary?.rows ?? []).filter(r => r.maptable && !r.encyclopedia);
   const unpairedNotes = (summary?.rows ?? []).filter(r => r.encyclopedia && !r.maptable && !r.encyclopedia.archived);
   const matchKey = `${unpairedMaps.map(r => r.key).join()}|${unpairedNotes.map(r => r.key).join()}`;
@@ -124,11 +129,16 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
         </div>}
         <div className="campaigns-filters">
           <label className="campaigns-search"><Search size={16} aria-hidden="true" /><input type="search" placeholder="Find a campaign" aria-label="Find a campaign" value={query} onChange={e => setQuery(e.target.value)} /></label>
-          {worldsInUse.length > 1 && <div className="campaigns-chips" role="group" aria-label="World">
-            <button type="button" aria-pressed={!world} onClick={() => setWorld(null)}>All worlds</button>
-            {worldsInUse.map(w => <button type="button" key={w.id} aria-pressed={world === w.id} onClick={() => setWorld(w.id)}>{w.name}</button>)}
+          {/* The tags on your campaigns. Pick one to show only the campaigns with it. */}
+          {campaignTags.length > 0 && <div className="campaigns-chips" role="group" aria-label="Tag">
+            <button type="button" aria-pressed={!filterTag} onClick={() => setTagFilter(null)}>All</button>
+            {campaignTags.map(t => <button type="button" key={t.id} className={`tag-${t.color}`} aria-pressed={filterTag?.id === t.id} onClick={() => setTagFilter(filterTag?.id === t.id ? null : t.id)}><i aria-hidden="true" />{t.name}</button>)}
           </div>}
-          {filterTag && <span className={`tag-chip tag-${filterTag.color} campaigns-tag-filter`}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
+          {worldsInUse.length > 1 && <label className="campaigns-world"><span className="sr-only">World</span><select value={world ?? ""} onChange={e => setWorld(e.target.value || null)}>
+            <option value="">All worlds</option>
+            {worldsInUse.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select></label>}
+          {filterTag && !campaignTags.some(x => x.id === filterTag.id) && <span className={`tag-chip tag-${filterTag.color} campaigns-tag-filter`}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
         </div>
         {drag && <div className={`campaigns-drop-top${over === "top" ? " over" : ""}`} {...dropProps(null, "top")}><Folder size={15} aria-hidden="true" />Drop here for the top level</div>}
         <div className="campaigns-table" role="table" aria-label="Campaigns">
