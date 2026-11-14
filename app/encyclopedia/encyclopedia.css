@@ -1024,6 +1024,12 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .write-again.closed{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 0 0;border:0;border-top:1px solid var(--line);border-radius:0;max-width:none}
 .write-again.closed .aside-hint{margin:0}
 .write-again textarea,.write-again select{width:100%}
+.recap-start-choices{display:grid;gap:8px;margin-top:12px}
+.recap-choice{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink)}
+.recap-choice:hover{border-color:var(--accent)}.recap-choice svg{flex:none;margin-top:2px;color:var(--accent)}
+.recap-choice strong{display:block;font-size:13px;font-weight:600}.recap-choice small{display:block;color:var(--muted);font-size:12px;line-height:1.45;margin-top:2px}
+.check-with-ai{display:grid;gap:8px;margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:var(--radius)}.check-with-ai .aside-hint{margin:0}.check-with-ai select{width:100%}
+.folder-contents>.recap-start-row{margin:0 0 18px;gap:8px}.folder-contents>.recap-start-row>.button.recap-start{margin:0;padding:9px 13px;font-size:12px}
 .link-read{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--accent);font-weight:400}
 /* A co-GM in someone else's campaign (components/encyclopedia/member-view.ts): whose campaign it is, read only for now. */
 .co-gm-bar { display:flex; align-items:center; gap:10px; padding:9px 24px; background:color-mix(in srgb, var(--green) 14%, var(--panel)); border-bottom:1px solid color-mix(in srgb, var(--green) 35%, var(--line)); font-size:13px; color:var(--ink); }

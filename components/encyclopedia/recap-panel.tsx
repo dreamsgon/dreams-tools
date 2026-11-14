@@ -5,7 +5,7 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
@@ -57,10 +57,10 @@ export function useWriters(campaignId:string|null|undefined){
 }
 
 /** Asks RPG Tools to write with an API-key connection. Returns the server's answer, or throws its message. */
-export async function writeWithKey(body:{action:'write'|'again';entryId:string;campaignId:string;connectionId:string;note?:string}){
+export async function writeWithKey(body:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string}){
  const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
  if(!r.ok)throw Error(r.b.error??'Could not write the recap.');
- return r.b as {tokens:number;by:string;toCheck?:number};
+ return r.b as {tokens:number;by:string;toCheck?:number;added?:number};
 }
 
 // ---- Under the title ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ export async function writeWithKey(body:{action:'write'|'again';entryId:string;c
 export function RecapChips({recap}:{recap:Recap}){
  const played=recap.playedOn?new Date(`${recap.playedOn}T12:00:00`).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'}):'';
  return <div className="recap-chips">
-  {recap.status==='draft'?<><span className="recap-chip draft">Draft{recap.by?` from ${recap.by}`:''}</span><span className="recap-chip">Players can’t see it yet</span></>:<span className="recap-chip shared"><Eye size={12}/> Published to players</span>}
+  {recap.status==='draft'?<><span className="recap-chip draft">Draft{recap.mine?' · written by you':recap.by?` from ${recap.by}`:''}</span><span className="recap-chip">Players can’t see it yet</span></>:<span className="recap-chip shared"><Eye size={12}/> Published to players</span>}
   {recap.source&&<span className="recap-chip">{recap.source}</span>}
   {recap.transcriptWords?<span className="recap-chip">Transcript · {words(recap.transcriptWords)}</span>:null}
   {played&&<span className="recap-chip">Played {played}</span>}
@@ -167,7 +167,8 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
  const groups=['People, places and things','Quests','Codex'].map(g=>({g,items:open.filter(r=>groupOf(r)===g)})).filter(x=>x.items.length);
  return <div className="aside-section recap-check">
   <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
-  <p className="aside-hint">What the AI found in this session. Nothing changes in your pages until you press a button.</p>
+  <p className="aside-hint">{recap.mine&&!recap.review.length?'Your own recap. Publish it as it is, or have the AI list the people, places and quest moves it mentions first.':'What the AI found in this session. Nothing changes in your pages until you press a button.'}</p>
+  {recap.mine&&<CheckWithAi entry={entry} data={data} setNotice={setNotice}/>}
   {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g.toUpperCase()}</span>{items.map(r=><div key={r.id} className="check-item">
    <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
    {editing===r.id?<><textarea className="check-text" aria-label={`Text for ${r.name}`} rows={4} maxLength={4000} value={text} onChange={e=>setText(e.target.value)}/><div className="check-actions"><button className="button primary small" onClick={()=>{editItem(r.id,{text:text.trim()});setEditing(null);}}>Save</button><button className="button small" onClick={()=>setEditing(null)}>Cancel</button></div></>
@@ -206,9 +207,41 @@ export function WriteAgain({entry,data,setNotice}:{entry:Entry;data:Workspace;se
  </div>;
 }
 
-/** A session page with no recap yet: how to get one. */
-export function RecapStart({entry,onStart}:{entry:Entry;onStart?:()=>void}){
- return <div className="aside-section recap-check"><span className="eyebrow">AI RECAP</span><p className="aside-hint">Have your AI app draft a recap of this session from a transcript, an RP thread, or notes in Notion, Google Drive or GitHub. You check it before players see anything.</p>{onStart&&<button className="button primary small recap-start" onClick={onStart}><Sparkles size={13}/> New session recap</button>}{entry.overviewVisibility==='players'&&<p className="aside-hint">Players can see this page now. It’s hidden from them while the recap is a draft.</p>}</div>;
+/**
+ * Check it with AI, under a recap the GM wrote: the AI lists what the recap mentions in the check list and
+ * leaves the words alone. With an API key here, or by copying a prompt for the GM's AI app.
+ */
+function CheckWithAi({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotice:(s:string)=>void}){
+ const writers=useWriters(entry.campaignId),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
+ const keys=writers?.keys??[],chosen=keys.find(k=>k.id===key)??keys.find(k=>k.transcripts)??keys[0];
+ const campaign=data.campaigns.find(c=>c.id===entry.campaignId),empty=!entry.body.trim();
+ const ask=`In RPG Tools for "${campaign?.name??'my campaign'}", read the session page "${entry.title}" with read_page. I wrote its recap myself, so don't change it. List the new people, places and things, quest moves and codex finds it mentions with add_recap_finds.`;
+ const run=async()=>{
+  if(!chosen||!entry.campaignId)return;
+  setBusy(true);setError('');
+  try{const r=await writeWithKey({action:'check',entryId:entry.id,campaignId:entry.campaignId,connectionId:chosen.id});setNotice(r.added?`${r.by} found ${r.added} thing${r.added===1?'':'s'} to check (${r.tokens.toLocaleString('en')} tokens). They show up in a moment. Your recap didn’t change.`:`${r.by} found nothing new to add (${r.tokens.toLocaleString('en')} tokens).`);}
+  catch(e){setError(e instanceof Error?e.message:'Could not check the recap.');}
+  finally{setBusy(false);}
+ };
+ const blocked=chosen&&!chosen.transcripts?`${chosen.name} can’t read draft recaps, which are GM-only. Turn on “See GM-only things” for it under What it may do.`:'';
+ return <div className="check-with-ai">
+  <span className="eyebrow">CHECK IT WITH AI <small className="muted">optional</small></span>
+  <p className="aside-hint">The AI reads your recap and lists new people, places, quest moves and codex finds for you to add. It doesn’t change your words.</p>
+  {keys.length>1&&<label className="field-label">Checked by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
+  {empty&&<p className="aside-hint">Write the recap first, then check it.</p>}
+  {(blocked||error)&&<p className="form-error">{error||blocked}</p>}
+  <div className="check-actions">{chosen&&<button className="button small" disabled={busy||empty||!!blocked} onClick={run}><Sparkles size={13}/> {busy?'Reading…':`Check it with ${chosen.name}`}</button>}<button className="button small" disabled={empty} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy for my AI app'}</button></div>
+ </div>;
+}
+
+/** A session page with no recap yet: write it yourself, or have the AI draft it. */
+export function RecapStart({entry,onStart,onWrite}:{entry:Entry;onStart?:()=>void;onWrite?:()=>void}){
+ return <div className="aside-section recap-check"><span className="eyebrow">RECAP</span><p className="aside-hint">Write the recap yourself, or have the AI draft it from a transcript, an RP thread, or notes in Notion, Google Drive or GitHub. Either way, players see nothing until you publish it.</p>
+  {(onWrite||onStart)&&<div className="recap-start-choices">
+   {onWrite&&<button className="recap-choice" onClick={onWrite}><PenLine size={15} aria-hidden="true"/><span><strong>Write it myself</strong><small>A recap you write. Publish it, post it to Discord, and The story so far uses it like any other.</small></span></button>}
+   {onStart&&<button className="recap-choice ai" onClick={onStart}><Sparkles size={15} aria-hidden="true"/><span><strong>Draft it with AI…</strong><small>From a transcript, a chat export, or a Notion, Drive or GitHub link.</small></span></button>}
+  </div>}
+  {entry.overviewVisibility==='players'&&<p className="aside-hint">Players can see this page now. It’s hidden from them while the recap is a draft.</p>}</div>;
 }
 
 /** A recap asked for in the New session recap dialog that the AI hasn't saved yet. */

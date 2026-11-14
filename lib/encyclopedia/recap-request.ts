@@ -63,16 +63,22 @@ export function keepNotes(e: Entry): Pick<Entry, "tabs"> {
 
 /**
  * Makes the session page a recap waits on (or readies an existing one): a draft with what the GM asked for,
- * hidden from players. The AI fills it with save_recap.
+ * hidden from players. The AI fills it with save_recap. With `mine`, the GM writes the recap themselves: no
+ * request is stored, so nothing waits for an AI.
  */
-export function startRecap(ws: Workspace, input: { campaignId: string; title: string; playedOn?: string; source: string; request: RecapRequest; pageId?: string; folderId?: string | null; transcriptWords?: number }, now = new Date()): { next: Workspace; id: string } {
+export function startRecap(ws: Workspace, input: { campaignId: string; title: string; playedOn?: string; source: string; request?: RecapRequest; mine?: boolean; pageId?: string; folderId?: string | null; transcriptWords?: number }, now = new Date()): { next: Workspace; id: string } {
   const c = ws.campaigns.find(x => x.id === input.campaignId);
   if (!c) throw Error("That campaign is gone.");
+  if (!input.mine && !input.request) throw Error("Say what the AI should make.");
   const at = now.toISOString();
-  const recap = (before?: Recap): Recap => ({
-    ...(before ?? emptyRecap()), status: "draft", source: input.source.slice(0, 200), request: input.request,
-    ...(input.playedOn ? { playedOn: input.playedOn } : {}), ...(input.transcriptWords ? { transcriptWords: input.transcriptWords } : {}),
-  });
+  const recap = (before?: Recap): Recap => {
+    const { request: _asked, mine: _mine, source: _source, ...rest } = before ?? emptyRecap();
+    return {
+      ...rest, status: "draft", ...(input.source.trim() ? { source: input.source.slice(0, 200) } : {}),
+      ...(input.mine ? { mine: true } : { request: input.request }),
+      ...(input.playedOn ? { playedOn: input.playedOn } : {}), ...(input.transcriptWords ? { transcriptWords: input.transcriptWords } : {}),
+    };
+  };
   if (input.pageId) {
     const page = ws.entries.find(e => e.id === input.pageId);
     if (page?.kind !== "session" || page.campaignId !== c.id) throw Error("That session page is gone.");
@@ -81,6 +87,17 @@ export function startRecap(ws: Workspace, input: { campaignId: string; title: st
   const id = newId();
   const page: Entry = { id, worldId: c.worldId, campaignId: c.id, parentId: input.folderId ?? null, title: input.title, kind: "session", body: "", recap: recap(), updatedAt: at };
   return { id, next: { ...ws, entries: [...ws.entries, page] } };
+}
+
+/**
+ * Write it myself, on a session page: the page becomes a draft recap the GM writes, with its own text kept in a
+ * GM-only tab. It publishes, posts to Discord and feeds The story so far like a recap the AI drafted.
+ */
+export function startOwnRecap(ws: Workspace, pageId: string, now = new Date()): Workspace {
+  const page = ws.entries.find(e => e.id === pageId);
+  if (page?.kind !== "session" || !page.campaignId) throw Error("Only a session page in a campaign can hold a recap.");
+  if (page.recap) return ws;
+  return { ...ws, entries: ws.entries.map(e => e.id === page.id ? { ...e, ...keepNotes(e), body: "", recap: { ...emptyRecap(), mine: true }, overviewVisibility: undefined, updatedAt: now.toISOString() } : e) };
 }
 
 /** A recap that was asked for and hasn't come back yet. */

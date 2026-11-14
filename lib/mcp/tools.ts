@@ -20,7 +20,7 @@ import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isI
 import { editScene } from "./table.ts";
 import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts";
 import type { MovePreview } from "./activity.ts";
-import { PART_SIZE, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiRecap } from "../encyclopedia/recaps.ts";
+import { PART_SIZE, addFinds, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiFinds, type AiRecap } from "../encyclopedia/recaps.ts";
 import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
 import { publishedRecaps, storyNow } from "../encyclopedia/recap-prompts.ts";
@@ -82,6 +82,12 @@ type Tool = {
 
 const str = (description: string, max = 200) => ({ type: "string", minLength: 1, maxLength: max, description });
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
+/** save_recap's and add_recap_finds' lists of what changed in the world. */
+const findsSchema = {
+      found: { type: "array", maxItems: 40, description: "People, places, factions, lore and things that are new or changed. The server matches names to pages.", items: { type: "object", properties: { name: str("Its name.", 160), kind: { type: "string", enum: ["character", "place", "faction", "lore", "note"] }, text: { type: "string", minLength: 1, maxLength: 4000, description: "One or two sentences: who or what it is, or what changed." }, playersSee: { type: "boolean", description: "For a new page: players may read it." } }, required: ["name", "text"], additionalProperties: false } },
+      quests: { type: "array", maxItems: 30, description: "Quests that moved. An unknown quest becomes a new rumour.", items: { type: "object", properties: { quest: str("The quest's title.", 160), log: { type: "string", maxLength: 4000, description: "A line for its log." }, tick: str("An objective that is now done, by its text.", 300), playersSee: { type: "boolean", description: "Players may read the log line." } }, required: ["quest"], additionalProperties: false } },
+      codex: { type: "array", maxItems: 20, description: "Codex entries the party found.", items: { type: "object", properties: { page: str("The codex page's title."), label: str("Where or when, such as the session title.", 80) }, required: ["page"], additionalProperties: false } },
+};
 
 export class ToolError extends Error {}
 const fail = (message: string): never => { throw new ToolError(message); };
@@ -620,9 +626,7 @@ const tools: Tool[] = [
       timeline: { type: "array", maxItems: 60, description: "What happened, in order.", items: { type: "object", properties: { title: str("What happened.", 200), big: { type: "boolean", description: "A major turn of the session." }, steps: { type: "array", maxItems: 12, items: str("A short step.", 300) } }, required: ["title"], additionalProperties: false } },
       quotes: { type: "array", maxItems: 20, description: "Memorable lines, word for word.", items: { type: "object", properties: { text: str("The words exactly as said.", 500), who: str("Who said it.", 120) }, required: ["text"], additionalProperties: false } },
       gmNotes: { type: "string", maxLength: 20000, description: "For the GM only: hooks, secrets the party got close to, rules calls, things to follow up." },
-      found: { type: "array", maxItems: 40, description: "People, places, factions, lore and things that are new or changed. The server matches names to pages.", items: { type: "object", properties: { name: str("Its name.", 160), kind: { type: "string", enum: ["character", "place", "faction", "lore", "note"] }, text: { type: "string", minLength: 1, maxLength: 4000, description: "One or two sentences: who or what it is, or what changed." }, playersSee: { type: "boolean", description: "For a new page: players may read it." } }, required: ["name", "text"], additionalProperties: false } },
-      quests: { type: "array", maxItems: 30, description: "Quests that moved. An unknown quest becomes a new rumour.", items: { type: "object", properties: { quest: str("The quest's title.", 160), log: { type: "string", maxLength: 4000, description: "A line for its log." }, tick: str("An objective that is now done, by its text.", 300), playersSee: { type: "boolean", description: "Players may read the log line." } }, required: ["quest"], additionalProperties: false } },
-      codex: { type: "array", maxItems: 20, description: "Codex entries the party found.", items: { type: "object", properties: { page: str("The codex page's title."), label: str("Where or when, such as the session title.", 80) }, required: ["page"], additionalProperties: false } },
+      ...findsSchema,
     }, ["title", "recap", "timeline"]),
     write: a => {
       const input = recapInput(a), q = text(a, "page", false);
@@ -652,6 +656,22 @@ const tools: Tool[] = [
         if (e.recap!.status !== "draft") fail(`“${e.title}” is published. Ask the GM to unpublish it before it is written again.`);
         const body = linkNames(recap, c.book.entries, { worldId: c.campaign.worldId, campaignId: c.campaign.id });
         return { next: patchEntry(full, e.id, { body, updatedAt: now.toISOString() }), summary: `Wrote the recap “${e.title}” again`, detail: `${wordCount(recap).toLocaleString("en")} words`, reply: { saved: { id: e.id, title: e.title }, note: "Still a draft: players can't see it. The timeline, quotes and check list didn't change." } };
+      };
+    },
+  },
+    {
+    name: "add_recap_finds", title: "List what a recap mentions", level: "assist", readOnly: false,
+    description: "For a session recap the GM wrote themselves: add the people, places, factions, lore and things that are new or changed, quests that moved and codex finds to its \"Check before publishing\" list. The recap text, timeline and quotes don't change, and nothing else in the campaign changes until the GM adds each one. Read the page with read_page first. Use names as the campaign spells them.",
+    inputSchema: obj({ page: str("The session page's title or id.", 200), ...findsSchema }, ["page"]),
+    write: a => {
+      const q = text(a, "page", true, 200)!, input = findsInput(a);
+      return (full, c, now) => {
+        const e = own(pick(pages(c).filter(x => x.kind === "session" && x.recap), q, x => x.id, x => x.title, "session recap"));
+        const { added, entry } = addFinds(c.book, c.campaign, e, input);
+        return {
+          next: patchEntry(full, e.id, { recap: entry.recap, updatedAt: now.toISOString() }), summary: `Listed what “${e.title}” mentions`, detail: added.length ? `${added.length} thing${added.length > 1 ? "s" : ""} to check before publishing` : "Nothing new to check",
+          reply: { saved: { id: e.id, title: e.title }, added: added.map(r => `${r.kind}: ${r.name}`), note: "Added to the check list only. The recap text didn't change, and nothing else changes until the GM adds each one." },
+        };
       };
     },
   },
@@ -869,32 +889,42 @@ function questDetails(c: McpContext, e: Entry) {
   };
 }
 
+
 /** Checks save_recap's lists. Lengths are checked by the page's own schema when it saves. */
-function recapInput(a: Record<string, unknown>): AiRecap {
-  const arr = (key: string, max: number) => {
-    const v = a[key];
-    if (v === undefined) return [];
-    if (!Array.isArray(v) || v.length > max || v.some(x => !x || typeof x !== "object" || Array.isArray(x))) return fail(`${key} must be a list of up to ${max} objects.`);
-    return v as Record<string, unknown>[];
-  };
+const listOf = (a: Record<string, unknown>, key: string, max: number) => {
+  const v = a[key];
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > max || v.some(x => !x || typeof x !== "object" || Array.isArray(x))) return fail(`${key} must be a list of up to ${max} objects.`);
+  return v as Record<string, unknown>[];
+};
+const flagOf = (o: Record<string, unknown>, key: string) => bool(o, key) || undefined;
+
+/** Checks the found, quests and codex lists of save_recap and add_recap_finds. */
+function findsInput(a: Record<string, unknown>): AiFinds {
   const s = (o: Record<string, unknown>, key: string, max: number, need = false) => optionalText(o, key, max, need);
-  const flag = (o: Record<string, unknown>, key: string) => bool(o, key) || undefined;
+  return {
+    found: listOf(a, "found", 40).map(x => {
+      const kind = s(x, "kind", 20) || "note";
+      if (!(recapPageKinds as readonly string[]).includes(kind)) fail("found kind must be character, place, faction, lore or note.");
+      return { name: s(x, "name", 160, true), kind, text: s(x, "text", 4000, true), playersSee: flagOf(x, "playersSee") };
+    }),
+    quests: listOf(a, "quests", 30).map(x => ({ quest: s(x, "quest", 160, true), log: s(x, "log", 4000) || undefined, tick: s(x, "tick", 300) || undefined, playersSee: flagOf(x, "playersSee") })),
+    codex: listOf(a, "codex", 20).map(x => ({ page: s(x, "page", 200, true), label: s(x, "label", 80) || undefined })),
+  };
+}
+
+function recapInput(a: Record<string, unknown>): AiRecap {
+  const s = (o: Record<string, unknown>, key: string, max: number, need = false) => optionalText(o, key, max, need);
   const playedOn = text(a, "playedOn", false, 10);
   if (playedOn && !/^\d{4}-\d{2}-\d{2}$/.test(playedOn)) fail("playedOn must be YYYY-MM-DD.");
   return {
     title: text(a, "title", true, 120)!, playedOn, source: text(a, "source", false, 200), recap: optionalText(a, "recap", 20000, true), gmNotes: optionalText(a, "gmNotes", 20000),
-    timeline: arr("timeline", 60).map(b => {
+    timeline: listOf(a, "timeline", 60).map(b => {
       const steps = b.steps === undefined ? [] : Array.isArray(b.steps) && b.steps.length <= 12 && b.steps.every(x => typeof x === "string" && x.trim() && x.length <= 300) ? b.steps as string[] : fail("Each timeline steps must be a list of up to 12 short lines.");
-      return { title: s(b, "title", 200, true), big: flag(b, "big"), steps };
+      return { title: s(b, "title", 200, true), big: flagOf(b, "big"), steps };
     }),
-    quotes: arr("quotes", 20).map(x => ({ text: s(x, "text", 500, true), who: s(x, "who", 120) })),
-    found: arr("found", 40).map(x => {
-      const kind = s(x, "kind", 20) || "note";
-      if (!(recapPageKinds as readonly string[]).includes(kind)) fail("found kind must be character, place, faction, lore or note.");
-      return { name: s(x, "name", 160, true), kind, text: s(x, "text", 4000, true), playersSee: flag(x, "playersSee") };
-    }),
-    quests: arr("quests", 30).map(x => ({ quest: s(x, "quest", 160, true), log: s(x, "log", 4000) || undefined, tick: s(x, "tick", 300) || undefined, playersSee: flag(x, "playersSee") })),
-    codex: arr("codex", 20).map(x => ({ page: s(x, "page", 200, true), label: s(x, "label", 80) || undefined })),
+    quotes: listOf(a, "quotes", 20).map(x => ({ text: s(x, "text", 500, true), who: s(x, "who", 120) })),
+    ...findsInput(a),
   };
 }
 

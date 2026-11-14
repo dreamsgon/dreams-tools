@@ -6,7 +6,7 @@
  * through the usual live sync.
  */
 import {useMemo,useRef,useState} from 'react';
-import {ClipboardList,Upload,MessagesSquare,BookText,HardDrive,GitBranch,MessageCircle,Check,Copy,Clock,ArrowRight,Sparkles,KeyRound} from 'lucide-react';
+import {ClipboardList,Upload,MessagesSquare,BookText,HardDrive,GitBranch,MessageCircle,Check,Copy,Clock,ArrowRight,Sparkles,KeyRound,PenLine} from 'lucide-react';
 import type {Campaign,Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {recapParts,type RecapRequest} from '@/lib/encyclopedia/recap-schema';
 import {chatGroupsToText,discordJsonToText,guessCast,speakersIn,startRecap,waitingForAi} from '@/lib/encyclopedia/recap-request';
@@ -56,7 +56,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [length,setLength]=useState<RecapRequest['length']>('standard'),[depth,setDepth]=useState<RecapRequest['depth']>('balanced'),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(new Set());
  const [cast,setCast]=useState<NonNullable<RecapRequest['cast']>>([]),[made,setMade]=useState<{id:string;title:string;saved:boolean;link?:string}|null>(resume?{id:resume.id,title:resume.title,saved:true,link:resume.recap?.request?.link}:null);
  const writers=useWriters(campaign.id),apps=writers?.apps??null,keys=writers?.keys??[];
- const [writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
+ const [mine,setMine]=useState(false),[writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
  const fileInput=useRef<HTMLInputElement>(null);
  const characters=useMemo(()=>data.entries.filter(e=>e.kind==='character'&&e.worldId===campaign.worldId&&(e.campaignId===campaign.id||e.campaignId===null)).sort((a,b)=>(a.character?.role==='pc'?0:1)-(b.character?.role==='pc'?0:1)||a.title.localeCompare(b.title)),[data.entries,campaign]);
  const [fetched,setFetched]=useState(''),[unread,setUnread]=useState(false);
@@ -65,7 +65,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const appReads=isLink&&fetched!==link.trim();
  const compacted=useMemo(()=>step==='options'&&!appReads?compactTranscript(text).length:0,[step,appReads,text]);
  const keyBlock=appReads?'RPG Tools couldn’t read this link, so your AI app reads it with its own access.':compacted>IN_APP_LIMIT?'This transcript is too long to write here in one go. Your AI app reads it in parts.':'';
- const key=keyBlock?undefined:keys.find(k=>k.id===writer&&k.transcripts);
+ const key=keyBlock||mine?undefined:keys.find(k=>k.id===writer&&k.transcripts);
  const current=made?data.entries.find(e=>e.id===made.id):undefined,arrived=!!current?.recap&&!waitingForAi(current.recap);
 
  const toOptions=async()=>{
@@ -94,17 +94,20 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const handOver=async()=>{
   if(!title.trim()){setError('Give the session a title.');return;}
   setError('');setBusy(true);
-  const request:RecapRequest={length,depth,...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
+  const request:RecapRequest|undefined=mine?undefined:{length,depth,...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
   const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':'A pasted transcript';
   let id='';
-  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
+  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,mine,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
   if(ok===false||!id){setBusy(false);return;}
   let saved=true;
   if(!appReads){
    const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transcript',entryId:id,text})}).then(r=>r.ok).catch(()=>false);
    saved=r;
   }
-  setBusy(false);setMade({id,title:title.trim(),saved,...(appReads?{link:link.trim()}:{})});setStep('handoff');
+  setBusy(false);
+  // Written by the GM: open the page to write it. The source stays on its Transcript tab.
+  if(mine){onOpen(id);onClose();return;}
+  setMade({id,title:title.trim(),saved,...(appReads?{link:link.trim()}:{})});setStep('handoff');
   if(key&&saved)void write(id);
   else if(key){setWriting('failed');setError('The transcript didn’t save, so it can’t be written here. Paste it on the page’s Transcript tab, then try again.');}
  };
@@ -142,7 +145,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
 
  return <ToolDialog title="New session recap" onClose={onClose} wide><div className="recap-dialog">
   <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
-  <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key?'Write it':'Hand it over'}</span></div>
+  <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key||mine?'Write it':'Hand it over'}</span></div>
   {step==='source'?<>
    <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon,off=s.kind==='forum';return <button key={s.kind} role="radio" aria-checked={kind===s.kind} disabled={off} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(off)return;setKind(s.kind as Kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}{off&&<small className="soon">After the forum</small>}</strong><small>{s.hint}</small></span></button>;})}</div>
    <input ref={fileInput} type="file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.html,.htm,text/plain,text/markdown,application/json,text/html" onChange={e=>{void pick(e.target.files?.[0]);e.target.value='';}}/>
@@ -158,21 +161,22 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
      <label className="field-title">Title<input className="recap-input" maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label>
      <label className="field-title">Played on<input className="recap-input date" type="date" value={playedOn} onChange={e=>setPlayedOn(e.target.value)}/></label>
      {cast.length>0&&<div className="field-title">Who is who<div className="cast-rows">{cast.map((c,i)=><div key={c.speaker} className="cast-row"><code>{c.speaker}</code><ArrowRight size={13}/><select aria-label={`Who ${c.speaker} is`} value={c.as} onChange={e=>{const v=e.target.value,p=characters.find(x=>x.id===v);setCast(cast.map((x,j)=>j===i?{speaker:x.speaker,as:v,...(p?{name:p.title}:{})}:x));}}><option value="gm">The GM (you)</option><option value="">A player, no character</option>{characters.map(p=><option key={p.id} value={p.id}>{p.title}{p.character?.role==='pc'?' · player character':''}</option>)}</select></div>)}</div></div>}
-     <div className="field-title">Recap length<div className="segmented wide">{(['short','standard','detailed'] as const).map(x=><button key={x} className={length===x?'on':''} onClick={()=>setLength(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</div></div>
+     {!mine&&<><div className="field-title">Recap length<div className="segmented wide">{(['short','standard','detailed'] as const).map(x=><button key={x} className={length===x?'on':''} onClick={()=>setLength(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</div></div>
      <div className="field-title">How much to pull out<div className="segmented wide">{([['main','Main things'],['balanced','Balanced'],['everything','Everything']] as const).map(([x,l])=><button key={x} className={depth===x?'on':''} onClick={()=>setDepth(x)}>{l}</button>)}</div></div>
-     <label className="field-title">Anything to steer it<textarea className="recap-input" rows={3} maxLength={500} value={steer} placeholder="Warm and a little ominous. Name each player character at least once." onChange={e=>setSteer(e.target.value)}/></label>
+     <label className="field-title">Anything to steer it<textarea className="recap-input" rows={3} maxLength={500} value={steer} placeholder="Warm and a little ominous. Name each player character at least once." onChange={e=>setSteer(e.target.value)}/></label></>}
     </div>
     <div>
-     <div className="field-title">What to make<div className="make-list">{recapParts.map(k=><label key={k}><input type="checkbox" checked={!skip.has(k)} onChange={e=>{const n=new Set(skip);if(e.target.checked)n.delete(k);else n.add(k);setSkip(n);}}/> <span>{partLabels[k][0]}</span><small>{partLabels[k][1]}</small></label>)}</div></div>
+     {!mine&&<div className="field-title">What to make<div className="make-list">{recapParts.map(k=><label key={k}><input type="checkbox" checked={!skip.has(k)} onChange={e=>{const n=new Set(skip);if(e.target.checked)n.delete(k);else n.add(k);setSkip(n);}}/> <span>{partLabels[k][0]}</span><small>{partLabels[k][1]}</small></label>)}</div></div>}
      <div className="field-title">Who writes it
-      <label className={`writer-card ${!key?'on':''}`}><input type="radio" name="writer" checked={!key} onChange={()=>setWriter('')}/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
-      {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>setWriter(k.id)}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text, files and public links.`}</small></span></label>;})
+      <label className={`writer-card ${!key&&!mine?'on':''}`}><input type="radio" name="writer" checked={!key&&!mine} onChange={()=>{setWriter('');setMine(false);}}/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
+      {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>{setWriter(k.id);setMine(false);}}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text, files and public links.`}</small></span></label>;})
       :<label className="writer-card off"><input type="radio" name="writer" disabled/><span><strong><KeyRound size={13}/> An API key, here</strong><small>Runs in RPG Tools with your own AI key. Add one with Connect an AI › Use an API key, with Help me run the game or Run the game.</small></span></label>}
+      <label className={`writer-card ${mine?'on':''}`}><input type="radio" name="writer" checked={mine} onChange={()=>setMine(true)}/><span><strong><PenLine size={13}/> Me, no AI</strong><small>{appReads?'Makes the page with the link noted on it. You write the recap; Check it with AI stays optional.':'Makes the page with the transcript on a GM-only tab. You write the recap; Check it with AI stays optional.'}</small></span></label>
      </div>
     </div>
    </div>
    {error&&<p className="form-error">{error}</p>}
-   <div className="dialog-footer"><span className="aside-hint">{page?`Fills “${page.title}”.${page.body.trim()&&!page.recap?' Its current text moves to a GM-only tab.':''} Players can’t see it until you publish.`:'Makes a new GM-only session page.'}</span><div className="button-row"><button className="button" onClick={()=>setStep('source')}>Back</button><button className="button primary" disabled={busy} onClick={handOver}><Sparkles size={14}/> {busy?'Saving…':key?`Write it with ${key.name}`:'Hand to my AI app'}</button></div></div>
+   <div className="dialog-footer"><span className="aside-hint">{page?`Fills “${page.title}”.${page.body.trim()&&!page.recap?' Its current text moves to a GM-only tab.':''} Players can’t see it until you publish.`:'Makes a new GM-only session page.'}</span><div className="button-row"><button className="button" onClick={()=>setStep('source')}>Back</button><button className="button primary" disabled={busy} onClick={handOver}>{mine?<PenLine size={14}/>:<Sparkles size={14}/>} {busy?'Saving…':mine?'Make the page':key?`Write it with ${key.name}`:'Hand to my AI app'}</button></div></div>
   </>}
  </div></ToolDialog>;
 }
