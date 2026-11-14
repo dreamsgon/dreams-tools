@@ -2288,6 +2288,8 @@ button.primary, .rpg-open { font-weight:500; }
  .site-header .site-links { display:flex; align-items:center; gap:14px; order:2; flex:1 1 0; min-width:0; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-width:none; }
  .site-header .site-links::-webkit-scrollbar { display:none; }
  .site-header .site-links .site-nav-link { flex:none; white-space:nowrap; }
+ /* The page you are on comes first in the strip, so it is never off the edge. */
+ .site-header .site-links .site-nav-link[aria-current="page"] { order:-1; }
  .site-header .site-account-long { display:none; }
 }
 @media(max-width:480px) { .site-header .brand .brand-name { display:none; } }
