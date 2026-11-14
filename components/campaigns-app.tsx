@@ -202,7 +202,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     </div>
     {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
-    {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} close={() => setMoving(null)} send={send} />}
+    {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
@@ -323,7 +323,9 @@ function Sheet({ title, close, children }: { title: string; close: () => void; c
       setTimeout(() => { const now = document.activeElement; if ((!now || now === document.body) && opener?.isConnected) opener.focus(); }, 0);
     };
   }, [opener]);
-  return <div className="campaigns-backdrop campaigns-sheet-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
+  return <div className="campaigns-backdrop campaigns-sheet-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}
+    // The folder menu sits inside a folder row, and React passes events up through it: keep taps, keys and drags in the sheet from opening, closing or re-ordering that folder.
+    onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()} onDragOver={e => e.stopPropagation()} onDrop={e => e.stopPropagation()}>
     <div className="campaigns-sheet" ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
       <span className="campaigns-grab" aria-hidden="true" />
       <h2>{title}</h2>
@@ -332,21 +334,29 @@ function Sheet({ title, close, children }: { title: string; close: () => void; c
   </div>;
 }
 
-function MoveSheet({ row, summary, busy, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
+function MoveSheet({ row, summary, busy, error, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close: () => void; send: Send }) {
   const [creating, setCreating] = useState(false), [name, setName] = useState("");
   const options = moveOptions(summary.folders, row.folderId);
   const title = `Move “${row.name}” to…`;
-  async function move(id: string | null, label: string) { await send({ action: "moveCampaign", key: row.key, folderId: id }, `Moved ${row.name} to ${label}.`); close(); }
+  // On failure the sheet stays open and shows why, so the choice is not lost.
+  async function move(id: string | null, label: string) { if (await send({ action: "moveCampaign", key: row.key, folderId: id }, `Moved ${row.name} to ${label}.`)) close(); }
   async function createAndMove() {
     const clean = name.trim();
     if (!clean) return;
     const before = new Set(summary.folders.map(f => f.id));
     let created: CampaignFolder | undefined;
-    const ok = await send({ action: "newFolder", name: clean, parentId: null }, undefined, next => { created = next.folders.find(f => !before.has(f.id)); });
-    if (ok && created) await move(created.id, created.name);
-    else close();
+    // The server answers with the whole list, so pick out the folder this made: new, at the top level, and named as typed
+    // (falling back to the only new top-level folder, in case the server tidied the name).
+    const ok = await send({ action: "newFolder", name: clean, parentId: null }, undefined, next => {
+      const fresh = next.folders.filter(f => !before.has(f.id) && !f.parentId);
+      created = fresh.filter(f => f.name === clean).at(-1) ?? (fresh.length === 1 ? fresh[0] : undefined);
+    });
+    if (!ok) return; // stay on the name box with the error showing
+    setCreating(false);
+    if (created) await move(created.id, created.name);
   }
   return <Sheet title={title} close={close}>
+    {error && <p className="campaigns-sheet-error" role="alert">{error}</p>}
     {creating ? <form className="campaigns-sheet-new" onSubmit={e => { e.preventDefault(); void createAndMove(); }}>
       <label>Folder name<input autoFocus value={name} maxLength={120} disabled={busy} onChange={e => setName(e.target.value)} placeholder="For example, One-shots" /></label>
       <div className="campaigns-sheet-new-actions">
