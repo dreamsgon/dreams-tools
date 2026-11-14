@@ -6,7 +6,7 @@
  * around, scroll or use the buttons to zoom. The side panel also works as a plain list for keyboards and screen readers.
  */
 import {useMemo,useState} from 'react';
-import {ArrowUpRight,Eye,EyeOff,GitFork,ListTree,Network,Plus,Search,X} from 'lucide-react';
+import {ArrowUpRight,Dices,Eye,EyeOff,GitFork,ListTree,Network,Plus,Search,X} from 'lucide-react';
 import './quest-connections.css';
 import './ties.css';
 import './relationships.css';
@@ -20,6 +20,7 @@ import {useTies} from './page-connections';
 import {TieKinds} from './tie-types';
 import {ZoomButtons,usePanZoom} from './pan-zoom';
 import {FamilyTrees} from './family-tree';
+import {GenerateTies} from './relationship-generators';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const MAX_NODES=150;
@@ -122,7 +123,7 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
  const [worked,setWorked]=useState(false),[players,setPlayers]=useState(false);
  const [hiddenGroups,setHiddenGroups]=useState<Set<string>>(()=>new Set()),[hiddenKinds,setHiddenKinds]=useState<Set<WebPageKind>>(()=>new Set());
  const [focus,setFocus]=useState<string|null>(null),[depth,setDepth]=useState(1),[edgeKey,setEdgeKey]=useState<string|null>(null);
- const [picking,setPicking]=useState(false),[kinds,setKinds]=useState(false),[mode,setMode]=useState<'web'|'trees'>('web');
+ const [picking,setPicking]=useState(false),[kinds,setKinds]=useState(false),[mode,setMode]=useState<'web'|'trees'>('web'),[generating,setGenerating]=useState(false);
  const all=useMemo(()=>webTies(data,worldId,campaignId,{worked,types}),[data,worldId,campaignId,worked,types]);
  const readable=useMemo(()=>players&&campaign?new Set(playerCampaign(data,campaign.id).entries.map(e=>e.id)):null,[players,campaign,data]);
  const ties=useMemo(()=>readable?playersWebTies(all,id=>readable.has(id),id=>data.entries.find(e=>e.id===id)?.profile?.visibility==='players'):all,[all,readable,data.entries]);
@@ -151,6 +152,7 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
      <button type="button" role="radio" aria-checked={mode==='trees'} className={mode==='trees'?'on':''} onClick={()=>setMode('trees')}><GitFork size={13}/> Family trees</button>
     </div>
     {!players&&<button type="button" className="button small" onClick={()=>setKinds(true)}><ListTree size={14}/> Kinds of tie</button>}
+    {!players&&mode==='web'&&<button type="button" className="button small" onClick={()=>setGenerating(true)}><Dices size={14}/> Generate ties</button>}
     {campaign&&<div className="segmented" role="radiogroup" aria-label="Whose view">
      <button type="button" role="radio" aria-checked={!players} className={!players?'on':''} onClick={()=>setPlayers(false)}><EyeOff size={13}/> GM view</button>
      <button type="button" role="radio" aria-checked={players} className={players?'on':''} onClick={()=>{setPlayers(true);setEdgeKey(null);}}><Eye size={13}/> What players see</button>
@@ -193,6 +195,7 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
    </aside>
   </div>}
   </>}
+  {generating&&<GenerateTies data={data} worldId={worldId} campaignId={campaignId} initial={focused?[focused]:[]} change={change} onClose={()=>setGenerating(false)} onDone={()=>setGenerating(false)}/>}
   {kinds&&world&&<TieKinds world={world} data={data} change={change} onClose={()=>setKinds(false)}/>}
  </section>;
 }
