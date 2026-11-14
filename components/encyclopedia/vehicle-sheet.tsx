@@ -14,6 +14,7 @@ import {usePictureSrc} from './character-picture';
 import {PageSlot} from './quest-facts';
 import {TargetPicker} from './quest-goals';
 import {VehicleArtIcon} from './vehicle-art';
+import {SeatCards,SeatCardsReadOnly,SeatPins,VehicleCrew,pinsOf} from './vehicle-crew';
 import {confirmDialog} from '../confirm-dialog';
 import './quest-facts.css';
 import './vehicle-sheet.css';
@@ -45,7 +46,7 @@ function ValueBox({label,value,kind,gm,onSave,onGm}:{label:string;value:string;k
 }
 
 /** The middle: the vehicle's picture, or its type's silhouette with a button to add one. */
-function VehiclePicture({entry,art,update}:{entry:Entry;art:Parameters<typeof VehicleArtIcon>[0]['art'];update:(p:Partial<Entry>)=>void}){
+function VehiclePicture({entry,art,update,pins}:{entry:Entry;art:Parameters<typeof VehicleArtIcon>[0]['art'];update:(p:Partial<Entry>)=>void;pins?:ReactNode}){
  const picture=entry.picture,{src,failed}=usePictureSrc(picture?.imageId),file=useRef<HTMLInputElement>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  async function upload(f:File){setBusy(true);setError('');try{const image=await uploadMapImage(f);update({picture:newPicture(image.imageId,image.imageWidth,image.imageHeight)});}catch(e){setError(e instanceof Error?e.message:'Upload failed');}finally{setBusy(false);}}
@@ -53,6 +54,7 @@ function VehiclePicture({entry,art,update}:{entry:Entry;art:Parameters<typeof Ve
   <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f);}}/>
   {/* eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image cannot optimise it */}
   {picture?(src?<img src={src} alt=""/>:<span className="vehicle-picture-wait">{failed?'Picture unavailable':'Loading…'}</span>):<VehicleArtIcon art={art} size={260} className="vehicle-art"/>}
+  {pins}
   <div className="vehicle-picture-tools">
    <button type="button" className="icon-button" disabled={busy} aria-label={picture?'Replace the picture':'Add a picture'} title={picture?'Replace the picture':'Add a picture or deck plan'} onClick={()=>file.current?.click()}><ImagePlus size={15}/></button>
    {picture&&<button type="button" className="icon-button" aria-label="Remove the picture" onClick={async()=>{if(await confirmDialog({title:'Remove this picture?',message:'The type’s outline shows instead.',confirm:'Remove picture',danger:true}))update({picture:undefined});}}><Trash2 size={15}/></button>}
@@ -80,13 +82,24 @@ function LocationSlot({vehicle,pages,set,onOpen}:{vehicle:Vehicle;pages:Entry[];
  </section>;
 }
 
+/** The pages a vehicle can point at: the same world, and this campaign or the whole world. */
+function usePages(entry:Entry,data:Workspace){
+ return useMemo(()=>data.entries.filter(e=>e.id!==entry.id&&e.kind!=='folder'&&e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)).sort((a,b)=>a.title.localeCompare(b.title)),[data.entries,entry.id,entry.worldId,entry.campaignId]);
+}
+
+/** The GM's Crew tab of a vehicle page. */
+export function VehicleCrewTab({entry,data,update,onOpen}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void}){
+ const world=data.worlds.find(w=>w.id===entry.worldId),vehicle=entry.vehicle??newVehicle(vehicleTypesOf(world)[0]),pages=usePages(entry,data);
+ return <VehicleCrew vehicle={vehicle} type={vehicleTypeOf(vehicle,world)} pages={pages} save={v=>update({vehicle:v})} onOpen={onOpen}/>;
+}
+
 /** The GM's Overview tab of a vehicle page. */
-export function VehicleSheet({entry,data,update,onOpen}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void}){
+export function VehicleSheet({entry,data,update,onOpen,onCrew}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void;onCrew:()=>void}){
  const world=data.worlds.find(w=>w.id===entry.worldId),types=vehicleTypesOf(world);
  const vehicle=entry.vehicle??newVehicle(types[0]),type=vehicleTypeOf(vehicle,world);
  const save=(v:Vehicle)=>update({vehicle:v});
  const set=(patch:Partial<Vehicle>)=>{const next={...vehicle,...patch};for(const k of Object.keys(patch) as (keyof Vehicle)[])if(next[k]===undefined)delete next[k];save(next);};
- const pages=useMemo(()=>data.entries.filter(e=>e.id!==entry.id&&e.kind!=='folder'&&e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)).sort((a,b)=>a.title.localeCompare(b.title)),[data.entries,entry.id,entry.worldId,entry.campaignId]);
+ const pages=usePages(entry,data);
  const owners=useMemo(()=>pages.filter(isWho),[pages]),characters=useMemo(()=>pages.filter(e=>e.kind==='character'),[pages]);
  const switchType=async(id:string)=>{const to=types.find(t=>t.id===id);if(!to||to.id===type.id)return;
   if(!await confirmDialog({title:`Make this a ${to.name.toLowerCase()}?`,message:'Stats and gauges with the same names keep their values; the rest start empty.',confirm:`Change to ${to.name}`}))return;
@@ -102,8 +115,9 @@ export function VehicleSheet({entry,data,update,onOpen}:{entry:Entry;data:Worksp
     <PageSlot className={`vehicle-slot o-cmd${vehicle.commanderGm?' is-hidden':''}`} icon={<Crown size={13}/>} title={type.commander} label={`the ${type.commander.toLowerCase()}`} empty={`Who is the ${type.commander.toLowerCase()}?`} pageId={vehicle.commanderId} pages={characters} first={()=>true} onSet={id=>set({commanderId:id??undefined})} onOpen={onOpen} tools={<EyeToggle gm={!!vehicle.commanderGm} what={`the ${type.commander.toLowerCase()}`} onChange={v=>set({commanderGm:v||undefined})}/>}/>
    </div>
    <div className="vehicle-col vehicle-mid">
-    <VehiclePicture entry={entry} art={type.art} update={update}/>
+    <VehiclePicture entry={entry} art={type.art} update={update} pins={<SeatPins stations={pinsOf(vehicle,type,pages)}/>}/>
     <LocationSlot vehicle={vehicle} pages={pages} set={set} onOpen={onOpen}/>
+    <SeatCards vehicle={vehicle} type={type} pages={pages} characters={characters} save={save} onOpen={onOpen} onCrew={onCrew}/>
    </div>
    <div className="vehicle-col vehicle-right">
     {type.gauges.length>0&&<section className="vehicle-card o-gauge" aria-label="Condition"><span className="eyebrow">Condition</span>
@@ -134,8 +148,9 @@ export function VehicleReadOnly({vehicle,picture,names,open,token}:{vehicle:Play
    <div className="vehicle-col vehicle-left">{who('Owner',<Shield size={13}/>,'o-own',vehicle.ownerId)}{who(vehicle.type.commander,<Crown size={13}/>,'o-cmd',vehicle.commanderId)}</div>
    <div className="vehicle-col vehicle-mid">
     {/* eslint-disable-next-line @next/next/no-img-element -- a private object URL */}
-    <div className="vehicle-picture">{picture&&src?<img src={src} alt=""/>:<VehicleArtIcon art={vehicle.type.art} size={260} className="vehicle-art"/>}</div>
+    <div className="vehicle-picture">{picture&&src?<img src={src} alt=""/>:<VehicleArtIcon art={vehicle.type.art} size={260} className="vehicle-art"/>}<SeatPins names={false} stations={vehicle.stations.filter(s=>s.pic).map(s=>({label:s.label,filled:!!(s.characterId||s.name||s.unknown),name:s.characterId?names(s.characterId):s.name??'?'}))}/></div>
     {(vehicle.locationId||vehicle.locationText)&&<div className="vehicle-location"><span className="vehicle-location-icon" aria-hidden="true"><MapPin size={16}/></span><div className="vehicle-location-body"><span className="eyebrow">Current location</span>{vehicle.locationId?<button type="button" className="wiki-link vehicle-location-name" onClick={()=>open(vehicle.locationId!)}>{names(vehicle.locationId)}</button>:<span className="vehicle-location-name">{vehicle.locationText}</span>}</div></div>}
+    <SeatCardsReadOnly vehicle={vehicle} names={names} open={open}/>
    </div>
    <div className="vehicle-col vehicle-right">
     {vehicle.gauges.length>0&&<section className="vehicle-card o-gauge" aria-label="Condition"><span className="eyebrow">Condition</span>{vehicle.gauges.map(g=><GaugeView key={g.id} {...g}/>)}</section>}

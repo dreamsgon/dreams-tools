@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSchema,demoWorkspace,playerCampaign,importCopy,searchableText,defaultCharacter} from '../lib/encyclopedia/world-model.ts';
-import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema} from '../lib/encyclopedia/vehicles.ts';
+import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf} from '../lib/encyclopedia/vehicles.ts';
 
 const C='demo-campaign',T='2026-11-14T10:00:00.000Z';
 const page=(id,title,kind,extra={})=>({id,worldId:'demo-world',campaignId:C,parentId:null,title,kind,body:'',updatedAt:T,...extra});
@@ -101,4 +101,86 @@ test('search, import and remapping carry vehicles across',()=>{
  assert.ok(moved.vehicle.commanderId&&moved.vehicle.commanderId!=='cap');
  assert.equal(copy.entries.find(x=>x.id===moved.vehicle.commanderId).title,'Ilsa Marrow');
  assert.equal(remapVehicle({...v,ownerId:'x'},id=>id==='cap'?'c2':undefined).ownerId,undefined);
+});
+
+test('seats start as the type’s, and each vehicle can rename, pin, add and remove its own',()=>{
+ let v=newVehicle(ship);
+ assert.equal(v.stations,undefined,'a new vehicle keeps the type’s seats until it changes one');
+ assert.deepEqual(stationList(v,ship).map(s=>[s.label,s.pic]),[['Pilot',true],['Gunner',true],['Engineer',true],['Sensors',true],['Medic',false],['Quartermaster',false]]);
+ v=editStation(v,ship,'medic',{label:'  Ship’s doctor ',pic:true});
+ v=editStation(v,ship,'gunner',{label:'   '});
+ v=addStation(v,ship,'Tractor beam');
+ v=removeStation(v,ship,'quartermaster');
+ const list=stationList(v,ship);
+ assert.deepEqual(list.map(s=>s.label),['Pilot','Gunner','Engineer','Sensors','Ship’s doctor','Tractor beam']);
+ assert.equal(list.find(s=>s.label==='Ship’s doctor').pic,true);
+ assert.equal(list.at(-1).pic,false,'a new seat starts in the Crew tab');
+ assert.ok(vehicleSchema.safeParse(v).success);
+ assert.equal(stationList(newVehicle(ship),ship).length,6,'the type itself is unchanged');
+});
+
+test('a character holds one seat at a time; names, the manifest and counts work',()=>{
+ let v=seat(newVehicle(ship),ship,'pilot',{characterId:'cap'});
+ v=seat(v,ship,'gunner',{characterId:'cap'});
+ assert.equal(stationList(v,ship).find(s=>s.id==='pilot').characterId,undefined,'moving seats empties the old one');
+ v=seat(v,ship,'engineer',{name:'  Osk '});v=seat(v,ship,'sensors',{characterId:'spy'});v=editStation(v,ship,'sensors',{gm:true});
+ assert.equal(stationList(v,ship).find(s=>s.id==='engineer').name,'Osk');
+ v=addCrew(v,{name:'Dr. Hale'},'Medic');v=addCrew(v,{characterId:'cap'});v=addCrew(v,{characterId:'cap'});v=addCrew(v,{name:'  '});
+ assert.equal(v.crew.length,2,'no duplicates and no blank names');
+ v=editCrew(v,v.crew[1].id,{role:'Owner’s eyes',gm:true});
+ v=setHands(v,ship,'marines',{value:-3});v=setHands(v,ship,'crew',{value:22});v=setHands(v,ship,'nope',{value:5});
+ assert.deepEqual(handRows(v,ship).map(h=>[h.label,h.value]),[['Crew',22],['Marines',0]]);
+ assert.deepEqual(vehicleRolesOf({...v,commanderId:'cap'},ship,'cap'),['Captain','Gunner','Crew · Owner’s eyes']);
+ assert.ok(vehicleSchema.safeParse(v).success);
+ assert.equal(removeCrew(removeCrew(v,v.crew[0].id),v.crew[1].id).crew,undefined);
+ assert.equal(vehicleSchema.safeParse({...v,crew:[{id:'x'}]}).success,false,'a crew member needs a page or a name');
+});
+
+test('changing the type keeps people in seats with the same name and never drops anyone',()=>{
+ let v=seat(newVehicle(ship),ship,'pilot',{name:'Tam'});
+ v=seat(v,ship,'quartermaster',{characterId:'cap'});
+ v=seat(v,ship,'gunner',{name:'Rook'});
+ v=setHands(v,ship,'marines',{value:8});
+ const s=changeType(v,ship,sail),list=stationList(s,sail);
+ assert.equal(list.find(x=>x.label==='Quartermaster').characterId,'cap','same seat name, same person');
+ assert.ok(list.some(x=>x.name==='Tam'&&!x.pic),'an unmatched seat moves to the Crew tab');
+ assert.ok(list.some(x=>x.name==='Rook'));
+ assert.ok(!list.some(x=>x.label==='Engineer'),'empty seats of the old type go');
+ assert.equal(handRows(s,sail).find(h=>h.label==='Marines').value,8);
+ assert.ok(vehicleSchema.safeParse(s).success);
+});
+
+test('seats and crew must be character pages, and players see only what is shown',()=>{
+ let v={...newVehicle(ship),visibility:'players'};
+ v=seat(v,ship,'pilot',{characterId:'cap'});v=seat(v,ship,'sensors',{characterId:'spy'});v=seat(v,ship,'engineer',{name:'Osk'});
+ v=seat(v,ship,'medic',{name:'Doctor Secret'});v=editStation(v,ship,'gunner',{gm:true});
+ v=addCrew(v,{name:'Hidden Stowaway'});v=editCrew(v,v.crew[0].id,{gm:true});v=addCrew(v,{characterId:'spy'},'Crown spy');v=addCrew(v,{name:'Bo'},'Cook');
+ v=setHands(v,ship,'marines',{value:8,gm:true});v=setHands(v,ship,'crew',{value:22});
+ assert.ok(ok(world(v)).success);
+ assert.equal(ok(world(seat(v,ship,'pilot',{characterId:'port'}))).success,false,'an organization can’t sit in a seat');
+ assert.equal(ok(world(addCrew(v,{characterId:'vesh'}))).success,false);
+ let pv=playerCampaign(world(v),C).entries.find(e=>e.id==='gdn').vehicle;
+ assert.deepEqual(pv.stations.map(s=>s.label),['Pilot','Engineer','Sensors'],'Crew tab not shared: pinned, shown seats only');
+ assert.equal(pv.stations.find(s=>s.label==='Pilot').characterId,'cap');
+ assert.deepEqual(pv.stations.find(s=>s.label==='Sensors'),{id:'sensors',label:'Sensors',pic:true,unknown:true},'a page players can’t read stays unnamed');
+ assert.equal(pv.crewTab,undefined);
+ v={...v,crewVisibility:'players'};
+ pv=playerCampaign(world(v),C).entries.find(e=>e.id==='gdn').vehicle;
+ assert.deepEqual(pv.stations.map(s=>s.label),['Pilot','Engineer','Sensors','Medic','Quartermaster']);
+ assert.deepEqual(pv.crewTab.crew.map(c=>c.name??c.characterId),['Bo'],'GM-only and unreadable people are left out');
+ assert.deepEqual(pv.crewTab.hands,[{id:'crew',label:'Crew',value:22}]);
+ const text=JSON.stringify(playerCampaign(world(v),C));
+ for(const secret of ['Hidden Stowaway','Crown spy','Agent Vey'])assert.ok(!text.includes(secret),secret);
+ const hidden=world({...v,visibility:'gm'});
+ assert.equal(playerCampaign(hidden,C).entries.find(e=>e.id==='gdn'),undefined,'a shared Crew tab on a GM-only vehicle is not shared');
+});
+
+test('imports carry seats and crew across and drop pages that didn’t come',()=>{
+ let v=seat(newVehicle(ship),ship,'pilot',{characterId:'cap'});v=addCrew(v,{characterId:'cap'},'Owner');v=addCrew(v,{characterId:'gone'});
+ const r=remapVehicle(v,id=>id==='cap'?'c2':undefined);
+ assert.equal(stationList(r,ship).find(s=>s.id==='pilot').characterId,'c2');
+ assert.deepEqual(r.crew.map(c=>c.characterId),['c2'],'a crew row with no page left and no name goes');
+ const copy=importCopy(demoWorkspace(),world(seat(newVehicle(ship),ship,'pilot',{characterId:'cap'})));
+ const moved=copy.entries.find(x=>x.title==='GDN-205'&&x.kind==='vehicle'),pilot=stationList(moved.vehicle,ship).find(s=>s.id==='pilot');
+ assert.equal(copy.entries.find(x=>x.id===pilot.characterId).title,'Ilsa Marrow');
 });

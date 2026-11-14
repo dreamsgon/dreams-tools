@@ -12,7 +12,7 @@ import {lookSchema,playerLook} from './look.ts';
 import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
 import {sheetSchema,playerSheet} from './sheet-link.ts';
-import {vehicleSchema,vehicleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
+import {vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
@@ -136,6 +136,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
         if(e.vehicle){for(const ref of vehicleRefs(e.vehicle)){const t=entries.get(ref);if(!t)continue;if(ref===e.id)bad('A vehicle cannot point at itself');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A vehicle cannot point outside its world or campaign');}
           const kindOf=(id?:string)=>id?entries.get(id)?.kind:undefined,owner=kindOf(e.vehicle.ownerId),commander=kindOf(e.vehicle.commanderId);
           if(commander&&commander!=='character')bad('A vehicle’s commander must be a character page');
+          if(peopleRefs(e.vehicle).some(id=>{const k=kindOf(id);return k&&k!=='character';}))bad('Only character pages can hold a seat or be on a crew manifest');
           if(owner&&owner!=='character'&&owner!=='faction')bad('A vehicle’s owner must be a character or organization page');}
         if(e.profile)for(const ref of profileRefs(e.profile)){const t=entries.get(ref);if(!t)continue;if(ref===e.id)bad('A character cannot have a tie to themselves');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A profile cannot point outside its world or campaign');if(t.kind!=='character'&&t.kind!=='faction')bad('Ties must point at character or organization pages');}
         if(e.codex)for(const cid of Object.keys(e.codex.found)){const c=campaigns.get(cid);if(!c||c.worldId!==e.worldId||(e.campaignId!==null&&e.campaignId!==cid))bad('A codex find belongs to a campaign that can see the page');}
