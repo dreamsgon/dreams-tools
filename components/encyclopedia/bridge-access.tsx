@@ -62,7 +62,11 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
     <span className="import-label">Address</span>
     <div className="bridge-copy"><code>{base}</code><button type="button" className="button small" onClick={()=>void copy('url',base)}>{copied==='url'?<><Check size={13}/> Copied</>:<><Copy size={13}/> Copy</>}</button></div>
     <p className="import-warn"><b>Copy the key now.</b> It won’t be shown again. Anyone with it can read this campaign, GM secrets included, and change what you allow below, until you revoke it.</p>
-    {made.bridge.client==='foundry'&&<p className="import-note">The RPG Tools Bridge module for Foundry is the next part being built. When it’s ready, paste the key and address in its settings.</p>}
+    {made.bridge.client==='foundry'&&<>
+     <span className="import-label">In Foundry: Add-on Modules › Install Module, then paste this manifest URL</span>
+     <div className="bridge-copy"><code>{`${base}/foundry/module.json`}</code><button type="button" className="button small" onClick={()=>void copy('manifest',`${base}/foundry/module.json`)}>{copied==='manifest'?<><Check size={13}/> Copied</>:<><Copy size={13}/> Copy</>}</button></div>
+     <p className="import-note">Turn on RPG Tools Bridge in your world, then paste the address and key in its module settings. Only your GM browser keeps the key.</p>
+    </>}
     {copied==='failed'&&<p className="ai-error" role="alert">Copying didn’t work here. Select the text and copy it yourself.</p>}
    </section>}
    <form className="bridge-new" onSubmit={e=>{e.preventDefault();void make();}}>
@@ -80,7 +84,7 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
      {editing===k.id&&<div className="bridge-sync">
       <p className="import-note">Each kind of thing has its own direction. Lore starts one way, from RPG Tools, so the table can’t overwrite your Encyclopedia by accident.</p>
       <table className="bridge-table"><thead><tr><th>In RPG Tools</th><th>At the table</th><th>Direction</th></tr></thead><tbody>
-       {syncKinds.map(kind=><tr key={kind}><td><b>{syncInfo[kind].name}</b>{!syncInfo[kind].ready&&<span className="import-chip">With the Foundry module</span>}</td><td>{syncInfo[kind].there}</td>
+       {syncKinds.map(kind=><tr key={kind}><td><b>{syncInfo[kind].name}</b>{!syncInfo[kind].ready&&<span className="import-chip">Coming next</span>}</td><td>{syncInfo[kind].there}</td>
         <td><select aria-label={`${syncInfo[kind].name} direction`} value={k.sync[kind]} onChange={e=>void direction(k,kind,e.target.value as Direction)}>{(Object.keys(directionNames) as Direction[]).map(d=><option key={d} value={d}>{directionNames[d]}</option>)}</select></td></tr>)}
       </tbody></table>
      </div>}

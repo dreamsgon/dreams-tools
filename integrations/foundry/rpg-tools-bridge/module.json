@@ -1,0 +1,13 @@
+{
+  "id": "rpg-tools-bridge",
+  "title": "RPG Tools Bridge",
+  "description": "Keeps a Foundry world in step with one RPG Tools Encyclopedia campaign: characters as actors, HP both ways, the character's rolls, and rolls to the campaign's Discord.",
+  "version": "0.1.0",
+  "authors": [{ "name": "RPG Tools" }],
+  "compatibility": { "minimum": "12", "verified": "13" },
+  "esmodules": ["scripts/main.mjs"],
+  "languages": [{ "lang": "en", "name": "English", "path": "lang/en.json" }],
+  "url": "https://github.com/dreamsgon/dreams-tools",
+  "manifest": "",
+  "download": ""
+}

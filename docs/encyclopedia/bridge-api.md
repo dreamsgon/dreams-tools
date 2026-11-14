@@ -43,7 +43,7 @@ A call whose direction is not allowed gets `403`. These are the kinds and their 
 | `tables` | `both` | Come with the Foundry module |
 | `calendar` | `to` | Come with the Foundry module |
 | `initiative` | `both` | Come with the Foundry module |
-| `rolls` | `from` | Come with the Foundry module |
+| `rolls` | `from` | Ready |
 
 ## Endpoints
 
@@ -107,6 +107,24 @@ Returns:
 - Text is Markdown:
   - `[[page-id|Label]]` links to another page.
   - `[[2d6+3|Label]]` is an inline roll.
+
+### Rolls
+
+`POST /api/bridge/rolls`
+
+- Body: `{title, formula, total, detail?, who?}`.
+- Posts the roll to the campaign's Discord rolls channel, like a roll made in RPG Tools.
+- The formula must be dice RPG Tools understands: NdS with `+` and `-`, `kh`/`kl`, `!` for exploding, `>=N` or `<=N` to count, `dF`.
+- When the campaign has no Discord channel set up, the reply is `409` with the reason.
+
+### The Foundry module
+
+These two addresses need no key, because they hold only the module's own files:
+
+- `GET /api/bridge/foundry/module.json` is the manifest to paste into Foundry. It points its download at this same site.
+- `GET /api/bridge/foundry/rpg-tools-bridge.zip` is the module itself.
+
+The source is in `integrations/foundry/rpg-tools-bridge`, and its README explains how to install and use it.
 
 ## Errors
 

@@ -47,6 +47,11 @@ try{
     const r=await fetch(base+path,init);assert.equal(r.status,401,path);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.match((await r.json()).error,/bridge key/);
   }
   assert.equal((await fetch(base+'/api/encyclopedia/bridge-keys?campaignId=demo-campaign',{headers:forged})).status,401);
+  // The Foundry module installs from one manifest address, and its zip holds the module's files with that manifest.
+  const manifest=await (await fetch(base+'/api/bridge/foundry/module.json')).json();assert.equal(manifest.id,'rpg-tools-bridge');assert.equal(manifest.download,base+'/api/bridge/foundry/rpg-tools-bridge.zip');
+  const zip=await fetch(manifest.download);assert.equal(zip.status,200);assert.equal(zip.headers.get('content-type'),'application/zip');const bytes=new Uint8Array(await zip.arrayBuffer());assert.equal(bytes[0],0x50);assert.equal(bytes[1],0x4b);assert.ok(Buffer.from(bytes).includes('scripts/main.mjs'));
+  assert.equal((await fetch(base+'/api/bridge/foundry/other.txt')).status,404);
+  assert.equal((await fetch(base+'/api/bridge/rolls',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
   assert.equal((await fetch(base+'/api/encyclopedia/bridge-keys',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{"campaignId":"demo-campaign","action":"create"}'})).status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);
   const account=await fetch(base+'/api/account',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:'{}'});assert.equal(account.status,403);

@@ -21,7 +21,7 @@ export const syncInfo: Record<SyncKind, { name: string; there: string; ready: bo
   tables: { name: "Random tables", there: "Rollable tables", ready: false },
   calendar: { name: "Calendar date and weather", there: "World time", ready: false },
   initiative: { name: "Initiative", there: "Combat tracker", ready: false },
-  rolls: { name: "Roll log", there: "Chat rolls", ready: false },
+  rolls: { name: "Roll log", there: "Chat rolls, to the campaign’s Discord", ready: true },
 };
 /** Lore starts one way, from RPG Tools, so another table can't overwrite the Encyclopedia by accident. */
 export const defaultSync: Sync = { characters: "both", pages: "to", quests: "both", recaps: "to", scenes: "both", tokens: "both", markers: "to", tables: "both", calendar: "to", initiative: "both", rolls: "from" };
