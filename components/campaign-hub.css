@@ -9,7 +9,7 @@
 .hub-banner { height:150px; margin-bottom:20px; border-radius:var(--radius-lg, 8px); }
 .hub-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px 24px; flex-wrap:wrap; margin-bottom:12px; }
 .hub-title { min-width:0; }
-.hub-title p { margin:0; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.hub-title > p { margin:0; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
 .hub-title h1 { margin:4px 0 0; font-family:var(--font-display); font-size:clamp(28px,calc(3.6vw / var(--ui-zoom, 1)),40px); line-height:1.15; letter-spacing:-.01em; font-weight:600; }
 .hub-actions { display:flex; gap:8px; flex-wrap:wrap; padding-bottom:2px; }
 

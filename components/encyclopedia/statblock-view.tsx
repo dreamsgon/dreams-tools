@@ -27,7 +27,7 @@ export function StatblockView({entry,onChange}:{entry:Entry;onChange:(c:Characte
  if(editing)return <div className="statblock-editor">
   <h2>Paste a statblock</h2>
   <p className="aside-hint">Paste from any book, site or system. It stays exactly as you pasted it, and rolls are found and made clickable. Only you see it.</p>
-  <textarea className="editor statblock-input" aria-label="Statblock" autoFocus maxLength={50000} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={"Klarg\nLarge humanoid (goblinoid), chaotic evil\nArmor Class 16\nHit Points 27 (5d10)\n…"}/>
+  <textarea className="editor statblock-input" aria-label="Statblock" autoFocus maxLength={50000} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={"Mire hound\nLarge beast, unaligned\nArmor Class 13\nHit Points 37 (5d10 + 10)\n…"}/>
   <label className="check-row"><input type="checkbox" checked={auto} onChange={e=>setAuto(e.target.checked)}/> Find rolls automatically (turn off if a statblock reads oddly; [[1d20+5]] always works)</label>
   <div className="statblock-found"><span className="eyebrow">Found {found.length} roll{found.length===1?"":"s"}</span><div>{found.slice(0,14).map((s,i)=><RollChip key={i} title={entry.title} formula={s.formula!} label={[s.context,s.text.trim()].filter(Boolean).join(" ")}/>)}{found.length>14&&<span className="aside-hint">+{found.length-14} more</span>}</div></div>
   <div className="button-row"><button className="button primary" onClick={()=>{onChange({...c,statblock:draft.trim()?draft:undefined,statblockRolls:auto?undefined:false});setDraft(null);}}>Save statblock</button><button className="button" onClick={()=>{setDraft(null);setAuto(detect);}}>Cancel</button></div>

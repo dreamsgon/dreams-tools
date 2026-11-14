@@ -40,7 +40,7 @@ test('statblocks and roll settings are saved, kept in backups, and never sent to
  delete e.character.statblock;delete e.character.statblockRolls;delete c.discord;delete c.statFields[0].roll;workspaceSchema.parse(s);
 });
 test('Discord roll messages are one formatted post and refuse bad formulas',()=>{
- assert.equal(discordRollMessage({campaignId:'c',title:'Klarg · Morningstar',formula:'1d20+5',total:19,detail:'14 + 5'}),'🎲 Klarg · Morningstar\n1d20+5 = **19** (14 + 5)');
+ assert.equal(discordRollMessage({campaignId:'c',title:'Mire hound · Bite',formula:'1d20+5',total:19,detail:'14 + 5'}),'🎲 Mire hound · Bite\n1d20+5 = **19** (14 + 5)');
  assert.throws(()=>discordRollMessage({campaignId:'c',title:'x',formula:'drop table',total:1,detail:''}));
  assert.throws(()=>discordTarget(demoWorkspace(),'demo-campaign'),/Discord channel/);
 });

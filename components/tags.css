@@ -25,16 +25,17 @@
 .tag-error { color:var(--danger); font-size:13px; }
 
 .tag-dot { display:inline-block; flex:none; width:10px; height:10px; padding:0; border:0; border-radius:50%; background:var(--tag); }
-button.tag-dot { width:16px; height:16px; cursor:pointer; box-shadow:0 0 0 2px var(--panel); }
+button.tag-dot { width:16px; height:16px; min-height:0; min-width:0; cursor:pointer; box-shadow:0 0 0 2px var(--panel); }
 button.tag-dot[aria-checked="true"] { box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--tag); }
 .tag-dot-big { width:18px; height:18px; }
 .tag-colors { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
 
 .tag-picker { position:absolute; z-index:70; top:calc(100% + 6px); left:0; width:min(320px, calc(100vw / var(--ui-zoom, 1) - 32px)); padding:8px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); box-shadow:0 10px 30px #0000002e; color:var(--ink); }
 .tag-picker-input { display:flex; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--accent); border-radius:var(--radius); color:var(--muted); }
-.tag-picker-input input { flex:1; min-width:0; min-height:36px; border:0; outline:0; background:none; color:var(--ink); font:inherit; font-size:14px; }
+.tag-picker-input:focus-within { box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.tag-picker-input input, .tag-picker-input input:focus-visible { flex:1; min-width:0; min-height:36px; padding:0; border:0; outline:0; box-shadow:none; background:none; color:var(--ink); font:inherit; font-size:14px; }
 .tag-picker-list { max-height:min(280px, calc(50vh / var(--ui-zoom, 1))); overflow:auto; margin-top:6px; }
-.tag-picker-list > button, .tag-picker-create > button { display:flex; align-items:center; gap:10px; width:100%; min-height:34px; padding:6px 8px; border:0; border-radius:var(--radius); background:none; color:var(--ink); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.tag-picker-list > button, .tag-picker-create > button { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:34px; padding:6px 8px; border:0; border-radius:var(--radius); background:none; color:var(--ink); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
 .tag-picker-list > button > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tag-picker-list > button small { color:var(--muted); font-size:12px; }
 .tag-picker-list [aria-selected="true"] { background:var(--chrome-hover, var(--accent-soft)); }
