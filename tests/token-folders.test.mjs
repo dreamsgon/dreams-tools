@@ -4,7 +4,7 @@ import { initialWorkspace, newToken, workspaceSchema, createTokenFolder, moveTok
 
 const base = () => {
   const w = initialWorkspace();
-  w.collections = ["mash", "klarg"].map(id => ({ id, name: id, kind: "campaign", parentId: null }));
+  w.collections = ["mash", "greyfen"].map(id => ({ id, name: id, kind: "campaign", parentId: null }));
   return w;
 };
 
@@ -13,7 +13,7 @@ test("legacy mixed token folder trees migrate per campaign without changing asse
   w.assetFolders = [{ id: "root", name: "Creatures", kind: "folder", parentId: null }, { id: "child", name: "Monsters", kind: "folder", parentId: "root" }];
   w.assetLocations = { image: "child" };
   w.tokenLibrary = ["m", "k", "s"].map(id => ({ ...newToken(id), id }));
-  w.libraryCampaigns = { m: "mash", k: "klarg", s: null };
+  w.libraryCampaigns = { m: "mash", k: "greyfen", s: null };
   w.libraryLocations = { m: "child", k: "child", s: "child" };
   const migrated = workspaceSchema.parse(w);
   assert.equal(migrated.tokenFolders.length, 6);
@@ -32,9 +32,9 @@ test("legacy mixed token folder trees migrate per campaign without changing asse
 
 test("new folders belong to current campaign and other campaigns never see them", () => {
   const w = base();
-  const mash = createTokenFolder(w, "mash", "Mash NPCs"), klarg = createTokenFolder(w, "klarg", "Klarg goblins");
+  const mash = createTokenFolder(w, "mash", "Mash NPCs"), greyfen = createTokenFolder(w, "greyfen", "Greyfen hounds");
   assert.deepEqual(tokenFoldersForCampaign(w, "mash").map(f => f.id), [mash.id]);
-  assert.deepEqual(tokenFoldersForCampaign(w, "klarg").map(f => f.id), [klarg.id]);
+  assert.deepEqual(tokenFoldersForCampaign(w, "greyfen").map(f => f.id), [greyfen.id]);
   assert.equal(w.assetFolders.length, 0);
   assert.equal(createTokenFolder(w, "mash", "  "), undefined);
 });
@@ -49,15 +49,15 @@ test("shared folders appear in campaign galleries only when they contain shared 
 
 test("explicit folder moves transfer campaigns and campaign moves preserve independent hierarchy", () => {
   const w = base(); const root = createTokenFolder(w, "mash", "NPCs"), child = createTokenFolder(w, "mash", "Allies"); child.parentId = root.id;
-  const other = createTokenFolder(w, "klarg", "Goblins");
+  const other = createTokenFolder(w, "greyfen", "Goblins");
   w.tokenLibrary.push({ ...newToken("Friend"), id: "friend" }); w.libraryCampaigns.friend = "mash";
   assert.equal(moveTokenToFolder(w, "friend", other.id), true);
-  assert.equal(w.libraryCampaigns.friend, "klarg");
+  assert.equal(w.libraryCampaigns.friend, "greyfen");
   assert.equal(moveTokenToFolder(w, "friend", child.id), true);
   assert.equal(w.libraryCampaigns.friend, "mash");
-  moveLibraryTokenToCampaign(w, "friend", "klarg");
+  moveLibraryTokenToCampaign(w, "friend", "greyfen");
   const moved = w.tokenFolders.find(f => f.id === w.tokenFolderLocations.friend);
-  assert.equal(moved.campaignId, "klarg"); assert.equal(moved.name, "Allies");
+  assert.equal(moved.campaignId, "greyfen"); assert.equal(moved.name, "Allies");
   assert.equal(w.tokenFolders.find(f => f.id === moved.parentId).name, "NPCs");
   assert.equal(child.campaignId, "mash"); assert.equal(workspaceSchema.safeParse(w).success, true);
   w.tokenFolderLocations.friend = child.id;
