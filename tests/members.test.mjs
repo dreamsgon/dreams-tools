@@ -4,6 +4,7 @@ process.env.AI_KEY_SECRET='test-secret-for-members';
 const M=await import('../lib/members.ts');
 const {MemberStore,seenHash,requestIp,memberRef}=await import('../lib/members-server.ts');
 const {EncyclopediaStore}=await import('../lib/encyclopedia/store.ts');
+const {campaignExport}=await import('../lib/encyclopedia/world-model.ts');
 const {demoWorkspace}=await import('../lib/encyclopedia/world-model.ts');
 
 const C='demo-campaign',NOW=new Date('2026-11-14T10:00:00Z');
@@ -133,7 +134,7 @@ test('members open the player pages signed in, and can leave',async()=>{
  const [mine]=await store.memberships(mara.userId);
  assert.match(mine.ref,/^[a-f0-9]{64}$/);assert.equal(mine.ref,await memberRef(gm.userId,C));assert.equal(mine.open,true);
  assert.doesNotMatch(JSON.stringify(mine),/supabase:gm/,'the owner\'s account id stays on the server');
- assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C});
+ assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C,ownerName:'the GM',role:'Player'});
  const shown=JSON.stringify(await enc.playerOf(await store.openAs(mara.userId,mine.ref)));
  assert.match(shown,/The Salt Road/);assert.doesNotMatch(shown,/secret-GM-notes/);
  assert.equal(await store.openAs('supabase:stranger',mine.ref),null,'someone else can\'t use the ref');
@@ -155,4 +156,26 @@ test('members open the player pages signed in, and can leave',async()=>{
  assert.equal(asking.asking,true);assert.equal(asking.open,false);
  await store.leave(mara.userId,asking.ref,NOW);
  assert.equal((await store.read(gm.userId,C)).list.requests.length,0);assert.deepEqual(await store.memberships(mara.userId),[]);
+});
+
+test('co-GMs open the whole campaign, and only that campaign; players don\'t',async()=>{
+ const b=bucket(),store=new MemberStore(b),enc=new EncyclopediaStore(b);
+ const w=demoWorkspace(),other={...w.campaigns[0],id:'other-campaign',name:'Greyfen Nights',maptableCampaignId:undefined};
+ const secret={...w.entries.find(e=>e.campaignId===C),id:'other-secret',title:'Only in Greyfen Nights',campaignId:'other-campaign',parentId:null};
+ await enc.save(gm.userId,{...w,campaigns:[...w.campaigns,other],entries:[...w.entries,secret]},0);
+ const cogm=await store.newLink(gm.userId,C,'cogms',{approve:false,expiresAt:null},NOW);
+ await store.join(cogm,mara,'Mara',NOW);
+ const [mine]=await store.memberships(mara.userId);
+ assert.equal(mine.gm,true);assert.equal(mine.role,'Co-GM');
+ const grant=await store.openAs(mara.userId,mine.ref,'seeGm');
+ assert.equal(grant.role,'Co-GM');
+ const {data}=await enc.read(grant.owner),scoped=campaignExport(data,grant.campaignId);
+ assert.deepEqual(scoped.campaigns.map(c=>c.id),[C]);
+ assert.equal(scoped.entries.some(e=>e.id==='other-secret'),false,'other campaigns stay out');
+ assert.ok(scoped.entries.length>0);
+ // Moved to Players: the player pages still open, the GM side doesn't.
+ await store.change(gm.userId,C,l=>M.setMemberGroups(l,mara.userId,['players']));
+ assert.equal(await store.openAs(mara.userId,mine.ref,'seeGm'),null);
+ assert.ok(await store.openAs(mara.userId,mine.ref));
+ assert.equal((await store.memberships(mara.userId))[0].gm,false);
 });

@@ -6,12 +6,13 @@ import {newPicture,fitCircle,circleStyle,ringColors,tokenSizes} from '@/lib/ency
 import {uploadMapImage} from './map-transfer';
 import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
+import {imageSrc} from './member-view';
 
 /** Loads a picture from the Encyclopedia's image store (or a player link) as an object URL. */
 export function usePictureSrc(imageId:string|undefined,playerToken?:string){
  const [src,setSrc]=useState(''),[failed,setFailed]=useState(false);
  useEffect(()=>{if(!imageId)return;const controller=new AbortController();let url='';
-  const request=playerToken?fetch('/api/encyclopedia/player-map-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:playerToken,imageId}),signal:controller.signal}):fetch('/api/encyclopedia/map-images?id='+encodeURIComponent(imageId),{signal:controller.signal});
+  const request=playerToken?fetch('/api/encyclopedia/player-map-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:playerToken,imageId}),signal:controller.signal}):fetch(imageSrc(imageId),{signal:controller.signal});
   request.then(async r=>{if(!r.ok)throw new Error();const blob=await r.blob();if(controller.signal.aborted)return;url=URL.createObjectURL(blob);setSrc(url);setFailed(false);}).catch(()=>{if(!controller.signal.aborted)setFailed(true);});
   return()=>{controller.abort();if(url)URL.revokeObjectURL(url);setSrc('');};
  },[imageId,playerToken]);

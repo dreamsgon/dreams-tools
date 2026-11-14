@@ -6,12 +6,13 @@ import {MapWeather} from './map-weather';
 import type {Calendar} from '@/lib/encyclopedia/calendar-model';
 import {MapViewport} from './map-viewport';
 import {legendItems,mapLookOf,mapLooks,type MapLook} from '@/lib/encyclopedia/map-looks';
+import {imageSrc} from './member-view';
 type Style=ReturnType<typeof mapLookOf>;
 const painted0=mapLookOf({});
 export function useMapImage(map:MapData,playerToken?:string){
  const [url,setUrl]=useState<string|undefined>(),[error,setError]=useState('');
  useEffect(()=>{setUrl(undefined);setError('');if(map.source!=='image'||!map.imageId)return;const controller=new AbortController();let objectUrl:string|undefined;
- const request=playerToken?fetch('/api/encyclopedia/player-map-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:playerToken,imageId:map.imageId}),signal:controller.signal}):fetch('/api/encyclopedia/map-images?id='+encodeURIComponent(map.imageId),{signal:controller.signal});
+ const request=playerToken?fetch('/api/encyclopedia/player-map-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:playerToken,imageId:map.imageId}),signal:controller.signal}):fetch(imageSrc(map.imageId),{signal:controller.signal});
  request.then(async r=>{if(!r.ok)throw new Error('Map image unavailable. Ask the GM to check or refresh the map.');const blob=await r.blob();if(controller.signal.aborted)return;objectUrl=URL.createObjectURL(blob);setUrl(objectUrl);}).catch(e=>{if(!controller.signal.aborted)setError(e.message);});
  return()=>{controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl);};
  },[map.imageId,map.source,playerToken]);return {url,error};
