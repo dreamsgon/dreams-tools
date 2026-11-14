@@ -103,3 +103,11 @@
   .home-section-head { flex-wrap:wrap; }
   .home-door { padding:18px; }
 }
+
+/* The Forums placeholder page. */
+.forums-soon { padding:56px 0 64px; max-width:56ch; }
+.forums-soon h1 { margin:0; font-family:var(--font-display); font-size:clamp(30px,calc(4.4vw / var(--ui-zoom, 1)),40px); line-height:1.1; letter-spacing:-.03em; font-weight:600; }
+.forums-soon p { margin:14px 0 0; font-size:16px; line-height:1.6; color:var(--muted); }
+.forums-soon-links { display:flex; flex-wrap:wrap; gap:10px; margin-top:28px; }
+.forums-soon a.forums-soon-link { display:inline-flex; align-items:center; min-height:44px; padding:8px 16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-weight:600; font-size:14px; text-decoration:none; }
+.forums-soon a.forums-soon-link:hover { background:var(--chrome-hover); }

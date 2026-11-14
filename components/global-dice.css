@@ -10,3 +10,11 @@
 
 /* Leave room under the last of the page's content so it can scroll clear of the buttons. */
 body:has(.global-dice) { padding-bottom: 64px; }
+
+/* Phones: smaller, icon-only buttons, and enough room under the page's content (button height, gap and the home-bar inset) to scroll clear of them. */
+@media (max-width: 640px) {
+  .global-dice { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); gap: 6px; }
+  .global-dice button { min-height: 40px; min-width: 40px; padding: 0; width: 40px; }
+  .global-dice button > span { display: none; }
+  body:has(.global-dice) { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+}

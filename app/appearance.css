@@ -144,3 +144,5 @@ html[data-text-size="larger"] { zoom:1.25; --ui-zoom:1.25; }
 html[data-page-width="narrow"] { --page-width:880px; --content-width:960px; --reading-width:600px; }
 html[data-page-width="wide"] { --page-width:1320px; --content-width:1600px; --reading-width:880px; }
 html[data-page-width="full"] { --page-width:100000px; --content-width:none; --reading-width:1fr; }
+/* "Soon" pill beside a link to something that is not built yet. */
+.soon-pill { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; line-height:1.5; vertical-align:middle; }

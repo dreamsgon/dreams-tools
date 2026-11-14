@@ -165,3 +165,10 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-folder-row { cursor:pointer; }
 .campaigns-folder-row[data-drop-edge="before"] { box-shadow:0 -3px 0 var(--accent); }
 .campaigns-folder-row[data-drop-edge="after"] { box-shadow:0 3px 0 var(--accent); }
+
+/* Phone: the title and description take the full width; the buttons sit on their own row below. */
+@media (max-width: 640px) {
+  .campaigns-head { flex-wrap:wrap; align-items:stretch; }
+  .campaigns-head > div { flex:1 1 100%; }
+  .campaigns-head > button { flex:1 1 0; }
+}
