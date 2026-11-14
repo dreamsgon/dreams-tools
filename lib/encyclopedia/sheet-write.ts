@@ -119,3 +119,15 @@ export function coalesce<T>(run: (latest: T) => void, wait = HP_DEBOUNCE_MS, tim
     pending: () => has,
   };
 }
+
+/** Like coalesce, one wait per key (a character): pushing for Ayla never delays Borin's write. */
+export function coalesceByKey<T>(run: (key: string, latest: T) => void, wait = HP_DEBOUNCE_MS, timers?: Timers) {
+  const each = new Map<string, ReturnType<typeof coalesce<T>>>();
+  const one = (key: string) => { let c = each.get(key); if (!c) { c = coalesce<T>(v => run(key, v), wait, timers); each.set(key, c); } return c; };
+  return {
+    push(key: string, v: T) { one(key).push(v); },
+    flush(key?: string) { for (const [k, c] of each) if (key === undefined || k === key) c.flush(); },
+    cancel(key?: string) { for (const [k, c] of each) if (key === undefined || k === key) c.cancel(); },
+    pending: (key?: string) => [...each].some(([k, c]) => (key === undefined || k === key) && c.pending()),
+  };
+}
