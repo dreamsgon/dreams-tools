@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
-import {Eye,EyeOff,Lock,Unlock,GripVertical} from "lucide-react";
+import {Eye,EyeOff,Lock,Unlock,GripVertical,Pencil} from "lucide-react";
 import {uid,type MapDrawing} from "@/lib/model";
 import {layerChildren,layerIds,moveLayer,layerState,dropLayers,type LayerDrop} from "@/lib/map-drawing";
 export default function DrawingLayers({drawing:d,selected,selectedIds,select,change}:{drawing:MapDrawing;selected:string|null;selectedIds:string[];select:(id:string|null,additive?:boolean)=>void;change:(fn:(d:MapDrawing)=>void)=>void}){
@@ -28,14 +28,15 @@ export default function DrawingLayers({drawing:d,selected,selectedIds,select,cha
   const parent=shape?.folderId??folder?.parentId??null;
   const protectedLayer=!!selected&&layerState(d,selected).locked;
   const allowed=(id:string)=>{let f=folders.find(f=>f.id===id);const seen=new Set<string>();while(f){if(f.id===selected||seen.has(f.id))return false;seen.add(f.id);f=folders.find(p=>p.id===f!.parentId);}return true;};
+  const toggle=(id:string)=>setClosed(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;});
   const tree=(parent:string|null):React.ReactNode=>layerChildren(d,parent).reverse().map(id=>{
     const s=d.shapes.find(s=>s.id===id),f=folders.find(f=>f.id===id);
-    return <div key={id}><div data-layer-target={id} className={"drawing-layer-row "+dropStyle(id)}>
+    return <div key={id}><div data-layer-target={id} className={"drawing-layer-row "+dropStyle(id)} onClick={f?e=>{if(!(e.target as HTMLElement).closest("button, input, a"))toggle(id);}:undefined}>
       {grip(id,f?.name||s?.name||s?.type||"layer")}
       <button className="layer-state" aria-label={`${(s||f)!.hidden?"Show":"Hide"} layer ${f?.name||s?.name||s?.type}`} title="Show or hide layer" onClick={()=>change(next=>{const item=next.shapes.find(s=>s.id===id)||next.folders.find(f=>f.id===id);if(item)item.hidden=!item.hidden;})}>{layerState(d,id).hidden?<EyeOff size={14}/>:<Eye size={14}/>}</button>
       <button className="layer-state" aria-label={`${(s||f)!.locked?"Unlock":"Lock"} layer ${f?.name||s?.name||s?.type}`} title="Lock or unlock layer" onClick={()=>change(next=>{const item=next.shapes.find(s=>s.id===id)||next.folders.find(f=>f.id===id);if(item)item.locked=!item.locked;})}>{layerState(d,id).locked?<Lock size={14}/>:<Unlock size={14}/>}</button>
       {f && <button aria-label={`${closed.has(id)?"Expand":"Collapse"} layer folder ${f.name}`} onClick={()=>setClosed(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;})}>{closed.has(id)?"+":"-"}</button>}
-      <button className={selected===id||selectedIds.includes(id)?"active":""} onClick={e=>select(id,e.shiftKey||e.ctrlKey||e.metaKey)}><span className="layer-swatch" style={{background:f?"#dce2d7":s?.fill??"#f7f8f3",borderColor:s?.stroke??"#aab9a4"}}>{f?"+":""}</span><span>{f?f.name:s?.name||s?.type}<small>{f?"Folder":s?.type}</small></span></button>
+      <button className={selected===id||selectedIds.includes(id)?"active":""} aria-expanded={f?!closed.has(id):undefined} onClick={e=>{if(f&&!e.shiftKey&&!e.ctrlKey&&!e.metaKey)toggle(id);else select(id,e.shiftKey||e.ctrlKey||e.metaKey);}}><span className="layer-swatch" style={{background:f?"#dce2d7":s?.fill??"#f7f8f3",borderColor:s?.stroke??"#aab9a4"}}>{f?"+":""}</span><span>{f?f.name:s?.name||s?.type}<small>{f?"Folder":s?.type}</small></span></button>{f&&<button className="layer-state" aria-label={`Edit layer folder ${f.name}`} title="Edit this folder" aria-pressed={selected===id} onClick={()=>select(selected===id?null:id)}><Pencil size={14}/></button>}
     </div>{f&&!closed.has(id)&&<div className="drawing-layer-children">{tree(id)}</div>}</div>;
   });
   return <section className="drawing-layers"><h3>Layers</h3><p className="muted">Drag between rows to reorder; onto a folder center to group. Top layers draw in front. Folder visibility and locks apply to their contents.</p>

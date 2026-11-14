@@ -3,12 +3,14 @@ import { parseDice } from '../rolls.ts';
 import type { Workspace } from './world-model.ts';
 
 export const discordRollSchema = z.object({
-  campaignId: z.string().min(1).max(100),
+  /** An Encyclopedia campaign (its Discord target is looked up), or a Maptable campaign directly (the Campaigns page, for a campaign with no notes). */
+  campaignId: z.string().min(1).max(100).optional(),
+  maptableCampaignId: z.string().min(1).max(100).optional(),
   title: z.string().trim().min(1).max(200),
   formula: z.string().min(1).max(200),
   total: z.number().finite().min(-10_000_000).max(10_000_000),
   detail: z.string().max(400),
-});
+}).refine(r => !!r.campaignId !== !!r.maptableCampaignId, { message: 'Name one campaign.' });
 export type DiscordRoll = z.infer<typeof discordRollSchema>;
 
 /**

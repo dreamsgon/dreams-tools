@@ -3,6 +3,9 @@ import {useEffect,useState,useCallback,useRef} from 'react';
 import Link from 'next/link';
 import {ThemeToggle} from './theme';
 import {PlayerView} from './player-view';
+import {useDiceTarget} from '../use-dice-target';
+import {playerDiceTarget,NO_CAMPAIGN} from '@/lib/dice-target';
+import {parsePlayerHash} from '@/lib/encyclopedia/player-place';
 import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
 import type {SheetState} from '@/lib/encyclopedia/player-sheet';
@@ -11,13 +14,14 @@ type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages;sheets?:Record<string
 export default function PlayerClient(){
  const [data,setData]=useState<Shown|null>(null),[error,setError]=useState(''),[token,setToken]=useState(''),[updating,setUpdating]=useState(false),[refreshed,setRefreshed]=useState(''),[signIn,setSignIn]=useState(false);
  const request=useRef<AbortController|null>(null);
+ useDiceTarget(data&&token?playerDiceTarget(token,data.campaign,!!data.you):NO_CAMPAIGN);
  const refresh=useCallback(async(token:string)=>{
   if(request.current)return;const controller=new AbortController();request.current=controller;setUpdating(true);
   try{const r=await fetch('/api/encyclopedia/player-view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token}),signal:controller.signal});const value=await r.json() as Shown&{error?:string};if(!r.ok){setSignIn(r.status===401);throw new Error(value.error??'Could not refresh the campaign.');}setSignIn(false);if(controller.signal.aborted)return;setData(value);setError('');setRefreshed(new Date().toLocaleTimeString());}
   catch(e){if(!controller.signal.aborted){setData(null);setError(e instanceof Error?e.message:'Could not refresh the campaign.');}}
   finally{if(request.current===controller){request.current=null;setUpdating(false);}}
  },[]);
- useEffect(()=>{const token=location.hash.slice(1);setToken(token);if(!/^(?:m-)?[a-f0-9]{64}$/.test(token)){setError('This player link is invalid. Ask your GM for a current link.');return;}
+ useEffect(()=>{const token=parsePlayerHash(location.hash).token;setToken(token);if(!/^(?:m-)?[a-f0-9]{64}$/.test(token)){setError('This player link is invalid. Ask your GM for a current link.');return;}
   // Background tabs stop polling and catch up as soon as they are shown again.
   void refresh(token);const timer=setInterval(()=>{if(!document.hidden)void refresh(token);},5000),focus=()=>{if(!document.hidden)void refresh(token);};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
   return()=>{clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);request.current?.abort();request.current=null;};

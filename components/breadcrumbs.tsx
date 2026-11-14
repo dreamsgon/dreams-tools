@@ -39,7 +39,7 @@ export default function Breadcrumbs({ items, label = "Breadcrumb", className = "
   const parent = items.length > 1 ? items[items.length - 2] : null;
   useEffect(() => {
     const up = (e: KeyboardEvent) => {
-      if (!e.altKey || e.key !== "ArrowUp" || !parent?.go) return;
+      if (e.defaultPrevented || !e.altKey || e.key !== "ArrowUp" || !parent?.go) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input, textarea, select, [contenteditable='true']")) return;
       e.preventDefault(); parent.go();

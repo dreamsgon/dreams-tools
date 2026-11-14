@@ -61,3 +61,7 @@
 .explore-page > span { flex:1; min-width:0; display:flex; flex-direction:column; }
 .explore-page strong { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
 .explore-page small { color:var(--muted); font-size:11px; }
+
+.explore-folder-row { cursor: pointer; }
+.explore-folder-row[data-drop-edge="before"] { box-shadow: 0 -3px 0 0 var(--accent, var(--green)); }
+.explore-folder-row[data-drop-edge="after"] { box-shadow: 0 3px 0 0 var(--accent, var(--green)); }

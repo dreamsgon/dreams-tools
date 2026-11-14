@@ -335,6 +335,8 @@ export const workspaceSchema = z.object({
   tokenFolderLocations: z.record(z.string(), short.nullable()).optional(),
   conditionFolders: z.array(collectionSchema.extend({kind:z.literal("folder")})).max(2000).default([]),
   conditionLocations: z.record(z.string(), short.nullable()).default({}),
+  /** Set once the Campaigns page folders have been re-ordered by hand; until then that page lists them by name. */
+  campaignFoldersOrdered: z.boolean().optional(),
 }).transform((w) => {
   // Upgrade legacy text folders once, preserving their contents.
   for (const s of w.scenes) {

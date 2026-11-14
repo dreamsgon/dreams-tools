@@ -4,9 +4,11 @@ import { useFolderExpansion } from "./folder-expansion";
 import { countLabel } from "@/lib/plural";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Folder, Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Pencil, Pin, Settings2, Map as MapIcon } from "lucide-react";
+import { Folder, FolderOpen, Plus, BookOpen, ChevronDown, ChevronRight, ChevronUp, GripVertical, Pencil, Pin, Settings2, Map as MapIcon } from "lucide-react";
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 import { uid, collectionPath, canMoveCollection, type Workspace, type Collection } from "@/lib/model";
+import { altStep } from "./folder-reorder";
+import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "@/lib/folder-order";
 
 type Props = {
   workspace: Workspace;
@@ -54,13 +56,15 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   const hover = useRef<{id:string|null|undefined; since:number}>({id:undefined,since:0});
   const [moving, setMoving] = useState<Moving | null>(null);
   const [over, setOver] = useState<string | null | undefined>(undefined);
+  const [edgeAt, setEdgeAt] = useState<{ id: string; place: "before" | "after" } | null>(null);
+  const edgeRef = useRef<{ id: string; place: "before" | "after" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   useEffect(() => {
     if (!announcement) return;
     const timer = window.setTimeout(() => setAnnouncement(""), 5000);
     return () => window.clearTimeout(timer);
   }, [announcement]);
-  const resetDrag = () => { pending.current = null; setMoving(null); setOver(undefined); hover.current={id:undefined,since:0}; };
+  const resetDrag = () => { pending.current = null; edgeRef.current = null; setEdgeAt(null); setMoving(null); setOver(undefined); hover.current={id:undefined,since:0}; };
   useEffect(() => {
     const cancel = (e: KeyboardEvent) => { if(e.key === "Escape") {resetDrag();setAnnouncement("Move cancelled.");} };
     window.addEventListener("keydown", cancel);
@@ -83,13 +87,33 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     }
     return true;
   };
-  const accepts = (item: Moving, target: string | null) => {
+  const container = (target: string | null) => {
     if (target !== rootId) {
       const folder = w.collections.find((c) => c.id === target);
       if (!folder) return false;
       if (dashboard && (folder.kind !== "folder" || !inScope(folder.parentId))) return false;
       if (!dashboard && folder.kind !== "campaign" && !inScope(folder.parentId)) return false;
     }
+    return true;
+  };
+  const shownHere = (c: Collection) => dashboard || c.kind !== "campaign";
+  const reorder = (id: string, delta: -1 | 1) => {
+    const c = w.collections.find(item => item.id === id); if (!c || !canMoveSibling(w.collections, id, delta, shownHere)) return;
+    commit(next => { next.collections = moveSibling(next.collections, id, delta, shownHere); });
+    setAnnouncement(`Moved ${c.name} ${delta < 0 ? "up" : "down"}.`);
+  };
+  // A folder dragged onto the top or bottom edge of another folder row goes before or after it, in that folder's parent.
+  const findEdge = (item: Moving, x: number, y: number) => {
+    if (item.kind !== "collection") return null;
+    const row = document.elementFromPoint(x, y)?.closest<HTMLElement>(".organizer-row[data-folder-drop]");
+    const id = row?.dataset.folderDrop; if (!row || !id || id === "root" || id === item.id) return null;
+    const target = w.collections.find(c => c.id === id);
+    if (!target || target.kind !== "folder" || !container(target.parentId) || !canMoveCollection(w.collections, item.id, target.parentId)) return null;
+    const rect = row.getBoundingClientRect(), place = dropPlace(y - rect.top, rect.height);
+    return place === "inside" ? null : { id, place };
+  };
+  const accepts = (item: Moving, target: string | null) => {
+    if (!container(target)) return false;
     if (item.kind === "scene") return !dashboard && w.scenes.some((s) => s.id === item.id && s.containerId !== target);
     const collection = w.collections.find((c) => c.id === item.id);
     return !!collection && collection.parentId !== target && canMoveCollection(w.collections, item.id, target);
@@ -114,7 +138,9 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
         const speed=drag.py<top+60 ? -Math.min(1,(top+60-drag.py)/60) : drag.py>bottom-60 ? Math.min(1,(drag.py-bottom+60)/60) : 0;
         drag.host.scrollTop+=speed*dt*0.6;
       }
-      const target=findTarget(drag.item,drag.px,drag.py);
+      const edge=findEdge(drag.item,drag.px,drag.py);
+      if(edge?.id!==edgeRef.current?.id||edge?.place!==edgeRef.current?.place){edgeRef.current=edge;setEdgeAt(edge);}
+      const target=edge?undefined:findTarget(drag.item,drag.px,drag.py);
       if(drag.target!==target){drag.target=target;setOver(target);hover.current={id:target,since:now};}
       if(target && now-hover.current.since>650) {
         setClosed((old)=>{if(!old.has(target))return old;const next=new Set(old);next.delete(target);return next;});
@@ -127,6 +153,7 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   const dropProps = (id: string | null) => ({
     "data-folder-drop": id ?? "root",
     "data-drop-state": moving && over === id ? "ready" : undefined,
+    "data-drop-edge": id !== null && edgeAt?.id === id ? edgeAt.place : undefined,
   });
   const grip = (item: Moving) => <button className="organizer-grip" aria-label={`Drag ${item.name}`} title={`Drag ${item.name} into a folder`} onClick={(e) => e.stopPropagation()}
     onPointerDown={(e) => {
@@ -144,6 +171,15 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     }}
     onPointerUp={(e) => {
       const drag = pending.current;
+      const edge = drag?.active ? findEdge(drag.item,e.clientX,e.clientY) : null;
+      if(drag?.active && edge) {
+        const name = w.collections.find(c => c.id === edge.id)?.name ?? "";
+        commit((next) => { next.collections = placeBeside(next.collections, drag.item.id, edge.id, edge.place); });
+        setAnnouncement(`Moved ${drag.item.name} ${edge.place} ${name}. Undo restores the move.`);
+        resetDrag();
+        if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+        return;
+      }
       if(drag?.active) drag.target=findTarget(drag.item,e.clientX,e.clientY);
       if(drag?.active && drag.target !== undefined && accepts(drag.item,drag.target)) {
         const target = drag.target;
@@ -163,9 +199,10 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
     onClick={() => { setLocation(s.containerId); activate(s.id); }}>
     <span className="scene-kind"><SceneKindIcon type={s.mapType} /></span><span><strong>{s.name}</strong><small>{query ? collectionPath(w.collections, s.containerId) : sceneKindLabel(s)}</small></span>
   </button>{onSettings && <button className="organizer-scene-settings" aria-label={`Settings for ${s.name}`} title="Scene settings" onClick={() => { setLocation(s.containerId); onSettings(s.id); }}><Settings2 size={15}/></button>}</div>;
+  const toggle = (id: string) => setClosed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const collectionButton = (c: Collection, searched = false) => <>
-    <button className="collection-primary" onClick={() => c.kind === "campaign" && dashboard ? openCampaign?.(c.id) : setLocation(c.id)}>
-      {c.kind === "campaign" ? <BookOpen size={18} /> : <Folder size={18} />}
+    <button className="collection-primary" aria-expanded={c.kind === "folder" && !searched ? !closed.has(c.id) : undefined} onClick={() => c.kind === "campaign" ? (dashboard ? openCampaign?.(c.id) : setLocation(c.id)) : searched ? setLocation(c.id) : toggle(c.id)}>
+      {c.kind === "campaign" ? <BookOpen size={18} /> : closed.has(c.id) ? <Folder size={18} /> : <FolderOpen size={18} />}
       <span><strong>{searched ? collectionPath(w.collections, c.id) : c.name}</strong>{dashboard && c.id === lastCampaignId && <em className="collection-badge">Last opened</em>}<small>{c.kind === "campaign" ? (dashboard ? countLabel(sceneCount(c.id), "scene") : "Open campaign →") : `${w.collections.filter(child => child.parentId === c.id).length + w.scenes.filter(scene => scene.containerId === c.id).length} items`}</small></span>
     </button>
     {dashboard && c.kind === "campaign" && <button className="collection-pin" aria-label={`${c.pinned ? "Unpin" : "Pin"} ${c.name}`} aria-pressed={!!c.pinned} title={c.pinned ? "Unpin campaign" : "Pin campaign"} onClick={() => commit(next => { const campaign = next.collections.find(item => item.id === c.id); if(campaign) campaign.pinned = !campaign.pinned; })}><Pin size={15} /></button>}
@@ -173,7 +210,9 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
   </>;
   const tree = (parentId: string | null): React.ReactNode => <>
     {w.collections.filter((c) => c.parentId === parentId && (dashboard || c.kind !== "campaign")).map((c) => <div key={c.id} data-kind={c.kind} {...(c.kind === "folder" ? dropProps(c.id) : {})} data-dragging={moving?.id===c.id || undefined}>
-      <div {...(c.kind === "folder" ? dropProps(c.id) : {})} className={"organizer-row " + (location === c.id ? "active" : "")}>
+      <div {...(c.kind === "folder" ? dropProps(c.id) : {})} className={"organizer-row " + (location === c.id ? "active" : "")}
+        onClick={c.kind === "folder" ? (e) => { if (!(e.target as HTMLElement).closest("button, input, a")) toggle(c.id); } : undefined}
+        onKeyDown={(e) => { const d = altStep(e); if (d) reorder(c.id, d); }}>
         {grip({kind:"collection",id:c.id,name:c.name})}
         {c.kind === "folder" && <button aria-label={`${closed.has(c.id) ? "Expand" : "Collapse"} ${c.name}`} aria-expanded={!closed.has(c.id)} onClick={() => setClosed((old) => {
           const next = new Set(old); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next;
@@ -222,6 +261,10 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
         const parentId = e.target.value || null;
         if (canMoveCollection(w.collections, current.id, parentId)) commit((next) => {next.collections.find((c) => c.id === current.id)!.parentId = parentId;});
       }}><LocationOptions workspace={w} exclude={current.id} dashboard={dashboard} /></select></label>
+      <div className="button-row organizer-order" role="group" aria-label={`Order of ${current.name}`}>
+        <button disabled={!canMoveSibling(w.collections, current.id, -1, shownHere)} onClick={() => reorder(current.id, -1)}><ChevronUp size={14} aria-hidden="true" />Move up</button>
+        <button disabled={!canMoveSibling(w.collections, current.id, 1, shownHere)} onClick={() => reorder(current.id, 1)}><ChevronDown size={14} aria-hidden="true" />Move down</button>
+      </div>
       <button className="danger" onClick={() => {
         commit((next) => {
           next.collections = next.collections.filter((c) => c.id !== current.id);

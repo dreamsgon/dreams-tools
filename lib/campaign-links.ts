@@ -1,6 +1,7 @@
 import type { Workspace as MapWorkspace } from "./model";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model";
 import { scenesInOrder } from "./scene-order.ts";
+import { sortSiblings } from "./folder-order.ts";
 
 /**
  * One campaign list across Maptable and the Encyclopedia.
@@ -74,10 +75,11 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"> | null, book: BookWorkspace): CampaignSummary {
+export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace): CampaignSummary {
   const maps = mapCampaigns(map), books = bookCampaigns(book);
   const mapById = new Map(maps.map(m => [m.id, m])), used = new Set<string>();
-  const folders = campaignFolders(map?.collections), folderIds = new Set(folders.map(f => f.id));
+  // Folders list by name until someone re-orders them by hand; after that the saved order is kept.
+  const found = campaignFolders(map?.collections), folders = map?.campaignFoldersOrdered ? found : sortSiblings(found, byName), folderIds = new Set(folders.map(f => f.id));
   const parentOf = new Map((map?.collections ?? []).map(c => [c.id, c.parentId]));
   const inFolder = (id: string | null | undefined) => id && folderIds.has(id) ? id : null;
   const bookFolders = new Map(book.campaigns.map(c => [c.id, c.folderId]));
@@ -102,7 +104,7 @@ export type LayoutItem =
 
 /**
  * The Campaigns table in display order, like Maptable's organizer: inside each level
- * folders come first, then campaigns, each by name. `rows` are the campaigns to show
+ * folders come first (in their saved order), then campaigns by name. `rows` are the campaigns to show
  * (after any filters). Folders that are in `collapsed` hide their contents unless
  * `filtered` is set, which shows only folders holding a match, all expanded.
  */
@@ -114,7 +116,7 @@ export function campaignLayout(folders: CampaignFolder[], rows: CampaignRow[], c
   const total = (id: string): number => (inside.get(id)?.length ?? 0) + (subs.get(id) ?? []).reduce((n, f) => n + total(f.id), 0);
   const out: LayoutItem[] = [];
   const walk = (parent: string | null, depth: number) => {
-    for (const f of [...(subs.get(parent) ?? [])].sort(byName)) {
+    for (const f of subs.get(parent) ?? []) { // folders keep their saved order (they can be re-ordered); campaigns are by name
       const count = total(f.id);
       if (filtered && !count) continue;
       const open = filtered || !collapsed.has(f.id);

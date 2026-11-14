@@ -308,3 +308,95 @@ test('the linker key is an HMAC with the server secret',()=>{
  assert.match(a,/^[a-f0-9]{32}$/);assert.notEqual(a,b);assert.notEqual(a,S.linkerKey(OWNER,C,'wren',{AI_KEY_SECRET:'a'}));
  assert.throws(()=>S.linkerKey(OWNER,C,'mara',{}),/no secret/);
 });
+
+// ---- The member's own dice tray (POST /api/encyclopedia/player-dice) ---------------------------
+
+const diceCall=(s,body,o)=>R.handlePlayerDice(req({ref:REF,...body},o),s.deps);
+const withChannel=s=>{const w=s.state.data;s.state.data={...w,campaigns:w.campaigns.map(c=>c.id===C?{...c,discord:{maptableCampaignId:'map-1'}}:c)};return s;};
+
+test('player dice: a signed-in member of the campaign only, same origin, small bodies, throttled',async()=>{
+ R.resetThrottles();
+ const s=setup();
+ assert.equal((await diceCall(s,{action:'roll',formula:'1d20'},{origin:'https://evil.example'})).status,403);
+ assert.equal((await diceCall(s,{action:'roll',formula:'1d20'},{len:9000})).status,413);
+ assert.equal((await R.handlePlayerDice(req({ref:'b'.repeat(64),action:'roll',formula:'1d20'}),s.deps)).status,404,'a share link is not a member');
+ s.as('out');assert.equal((await diceCall(s,{action:'roll',formula:'1d20'})).status,401);
+ s.as('mara');const ok=await diceCall(s,{action:'roll',formula:'1d20'});
+ assert.equal(ok.status,200);assert.match(ok.headers.get('Cache-Control'),/no-store/);
+ let last=0;for(let i=0;i<12;i++)last=(await diceCall(s,{action:'roll',formula:'1d20'})).status;
+ assert.equal(last,429,'10 per 10 seconds per person');
+});
+
+test('player dice: the server rolls the formula, ignores any total from the browser and posts nothing until Send',async()=>{
+ R.resetThrottles();
+ const s=withChannel(setup());
+ const r=await diceCall(s,{action:'roll',formula:'1d20+4',total:999,detail:'forged',label:'Sneak'});
+ const body=await r.json();
+ assert.equal(body.total,15,'random 0.5 on a d20 is 11, plus 4');assert.equal(body.formula,'1d20+4');assert.equal(body.title,'Mara · Sneak');assert.equal(body.discord,'available');
+ assert.equal(s.state.posts.length,0,'rolling does not post');
+ for(const bad of ['drop table','','1d9999999','100000d6','1d20;2d6','[[1d20]]','@everyone'])assert.equal((await diceCall(s,{action:'roll',formula:bad})).status,400,`rejects ${bad}`);
+ const none=setup();assert.equal((await (await diceCall(none,{action:'roll',formula:'2d6'})).json()).discord,'none','no channel: still rolled, nothing to send to');
+});
+
+test('player dice: Send posts the server\'s own roll under the member\'s name, once, with no mentions or lookup by title',async()=>{
+ R.resetThrottles();
+ const s=withChannel(setup());
+ const rolled=await (await diceCall(s,{action:'roll',formula:'2d6+1',label:'Hold the line'})).json();
+ // A forged total, another member's proof and a stale proof are all refused.
+ assert.equal((await diceCall(s,{action:'send',proof:{...rolled.proof,total:99}})).status,400);
+ s.as('tobin');assert.equal((await diceCall(s,{action:'send',proof:rolled.proof})).status,400,'a proof belongs to the member it was made for');
+ s.as('mara');
+ const old=withChannel(setup());old.deps.now=1000;const earlier=await (await diceCall(old,{action:'roll',formula:'1d6'})).json();old.deps.now=1000+11*60_000;
+ assert.equal((await diceCall(old,{action:'send',proof:earlier.proof})).status,400,'proofs expire');
+ const sent=await diceCall(s,{action:'send',label:'Hold the line',proof:rolled.proof});
+ assert.equal(sent.status,200);assert.equal((await sent.json()).discord,'sent');
+ assert.equal(s.state.posts.length,1);
+ const {m,post}=s.state.posts[0];
+ assert.equal(m.name,'Mara');assert.equal(post.kind,'roll');assert.equal(post.title,'Mara · Hold the line');assert.equal(post.who,'Mara');
+ assert.equal(post.total,rolled.total);assert.equal(post.avatarOf,'','an empty own-picture id: never looked up by name');
+ assert.equal((await diceCall(s,{action:'send',label:'Hold the line',proof:rolled.proof})).status,409,'a roll is sent once');
+ const sk=withChannel(setup({skipped:true}));const r2=await (await diceCall(sk,{action:'roll',formula:'1d4'})).json();
+ assert.equal((await (await diceCall(sk,{action:'send',proof:r2.proof})).json()).discord,'skipped');
+ const nochan=setup();const r3=await (await diceCall(nochan,{action:'roll',formula:'1d8'})).json();assert.equal((await diceCall(nochan,{action:'send',proof:r3.proof})).status,400);
+});
+
+test('the Discord sender never allows mentions in a roll card, whatever the member typed as a label',async()=>{
+ const send=await import('../lib/discord/send.ts');
+ const {rollPost}=await import('../lib/discord/cards.ts');
+ const card=rollPost({title:'Mara · @everyone <@123>',formula:'1d20',total:11,detail:'11',who:'Mara',avatar:false});
+ assert.ok(JSON.stringify(card).length>0);
+ const src=(await import('node:fs')).readFileSync(new URL('../lib/discord/send.ts',import.meta.url),'utf8');
+ assert.match(src,/allowed_mentions:\s*\{\s*parse:\s*\[\]/,'every webhook post carries allowed_mentions with nothing parsed');
+ assert.ok(send);
+});
+
+test('player dice: Send has its own throttle, a failed post can be retried, and Discord markdown is stripped from the label',async()=>{
+ R.resetThrottles();
+ const s=withChannel(setup());
+ const rolled=await (await diceCall(s,{action:'roll',formula:'1d12',label:'**bold** _it_ ~~x~~ `c` ||spoiler|| > #head'})).json();
+ assert.equal(rolled.title,'Mara · bold it x c spoiler head','member name stays, label is plain');
+ // Ten rolls used up the roll bucket; Send is counted separately.
+ for(let i=0;i<9;i++)await diceCall(s,{action:'roll',formula:'1d20'});
+ assert.equal((await diceCall(s,{action:'roll',formula:'1d20'})).status,429);
+ const real=s.deps.post;let fail=true;
+ s.deps.post=async(...a)=>{if(fail)throw Error('down');return real(...a);};
+ assert.equal((await diceCall(s,{action:'send',proof:rolled.proof})).status,502);
+ fail=false;
+ const again=await diceCall(s,{action:'send',proof:rolled.proof});
+ assert.equal(again.status,200,'a failed post does not use up the roll');assert.equal((await again.json()).discord,'sent');
+ assert.equal((await diceCall(s,{action:'send',proof:rolled.proof})).status,409);
+ assert.equal(s.state.posts.length,1);
+ let last=0;for(let i=0;i<12;i++)last=(await diceCall(s,{action:'send',proof:rolled.proof})).status;
+ assert.equal(last,429,'sends are throttled on their own');
+});
+test('player dice proofs are signed over a JSON payload and compared in constant time',async()=>{
+ const {proveRoll,checkProof}=await import('../lib/encyclopedia/player-dice.ts');
+ const env={AI_KEY_SECRET:'test-secret'},who={owner:'o',campaignId:'c',userId:'u'};
+ const p=proveRoll(who,{formula:'1d20',total:5,detail:'5'},1000,env);
+ assert.ok(checkProof(who,p,2000,env));
+ assert.ok(!checkProof({...who,userId:'u\nx'},p,2000,env));
+ // Fields that used to run together with a newline now stay apart.
+ const a=proveRoll({owner:'o',campaignId:'c\nu',userId:'x'},{formula:'1d20',total:5,detail:'5'},1000,env),b=proveRoll({owner:'o',campaignId:'c',userId:'u\nx'},{formula:'1d20',total:5,detail:'5'},1000,env);
+ assert.notEqual(a.sig,b.sig);
+ assert.ok(!checkProof(who,{...p,sig:'0'.repeat(64)},2000,env));assert.ok(!checkProof(who,{...p,sig:'ab'},2000,env));
+});

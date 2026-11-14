@@ -13,8 +13,8 @@ export async function POST(request: Request) {
         const text = await request.text();
         if (text.length > 4000) return fail("This roll is too large to send.");
         const body = JSON.parse(text);
-        await sendDiscordRoll(getBucket(), owner, body);
-        return Response.json({ ok: true }, { headers: privateHeaders });
+        const sent = await sendDiscordRoll(getBucket(), owner, body);
+        return Response.json({ ok: true, skipped: !!sent?.skipped }, { headers: privateHeaders });
     }
     catch (e) { return fail(e instanceof Error && !(e instanceof SyntaxError) && !("issues" in e) ? e.message : "Could not send this roll."); }
 }

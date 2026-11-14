@@ -169,3 +169,34 @@ test('folders can be made before a Maptable workspace exists', async () => {
   summary=await campaignAction(s,{action:'moveCampaign',key:'e:e1',folderId:id});
   assert.equal(rowOf(summary,'e:e1').folderId,id);
 });
+
+test('stepFolder and placeFolder re-order folders and keep their saved order', async () => {
+  const r=await folderSetup(),{s}=r;
+  let summary=await campaignAction(s,{action:'newFolder',name:'Aaa'});
+  summary=await campaignAction(s,{action:'newFolder',name:'Bbb'});
+  const top=()=>summary.folders.filter(f=>f.parentId===null).map(f=>f.name).filter(n=>n==='Aaa'||n==='Bbb');
+  const before=top(), bbb=summary.folders.find(f=>f.name==='Bbb').id, aaa=summary.folders.find(f=>f.name==='Aaa').id;
+  assert.deepEqual(before,['Aaa','Bbb']);
+  summary=await campaignAction(s,{action:'stepFolder',folderId:bbb,delta:-1});
+  assert.deepEqual(top(),['Bbb','Aaa']);
+  summary=await campaignAction(s,{action:'placeFolder',folderId:bbb,targetId:aaa,place:'after'});
+  assert.deepEqual(top(),['Aaa','Bbb']);
+  await assert.rejects(()=>campaignAction(s,{action:'placeFolder',folderId:'fa',targetId:'fb',place:'before'}),/inside itself/);
+  await assert.rejects(()=>campaignAction(s,{action:'stepFolder',folderId:'m1',delta:1}),/no longer exists/);
+});
+
+test('hub folders list by name until the first hand-made order, which saves what was on screen', async () => {
+  const r=await folderSetup(),{s}=r;
+  let summary=await campaignAction(s,{action:'newFolder',name:'Zed'});
+  summary=await campaignAction(s,{action:'newFolder',name:'Bee'});
+  const top=()=>summary.folders.filter(f=>f.parentId===null).map(f=>f.name);
+  const names=top();
+  assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true})),'name order before any reorder');
+  const zed=summary.folders.find(f=>f.name==='Zed').id;
+  summary=await campaignAction(s,{action:'stepFolder',folderId:zed,delta:-1});
+  const after=top(), at=after.indexOf('Zed');
+  assert.equal(after[at+1],names[names.length-2],'Zed moved above the folder that was above it by name');
+  assert.equal(after.length,names.length);
+  summary=await campaignAction(s,{action:'newFolder',name:'Aardvark'});
+  assert.equal(top().at(-1),'Aardvark','once ordered by hand, new folders keep array order instead of re-sorting');
+});

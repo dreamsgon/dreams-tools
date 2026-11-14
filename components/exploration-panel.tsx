@@ -1,6 +1,8 @@
 "use client";
-import { useState, type DragEvent, type ReactNode } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, CornerDownRight, EyeOff, Folder, FolderPlus, Globe2, Map as MapIcon, MapPin, Mountain, Pencil, Search, Swords, Trash2 } from "lucide-react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
+import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "@/lib/folder-order";
+import { altStep } from "./folder-reorder";
+import { ArrowUpRight, ChevronDown, ChevronRight, CornerDownRight, EyeOff, Folder, FolderPlus, Globe2, Map as MapIcon, MapPin, Mountain, Pencil, Search, ChevronUp, Swords, Trash2 } from "lucide-react";
 import { collectionPath, uid, type PointOfInterest, type Scene, type Workspace } from "@/lib/model";
 import { canMovePoiFolder, movePoiFolder, deletePoiFolder, poiFolderPath } from "@/lib/poi-folders";
 import { resolvePointOfInterestTarget, sceneTargets } from "@/lib/exploration";
@@ -28,6 +30,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
   const [closed,setClosed] = useState<Set<string>>(new Set());
   const [editingFolder,setEditingFolder] = useState<string|null>(null);
   const [dragging,setDragging] = useState(false);
+  const [edge,setEdge] = useState<{id:string;place:"before"|"after"}|null>(null);
   const [query,setQuery] = useState("");
   const [adding,setAdding] = useState(false);
   const [pageHint,setPageHint] = useState("");
@@ -37,7 +40,8 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
   // Markers on other maps in this campaign that open this one.
   const backLinks = targets.flatMap(map=>map.pointsOfInterest.filter(p=>p.targetSceneId===scene.id).map(p=>({map,point:p})));
   const patch = (values:Partial<PointOfInterest>) => { if(selected) update(current=>{const point=current.pointsOfInterest.find(p=>p.id===selected.id);if(point)Object.assign(point,values);}); };
-  const drag = (event:DragEvent,type:"point"|"folder",id:string) => {event.stopPropagation();event.dataTransfer.effectAllowed="move";event.dataTransfer.setData(DRAG_TYPE,JSON.stringify({sceneId:scene.id,type,id}));setDragging(true);};
+  const dragKind = useRef<"point"|"folder"|null>(null);
+  const drag = (event:DragEvent,type:"point"|"folder",id:string) => {dragKind.current=type;event.stopPropagation();event.dataTransfer.effectAllowed="move";event.dataTransfer.setData(DRAG_TYPE,JSON.stringify({sceneId:scene.id,type,id}));setDragging(true);};
   const drop = (event:DragEvent,folderId:string|null) => {
     event.preventDefault();event.stopPropagation();setDragging(false);
     try { const item=JSON.parse(event.dataTransfer.getData(DRAG_TYPE));if(item.sceneId!==scene.id)return;
@@ -46,6 +50,17 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
   };
   const q = query.trim().toLowerCase();
   const matches = (point:PointOfInterest) => !q || pointName(point).toLowerCase().includes(q) || (linkedName(point)??"").toLowerCase().includes(q);
+  // Dropping a folder on the top or bottom edge of another folder row puts it before or after that row; the middle puts it inside.
+  const edgeOf = (event:DragEvent,folder:{id:string;parentId:string|null}) => {if(dragKind.current!=="folder")return null;const rect=event.currentTarget.getBoundingClientRect();const place=dropPlace(event.clientY-rect.top,rect.height);return place==="inside"?null:{id:folder.id,place};};
+  const rowOver = (event:DragEvent,folder:{id:string;parentId:string|null}) => {const next=edgeOf(event,folder);if(next?.id!==edge?.id||next?.place!==edge?.place)setEdge(next);};
+  const rowDrop = (event:DragEvent,folder:{id:string;parentId:string|null}) => {
+    const place=edgeOf(event,folder);setEdge(null);
+    try { const item=JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
+      if(place&&item.sceneId===scene.id&&item.type==="folder"&&item.id!==folder.id&&canMovePoiFolder(scene.poiFolders,item.id,folder.parentId)){event.preventDefault();event.stopPropagation();setDragging(false);update(current=>{current.poiFolders=placeBeside(current.poiFolders,item.id,folder.id,place.place);});return;}
+    } catch { /* Ignore unrelated external drags. */ }
+    drop(event,folder.id);
+  };
+  const stepFolder = (id:string,delta:-1|1) => update(current=>{current.poiFolders=moveSibling(current.poiFolders,id,delta);});
   const toggleFolder = (id:string) => setClosed(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next;});
 
   const editor = (point:PointOfInterest) => {
@@ -91,14 +106,14 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
 
   const tree=(parentId:string|null,seen=new Set<string>()):ReactNode=><>
     {scene.poiFolders.filter(f=>f.parentId===parentId&&!seen.has(f.id)).map(folder=><div key={folder.id} className="explore-folder" onDragOver={e=>{e.preventDefault();e.stopPropagation();}} onDrop={e=>drop(e,folder.id)}>
-      <div className="explore-row explore-folder-row" draggable onDragStart={e=>drag(e,"folder",folder.id)} onDragEnd={()=>setDragging(false)}>
+      <div className="explore-row explore-folder-row" data-drop-edge={edge?.id===folder.id?edge.place:undefined} draggable onDragStart={e=>drag(e,"folder",folder.id)} onDragEnd={()=>{setDragging(false);setEdge(null);}} onDragOver={e=>{if(dragging){e.preventDefault();e.stopPropagation();rowOver(e,folder);}}} onDragLeave={()=>setEdge(null)} onDrop={e=>rowDrop(e,folder)} onClick={e=>{if(!(e.target as HTMLElement).closest("button, input, a"))toggleFolder(folder.id);}} onKeyDown={e=>{const d=altStep(e);if(d){e.preventDefault();stepFolder(folder.id,d);}}}>
         <button className="explore-row-main" aria-expanded={!closed.has(folder.id)} onClick={()=>toggleFolder(folder.id)}>{closed.has(folder.id)?<ChevronRight size={14}/>:<ChevronDown size={14}/>}<Folder size={15}/><span>{folder.name}</span><small>{scene.pointsOfInterest.filter(p=>p.folderId===folder.id).length}</small></button>
         <button className="explore-icon" aria-label={`Edit folder ${folder.name}`} aria-pressed={editingFolder===folder.id} onClick={()=>setEditingFolder(editingFolder===folder.id?null:folder.id)}><Pencil size={14}/></button>
       </div>
       {editingFolder===folder.id&&<div className="explore-editor">
         <Field label="Folder name"><input maxLength={120} value={folder.name} onChange={e=>update(current=>{const f=current.poiFolders.find(f=>f.id===folder.id);if(f)f.name=e.target.value;})}/></Field>
         <Field label="Inside"><select value={folder.parentId??""} onChange={e=>update(current=>{movePoiFolder(current.poiFolders,folder.id,e.target.value||null);})}><option value="">Top level</option>{scene.poiFolders.filter(f=>canMovePoiFolder(scene.poiFolders,folder.id,f.id)).map(f=><option key={f.id} value={f.id}>{poiFolderPath(scene.poiFolders,f.id)}</option>)}</select></Field>
-        <div className="explore-editor-foot"><button className="danger" onClick={()=>{update(current=>deletePoiFolder(current,folder.id));setEditingFolder(null);}}>Delete folder, keep markers</button><button onClick={()=>setEditingFolder(null)}>Done</button></div>
+        <div className="explore-editor-foot"><button disabled={!canMoveSibling(scene.poiFolders,folder.id,-1)} onClick={()=>stepFolder(folder.id,-1)}><ChevronUp size={14} aria-hidden="true"/>Move up</button><button disabled={!canMoveSibling(scene.poiFolders,folder.id,1)} onClick={()=>stepFolder(folder.id,1)}><ChevronDown size={14} aria-hidden="true"/>Move down</button><button className="danger" onClick={()=>{update(current=>deletePoiFolder(current,folder.id));setEditingFolder(null);}}>Delete folder, keep markers</button><button onClick={()=>setEditingFolder(null)}>Done</button></div>
       </div>}
       {!closed.has(folder.id)&&<div className="explore-children">{tree(folder.id,new Set(seen).add(folder.id))}</div>}
     </div>)}
