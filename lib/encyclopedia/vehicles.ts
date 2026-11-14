@@ -115,11 +115,12 @@ export function starterVehicleTypes(): VehicleType[] {
   ];
 }
 
-/** The vehicle types a world offers. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a world's own types come in a later part
-export const vehicleTypesOf = (_world?: unknown): VehicleType[] => starterVehicleTypes();
+export const maxVehicleTypes = 30;
+export const vehicleTypesSchema = z.array(vehicleTypeSchema).min(1).max(maxVehicleTypes).refine(l => unique(l.map(t => t.id)), { message: "Vehicle type ids must be unique" });
+/** The vehicle types a world offers: its own once it has edited them, otherwise the five ready-made ones. */
+export const vehicleTypesOf = (world?: { vehicleTypes?: VehicleType[] } | null): VehicleType[] => world?.vehicleTypes?.length ? world.vehicleTypes : starterVehicleTypes();
 /** A vehicle's type; a type that is gone falls back to the first, so the page always opens. */
-export function vehicleTypeOf(v: Pick<Vehicle, "typeId">, world?: unknown): VehicleType {
+export function vehicleTypeOf(v: Pick<Vehicle, "typeId">, world?: { vehicleTypes?: VehicleType[] } | null): VehicleType {
   const types = vehicleTypesOf(world);
   return types.find(t => t.id === v.typeId) ?? types[0];
 }
@@ -324,5 +325,47 @@ export function playerVehicle(v: Vehicle, t: VehicleType, readable: (id: string)
       crew: (v.crew ?? []).filter(c => !c.gm).flatMap(c => { const w = who(c); return w.characterId || w.name ? [{ id: c.id, ...w, ...(c.role && clean(c.role) ? { role: clean(c.role) } : {}) }] : []; }),
       hands: handRows(v, t).filter(h => !h.gm && h.value > 0).map(h => ({ id: h.id, label: h.label, value: h.value })),
     } } : {}),
+  };
+}
+
+/** A short id for a new type or field: its name, made safe, plus a few random letters so two with one name differ. */
+export const typeFieldId = (label: string, taken: Iterable<string> = []) => {
+  const used = new Set(taken), base = (slug(label) || "field").slice(0, 40);
+  if (!used.has(base)) return base;
+  for (;;) { const id = `${base}-${Math.random().toString(36).slice(2, 6)}`; if (!used.has(id)) return id; }
+};
+/** A blank type to start from. */
+export const blankVehicleType = (taken: string[]): VehicleType => ({ id: typeFieldId("new-type", taken), name: "New type", one: "Vehicle", art: "car", commander: "Captain", crew: "Crew", specs: [], gauges: [], now: [], stations: [], hands: [] });
+/** A copy of a type under a new id and name. */
+export const copyVehicleType = (t: VehicleType, taken: string[]): VehicleType => ({ ...structuredClone(t), id: typeFieldId(`${t.id}-copy`, taken), name: `${t.name} (copy)`.slice(0, 40) });
+
+/** The vehicles of a world, by the type they use (for "in use" counts and to keep a used type from being deleted). */
+export function typeUse(entries: { kind: string; worldId: string; vehicle?: Vehicle }[], worldId: string, types: VehicleType[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const e of entries) if (e.kind === "vehicle" && e.vehicle && e.worldId === worldId) { const id = (types.find(t => t.id === e.vehicle!.typeId) ?? types[0])?.id; if (id) out[id] = (out[id] ?? 0) + 1; }
+  return out;
+}
+
+/**
+ * A world's new list of vehicle types, with every vehicle in it tidied: values for fields its type no longer has are
+ * dropped, so they don't pile up. A vehicle whose type was removed is moved to the first type, keeping matching values.
+ */
+export function saveVehicleTypes<W extends { id: string; vehicleTypes?: VehicleType[] }, E extends { kind: string; worldId: string; vehicle?: Vehicle }>(worlds: W[], entries: E[], worldId: string, types: VehicleType[]): { worlds: W[]; entries: E[] } {
+  const parsed = vehicleTypesSchema.safeParse(types);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Those vehicle types can’t be saved.");
+  const world = worlds.find(w => w.id === worldId);
+  if (!world) throw new Error("That world is gone.");
+  const before = vehicleTypesOf(world), next = parsed.data;
+  const tidy = (v: Vehicle): Vehicle => {
+    const t = next.find(x => x.id === v.typeId);
+    if (!t) { const old = before.find(x => x.id === v.typeId) ?? before[0]!; return changeType(v, old, next[0]!); }
+    const keep = <X extends { id: string }>(list: X[], defs: { id: string }[]) => list.filter(x => defs.some(d => d.id === x.id));
+    const out: Vehicle = { ...v, specs: keep(v.specs, t.specs), gauges: keep(v.gauges, t.gauges).map(g => ({ ...g, value: clampGauge(g.value, t.gauges.find(d => d.id === g.id)!.max) })), now: keep(v.now, t.now) };
+    if (v.hands) { const hands = keep(v.hands, t.hands); if (hands.length) out.hands = hands; else delete out.hands; }
+    return out;
+  };
+  return {
+    worlds: worlds.map(w => w.id === worldId ? { ...w, vehicleTypes: next } : w),
+    entries: entries.map(e => e.kind === "vehicle" && e.vehicle && e.worldId === worldId ? { ...e, vehicle: tidy(e.vehicle) } : e),
   };
 }

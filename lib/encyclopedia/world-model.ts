@@ -13,7 +13,7 @@ import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
 import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
-import {vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
+import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 import {tiesSchema,tieTypesSchema,tieTypesOf,remapTies,tieSearchText} from './ties.ts';
 import {playerTies,type PlayerTie} from './tie-connections.ts';
@@ -71,7 +71,9 @@ export const worldSchema = z.object({ id, name, description: z.string().max(1000
   // Optional (added later): the character profile layout new characters start with.
   characterLayout:characterLayoutSchema.optional(),
   // Optional (added later): kinds of tie the GM renamed or made (ties.ts). Built-in kinds that are unchanged are not stored.
-  tieTypes:tieTypesSchema.optional() });
+  tieTypes:tieTypesSchema.optional(),
+  // Optional (added later): this world's own vehicle types (vehicles.ts). Left out, the five ready-made types.
+  vehicleTypes:vehicleTypesSchema.optional() });
 export const campaignSchema = z.object({ id, worldId: id, name, description: z.string().max(1000), github: githubSchema, statFields:z.array(statFieldSchema).max(100).optional(), calendars:z.array(calendarSchema).max(12).optional(),
   // Optional (added later): rolls from this campaign go to a Maptable campaign's Discord channel.
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),
