@@ -5,8 +5,9 @@ import {ThemeToggle} from './theme';
 import {PlayerView} from './player-view';
 import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
+import type {SheetState} from '@/lib/encyclopedia/player-sheet';
 // A signed-in member also gets `you`: the pages they may edit (lib/encyclopedia/player-edit.ts).
-type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages}};
+type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages;sheets?:Record<string,SheetState>}};
 export default function PlayerClient(){
  const [data,setData]=useState<Shown|null>(null),[error,setError]=useState(''),[token,setToken]=useState(''),[updating,setUpdating]=useState(false),[refreshed,setRefreshed]=useState(''),[signIn,setSignIn]=useState(false);
  const request=useRef<AbortController|null>(null);

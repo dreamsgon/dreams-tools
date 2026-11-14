@@ -64,7 +64,8 @@ export function CharacterSheetSection({entry,change}:{entry:Entry;change:Change}
   {dialogEl}
  </>;
 
- const shown=playerSheet(sheet),rolls=sheetRollGroups(shown),open=sheetOpenUrl(sheet),needsGoogle=sheet.source==='google'&&!googleConfigured();
+ const shown=playerSheet(sheet),rolls=sheetRollGroups(shown),open=sheetOpenUrl(sheet),theirs=!!sheet.linkedById&&sheet.source==='google',needsGoogle=theirs||(sheet.source==='google'&&!googleConfigured());
+ const why=theirs?`${sheet.linkedBy??'The player'} linked this from their own Google account, so only they can refresh it.`:needsGoogle?GOOGLE_NOT_SET_UP:undefined;
  const reads=sheet.mode==='template'?`Reads the ${TEMPLATE_TAB} tab`:`Reads ${sheet.items.length} picked ${sheet.items.length===1?'cell':'cells'}`;
  return <>
   <SheetView sheet={shown} note={rolls.length?'Values are copied here when the sheet is read. Rolls show in the roll card, where they can go to Discord.':undefined}
@@ -73,11 +74,11 @@ export function CharacterSheetSection({entry,change}:{entry:Entry;change:Change}
    subtitle={`Linked by ${sheet.linkedBy??'the GM'} · ${reads}`}
    actions={<>
     {open&&<a className="button small" href={open} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> {sheet.source==='google'?'Open in Google Sheets':'Open published sheet'}</a>}
-    {!coGm&&<button type="button" className="button small" disabled={busy||needsGoogle} title={needsGoogle?GOOGLE_NOT_SET_UP:undefined} onClick={()=>void refresh()}><RefreshCw size={13}/> {busy?'Reading…':'Refresh'}</button>}
+    {!coGm&&<button type="button" className="button small" disabled={busy||needsGoogle} title={why} onClick={()=>void refresh()}><RefreshCw size={13}/> {busy?'Reading…':'Refresh'}</button>}
     {!coGm&&<details className="sheet-menu"><summary className="button small icon-button" aria-label="More for this sheet"><MoreHorizontal size={15}/></summary>
-     <div className="sheet-menu-list"><button type="button" disabled={needsGoogle} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button><button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>Unlink</button></div></details>}
+     <div className="sheet-menu-list"><button type="button" disabled={needsGoogle} title={why} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button><button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>Unlink</button></div></details>}
    </>}>
-   <p className="sheet-visibility">{visible?'Players see the copied values, read only, because this character’s Stats tab is player visible.':'Only you see this. Set the Stats tab to Player visible to show the copied values to players.'}</p>
+   <p className="sheet-visibility">{visible?'Players see the copied values, read only, because this character’s Stats tab is player visible.':sheet.linkedById?`Only you and ${sheet.linkedBy??'the player'} see this. Set the Stats tab to Player visible to show the copied values to every player.`:'Only you see this. Set the Stats tab to Player visible to show the copied values to players.'}</p>
    {notice&&<p role="status" className="sheet-notice">{notice}</p>}
   </SheetView>
   {dialogEl}

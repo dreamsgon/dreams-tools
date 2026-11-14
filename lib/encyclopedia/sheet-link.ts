@@ -4,7 +4,7 @@
  * references, CSV, the "RPG Tools" template tab, guessing a kind and a formula for a cell, copying a read grid
  * onto the saved items, and the copy players get. Nothing here touches the network or the page.
  *
- * What stays with the GM: spreadsheetId, publishedUrl and linkedBy. Players only ever get playerSheet().
+ * What stays with the GM: spreadsheetId, publishedUrl, linkedBy and linkedById (only the member who linked a sheet is also given its open link). Players only ever get playerSheet().
  */
 import { z } from "zod";
 
@@ -132,6 +132,8 @@ export const sheetSchema = z.object({
   /** The tab cells are read from when a cell names none. */
   tab: z.string().trim().min(1).max(100).optional(),
   linkedBy: z.string().trim().min(1).max(100).optional(),
+  /** Set when a signed-in member linked it from the player pages: a keyed hash of who they are (player-sheet.ts), never shown to anyone. */
+  linkedById: z.string().regex(/^[a-f0-9]{32}$/).optional(),
   readAt: z.string().max(40).refine(v => !Number.isNaN(Date.parse(v)), "Use an ISO date").optional(),
   mode: z.enum(["template", "cells"]),
   items: z.array(sheetItemSchema).max(MAX_SHEET_ITEMS),

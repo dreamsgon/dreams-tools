@@ -20,9 +20,17 @@ type Props={
   current?:Sheet;
   /** The linked sheet already read again, so the dialog opens on the cell picker. */
   read?:SheetRead;
-  onSave:(sheet:Sheet)=>void;
+  /** May be async: a failure it throws is shown in the dialog, which stays open. */
+  onSave:(sheet:Sheet)=>void|Promise<void>;
   onClose:()=>void;
+  /** A signed-in player linking their own character's sheet: published links are read through the player route, and the wording is theirs. */
+  player?:{name:string;read:(link:string)=>Promise<SheetRead>};
 };
+
+/** Runs a save, showing what went wrong instead of closing. */
+async function attempt(save:()=>void|Promise<void>,fail:(message:string)=>void){
+  try{await save();}catch(e){fail(e instanceof Error?e.message:'That cannot be saved. Try again.');}
+}
 
 const google=(<svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>);
 
@@ -32,7 +40,7 @@ function downloadTemplate(){
 }
 
 /** Link a character sheet: sign in with Google and pick it, or paste a published link; then use the RPG Tools tab or pick cells. */
-export default function SheetDialog({characterName,current,read:initial,onSave,onClose}:Props){
+export default function SheetDialog({characterName,current,read:initial,onSave,onClose,player}:Props){
   const [read,setRead]=useState<SheetRead|null>(initial??null),[step,setStep]=useState<'link'|'found'|'pick'>(initial?'pick':'link');
   const [link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const configured=googleConfigured(),wrap=useRef<HTMLDivElement>(null);
@@ -54,19 +62,19 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
 
   const base=(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string):Sheet=>({
     source:r.source,...(r.spreadsheetId?{spreadsheetId:r.spreadsheetId}:{}),...(r.publishedUrl?{publishedUrl:r.publishedUrl}:{}),
-    title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,linkedBy:current?.linkedBy??'the GM',
+    title:(title.trim()||r.title).slice(0,200),tab:mode==='template'?TEMPLATE_TAB:current?.tab??r.tabs[0]?.name,linkedBy:current?.linkedBy??player?.name??'the GM',...(current?.linkedById?{linkedById:current.linkedById}:{}),
     readAt:new Date().toISOString(),mode,items,writeBack:false,
   });
   const chooseTemplate=(r:SheetRead)=>{
     const tab=findTemplateTab(r.tabs);if(!tab)return;
     const sheet=base(r,'template',templateItems(tab,current?.mode==='template'?current.items:[]),r.title),checked=sheetSchema.safeParse(sheet);
     if(!checked.success){setError(checked.error.issues[0]?.message??'That sheet cannot be saved.');return;}
-    onSave(checked.data);
+    void attempt(()=>onSave(checked.data),setError);
   };
 
   return <ToolDialog title={step==='pick'?'Pick cells':'Link a character sheet'} wide={step==='pick'} onClose={onClose}>
     <div className="sheet-dialog" ref={wrap}>
-      {step!=='pick'&&<p className="modal-intro">For {characterName}. Stats and rolls come from one Google Sheet.</p>}
+      {step!=='pick'&&<p className="modal-intro">For {characterName}. {player?'Stats and rolls come from your own Google Sheet. Only you and your GM can change what is linked.':'Stats and rolls come from one Google Sheet.'}</p>}
       {step==='link'&&<>
         <div className="sheet-way is-main">
           <h3>1. Sign in with Google and pick the sheet <span className="sheet-pill">Recommended</span></h3>
@@ -75,7 +83,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
           {!configured&&<p className="sheet-error" role="note">{GOOGLE_NOT_SET_UP}</p>}
           {configured&&<p><Check size={12} aria-hidden="true"/> Stays private. Refresh reads it again whenever you choose.</p>}
         </div>
-        <form className="sheet-way" onSubmit={e=>{e.preventDefault();if(link.trim())void run(()=>readPublished(link));}}>
+        <form className="sheet-way" onSubmit={e=>{e.preventDefault();if(link.trim())void run(()=>(player?.read??readPublished)(link));}}>
           <h3>2. Paste a published link</h3>
           <p>No sign-in. Works for a sheet published to the web as CSV.</p>
           <div className="sheet-link-row">
@@ -105,7 +113,7 @@ export default function SheetDialog({characterName,current,read:initial,onSave,o
         </div>
         <div className="sheet-foot-row"><button type="button" className="button" onClick={()=>{setStep('link');setRead(null);}}>Back</button><button type="button" className="button" onClick={onClose}>Cancel</button></div>
       </>}
-      {step==='pick'&&read&&<CellPicker read={read} current={current} base={base} onSave={onSave} onClose={onClose} onBack={initial?undefined:()=>{setStep('link');setRead(null);}}/>}
+      {step==='pick'&&read&&<CellPicker read={read} current={current} base={base} player={!!player} onSave={onSave} onClose={onClose} onBack={initial?undefined:()=>{setStep('link');setRead(null);}}/>}
     </div>
   </ToolDialog>;
 }
@@ -114,7 +122,7 @@ type Slot={tab:string;col:number;row:number};
 const same=(a:Slot|null,b:Slot|null)=>!!a&&!!b&&a.tab===b.tab&&a.col===b.col&&a.row===b.row;
 
 /** The picker: click a label cell, then its value cell, choose what it is, and build the list of items to read. */
-function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;current?:Sheet;base:(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string)=>Sheet;onSave:(s:Sheet)=>void;onClose:()=>void;onBack?:()=>void}){
+function CellPicker({read,current,base,onSave,onClose,onBack,player}:{read:SheetRead;current?:Sheet;player?:boolean;base:(r:SheetRead,mode:Sheet['mode'],items:SheetItem[],title:string)=>Sheet;onSave:(s:Sheet)=>void|Promise<void>;onClose:()=>void;onBack?:()=>void}){
   const [tabName,setTab]=useState(read.tabs[0]?.name??''),[label,setLabel]=useState<Slot|null>(null),[value,setValue]=useState<Slot|null>(null);
   const [items,setItems]=useState<SheetItem[]>(current?.mode==='cells'?current.items:[]);
   const [name,setName]=useState(''),[kind,setKind]=useState<SheetKind>('stat'),[formula,setFormula]=useState(''),[title,setTitle]=useState(current?.title??read.title),[error,setError]=useState('');
@@ -163,7 +171,7 @@ function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;cu
     if(items.some(i=>!i.name.trim())){setError('Give every picked item a name.');return;}
     const draft=base(read,'cells',items.map(i=>({...i,name:i.name.trim()})),title),fresh=refreshSheet(draft,read.tabs,draft.readAt!).sheet,checked=sheetSchema.safeParse(fresh);
     if(!checked.success){setError(checked.error.issues[0]?.message??'That cannot be saved.');return;}
-    onSave(checked.data);
+    void attempt(()=>onSave(checked.data),setError);
   }
 
   const hasTemplate=!!findTemplateTab(read.tabs);
@@ -211,6 +219,6 @@ function CellPicker({read,current,base,onSave,onClose,onBack}:{read:SheetRead;cu
       <button type="button" className="button" onClick={onClose}>Cancel</button>
       <button type="button" className="button primary" disabled={!items.length||!title.trim()} onClick={save}>Save {items.length} {items.length===1?'item':'items'}</button>
     </div>
-    <p className="sheet-foot">Values are copied to the character page each time the sheet is read.</p>
+    <p className="sheet-foot">{player?'Values are copied to your character page each time you refresh. Your GM can see them too.':'Values are copied to the character page each time the sheet is read.'}</p>
   </>;
 }

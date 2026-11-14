@@ -12,13 +12,13 @@ const modes:RollMode[]=['high','normal','low'];
  * choice that applies to the next roll and then goes back to Normal. `twice` rolls a formula that isn't a single d20
  * twice and keeps the higher or lower total (the Encyclopedia); without it, other formulas just roll normally (Maptable's tray).
  */
-export function SheetRolls({groups,twice,compact,onRoll}:{groups:SheetRollGroup[];twice:boolean;compact?:boolean;onRoll:(rollName:string,formula:string,mode:RollMode)=>void}){
+export function SheetRolls({groups,twice,compact,onRoll}:{groups:SheetRollGroup[];twice:boolean;compact?:boolean;onRoll:(rollName:string,formula:string,mode:RollMode,itemId:string)=>void}){
  const [mode,setMode]=useState<RollMode>('normal');
  const formulas=groups.flatMap(g=>g.rows.flatMap(r=>r.buttons.map(b=>b.formula))),anyD20=formulas.some(isSingleD20);
  // With any single d20 roll the choice is advantage and applies to those only; with none it is roll twice and applies to every roll.
  const names:Record<RollMode,string>=anyD20||!twice?{high:'Advantage',normal:'Normal',low:'Disadvantage'}:{high:'Keep higher',normal:'Normal',low:'Keep lower'};
  const hint=anyD20||!twice?'Advantage applies to d20 rolls.':'Rolls twice and keeps the higher or lower total.';
- const go=(name:string,formula:string)=>{onRoll(name,formula,anyD20&&!isSingleD20(formula)?'normal':mode);setMode('normal');};
+ const go=(b:{rollName:string;formula:string;itemId:string})=>{onRoll(b.rollName,b.formula,anyD20&&!isSingleD20(b.formula)?'normal':mode,b.itemId);setMode('normal');};
  return <div className={`sheet-roll-panel${compact?' compact':''}`}>
   <div className="sheet-mode" role="radiogroup" aria-label="Roll twice">
    {modes.map(m=><button key={m} type="button" role="radio" aria-checked={mode===m} className={mode===m?'on':''} onClick={()=>setMode(m)}>{names[m]}</button>)}
@@ -35,8 +35,8 @@ export function SheetRolls({groups,twice,compact,onRoll}:{groups:SheetRollGroup[
  </div>;
 }
 
-function RollButton({label,b,go}:{label:string;b:{rollName:string;formula:string};go:(name:string,formula:string)=>void}){
- return <button type="button" className="sheet-roll-button" title={`Roll ${b.rollName}: ${b.formula}`} onClick={()=>go(b.rollName,b.formula)}><span>{label}</span><code>{b.formula}</code></button>;
+function RollButton({label,b,go}:{label:string;b:{rollName:string;formula:string;itemId:string};go:(b:{rollName:string;formula:string;itemId:string})=>void}){
+ return <button type="button" className="sheet-roll-button" title={`Roll ${b.rollName}: ${b.formula}`} onClick={()=>go(b)}><span>{label}</span><code>{b.formula}</code></button>;
 }
 
 let logVersion=0;
