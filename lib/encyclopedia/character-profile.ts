@@ -12,7 +12,8 @@ import type { Entry, Workspace, World } from "./world-model.ts";
 
 export const maxTraits = 12, maxTies = 40;
 export const traitSchema = z.object({ id: oid, label: text(30), symbol: z.enum(emblemSymbols).optional(), gm: z.boolean().optional() });
-export const tieSchema = z.object({ id: oid, entryId: oid, note: text(200).optional(), gm: z.boolean().optional() });
+/** A tie in the People block. `typeId` is a kind of tie (ties.ts); without one it counts as Knows. */
+export const tieSchema = z.object({ id: oid, entryId: oid, note: text(200).optional(), gm: z.boolean().optional(), typeId: oid.optional() });
 
 export const profileBlockKinds = ["beliefs", "organizations", "ties", "text", "linked"] as const;
 export type ProfileBlockKind = typeof profileBlockKinds[number];

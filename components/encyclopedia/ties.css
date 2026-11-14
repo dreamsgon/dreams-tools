@@ -1,0 +1,82 @@
+/* Ties: the colour of each group of kinds, the tie editor, Kinds of tie, and the player view's Connections tab. */
+.tie-family{--tc:#2f7d57}.tie-heart{--tc:#b23a6b}.tie-conflict{--tc:#b4441f}.tie-allegiance{--tc:#6a4f9f}
+.tie-guidance{--tc:#94690f}.tie-dealings{--tc:#2f63a8}.tie-belonging{--tc:#4f6b75}.tie-other{--tc:var(--muted)}
+:root[data-theme="dark"] .tie-family{--tc:#78cc9a}:root[data-theme="dark"] .tie-heart{--tc:#f09ac0}:root[data-theme="dark"] .tie-conflict{--tc:#f2a07f}:root[data-theme="dark"] .tie-allegiance{--tc:#b9a2ea}
+:root[data-theme="dark"] .tie-guidance{--tc:#e8c37a}:root[data-theme="dark"] .tie-dealings{--tc:#8fb7f0}:root[data-theme="dark"] .tie-belonging{--tc:#a7bcc4}
+
+/* Tie chips in the list, and their lines and boxes in the web. */
+.qc-reason.tie{color:var(--tc);border-color:color-mix(in srgb,var(--tc) 45%,var(--line));background:color-mix(in srgb,var(--tc) 10%,var(--panel))}
+button.qc-reason{cursor:pointer;line-height:1.5}
+button.qc-reason:hover{border-color:var(--tc,var(--accent));background:color-mix(in srgb,var(--tc,var(--accent)) 18%,var(--panel))}
+button.qc-reason:focus-visible{outline:2px solid var(--tc,var(--accent));outline-offset:1px}
+.qc-reason.worked{background:transparent;border-style:dashed}
+.qc-edge.tie{stroke:color-mix(in srgb,var(--tc) 70%,var(--line-strong))}
+.qc-node.tie rect{stroke:var(--tc)}
+.qc-node.tie .qc-why{fill:var(--tc)}
+
+/* Show ties of one group. */
+.tie-filter{display:flex;flex-wrap:wrap;gap:6px}
+.tie-filter button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:12px;color:var(--ink)}
+.tie-filter button i,.tie-kind-group h3 i{width:9px;height:9px;border-radius:50%;background:var(--tc);display:inline-block}
+.tie-filter button small{color:var(--muted);font-size:11px}
+.tie-filter button[aria-pressed=true]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 50%,var(--line));color:var(--accent)}
+
+/* The tie editor. */
+.tie-sentence{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-4px 0 18px;font-size:15px}
+.tie-sentence strong{font-family:var(--font-display,inherit);font-weight:500;overflow-wrap:anywhere}
+.tie-sentence .qc-reason{font-size:12px}
+.tie-form textarea{display:block;width:100%;margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);font-size:13px;resize:vertical;font-family:inherit}
+.tie-kind-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.tie-kind-row>label{flex:1 1 220px;font-size:11px;color:var(--muted)}
+.tie-kind-row .text-button{padding-bottom:12px}
+.tie-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tie-pair>label{font-size:11px;color:var(--muted);min-width:0}
+.tie-form fieldset,.tie-kind-editor fieldset{border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px 14px;margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+.tie-form legend,.tie-kind-editor legend{font-size:11px;color:var(--muted);padding:0 4px}
+.tie-form fieldset>label{font-size:11px;color:var(--muted)}
+.tie-share .segmented{align-self:flex-start}
+.tie-hint{margin:0;font-size:12px;line-height:1.6;color:var(--muted)}
+.modal-intro.tie-hint{margin:-6px 0 0}
+.tie-buttons{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.details-form .tie-buttons .button{align-self:auto;margin-top:0}
+.tie-remove{margin-right:auto;color:var(--danger)}
+.tie-none{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+
+/* Kinds of tie. */
+.tie-kinds-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.tie-kinds{display:flex;flex-direction:column;gap:18px}
+.tie-kind-group h3{display:flex;align-items:center;gap:8px;font-size:17px;margin:0 0 6px;flex-wrap:wrap}
+.tie-kind-group h3 small{font-family:var(--font-sans);font-size:12px;color:var(--muted)}
+.tie-kind-group ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.tie-kind{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.7fr) 64px 76px;align-items:center;gap:6px 14px;padding:8px 0;border-bottom:1px solid var(--line)}
+.tie-kind-name{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0}
+.tie-kind-name strong{font-size:13.5px;font-weight:600}
+.tie-kind-name small{font-size:12.5px;color:var(--muted)}
+.tie-kind-name em{font-style:normal;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.tie-kind-pages{font-size:12px;color:var(--muted);min-width:0}
+.tie-kind-use{font-size:12px;color:var(--muted);white-space:nowrap;text-align:right}
+.tie-kind-tools{display:flex;gap:4px;justify-content:flex-end}
+.tie-kind-tools .icon-button{padding:6px}
+.tie-check{display:flex!important;align-items:center;gap:8px;font-size:12.5px!important;color:var(--ink)!important}
+.tie-check input,.tie-page-kinds input{accent-color:var(--accent)}
+.tie-check input{width:auto!important;margin:0!important}
+.tie-page-kinds{flex-direction:row!important;flex-wrap:wrap;gap:6px 14px!important}
+.tie-page-kinds label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);min-height:32px}
+.tie-page-kinds input{width:auto!important;margin:0!important}
+
+/* The player view. */
+.player-ties{list-style:none;margin:25px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:10px}
+.player-ties li{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow-wrap:anywhere}
+.player-ties button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;padding:12px 14px;text-align:left}
+.player-ties button small{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.player-ties button strong{font-size:15px;font-weight:500;color:var(--accent)}
+.player-ties p{margin:0;padding:0 14px 12px;font-size:13px;line-height:1.6;color:var(--muted)}
+
+@media (max-width:760px){
+  .tie-pair{grid-template-columns:1fr}
+  .tie-kind{grid-template-columns:minmax(0,1fr) auto;padding:10px 0}
+  .tie-kind-pages{grid-column:1/-1;grid-row:2}
+  .tie-kind-use{grid-column:1;grid-row:3;text-align:left}
+  .tie-kind-tools{grid-column:2;grid-row:1}
+  .qc-notes{padding-left:10px}
+}
