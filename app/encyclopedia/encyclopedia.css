@@ -1155,6 +1155,7 @@ button.player-seen:hover{border-color:var(--line-strong)}
 .toast{bottom:calc(var(--enc-bar-h) + 12px)}
 body:has(.global-dice):has(.enc-bar){padding-bottom:0}
 body:has(.enc-bar) .global-dice{display:none}
+body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bottom))}
 .more-sheet[open]{display:block;position:fixed;inset:auto 0 0 0;margin:0;width:100%;max-width:none;max-height:calc(86dvh / var(--ui-zoom, 1));padding:0;border:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;background:var(--panel);color:var(--ink);overflow:auto;overscroll-behavior:contain}
 .more-sheet::backdrop{background:var(--overlay)}
 .more-sheet-inner{padding:6px 16px calc(16px + env(safe-area-inset-bottom))}
