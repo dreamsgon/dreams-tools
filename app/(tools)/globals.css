@@ -2261,3 +2261,35 @@ button.primary, .rpg-open { font-weight:500; }
 .organizer-row[data-folder-drop] { cursor: pointer; }
 .organizer-order { gap: 6px; }
 .organizer-order button { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Maptable phone top bar: the row scrolls sideways with a finger so nothing is cut off. Menus opened from it are fixed so the scrolling row does not clip them. */
+@media(max-width:799px) {
+ .app-shell .app-header {overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;justify-content:flex-start;}
+ .app-shell .app-header::-webkit-scrollbar {display:none;}
+ .app-shell .app-header > * {flex:none;}
+ .app-shell .app-header > .save-chip-group, .app-shell .app-header > .save-chip {margin-left:auto;}
+ .app-shell .app-header .header-actions[data-mobile-open="true"] {position:fixed;}
+ .app-shell .app-header .crumbbar-menu, .app-shell .app-header .scene-switcher-panel {position:fixed;top:60px;left:8px;right:8px;width:auto;max-width:none;}
+}
+@media(max-width:799px) and (max-height:500px) {
+ .app-shell .app-header .crumbbar-menu, .app-shell .app-header .scene-switcher-panel {top:48px;}
+}
+
+.site-links { display:contents; }
+
+/* Phone site header: one compact row, with the links as a strip you can swipe. */
+@media(max-width:640px) {
+ .rpg-hub .site-header { flex-wrap:nowrap; align-items:center; gap:8px; padding-top:8px; padding-bottom:8px; }
+ .rpg-hub .site-header .brand { flex:none; font-size:17px; }
+ .rpg-hub .site-header nav { display:contents; }
+ .rpg-hub .site-header nav .appearance { order:3; margin-left:0; }
+ .rpg-hub .site-header .bell { order:4; }
+ .rpg-hub .site-header nav > a.site-nav-link { order:5; flex:none; white-space:nowrap; }
+ .site-header .site-links { display:flex; align-items:center; gap:14px; order:2; flex:1 1 0; min-width:0; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-width:none; }
+ .site-header .site-links::-webkit-scrollbar { display:none; }
+ .site-header .site-links .site-nav-link { flex:none; white-space:nowrap; }
+ /* The page you are on comes first in the strip, so it is never off the edge. */
+ .site-header .site-links .site-nav-link[aria-current="page"] { order:-1; }
+ .site-header .site-account-long { display:none; }
+}
+@media(max-width:480px) { .site-header .brand .brand-name { display:none; } }

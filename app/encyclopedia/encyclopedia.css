@@ -1115,3 +1115,17 @@ button.player-seen:hover{border-color:var(--line-strong)}
 .tree-row .tree-edit{flex:none;display:inline-flex;align-items:center;justify-content:center;align-self:center;line-height:0;width:24px;height:24px;min-height:0;padding:0;margin:0 4px 0 0;opacity:0;border:0;background:transparent;color:var(--muted)}
 .tree-row:hover .tree-edit,.tree-row:focus-within .tree-edit,.tree-row.selected .tree-edit{opacity:1}
 @media (hover:none){.tree-row .tree-edit{opacity:1}}
+
+/* Phone top bar: the row scrolls sideways with a finger, so the page name stays readable and every button stays reachable. Menus opened from it are fixed so the scrolling row does not clip them. */
+@media(max-width:720px){
+.topbar{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none}
+.topbar::-webkit-scrollbar{display:none}
+.topbar>*{flex:none}
+.topbar .topbar-crumbs{flex:none;width:176px}
+.topbar .top-actions{flex:none;justify-content:flex-start}
+.topbar .search-box{flex:none}
+.topbar .search-box input{width:120px;max-width:none}
+.topbar .crumbbar-menu{position:fixed;top:68px;left:8px;right:8px;width:auto;max-width:none}
+.topbar .appearance-panel{position:fixed;top:68px;bottom:auto;left:8px;right:8px;width:auto;max-width:none}
+}
+@media(max-width:720px){.sidebar-tools .tool-switch nav{flex-wrap:wrap;gap:4px 16px}}
