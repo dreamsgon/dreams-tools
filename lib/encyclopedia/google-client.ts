@@ -4,7 +4,8 @@
  * The Google scripts load the first time someone uses the Google option, never with the page.
  * Configure with NEXT_PUBLIC_GOOGLE_CLIENT_ID, NEXT_PUBLIC_GOOGLE_API_KEY and NEXT_PUBLIC_GOOGLE_APP_ID (see docs/ENCYCLOPEDIA.md).
  */
-import { GRID_ROWS, clipRows, labelFromRangeName, namedRangeCell, rowsFromValues, type SheetTab } from "./sheet-link.ts";
+import { GRID_ROWS, clipRows, labelFromRangeName, namedRangeCell, rowsFromValues, type Sheet, type SheetTab } from "./sheet-link.ts";
+import { buildHpRead, buildHpWrite, cellFromAnswer } from "./sheet-write.ts";
 
 export const googleConfig = {
   clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
@@ -80,6 +81,10 @@ export async function preloadGoogle(): Promise<void> {
   await Promise.all([script("https://accounts.google.com/gsi/client"), script("https://apis.google.com/js/api.js")]);
 }
 export const forgetGoogleToken = () => { token = null; };
+/** Whether this page already holds a live token. Never opens a pop-up, so it is safe to ask while playing. */
+export const hasGoogleToken = () => !!token && token.until > Date.now() + 60_000;
+/** The live token, or null. Never opens a pop-up. */
+export const currentGoogleToken = () => hasGoogleToken() ? token!.value : null;
 
 /** Google's own file picker, limited to spreadsheets. Resolves to the chosen sheet, or null when closed. */
 export async function pickSpreadsheet(accessToken: string): Promise<{ id: string; name: string } | null> {
@@ -134,3 +139,24 @@ export async function readTabs(id: string, accessToken: string, ranges: { name: 
   return ranges.map((r, i) => ({ name: r.name, rows: clipRows(rowsFromValues(body.valueRanges?.[i]?.values)) }));
 }
 export const GRID_RANGE = `A1:Z${GRID_ROWS}`;
+
+type Writable = Pick<Sheet, "source" | "spreadsheetId" | "tab" | "items" | "writeBack">;
+async function writeCall(req: { url: string; method: "GET" | "PUT"; body?: string }, accessToken: string): Promise<unknown> {
+  let res: Response;
+  try { res = await fetch(req.url, { method: req.method, headers: { Authorization: `Bearer ${accessToken}`, ...(req.body ? { "Content-Type": "application/json" } : {}) }, ...(req.body ? { body: req.body } : {}) }); }
+  catch { throw new GoogleError("Couldn't reach Google Sheets. Try again in a moment."); }
+  if (res.status === 401) { forgetGoogleToken(); throw new GoogleError("Your Google sign-in ended. Sign in again.", 401); }
+  if (res.status === 403 || res.status === 404) throw new GoogleError("Google won't let RPG Tools write to that sheet with this sign-in. Sign in with the Google account you picked the sheet with, and make sure the Google Sheets API is on for this site.", res.status);
+  if (res.status === 400) throw new GoogleError("Google didn't accept that cell. Use Change cells to pick the HP cell again.", 400);
+  if (res.status === 429) throw new GoogleError("Google asked RPG Tools to slow down. Try again in a minute.", 429);
+  if (!res.ok) throw new GoogleError(`Google Sheets answered with an error (${res.status}).`, res.status);
+  return res.json();
+}
+/** The HP cell as it is in the sheet now (a formula shows as "=..."). Browser only, with the person's own token. */
+export async function readHpCell(sheet: Writable, accessToken: string): Promise<string> {
+  return cellFromAnswer(await writeCall(buildHpRead(sheet), accessToken));
+}
+/** Writes the HP number into the sheet's HP cell, and nothing else. */
+export async function writeHpCell(sheet: Writable, value: number, accessToken: string): Promise<void> {
+  await writeCall(buildHpWrite(sheet, value), accessToken);
+}

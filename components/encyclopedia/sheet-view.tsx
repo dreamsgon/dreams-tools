@@ -16,7 +16,7 @@ function useNow(){
  * with their formulas. Used by the GM's Profile tab and, read only, by the player site. Rolls are listed for players; the GM's page
  * passes `rolling` to make them rollable.
  */
-export function SheetView({sheet,subtitle,actions,note,rolling,children}:{sheet:PlayerSheet;subtitle?:ReactNode;actions?:ReactNode;note?:ReactNode;/** The GM's rollable rolls and roll log. Players never get this: they see the plain list. */rolling?:ReactNode;children?:ReactNode}){
+export function SheetView({sheet,subtitle,actions,note,rolling,hpTools,children}:{sheet:PlayerSheet;subtitle?:ReactNode;actions?:ReactNode;note?:ReactNode;/** The GM's rollable rolls and roll log. Players never get this: they see the plain list. */rolling?:ReactNode;/** The GM's HP controls and write-back switch, shown under the tiles. Never passed on the player site. */hpTools?:ReactNode;children?:ReactNode}){
  const now=useNow(),{tiles,stats,rolls,initFormula}=sheetLayout(sheet.items),groups=rollGroups(rolls),ago=timeAgo(sheet.readAt,now);
  return <section className="sheet-card" aria-label="Character sheet">
   <div className="sheet-head"><span className="eyebrow">CHARACTER SHEET</span>{ago&&<small>Read {ago}</small>}</div>
@@ -28,6 +28,7 @@ export function SheetView({sheet,subtitle,actions,note,rolling,children}:{sheet:
    {t.ratio!==undefined&&<div className="sheet-bar" role="img" aria-label={`${Math.round(t.ratio*100)} percent`}><span style={{width:`${Math.round(t.ratio*100)}%`}}/></div>}
    {t.kind==='init'&&initFormula&&<code>{initFormula}</code>}
   </div>)}</div>}
+  {hpTools}
   {stats.length>0&&<div className="sheet-stats">{stats.map(s=><div className="sheet-tile" key={s.id}><small>{s.name}</small><strong>{s.value||'—'}</strong></div>)}</div>}
   {rolling?<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{rolling}</div>:groups.length>0&&<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{groups.map(g=><div className="sheet-roll-group" key={g.title}>
    {(groups.length>1||g.title!=='Rolls')&&<h4>{g.title}</h4>}

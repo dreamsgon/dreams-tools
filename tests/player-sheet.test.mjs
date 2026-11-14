@@ -143,6 +143,30 @@ test('a co-GM\'s restore keeps a sheet a member linked',()=>{
  assert.equal(a.body,'Ayla keeps her bow oiled.');assert.equal(a.character.sheet.linkedById,MARA);assert.equal(a.character.sheet.spreadsheetId,SHEET_ID);
 });
 
+test('a member cannot turn write-back on, and a GM-set write-back survives a co-GM restore and stays out of every player copy',()=>{
+ const w=world();
+ // A forged writeBack:true from a member's browser is stored as off: only the linker's own settings screen (their browser) could ever write.
+ const next=link(w,gSheet({writeBack:true}));
+ assert.equal(ent(next,'ayla').character.sheet.writeBack,false);
+ // Refreshing a member's sheet keeps it off.
+ const fresh=S.refreshOwnSheet(next,C,rights('mara'),MARA,'ayla',TABS,NOW).data;
+ assert.equal(ent(fresh,'ayla').character.sheet.writeBack,false);
+ // A GM-linked sheet with write-back on: a co-GM restore keeps it, and no player or AI copy mentions it.
+ const gm={...w,entries:w.entries.map(e=>e.id==='borin'?{...e,character:{...e.character,sheet:{...e.character.sheet,writeBack:true}}}:e)};
+ const parsed=workspaceSchema.parse(gm);assert.equal(ent(parsed,'borin').character.sheet.writeBack,true);
+ const mine=structuredClone(campaignExport(parsed,C));
+ mine.entries=mine.entries.map(e=>e.id==='borin'?{...e,body:'Borin counts the gulls.',updatedAt:T,character:{...e.character,sheet:undefined}}:e);
+ const restored=applyCoGmEdit(parsed,C,mine);
+ assert.equal(ent(restored,'borin').body,'Borin counts the gulls.');assert.equal(ent(restored,'borin').character.sheet.writeBack,true);
+ const players=JSON.stringify([playerCampaign(parsed,C),playerCampaign(parsed,C,new Set(['borin']),WREN)]);
+ assert.ok(players.includes('Ayla - Salt Road'));assert.ok(!players.includes('writeBack'));
+ const full=campaignExport(parsed,C),limited=narrow({book:full,campaign:full.campaigns[0],maps:null,level:'read',perms:{...presets.gm,seeSecrets:'off'}});
+ assert.ok(!JSON.stringify(limited.book).includes('writeBack'));
+ assert.ok(!JSON.stringify(playerSheet(ent(parsed,'borin').character.sheet)).includes('writeBack'));
+ assert.ok(!JSON.stringify(withoutLinkDetails(ent(parsed,'borin').character.sheet)).includes('writeBack'));
+ assert.ok(!JSON.stringify(S.sheetStates(parsed,C,rights('wren'),WREN)).includes('writeBack'));
+});
+
 // ---- The routes' handlers ---------------------------------------------------------------------
 
 const REF='a'.repeat(64);
