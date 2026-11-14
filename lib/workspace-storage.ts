@@ -66,6 +66,16 @@ async function saveFromSnapshot(bucket:Bucket,prefix:string,workspace:Workspace,
 export type WorkspacePatch=Partial<Omit<Workspace,'scenes'>>&{scenes?:{upsert?:Workspace['scenes'];remove?:string[];order?:string[]}};
 export async function patchWorkspace(bucket:Bucket,prefix:string,revision:string|null,patch:WorkspacePatch):Promise<{revision:string}|null>{
  const current=await loadWorkspace(bucket,prefix);if(!current||current.revision!==revision)return null;
+ return saveFromSnapshot(bucket,prefix,applyWorkspacePatch(current.workspace,patch),revision,current);
+}
+/** Saves `change(current)` when the cloud copy is still at `revision`. Null when it moved on, or when there is none. */
+export async function updateWorkspace(bucket:Bucket,prefix:string,revision:string|null,change:(current:Workspace)=>Workspace):Promise<{revision:string}|null>{
+ const current=await loadWorkspace(bucket,prefix);if(!current||current.revision!==revision)return null;
+ return saveFromSnapshot(bucket,prefix,change(current.workspace),revision,current);
+}
+/** A save's changes (lib/workspace-save.ts workspacePatch) applied to the workspace they were made against. */
+export function applyWorkspacePatch(workspace:Workspace,patch:WorkspacePatch):Workspace{
+ const current={workspace};
  if(!patch||typeof patch!=='object'||Array.isArray(patch)||Object.keys(patch).some(key=>!(key in current.workspace)))throw new Error('Invalid workspace changes.');
  const {scenes:change,...metadata}=patch;
  if(change!==undefined&&(!change||typeof change!=='object'||Array.isArray(change)||Object.keys(change).some(k=>!['upsert','remove','order'].includes(k))||!Array.isArray(change.upsert)||!Array.isArray(change.remove)||change.remove.some(id=>typeof id!=='string')||change.upsert.some(scene=>!scene||typeof scene!=='object'||typeof scene.id!=='string')))throw new Error('Invalid scene changes.');
@@ -73,5 +83,5 @@ export async function patchWorkspace(bucket:Bucket,prefix:string,revision:string
  if(updates.size!==(change?.upsert?.length??0)||[...updates.keys()].some(id=>remove.has(id)))throw new Error('Duplicate scene changes.');
  const scenes=current.workspace.scenes.filter(scene=>!remove.has(scene.id)).map(scene=>{const updated=updates.get(scene.id);updates.delete(scene.id);return updated??scene;});scenes.push(...updates.values());
  if(change?.order){if(!Array.isArray(change.order)||change.order.length!==scenes.length||new Set(change.order).size!==scenes.length||change.order.some(id=>!scenes.some(scene=>scene.id===id)))throw new Error('Invalid scene order.');const byId=new Map(scenes.map(scene=>[scene.id,scene]));scenes.splice(0,scenes.length,...change.order.map(id=>byId.get(id)!));}
- return saveFromSnapshot(bucket,prefix,{...current.workspace,...metadata,scenes},revision,current);
+ return {...current.workspace,...metadata,scenes};
 }
