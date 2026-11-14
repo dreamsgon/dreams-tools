@@ -47,6 +47,9 @@ function TypeForm({t,set}:{t:VehicleType;set:(t:VehicleType)=>void}){
    <label className="field-label">One of them is a<input value={t.one} maxLength={30} placeholder="Ship, Coach, Mech…" onChange={e=>patch({one:e.target.value})}/></label>
    <label className="field-label">Commander<input value={t.commander} maxLength={30} placeholder="Captain, Driver…" onChange={e=>patch({commander:e.target.value})}/></label>
    <label className="field-label">Crew tab<input value={t.crew} maxLength={30} placeholder="Crew, Retinue, Passengers…" onChange={e=>patch({crew:e.target.value})}/></label>
+   <label className="field-label">Hold tab<input value={t.hold??''} maxLength={30} placeholder="Hold" onChange={e=>patch({hold:e.target.value})}/></label>
+   <label className="field-label">Cargo counted in<input value={t.holdUnit??''} maxLength={16} placeholder="t, casks, crates, kg…" onChange={e=>patch({holdUnit:e.target.value})}/></label>
+   <label className="field-label">Systems tab<input value={t.systems??''} maxLength={30} placeholder="Systems, Guns and rigging…" onChange={e=>patch({systems:e.target.value})}/></label>
   </div>
   <div className="vt-arts" role="radiogroup" aria-label="Outline">{vehicleArts.map(a=><button type="button" role="radio" aria-checked={t.art===a} key={a} className={`vt-art${t.art===a?' on':''}`} onClick={()=>patch({art:a})} title={artNames[a]}><VehicleArtIcon art={a} size={44}/><span>{artNames[a]}</span></button>)}</div>
   <Rows title="Gauges" hint={`Bars or pips (up to ${maxPips}); new vehicles start full`} items={t.gauges} max={maxGauges} set={gauges=>patch({gauges})}
@@ -92,7 +95,8 @@ export function VehicleTypesDialog({data,worldId,start,change,onClose}:{data:Wor
   const rest=types.filter(x=>x.id!==t.id);setTypes(rest);setPick(rest[0]!.id);
  }
  function save(){
-  const clean=types.map(x=>({...x,name:x.name.trim(),one:x.one.trim(),commander:x.commander.trim(),crew:x.crew.trim(),specs:x.specs.map(f=>({...f,label:f.label.trim()})),gauges:x.gauges.map(({unit,...f})=>({...f,label:f.label.trim(),...(unit?.trim()?{unit:unit.trim()}:{})})),now:x.now.map(f=>({...f,label:f.label.trim()})),stations:x.stations.map(f=>({...f,label:f.label.trim()})),hands:x.hands.map(f=>({...f,label:f.label.trim()}))}));
+  const opt=(v?:string)=>v?.trim()||undefined;
+  const clean=types.map(({hold,holdUnit,systems,...x})=>({...x,...(opt(hold)?{hold:opt(hold)}:{}),...(opt(holdUnit)?{holdUnit:opt(holdUnit)}:{}),...(opt(systems)?{systems:opt(systems)}:{}),name:x.name.trim(),one:x.one.trim(),commander:x.commander.trim(),crew:x.crew.trim(),specs:x.specs.map(f=>({...f,label:f.label.trim()})),gauges:x.gauges.map(({unit,...f})=>({...f,label:f.label.trim(),...(unit?.trim()?{unit:unit.trim()}:{})})),now:x.now.map(f=>({...f,label:f.label.trim()})),stations:x.stations.map(f=>({...f,label:f.label.trim()})),hands:x.hands.map(f=>({...f,label:f.label.trim()}))}));
   const blank=clean.find(x=>!x.name||!x.one||!x.commander||!x.crew||[...x.specs,...x.gauges,...x.now,...x.stations,...x.hands].some(f=>!f.label));
   if(blank){setPick(blank.id);setError(`Every name in ${blank.name||'this type'} needs filling in.`);return;}
   const parsed=vehicleTypesSchema.safeParse(clean);
