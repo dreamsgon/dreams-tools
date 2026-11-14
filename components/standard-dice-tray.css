@@ -73,3 +73,4 @@
 .tray-dice button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 /* The optional roll name sits on its own row above the formula and Roll button. */
 .standard-dice-tray form:has(.tray-roll-name){flex-wrap:wrap}.standard-dice-tray form label.tray-roll-name{flex:1 1 100%;order:-1}
+.standard-dice-dock .tray-local-note{margin:8px 0 0;font-size:12px;line-height:1.4;color:var(--muted)}

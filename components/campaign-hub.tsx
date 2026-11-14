@@ -18,6 +18,8 @@ import { campaignTargets } from "@/lib/tags";
 import CampaignMembers, { type MembersView } from "./campaign-members";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
+import { useDiceTarget } from "./use-dice-target";
+import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 
 type Tab = "dashboard" | "front" | "members";
@@ -37,6 +39,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const [hub, setHub] = useState<CampaignHub | null>(null), [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>(tabParam), [editing, setEditing] = useState(false);
   usePageTitle(hub ? campaignTitle(hub.row.name) : "");
+  useDiceTarget(hub ? hubDiceTarget(hub.row) : NO_CAMPAIGN);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
   const [draft, setDraft] = useState<Dashboard | null>(null), [saveError, setSaveError] = useState("");
   const saves = useRef(0);

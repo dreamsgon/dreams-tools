@@ -10,6 +10,7 @@ import { sheetSchema } from './sheet-link.ts';
 import { readPublishedSheet, SheetReadError } from './sheet-published.ts';
 import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
 import { rollWithMode } from './roll-mode.ts';
+import { checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
 import type { Rights } from './player-edit.ts';
 import type { Workspace } from './world-model.ts';
@@ -26,7 +27,7 @@ export type Deps = {
   now?: number;
 };
 
-export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000;
+export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000;
 const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000);
 export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); };
 
@@ -118,5 +119,49 @@ export async function handlePlayerRoll(request: Request, deps: Deps) {
       catch { discord = 'failed'; }
     }
     return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, discord });
+  } catch (e) { return failure(e, 'Could not roll. Try again.'); }
+}
+
+const diceAction = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('roll'), ref, formula: z.string().trim().min(1).max(200), label: z.string().max(120).optional() }),
+  z.object({ action: z.literal('send'), ref, label: z.string().max(120).optional(),
+    proof: z.object({ formula: z.string().max(200), total: z.number().finite(), detail: z.string().max(1200), at: z.number().int(), sig: z.string().regex(/^[a-f0-9]{64}$/) }) }),
+]);
+const sent = new Set<string>();
+const oneLine = (text: string | undefined, max: number) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/**
+ * POST /api/encyclopedia/player-dice: a signed-in member's own dice tray. `roll` rolls any formula here (the dice limits
+ * of parseDice apply) and returns the result with a proof; nothing is posted. `send` posts a rolled result to the campaign's
+ * Discord, titled "<member name> · <label or formula>", after checking the proof. A total from the browser is never read.
+ */
+export async function handlePlayerDice(request: Request, deps: Deps) {
+  try {
+    const got = await start(request, deps, DICE_BODY);
+    if (got.fail) return got.fail;
+    const body = diceAction.parse(JSON.parse(got.text)), found = await memberOf(deps, body.ref);
+    if (found.fail) return found.fail;
+    const m = found.m, who = { owner: m.owner, campaignId: m.campaignId, userId: m.userId }, now = deps.now ?? Date.now();
+    if (rollThrottle.hit(m.userId, deps.now)) return json({ error: 'Rolling too quickly. Wait a few seconds and try again.' }, 429);
+    const { data } = await deps.store.read(m.owner);
+    let channel = true;
+    try { discordTarget(data, m.campaignId); } catch { channel = false; }
+    const title = (formula: string) => `${oneLine(m.name, 60) || 'A player'} · ${oneLine(body.label, 80) || formula}`;
+    if (body.action === 'roll') {
+      let rolled;
+      try { rolled = rollWithMode(body.formula, 'normal', deps.random); } catch (e) { return json({ error: e instanceof Error ? e.message : 'That formula can’t be rolled.' }, 400); }
+      const proof = proveRoll(who, { formula: rolled.formula, total: rolled.total, detail: rolled.detail.slice(0, 1200) }, now);
+      return json({ title: title(rolled.formula), formula: rolled.formula, total: rolled.total, detail: proof.detail, proof, discord: channel ? 'available' : 'none' });
+    }
+    const p = body.proof;
+    if (!checkProof(who, p, now)) return json({ error: 'This roll can no longer be sent. Roll again.' }, 400);
+    if (sent.has(p.sig)) return json({ error: 'This roll was already sent.' }, 409);
+    if (!channel || !deps.post) return json({ error: 'This campaign has no Discord channel set up.' }, 400);
+    let result;
+    try { result = await deps.post(m, { kind: 'roll', title: title(p.formula), formula: p.formula, total: p.total, detail: p.detail, who: oneLine(m.name, 60) || 'A player', avatarOf: '' }); }
+    catch { return json({ error: 'Could not post to Discord. Try again.' }, 502); }
+    if (sent.size > 500) sent.clear();
+    sent.add(p.sig);
+    return json({ discord: result.skipped ? 'skipped' : 'sent' });
   } catch (e) { return failure(e, 'Could not roll. Try again.'); }
 }

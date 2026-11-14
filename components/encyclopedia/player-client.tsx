@@ -3,6 +3,8 @@ import {useEffect,useState,useCallback,useRef} from 'react';
 import Link from 'next/link';
 import {ThemeToggle} from './theme';
 import {PlayerView} from './player-view';
+import {useDiceTarget} from '../use-dice-target';
+import {playerDiceTarget,NO_CAMPAIGN} from '@/lib/dice-target';
 import {parsePlayerHash} from '@/lib/encyclopedia/player-place';
 import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
@@ -12,6 +14,7 @@ type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages;sheets?:Record<string
 export default function PlayerClient(){
  const [data,setData]=useState<Shown|null>(null),[error,setError]=useState(''),[token,setToken]=useState(''),[updating,setUpdating]=useState(false),[refreshed,setRefreshed]=useState(''),[signIn,setSignIn]=useState(false);
  const request=useRef<AbortController|null>(null);
+ useDiceTarget(data&&token?playerDiceTarget(token,data.campaign.name,!!data.you):NO_CAMPAIGN);
  const refresh=useCallback(async(token:string)=>{
   if(request.current)return;const controller=new AbortController();request.current=controller;setUpdating(true);
   try{const r=await fetch('/api/encyclopedia/player-view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token}),signal:controller.signal});const value=await r.json() as Shown&{error?:string};if(!r.ok){setSignIn(r.status===401);throw new Error(value.error??'Could not refresh the campaign.');}setSignIn(false);if(controller.signal.aborted)return;setData(value);setError('');setRefreshed(new Date().toLocaleTimeString());}

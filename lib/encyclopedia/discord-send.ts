@@ -62,7 +62,16 @@ export async function sendEncyclopediaPost(bucket: S3Bucket, owner: string, camp
 /** A roll from the Encyclopedia's roll card, posted when the GM presses Send to Discord (or has Always on). */
 export async function sendDiscordRoll(bucket: S3Bucket, owner: string, input: unknown) {
   const roll = discordRollSchema.parse(input);
-  return sendEncyclopediaPost(bucket, owner, roll.campaignId, { kind: "roll", title: roll.title, formula: roll.formula, total: roll.total, detail: roll.detail });
+  if (roll.maptableCampaignId) {
+    parseDice(roll.formula);
+    const prefix = `users/${encodeURIComponent(owner)}/`, maptable = await loadWorkspace(bucket, prefix);
+    const campaign = maptable?.workspace.collections.find(c => c.id === roll.maptableCampaignId && c.kind === "campaign");
+    if (!campaign) throw Error("This campaign has no Maptable campaign to post through.");
+    const who = rollerName(roll.title) || undefined;
+    const sent = await postForCampaign(bucket, prefix, campaign.id, "rolls", rollPost({ title: roll.title, formula: roll.formula, total: roll.total, detail: roll.detail, who, avatar: false }), { campaignName: campaign.name });
+    return { skipped: sent.skipped };
+  }
+  return sendEncyclopediaPost(bucket, owner, roll.campaignId!, { kind: "roll", title: roll.title, formula: roll.formula, total: roll.total, detail: roll.detail });
 }
 
 const tableResultPost = (r: TableResult) => r.oracle ? oraclePost({ ...r.oracle, footer: r.footer }) : tablePost(r);

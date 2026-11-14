@@ -30,6 +30,8 @@ import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
 import {placeFromQuery,placeQuery,isNewPlace,defaultTab,type Place} from "@/lib/encyclopedia/place";
 import {encyclopediaTitle} from "@/lib/page-title";
 import {usePageTitle} from "../use-page-title";
+import {useDiceTarget} from "../use-dice-target";
+import {encyclopediaDiceTarget,NO_CAMPAIGN} from "@/lib/dice-target";
 import { confirmDialog } from "../confirm-dialog";
 import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
@@ -92,6 +94,7 @@ export default function WorkspaceApp() {
     if (tabAt && tabAt.entry !== selected) setTabAt(null);
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
+    useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
     usePageTitle(loaded && !signedOut ? encyclopediaTitle({ entry: view === "overview" ? entry?.title : null, view, campaign: campaign?.name, world: world?.name }) : "");
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
