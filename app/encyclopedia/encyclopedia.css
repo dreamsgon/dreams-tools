@@ -734,9 +734,15 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .player-quest-chips .quest-state{color:var(--muted)}
 .player-quest-steps{list-style:none;margin:0;padding:12px 16px;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:var(--radius);display:flex;flex-direction:column;gap:8px}
 .player-quest-steps li{display:flex;align-items:center;gap:10px}
-.player-quest-steps li span{width:16px;height:16px;border:1px solid var(--line-strong);border-radius:3px;display:grid;place-items:center;flex-shrink:0}
-.player-quest-steps li.done{color:var(--muted);text-decoration:line-through}
-.player-quest-steps li.done span{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.player-quest-steps li{align-items:flex-start}
+.player-goal-mark{width:16px;height:16px;margin-top:3px;border:1px solid var(--line-strong);border-radius:3px;display:grid;place-items:center;flex-shrink:0}
+.player-goal-text{min-width:0}
+.player-goal-text small{color:var(--muted)}
+.player-goal-note{display:block;font-size:13px;margin-top:2px}
+.player-quest-steps li.done .player-goal-text,.player-quest-steps li.dropped .player-goal-text{color:var(--muted);text-decoration:line-through}
+.player-quest-steps li.done .player-goal-mark{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.player-quest-steps li.failed .player-goal-mark{background:var(--danger);border-color:var(--danger);color:var(--panel)}
+.player-quest-steps li.dropped{opacity:.7}
 @media (max-width:1100px){.quest-board{grid-template-columns:repeat(4,260px)}.quest-detail-grid,.article .quest-detail-grid{grid-template-columns:1fr}}
 @media (max-width:760px){.quest-journal{grid-template-columns:1fr}.quest-list{position:static}.quest-log li{grid-template-columns:1fr;gap:6px}.quests-filters p{text-align:left}}
 .quest-card-foot>span:nth-child(2){flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

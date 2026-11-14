@@ -1,24 +1,16 @@
 "use client";
 import {useRef,useState,type DragEvent} from 'react';
-import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,X,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags} from 'lucide-react';
+import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags} from 'lucide-react';
 import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
 import {categoryLook,CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
-import {PictureToken,usePictureSrc} from './character-picture';
+import {Face,GoalBar,QuestGoals} from './quest-goals';
 import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 /** 'all', or a quest category id. */
 type Filter=string;
-
-/** A small round face for the quest giver: their picture when they have one, otherwise their initials. */
-function Face({entry,size=26}:{entry?:Entry;size?:number}){
- const {src}=usePictureSrc(entry?.picture?.imageId);
- if(entry?.picture&&src)return <PictureToken picture={entry.picture} src={src} size={size} ring="var(--line-strong)"/>;
- const initials=(entry?.title??'?').split(/\s+/).filter(w=>/^\p{L}/u.test(w)).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
- return <span className="quest-face" aria-hidden="true" style={{width:size,height:size,fontSize:size*.4}}>{initials}</span>;
-}
 
 const quest=(e:Entry)=>e.quest??newQuest();
 
@@ -116,37 +108,27 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
  const [editing,setEditing]=useState(false),cats=questCategories(campaign??data.campaigns.find(c=>c.id===entry.campaignId));
  // The board passes its own dialog; a quest's own page shows one here.
  const editCategories=onEditCategories??(campaign&&change?()=>setEditing(true):undefined);
- const q=quest(entry),[step,setStep]=useState(''),[log,setLog]=useState(''),[label,setLabel]=useState(''),[players,setPlayers]=useState(true),[title,setTitle]=useState(entry.title);
+ const q=quest(entry),[log,setLog]=useState(''),[label,setLabel]=useState(''),[players,setPlayers]=useState(true),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
  const scope=data.entries.filter(e=>e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)&&e.id!==entry.id);
  const people=scope.filter(e=>e.kind==='character').sort((a,b)=>a.title.localeCompare(b.title)),places=scope.filter(e=>e.kind==='place'||e.kind==='map').sort((a,b)=>a.title.localeCompare(b.title));
  const giver=q.giverId?data.entries.find(e=>e.id===q.giverId):undefined,place=q.placeId?data.entries.find(e=>e.id===q.placeId):undefined;
  const shared=entry.overviewVisibility==='players';
  const sessions=scope.filter(e=>e.kind==='session'&&e.campaignId===entry.campaignId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
- function addStep(){const text=step.trim();if(!text||q.objectives.length>=50)return;set({objectives:[...q.objectives,{id:newId(),text:text.slice(0,300),done:false}]});setStep('');}
  function addLog(){const text=log.trim();if(!text)return;set({log:[{id:newId(),at:new Date().toISOString(),label:label.trim().slice(0,80)||undefined,text:text.slice(0,4000),players},...q.log].slice(0,500)});setLog('');}
- const progress=questProgress(q);
  return <div className="quest-detail">
   <div className="quest-detail-chips">
    <CategoryPicker categories={cats} value={q.type} onChange={type=>set({type})} onEdit={editCategories}/>
    <label className="quest-state-pick"><select aria-label="Quest state" value={q.state} onChange={e=>set({state:e.target.value as QuestState,rank:-1})}>{questStates.map(s=><option key={s} value={s}>{s==='rumour'?'Rumour':stateNames[s]}</option>)}</select></label>
    <button className={`quest-share ${shared?'on':''}`} aria-pressed={shared} onClick={()=>update({overviewVisibility:shared?'gm':'players'})}>{shared?<><Eye size={12}/> Shared with players</>:<><EyeOff size={12}/> GM only</>}</button>
+   <GoalBar quest={q}/>
    {withTitle&&<button className="text-button quest-open" onClick={()=>onOpen(entry.id)}>Open page <ArrowUpRight size={13}/></button>}
   </div>
   {withTitle&&<input className="quest-title-input" aria-label="Quest name" value={title} maxLength={160} onChange={e=>{setTitle(e.target.value);if(e.target.value.trim())update({title:e.target.value.trim()});}} onBlur={()=>setTitle(entry.title)}/>}
   <div className="quest-detail-grid">
    <div className="quest-detail-main">
     {withTitle&&entry.body.trim()&&<div className="prose quest-summary"><ArticleBody entry={entry} data={data} onOpen={onOpen} onChange={body=>update({body})}/></div>}
-    <div className="quest-objectives">
-     <div className="quest-objectives-head"><span className="eyebrow">Objectives</span>{progress.total>0&&<small>{progress.done} of {progress.total}</small>}</div>
-     {q.objectives.map((o,i)=><div key={o.id} className={`quest-objective ${o.done?'done':''}`}>
-      <input type="checkbox" aria-label={`Done: ${o.text}`} checked={o.done} onChange={e=>set({objectives:q.objectives.map(x=>x.id===o.id?{...x,done:e.target.checked}:x)})}/>
-      <textarea className="quest-objective-text" rows={1} aria-label={`Step ${i+1}`} defaultValue={o.text} maxLength={300} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur();}}} onBlur={e=>{const text=e.target.value.trim();if(text&&text!==o.text)set({objectives:q.objectives.map(x=>x.id===o.id?{...x,text}:x)});else e.target.value=o.text;}}/>
-      <button className={`quest-hide ${o.hidden?'on':''}`} aria-pressed={!!o.hidden} title={o.hidden?'Players can’t see this step':'Hide this step from players'} onClick={()=>set({objectives:q.objectives.map(x=>x.id===o.id?{...x,hidden:!x.hidden||undefined}:x)})}>{o.hidden?<><EyeOff size={12}/> Hidden</>:<EyeOff size={13} aria-label="Hide from players"/>}</button>
-      <button className="icon-button quest-remove" aria-label={`Remove step ${o.text}`} onClick={()=>set({objectives:q.objectives.filter(x=>x.id!==o.id)})}><X size={13}/></button>
-     </div>)}
-     <form className="quest-add-step" onSubmit={e=>{e.preventDefault();addStep();}}><Plus size={14}/><input aria-label="Add a step" placeholder="Add a step…" value={step} maxLength={300} onChange={e=>setStep(e.target.value)}/></form>
-    </div>
+    <QuestGoals entry={entry} data={data} quest={q} setGoals={objectives=>set({objectives})}/>
     <form className="quest-log-composer" onSubmit={e=>{e.preventDefault();addLog();}}>
      <textarea aria-label="Add to the log" placeholder="Add to the log. What happened?" value={log} maxLength={4000} rows={log?3:1} onChange={e=>setLog(e.target.value)}/>
      <div className="quest-log-tools">

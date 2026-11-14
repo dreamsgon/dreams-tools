@@ -38,7 +38,31 @@ export function categoryOf(categories: QuestCategory[], type: string): QuestCate
 }
 /** The category new quests go in: Side when the campaign has it, otherwise the first. */
 export const defaultCategory = (categories: QuestCategory[]) => (categories.find(c => c.id === "side") ?? categories[0])?.id ?? "side";
-export const objectiveSchema = z.object({ id: qid, text: z.string().trim().min(1).max(300), done: z.boolean(), hidden: z.boolean().optional() });
+/**
+ * A goal (objective). `text` is always a readable sentence, so older code, the AI tools and players can show it as it is.
+ * A goal built from parts also has a verb, a target (a page, or just a name) and an optional second part such as
+ * "last seen at the Old Mill"; its `text` is rebuilt from those parts whenever they change (see `goalText`).
+ * A goal with no verb is written out by hand. `done` stays the source of truth for Done; `status` adds Failed and Dropped.
+ */
+export const goalStatuses = ["todo", "done", "failed", "dropped"] as const;
+export type GoalStatus = typeof goalStatuses[number];
+export const goalStatusNames: Record<GoalStatus, string> = { todo: "To do", done: "Done", failed: "Failed", dropped: "Dropped" };
+const pageName = z.string().trim().max(160).optional();
+export const objectiveSchema = z.object({
+  id: qid, text: z.string().trim().min(1).max(300), done: z.boolean(), hidden: z.boolean().optional(),
+  /** What the party must do: one of `goalVerbs` or the GM's own word. */
+  verb: z.string().trim().min(1).max(40).optional(),
+  /** Who or what: a page in the campaign, and its name (kept so the goal still reads if the page goes). */
+  targetId: qid.nullable().optional(), target: pageName,
+  /** A second part, such as where they were last seen or who it goes to. */
+  whereId: qid.nullable().optional(), where: pageName,
+  /** The words before the second part when they aren't the verb's own ("last seen at", "to"…). */
+  whereLabel: z.string().trim().max(40).optional(),
+  /** Failed or Dropped. A goal that is neither is To do, or Done when `done` is set. */
+  status: z.enum(["failed", "dropped"]).optional(),
+  /** A line on what to do or where to start. */
+  note: z.string().trim().max(600).optional(),
+});
 export const questLogSchema = z.object({
   id: qid,
   /** When it was written (ISO). */
@@ -67,11 +91,49 @@ export type QuestLog = z.infer<typeof questLogSchema>;
 
 export const newQuest = (state: QuestState = "active", type = "side"): Quest => ({ state, type, objectives: [], log: [] });
 
-/** Steps done and in total, counting every objective the GM wrote. */
-export function questProgress(q: Quest) {
-  return { done: q.objectives.filter(o => o.done).length, total: q.objectives.length };
+/** The verbs offered for a goal, with the words that lead into its second part. */
+export const goalVerbs = [
+  { name: "Find", where: "last seen at" }, { name: "Rescue", where: "held at" }, { name: "Recover", where: "from" },
+  { name: "Deliver", where: "to" }, { name: "Investigate", where: "at" }, { name: "Defeat", where: "at" },
+  { name: "Escort", where: "to" }, { name: "Reach", where: "by way of" }, { name: "Protect", where: "from" },
+  { name: "Persuade", where: "to" }, { name: "Learn", where: "from" }, { name: "Meet", where: "at" },
+] as const;
+/** The words before a goal's second part: its own, or its verb's, or "at" for a verb of the GM's own. */
+export const whereLabel = (o: Pick<Objective, "verb" | "whereLabel">) =>
+  o.whereLabel || goalVerbs.find(v => v.name.toLowerCase() === o.verb?.toLowerCase())?.where || "at";
+
+export const goalStatus = (o: Pick<Objective, "done" | "status">): GoalStatus => o.done ? "done" : o.status ?? "todo";
+/** A goal with a new status. Done sets `done`; the others clear it. */
+export function withGoalStatus<O extends Objective>(o: O, status: GoalStatus): O {
+  const next = { ...o, done: status === "done" };
+  if (status === "failed" || status === "dropped") next.status = status; else delete next.status;
+  return next;
 }
-export const nextStep = (q: Quest) => q.objectives.find(o => !o.done)?.text ?? null;
+
+/**
+ * The sentence a goal reads as, from its parts: "Find Arin Vale, last seen at the Old Mill". `title` gives a linked
+ * page's current name, so a renamed page reads right. A goal written by hand reads as its text.
+ */
+export function goalText(o: Objective, title: (id: string) => string | undefined = () => undefined): string {
+  if (!o.verb) return o.text;
+  const target = (o.targetId && title(o.targetId)) || o.target || "";
+  const where = (o.whereId && title(o.whereId)) || o.where || "";
+  return `${o.verb}${target ? ` ${target}` : ""}${where ? `, ${whereLabel(o)} ${where}` : ""}`.slice(0, 300);
+}
+/** A goal with its parts changed and its text rebuilt to match. */
+export function setGoalParts(o: Objective, patch: Partial<Pick<Objective, "verb" | "targetId" | "target" | "whereId" | "where" | "whereLabel">>, title?: (id: string) => string | undefined): Objective {
+  const next = { ...o, ...patch };
+  for (const k of ["targetId", "target", "whereId", "where", "whereLabel"] as const) if (next[k] === undefined || next[k] === null || next[k] === "") delete next[k];
+  return { ...next, text: goalText(next, title) || next.verb || o.text };
+}
+
+/** Goals done and in total. Dropped goals don't count; failed ones do. */
+export function questProgress(q: Quest) {
+  const counted = q.objectives.filter(o => goalStatus(o) !== "dropped");
+  return { done: counted.filter(o => o.done).length, total: counted.length };
+}
+/** The first goal still to do. */
+export const nextStep = (q: Quest) => q.objectives.find(o => goalStatus(o) === "todo")?.text ?? null;
 
 type QuestEntry = { id: string; worldId: string; campaignId: string | null; kind: string; title: string; quest?: Quest; updatedAt: string };
 type HasEntries<E> = { entries: E[] };
@@ -138,7 +200,11 @@ export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: 
     state: q.state, type: q.type, category: { name: category.name, color: category.color }, reward: q.reward ?? "",
     giverId: q.giverId && readable(q.giverId) ? q.giverId : null,
     placeId: q.placeId && readable(q.placeId) ? q.placeId : null,
-    objectives: q.objectives.filter(o => !o.hidden).map(o => ({ id: o.id, text: o.text, done: o.done })),
+    objectives: q.objectives.filter(o => !o.hidden).map(o => ({
+      id: o.id, text: o.text, done: o.done, status: goalStatus(o),
+      ...(o.verb ? { verb: o.verb, target: o.target ?? "", targetId: o.targetId && readable(o.targetId) ? o.targetId : null, where: o.where ?? "", whereId: o.whereId && readable(o.whereId) ? o.whereId : null, whereLabel: o.where || o.whereId ? whereLabel(o) : "" } : {}),
+      ...(o.note ? { note: clean(o.note) } : {}),
+    })),
     log: q.log.filter(l => l.players).map(l => ({ id: l.id, at: l.at, label: l.label ?? "", text: unlink(clean(l.text)) })),
   };
 }

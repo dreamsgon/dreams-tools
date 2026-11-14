@@ -4,7 +4,7 @@
  * so smaller models can use them. Everything in this file is pure: the routes load and save the data.
  */
 import { defaultCharacter, folderPath, searchableText, type Campaign, type Entry, type Workspace as Book } from "../encyclopedia/world-model.ts";
-import { categoryOf, defaultCategory, moveQuest, newQuest, nextStep, questCategories, questProgress, questsIn, stateNames, type QuestState } from "../encyclopedia/quests.ts";
+import { categoryOf, defaultCategory, goalStatus, moveQuest, withGoalStatus, newQuest, nextStep, questCategories, questProgress, questsIn, stateNames, type QuestState } from "../encyclopedia/quests.ts";
 import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
 import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { characterProfileText, defaultProfile, organizationsOf } from "../encyclopedia/character-profile.ts";
@@ -529,7 +529,7 @@ const tools: Tool[] = [
         const found = quest.objectives.find(o => o.id === goal) ?? quest.objectives.find(o => o.text.toLowerCase() === low) ?? (quest.objectives.filter(o => o.text.toLowerCase().startsWith(low)).length === 1 ? quest.objectives.find(o => o.text.toLowerCase().startsWith(low)) : undefined);
         let objectives = quest.objectives, summary: string;
         if (found) {
-          objectives = objectives.map(o => o === found ? { ...o, ...(a.done !== undefined ? { done: a.done as boolean } : {}), ...(a.hidden !== undefined ? { hidden: a.hidden as boolean } : {}) } : o);
+          objectives = objectives.map(o => o === found ? { ...(a.done !== undefined ? withGoalStatus(o, a.done ? "done" : "todo") : o), ...(a.hidden !== undefined ? { hidden: a.hidden as boolean } : {}) } : o);
           summary = a.done === true ? `Ticked “${found.text}” in “${e.title}”` : a.done === false ? `Unticked “${found.text}” in “${e.title}”` : `Changed “${found.text}” in “${e.title}”`;
         } else {
           if (objectives.length >= 50) fail("This quest has 50 objectives already.");
@@ -838,7 +838,7 @@ function questDetails(c: McpContext, e: Entry) {
   return {
     state: q.state, category: categoryOf(cats, q.type).name, progress: questProgress(q),
     giver: name(q.giverId), place: name(q.placeId), reward: q.reward || undefined,
-    objectives: q.objectives.map(o => ({ text: o.text, done: o.done, hiddenFromPlayers: o.hidden || undefined })),
+    objectives: q.objectives.map(o => ({ text: o.text, done: o.done, status: goalStatus(o) === "failed" || goalStatus(o) === "dropped" ? goalStatus(o) : undefined, note: o.note, hiddenFromPlayers: o.hidden || undefined })),
     log: q.log.map(l => ({ when: l.label || l.at.slice(0, 10), text: l.text, playersSee: l.players })),
   };
 }
