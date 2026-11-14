@@ -23,6 +23,10 @@
 .ency-token-text{display:flex;flex-direction:column;min-width:0}
 .ency-token-text strong{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ency-token-text small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ency-token-toggle{display:flex;align-items:center;gap:8px;min-height:32px;margin-top:8px;font-size:12px;color:var(--ink);cursor:pointer}
+.ency-token-toggle input{margin:0;accent-color:var(--accent)}
+.ency-token-hint a{color:var(--accent);text-decoration:underline}
+.ency-token-origin{margin-left:6px;padding:1px 6px;border:1px solid var(--line);border-radius:999px;font-size:10px;font-style:normal;font-weight:500;color:var(--muted);white-space:nowrap}
 .ency-token-add{height:30px;padding:0 10px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--panel);color:var(--ink);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
 .ency-token-add:hover{background:var(--hover)}
 .ency-token-add:disabled{opacity:.45;cursor:not-allowed}
