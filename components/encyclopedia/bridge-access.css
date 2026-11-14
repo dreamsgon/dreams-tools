@@ -1,0 +1,27 @@
+.bridge-body{display:flex;flex-direction:column;gap:12px}
+.bridge-body .modal-intro{margin-bottom:0}
+.bridge-new{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:10px;align-items:end}
+.bridge-new label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.bridge-new select,.bridge-new input{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:9px 10px;font-size:13px;color:var(--ink);min-width:0}
+.bridge-made{display:flex;flex-direction:column;gap:6px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft);padding:12px 14px}
+.bridge-copy{display:flex;gap:8px;align-items:center;min-width:0}
+.bridge-copy code{flex:1;min-width:0;overflow-wrap:anywhere;font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px}
+.bridge-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.bridge-list>li{border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.bridge-row{display:flex;gap:8px;align-items:center}
+.bridge-row>span{flex:1;min-width:0}
+.bridge-row small{display:block;color:var(--muted);font-size:12px}
+.bridge-sync{display:flex;flex-direction:column;gap:8px;overflow-x:auto}
+.bridge-table{width:100%;border-collapse:collapse;font-size:12px}
+.bridge-table th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 6px}
+.bridge-table td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
+.bridge-table td:first-child b{font-weight:600;margin-right:6px}
+.bridge-table td:nth-child(2){color:var(--muted)}
+.bridge-table select{font-size:12px;padding:4px 6px;min-width:150px}
+@media (max-width:620px){
+ .bridge-new{grid-template-columns:1fr}
+ .bridge-table thead{display:none}
+ .bridge-table tr{display:grid;gap:4px;padding:8px 0;border-top:1px solid var(--line)}
+ .bridge-table td{border:0;padding:0}
+ .bridge-table select{width:100%}
+}

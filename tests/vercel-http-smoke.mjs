@@ -41,9 +41,16 @@ try{
   assert.equal((await fetch(base+'/api/members',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({action:'ban',campaignId:'demo-campaign',userId:'x',email:true,ip:false,note:''})})).status,401);
   assert.deepEqual(await (await fetch(base+'/api/notifications',{headers:forged})).json(),{items:[],unread:0});
   const agent=await fetch(base+'/api/agent/maps');assert.equal(agent.status,401);
+  // The bridge API: a key in the Authorization header only, and any origin may ask (the Foundry module calls from its own page).
+  const pre=await fetch(base+'/api/bridge/characters',{method:'OPTIONS',headers:{Origin:'http://localhost:30000','Access-Control-Request-Method':'PUT','Access-Control-Request-Headers':'authorization,content-type'}});assert.equal(pre.status,204);assert.equal(pre.headers.get('access-control-allow-origin'),'*');assert.match(pre.headers.get('access-control-allow-headers'),/Authorization/);
+  for(const [path,init] of [['/api/bridge',{}],['/api/bridge/characters',{headers:forged}],['/api/bridge/pages',{headers:{Authorization:'Bearer rpgb_short'}}],['/api/bridge/characters/demo-mara',{method:'PUT',headers:{Authorization:'Bearer rpg_'+'0'.repeat(64),'Content-Type':'application/json'},body:'{}'}],['/api/bridge/characters/demo-mara/hp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"value":1}'}]]){
+    const r=await fetch(base+path,init);assert.equal(r.status,401,path);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.match((await r.json()).error,/bridge key/);
+  }
+  assert.equal((await fetch(base+'/api/encyclopedia/bridge-keys?campaignId=demo-campaign',{headers:forged})).status,401);
+  assert.equal((await fetch(base+'/api/encyclopedia/bridge-keys',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{"campaignId":"demo-campaign","action":"create"}'})).status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);
   const account=await fetch(base+'/api/account',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:'{}'});assert.equal(account.status,403);
-  console.log('PASS: RPG Tools home, encyclopedia/player routes, production account page, protected map and encyclopedia redirects, forged identity rejection, private APIs, transfers, campaign authentication, and cross-origin account protection.');
+  console.log('PASS: RPG Tools home, encyclopedia/player routes, production account page, protected map and encyclopedia redirects, forged identity rejection, private APIs, transfers, campaign authentication, the bridge API, and cross-origin account protection.');
 }finally{
   child.kill();
   await new Promise(resolve=>{if(child.exitCode!==null)resolve();else child.once('exit',resolve);});
