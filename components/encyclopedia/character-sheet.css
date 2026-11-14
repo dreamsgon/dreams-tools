@@ -127,7 +127,7 @@
 .sheet-roll-pair .sheet-roll-button{flex:1 1 130px;width:auto}
 .sheet-roll-button:hover,.sheet-roll-button:focus-visible{border-color:var(--accent);outline:none}
 .sheet-roll-button span{overflow-wrap:anywhere;min-width:0}
-.sheet-roll-button code{flex:none}
+.sheet-roll-button code{flex:none;align-self:center}
 .sheet-roll-panel.compact{gap:6px}
 .sheet-roll-panel.compact .sheet-roll-group h4{margin-bottom:4px}
 .sheet-roll-panel.compact ul{grid-template-columns:1fr;gap:4px}
