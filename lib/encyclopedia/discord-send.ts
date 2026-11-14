@@ -18,7 +18,7 @@ import { campaignScenes } from "../agent-maps.ts";
 
 export type EncyclopediaPost =
   | { kind: "roll"; ai?: boolean; title: string; formula: string; total: number; detail: string; who?: string; natural?: number | null }
-  | { kind: "narration" | "recap"; text: string; title?: string }
+  | { kind: "narration" | "recap" | "members"; text: string; title?: string }
   | { kind: "table"; result: TableResult };
 
 /** The picture for whoever rolled: a page in this campaign (or its world) with that title, or a token of that name on its maps. */
@@ -53,7 +53,7 @@ export async function sendEncyclopediaPost(bucket: S3Bucket, owner: string, camp
     card = rollPost({ title, formula: post.formula, total: post.total, detail: post.detail, who, avatar: !!avatar, natural: post.natural, footer: post.ai ? "Rolled by the AI" : undefined });
   } else if (post.kind === "table") card = tableResultPost(post.result);
   else card = textPost(post.kind, post.text, post.title);
-  const sent = await postForCampaign(bucket, prefix, target.maptableCampaignId, post.kind === "roll" ? (post.ai ? "aiRolls" : "rolls") : post.kind === "table" ? "rolls" : post.kind === "recap" ? "recaps" : "narration",
+  const sent = await postForCampaign(bucket, prefix, target.maptableCampaignId, post.kind === "roll" ? (post.ai ? "aiRolls" : "rolls") : post.kind === "table" ? "rolls" : post.kind === "recap" ? "recaps" : post.kind === "members" ? "members" : "narration",
     { ...card, ...(files.length ? { files } : {}) }, { legacyRoute: target.route, campaignName: mapCampaign.name });
   return { skipped: sent.skipped };
 }

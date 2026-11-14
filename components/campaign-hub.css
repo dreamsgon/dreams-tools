@@ -18,6 +18,9 @@
 .hub-tabs [role="tablist"] > * { display:inline-flex; align-items:center; gap:7px; padding:12px 12px 11px; border:0; border-bottom:2px solid transparent; background:none; color:var(--muted); font:inherit; font-size:14px; font-weight:500; white-space:nowrap; cursor:pointer; }
 .hub-tabs [role="tablist"] > *:hover { color:var(--ink); }
 .hub-tabs [aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); }
+.hub-tabs [role="tablist"] > .hub-tab-later { cursor:default; opacity:.6; }
+.hub-tabs [role="tablist"] > .hub-tab-later:hover { color:var(--muted); }
+.hub-tab-later small { padding:1px 6px; border-radius:var(--radius-sm, 4px); background:var(--chrome-hover); font-size:11px; }
 .hub-button { display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:6px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font:inherit; font-size:14px; font-weight:500; white-space:nowrap; cursor:pointer; }
 .hub-button:hover:not(:disabled) { background:var(--chrome-hover); }
 .hub-button-primary, a.hub-button-primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }

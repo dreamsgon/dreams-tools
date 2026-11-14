@@ -35,6 +35,11 @@ try{
   for(const path of ['/api/encyclopedia/player-links','/api/encyclopedia/agent-access','/api/encyclopedia/mcp','/api/encyclopedia/history','/api/encyclopedia/discord-roll'])assert.equal((await fetch(base+path,{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{}'})).status,401);
   assert.equal((await fetch(base+'/api/encyclopedia/player-view',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"token":"invalid"}'})).status,404);
   assert.equal((await fetch(base+'/api/campaigns',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{"action":"pair","pairs":[]}'})).status,401);
+  assert.equal((await fetch(base+'/api/members?campaignId=demo-campaign',{headers:forged})).status,401);
+  assert.equal((await fetch(base+'/api/members?mine=1',{headers:forged})).status,401);
+  assert.equal((await fetch(base+'/api/members',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({action:'join',token:'a'.repeat(64),name:'Mara'})})).status,401);
+  assert.equal((await fetch(base+'/api/members',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({action:'ban',campaignId:'demo-campaign',userId:'x',email:true,ip:false,note:''})})).status,401);
+  assert.deepEqual(await (await fetch(base+'/api/notifications',{headers:forged})).json(),{items:[],unread:0});
   const agent=await fetch(base+'/api/agent/maps');assert.equal(agent.status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);
   const account=await fetch(base+'/api/account',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:'{}'});assert.equal(account.status,403);

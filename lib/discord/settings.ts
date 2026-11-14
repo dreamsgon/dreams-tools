@@ -8,7 +8,7 @@
  */
 import { parseWebhook, savedWebhook } from "./webhook.ts";
 
-export const postKinds = ["rolls", "aiRolls", "initiative", "combatMaps", "areaMaps", "worldMaps", "narration", "recaps"] as const;
+export const postKinds = ["rolls", "aiRolls", "initiative", "combatMaps", "areaMaps", "worldMaps", "narration", "recaps", "members"] as const;
 export type PostKind = (typeof postKinds)[number];
 export const postKindNames: Record<PostKind, { name: string; hint: string }> = {
   rolls: { name: "Your dice rolls", hint: "From the dice tray, statblocks and pages, when you post them" },
@@ -19,6 +19,7 @@ export const postKindNames: Record<PostKind, { name: string; hint: string }> = {
   worldMaps: { name: "World maps", hint: "Shared from Maptable" },
   narration: { name: "The AI’s narration", hint: "Read-aloud text and NPC lines it posts" },
   recaps: { name: "Session recaps", hint: "Recaps the AI writes and posts" },
+  members: { name: "People joining", hint: "When someone asks to join or joins, if you turned it on under Members" },
 };
 export type MapRoute = "combat" | "exploration" | "world";
 export const mapKind = (route: MapRoute): PostKind => route === "world" ? "worldMaps" : route === "exploration" ? "areaMaps" : "combatMaps";

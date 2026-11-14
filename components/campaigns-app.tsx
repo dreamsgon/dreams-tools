@@ -4,6 +4,7 @@ import { BookOpen, Check, ChevronDown, ChevronRight, Download, Folder, FolderOpe
 import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
+import CampaignsJoined from "./campaigns-joined";
 import "./campaigns.css";
 
 type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
@@ -156,6 +157,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
           <span><Download size={15} aria-hidden="true" /><a className="campaigns-link" href="/api/campaigns?download=backup">Download a backup of both tools</a></span>
         </div>
       </>}
+      <CampaignsJoined />
     </div>
     {tagsOpen && <TagsManager onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
