@@ -366,6 +366,12 @@ test('the reader refuses other hosts, private sheets, web pages and oversized re
  // A redirect that stays on docs.google.com is followed.
  const hop=web([{match:'/pubhtml',status:500,body:''},{match:'output=csv&single',status:307,location:'https://docs.google.com/spreadsheets/u/0/d/e/'+PUB_ID+'/pub?output=csv&hop=1'},{match:'hop=1',body:'a,b\n'}]);
  assert.deepEqual((await readPublishedSheet(link,hop)).tabs[0].rows,[['a','b']]);
+ // Google serves a published CSV by redirecting to a sheets.googleusercontent.com host; that is followed too.
+ const csv=web([{match:'/pubhtml',status:500,body:''},{match:'output=csv&single',status:302,location:'https://doc-04-9s-sheets.googleusercontent.com/pub/abc/def/1794648075000/123/*/e@'+PUB_ID+'?output=csv'},{match:'googleusercontent.com/pub/',body:'Ayla,,\nHP,,24\n'}]);
+ assert.deepEqual((await readPublishedSheet(link,csv)).tabs[0].rows,[['Ayla','',''],['HP','','24']]);
+ // Other googleusercontent.com hosts, look-alikes, plain http and odd ports are still refused.
+ for(const location of['https://lh3.googleusercontent.com/x','https://doc-04-9s-sheets.googleusercontent.com.evil.example/x','https://evil-doc-04-9s-sheets.googleusercontent.com/x','http://doc-04-9s-sheets.googleusercontent.com/x','https://doc-04-9s-sheets.googleusercontent.com:8443/x'])
+  await fail(link,web([{match:'/pubhtml',status:500,body:''},{match:'output=csv',status:302,location}]),/somewhere RPG Tools doesn't read/);
 });
 
 // ---- Review fixes ------------------------------------------------------------------------------
