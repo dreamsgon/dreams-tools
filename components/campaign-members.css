@@ -61,6 +61,7 @@
 .mem-new-group input { font:inherit; font-size:14px; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); padding:7px 10px; min-height:36px; min-width:200px; }
 .mem-colors { display:inline-flex; gap:6px; }
 .mem-swatch { width:22px; height:22px; min-height:0; min-width:0; border-radius:50%; border:2px solid transparent; background:var(--c); cursor:pointer; padding:0; }
+.mem-colors .custom-colour { width:22px; height:22px; }
 .mem-swatch[aria-checked="true"] { box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--c); }
 .mem-edit-group { gap:12px; }
 .mem-danger-button { color:var(--danger); }

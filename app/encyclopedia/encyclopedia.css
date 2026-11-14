@@ -642,6 +642,8 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .quest-type.cat-orange{background:color-mix(in srgb,#e0874a 22%,transparent);color:color-mix(in srgb,#e0874a 62%,var(--ink))}
 .quest-type.cat-gold{background:color-mix(in srgb,#c99a2e 22%,transparent);color:color-mix(in srgb,#c99a2e 62%,var(--ink))}
 .quest-type.cat-rose{background:color-mix(in srgb,#dd6278 22%,transparent);color:color-mix(in srgb,#dd6278 62%,var(--ink))}
+.quest-type.cat-custom{background:color-mix(in srgb,var(--c) 22%,transparent);color:color-mix(in srgb,var(--c) 62%,var(--ink))}
+.quest-cat-dot.cat-custom{background:var(--c)}
 .quest-cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--muted)}
 .quest-cat-dot.cat-accent{background:var(--accent)}
 .quest-cat-dot.cat-purple{background:#a678d8}

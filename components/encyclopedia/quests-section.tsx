@@ -3,7 +3,7 @@ import {useRef,useState,type DragEvent} from 'react';
 import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,X,ChevronDown,ChevronRight,Goal,ArrowUpRight,Trash2,Tags} from 'lucide-react';
 import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
-import {CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
+import {categoryLook,CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
 import {PictureToken,usePictureSrc} from './character-picture';
 import {confirmDialog} from '../confirm-dialog';
@@ -59,7 +59,7 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
   <div className="quests-filters">
    <div className="quest-chips" role="group" aria-label="Show quests">
     <button className={filter==='all'?'on':''} aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>All <b>{all.length}</b></button>
-    {cats.map(c=><button key={c.id} className={filter===c.id?'on':''} aria-pressed={filter===c.id} onClick={()=>setFilter(c.id)}><span className={`quest-cat-dot cat-${c.color}`} aria-hidden="true"/>{c.name} <b>{all.filter(q=>q.quest.type===c.id).length}</b></button>)}
+    {cats.map(c=><button key={c.id} className={filter===c.id?'on':''} aria-pressed={filter===c.id} onClick={()=>setFilter(c.id)}><span className={`quest-cat-dot ${categoryLook(c.color).className}`} style={categoryLook(c.color).style} aria-hidden="true"/>{c.name} <b>{all.filter(q=>q.quest.type===c.id).length}</b></button>)}
     <button className="quest-chips-edit" onClick={()=>setEditing(true)}><Tags size={14}/> Categories</button>
    </div>
    <p className="muted">{mode==='board'?'Drag a card to change its state. Players only see quests you share, and only the steps you haven’t hidden.':'Tick steps off and write what happened. Players see the entries you share.'}</p>

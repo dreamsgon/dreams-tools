@@ -29,6 +29,8 @@ button.tag-dot { width:16px; height:16px; min-height:0; min-width:0; cursor:poin
 button.tag-dot[aria-checked="true"] { box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--tag); }
 .tag-dot-big { width:18px; height:18px; }
 .tag-colors { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.tag-colors .custom-colour { width:16px; height:16px; }
+.tag-custom { --tag:var(--c); }
 
 .tag-picker { position:absolute; z-index:70; top:calc(100% + 6px); left:0; width:min(320px, calc(100vw / var(--ui-zoom, 1) - 32px)); padding:8px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); box-shadow:0 10px 30px #0000002e; color:var(--ink); }
 .tag-picker-input { display:flex; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--accent); border-radius:var(--radius); color:var(--muted); }

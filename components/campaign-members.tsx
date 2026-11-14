@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Ban, Bell, Check, Copy, Link2, MoreHorizontal, Plus, RefreshCw, Trash2, UserPlus, X } from "lucide-react";
+import { colourStyle } from "@/lib/colour";
 import { choices, groupColors, permissionInfo, permissionKeys, type Choice, type GroupColor, type Permission } from "@/lib/members";
 import type { MemberStore } from "@/lib/members-server";
 import { when } from "./home-campaigns";
+import { CustomColourSwatch } from "./custom-colour-swatch";
 import "./campaign-members.css";
 
 export type MembersView = Awaited<ReturnType<MemberStore["forOwner"]>>;
@@ -27,7 +29,8 @@ const builtinAbout: Record<string, string> = { cogms: "Run the game with you", p
 export const about = (g: Pick<Group, "about" | "builtin">) => g.about || (g.builtin ? builtinAbout[g.builtin] : "Made by you");
 
 export function Chip({ group }: { group: Pick<Group, "name" | "color"> }) {
-  return <span className={`mem-chip mem-${group.color}`}>{group.name}</span>;
+  const c = colourStyle("mem", group.color);
+  return <span className={`mem-chip ${c.className}`} style={c.style}>{group.name}</span>;
 }
 export function Avatar({ name, seed }: { name: string; seed?: string }) {
   const n = [...(seed ?? name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 6;
@@ -183,7 +186,7 @@ function Groups({ view, act, busy }: Part) {
   </div>;
 }
 function Colors({ value, set }: { value: GroupColor; set: (c: GroupColor) => void }) {
-  return <span className="mem-colors" role="radiogroup" aria-label="Colour">{groupColors.map(c => <button type="button" key={c} role="radio" aria-checked={value === c} aria-label={c} className={`mem-swatch mem-${c}`} onClick={() => set(c)} />)}</span>;
+  return <span className="mem-colors" role="radiogroup" aria-label="Colour">{groupColors.map(c => <button type="button" key={c} role="radio" aria-checked={value === c} aria-label={c} className={`mem-swatch mem-${c}`} onClick={() => set(c)} />)}<CustomColourSwatch className="mem-swatch-custom" value={value} presets={groupColors} onChange={c => set(c as GroupColor)} /></span>;
 }
 function EditGroup({ group, busy, act, done }: { group: Group; busy: boolean; act: (b: object) => Promise<boolean>; done: () => void }) {
   const [name, setName] = useState(group.name), [color, setColor] = useState<GroupColor>(group.color), [text, setText] = useState(group.about ?? "");

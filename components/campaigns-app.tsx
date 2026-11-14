@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
+import { colourStyle } from "@/lib/colour";
 import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
 import CampaignsJoined from "./campaigns-joined";
@@ -132,13 +133,13 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
           {/* The tags on your campaigns. Pick one to show only the campaigns with it. */}
           {campaignTags.length > 0 && <div className="campaigns-chips" role="group" aria-label="Tag">
             <button type="button" aria-pressed={!filterTag} onClick={() => setTagFilter(null)}>All</button>
-            {campaignTags.map(t => <button type="button" key={t.id} className={`tag-${t.color}`} aria-pressed={filterTag?.id === t.id} onClick={() => setTagFilter(filterTag?.id === t.id ? null : t.id)}><i aria-hidden="true" />{t.name}</button>)}
+            {campaignTags.map(t => <button type="button" key={t.id} className={colourStyle("tag", t.color).className} style={colourStyle("tag", t.color).style} aria-pressed={filterTag?.id === t.id} onClick={() => setTagFilter(filterTag?.id === t.id ? null : t.id)}><i aria-hidden="true" />{t.name}</button>)}
           </div>}
           {worldsInUse.length > 1 && <label className="campaigns-world"><span className="sr-only">World</span><select value={world ?? ""} onChange={e => setWorld(e.target.value || null)}>
             <option value="">All worlds</option>
             {worldsInUse.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select></label>}
-          {filterTag && !campaignTags.some(x => x.id === filterTag.id) && <span className={`tag-chip tag-${filterTag.color} campaigns-tag-filter`}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
+          {filterTag && !campaignTags.some(x => x.id === filterTag.id) && <span className={`tag-chip ${colourStyle("tag", filterTag.color).className} campaigns-tag-filter`} style={colourStyle("tag", filterTag.color).style}><span className="tag-chip-name"><i aria-hidden="true" />Tagged {filterTag.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${filterTag.name}`} onClick={() => setTagFilter(null)}><X size={11} /></button></span>}
         </div>
         {drag && <div className={`campaigns-drop-top${over === "top" ? " over" : ""}`} {...dropProps(null, "top")}><Folder size={15} aria-hidden="true" />Drop here for the top level</div>}
         <div className="campaigns-table" role="table" aria-label="Campaigns">

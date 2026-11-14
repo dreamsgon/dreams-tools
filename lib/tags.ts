@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hexColour } from "./colour.ts";
 
 /*
  * Tags: your own coloured labels. Each place keeps its own list: Encyclopedia,
@@ -17,8 +18,10 @@ import { z } from "zod";
  */
 
 export const TAG_COLORS = ["red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "slate"] as const;
-export type TagColor = (typeof TAG_COLORS)[number];
-export const TAG_COLOR_NAMES: Record<TagColor, string> = { red: "Red", orange: "Orange", amber: "Amber", green: "Green", teal: "Teal", blue: "Blue", purple: "Purple", pink: "Pink", slate: "Grey" };
+/** One of the named colours, or any colour picked with the colour picker (#rrggbb). */
+export type TagColor = (typeof TAG_COLORS)[number] | `#${string}`;
+export const tagColorSchema = z.union([z.enum(TAG_COLORS), hexColour]);
+export const TAG_COLOR_NAMES: Record<(typeof TAG_COLORS)[number], string> = { red: "Red", orange: "Orange", amber: "Amber", green: "Green", teal: "Teal", blue: "Blue", purple: "Purple", pink: "Pink", slate: "Grey" };
 
 export const TAG_LIMIT = 500, TAGS_PER_ITEM = 30, TAG_NAME_LIMIT = 40, TARGET_LIMIT = 20_000;
 const id = z.string().min(1).max(60).regex(/^[a-zA-Z0-9_-]+$/);
@@ -26,7 +29,7 @@ export const TAG_SCOPES = ["encyclopedia", "campaigns", "maptable"] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];
 export const TAG_SCOPE_NAMES: Record<TagScope, string> = { encyclopedia: "Encyclopedia", campaigns: "Campaign", maptable: "Maptable" };
 const target = z.string().min(3).max(140).regex(/^(entry|scene|campaign):[a-zA-Z0-9_:-]+$/);
-export const tagSchema = z.object({ id, name: z.string().trim().min(1).max(TAG_NAME_LIMIT), color: z.enum(TAG_COLORS), scope: z.enum(TAG_SCOPES) });
+export const tagSchema = z.object({ id, name: z.string().trim().min(1).max(TAG_NAME_LIMIT), color: tagColorSchema, scope: z.enum(TAG_SCOPES) });
 export const tagLibrarySchema = z.object({
   tags: z.array(tagSchema).max(TAG_LIMIT),
   on: z.record(target, z.array(id).max(TAGS_PER_ITEM)),
@@ -139,11 +142,11 @@ export type TagAction =
   | { action: "delete"; tagId: string };
 
 export const tagActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("create"), id, scope: z.enum(TAG_SCOPES), name: z.string(), color: z.enum(TAG_COLORS) }),
+  z.object({ action: z.literal("create"), id, scope: z.enum(TAG_SCOPES), name: z.string(), color: tagColorSchema }),
   z.object({ action: z.literal("add"), target, tagId: id }),
   z.object({ action: z.literal("remove"), targets: z.array(target).min(1).max(4), tagId: id }),
   z.object({ action: z.literal("rename"), tagId: id, name: z.string() }),
-  z.object({ action: z.literal("recolor"), tagId: id, color: z.enum(TAG_COLORS) }),
+  z.object({ action: z.literal("recolor"), tagId: id, color: tagColorSchema }),
   z.object({ action: z.literal("merge"), from: id, into: id }),
   z.object({ action: z.literal("delete"), tagId: id }),
 ]);

@@ -1,5 +1,6 @@
 'use client';
 import {useState} from 'react';
+import {colourStyle} from '@/lib/colour';
 import {BookOpen,Users,Search,Eye,CalendarDays,House,Goal,Check,Gift,Library} from 'lucide-react';
 import {usePictureSrc} from './character-picture';
 import {CategoryIcon} from './codex-icon';
@@ -30,7 +31,7 @@ const questStateNames={rumour:'Rumour',active:'Active',done:'Done',failed:'Faile
 type Q=NonNullable<PlayerCampaign['entries'][number]['quest']>;
 /** What the party knows about a quest: the steps the GM shares and the journal entries for players. */
 function PlayerQuestView({quest,names,open,entries}:{quest:Q;names:(id:string)=>string;open:(id:string)=>void;entries:readonly {id:string;title:string}[]}){
- return <div className="player-quest"><div className="player-quest-chips"><span className={`quest-type cat-${quest.category?.color??'grey'}`}>{quest.category?.name??'Quest'}{quest.category?' quest':''}</span><span className="quest-state">{questStateNames[quest.state]}</span>{quest.giverId&&<button className="inline-link" onClick={()=>open(quest.giverId!)}>Given by {names(quest.giverId)}</button>}{quest.placeId&&<button className="inline-link" onClick={()=>open(quest.placeId!)}>{names(quest.placeId)}</button>}{quest.reward&&<span><Gift size={12}/> {quest.reward}</span>}</div>
+ return <div className="player-quest"><div className="player-quest-chips"><span className={`quest-type ${colourStyle('cat',quest.category?.color??'grey').className}`} style={colourStyle('cat',quest.category?.color??'grey').style}>{quest.category?.name??'Quest'}{quest.category?' quest':''}</span><span className="quest-state">{questStateNames[quest.state]}</span>{quest.giverId&&<button className="inline-link" onClick={()=>open(quest.giverId!)}>Given by {names(quest.giverId)}</button>}{quest.placeId&&<button className="inline-link" onClick={()=>open(quest.placeId!)}>{names(quest.placeId)}</button>}{quest.reward&&<span><Gift size={12}/> {quest.reward}</span>}</div>
   {quest.objectives.length>0&&<ul className="player-quest-steps">{quest.objectives.map(o=><li key={o.id} className={o.done?'done':''}><span aria-hidden="true">{o.done&&<Check size={12}/>}</span>{o.text}</li>)}</ul>}
   {quest.log.length>0&&<ol className="quest-log">{quest.log.map(l=><li key={l.id}><div className="quest-log-when"><strong>{l.label||new Date(l.at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</strong></div><PlayerProse className="quest-log-text" text={l.text} entries={entries} open={open}/></li>)}</ol>}
  </div>;

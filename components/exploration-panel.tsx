@@ -10,6 +10,7 @@ import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/worl
 import { PageSearch } from "./map-note-card";
 import PanelTip from "./panel-tip";
 import "./exploration-panel.css";
+import {CustomColourSwatch} from "./custom-colour-swatch";
 
 type Props = {workspace:Workspace;scene:Scene;pages:NotePage[];book:EncyclopediaWorkspace|null;bookError:string;update:(fn:(scene:Scene)=>void)=>void;selectedId:string|null;select:(id:string|null)=>void;place:(activation:"double"|"single")=>void;createMap:(type:Scene["mapType"])=>void;openScene:(id:string)=>void};
 const mapTypes = ["world", "area", "encounter"] as const;
@@ -66,7 +67,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
       <div className="field"><span>Colour</span>
         <div className="explore-colours" role="radiogroup" aria-label="Marker colour">
           {MARKER_COLOURS.map(c=><button key={c} role="radio" aria-checked={point.color.toLowerCase()===c} aria-label={c} style={{background:c}} onClick={()=>patch({color:c})}/>)}
-          <label className="explore-colour-custom" title="Another colour"><input type="color" aria-label="Another colour" value={point.color} onChange={e=>patch({color:e.target.value})}/></label>
+          <CustomColourSwatch value={point.color} presets={MARKER_COLOURS} label="Another colour" onChange={color=>patch({color})}/>
         </div>
       </div>
       {scene.poiFolders.length>0&&<Field label="Folder"><select value={point.folderId??""} onChange={e=>patch({folderId:e.target.value||null})}><option value="">No folder</option>{scene.poiFolders.map(f=><option key={f.id} value={f.id}>{poiFolderPath(scene.poiFolders,f.id)}</option>)}</select></Field>}

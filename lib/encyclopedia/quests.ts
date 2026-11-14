@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hexColour } from "../colour.ts";
 
 /*
  * Quests: a page of kind "quest" with a state on the quest board, objectives and a journal log.
@@ -18,9 +19,10 @@ const qid = z.string().min(1).max(100);
  * so quests saved before categories existed keep theirs.
  */
 export const categoryColors = ["accent", "grey", "purple", "teal", "orange", "gold", "rose"] as const;
-export type CategoryColor = typeof categoryColors[number];
+/** One of the named colours, or any colour picked with the colour picker (#rrggbb). */
+export type CategoryColor = typeof categoryColors[number] | `#${string}`;
 export const maxQuestCategories = 20;
-export const questCategorySchema = z.object({ id: qid.regex(/^[a-zA-Z0-9_-]+$/), name: z.string().trim().min(1).max(40), color: z.enum(categoryColors) });
+export const questCategorySchema = z.object({ id: qid.regex(/^[a-zA-Z0-9_-]+$/), name: z.string().trim().min(1).max(40), color: z.union([z.enum(categoryColors), hexColour]) });
 export type QuestCategory = z.infer<typeof questCategorySchema>;
 export const questCategoriesSchema = z.array(questCategorySchema).min(1).max(maxQuestCategories)
   .refine(c => new Set(c.map(x => x.id)).size === c.length, "Each quest category needs its own id");

@@ -48,3 +48,9 @@ test('creatures are characters, and players see a picture only with the Overview
   assert.equal(playerCampaign(book('gm'),'c1').entries.find(e=>e.id==='e1'),undefined);
   assert.throws(()=>workspaceSchema.parse({...book('gm'),entries:[{...book('gm').entries[0],picture:{...newPicture(img,5,5),size:.1}}]}));
 });
+
+test('a token ring can be any picked #rrggbb colour but not other text',()=>{
+  const w=book('gm'),withRing=ring=>({...w,entries:[{...w.entries[0],picture:{...newPicture(img,5,5),ring}}]});
+  assert.equal(workspaceSchema.parse(withRing('#12ab9f')).entries[0].picture.ring,'#12ab9f');
+  for(const bad of ['red','#abc','#12ab9g','#12ab9f;x'])assert.throws(()=>workspaceSchema.parse(withRing(bad)),bad);
+});
