@@ -13,7 +13,7 @@ export function pageTitle(parts: (string | null | undefined)[], app?: string): s
 export const encyclopediaApp = "RPG Encyclopedia";
 const viewNames: Record<string, string> = {
   characters: "Characters", maps: "Maps", calendar: "Calendar", tables: "Random tables", templates: "Templates",
-  quests: "Quests", codex: "Codex", look: "Look", dashboard: "Dashboard",
+  quests: "Quests", codex: "Codex", relationships: "Relationships", look: "Look", dashboard: "Dashboard",
 };
 
 /** Encyclopedia: a page is "Page · Campaign", a view is "Quests · Campaign", an open campaign is its name, else the world. */
