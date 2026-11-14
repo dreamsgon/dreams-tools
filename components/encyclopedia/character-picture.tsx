@@ -7,6 +7,7 @@ import {uploadMapImage} from './map-transfer';
 import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
 import {imageSrc} from './member-view';
+import {CustomColourSwatch} from '../custom-colour-swatch';
 
 /** Loads a picture from the Encyclopedia's image store (or a player link) as an object URL. */
 export function usePictureSrc(imageId:string|undefined,playerToken?:string){
@@ -74,6 +75,7 @@ function FrameDialog({picture,src,onSave,onClose}:{picture:Picture;src:string;on
     <fieldset className="ring-choice"><legend>Ring</legend>
      <button type="button" aria-pressed={!p.ring} className="ring-auto" onClick={()=>setP({...p,ring:undefined})}>Role colour</button>
      {ringColors.map(c=><button type="button" key={c} aria-label={`Ring ${c}`} aria-pressed={p.ring===c} style={{background:c}} onClick={()=>setP({...p,ring:c})}/>)}
+     <CustomColourSwatch value={p.ring} presets={ringColors} label="Pick any ring colour" onChange={ring=>setP({...p,ring})}/>
     </fieldset>
    </div>
   </div>

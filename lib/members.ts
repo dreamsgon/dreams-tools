@@ -6,6 +6,7 @@
  * as keyed hashes). Pure: storage is in members-server.ts.
  */
 import { z } from "zod";
+import { hexColour } from "./colour.ts";
 
 export const permissionKeys = [
   "seePlayer", "seeGm", "editPages", "editOwnCharacter", "addSubPages", "editMaps", "invite", "manage",
@@ -32,14 +33,16 @@ export const permissionInfo: Record<Permission, { name: string; forum?: true; so
 export const choices = ["yes", "no", "never"] as const;
 export type Choice = (typeof choices)[number];
 export const groupColors = ["violet", "blue", "sand", "pink", "teal", "green", "orange", "gray"] as const;
-export type GroupColor = (typeof groupColors)[number];
+/** One of the named colours, or any colour picked with the colour picker (#rrggbb). */
+export type GroupColor = (typeof groupColors)[number] | `#${string}`;
+export const groupColorSchema = z.union([z.enum(groupColors), hexColour]);
 
 const id = z.string().min(1).max(80).regex(/^[A-Za-z0-9_:.-]+$/);
 const name = z.string().trim().min(1).max(40);
 const at = z.string().max(40);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const perms = z.object(Object.fromEntries(permissionKeys.map(k => [k, z.enum(choices)])) as Record<Permission, z.ZodEnum<["yes", "no", "never"]>>);
-export const groupSchema = z.object({ id, name, color: z.enum(groupColors), about: z.string().max(80).optional(), builtin: z.enum(["cogms", "players", "guests"]).optional(), perms });
+export const groupSchema = z.object({ id, name, color: groupColorSchema, about: z.string().max(80).optional(), builtin: z.enum(["cogms", "players", "guests"]).optional(), perms });
 // `email` and `ip` are keyed hashes, kept so the GM can ban by them later. Never sent to the browser.
 export const memberSchema = z.object({ userId: id, name, groups: z.array(id).max(20), joinedAt: at, email: hash.optional(), ip: hash.optional() });
 // `secret` is the link itself, locked with the server's key, so the GM can copy it again later.

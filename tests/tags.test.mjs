@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
  tagKey,cleanTagName,findTag,emptyTags,tagLibrarySchema,applyTagAction,importCharacterTags,
  tagsOn,campaignTargets,tagUses,kindsLabel,targetsWith,parseTagQuery,partialTag,suggestTags,
- migrateTagLibrary,scopedTags,targetScope,TAG_SCOPES,
+ migrateTagLibrary,scopedTags,targetScope,TAG_SCOPES,tagActionSchema,
 } from '../lib/tags.ts';
 import {tagsKey,readTags,changeTags,tagAction,tagsWithImport,describeTagged} from '../lib/tags-server.ts';
 import {emptyWorkspace} from '../lib/encyclopedia/world-model.ts';
@@ -445,4 +445,15 @@ test('importCharacterTags only uses and creates Encyclopedia tags', () => {
   tagLibrarySchema.parse(next);
   assert.deepEqual(next.tags.map(t=>[t.id,t.scope]),[['c1','campaigns'],['new1','encyclopedia']]);
   assert.deepEqual(next.on,{'entry:e1':['new1']});
+});
+
+test('a tag colour can be a named colour or any picked #rrggbb, and nothing else', () => {
+  const lib=withTags('Villain');
+  const colored=run(lib,{action:'recolor',tagId:'t1',color:'#12ab9f'});
+  assert.equal(colored.tags[0].color,'#12ab9f');
+  assert.equal(colored.tags[0].scope,'encyclopedia');
+  assert(tagActionSchema.safeParse({action:'recolor',tagId:'t1',color:'#12ab9f'}).success);
+  assert.equal(create(emptyTags(),'t1','Ally','#336699').tags[0].color,'#336699');
+  for(const bad of ['mauve','#abc','#12ab9g','red;x:y']) assert(!tagActionSchema.safeParse({action:'recolor',tagId:'t1',color:bad}).success,bad);
+  assert.throws(()=>tagLibrarySchema.parse({...lib,tags:[{...lib.tags[0],color:'#zzzzzz'}]}));
 });

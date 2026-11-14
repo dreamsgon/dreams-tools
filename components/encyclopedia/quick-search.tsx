@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useMemo,useRef,useState,type ComponentType,type KeyboardEvent} from "react";
 import {Search,Plus,LayoutDashboard,Users,Map as MapIcon,CalendarDays,ArrowUpRight,Hash,X} from "lucide-react";
+import {colourStyle} from "@/lib/colour";
 import {loadTags,TagList,useTags} from "../tags";
 import {parseTagQuery,partialTag,suggestTags,tagsOn,targetKey,type Tag,type TaggedItem} from "@/lib/tags";
 import {searchableText,type Entry} from "@/lib/encyclopedia/world-model";
@@ -66,7 +67,7 @@ export function QuickSearch({entries,icons,labels,scopeName,canCreate,onOpen,onC
  const row=(item:Item,index:number)=>{const Icon=item.icon;return <button type="button" role="option" aria-selected={index===current} data-index={index} key={item.key} className="quick-row" onMouseMove={()=>setActive(index)} onClick={e=>item.run(e.ctrlKey||e.metaKey)}><Icon size={16}/><span><strong>{item.label}</strong>{item.detail&&<small>{item.detail}</small>}</span>{item.tags?.length?<TagList tags={item.tags} max={3}/>:index===current?<kbd>Enter</kbd>:<span/>}</button>;};
  return <dialog ref={ref} className="quick-search" aria-label="Quick search" onCancel={onClose} onClick={e=>{if(e.target===ref.current)onClose();}}>
   <div className="quick-input"><Search size={17}/>
-   {chosen.map(t=><span key={t.id} className={`tag-chip tag-${t.color}`}><span className="tag-chip-name"><i aria-hidden="true"/>{t.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${t.name}`} onClick={()=>{setTagIds(ids=>ids.filter(i=>i!==t.id));input.current?.focus();}}><X size={11}/></button></span>)}
+   {chosen.map(t=><span key={t.id} className={`tag-chip ${colourStyle('tag',t.color).className}`} style={colourStyle('tag',t.color).style}><span className="tag-chip-name"><i aria-hidden="true"/>{t.name}</span><button type="button" className="tag-chip-remove" aria-label={`Stop filtering by ${t.name}`} onClick={()=>{setTagIds(ids=>ids.filter(i=>i!==t.id));input.current?.focus();}}><X size={11}/></button></span>)}
    <input ref={input} autoFocus value={query} onChange={e=>{setQuery(e.target.value);setActive(0);}} onKeyDown={key} placeholder={filtering?"Add words or another #tag":"Jump to an entry, or type # for a tag…"} aria-label="Search entries" aria-controls="quick-results" role="combobox" aria-expanded="true"/><kbd>Esc</kbd></div>
   {filtering&&<div className="quick-scopes" role="group" aria-label="Show"><span>{items?`${tagged.length} page${tagged.length===1?"":"s"}`:"Loading…"}</span></div>}
   <div className="quick-results" id="quick-results" role="listbox" ref={list}>

@@ -77,3 +77,10 @@ test('players see the quest category name and colour, not its id', () => {
   const old=playerCampaign(world([{...quest('bell','active',{type:'main'}),overviewVisibility:'players'}]),'demo-campaign').entries.find(e=>e.id==='bell').quest;
   assert.deepEqual(old.category,{name:'Main',color:'accent'});
 });
+
+test('a quest category colour can be a named colour or any picked #rrggbb, and nothing else', async () => {
+  const {questCategoriesSchema}=await import('../lib/encyclopedia/quests.ts');
+  const ok=color=>questCategoriesSchema.safeParse([{id:'a',name:'A',color}]).success;
+  assert(ok('gold')); assert(ok('#a1b2c3')); assert(ok('#A1B2C3'));
+  for(const bad of ['crimson','#abc','#a1b2c3d','a1b2c3','red;x:y']) assert(!ok(bad),bad);
+});

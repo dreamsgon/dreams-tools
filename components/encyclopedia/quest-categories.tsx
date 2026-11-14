@@ -3,14 +3,20 @@ import {useEffect,useRef,useState,type KeyboardEvent} from 'react';
 import {Check,ChevronDown,GripVertical,Pencil,Plus,Trash2,X} from 'lucide-react';
 import './quest-categories.css';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
+import {colourStyle} from '@/lib/colour';
+import {CustomColourSwatch} from '../custom-colour-swatch';
 import {categoryColors,categoryOf,maxQuestCategories,questCategories,questsIn,removeQuestCategory,setQuestCategories,type CategoryColor,type QuestCategory} from '@/lib/encyclopedia/quests';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
-const colorNames:Record<CategoryColor,string>={accent:'Accent',grey:'Grey',purple:'Purple',teal:'Teal',orange:'Orange',gold:'Gold',rose:'Rose'};
+const names_:Record<string,string>={accent:'Accent',grey:'Grey',purple:'Purple',teal:'Teal',orange:'Orange',gold:'Gold',rose:'Rose'};
+const colorName=(c:string)=>names_[c]??'Custom colour';
+/** Class and inline colour for a category's chip or dot: a named colour has a class, a picked one carries its own. */
+export const categoryLook=(c:string)=>colourStyle('cat',c);
 
 /** A quest's category as a small coloured label. */
 export function CategoryChip({category,suffix=''}:{category:QuestCategory;suffix?:string}){
- return <span className={`quest-type cat-${category.color}`}>{category.name}{suffix}</span>;
+ const look=categoryLook(category.color);
+ return <span className={`quest-type ${look.className}`} style={look.style}>{category.name}{suffix}</span>;
 }
 
 /**
@@ -37,7 +43,7 @@ export function CategoryPicker({categories,value,onChange,onEdit}:{categories:Qu
  }
  const pick=(id:string)=>{setOpen(false);button.current?.focus();if(id!==value)onChange(id);};
  return <div className="quest-cat-picker" ref={box} onKeyDown={keys}>
-  <button ref={button} type="button" className={`quest-type cat-${current.color} quest-cat-button`} aria-haspopup="menu" aria-expanded={open} aria-label={`Quest category: ${current.name}`} onClick={()=>setOpen(!open)}>{current.name} quest <ChevronDown size={13}/></button>
+  <button ref={button} type="button" className={`quest-type ${categoryLook(current.color).className} quest-cat-button`} style={categoryLook(current.color).style} aria-haspopup="menu" aria-expanded={open} aria-label={`Quest category: ${current.name}`} onClick={()=>setOpen(!open)}>{current.name} quest <ChevronDown size={13}/></button>
   {open&&<div className="quest-cat-menu" role="menu" aria-label="Quest category">
    {categories.map(c=><button key={c.id} type="button" role="menuitemradio" aria-checked={c.id===value} tabIndex={-1} onClick={()=>pick(c.id)}><CategoryChip category={c}/>{c.id===value&&<Check size={14}/>}</button>)}
    {onEdit&&<button type="button" role="menuitem" tabIndex={-1} className="quest-cat-edit" onClick={()=>{setOpen(false);onEdit();}}><Pencil size={13}/> Edit categories…</button>}
@@ -95,7 +101,7 @@ export function QuestCategoriesDialog({data,worldId,campaign,change,onClose}:{da
     <button type="button" className="quest-cat-handle" draggable aria-label={`Move ${c.name}. Use the up and down arrow keys.`} title="Drag to reorder"
      onDragStart={e=>{e.dataTransfer.setData('text/plain',c.id);e.dataTransfer.effectAllowed='move';const row=e.currentTarget.closest('li');if(row)e.dataTransfer.setDragImage(row,16,20);setDragging(c.id);}}
      onDragEnd={()=>setDragging(null)} onKeyDown={e=>handleKeys(e,c.id,i)}><GripVertical size={15}/></button>
-    <button type="button" className={`quest-cat-dot cat-${c.color}`} aria-label={`Colour for ${c.name}: ${colorNames[c.color]}`} aria-expanded={active===c.id} onClick={()=>setActive(active===c.id?null:c.id)}/>
+    <button type="button" className={`quest-cat-dot ${categoryLook(c.color).className}`} style={categoryLook(c.color).style} aria-label={`Colour for ${c.name}: ${colorName(c.color)}`} aria-expanded={active===c.id} onClick={()=>setActive(active===c.id?null:c.id)}/>
     {gone?<div className="quest-cat-remove">
      <span>Move its {n} {n===1?'quest':'quests'} to</span>
      <select aria-label={`Move the quests in ${c.name} to`} value={removing.to} onChange={e=>setRemoving({id:c.id,to:e.target.value})}>{categories.filter(x=>x.id!==c.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
@@ -112,7 +118,8 @@ export function QuestCategoriesDialog({data,worldId,campaign,change,onClose}:{da
    </li>;})}
   </ol>
   {activeCat&&<div className="quest-cat-swatches" role="radiogroup" aria-label={`Colour for ${activeCat.name}`}>
-   {categoryColors.map(color=><button key={color} type="button" role="radio" aria-checked={activeCat.color===color} aria-label={colorNames[color]} title={colorNames[color]} className={`quest-cat-dot cat-${color}`} onClick={()=>patch(activeCat.id,{color})}/>)}
+   {categoryColors.map(color=><button key={color} type="button" role="radio" aria-checked={activeCat.color===color} aria-label={colorName(color)} title={colorName(color)} className={`quest-cat-dot cat-${color}`} onClick={()=>patch(activeCat.id,{color})}/>)}
+   <CustomColourSwatch value={activeCat.color} presets={categoryColors} label={`Pick any colour for ${activeCat.name}`} onChange={color=>patch(activeCat.id,{color:color as CategoryColor})}/>
    <small>Colour for “{activeCat.name}”</small>
   </div>}
   <form className="quest-cat-add" onSubmit={e=>{e.preventDefault();add();}}>

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Keyboa
 import { Check, Merge, MoreVertical, Pencil, Plus, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { usePopover } from "./popover-menu";
 import { TAG_COLORS, TAG_COLOR_NAMES, TAG_SCOPE_NAMES, applyTagAction, cleanTagName, findTag, kindsLabel, newTagId, nextColor, scopeKind, scopedTags, suggestTags, tagUses, tagsOn, targetScope, type Tag, type TagAction, type TagColor, type TagLibrary, type TagScope, type TaggedItem, type TargetKind } from "@/lib/tags";
+import { colourStyle } from "@/lib/colour";
+import { CustomColourSwatch } from "./custom-colour-swatch";
 import "./tags.css";
 import { confirmDialog } from "./confirm-dialog";
 
@@ -76,7 +78,7 @@ export async function addNewTag(target: string, name: string, color: TagColor) {
 }
 
 export function TagChip({ tag, onRemove, onClick, small }: { tag: Tag; onRemove?: () => void; onClick?: () => void; small?: boolean }) {
-  const cls = `tag-chip tag-${tag.color}${small ? " tag-chip-small" : ""}`;
+  const look = colourStyle("tag", tag.color), cls = `tag-chip ${look.className}${small ? " tag-chip-small" : ""}`;
   const inner = <><i aria-hidden="true" />{tag.name}</>;
   return <span className={cls}>
     {onClick ? <button type="button" className="tag-chip-name" title={`Show everything tagged ${tag.name}`} onClick={onClick}>{inner}</button> : <span className="tag-chip-name">{inner}</span>}
@@ -128,7 +130,7 @@ export function TagPicker({ scope, library, applied, onPick, onCreate }: { scope
     <label className="tag-picker-input"><TagIcon size={14} aria-hidden="true" /><input autoFocus value={text} maxLength={60} placeholder="Find or create a tag" aria-label="Tag name" onChange={e => { setText(e.target.value); setActive(0); }} onKeyDown={key} /></label>
     <div className="tag-picker-list" role="listbox" aria-label="Tags">
       {found.map((t, i) => <button type="button" role="option" aria-selected={i === current} key={t.id} onMouseMove={() => setActive(i)} onClick={() => onPick(t)}>
-        <i className={`tag-dot tag-${t.color}`} aria-hidden="true" /><span>{t.name}</span><small>{plural(uses.get(t.id)?.count ?? 0, "use")}</small>
+        <i className={`tag-dot ${colourStyle("tag", t.color).className}`} style={colourStyle("tag", t.color).style} aria-hidden="true" /><span>{t.name}</span><small>{plural(uses.get(t.id)?.count ?? 0, "use")}</small>
       </button>)}
       {canCreate && <div className={`tag-picker-create${current === found.length ? " is-active" : ""}`} onMouseMove={() => setActive(found.length)}>
         <button type="button" role="option" aria-selected={current === found.length} onClick={() => onCreate(name, color)}><Plus size={14} aria-hidden="true" />Create “{name}”</button>
@@ -143,9 +145,11 @@ export function TagPicker({ scope, library, applied, onPick, onCreate }: { scope
 function ColorDots({ value, onChange }: { value: TagColor; onChange: (c: TagColor) => void }) {
   return <span className="tag-colors" role="radiogroup" aria-label="Colour">
     {TAG_COLORS.map(c => <button type="button" key={c} role="radio" aria-checked={c === value} aria-label={TAG_COLOR_NAMES[c]} title={TAG_COLOR_NAMES[c]} className={`tag-dot tag-${c}`} onClick={() => onChange(c)} />)}
+    <CustomColourSwatch value={value} presets={TAG_COLORS} onChange={c => onChange(c as TagColor)} />
   </span>;
 }
 
+const colorName = (c: TagColor) => (TAG_COLOR_NAMES as Record<string, string>)[c] ?? "Custom colour";
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const MANAGER_TEXT: Record<TagScope, { title: string; intro: string; empty: string; foot: string }> = {
@@ -190,7 +194,7 @@ function NewTagRow({ scope, library, done }: { scope: TagScope; library: TagLibr
   const [name, setName] = useState(""), [color, setColor] = useState<TagColor>(() => nextColor(library));
   const save = async () => { const clean = cleanTagName(name); if (!clean) return done(); if (await changeTags({ action: "create", id: newTagId(), scope, name: clean, color })) done(); };
   return <form className="tags-row tags-row-new" onSubmit={e => { e.preventDefault(); void save(); }}>
-    <i className={`tag-dot tag-${color}`} aria-hidden="true" />
+    <i className={`tag-dot ${colourStyle("tag", color).className}`} style={colourStyle("tag", color).style} aria-hidden="true" />
     <input autoFocus value={name} maxLength={60} placeholder="Tag name" aria-label="New tag name" onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); done(); } }} />
     <ColorDots value={color} onChange={setColor} />
     <button type="submit" className="tags-button tags-button-primary">Add</button>
@@ -206,7 +210,7 @@ function ManagerRow({ tag, library, uses, onShow }: { tag: Tag; library: TagLibr
   const escape = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setMode("view"); setName(tag.name); } };
   return <div className="tags-row">
     <div className="tags-colour" ref={colourRef}>
-      <button type="button" className={`tag-dot tag-dot-big tag-${tag.color}`} aria-label={`Colour of ${tag.name}: ${TAG_COLOR_NAMES[tag.color]}. Change`} aria-haspopup="dialog" aria-expanded={colourOpen} onClick={() => setColourOpen(v => !v)} />
+      <button type="button" className={`tag-dot tag-dot-big ${colourStyle("tag", tag.color).className}`} style={colourStyle("tag", tag.color).style} aria-label={`Colour of ${tag.name}: ${colorName(tag.color)}. Change`} aria-haspopup="dialog" aria-expanded={colourOpen} onClick={() => setColourOpen(v => !v)} />
       {colourOpen && <div className="tags-pop"><ColorDots value={tag.color} onChange={c => { setColourOpen(false); void changeTags({ action: "recolor", tagId: tag.id, color: c }); }} /></div>}
     </div>
     {mode === "rename" ? <form className="tags-inline" onSubmit={e => { e.preventDefault(); void rename(); }}>

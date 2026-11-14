@@ -181,3 +181,12 @@ test('co-GMs open the whole campaign, and only that campaign; players don\'t',as
  assert.ok(await store.openAs(mara.userId,mine.ref));
  assert.equal((await store.memberships(mara.userId))[0].gm,false);
 });
+
+test('a group colour can be a named colour or any picked #rrggbb, and nothing else', () => {
+  const g={id:'g1',name:'Scouts',color:'violet',perms:Object.fromEntries(M.permissionKeys.map(k=>[k,'no']))};
+  assert.equal(M.groupSchema.parse(g).color,'violet');
+  assert.equal(M.groupSchema.parse({...g,color:'#12abEF'}).color,'#12abEF');
+  for(const bad of ['purple','#fff','#12345g','red;background:url(x)','']) assert.throws(()=>M.groupSchema.parse({...g,color:bad}),bad);
+  const list=M.editGroup({groups:[g],members:[],links:[]},'g1',{color:'#336699'});
+  assert.equal(list.groups[0].color,'#336699');
+});

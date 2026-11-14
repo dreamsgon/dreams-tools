@@ -4,7 +4,7 @@ import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { MemberStore, requestIp, type Who } from "@/lib/members-server";
 import {
-  MembersError, addGroup, ban, choices, decline, deleteGroup, editGroup, groupColors, letIn, permissionKeys, removeMember, setMemberGroups, setPageAccess, setPermission, unban,
+  MembersError, addGroup, ban, choices, decline, deleteGroup, editGroup, groupColorSchema, letIn, permissionKeys, removeMember, setMemberGroups, setPageAccess, setPermission, unban,
   type MemberList,
 } from "@/lib/members";
 export const dynamic = "force-dynamic";
@@ -21,8 +21,8 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("newLink"), ...owned, groupId: id, approve: z.boolean(), expires: expiry.optional() }),
   z.object({ action: z.literal("linkSettings"), ...owned, groupId: id, approve: z.boolean().optional(), expires: expiry.optional() }),
   z.object({ action: z.literal("linkOff"), ...owned, groupId: id }),
-  z.object({ action: z.literal("addGroup"), ...owned, name: z.string().max(80), color: z.enum(groupColors) }),
-  z.object({ action: z.literal("editGroup"), ...owned, groupId: id, name: z.string().max(80).optional(), color: z.enum(groupColors).optional(), about: z.string().max(80).optional() }),
+  z.object({ action: z.literal("addGroup"), ...owned, name: z.string().max(80), color: groupColorSchema }),
+  z.object({ action: z.literal("editGroup"), ...owned, groupId: id, name: z.string().max(80).optional(), color: groupColorSchema.optional(), about: z.string().max(80).optional() }),
   z.object({ action: z.literal("deleteGroup"), ...owned, groupId: id }),
   z.object({ action: z.literal("permission"), ...owned, groupId: id, permission: z.enum(permissionKeys), choice: z.enum(choices) }),
   z.object({ action: z.literal("memberGroups"), ...owned, userId: id, groups: z.array(id).max(20) }),
