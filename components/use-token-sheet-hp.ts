@@ -1,7 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {currentGoogleToken,googleToken,readHpCell,writeHpCell} from "@/lib/encyclopedia/google-client";
-import {checkHpCell,coalesceByKey} from "@/lib/encyclopedia/sheet-write";
+import {checkHpCell,coalesceByKey,hpTarget,hpValue} from "@/lib/encyclopedia/sheet-write";
 import {chooseWrites,hpChanges} from "@/lib/maptable-sheet-hp";
 import {mapMemberRef} from "@/lib/maptable-member";
 import {loadEncyclopedia} from "./encyclopedia-tokens";
@@ -19,10 +19,19 @@ export async function postSheetHp(body:object){
  if(!res.ok)throw new Error(((await res.json().catch(()=>null)) as {error?:string}|null)?.error??"Could not save to your Encyclopedia.");
 }
 
-async function attempt(s:Shared,job:Job,force:boolean){
+/** The job against the newest Encyclopedia copy: still switched on, and still the same spreadsheet, tab and cell. Null when it must not be written. */
+async function revalidate(job:Job):Promise<Job|null>{
+ const fresh=chooseWrites([{entryId:job.entryId,tokenId:"",hp:job.hp}],await loadEncyclopedia(true))[0],a=hpTarget(job.sheet),b=fresh?hpTarget(fresh.sheet):null;
+ return fresh&&a.ok&&b?.ok&&a.range===b.range&&job.sheet.spreadsheetId===fresh.sheet.spreadsheetId?{...fresh,hp:job.hp}:null;
+}
+async function attempt(s:Shared,queued:Job,force:boolean){
  const live=s.live!,token=currentGoogleToken();
- if(!token){s.waiting.set(job.entryId,job);live.say(job.entryId,{tone:"warn",text:"Sign in with Google to write HP back",signIn:true});live.notify(`${job.name}’s HP wasn’t written to the sheet yet. Open Roll from sheet to sign in.`);return;}
+ if(!token){s.waiting.set(queued.entryId,queued);live.say(queued.entryId,{tone:"warn",text:"Sign in with Google to write HP back",signIn:true});live.notify(`${queued.name}’s HP wasn’t written to the sheet yet. Open Roll from sheet to sign in.`);return;}
+ let job=queued;
  try{
+  const fresh=await revalidate(queued);
+  if(!fresh){s.waiting.delete(queued.entryId);live.say(queued.entryId,null);return;} // Switched off or relinked since: nothing is written.
+  job=fresh;
   if(!force){
    const check=checkHpCell(await readHpCell(job.sheet,token),job.sheet.items.find(i=>i.kind==="hp")?.value,job.hp);
    if(check.kind==="formula"){s.waiting.delete(job.entryId);live.say(job.entryId,{tone:"error",text:"Couldn’t write HP: the HP cell holds a formula, and RPG Tools won’t overwrite it."});return;}
@@ -63,7 +72,8 @@ export function useTokenSheetHp({enabled,notify,setTokenHp,refreshSheets}:{enabl
  const get=useCallback(():Shared=>box.current??=({waiting:new Map(),chain:{p:Promise.resolve()},skip:new Set(),queue:null,live:null}),[]);
  const say=useCallback((id:string,st:HpStatus|null)=>setStatuses(m=>{const n={...m};if(st)n[id]=st;else delete n[id];return n;}),[]);
  useEffect(()=>{get().live={say,notify,setTokenHp,refreshSheets};});
- useEffect(()=>()=>{box.current?.queue?.cancel();},[]);
+ // Leaving Maptable sends what is still waiting only when a Google sign-in is live; otherwise it is dropped, with a notice.
+ useEffect(()=>()=>{const s=box.current;if(!s?.queue?.pending())return;if(currentGoogleToken())s.queue.flush();else{s.queue.cancel();s.live?.notify("An HP change wasn’t written to the sheet because the Google sign-in had ended.");}},[]);
 
  const observe=useCallback((before:Parameters<typeof hpChanges>[0],after:Parameters<typeof hpChanges>[1])=>{
   if(!enabled||mapMemberRef())return;
@@ -80,13 +90,18 @@ export function useTokenSheetHp({enabled,notify,setTokenHp,refreshSheets}:{enabl
    catch(e){say(entryId,{tone:"error",text:`Couldn’t write HP: ${e instanceof Error?e.message:"sign-in failed."}`,signIn:true});}
   },
   useSheetValue(entryId:string){
-   const shared=get(),n=Number(statuses[entryId]?.conflict?.theirs),had=shared.waiting.delete(entryId);
+   const shared=get(),n=hpValue(statuses[entryId]?.conflict?.theirs??""),had=shared.waiting.delete(entryId);
+   if(n===null){say(entryId,{tone:"warn",text:"The sheet’s HP cell is empty or not a number."});return;}
    say(entryId,{tone:"ok",text:"Using the sheet’s HP."});
-   if(!had||!Number.isInteger(n)||n<0)return;
-   shared.skip.add(entryId);setTokenHp(entryId,n);
+   if(!had)return;
+   // The token change below is this one, so it must not be written back. commit() notices it synchronously.
+   shared.skip.add(entryId);setTokenHp(entryId,n);shared.skip.delete(entryId);
    postSheetHp({action:"hp",entryId,value:n}).then(()=>refreshSheets()).catch(()=>{});
   },
   writeOurs(entryId:string){const shared=get(),job=shared.waiting.get(entryId);if(job){say(entryId,{tone:"info",text:"Writing HP to the sheet…"});run(shared,job,true);}},
-  async setWriteBack(entryId:string,on:boolean){await postSheetHp({action:"writeBack",entryId,on});refreshSheets();},
+  async setWriteBack(entryId:string,on:boolean){
+   if(!on){const shared=get();shared.queue?.cancel(entryId);shared.waiting.delete(entryId);say(entryId,null);}
+   await postSheetHp({action:"writeBack",entryId,on});refreshSheets();
+  },
  };
 }

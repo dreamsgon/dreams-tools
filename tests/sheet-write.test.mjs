@@ -71,6 +71,11 @@ test('a cell that changed in the sheet is a conflict, a formula is never overwri
  assert.deepEqual(W.checkHpCell('','24',19),{kind:'changed',theirs:''});
  assert.deepEqual(W.checkHpCell('19','24',19),{kind:'ok'},'already shows what we are writing');
  assert.deepEqual(W.checkHpCell('','',19),{kind:'ok'});
+ assert.deepEqual(W.checkHpCell('24 HP','24',19),{kind:'ok'},'decoration is ignored');
+ assert.deepEqual(W.checkHpCell('HP: 1,024','1024',19),{kind:'ok'});
+ assert.deepEqual(W.checkHpCell('30 HP','24',19),{kind:'changed',theirs:'30 HP'});
+ assert.deepEqual(W.checkHpCell('10/20','24',19),{kind:'changed',theirs:'10/20'},'two numbers are not one HP');
+ assert.deepEqual(W.checkHpCell('=C2-D2','24 HP',19),{kind:'formula',theirs:'=C2-D2'});
  assert.deepEqual(W.checkHpCell('=C2-D2','24',19),{kind:'formula',theirs:'=C2-D2'});
  assert.equal(W.cellFromAnswer({values:[[24]]}),'24');assert.equal(W.cellFromAnswer({}),'');assert.equal(W.cellFromAnswer(null),'');
 });

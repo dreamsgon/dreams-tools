@@ -3,8 +3,8 @@ import {z} from "zod";
 export const rollPresetSchema=z.object({damageType:z.string().max(80).optional(),damageCategory:z.enum(["normal","precision","persistent","splash"]).optional(),damageTags:z.array(z.string().max(80)).max(30).optional(),scaling:z.object({baseRank:z.number().int().min(1).max(10),baseFormula:z.string().max(200),interval:z.number().int().min(1).max(9),increment:z.string().max(200)}).optional(),mode:z.string().max(80).optional(),persistent:z.boolean().optional(),id:z.string().max(100),name:z.string().max(160),kind:z.enum(["attack","damage","save","skill","other"]),formula:z.string().max(200),damageMode:z.enum(["double","once","criticalOnly"]).optional(),weaponDice:z.boolean().optional(),sourceKey:z.string().max(600).optional(),sourceFormula:z.string().max(200).optional(),note:z.string().max(500).optional()});
 export type RollPreset=z.infer<typeof rollPresetSchema>;
 /** One dice group or constant. `keep`, `explode`, `target` and `pm` are set only for the notation that asks for them. */
-export type Term={sign:number;count:number;sides:number;constant:number;keep?:{high:boolean;n:number};explode?:boolean;target?:number;pm?:boolean};
-export const DICE_ERROR="Use dice and modifiers, such as 1d20+9, 4d6kh3, 2d6!, 5d10>=8 or 4dF. No functions or multiplication.";
+export type Term={sign:number;count:number;sides:number;constant:number;keep?:{high:boolean;n:number};explode?:boolean;target?:number;/** With `target`: successes are dice at or under it (<=), not at or over it (>=). */under?:boolean;pm?:boolean};
+export const DICE_ERROR="Use dice and modifiers, such as 1d20+9, 4d6kh3, 2d6!, 5d10>=8, 2d20<=14 or 4dF. No functions or multiplication.";
 const LIMIT_ERROR="Use at most 100 dice, 20 terms, d2–d1000, and modifiers up to 100000.";
 /** The most extra dice one roll can add by exploding, so a roll always ends. */
 export const MAX_EXPLOSIONS=100;
@@ -13,7 +13,7 @@ export const MAX_EXPLOSIONS=100;
  * read only one way and the checks below stay linear in the length (no nested repeats that could backtrack).
  */
 const HEAD=/^(\d*)d(\d+|f)/;
-const SUFFIX=/^(?:(k[hl]?)(\d*)|(!)|(>=)(\d+))/;
+const SUFFIX=/^(?:(k[hl]?)(\d*)|(!)|(>=|<=)(\d+))/;
 export function parseDice(input:string):Term[]{
   const text=input.toLowerCase().replace(/\s/g,"").replace(/[−–]/g,"-");
   if(!text||text.length>200)throw Error(DICE_ERROR);
@@ -27,10 +27,10 @@ export function parseDice(input:string):Term[]{
     if(pm)term.pm=true;
     for(let rest=part.slice(head[0].length);rest;){
       const m=SUFFIX.exec(rest);if(!m)throw Error(DICE_ERROR);
-      if(term.keep||term.explode||term.target!==undefined||pm)throw Error("Use only one of keep (kh, kl), exploding (!) or successes (>=) on a dice group, and none on plus/minus dice.");
+      if(term.keep||term.explode||term.target!==undefined||pm)throw Error("Use only one of keep (kh, kl), exploding (!) or successes (>= or <=) on a dice group, and none on plus/minus dice.");
       if(m[1])term.keep={high:m[1]!=="kl",n:m[2]?Number(m[2]):1};
       else if(m[3])term.explode=true;
-      else term.target=Number(m[5]);
+      else{term.target=Number(m[5]);if(m[4]==="<=")term.under=true;}
       rest=rest.slice(m[0].length);
     }
     return term;
@@ -41,7 +41,7 @@ export function parseDice(input:string):Term[]{
     if(t.target!==undefined){
       if(t.target<1||t.target>t.sides)throw Error("A success needs a target from 1 up to the die's highest number.");
       if(t.sign<0)throw Error("Counting successes can't be subtracted.");
-      if(terms.length>1)throw Error("Counting successes works on its own, such as 5d10>=8, without other dice or modifiers.");
+      if(terms.length>1)throw Error("Counting successes works on its own, such as 5d10>=8 or 2d20<=14, without other dice or modifiers.");
     }
   }
   return terms;
@@ -99,7 +99,7 @@ export function rollDice(formula:string,random:()=>number=Math.random){
       const dice=rolled.filter((v,i)=>kept.has(i)),dropped=rolled.filter((v,i)=>!kept.has(i));
       return {...t,dice,dropped,rolled,subtotal:t.sign*dice.reduce((a,b)=>a+b,0)};
     }
-    if(t.target!==undefined){const successes=rolled.filter(v=>v>=t.target!).length;return {...t,dice:rolled,successes,subtotal:t.sign*successes};}
+    if(t.target!==undefined){const successes=rolled.filter(v=>t.under?v<=t.target!:v>=t.target!).length;return {...t,dice:rolled,successes,subtotal:t.sign*successes};}
     return {...t,dice:rolled,...(t.explode?{bang}:{}),subtotal:t.sign*(rolled.reduce((a,b)=>a+b,0)+t.constant)};
   });
   const first=parts[0],natural=first&&first.sides===20&&first.sign===1&&!first.explode&&first.target===undefined&&(first.count===1||first.keep?.n===1)?first.dice[0]:null;
@@ -136,5 +136,5 @@ export function partText(p:RollPart,open="("):string{
 export function describeParts(parts:RollPart[]){
   return parts.map((p,i)=>{const text=p.count?partText(p):String(p.constant);return i===0?(p.sign<0?`−${text}`:text):`${p.sign<0?"−":"+"} ${text}`;}).join(" ");
 }
-/** A dice group written back as notation, such as "4d6kh3", "2d6!", "5d10>=8" or "4dF". */
-export const termLabel=(t:Term)=>t.pm?`${t.count}dF`:`${t.count}d${t.sides}${t.keep?`k${t.keep.high?"h":"l"}${t.keep.n}`:""}${t.explode?"!":""}${t.target!==undefined?`>=${t.target}`:""}`;
+/** A dice group written back as notation, such as "4d6kh3", "2d6!", "5d10>=8", "2d20<=14" or "4dF". */
+export const termLabel=(t:Term)=>t.pm?`${t.count}dF`:`${t.count}d${t.sides}${t.keep?`k${t.keep.high?"h":"l"}${t.keep.n}`:""}${t.explode?"!":""}${t.target!==undefined?`${t.under?"<=":">="}${t.target}`:""}`;

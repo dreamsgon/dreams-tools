@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useRef} from "react";
+import {useEffect,useLayoutEffect,useRef} from "react";
 import {createPortal} from "react-dom";
 import {X} from "lucide-react";
 import {SheetRolls} from "./encyclopedia/sheet-rolls";
@@ -28,7 +28,14 @@ export default function TokenSheetRolls({character,groups,tokenId,sceneId,campai
   window.addEventListener("pointerdown",down,true);window.addEventListener("keydown",key,true);box.current?.focus();
   return()=>{window.removeEventListener("pointerdown",down,true);window.removeEventListener("keydown",key,true);};
  },[]);
- return createPortal(<div ref={box} tabIndex={-1} className="token-sheet-rolls" role="dialog" aria-label={`Roll from ${character}’s sheet`} style={{left:`min(${at.x}px, calc(calc(100vw / var(--ui-zoom, 1)) - 308px))`,top:`max(8px, min(${at.y}px, calc(calc(100vh / var(--ui-zoom, 1)) - 360px)))`}}>
+ // Keeps the whole panel on screen: its top is the click point, moved up when the panel (which grows with the HP status) would run past the bottom.
+ useLayoutEffect(()=>{
+  const el=box.current;if(!el)return;
+  const place=()=>{const zoom=Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom"))||1;el.style.top=`${Math.max(8,Math.min(at.y,window.innerHeight/zoom-el.offsetHeight-8))}px`;};
+  place();const watch=new ResizeObserver(place);watch.observe(el);window.addEventListener("resize",place);
+  return()=>{watch.disconnect();window.removeEventListener("resize",place);};
+ },[at.y]);
+ return createPortal(<div ref={box} tabIndex={-1} className="token-sheet-rolls" role="dialog" aria-label={`Roll from ${character}’s sheet`} style={{left:`min(${at.x}px, calc(calc(100vw / var(--ui-zoom, 1)) - 308px))`}}>
   <header><strong>{character}’s sheet</strong><button type="button" className="icon-only" aria-label="Close" onClick={onClose}><X size={14}/></button></header>
   {groups.length>0&&<SheetRolls groups={groups} twice={false} compact onRoll={(name,formula,mode)=>{requestMapRoll({formula:withKeepMode(formula,mode),context:{sceneId,campaignId,label:`${character} · ${name}`.slice(0,120),tokenId}});onClose();}}/>}
   {hp&&<>

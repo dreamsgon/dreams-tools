@@ -71,7 +71,12 @@ export const cellFromAnswer = (body: unknown): string => {
   const v = (body as { values?: unknown[][] } | null)?.values?.[0]?.[0];
   return v === undefined || v === null ? "" : String(v).trim();
 };
-const asNumber = (s: string) => { const t = s.replace(/,/g, "").trim(); const n = Number(t); return t && Number.isFinite(n) ? n : null; };
+/** A single number in a cell, ignoring decoration such as "24 HP", "1,024" or "HP: 24"; null for none or several ("10/20"). */
+const asNumber = (s: string) => {
+  const m = /^[^\d-]*(-?\d[\d,]*(?:\.\d+)?)[^\d]*$/.exec(s.trim());
+  const n = m ? Number(m[1].replace(/,/g, "")) : NaN;
+  return Number.isFinite(n) ? n : null;
+};
 
 export type HpCheck = { kind: "ok" } | { kind: "formula"; theirs: string } | { kind: "changed"; theirs: string };
 /**

@@ -463,7 +463,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     } else if (mine) next = preserveActiveScene(incoming, mine.activeId);
     acknowledged.current = incoming;
     revision.current = incomingRevision;
-    observeHp.current(mine ?? null, next);
     state.current = next;
     setWorkspace(next);
     // Undo steps are whole snapshots: replaying one now would quietly take back the other side's changes.
@@ -483,7 +482,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     } catch { return false; }
   }, [takeIn]);
   const scheduleRef = useRef<() => void>(() => {});
-  // Token HP changes are noticed where scene changes are applied (commit, undo, redo, a cloud save taken in), to write a linked sheet's HP back.
+  // Token HP changes made in this tab are noticed where scene changes are applied (commit, undo, redo) to write a linked sheet's HP back. Changes that arrive from the cloud (another tab or device, or an AI over MCP) are not: only the tab that made a change writes it.
   const observeHp = useRef<(before: Workspace | null, after: Workspace) => void>(() => {});
   useEffect(() => {
     let disposed = false;

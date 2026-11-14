@@ -65,6 +65,7 @@ const NOW=new Date('2026-11-14T12:00:00Z');
 
 test('Maptable stores HP on one character\'s sheet copy only, while write-back is on',()=>{
  const {w,id}=world(),next=H.storeHp(w,id,19,NOW),sheet=next.entries.find(e=>e.id===id).character.sheet;
+ const before=w.entries.find(e=>e.id===id),after=next.entries.find(e=>e.id===id);assert.equal(after.updatedAt,before.updatedAt,'an HP number is not a page edit');assert.equal(after.editedBy,before.editedBy);
  assert.equal(sheet.items[0].value,'19');assert.equal(sheet.readAt,NOW.toISOString());assert.equal(sheet.items[1].value,'31');assert.equal(sheet.writeBack,true);
  assert.deepEqual(next.entries.filter(e=>e.id!==id).map(e=>e.id),w.entries.filter(e=>e.id!==id).map(e=>e.id));
  assert.throws(()=>H.storeHp(w,id,1.5,NOW),/whole number/);assert.throws(()=>H.storeHp(w,id,100000,NOW),/whole number/);
@@ -75,11 +76,11 @@ test('Maptable stores HP on one character\'s sheet copy only, while write-back i
 });
 
 test('the write-back switch is turned on only for a GM-linked Google sheet with an HP cell',()=>{
- const {w,id}=world(google({writeBack:false})),on=H.storeWriteBack(w,id,true,NOW);
+ const {w,id}=world(google({writeBack:false})),on=H.storeWriteBack(w,id,true);
  assert.equal(on.entries.find(e=>e.id===id).character.sheet.writeBack,true);
- assert.equal(H.storeWriteBack(on,id,false,NOW).entries.find(e=>e.id===id).character.sheet.writeBack,false);
- assert.throws(()=>H.storeWriteBack(world(google({writeBack:false,items:items.slice(1)})).w,id,true,NOW),/no HP cell/);
- assert.throws(()=>H.storeWriteBack(world(google({writeBack:false,linkedById:'a'.repeat(32)})).w,id,true,NOW),/linked with Google/);
+ assert.equal(H.storeWriteBack(on,id,false).entries.find(e=>e.id===id).character.sheet.writeBack,false);
+ assert.throws(()=>H.storeWriteBack(world(google({writeBack:false,items:items.slice(1)})).w,id,true),/no HP cell/);
+ assert.throws(()=>H.storeWriteBack(world(google({writeBack:false,linkedById:'a'.repeat(32)})).w,id,true),/linked with Google/);
 });
 
 test('the sheet-hp route checks sign-in, origin, size and input, retries a crossed save, and keeps other edits',async()=>{

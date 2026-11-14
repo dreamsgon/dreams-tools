@@ -9,6 +9,8 @@ import './character-sheet.css';
 type Store=(f:(s:Sheet)=>Sheet)=>boolean|void;
 type Job={n:number;sheet:Sheet;known:string|undefined;store:Store};
 type Status={tone:'ok'|'warn'|'error'|'info';text:string};
+/** Sheets whose switch was turned off while this page is open: a change still waiting for them is dropped, never written. */
+const switchedOff=new Set<string>();
 const rangeText=`a whole number from ${HP_MIN} to ${HP_MAX}`;
 
 /**
@@ -19,7 +21,7 @@ export function SheetWriteBack({sheet,linker,onChange}:{sheet:Sheet;/** The play
  const target=hpTarget(sheet,false),on=sheet.writeBack===true;
  const blocked=sheet.source!=='google'?PUBLISHED_CANT_WRITE:linker?`${linker} linked this sheet from their own Google account, so only they can turn this on.`:!googleConfigured()?GOOGLE_NOT_SET_UP:!target.ok?target.reason:'';
  return <div className="sheet-writeback">
-  <label className="sheet-switch"><input type="checkbox" role="switch" checked={on&&!blocked} disabled={!!blocked} onChange={e=>onChange(withWriteBack(sheet,e.target.checked))}/>
+  <label className="sheet-switch"><input type="checkbox" role="switch" checked={on&&!blocked} disabled={!!blocked} onChange={e=>{const id=sheet.spreadsheetId??'';if(e.target.checked)switchedOff.delete(id);else switchedOff.add(id);onChange(withWriteBack(sheet,e.target.checked));}}/>
    <span><strong>Write HP back to the sheet</strong><small>When HP changes here, update the cell in the sheet.</small></span></label>
   {blocked?<p className="sheet-hint">{blocked}</p>:on&&target.ok?<p className="sheet-hint">Only the HP cell ({target.range.replace(/^'(.*)'!/,'$1 ')}) is written, as a plain number. Max HP and every other cell are never touched. You may be asked to sign in with Google while the page is open.</p>:null}
  </div>;
@@ -36,6 +38,7 @@ export function SheetHp({sheet,store,onHold}:{sheet:Sheet;store:Store;/** True w
 
  const settle=(s:Status|null)=>{setStatus(s);};
  async function attempt(job:Job,force:boolean){
+  if(switchedOff.has(job.sheet.spreadsheetId??'')){waiting.current=null;onHold(false);return;}
   const token=currentGoogleToken();
   if(!token){waiting.current=job;setNeedSignIn(true);settle({tone:'warn',text:'Sign in with Google to write HP back'});return;}
   try{
@@ -65,6 +68,7 @@ export function SheetHp({sheet,store,onHold}:{sheet:Sheet;store:Store;/** True w
   if(n===null){settle({tone:'error',text:`HP must be ${rangeText}.`});return;}
   const q=queue.current??=coalesce<Job>(job=>run(job));
   if(!waiting.current&&!q.pending())known.current=sheet.items.find(i=>i.kind==='hp')?.value??'';
+  switchedOff.delete(sheet.spreadsheetId??''); // The controls only show while the switch is on.
   const job:Job={n,sheet,known:known.current,store};
   store(s=>withHp(s,n,s.readAt??new Date().toISOString()));
   setConflict(null);setDraft('');onHold(true);settle({tone:'info',text:'Writing HP to the sheet in a moment…'});

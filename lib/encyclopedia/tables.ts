@@ -97,7 +97,7 @@ export const rollLabel = (t: RandomTable) => t.kind === 'generator' ? 'generator
 /** A table's dice: plain dice, modifiers and keep (kh, kl). Exploding, success counting and plus/minus dice don't give a total to look a row up by. */
 export function tableDice(formula: string) {
   const terms = parseDice(diceFormula(formula));
-  if (terms.some(t => t.explode || t.target !== undefined || t.pm)) throw Error('A table roll can use plain dice, modifiers and keep highest or lowest, not !, >= or dF.');
+  if (terms.some(t => t.explode || t.target !== undefined || t.pm)) throw Error('A table roll can use plain dice, modifiers and keep highest or lowest, not !, >=, <= or dF.');
   return terms;
 }
 /** Lowest and highest totals a formula can roll. */
