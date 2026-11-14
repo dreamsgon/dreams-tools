@@ -5,6 +5,7 @@
  * Only what the AI reads is narrowed: changes still go to the whole campaign, so nothing is lost.
  */
 import { playerText, type Workspace as Book } from "../encyclopedia/world-model.ts";
+import type { Tie } from "../encyclopedia/ties.ts";
 import { playerRecapTabs } from "../encyclopedia/recap-schema.ts";
 import { withoutLinkDetails } from "../encyclopedia/sheet-link.ts";
 import type { Scene, Workspace as Maps } from "../model.ts";
@@ -27,7 +28,28 @@ export function playersBook(book: Book, campaignId: string): Book {
       org: undefined, profile: undefined }];
   });
   const campaigns = book.campaigns.map(c => ({ ...c, calendars: c.calendars?.filter(x => x.visibility === "players") }));
-  return { ...book, campaigns, entries };
+  return { ...book, campaigns, entries: playersTies(entries) };
+}
+
+/**
+ * Ties as players see them: shared ties between pages they can read, and the cover story in place of a GM-only tie
+ * (a cover that reads the other way round moves to the page at the other end). GM-only ties without one are left out.
+ */
+function playersTies(entries: Book["entries"]): Book["entries"] {
+  const kept = new Set(entries.filter(e => e.kind !== "folder").map(e => e.id)), moved = new Map<string, Tie[]>();
+  const note = (t?: string) => { const v = t ? playerText(t).trim() : ""; return v ? { note: v } : {}; };
+  const out = entries.map(e => {
+    if (!e.ties) return e;
+    const ties = e.ties.flatMap((t): Tie[] => {
+      if (!kept.has(t.toId) || !kept.has(e.id)) return [];
+      if (!t.gm) { const { note: n, cover: _cover, ...rest } = t; void _cover; return [{ ...rest, ...note(n) }]; }
+      if (!t.cover) return [];
+      if (t.cover.reversed) { moved.set(t.toId, [...moved.get(t.toId) ?? [], { id: t.id, toId: e.id, typeId: t.cover.typeId, ...note(t.cover.note) }]); return []; }
+      return [{ id: t.id, toId: t.toId, typeId: t.cover.typeId, ...note(t.cover.note) }];
+    });
+    return { ...e, ties: ties.length ? ties : undefined };
+  });
+  return out.map(e => moved.has(e.id) ? { ...e, ties: [...e.ties ?? [], ...moved.get(e.id)!].slice(0, 100) } : e);
 }
 
 /** Scenes as players see them. `fogged` says whether a point is under fog (from tools.ts). */

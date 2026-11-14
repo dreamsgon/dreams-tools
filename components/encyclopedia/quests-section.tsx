@@ -9,6 +9,7 @@ import {Face,GoalBar,QuestGoals} from './quest-goals';
 import {QuestFacts,QuestPrep} from './quest-facts';
 import {QuestLogPanel} from './quest-log';
 import {QuestConnections} from './quest-connections';
+import {pageTies} from '@/lib/encyclopedia/tie-connections';
 import {questConnections} from '@/lib/encyclopedia/quest-connections';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
@@ -114,7 +115,7 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
  const [tab,setTab]=useState<'overview'|'log'|'connections'|'gm'>('overview');
  const q=quest(entry),[title,setTitle]=useState(entry.title);
  const set=(patch:Partial<Quest>)=>update({quest:{...q,...patch}});
- const connected=questConnections(data,{...entry,quest:q}).length;
+ const connected=new Set([...questConnections(data,{...entry,quest:q}).map(c=>c.entry.id),...pageTies(data,entry,undefined,campaign?.id??entry.campaignId).map(x=>x.otherId)]).size;
  const shared=entry.overviewVisibility==='players';
  return <div className="quest-detail">
   <div className="quest-detail-chips">
@@ -139,7 +140,7 @@ export function QuestDetail({entry,data,campaign,update,change,onOpen,onEditCate
    <QuestFacts entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>
   </div>}
   {tab==='log'&&<QuestLogPanel entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
-  {tab==='connections'&&<QuestConnections entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
+  {tab==='connections'&&<QuestConnections entry={entry} data={data} quest={q} set={set} onOpen={onOpen} change={change} campaignId={campaign?.id??entry.campaignId}/>}
   {tab==='gm'&&<QuestPrep entry={entry} data={data} quest={q} set={set} onOpen={onOpen}/>}
   {editing&&campaign&&change&&<QuestCategoriesDialog data={data} worldId={entry.worldId} campaign={campaign} change={change} onClose={()=>setEditing(false)}/>}
  </div>;

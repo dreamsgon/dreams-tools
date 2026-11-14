@@ -8,6 +8,8 @@ import { categoryOf, defaultCategory, goalStatus, moveQuest, withGoalStatus, new
 import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
 import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { characterProfileText, defaultProfile, organizationsOf } from "../encyclopedia/character-profile.ts";
+import { maxTies, tieFits, tieTypesOf } from "../encyclopedia/ties.ts";
+import { tiesText } from "../encyclopedia/tie-connections.ts";
 import { rollDice, partText, termLabel } from "../rolls.ts";
 import { playerSheet } from "../encyclopedia/sheet-link.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
@@ -258,6 +260,7 @@ const tools: Tool[] = [
         quest: e.quest ? questDetails(c, e) : undefined,
         profile: e.org ? orgProfileText(e.org, id => c.book.entries.find(x => x.id === id)?.title ?? "") : e.kind === "character" ? characterProfileText(e.profile, id => c.book.entries.find(x => x.id === id)?.title ?? "", organizationsOf(c.book.entries, e.id)) : undefined,
         codex: e.codex ? { category: e.codex.category, playerSummary: e.codex.summary, found: !!e.codex.found[c.campaign.id] } : undefined,
+        ties: (t => t.length ? t : undefined)(tiesText(c.book, e, c.campaign.id, id => c.book.entries.find(x => x.id === id)?.title ?? "")),
         children: children.length ? children : undefined,
         recap: e.recap ? {
           status: e.recap.status, playedOn: e.recap.playedOn, source: e.recap.source,
@@ -499,6 +502,29 @@ const tools: Tool[] = [
         const body = e.body.trimEnd() ? `${e.body.trimEnd()}\n\n${add}` : add;
         if (body.length > 100000) fail("That page would be longer than 100,000 characters. Make a new page instead.");
         return { next: patchEntry(full, e.id, { body, updatedAt: now.toISOString() }), summary: `Added to “${e.title}”`, detail: snippet(add), reply: { page: e.title, added: add.length } };
+      };
+    },
+  },
+  {
+    name: "tie_pages", title: "Tie two pages", level: "assist", readOnly: false,
+    description: "Record a relationship between two pages of this campaign, such as Mara Venn, Rival of, Tobin Hale, or The Gull, Based at, Greyhaven. kind is a kind of tie by either of its names (Parent of or Child of, Mentor of or Student of, Owes a debt to, Employs, Owns, Based at, Rival of, Married to, Knows, Connected to, or one the GM made). read_page lists a page's ties. GM-only unless playersSee is true.",
+    inputSchema: obj({ from: str("The first page's title or id."), kind: str("The kind of tie, read from the first page, e.g. \"Mentor of\" or \"Student of\".", 40), to: str("The other page's title or id."), note: str("One line on what is between them.", 300), playersSee: { type: "boolean", description: "Players can see this tie when they can read both pages (default false)." } }, ["from", "kind", "to"]),
+    write: a => {
+      const fromQ = text(a, "from")!, kindQ = text(a, "kind", true, 40)!.toLowerCase(), toQ = text(a, "to")!, note = text(a, "note", false, 300), players = bool(a, "playersSee");
+      return (full, c, now) => {
+        let from = pick(pages(c), fromQ, x => x.id, x => x.title, "page"), to = pick(pages(c), toQ, x => x.id, x => x.title, "page");
+        if (from.id === to.id) fail("A page can't be tied to itself.");
+        const types = tieTypesOf(full.worlds.find(w => w.id === c.campaign.worldId));
+        let type = types.find(t => t.name.toLowerCase() === kindQ);
+        if (!type) { type = types.find(t => !t.both && t.reverse?.toLowerCase() === kindQ); if (type) [from, to] = [to, from]; }
+        if (!type) return fail(`No kind of tie called "${kindQ}". This world has: ${types.map(t => t.both || !t.reverse ? t.name : `${t.name} / ${t.reverse}`).join(", ")}.`);
+        if (!tieFits(type, from.kind, to.kind)) fail(`${type.name} can't go from ${from.title} (${from.kind === "faction" ? "organization" : from.kind}) to ${to.title} (${to.kind === "faction" ? "organization" : to.kind}). Try Connected to.`);
+        own(from);
+        if (from.campaignId === null && to.campaignId !== null) fail(`“${from.title}” is shared world lore, so it can only be tied to other shared lore from its side. Tie it from “${to.title}” instead.`);
+        const ties = from.ties ?? [];
+        if (ties.length >= maxTies) fail(`“${from.title}” already has ${maxTies} ties.`);
+        const tie = { id: crypto.randomUUID(), toId: to.id, typeId: type.id, ...(note ? { note } : {}), ...(players ? {} : { gm: true }) };
+        return { next: patchEntry(full, from.id, { ties: [...ties, tie], updatedAt: now.toISOString() }), summary: `Tied “${from.title}” to “${to.title}”`, detail: `${type.name}${note ? `: ${snippet(note)}` : ""}. ${players ? "Players see it" : "GM only"}`, reply: { from: from.title, tie: type.name, to: to.title, playersSee: players } };
       };
     },
   },
