@@ -6,6 +6,18 @@ import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
 }
+export type Editor = { name: string; as: 'co-gm' | 'player' };
+/** Marks the pages that changed with who changed them, or clears the mark when the owner did. */
+export function markEditor(before: Workspace, after: Workspace, editor?: Editor): Workspace {
+  const was = new Map(before.entries.map(e => [e.id, e.updatedAt]));
+  return { ...after, entries: after.entries.map(e => {
+    if (was.get(e.id) === e.updatedAt) return e;
+    if (editor) return { ...e, editedBy: editor };
+    if (!e.editedBy) return e;
+    const { editedBy: _gone, ...rest } = e;
+    return rest;
+  }) };
+}
 export const encyclopediaPrefix = (owner: string) => `users/${encodeURIComponent(owner)}/encyclopedia/`;
 type LinkKind = 'player' | 'agent';
 type Grant = { owner: string; campaignId: string; hash: string };
@@ -22,12 +34,17 @@ export class EncyclopediaStore {
   async save(owner: string, input: Workspace, revision: number) {
     return (await this.saveTagged(owner, input, revision))?.revision ?? null;
   }
-  /** Saves, and also returns the stored copy's etag so the app can ask "anything new?" cheaply. */
-  async saveTagged(owner: string, input: Workspace, revision: number) {
-    const data=workspaceSchema.parse(input);
-    if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Encyclopedia workspace exceeds the 2 MB limit. Export a backup before reducing content.');
+  /**
+   * Saves, and also returns the stored copy's etag so the app can ask "anything new?" cheaply. `editor` is who
+   * changed it when it wasn't the owner (a co-GM, or a player on their own page): pages they changed are marked
+   * with their name, and pages anyone else changed lose an old mark.
+   */
+  async saveTagged(owner: string, input: Workspace, revision: number, editor?: Editor) {
+    let data=workspaceSchema.parse(input);
     const previous=await this.read(owner);
     if (previous.revision!==revision) return null;
+    data=markEditor(previous.data,data,editor);
+    if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Encyclopedia workspace exceeds the 2 MB limit. Export a backup before reducing content.');
     const next=revision+1;
     const saved=await this.bucket.put(encyclopediaPrefix(owner)+'workspace.json',JSON.stringify({data,revision:next}),{onlyIf:previous.etag?{etagMatches:previous.etag}:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
     if (!saved) return null;

@@ -1049,3 +1049,60 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .is-co-gm :is(.sidebar-bottom, .picture-add, .save-template, [aria-label="Page history"], .quiet-card .text-button, .dashboard-intro > .icon-button, .character-nav .button-row, .aside-section > .text-button:last-child, .recap-start, [title="Link one of your Maptable scenes"], [title="Put one of your random tables on this page"]), .is-co-gm .character-nav .campaign-link:has(+ .campaign-link + .button-row) { display:none !important; }
 /* A co-GM whose group can't edit pages sees no editing controls at all. */
 .co-gm-read :is(.add-note, .top-actions > .button.primary, .save-chip-group, .note-card.add-card, .tag-add, .tab-controls, .article-toolbar .segmented, .codex-add-page, .delete-entry, [aria-label="Rename entry"], [aria-label="Add tab"], [aria-label^="Add a sub-page inside"], .aside-section:has(> .field-label [aria-label="Inside"]), .aside-heading > .text-button) { display:none !important; }
+/* Editing from the player pages: a member's own pages, set by each page's Who can edit. */
+.player-edit-bar{margin:6px 0 18px;display:flex;flex-direction:column;gap:10px}
+.player-edit-actions{display:flex;gap:8px;flex-wrap:wrap}
+.player-new-page{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel)}
+.player-new-page input{flex:1 1 220px;min-width:0}
+.player-seen-choice{display:inline-flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.player-seen-choice button{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;font-size:12px;color:var(--muted);background:none;border:0;border-left:1px solid var(--line)}
+.player-seen-choice button:first-child{border-left:0}
+.player-seen-choice button[aria-checked="true"]{background:var(--green-pale);color:var(--green);font-weight:600}
+.player-editor{display:flex;flex-direction:column;gap:16px;margin-top:8px}
+.player-editor-tab{display:flex;flex-direction:column;gap:6px}
+.player-editor-tab textarea{width:100%;min-height:120px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--raised);color:inherit;font:inherit;line-height:1.6;resize:vertical}
+.player-edit-locked{display:flex;align-items:center;gap:6px;margin:0;padding:10px 12px;border:1px dashed var(--line-strong);border-radius:var(--radius);font-size:13px;color:var(--muted)}
+.player-edit-hint{margin:0;font-size:12px;color:var(--muted)}
+.player-edit-error{flex-basis:100%;margin:0;font-size:13px;color:var(--rust)}
+.player-subpages{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column}
+.player-subpages>.eyebrow{margin-bottom:6px}
+.player-subpage{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.player-subpage>.inline-link,.player-subpage>span:not(.player-seen){flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
+.player-seen{flex:none;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted);background:none}
+.player-seen.shared{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,var(--line));background:var(--green-pale)}
+button.player-seen:hover{border-color:var(--line-strong)}
+/* Who can edit a page (the GM only), and who changed it last when it wasn't the GM. */
+.article-access{margin-left:auto;display:flex;align-items:center;gap:10px;text-transform:none;letter-spacing:0;font-weight:400}
+.article-access:empty{display:none}
+.article-access .edited-by{color:var(--muted);font-size:12px}
+.who-can-edit{position:relative}
+.who-button{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font-size:12px;cursor:pointer}
+.who-button.on{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--line));background:var(--green-pale)}
+.who-pop{position:absolute;right:0;top:calc(100% + 8px);z-index:40;width:min(440px,calc(100vw / var(--ui-zoom, 1) - 32px));padding:16px;border:1px solid var(--line-strong);border-radius:var(--radius-lg);background:var(--raised);box-shadow:0 12px 32px rgba(0,0,0,.25);font-size:13px;color:var(--ink,inherit);text-transform:none;letter-spacing:0;display:flex;flex-direction:column;gap:0}
+.who-head{display:flex;flex-direction:column;gap:3px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.who-head strong{font-size:15px}
+.who-head small,.who-note,.who-empty,.who-fixed{color:var(--muted);font-size:12px;line-height:1.5}
+.who-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.who-row>.who-switch,.who-fixed{margin-left:auto}
+.who-fixed{display:inline-flex;align-items:center;gap:5px}
+.who-person{align-items:flex-start}
+.who-face{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;font-size:12px}
+.who-name{display:flex;flex-direction:column;min-width:0;flex:1}
+.who-name small{color:var(--muted);font-size:12px}
+.who-switches{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.who-switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap}
+.who-switch input{position:absolute;opacity:0;pointer-events:none}
+.who-switch span{width:30px;height:17px;border-radius:999px;background:var(--line-strong);position:relative;transition:background .15s}
+.who-switch span:after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:left .15s}
+.who-switch input:checked+span{background:var(--green)}
+.who-switch input:checked+span:after{left:15px}
+.who-switch input:focus-visible+span{outline:2px solid var(--green);outline-offset:2px}
+.who-switch:has(input:disabled){opacity:.6;cursor:default}
+.who-drop{flex:none;border:0;background:none;color:var(--muted);padding:2px;cursor:pointer}
+.who-chip{display:inline-flex;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500;color:color-mix(in srgb,var(--c,#6b737b) 80%,var(--ink,#888));background:color-mix(in srgb,var(--c,#6b737b) 16%,transparent)}
+.who-chip.c-violet{--c:#7b5cc4}.who-chip.c-blue{--c:#3b6fb6}.who-chip.c-sand{--c:#a07a2c}.who-chip.c-pink{--c:#c2457a}.who-chip.c-teal{--c:#1f8a80}.who-chip.c-green{--c:#3f8a4f}.who-chip.c-orange{--c:#c5662a}.who-chip.c-gray{--c:#6b737b}
+.who-add{display:flex;gap:8px;padding:12px 0 4px}
+.who-add select{flex:1;min-width:0}
+.who-note{margin:10px 0 0}
+.who-error{margin:8px 0 0;color:var(--rust);font-size:13px}
+.is-co-gm .who-can-edit{display:none}

@@ -4,7 +4,7 @@ import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { MemberStore, requestIp, type Who } from "@/lib/members-server";
 import {
-  MembersError, addGroup, ban, choices, decline, deleteGroup, editGroup, groupColors, letIn, permissionKeys, removeMember, setMemberGroups, setPermission, unban,
+  MembersError, addGroup, ban, choices, decline, deleteGroup, editGroup, groupColors, letIn, permissionKeys, removeMember, setMemberGroups, setPageAccess, setPermission, unban,
   type MemberList,
 } from "@/lib/members";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,8 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("ban"), ...owned, userId: id, email: z.boolean(), ip: z.boolean(), note: z.string().max(200) }),
   z.object({ action: z.literal("unban"), ...owned, banId: id }),
   z.object({ action: z.literal("notify"), ...owned, joins: z.boolean(), discord: z.boolean() }),
+  // Who can edit one Encyclopedia page, set from the page.
+  z.object({ action: z.literal("pageAccess"), ...owned, pageId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/), people: z.record(id, z.object({ edit: z.boolean(), subPages: z.boolean() })), groups: z.record(id, z.boolean()) }),
 ]);
 type Owned = Exclude<z.infer<typeof action>, { action: "invite" | "join" | "leave" }>;
 
@@ -111,6 +113,7 @@ async function manage(store: MemberStore, who: Who, body: Owned) {
     case "ban": await edit(l => ban(l, body.userId, { email: body.email, ip: body.ip }, body.note, `b-${newId()}`)); break;
     case "unban": await edit(l => unban(l, body.banId)); return;
     case "notify": await edit(l => ({ ...l, notify: { joins: body.joins, discord: body.discord } })); return;
+    case "pageAccess": await edit(l => setPageAccess(l, body.pageId, { people: body.people, groups: body.groups })); return;
   }
   await store.syncMembership(owner, c, body.userId);
 }

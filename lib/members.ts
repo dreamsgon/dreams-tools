@@ -17,8 +17,8 @@ export const permissionInfo: Record<Permission, { name: string; forum?: true; so
   seePlayer: { name: "See the front page and player pages" },
   seeGm: { name: "See GM-only pages, secrets and hidden tokens" },
   editPages: { name: "Edit Encyclopedia pages", hint: "Also needs “See GM-only pages” for now." },
-  editOwnCharacter: { name: "Edit their own character page", soon: true },
-  addSubPages: { name: "Add sub-pages under their own character page", soon: true },
+  editOwnCharacter: { name: "Edit their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
+  addSubPages: { name: "Add sub-pages under their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
   editMaps: { name: "Edit maps and run the table in Maptable", soon: true },
   invite: { name: "Invite people (to their own groups or lower)", soon: true },
   manage: { name: "Manage members, groups and permissions", soon: true },
@@ -46,11 +46,23 @@ export const memberSchema = z.object({ userId: id, name, groups: z.array(id).max
 export const linkSchema = z.object({ groupId: id, hash, secret: z.string().max(400).optional(), createdAt: at, expiresAt: at.nullable(), approve: z.boolean(), uses: z.number().int().min(0) });
 export const requestSchema = z.object({ userId: id, name, groupId: id, at, email: hash.optional(), ip: hash.optional() });
 export const banSchema = z.object({ id, userId: id, name, email: hash.optional(), ip: hash.optional(), ipUntil: at.optional(), note: z.string().max(200), at });
+/**
+ * Who can edit one page, set on the page itself (Who can edit): people by account, groups by id. `subPages` lets
+ * someone add pages inside it. `by` is the member who made the page, for a sub-page a player added.
+ */
+export const pageAccessSchema = z.object({
+  people: z.record(id, z.object({ edit: z.boolean(), subPages: z.boolean() })),
+  groups: z.record(id, z.boolean()),
+  by: id.optional(),
+});
+export type PageAccess = z.infer<typeof pageAccessSchema>;
 export const memberListSchema = z.object({
   campaignId: id, ownerName: z.string().max(80),
   groups: z.array(groupSchema).max(20), members: z.array(memberSchema).max(200), links: z.array(linkSchema).max(20),
   requests: z.array(requestSchema).max(50), bans: z.array(banSchema).max(200),
   notify: z.object({ joins: z.boolean(), discord: z.boolean() }),
+  // Optional (added later): Who can edit, by Encyclopedia page id.
+  pages: z.record(id, pageAccessSchema).optional(),
 });
 export type Group = z.infer<typeof groupSchema>;
 export type Member = z.infer<typeof memberSchema>;
@@ -148,7 +160,47 @@ export function setMemberGroups(list: MemberList, userId: string, groups: string
 }
 
 export function removeMember(list: MemberList, userId: string): MemberList {
-  return { ...list, members: list.members.filter(m => m.userId !== userId), requests: list.requests.filter(r => r.userId !== userId) };
+  const pages = list.pages && Object.fromEntries(Object.entries(list.pages).map(([page, a]) => [page, { ...a, people: Object.fromEntries(Object.entries(a.people).filter(([u]) => u !== userId)) }]));
+  return { ...list, members: list.members.filter(m => m.userId !== userId), requests: list.requests.filter(r => r.userId !== userId), ...(pages ? { pages } : {}) };
+}
+
+// ---- Who can edit, page by page --------------------------------------------------------------------
+
+const MAX_PAGES = 2000;
+const never = (list: MemberList, m: Member, permission: Permission) => m.groups.some(g => list.groups.find(x => x.id === g)?.perms[permission] === "never");
+/**
+ * The pages a member may edit or add sub-pages to, from each page's Who can edit. Never in any of their groups for
+ * "Edit Encyclopedia pages" (or "Add sub-pages") still wins, so a Guest stays read only whatever a page says.
+ */
+export function pageRights(list: MemberList, userId: string) {
+  const m = list.members.find(x => x.userId === userId), edit = new Set<string>(), subPages = new Set<string>(), made = new Set<string>();
+  if (!m) return { edit, subPages, made };
+  const noEdit = never(list, m, "editPages"), noSub = never(list, m, "addSubPages");
+  for (const [page, a] of Object.entries(list.pages ?? {})) {
+    if (!noEdit && (a.people[userId]?.edit || m.groups.some(g => a.groups[g]))) edit.add(page);
+    if (!noSub && a.people[userId]?.subPages) subPages.add(page);
+    if (a.by === userId) made.add(page);
+  }
+  return { edit, subPages, made };
+}
+export type PageRights = ReturnType<typeof pageRights>;
+
+/** Sets a page's Who can edit. People must be members and groups must exist; an empty setting is removed. */
+export function setPageAccess(list: MemberList, page: string, access: Omit<PageAccess, "by">): MemberList {
+  for (const u of Object.keys(access.people)) if (!list.members.some(m => m.userId === u)) fail("That person isn't in this campaign.");
+  for (const g of Object.keys(access.groups)) if (!list.groups.some(x => x.id === g)) fail("That group is gone.");
+  const people = Object.fromEntries(Object.entries(access.people).filter(([, p]) => p.edit || p.subPages));
+  const groups = Object.fromEntries(Object.entries(access.groups).filter(([, on]) => on));
+  const by = list.pages?.[page]?.by, rest = Object.fromEntries(Object.entries(list.pages ?? {}).filter(([p]) => p !== page));
+  const empty = !Object.keys(people).length && !Object.keys(groups).length && !by;
+  if (!empty && Object.keys(rest).length >= MAX_PAGES) fail("Too many pages have their own Who can edit.");
+  return { ...list, pages: empty ? rest : { ...rest, [page]: { people, groups, ...(by ? { by } : {}) } } };
+}
+
+/** A sub-page a member just added: theirs to edit and add to. */
+export function addMadePage(list: MemberList, userId: string, page: string): MemberList {
+  if (Object.keys(list.pages ?? {}).length >= MAX_PAGES) fail("Too many pages have their own Who can edit.");
+  return { ...list, pages: { ...list.pages, [page]: { people: { [userId]: { edit: true, subPages: true } }, groups: {}, by: userId } } };
 }
 
 // ---- Bans ----------------------------------------------------------------------------------------

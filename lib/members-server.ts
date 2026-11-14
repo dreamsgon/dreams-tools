@@ -17,7 +17,7 @@ import type { S3Bucket } from "./storage.ts";
 import { EncyclopediaStore, encyclopediaPrefix, hashToken } from "./encyclopedia/store.ts";
 import { lock, unlock } from "./ai/secret.ts";
 import {
-  MembersError, emptyMemberList, memberListSchema, join, liveLink, permissionInfo, permissionKeys, publicMembers, roleOf, bannedBy, can, removeMember,
+  MembersError, emptyMemberList, pageRights, addMadePage, memberListSchema, join, liveLink, permissionInfo, permissionKeys, publicMembers, roleOf, bannedBy, can, removeMember,
   type JoinOutcome, type MemberList,
 } from "./members.ts";
 
@@ -226,7 +226,25 @@ export class MemberStore {
     const found = await this.byRef(userId, ref);
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
-    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", edit: can(list, userId, "editPages") } : null;
+    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages") } : null;
+  }
+
+  /**
+   * A member on the player pages: the campaign, their name, and the pages they may edit or add sub-pages to
+   * (each page's Who can edit). Null when they can't open the player pages.
+   */
+  async rightsAs(userId: string, ref: string) {
+    const found = await this.byRef(userId, ref);
+    if (!found) return null;
+    const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
+    const m = list?.members.find(x => x.userId === userId);
+    if (!list || !m || !can(list, userId, "seePlayer")) return null;
+    return { owner: found.owner, campaignId: found.campaignId, userId, name: m.name, rights: pageRights(list, userId) };
+  }
+
+  /** Records a sub-page a member added, so it is theirs to edit. */
+  addMadePage(owner: string, campaignId: string, userId: string, page: string) {
+    return this.change(owner, campaignId, l => addMadePage(l, userId, page));
   }
 
   /** Leave campaign, or stop asking to join. The GM hears about a member leaving the way they hear about joins. */
