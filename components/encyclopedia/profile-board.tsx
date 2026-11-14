@@ -2,9 +2,10 @@
 /* The parts organization profiles and character profiles share: item tools, the block frame with its Arrange controls, the
    two-column board, the Arrange bar, the Add a block menu, the beliefs list, text blocks and the editable bottom bar. */
 import {Fragment,useState,type DragEvent,type ReactNode} from 'react';
-import {ArrowDown,ArrowLeftRight,ArrowUp,Check,Eye,EyeOff,GripVertical,Pencil,Plus,Trash2,X} from 'lucide-react';
+import {ArrowDown,ArrowLeftRight,ArrowUp,Check,Eye,EyeOff,GripVertical,Pencil,Plus,Sparkles,Trash2,X} from 'lucide-react';
 import {newId} from '@/lib/encyclopedia/world-model';
 import {boardSegments,maxBarFields,maxBlocks,standingNames,standings,type BoardBlock,type OrgBarField,type OrgBelief,type Standing} from '@/lib/encyclopedia/org-profile';
+import {fillable,suggestBelief,type Last} from '@/lib/encyclopedia/profile-suggest';
 import {GmChip} from './org-parts';
 
 export const stand=(value:string):Standing|undefined=>(standings as readonly string[]).includes(value)?value as Standing:undefined;
@@ -88,9 +89,13 @@ export function AddBlockMenu({kinds,count,onAdd}:{kinds:{kind:string;name:string
 /** A list of beliefs (topic, stance, detail), each GM only if you like. `ctx` is the page's editing state. */
 export function BeliefsList({items,set,editing,setEditing}:{items:OrgBelief[];set:(f:(l:OrgBelief[])=>OrgBelief[])=>void;editing:string|null;setEditing:(id:string|null)=>void}){
  const add=()=>{const id=newId();set(l=>[...l,{id,topic:'',stance:'',detail:''}]);setEditing(id);};
+ // What Suggest last put in each belief: it fills empty fields, or ones it filled itself and nobody has changed since.
+ const [last,setLast]=useState<Record<string,Last>>({});
+ const suggest=(x:OrgBelief)=>{const pick=suggestBelief(x,last[x.id],items.filter(y=>y.id!==x.id).map(y=>y.topic));if(!pick)return;const was=last[x.id];setLast(m=>({...m,[x.id]:{topic:pick.topic??was?.topic,stance:pick.stance??was?.stance}}));set(l=>l.map(y=>y.id!==x.id?y:{...y,...(pick.topic!==undefined&&fillable(y.topic,was?.topic)?{topic:pick.topic}:{}),...(pick.stance!==undefined&&fillable(y.stance,was?.stance)?{stance:pick.stance}:{})}));};
  return <>
   {items.map(x=>editing===x.id
    ?<div className="org-belief org-item" key={x.id}><input className="org-input" aria-label="Topic" placeholder="Topic, for example Authority" maxLength={60} autoFocus value={x.topic} onChange={e=>set(l=>l.map(y=>y.id===x.id?{...y,topic:e.target.value}:y))}/><input className="org-input" aria-label="Stance" placeholder="Stance, for example Earned by service" maxLength={100} value={x.stance} onChange={e=>set(l=>l.map(y=>y.id===x.id?{...y,stance:e.target.value}:y))}/><textarea className="org-input" aria-label="Detail" placeholder="A sentence of detail" maxLength={400} rows={2} value={x.detail} onChange={e=>set(l=>l.map(y=>y.id===x.id?{...y,detail:e.target.value}:y))}/>
+     {(fillable(x.topic,last[x.id]?.topic)||fillable(x.stance,last[x.id]?.stance))&&<button type="button" className="text-button org-suggest" aria-label="Suggest a topic and stance" onClick={()=>suggest(x)}><Sparkles size={12}/> Suggest</button>}
      <ItemTools gm={x.gm} editing what={x.topic||'this belief'} onEdit={()=>setEditing(null)} onGm={()=>set(l=>l.map(y=>y.id===x.id?{...y,gm:y.gm?undefined:true}:y))} onRemove={()=>set(l=>l.filter(y=>y.id!==x.id))}/></div>
    :<div className={`org-belief org-item${x.gm?' is-gm':''}`} key={x.id}><span className="org-belief-topic">{x.topic||'Untitled'}{x.gm&&<GmChip/>}</span><strong>{x.stance||<span className="org-blank">No stance yet</span>}</strong>{x.detail&&<p>{x.detail}</p>}<ItemTools gm={x.gm} what={x.topic||'this belief'} onEdit={()=>setEditing(x.id)} onGm={()=>set(l=>l.map(y=>y.id===x.id?{...y,gm:y.gm?undefined:true}:y))} onRemove={()=>set(l=>l.filter(y=>y.id!==x.id))}/></div>)}
   {!items.length&&<p className="org-empty">No beliefs yet.</p>}

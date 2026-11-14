@@ -1,12 +1,13 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {ImagePlus,Trash2,X} from 'lucide-react';
+import {ImagePlus,Sparkles,Trash2,X} from 'lucide-react';
 import type {World} from '@/lib/encyclopedia/world-model';
 import {emblemShapes,emblemSymbols,mapSwatches,orgTypeGroups,orgTypeList,shapeNames,symbolSwatches,defaultMapColour,type Org,type OrgEmblem} from '@/lib/encyclopedia/org-profile';
 import {CustomColourSwatch} from '../custom-colour-swatch';
 import {uploadMapImage} from './map-transfer';
 import {Emblem,symbolIcons,symbolNames} from './org-parts';
 import {usePictureSrc} from './character-picture';
+import {fillable,suggestOrgType} from '@/lib/encyclopedia/profile-suggest';
 
 const OTHER='__other';
 function Swatches({label,value,presets,onChange}:{label:string;value?:string;presets:readonly string[];onChange:(c:string)=>void}){
@@ -16,7 +17,9 @@ function Swatches({label,value,presets,onChange}:{label:string;value?:string;pre
 /** The Edit profile side panel: type, motto, emblem, shape, colours and banner. Every change is saved as you go. */
 export function OrgPanel({org,title,world,canEditWorld,update,addType,onClose}:{org:Org;title:string;world?:World;canEditWorld:boolean;update:(f:(o:Org)=>Org)=>void;addType:(type:string)=>void;onClose:()=>void}){
  const mine=world?.orgTypes??[],known=[...orgTypeList,...mine],custom=!!org.type&&!known.includes(org.type);
- const [other,setOther]=useState(false),[busy,setBusy]=useState<''|'emblem'|'banner'>(''),[error,setError]=useState('');
+ const [other,setOther]=useState(false),[busy,setBusy]=useState<''|'emblem'|'banner'>(''),[error,setError]=useState(''),[lastType,setLastType]=useState<string>();
+ // Suggest only fills an empty Type, or one a press of it filled and nobody has changed since.
+ const suggest=()=>{const t=suggestOrgType(org.type,{type:lastType},mine);if(!t)return;setLastType(t);setOther(false);update(o=>fillable(o.type,lastType)?{...o,type:t}:o);};
  const root=useRef<HTMLElement>(null);
  useEffect(()=>{root.current?.focus();},[]);
  const emblemFile=useRef<HTMLInputElement>(null),bannerFile=useRef<HTMLInputElement>(null);
@@ -41,6 +44,7 @@ export function OrgPanel({org,title,world,canEditWorld,update,addType,onClose}:{
      <option value={OTHER}>Type your own…</option>
     </select>
    </label>
+   {fillable(org.type,lastType)&&!other&&<button type="button" className="text-button org-suggest" aria-label="Suggest a type" onClick={suggest}><Sparkles size={12}/> Suggest</button>}
    {(other||custom)&&<label className="org-field">Your own type<input aria-label="Your own type" maxLength={60} autoFocus={other&&!custom} value={org.type??''} placeholder="For example Ferry cooperative" onChange={e=>update(o=>({...o,type:e.target.value||undefined}))} onBlur={e=>{if(canEditWorld)addType(e.target.value);}} onKeyDown={e=>{if(e.key==='Enter'&&canEditWorld)addType(e.currentTarget.value);}}/><small>{canEditWorld?'Kept for this world’s other organizations.':'Only the GM can keep a type for the world’s other organizations.'}</small></label>}
    <label className="org-field">Motto<input aria-label="Motto" maxLength={200} value={org.motto??''} placeholder="A line they live by" onChange={e=>update(o=>({...o,motto:e.target.value||undefined}))}/></label>
 

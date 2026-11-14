@@ -25,8 +25,8 @@ export function SidebarResize({width,maxWidth,onChange}:{width:number;maxWidth:n
  onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}} />;
 }
 export function useNavigationSections(){
- const [sections,setSections]=useState({lore:true,notes:true}),[ready,setReady]=useState(false);
- useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem('ttrpg-navigation-sections')??'null');if(saved)setSections({lore:typeof saved.lore==='boolean'?saved.lore:true,notes:typeof saved.notes==='boolean'?saved.notes:true});}catch{}setReady(true);},[]);
+ const [sections,setSections]=useState({lore:true,notes:true,orgs:true}),[ready,setReady]=useState(false);
+ useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem('ttrpg-navigation-sections')??'null');if(saved)setSections({lore:typeof saved.lore==='boolean'?saved.lore:true,notes:typeof saved.notes==='boolean'?saved.notes:true,orgs:typeof saved.orgs==='boolean'?saved.orgs:true});}catch{}setReady(true);},[]);
  useEffect(()=>{if(ready)try{localStorage.setItem('ttrpg-navigation-sections',JSON.stringify(sections));}catch{}},[sections,ready]);
- return {sections,toggle:(key:'lore'|'notes')=>setSections(s=>({...s,[key]:!s[key]})),open:(key:'lore'|'notes')=>setSections(s=>({...s,[key]:true}))};
+ return {sections,toggle:(key:'lore'|'notes'|'orgs')=>setSections(s=>({...s,[key]:!s[key]})),open:(key:'lore'|'notes'|'orgs')=>setSections(s=>({...s,[key]:true}))};
 }
