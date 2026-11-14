@@ -1111,3 +1111,7 @@ button.player-seen:hover{border-color:var(--line-strong)}
 .who-note{margin:10px 0 0}
 .who-error{margin:8px 0 0;color:var(--rust);font-size:13px}
 .is-co-gm .who-can-edit{display:none}
+
+.tree-row .tree-edit{flex:none;width:24px;height:24px;min-height:0;padding:0;margin-right:4px;opacity:0;border:0;background:transparent;color:var(--muted)}
+.tree-row:hover .tree-edit,.tree-row:focus-within .tree-edit,.tree-row.selected .tree-edit{opacity:1}
+@media (hover:none){.tree-row .tree-edit{opacity:1}}

@@ -161,3 +161,7 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
   .campaigns-folder-confirm > span { text-align:left; }
   .campaigns-folder-confirm { justify-content:flex-start; }
 }
+
+.campaigns-folder-row { cursor:pointer; }
+.campaigns-folder-row[data-drop-edge="before"] { box-shadow:0 -3px 0 var(--accent); }
+.campaigns-folder-row[data-drop-edge="after"] { box-shadow:0 3px 0 var(--accent); }

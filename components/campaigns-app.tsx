@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, Link2, Map as MapIcon, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { campaignLayout, folderChoices, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
+import { canMoveSibling, dropPlace } from "@/lib/folder-order";
 import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
 import CampaignsJoined from "./campaigns-joined";
@@ -91,6 +92,28 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     onDragLeave: () => { if (over === id) setOver(null); },
     onDrop: (e: React.DragEvent) => { e.preventDefault(); drop(target); },
   });
+  // A folder dragged onto the top or bottom edge of another folder row goes before or after it (in its parent); the middle puts it inside.
+  const [edge, setEdge] = useState<{ id: string; place: "before" | "after" } | null>(null);
+  const edgeOf = (e: React.DragEvent, folder: CampaignFolder) => {
+    if (drag?.type !== "folder" || drag.id === folder.id || descendants(drag.id).has(folder.id) || folder.parentId && descendants(drag.id).has(folder.parentId)) return null;
+    const rect = e.currentTarget.getBoundingClientRect(), place = dropPlace(e.clientY - rect.top, rect.height);
+    return place === "inside" ? null : { id: folder.id, place };
+  };
+  const folderDrops = (folder: CampaignFolder) => ({
+    onDragOver: (e: React.DragEvent) => {
+      const next = edgeOf(e, folder);
+      if (next) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (edge?.id !== next.id || edge.place !== next.place) setEdge(next); if (over) setOver(null); return; }
+      if (edge) setEdge(null);
+      dropProps(folder.id, `f:${folder.id}`).onDragOver(e);
+    },
+    onDragLeave: () => { setEdge(null); if (over === `f:${folder.id}`) setOver(null); },
+    onDrop: (e: React.DragEvent) => {
+      const next = edgeOf(e, folder), d = drag; setEdge(null);
+      if (!next || d?.type !== "folder") { dropProps(folder.id, `f:${folder.id}`).onDrop(e); return; }
+      e.preventDefault(); setDrag(null); setOver(null);
+      void send({ action: "placeFolder", folderId: d.id, targetId: folder.id, place: next.place }, `Moved the folder ${next.place} “${folder.name}”.`);
+    },
+  });
   const dragProps = (d: Drag) => ({
     draggable: !busy, onDragStart: (e: React.DragEvent) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", d.type === "campaign" ? d.key : d.id); setDrag(d); },
     onDragEnd: () => { setDrag(null); setOver(null); },
@@ -148,7 +171,8 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             over={over === `f:${item.folder.id}`} dragging={drag?.type === "folder" && drag.id === item.folder.id}
             toggle={() => toggleFolder(item.folder.id)} startRename={() => { setRenaming(item.folder.id); setRemoving(null); }} startRemove={() => { setRemoving(item.folder.id); setRenaming(null); }}
             stop={() => { setRenaming(null); setRemoving(null); }} send={send} filtered={filtered}
-            drag={dragProps({ type: "folder", id: item.folder.id })} drops={dropProps(item.folder.id, `f:${item.folder.id}`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
+            drag={dragProps({ type: "folder", id: item.folder.id })} drops={folderDrops(item.folder)} edge={edge?.id === item.folder.id ? edge.place : undefined}
+            canStep={d => canMoveSibling(folders, item.folder.id, d)} step={d => void send({ action: "stepFolder", folderId: item.folder.id, delta: d }, `Moved “${item.folder.name}” ${d < 0 ? "up" : "down"}.`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
             className={`campaigns-row${r.key === selectedKey ? " selected" : ""}${drag?.type === "campaign" && drag.key === r.key ? " dragging" : ""}`} style={{ "--depth": item.depth } as React.CSSProperties}>
             <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
             <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
@@ -233,13 +257,16 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
   </aside>;
 }
 
-function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, startRename, startRemove, stop, send, filtered, drag, drops }: {
+function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, startRename, startRemove, stop, send, filtered, drag, drops, edge, canStep, step }: {
   item: { folder: CampaignFolder; depth: number; count: number; open: boolean }; busy: boolean; renaming: boolean; removing: boolean; over: boolean; dragging: boolean; filtered: boolean;
   toggle: () => void; startRename: () => void; startRemove: () => void; stop: () => void; send: Send; drag: React.HTMLAttributes<HTMLDivElement>; drops: React.HTMLAttributes<HTMLDivElement>;
+  edge?: "before" | "after"; canStep: (delta: -1 | 1) => boolean; step: (delta: -1 | 1) => void;
 }) {
   const { folder, depth, count, open } = item, [name, setName] = useState(folder.name);
   const Icon = open ? FolderOpen : Folder;
-  return <div role="row" className={`campaigns-row campaigns-folder-row${over ? " over" : ""}${dragging ? " dragging" : ""}`} style={{ "--depth": depth } as React.CSSProperties} {...drag} {...drops}>
+  return <div role="row" className={`campaigns-row campaigns-folder-row${over ? " over" : ""}${dragging ? " dragging" : ""}`} style={{ "--depth": depth } as React.CSSProperties} data-drop-edge={edge} {...drag} {...drops}
+    onClick={e => { if (!filtered && !renaming && !(e.target as HTMLElement).closest("button, input, a, form")) toggle(); }}
+    onKeyDown={e => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); const d = e.key === "ArrowUp" ? -1 : 1; if (canStep(d) && !busy) step(d); } }}>
     <span role="cell" className="campaigns-folder-main">
       <button type="button" className="campaigns-icon campaigns-chevron" onClick={toggle} disabled={filtered} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>
       <Icon size={18} aria-hidden="true" className="campaigns-folder-icon" />
@@ -255,6 +282,8 @@ function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, sta
       <button type="button" className="campaigns-danger" disabled={busy} onClick={() => void send({ action: "removeFolder", folderId: folder.id }, "Folder removed. Its campaigns moved up a level.", stop)}>Remove folder</button>
       <button type="button" className="campaigns-secondary" onClick={stop}>Keep it</button>
     </span> : <span role="cell" className="campaigns-folder-actions">
+      <button type="button" className="campaigns-mini" disabled={busy || !canStep(-1)} onClick={() => step(-1)} aria-label={`Move ${folder.name} up`}><ChevronUp size={13} aria-hidden="true" />Up</button>
+      <button type="button" className="campaigns-mini" disabled={busy || !canStep(1)} onClick={() => step(1)} aria-label={`Move ${folder.name} down`}><ChevronDown size={13} aria-hidden="true" />Down</button>
       <button type="button" className="campaigns-mini" disabled={busy} onClick={() => { setName(folder.name); startRename(); }} aria-label={`Rename ${folder.name}`}><Pencil size={13} aria-hidden="true" />Rename</button>
       <button type="button" className="campaigns-mini" disabled={busy} onClick={startRemove} aria-label={`Remove ${folder.name}`}><Trash2 size={13} aria-hidden="true" />Remove</button>
     </span>}

@@ -169,3 +169,18 @@ test('folders can be made before a Maptable workspace exists', async () => {
   summary=await campaignAction(s,{action:'moveCampaign',key:'e:e1',folderId:id});
   assert.equal(rowOf(summary,'e:e1').folderId,id);
 });
+
+test('stepFolder and placeFolder re-order folders and keep their saved order', async () => {
+  const r=await folderSetup(),{s}=r;
+  let summary=await campaignAction(s,{action:'newFolder',name:'Aaa'});
+  summary=await campaignAction(s,{action:'newFolder',name:'Bbb'});
+  const top=()=>summary.folders.filter(f=>f.parentId===null).map(f=>f.name);
+  const before=top(), bbb=summary.folders.find(f=>f.name==='Bbb').id, aaa=summary.folders.find(f=>f.name==='Aaa').id;
+  assert.deepEqual(before.slice(-2),['Aaa','Bbb']);
+  summary=await campaignAction(s,{action:'stepFolder',folderId:bbb,delta:-1});
+  assert.deepEqual(top().slice(-2),['Bbb','Aaa']);
+  summary=await campaignAction(s,{action:'placeFolder',folderId:bbb,targetId:aaa,place:'after'});
+  assert.deepEqual(top().slice(-2),['Aaa','Bbb']);
+  await assert.rejects(()=>campaignAction(s,{action:'placeFolder',folderId:'fa',targetId:'fb',place:'before'}),/inside itself/);
+  await assert.rejects(()=>campaignAction(s,{action:'stepFolder',folderId:'m1',delta:1}),/no longer exists/);
+});

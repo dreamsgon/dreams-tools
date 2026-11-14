@@ -5,6 +5,7 @@ import { canMoveCollection, effectPresetSchema, uid, type Effect, type EffectPre
 import { Field, Modal, NumberField, Toggle } from "./dialogs";
 import EffectAppearance from "./effect-appearance";
 import LibraryOrganizer from "./library-organizer";
+import { moveSibling, placeBeside } from "@/lib/folder-order";
 
 const icons = { circle: Circle, square: Square, line: Minus, cone: Triangle, custom: Pentagon };
 type Props = { workspace: Workspace; commit: (fn: (w: Workspace) => void) => void; onUsePreset: (preset: EffectPreset) => void; selectedEffect?: Effect };
@@ -33,6 +34,8 @@ export default function EffectPresets({ workspace, commit, onUsePreset, selected
       onCreateFolder={name => commit(w => { w.effectPresetFolders.push({ id: uid(), name, kind: "folder", parentId: null }); })}
       onRenameFolder={(id, name) => commit(w => { const folder = w.effectPresetFolders.find(f => f.id === id); if (folder) folder.name = name; })}
       onMoveFolder={(id, parentId) => commit(w => { const folder = w.effectPresetFolders.find(f => f.id === id); if (folder && canMoveCollection(w.effectPresetFolders, id, parentId)) folder.parentId = parentId; })}
+      onStepFolder={(id, delta) => commit(w => { w.effectPresetFolders = moveSibling(w.effectPresetFolders, id, delta); })}
+      onPlaceFolder={(id, targetId, place) => commit(w => { const t = w.effectPresetFolders.find(f => f.id === targetId); if (t && canMoveCollection(w.effectPresetFolders, id, t.parentId)) w.effectPresetFolders = placeBeside(w.effectPresetFolders, id, targetId, place); })}
       onRemoveFolder={id => { commit(w => { const parent = w.effectPresetFolders.find(f => f.id === id)?.parentId ?? null; for (const folder of w.effectPresetFolders) if (folder.parentId === id) folder.parentId = parent; for (const key of Object.keys(w.presetLocations)) if (w.presetLocations[key] === id) w.presetLocations[key] = parent; w.effectPresetFolders = w.effectPresetFolders.filter(f => f.id !== id); }); if (location === id) setLocation(null); }}
       onMoveItem={(id, target) => commit(w => { w.presetLocations[id] = target; })}
       renderItem={preset => { const Icon = icons[preset.type]; return <div className="token-list-row"><button title="Use preset to draw on the map" onClick={() => onUsePreset(preset)}><Icon size={18} color={preset.color} /><span>{preset.name}</span></button><button className="text-button" aria-label={`Edit preset ${preset.name}`} onClick={() => open(preset)}>Edit</button></div>; }} />

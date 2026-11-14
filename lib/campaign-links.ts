@@ -102,7 +102,7 @@ export type LayoutItem =
 
 /**
  * The Campaigns table in display order, like Maptable's organizer: inside each level
- * folders come first, then campaigns, each by name. `rows` are the campaigns to show
+ * folders come first (in their saved order), then campaigns by name. `rows` are the campaigns to show
  * (after any filters). Folders that are in `collapsed` hide their contents unless
  * `filtered` is set, which shows only folders holding a match, all expanded.
  */
@@ -114,7 +114,7 @@ export function campaignLayout(folders: CampaignFolder[], rows: CampaignRow[], c
   const total = (id: string): number => (inside.get(id)?.length ?? 0) + (subs.get(id) ?? []).reduce((n, f) => n + total(f.id), 0);
   const out: LayoutItem[] = [];
   const walk = (parent: string | null, depth: number) => {
-    for (const f of [...(subs.get(parent) ?? [])].sort(byName)) {
+    for (const f of subs.get(parent) ?? []) { // folders keep their saved order (they can be re-ordered); campaigns are by name
       const count = total(f.id);
       if (filtered && !count) continue;
       const open = filtered || !collapsed.has(f.id);

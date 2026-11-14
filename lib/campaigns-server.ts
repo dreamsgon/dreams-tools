@@ -9,6 +9,7 @@ import { dashboardSchema, excerpt } from "./encyclopedia/dashboard.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
+import { moveSibling, placeBeside } from "./folder-order.ts";
 import { applyPairs, campaignFolders, campaignSummary, cleanName } from "./campaign-links.ts";
 
 /*
@@ -65,6 +66,8 @@ export type CampaignAction =
   | { action: "removeFolder"; folderId: string }
   | { action: "moveCampaign"; key: string; folderId: string | null }
   | { action: "moveFolder"; folderId: string; parentId: string | null }
+  | { action: "stepFolder"; folderId: string; delta: -1 | 1 }
+  | { action: "placeFolder"; folderId: string; targetId: string; place: "before" | "after" }
   | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
@@ -168,6 +171,14 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     const id = folderOf(mapNow, body.folderId), parentId = parentOf(mapNow, body.parentId);
     if (!canMoveCollection(mapNow.collections, id, parentId)) throw new Error("A folder can't go inside itself or one of its own folders.");
     await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === id ? { ...c, parentId } : c) });
+  } else if (body.action === "stepFolder") {
+    const id = folderOf(mapNow, body.folderId), delta = body.delta === -1 ? -1 : 1;
+    await saveMap(s, both.map, { ...mapNow, collections: moveSibling(mapNow.collections, id, delta, c => c.kind === "folder") });
+  } else if (body.action === "placeFolder") {
+    const id = folderOf(mapNow, body.folderId), targetId = folderOf(mapNow, body.targetId), place = body.place === "before" ? "before" : "after";
+    const target = mapNow.collections.find(c => c.id === targetId)!;
+    if (!canMoveCollection(mapNow.collections, id, target.parentId)) throw new Error("A folder can't go inside itself or one of its own folders.");
+    await saveMap(s, both.map, { ...mapNow, collections: placeBeside(mapNow.collections, id, targetId, place) });
   } else throw new Error("Unknown action.");
   return summaryOf(await readBoth(s));
 }

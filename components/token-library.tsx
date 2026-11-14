@@ -8,6 +8,7 @@ import { Modal } from "./dialogs";
 import { confirmDialog } from "./confirm-dialog";
 import { useFolderExpansion } from "./folder-expansion";
 import LibraryOrganizer from "./library-organizer";
+import { moveSibling, placeBeside } from "@/lib/folder-order";
 import TokenFace from "./token-face";
 import TokenEditor from "./token-editor";
 import { TokenTile, usePlacementGesture } from "./token-placement";
@@ -136,6 +137,8 @@ export default function TokenLibrary({ workspace: w, commit, campaignId, armed, 
         onRenameFolder={(id, name) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && name.trim()) f.name = name.trim().slice(0, 120); })}
         canMoveFolder={(id, parentId) => parentId === null || w.tokenFolders.find(f => f.id === id)?.campaignId === w.tokenFolders.find(f => f.id === parentId)?.campaignId}
         onMoveFolder={(id, parentId) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && (parentId === null || next.tokenFolders.some(parent => parent.id === parentId && parent.campaignId === f.campaignId)) && canMoveCollection(next.tokenFolders, id, parentId)) f.parentId = parentId; })}
+        onStepFolder={(id, delta) => commit(next => { const shown = new Set(folders.map(f => f.id)); next.tokenFolders = moveSibling(next.tokenFolders, id, delta, f => shown.has(f.id)); })}
+        onPlaceFolder={(id, targetId, place) => commit(next => { const f = next.tokenFolders.find(f => f.id === id), t = next.tokenFolders.find(f => f.id === targetId); if (f && t && f.campaignId === t.campaignId && canMoveCollection(next.tokenFolders, id, t.parentId)) next.tokenFolders = placeBeside(next.tokenFolders, id, targetId, place); })}
         onRemoveFolder={id => commit(next => {
           const f = next.tokenFolders.find(f => f.id === id); if (!f) return;
           next.tokenFolders = next.tokenFolders.filter(f => f.id !== id);

@@ -2254,3 +2254,10 @@ button.primary, .rpg-open { font-weight:500; }
 .co-gm-bar > span { flex:1; min-width:min(100%, 240px); }
 .co-gm-bar a { color:var(--green); font-weight:600; white-space:nowrap; text-decoration:underline; }
 .is-co-gm :is(.scenes-backups, .dashboard-actions > .primary, .organizer-row:has(.collection-pin) > .collection-edit) { display:none !important; }
+
+/* Folder rows: whole row toggles, edges show where a dragged folder will land. */
+.organizer-row[data-drop-edge="before"] { box-shadow: 0 -3px 0 0 var(--accent, var(--green)); }
+.organizer-row[data-drop-edge="after"] { box-shadow: 0 3px 0 0 var(--accent, var(--green)); }
+.organizer-row[data-folder-drop] { cursor: pointer; }
+.organizer-order { gap: 6px; }
+.organizer-order button { display: inline-flex; align-items: center; gap: 4px; }
