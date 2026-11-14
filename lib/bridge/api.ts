@@ -12,6 +12,8 @@ import { applyImport, planFields, type ImportChoice, type ImportFile } from "../
 import { exportSheet, type SheetFile } from "../encyclopedia/sheet-export.ts";
 import { newItemId, type Sheet } from "../encyclopedia/sheet-link.ts";
 import { campaignExport, defaultCharacter, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
+import { z } from "zod";
+import { parseDice } from "../rolls.ts";
 import { allows, syncInfo, syncKinds, type BridgeGrant, type SyncKind } from "./keys.ts";
 
 export const BRIDGE_API_VERSION = 1;
@@ -48,6 +50,7 @@ export function bridgeInfo(data: Workspace, grant: BridgeGrant, revision: number
       character: "GET /api/bridge/characters/{id} · PUT /api/bridge/characters/{id} (sheet, optional baseUpdatedAt)",
       hp: "POST /api/bridge/characters/{id}/hp ({value, max?})",
       pages: "GET /api/bridge/pages?since={ISO time}",
+      rolls: "POST /api/bridge/rolls ({title, formula, total, detail?, who?}) posts to the campaign's Discord rolls channel",
     },
   };
 }
@@ -133,6 +136,18 @@ export function setHp(data: Workspace, campaignId: string, id: string, input: { 
   items.sort((a, b) => (a.kind === "hp" ? 0 : a.kind === "maxHp" ? 1 : 2) - (b.kind === "hp" ? 0 : b.kind === "maxHp" ? 1 : 2));
   const next: Entry = { ...e, character: { ...character, sheet: { ...sheet, items } }, editedBy: undefined, updatedAt: now };
   return { workspace: { ...data, entries: data.entries.map(x => x.id === e.id ? next : x) }, hp: { value, max: max ?? Number(items.find(x => x.kind === "maxHp")?.value ?? value) } };
+}
+
+const rollSchema = z.object({
+  title: z.string().trim().min(1).max(120), formula: z.string().trim().min(1).max(200), total: z.number().finite(),
+  detail: z.string().trim().max(500).optional(), who: z.string().trim().max(80).optional(),
+});
+/** A roll made at the other table, checked before it goes to Discord: dice the roller understands, and a total. */
+export function bridgeRoll(input: unknown) {
+  const r = rollSchema.safeParse(input);
+  if (!r.success) throw new BridgeError(400, "A roll needs a title, a formula and a total.");
+  try { parseDice(r.data.formula); } catch { throw new BridgeError(400, `“${r.data.formula}” isn’t dice RPG Tools can show. Use NdS with + and -, kh/kl, ! for exploding, >=N to count successes, or dF.`); }
+  return { kind: "roll" as const, title: r.data.title, formula: r.data.formula.replace(/\s+/g, ""), total: r.data.total, detail: r.data.detail ?? "", ...(r.data.who ? { who: r.data.who } : {}) };
 }
 
 export type { SheetFile };

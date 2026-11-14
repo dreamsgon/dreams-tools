@@ -25,7 +25,7 @@ export const preflight = () => new Response(null, { status: 204, headers: cors }
 // A sync checks often while the table is open; this keeps a runaway loop from hammering the store.
 const throttle = createThrottle(240, 60_000);
 
-type Ctx = { grant: BridgeGrant; store: EncyclopediaStore };
+type Ctx = { grant: BridgeGrant; store: EncyclopediaStore; bucket: ReturnType<typeof getBucket> };
 /** Runs a bridge call: checks the key, the rate and the body size, and turns errors into JSON with the right status. */
 export async function bridge(request: Request, run: (ctx: Ctx) => Promise<Response>) {
   const key = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
@@ -36,7 +36,7 @@ export async function bridge(request: Request, run: (ctx: Ctx) => Promise<Respon
     const bucket = getBucket(), grant = await bridgeGrant(bucket, key);
     if (!grant) return wrong();
     if (throttle.hit(grant.keyId)) return reply({ error: "Too many requests. Wait a minute and sync again." }, 429);
-    return await run({ grant, store: new EncyclopediaStore(bucket) });
+    return await run({ grant, store: new EncyclopediaStore(bucket), bucket });
   } catch (e) {
     if (e instanceof BridgeError) return reply({ error: e.message, ...(e.body ?? {}) }, e.status);
     if (e instanceof z.ZodError || e instanceof SyntaxError) return reply({ error: "The request isn’t what this endpoint takes. See GET /api/bridge." }, 400);

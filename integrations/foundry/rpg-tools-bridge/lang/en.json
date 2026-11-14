@@ -1,0 +1,14 @@
+{
+  "RPGTB.Address.Name": "RPG Tools address",
+  "RPGTB.Address.Hint": "The bridge address shown when you made the key, such as https://your-rpg-tools-site/api/bridge.",
+  "RPGTB.Key.Name": "Bridge key",
+  "RPGTB.Key.Hint": "The rpgb_ key from AI & GitHub › Other tables in the Encyclopedia. Kept in this browser only, so players never get it.",
+  "RPGTB.Who.Name": "Characters to bring in",
+  "RPGTB.Who.Hint": "Player characters and companions, or every character the campaign can see.",
+  "RPGTB.Who.Party": "Player characters and companions",
+  "RPGTB.Who.All": "Every character",
+  "RPGTB.Rolls.Name": "Send rolls to RPG Tools",
+  "RPGTB.Rolls.Hint": "Public rolls in chat go to the campaign's Discord rolls channel. Whispered and blind rolls never do.",
+  "RPGTB.SyncNow": "Sync with RPG Tools",
+  "RPGTB.SheetRolls": "RPG Tools rolls"
+}
