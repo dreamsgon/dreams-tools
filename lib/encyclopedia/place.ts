@@ -1,7 +1,7 @@
 import type { Workspace } from "./world-model.ts";
 
 /** Where you are in the Encyclopedia, kept in the address so a refresh or Back returns there. */
-export const placeViews = ["dashboard", "overview", "characters", "maps", "calendar", "tables", "templates", "quests", "codex", "look"] as const;
+export const placeViews = ["dashboard", "overview", "characters", "maps", "calendar", "tables", "templates", "quests", "codex", "relationships", "look"] as const;
 export type PlaceView = typeof placeViews[number];
 /** `tab` is the open tab of an open page (for example "profile"); absent means the page's first tab. */
 export type Place = { worldId: string; campaignId: string | null; view: PlaceView; entryId: string | null; tab?: string | null };
