@@ -63,7 +63,11 @@ import {
   Grid3x3,
   LayoutGrid,
   FolderPlus,
+  Users,
 } from "lucide-react";
+import NextLink from "next/link";
+import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
+import { maptableCoGmRefusal } from "@/lib/maptable-co-gm";
 import { confirmDialog } from "./confirm-dialog";
 import SaveChip from "./save-chip";
 import { useAutosave } from "./use-autosave";
@@ -168,10 +172,14 @@ export default function MapApp(props: { navigationScope?: string } = {}) {
   useIdlePreload(preloadParts);
   return <FolderPreferenceScope.Provider value={props.navigationScope ?? "local"}><MapAppContent {...props} /></FolderPreferenceScope.Provider>;
 }
+/** The remembered-view scope: a co-GM keeps their own, apart from their own Maptable. */
+const scopeOf = (scope?: string) => scope && mapMemberRef() ? `${scope}:m:${mapMemberRef()}` : scope;
 function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const navigationRestored = useRef(false);
+  const memberInfo = useRef<{ ownerName: string; campaignId: string; locked?: string[] } | null>(null);
   const [navigationReady, setNavigationReady] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace | null>(null),
+    [member, setMember] = useState<{ ownerName: string; campaignId: string; locked?: string[] } | null>(null),
     [loadError, setLoadError] = useState(""),
     [saveStatus, setSaveStatus] = useState("Loading"),
     [saveError, setSaveError] = useState("");
@@ -294,7 +302,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   useEffect(() => {
     if (!navigationReady || !navigationScope || !workspace) return;
-    remember(navigationStorageKey(navigationScope), JSON.stringify({
+    remember(navigationStorageKey(scopeOf(navigationScope)!), JSON.stringify({
       version: 1, dashboard, creatorOpen, panel, sidebar, activeId: workspace.activeId,
       location, dashboardLocation, conditionLocation, overview,
     }));
@@ -329,6 +337,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   useEffect(()=>{
     let active=true;
     setSettings(s=>({...s,discordConfigured:false}));
+    if (mapMemberRef()) return () => { active = false; };
     api<{s3Configured:boolean;discordConfigured:boolean}>("/api/settings"+(campaignId?`?campaignId=${encodeURIComponent(campaignId)}`:""))
       .then(value=>{if(active)setSettings(value);}).catch(()=>{});
     return ()=>{active=false;};
@@ -350,14 +359,17 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       const result = await api<{
         workspace: Workspace | null;
         revision: string | null;
-      }>("/api/workspace");
+        member?: { ownerName: string; campaignId: string; locked?: string[] };
+      }>(mapWorkspaceUrl());
+      memberInfo.current = result.member ?? null;
+      setMember(result.member ?? null);
       let data = result.workspace
         ? workspaceSchema.parse(result.workspace)
         : initialWorkspace();
       loadEpoch.current++;
       acknowledged.current=result.workspace?data:null;
       let saved = null;
-      saved = navigationScope ? parseNavigationState(readRemembered(navigationStorageKey(navigationScope))) : null;
+      saved = navigationScope ? parseNavigationState(readRemembered(navigationStorageKey(scopeOf(navigationScope)!))) : null;
       // /maptable?scene=<id> (from an Encyclopedia link) opens that scene once, then the address is tidied.
       let requested: string | null = null, requestedCampaign: string | null = null;
       if (!navigationRestored.current) { try { const query = new URLSearchParams(window.location.search); requested = query.get("scene"); requestedCampaign = query.get("campaign"); } catch { requested = null; } }
@@ -436,7 +448,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   }, []);
   const rebase = useCallback(async () => {
     try {
-      const response = await fetch("/api/workspace", { cache: "no-store" });
+      const response = await fetch(mapWorkspaceUrl(), { cache: "no-store" });
       if (!response.ok) return false;
       const result = await readJsonResponse(response) as { workspace: Workspace | null; revision: string | null };
       if (!result.workspace || !takeIn(workspaceSchema.parse(result.workspace), result.revision)) return false;
@@ -467,7 +479,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       const start = snapshot();
       controller = new AbortController();
       try {
-        const response = await fetch("/api/workspace", {
+        const response = await fetch(mapWorkspaceUrl(), {
           cache: "no-store", signal: controller.signal,
           headers: start.revision ? { "If-None-Match": `"${start.revision}"` } : {},
         });
@@ -534,6 +546,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   }, []);
   const save = useCallback(() => saveWorkspace({
     state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus: reportSave, setSaveError, rebase,
+    request: (input, init) => fetch(typeof input === "string" && input.split("?")[0] === "/api/workspace" && mapMemberRef() ? mapWorkspaceUrl() : input, init),
   }), [rebase, reportSave]);
   const manualSave = useCallback(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -576,6 +589,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         if(!token)area.tokenId=null;
       }
       if (JSON.stringify(next) === JSON.stringify(previous)) return;
+      const ref = mapMemberRef(), co = memberInfo.current;
+      if (ref && co) { const refused = maptableCoGmRefusal(previous, next, co.campaignId, ref, new Set(co.locked ?? [])); if (refused) { setNotice(refused); return; } }
       history.current = [...history.current.slice(-29), previous];
       future.current = [];
       state.current = next;
@@ -828,7 +843,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // A character's picture is copied into Maptable's assets once, framed the way its page frames the token.
   const pictureAsset = async (c: EncyclopediaCharacter) => {
     if (!c.picture) return null;
-    const r = await fetch("/api/encyclopedia/map-images?id=" + encodeURIComponent(c.picture.imageId));
+    const r = await fetch(bookImageUrl(c.picture.imageId));
     if (!r.ok) throw new Error(`The picture for ${c.name} could not be loaded. Try again, or add it without one from Saved tokens.`);
     const { src } = await uploadAsset(await r.blob(), `${c.name}.png`), id = uid();
     commit(w => { w.assets.push({ id, name: c.name.slice(0, 120), src, width: c.picture!.width, height: c.picture!.height, kind: "image" }); w.assetLocations[id] = null; w.assetCampaigns[id] = campaignId; });
@@ -1044,7 +1059,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <MapIcon size={28} />
           <a href="/" title="RPG Tools home">Maptable</a>
         </div>
-        <p>{loadError || "Opening your table…"}</p>
+        <p role={loadError ? "alert" : undefined}>{loadError || "Opening your table…"}</p>
         {loadError && (
           <button className="primary" onClick={() => void load()}>
             Try again
@@ -1092,8 +1107,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
-  if (dashboard) return <main className="campaign-dashboard">
-    <header><ToolSwitch active="maptable" /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions">{saveChip}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
+  const coGmBar = member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true" /><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a co-GM here. Your changes save to their maps.</span><a href={`/encyclopedia#m-${mapMemberRef()}`}>Open the Encyclopedia</a><NextLink href="/campaigns">Back to Campaigns</NextLink></div>;
+  const encyclopediaHref = member ? `/encyclopedia#m-${mapMemberRef()}` : undefined;
+  if (dashboard) return <main className={"campaign-dashboard" + (member ? " is-co-gm" : "")}>
+    <header><ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" />{overviewOpen ? <><button className="crumb crumb-home" onClick={() => setOverview(null)}><LayoutDashboard size={15} aria-hidden="true" />Campaigns</button><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{workspace.collections.find(c => c.id === overview.id)?.name ?? "Not in a campaign"}</strong></> : <strong aria-current="page">Campaigns</strong>}</nav><div className="header-actions">{saveChip}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
+    {coGmBar}
     {overviewOpen ? <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={overview.id}
       lastSceneId={campaignFor(scene.containerId) === overview.id ? scene.id : null} open={enterScene} back={() => setOverview(null)}
       addScenes={() => { const target = campaignFor(scene.containerId) === overview.id ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === overview.id); if (target) { enterScene(target.id); setNewMapType("encounter"); setDialog("add-scenes"); } }} /></div> :
@@ -1114,38 +1132,39 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     </div>}
   </main>;
   return (
-    <main className="app-shell" data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>
+    <main className={"app-shell" + (member ? " is-co-gm" : "")} data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>
       <header className="app-header">
-        <ToolSwitch active="maptable" />
+        <ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} />
         <div className="header-scene">
           <span className="divider" />
           <Breadcrumbs items={sceneTrail()} />
         </div>
         <button className="header-campaigns-compact" onClick={() => {setDashboard(true);setOverview(null);setGridAdjust(false);}}><ChevronLeft size={17} aria-hidden="true" />Campaigns</button>
-        {campaignId && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} scene={scene?.name} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
+        {campaignId && !member && <AiActivity maptableCampaignId={campaignId} combat={aiCombat} scene={scene?.name} onChanged={() => window.dispatchEvent(new Event("focus"))} onSuggestedMoves={setSuggestedMoves}/>}
         {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} onClick={()=>setMobileHeaderOpen(v=>!v)}>Map menu</button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen}>
           <AppearanceMenu />
           <button aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}>Token gallery</button>
-          <button
+          {!member && <button
             className="icon-button"
             title="Connections"
             aria-label="Connections"
             onClick={() => setDialog("connections")}
           >
             <Link size={19} />
-          </button>
-          <button
+          </button>}
+          {!member && <button
             className="primary share-button"
             onClick={() => setDialog("export")}
           >
             <Share2 size={17} />
             <span>Share map</span>
-          </button>
+          </button>}
           <AccountLink />
         </div>
       </header>
+      {coGmBar}
       <div className="workspace">
         <nav className="rail" aria-label="Workspace tools" onClick={()=>setMobileToolsOpen(false)}>
           <button
@@ -1271,7 +1290,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   <SceneOrganizer workspace={workspace} rootId={campaignId} location={destination} setLocation={setLocation}
                     commit={commit} activate={activate} search={search} newFolderRequest={folderRequest}
                     onSettings={id=>{activate(id);setSceneTab("general");setPanel("scene");}} />
-                  <details className="scenes-backups">
+                  <details className="scenes-backups" hidden={!!member}>
                     <summary>Backups and import</summary>
                   <h3>Backups</h3>
                   <p className="muted">

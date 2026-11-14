@@ -6,7 +6,7 @@ import { memberRefPattern } from "./encyclopedia/member-workspace-server";
 import { privateHeaders } from "./server";
 import { workspaceBody, storedJson } from "./transfers";
 import { loadWorkspace, updateWorkspace, applyWorkspacePatch, type WorkspacePatch } from "./workspace-storage";
-import { maptableExport, applyMaptableCoGm, MapCoGmError } from "./maptable-co-gm";
+import { maptableExport, applyMaptableCoGm, lockedPictures, MapCoGmError } from "./maptable-co-gm";
 
 /**
  * A co-GM in the GM's Maptable: /maptable#m-<ref> reads and saves /api/workspace?member=<ref>. Every request is
@@ -49,7 +49,7 @@ export async function memberMapsGet(request: Request, ref: string) {
   const stored = await loadWorkspace(bucket, grant.prefix);
   const copy = stored ? maptableExport(stored.workspace, grant.campaignId, ref) : null;
   if (!stored || !copy) return json({ error: "The GM hasn't made any maps in this campaign yet." }, 404);
-  const member = { ownerName: grant.ownerName, campaignId: grant.campaignId };
+  const member = { ownerName: grant.ownerName, campaignId: grant.campaignId, locked: lockedPictures(stored.workspace, grant.campaignId) };
   // Large copies go through a transfer, the same as the GM's own (lib/transfers.ts), staged in the co-GM's storage.
   return storedJson(bucket, await userPrefix(), { workspace: copy, revision: stored.revision, member }, { headers: { ...privateHeaders, ETag: `"${stored.revision}"` } });
 }

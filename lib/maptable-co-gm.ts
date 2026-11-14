@@ -13,13 +13,15 @@ export class MapCoGmError extends Error {}
 const no = (message: string): never => { throw new MapCoGmError(message); };
 type Keyed = { id: string };
 
-/** The campaign and the folders inside it, at any depth. */
+/** The campaign and the folders inside it, at any depth. A campaign nested inside it is not part of it, nor is anything under that. */
 function subtree(w: Workspace, campaignId: string) {
   const ids = new Set([campaignId]);
-  for (let grew = true; grew;) { grew = false; for (const c of w.collections) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); grew = true; } }
+  for (let grew = true; grew;) { grew = false; for (const c of w.collections) if (c.parentId && c.kind !== "campaign" && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); grew = true; } }
   return ids;
 }
 const inCampaign = (campaign: string, value: string | null | undefined) => value === undefined || value === null || value === campaign;
+
+const isForeign = (owner: string | null | undefined, campaign: string) => owner !== undefined && owner !== null && owner !== campaign;
 
 /** Which of the GM's things a co-GM's copy holds. */
 function scope(w: Workspace, campaignId: string) {
@@ -36,19 +38,33 @@ function scope(w: Workspace, campaignId: string) {
   for (const c of w.conditions) if (c.assetId) used.add(c.assetId);
   const assets = w.assets.filter(a => used.has(a.id) || inCampaign(campaignId, w.assetCampaigns[a.id]));
   const tokenFolders = (w.tokenFolders ?? []).filter(f => inCampaign(campaignId, f.campaignId));
-  return { collections, scenes: new Set(scenes.map(s => s.id)), tokens: new Set(tokens.map(t => t.id)), assets: new Set(assets.map(a => a.id)), tokenFolders: new Set(tokenFolders.map(f => f.id)) };
+  // Pictures this campaign uses but the GM gave to another of their campaigns: the co-GM can see them, not change them.
+  const locked = new Set(assets.filter(a => isForeign(w.assetCampaigns[a.id], campaignId)).map(a => a.id));
+  return { locked, collections, scenes: new Set(scenes.map(s => s.id)), tokens: new Set(tokens.map(t => t.id)), assets: new Set(assets.map(a => a.id)), tokenFolders: new Set(tokenFolders.map(f => f.id)) };
 }
 
 const pick = <T,>(record: Record<string, T>, keys: Set<string>) => Object.fromEntries(Object.entries(record).filter(([k]) => keys.has(k)));
 /** `/api/assets?id=…` and `/api/s3?key=…` in the GM's copy, and the same with `&member=<ref>` in a co-GM's. */
 const withMember = (src: string, ref: string) => /^\/api\/(assets|s3)\?/.test(src) ? `${src}&member=${ref}` : src;
-function withoutMember(src: string, ref: string) {
-  if (!/^\/api\/(assets|s3)\?/.test(src)) return src;
-  const tail = `&member=${ref}`;
-  return src.endsWith(tail) && !src.slice(0, -tail.length).includes("&member=") ? src.slice(0, -tail.length) : no("Co-GMs can use the pictures in this campaign and add new ones here. That picture is somewhere else.");
+const elsewhere = "Co-GMs can use the pictures in this campaign and add new ones here. That picture is somewhere else.";
+/** A co-GM's picture address back in the GM's form. An address unchanged from the GM's own keeps the GM's exact spelling. */
+function withoutMember(src: string, ref: string, original?: string) {
+  if (/^https:\/\//.test(src)) return src;
+  if (original !== undefined && withMember(original, ref) === src) return original;
+  const kind = /^\/api\/assets\?/.test(src) ? "assets" : /^\/api\/s3\?/.test(src) ? "s3" : null;
+  if (!kind) return no(elsewhere);
+  let url: URL;
+  try { url = new URL(src, "https://x"); } catch { return no(elsewhere); }
+  const param = kind === "assets" ? "id" : "key";
+  const value = url.searchParams.getAll(param), member = url.searchParams.getAll("member");
+  if (url.pathname !== `/api/${kind}` || src.includes("#") || value.length !== 1 || !value[0] || member.length !== 1 || member[0] !== ref || [...url.searchParams.keys()].length !== 2) return no(elsewhere);
+  return `/api/${kind}?${param}=${encodeURIComponent(value[0])}`;
 }
 
 /** The copy a co-GM opens. Null when the campaign is gone or has no maps yet. */
+/** The pictures a co-GM can see but only the GM can change: the campaign uses them, another of the GM's campaigns owns them. */
+export const lockedPictures = (w: Workspace, campaignId: string) => [...scope(w, campaignId).locked];
+
 export function maptableExport(w: Workspace, campaignId: string, ref: string): Workspace | null {
   const campaign = w.collections.find(c => c.id === campaignId && c.kind === "campaign");
   if (!campaign) return null;
@@ -77,7 +93,9 @@ export function maptableExport(w: Workspace, campaignId: string, ref: string): W
  * Why a co-GM's copy can't become `after`, or null when it can. The app asks before each change, so a co-GM never
  * gets stuck on a save the server would refuse; the server asks again.
  */
-export function maptableCoGmRefusal(before: Workspace, after: Workspace, campaignId: string, ref: string): string | null {
+export function maptableCoGmRefusal(before: Workspace, after: Workspace, campaignId: string, ref: string, locked: ReadonlySet<string> = new Set()): string | null {
+  const lists: Keyed[][] = [after.scenes, after.assets, after.tokenLibrary, after.conditions, after.effectPresets, after.collections, after.assetFolders, after.conditionFolders, after.effectPresetFolders, after.tokenFolders ?? []];
+  if (lists.some(l => new Set(l.map(x => x.id)).size !== l.length)) return "Two things share an id; reload and try again.";
   const was = before.collections.find(c => c.id === campaignId), now = after.collections.find(c => c.id === campaignId);
   if (!now || now.kind !== "campaign" || now.parentId !== null) return "Only the GM can move or delete the campaign itself.";
   if (was && now.name !== was.name) return "Only the GM can rename the campaign.";
@@ -90,6 +108,21 @@ export function maptableCoGmRefusal(before: Workspace, after: Workspace, campaig
     if (old?.src === a.src) continue;
     try { withoutMember(a.src, ref); } catch (e) { return (e as Error).message; }
   }
+  const owned = (c: string | null | undefined) => c === undefined || c === null || c === campaignId;
+  if (![...Object.values(after.assetCampaigns), ...Object.values(after.libraryCampaigns), ...(after.tokenFolders ?? []).map(f => f.campaignId)].every(owned)) return "Keep pictures and tokens in this campaign.";
+  for (const id of locked) {
+    const was = before.assets.find(a => a.id === id), a = after.assets.find(x => x.id === id);
+    if (was && (!a || JSON.stringify(a) !== JSON.stringify(was) || (after.assetCampaigns[id] ?? null) !== (before.assetCampaigns[id] ?? null) || (after.assetLocations[id] ?? null) !== (before.assetLocations[id] ?? null)))
+      return "That picture belongs to another of the GM's campaigns, so only the GM can change it.";
+  }
+  // Shared by all the GM's campaigns: added to and edited freely, never deleted.
+  const kept = (was: Keyed[], now: Keyed[]) => { const ids = new Set(now.map(x => x.id)); return was.every(x => ids.has(x.id)); };
+  const shared = (items: Keyed[], campaigns: Record<string, string | null>) => items.filter(x => (campaigns[x.id] ?? null) === null);
+  if (!kept(shared(before.assets, before.assetCampaigns), after.assets) || !kept(shared(before.tokenLibrary, before.libraryCampaigns), after.tokenLibrary)
+    || !kept(before.conditions, after.conditions) || !kept(before.effectPresets, after.effectPresets) || !kept(before.assetFolders, after.assetFolders)
+    || !kept(before.conditionFolders, after.conditionFolders) || !kept(before.effectPresetFolders, after.effectPresetFolders)
+    || !kept((before.tokenFolders ?? []).filter(f => f.campaignId === null), after.tokenFolders ?? []))
+    return "Only the GM can delete things shared by all their campaigns.";
   return null;
 }
 
@@ -105,38 +138,50 @@ function mergeRecord<T>(full: Record<string, T>, inScope: Set<string>, known: Se
   const kept = Object.entries(full).filter(([k]) => !inScope.has(k));
   return Object.fromEntries([...kept, ...Object.entries(edited).filter(([k]) => inScope.has(k) || !known.has(k))]);
 }
+/** Things shared by all the GM's campaigns: the co-GM's edits in place, their additions at the end, the rest as the GM has them. */
+function mergeShared<T extends Keyed>(full: T[], edited: T[]): T[] {
+  const mine = new Map(edited.map(x => [x.id, x])), known = new Set(full.map(x => x.id));
+  return [...full.map(x => mine.get(x.id) ?? x), ...edited.filter(x => !known.has(x.id))];
+}
 
 /** A co-GM's save, put back into the GM's whole Maptable. Throws a MapCoGmError, with a message for them, if it can't be. */
 export function applyMaptableCoGm(full: Workspace, campaignId: string, ref: string, input: unknown): Workspace {
-  const edited = workspaceSchema.parse(input);
+  const incoming = workspaceSchema.safeParse(input);
+  if (!incoming.success) no(incoming.error.issues[0]?.message ?? "That change would break the maps.");
+  const edited = incoming.data!;
   const before = maptableExport(full, campaignId, ref) ?? no("This campaign's maps are gone.");
-  const refused = maptableCoGmRefusal(before, edited, campaignId, ref);
-  if (refused) no(refused);
   const s = scope(full, campaignId);
+  const refused = maptableCoGmRefusal(before, edited, campaignId, ref, s.locked);
+  if (refused) no(refused);
   const campaign = full.collections.find(c => c.id === campaignId)!;
   const all = <T extends Keyed>(items: T[]) => new Set(items.map(x => x.id));
+  const originals = new Map(full.assets.map(a => [a.id, a.src]));
+  // The GM's campaign for a picture stays when it is a different campaign's; otherwise the co-GM's choice, unsorted included.
+  const assetCampaigns = mergeRecord(full.assetCampaigns, s.assets, all(full.assets), edited.assetCampaigns);
+  for (const id of s.locked) assetCampaigns[id] = full.assetCampaigns[id];
   const next: Workspace = {
     ...full,
     scenes: merge(full.scenes, s.scenes, edited.scenes, "map"),
     collections: merge(full.collections, s.collections, edited.collections.map(c => c.id === campaignId ? { ...c, parentId: campaign.parentId } : c), "folder"),
-    assets: merge(full.assets, s.assets, edited.assets.map(a => ({ ...a, src: withoutMember(a.src, ref) })), "picture"),
-    assetCampaigns: mergeRecord(full.assetCampaigns, s.assets, all(full.assets), Object.fromEntries(Object.entries(edited.assetCampaigns).map(([id, c]) => [id, c === null && full.assetCampaigns[id] ? full.assetCampaigns[id] : c]))),
+    assets: merge(full.assets, s.assets, edited.assets.map(a => ({ ...a, src: withoutMember(a.src, ref, originals.get(a.id)) })), "picture"),
+    assetCampaigns,
     assetLocations: mergeRecord(full.assetLocations, s.assets, all(full.assets), edited.assetLocations),
     tokenLibrary: merge(full.tokenLibrary, s.tokens, edited.tokenLibrary, "token"),
     libraryCampaigns: mergeRecord(full.libraryCampaigns, s.tokens, all(full.tokenLibrary), edited.libraryCampaigns),
     libraryLocations: mergeRecord(full.libraryLocations, s.tokens, all(full.tokenLibrary), edited.libraryLocations),
     tokenFolders: merge(full.tokenFolders ?? [], s.tokenFolders, edited.tokenFolders ?? [], "token folder"),
     tokenFolderLocations: mergeRecord(full.tokenFolderLocations ?? {}, s.tokens, all(full.tokenLibrary), edited.tokenFolderLocations ?? {}),
-    // The shared table tools are all in the copy, so the co-GM's lists are the new ones.
-    conditions: edited.conditions, conditionFolders: edited.conditionFolders, conditionLocations: edited.conditionLocations,
-    effectPresets: edited.effectPresets, effectPresetFolders: edited.effectPresetFolders, presetLocations: edited.presetLocations,
-    assetFolders: edited.assetFolders,
+    // Shared table tools: the co-GM adds and edits, the GM's own stay.
+    conditions: mergeShared(full.conditions, edited.conditions),
+    conditionFolders: mergeShared(full.conditionFolders, edited.conditionFolders),
+    conditionLocations: mergeRecord(full.conditionLocations, all(full.conditions), all(full.conditions), edited.conditionLocations),
+    effectPresets: mergeShared(full.effectPresets, edited.effectPresets),
+    effectPresetFolders: mergeShared(full.effectPresetFolders, edited.effectPresetFolders),
+    presetLocations: mergeRecord(full.presetLocations, all(full.effectPresets), all(full.effectPresets), edited.presetLocations),
+    assetFolders: mergeShared(full.assetFolders, edited.assetFolders),
     // Which map the GM has open stays theirs.
     activeId: full.activeId,
   };
-  // Picture folders the GM's other pictures still sit in stay, even if the co-GM removed them from their copy.
-  const folders = new Map(full.assetFolders.map(f => [f.id, f]));
-  for (let id of [...Object.values(next.assetLocations), ...Object.values(next.libraryLocations)]) while (id && !next.assetFolders.some(f => f.id === id) && folders.has(id)) { next.assetFolders = [...next.assetFolders, folders.get(id)!]; id = folders.get(id)!.parentId; }
   if (!next.scenes.some(x => x.id === next.activeId)) next.activeId = next.scenes[0]?.id ?? no("Keep at least one map.");
   // A co-GM's new picture or token can't land in a campaign other than this one.
   for (const [id, c] of [...Object.entries(next.assetCampaigns), ...Object.entries(next.libraryCampaigns)]) if (!full.assets.some(a => a.id === id) && !full.tokenLibrary.some(t => t.id === id) && c !== null && c !== campaignId) no("Keep new pictures and tokens in this campaign.");
