@@ -3,6 +3,7 @@ import {useEffect,useState,useCallback,useRef} from 'react';
 import Link from 'next/link';
 import {ThemeToggle} from './theme';
 import {PlayerView} from './player-view';
+import {parsePlayerHash} from '@/lib/encyclopedia/player-place';
 import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
 import type {SheetState} from '@/lib/encyclopedia/player-sheet';
@@ -17,7 +18,7 @@ export default function PlayerClient(){
   catch(e){if(!controller.signal.aborted){setData(null);setError(e instanceof Error?e.message:'Could not refresh the campaign.');}}
   finally{if(request.current===controller){request.current=null;setUpdating(false);}}
  },[]);
- useEffect(()=>{const token=location.hash.slice(1);setToken(token);if(!/^(?:m-)?[a-f0-9]{64}$/.test(token)){setError('This player link is invalid. Ask your GM for a current link.');return;}
+ useEffect(()=>{const token=parsePlayerHash(location.hash).token;setToken(token);if(!/^(?:m-)?[a-f0-9]{64}$/.test(token)){setError('This player link is invalid. Ask your GM for a current link.');return;}
   // Background tabs stop polling and catch up as soon as they are shown again.
   void refresh(token);const timer=setInterval(()=>{if(!document.hidden)void refresh(token);},5000),focus=()=>{if(!document.hidden)void refresh(token);};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
   return()=>{clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);request.current?.abort();request.current=null;};

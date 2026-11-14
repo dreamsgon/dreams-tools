@@ -133,6 +133,9 @@ import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/worl
 import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
 import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
+import { maptableSearch, readMaptablePlace } from "@/lib/maptable-place";
+import { maptableTitle } from "@/lib/page-title";
+import { usePageTitle } from "./use-page-title";
 // Editors and panels that open on demand load as separate chunks; they are fetched while the
 // browser is idle (below) so the first open is still instant.
 const lazyParts = {
@@ -335,6 +338,19 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   };
   const campaignId = campaignFor(scene?.containerId ?? null);
   const campaign = workspace?.collections.find((c) => c.id === campaignId);
+  // The address names the open scene (or the open campaign's scene list), so it can be bookmarked. Other parameters stay.
+  const overviewCampaignId = dashboard && overview ? overview.id : null;
+  useEffect(() => {
+    if (!navigationReady || !workspace || creatorOpen) return;
+    const place = dashboard ? { campaignId: overviewCampaignId, sceneId: null } : { campaignId, sceneId: scene?.id ?? null };
+    try {
+      const search = maptableSearch(window.location.search, place);
+      if (search !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + search + window.location.hash);
+    } catch { /* The address is cosmetic. */ }
+  }, [navigationReady, workspace, creatorOpen, dashboard, overviewCampaignId, campaignId, scene?.id]);
+  usePageTitle(navigationReady && workspace ? maptableTitle(dashboard
+    ? { campaign: workspace.collections.find(c => c.id === overviewCampaignId)?.name }
+    : { scene: scene?.name, campaign: campaign?.name }) : "");
   // Map notes: the GM's Encyclopedia, read once a marker links a page or the Exploration panel opens.
   const [book,setBook]=useState<EncyclopediaWorkspace|null>(null),[bookError,setBookError]=useState(""),[playerNoteOpen,setPlayerNoteOpen]=useState<{id:string;key:string}|null>(null);
   // The player note closes when the view or the scene changes.
@@ -395,9 +411,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       acknowledged.current=result.workspace?data:null;
       let saved = null;
       saved = navigationScope ? parseNavigationState(readRemembered(navigationStorageKey(scopeOf(navigationScope)!))) : null;
-      // /maptable?scene=<id> (from an Encyclopedia link) opens that scene once, then the address is tidied.
+      // /maptable?campaign=<id>&scene=<id> (an Encyclopedia link or a bookmark) opens that scene; the address then follows the open scene.
       let requested: string | null = null, requestedCampaign: string | null = null;
-      if (!navigationRestored.current) { try { const query = new URLSearchParams(window.location.search); requested = query.get("scene"); requestedCampaign = query.get("campaign"); } catch { requested = null; } }
+      if (!navigationRestored.current) { try { const place = readMaptablePlace(window.location.search, data); requested = place.sceneId; requestedCampaign = place.campaignId; } catch { requested = null; } }
       const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
       const activeId = linked ?? (navigationRestored.current ? state.current?.activeId : saved?.activeId);
       if (activeId) data = preserveActiveScene(data, activeId);
@@ -424,7 +440,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         }
         if (requested || requestedCampaign) {
           if (linked) { setDashboard(false); setCreatorOpen(false); }
-          try { const url = new URL(window.location.href); url.searchParams.delete("scene"); url.searchParams.delete("campaign"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
         }
         setNavigationReady(true);
       }

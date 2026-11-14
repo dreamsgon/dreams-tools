@@ -8,6 +8,8 @@ import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
 import CampaignsJoined from "./campaigns-joined";
 import "./campaigns.css";
+import { usePageTitle } from "./use-page-title";
+import { campaignTitle } from "@/lib/page-title";
 
 type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
@@ -132,6 +134,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const [dismissed, setDismissed] = useState<string | null>(() => { try { return typeof window === "undefined" ? null : localStorage.getItem("campaigns-match-dismissed"); } catch { return null; } });
   const dismissMatch = () => { setDismissed(matchKey); try { localStorage.setItem("campaigns-match-dismissed", matchKey); } catch { /* Storage is optional. */ } };
   const selected = summary?.rows.find(r => r.key === selectedKey) ?? null;
+  usePageTitle(selected ? campaignTitle(selected.name) : "");
 
   if (!signedIn) return <section className="campaigns-empty"><h1>Campaigns</h1><p>Sign in to see your campaigns from Maptable and the Encyclopedia in one list.</p><a className="rpg-open" href="/account">Sign in or register</a></section>;
 

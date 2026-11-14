@@ -56,3 +56,22 @@ test("an unmatched ?maptable= is the same as no parameter", () => {
   assert.deepEqual(read("?maptable=nope&world=w1"), read("?world=w1"));
   assert.deepEqual(read("?maptable=nope&campaign=c1"), read("?campaign=c1"));
 });
+
+test("an open tab travels with its page and is ignored without one", async () => {
+  const { isNewPlace, defaultTab } = await import("../lib/encyclopedia/place.ts");
+  roundTrip({ worldId: "w2", campaignId: "c1", view: "overview", entryId: "e1", tab: "profile" });
+  assert.equal(placeQuery({ worldId: "w2", campaignId: "c1", view: "overview", entryId: "e1", tab: "profile" }), "?entry=e1&tab=profile");
+  assert.equal(placeQuery({ worldId: "w2", campaignId: "c1", view: "quests", entryId: null, tab: "profile" }), "?world=w2&campaign=c1&view=quests");
+  assert.equal(read("?entry=e1&tab=gear").tab, "gear");
+  assert.equal("tab" in read("?entry=e1"), false);
+  assert.equal("tab" in read("?entry=e1&tab=" + encodeURIComponent("<script>")), false, "odd tab ids are dropped");
+  assert.equal(read("?world=w2&tab=profile").entryId, null);
+  assert.equal(defaultTab("character"), "overview");
+  assert.equal(defaultTab("faction"), "profile");
+  assert.equal(defaultTab("map"), "map");
+  const a = { worldId: "w2", campaignId: "c1", view: "overview", entryId: "e1", tab: "profile" };
+  assert.equal(isNewPlace(a, { ...a, tab: "gear" }), false, "a tab switch replaces");
+  assert.equal(isNewPlace(a, { ...a, entryId: "e2" }), true, "another page pushes");
+  assert.equal(isNewPlace(a, { ...a, entryId: null, view: "maps" }), true);
+  assert.equal(isNewPlace(null, a), true);
+});

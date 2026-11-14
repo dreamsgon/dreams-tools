@@ -27,7 +27,9 @@ import {DiscordRollsSetting} from "./discord-rolls";
 import {LookSection,LookBanner,LookFont} from "./look-section";
 import {lookAttributes} from "@/lib/encyclopedia/look";
 import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
-import {placeFromQuery,placeQuery} from "@/lib/encyclopedia/place";
+import {placeFromQuery,placeQuery,isNewPlace,defaultTab,type Place} from "@/lib/encyclopedia/place";
+import {encyclopediaTitle} from "@/lib/page-title";
+import {usePageTitle} from "../use-page-title";
 import { confirmDialog } from "../confirm-dialog";
 import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
@@ -84,9 +86,11 @@ export default function WorkspaceApp() {
     const [member, setMember] = useState<CoGm | null>(null);
     const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [mobile, setMobile] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
-    const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"templates"|"quests"|"codex"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0);
+    const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"templates"|"quests"|"codex"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0),[tabAt,setTabAt]=useState<{entry:string;tab:string}|null>(null);
+    const lastPlace = useRef<Place | null>(null);
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
+    usePageTitle(loaded && !signedOut ? encyclopediaTitle({ entry: view === "overview" ? entry?.title : null, view, campaign: campaign?.name, world: world?.name }) : "");
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
     const linkQuery = useRef<URLSearchParams | null>(null);
@@ -122,14 +126,14 @@ export default function WorkspaceApp() {
         if (body.member && shared) {
             setMember(body.member); setMemberEdit(!!body.member.edit);
             const place = placeFromQuery(query, checked);
-            setWorldId(shared.worldId); setCampaignId(shared.id); setView(place?.view ?? "overview"); setSelected(place?.entryId ?? null);
+            setWorldId(shared.worldId); setCampaignId(shared.id); setView(place?.view ?? "overview"); setSelected(place?.entryId ?? null); setTabAt(place?.entryId && place.tab ? { entry: place.entryId, tab: place.tab } : null);
             setLoaded(true); setStatus(body.member.edit ? "All changes saved" : "Read only");
             return;
         }
         let stored: URLSearchParams | null = null;
         stored = new URLSearchParams(readRemembered(PLACE_KEY) ?? "");
         const place = placeFromQuery(query, checked) ?? (stored ? placeFromQuery(stored, checked) : null);
-        if (place) { setWorldId(place.worldId); setCampaignId(place.campaignId); setView(place.view); setSelected(place.entryId); }
+        if (place) { setWorldId(place.worldId); setCampaignId(place.campaignId); setView(place.view); setSelected(place.entryId); setTabAt(place.entryId && place.tab ? { entry: place.entryId, tab: place.tab } : null); }
         else { setWorldId(first?.id ?? ""); setCampaignId(null); }
         setLoaded(true);
         setStatus("All changes saved");
@@ -141,12 +145,34 @@ export default function WorkspaceApp() {
         e.preventDefault();
     } }; window.addEventListener("beforeunload", leave); return () => { window.removeEventListener("beforeunload", leave); if (timer.current)
         clearTimeout(timer.current); }; }, []);
+    // The address always names the open page, tab or view, so it can be bookmarked or shared. A different page or view is a new history entry (Back and Forward work); a tab switch only replaces.
     useEffect(() => {
         if (!loaded) return;
-        const search = placeQuery({ worldId, campaignId, view, entryId: view === "overview" ? selected : null });
+        const entryId = view === "overview" ? selected : null, kind = entryId ? current.current.entries.find(e => e.id === entryId)?.kind : undefined;
+        const tab = entryId && tabAt?.entry === entryId && tabAt.tab !== defaultTab(kind ?? "") ? tabAt.tab : null;
+        const place: Place = { worldId, campaignId, view, entryId, tab };
+        const search = placeQuery(place);
         if (!memberRef()) remember(PLACE_KEY, search);
-        if (search !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + search + window.location.hash);
-    }, [loaded, worldId, campaignId, view, selected]);
+        if (search !== window.location.search) {
+            const url = window.location.pathname + search + window.location.hash;
+            if (lastPlace.current && isNewPlace(lastPlace.current, place)) window.history.pushState(window.history.state, "", url);
+            else window.history.replaceState(window.history.state, "", url);
+        }
+        lastPlace.current = place;
+    }, [loaded, worldId, campaignId, view, selected, tabAt]);
+    // Back and Forward return to the place named by the address.
+    useEffect(() => {
+        if (!loaded) return;
+        const back = () => {
+            const place = placeFromQuery(new URLSearchParams(window.location.search), current.current);
+            if (!place) return;
+            if (!memberRef()) { setWorldId(place.worldId); setCampaignId(place.campaignId); }
+            setView(place.view); setSelected(place.entryId); setEditing(false); setQuery("");
+            setTabAt(place.entryId && place.tab ? { entry: place.entryId, tab: place.tab } : null);
+        };
+        window.addEventListener("popstate", back);
+        return () => window.removeEventListener("popstate", back);
+    }, [loaded]);
     useEffect(() => { if (toast) {
         const t = setTimeout(() => setToast(""), 4000);
         return () => clearTimeout(t);
@@ -331,7 +357,7 @@ export default function WorkspaceApp() {
                 view==='calendar'&&campaign ? <CalendarSection key={campaign.id} data={data} campaign={campaign} change={change}/> :
                 view==='maps' ? <MapsSection key={worldId+campaignId} data={data} worldId={worldId} campaignId={campaignId} change={change} onOpen={openEntry}/> :
                 view==='characters' ? <CharactersSection key={worldId+campaignId} data={data} worldId={worldId} campaignId={campaignId} change={change} onOpen={openEntry} onForm={()=>setTool('form')} onShare={()=>setTool('share')} onNewFolder={()=>setModal({type:'entry',id:'folder'})}/> :
-                entry ? <ArticleEditor key={entry.id} entry={entry} data={data} campaign={campaign} editing={editing} setEditing={setEditing} update={patch=>updateEntry(entry.id,patch)} change={change} onOpen={openEntry} onOverview={()=>setSelected(null)} onRename={()=>setModal({type:'rename',id:entry.id})} onDelete={()=>removeEntry(entry)} onNew={parent=>setModal({type:"entry",parent})} onForm={()=>setTool('form')} onTag={showTag}/> :
+                entry ? <ArticleEditor key={entry.id} entry={entry} data={data} campaign={campaign} editing={editing} setEditing={setEditing} update={patch=>updateEntry(entry.id,patch)} change={change} onOpen={openEntry} onOverview={()=>setSelected(null)} onRename={()=>setModal({type:'rename',id:entry.id})} onDelete={()=>removeEntry(entry)} onNew={parent=>setModal({type:"entry",parent})} onForm={()=>setTool('form')} onTag={showTag} initialTab={tabAt?.entry === entry.id ? tabAt.tab : undefined} onTab={tab => setTabAt({ entry: entry.id, tab })}/> :
                     <section className="page-content dashboard">{campaign&&<LookBanner look={campaign.look} className="overview-banner"/>}<div className="dashboard-intro"><div><span className="eyebrow">{campaign ? "YOUR CAMPAIGN WORKSPACE" : "THE WORLD BETWEEN ADVENTURES"}</span><h1>{campaign?.name ?? world.name}</h1><p className="subtitle">{campaign?.description ?? world.description}</p></div><button className="icon-button" title="Edit details" aria-label="Edit details" onClick={() => setModal({ type: "rename", id: campaign?.id ?? world.id })}><Settings size={19}/></button></div><div className="overview-strip"><span><FileText size={16}/><strong>{scope.filter(e => e.kind !== "folder").length}</strong> {campaign ? "campaign entries" : "world articles"}</span><span><BookOpen size={16}/><strong>{data.entries.filter(e => e.worldId === worldId && e.campaignId === null && e.kind !== "folder").length}</strong> shared articles</span><span><Flag size={16}/><strong>{data.campaigns.filter(c => c.worldId === worldId).length}</strong> campaigns</span></div><div className="section-heading"><h2>Pick up the story</h2><span>Recently updated</span></div><div className="recent-grid">{scope.filter(e => e.kind !== "folder").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4).map(e => <button className="note-card" key={e.id} onClick={() => openEntry(e.id)}><span className="card-top"><span className={`entry-icon ${e.kind}`}><EntryIcon kind={e.kind}/></span><span className="eyebrow">{labels[e.kind]}</span><ArrowUpRight size={16}/></span><h3>{e.title}</h3><p>{excerpt(e, data) || "A page waiting to be written."}</p><span className="card-footer">Open entry <ChevronRight size={14}/></span></button>)}<button className="note-card add-card" onClick={() => setModal({ type: "entry" })}><Plus size={25}/><h3>Start a new page</h3><p>A session, a character,<br />or a thought worth keeping.</p></button></div><div className="dashboard-lower"><div><div className="section-heading"><h2>Shared world lore</h2><button className="text-button" onClick={() => selectCampaign(null)}>Explore world <ArrowUpRight size={14}/></button></div><div className="lore-list">{shown.filter(e => e.campaignId === null && e.kind !== "folder").slice(0, 5).map(e => <button key={e.id} onClick={() => openEntry(e.id)}><EntryIcon kind={e.kind}/><span>{e.title}<small>{labels[e.kind]}</small></span><ChevronRight size={15}/></button>)}{!shown.some(e => e.campaignId === null) && <p className="muted">Create shared lore to connect your campaigns.</p>}</div></div><div className="quiet-card"><Compass size={28} strokeWidth={1.3}/><h3>One world. Many stories.</h3><p>World lore travels with every campaign. Session notes and decisions stay with the story they belong to.</p><button className="text-button" onClick={() => setModal({ type: "campaign" })}>Begin another campaign <Plus size={14}/></button></div></div></section>}
    <footer className="main-footer"><span>YOUR WORLDS, THEIR STORIES.</span><span>Private workspace <span>·</span> v0.11</span></footer>
   </main>
