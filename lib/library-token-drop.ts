@@ -13,6 +13,12 @@ export function libraryTokenDropTarget(x: number, y: number, tokenId: string): H
   return accepted ? target : null;
 }
 
+/** Drops a token on the map under a screen point. False when the point is not over the board or the board refuses it. */
+export function placeOnMap(x: number, y: number, tokenId: string): boolean {
+  const target = libraryTokenDropTarget(x, y, tokenId);
+  return !!target && !target.dispatchEvent(new CustomEvent<LibraryTokenDrop>(LIBRARY_TOKEN_DROP, { cancelable: true, detail: { tokenId, clientX: x, clientY: y } }));
+}
+
 export function libraryTokenDropPoint(
   client: Point, rect: Pick<DOMRect, "left" | "top">,
   view: { x: number; y: number; scale: number },

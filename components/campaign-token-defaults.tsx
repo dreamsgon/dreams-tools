@@ -3,7 +3,11 @@ import {useState} from "react";
 import {createPortal} from "react-dom";
 import {Settings2} from "lucide-react";
 import type { Workspace } from "@/lib/model";
-import { getTokenDefaults, applyCampaignDisplayDefaults } from "@/lib/token-defaults";
+import { getTokenDefaults, applyCampaignDisplayDefaults, SIDE_COLOURS, SIDE_TEXT, type TokenSide } from "@/lib/token-defaults";
+import { contrastRatio, formatContrast, readable, READABLE_CONTRAST } from "@/lib/contrast";
+import { newToken } from "@/lib/model";
+import { tokenInitials } from "@/lib/token-initials";
+import TokenFace from "./token-face";
 import TokenColor from "./token-color";
 import { Field, Toggle, Modal } from "./dialogs";
 
@@ -18,6 +22,19 @@ export default function CampaignTokenDefaults({workspace,campaignId,commit}:{wor
   });
   return <><button className="campaign-defaults-button" onClick={()=>setOpen(true)}><Settings2 size={16}/> Campaign token defaults</button>{open&&createPortal(<Modal title="Campaign token defaults" close={()=>{setOpen(false);setApplied(false);}}><p className="muted">Applies to {workspace.collections.find(c=>c.id===campaignId)?.name}. Changes save automatically.</p>
     <p className="muted">Individual token overrides take priority. Party markers are excluded from automatic HP states.</p>
+    <h3>Side colours</h3>
+    <p className="muted">Tokens without a picture take their side&apos;s fill, with a lighter ring and white letters. Click a swatch to pick another fill; the ring follows it.</p>
+    <div className="side-colour-rows">{([["party","Party","Player characters","AY"],["ally","Allies","Companions and friends","BR"],["neutral","Neutral","Townsfolk, NPCs","HM"],["enemy","Enemies","Monsters and foes","GO"]] as [TokenSide,string,string,string][]).map(([side,name,note,sample])=>{
+      const fill=defaults.sideColours?.[side]??SIDE_COLOURS[side].fill,ratio=contrastRatio(SIDE_TEXT,fill),low=!readable(ratio);
+      return <div className="side-colour-row" key={side} data-side={side}>
+        <TokenFace token={{...newToken(sample),disposition:side,sideColours:true}} workspace={workspace} campaignId={campaignId} initials={tokenInitials(sample)} size={38}/>
+        <span><strong>{name}</strong><small>{note}</small></span>
+        <span className="side-colour-tools"><TokenColor label={`${name} fill colour`} value={fill} onChange={colour=>patch({sideColours:{...defaults.sideColours,[side]:colour}})}/>
+          <span className="side-contrast" data-low={low} title="How well white letters read on this fill. 4.5 or more is good.">{formatContrast(ratio)}{low&&<> · low</>}</span>
+          {defaults.sideColours?.[side]&&<button type="button" className="text-button" aria-label={`Reset ${name} colour`} onClick={()=>{const next={...defaults.sideColours};delete next[side];patch({sideColours:next});}}>Reset</button>}</span>
+      </div>;})}</div>
+    {(["party","ally","neutral","enemy"] as const).some(side=>!readable(contrastRatio(SIDE_TEXT,defaults.sideColours?.[side]??SIDE_COLOURS[side].fill)))&&<p className="side-colour-warning" role="status">White letters are hard to read on a fill below {READABLE_CONTRAST} : 1. Pick a darker fill.</p>}
+    <p className="muted">The number is how well white letters read on the fill (4.5 or more is good). Old green tokens with no picture switch to their side&apos;s colour; tokens you coloured yourself stay as they are.</p>
     {([['partyZeroHp','Party members at 0 HP'],['npcZeroHp','NPCs at 0 HP']] as const).map(([key,label])=><Field key={key} label={label}><select value={defaults[key]} onChange={e=>patch({[key]:e.target.value as 'off'|'unconscious'|'dead'})}><option value="off">Off — manual only</option><option value="unconscious">Unconscious</option><option value="dead">Dead</option></select></Field>)}
     <Toggle label="Show token names by default" checked={defaults.showName} onChange={showName=>patch({showName})}/>
     <Toggle label="Show HP bars by default" checked={defaults.showHp} onChange={showHp=>patch({showHp})}/>
