@@ -19,7 +19,7 @@ export const permissionInfo: Record<Permission, { name: string; forum?: true; so
   editPages: { name: "Edit Encyclopedia pages", hint: "Also needs “See GM-only pages” for now." },
   editOwnCharacter: { name: "Edit their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
   addSubPages: { name: "Add sub-pages under their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
-  editMaps: { name: "Edit maps and run the table in Maptable", soon: true },
+  editMaps: { name: "Edit maps and run the table in Maptable", hint: "Also needs “See GM-only pages”: maps show hidden tokens." },
   invite: { name: "Invite people (to their own groups or lower)", soon: true },
   manage: { name: "Manage members, groups and permissions", soon: true },
   forumRead: { name: "Read the forum", forum: true },

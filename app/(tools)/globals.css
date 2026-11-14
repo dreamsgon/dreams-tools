@@ -2247,3 +2247,10 @@ button.primary, .rpg-open { font-weight:500; }
 .dashboard-first-campaign h3 { margin:6px 0 0; font-size:20px; }
 .dashboard-first-campaign p { margin:0 0 10px; color:var(--muted); font-size:13px; line-height:1.5; }
 .dashboard-first-campaign button { display:inline-flex; align-items:center; gap:6px; }
+
+/* A co-GM in someone else's campaign (lib/maptable-member.ts): whose campaign it is, and what only the GM can do. */
+.co-gm-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; flex-shrink:0; padding:9px 24px; background:color-mix(in srgb, var(--green) 14%, var(--panel)); border-bottom:1px solid color-mix(in srgb, var(--green) 35%, var(--line)); font-size:13px; color:var(--ink); }
+.co-gm-bar > svg { flex-shrink:0; color:var(--green); }
+.co-gm-bar > span { flex:1; min-width:min(100%, 240px); }
+.co-gm-bar a { color:var(--green); font-weight:600; white-space:nowrap; text-decoration:underline; }
+.is-co-gm :is(.scenes-backups, .dashboard-actions > .primary, .organizer-row:has(.collection-pin) > .collection-edit) { display:none !important; }

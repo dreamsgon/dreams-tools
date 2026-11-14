@@ -1,4 +1,5 @@
 import { readJsonResponse, stageTransfer } from "./transfer-client.ts";
+import { assetsUrl, mapMemberRef } from "./maptable-member.ts";
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   let data: (T & { error?: string }) | undefined;
@@ -16,7 +17,8 @@ export async function uploadAsset(
   storage = "hosted",
 ) {
   const transferId = await stageTransfer(blob, "image");
-  return api<{ src: string }>("/api/assets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transferId, storage }) });
+  // A co-GM's pictures go to the GM's hosted storage, never S3.
+  return api<{ src: string }>(assetsUrl(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transferId, storage: mapMemberRef() ? "hosted" : storage }) });
 }
 export async function loadImage(src: string): Promise<HTMLImageElement> {
   const res = await fetch(src, {

@@ -205,7 +205,7 @@ export class MemberStore {
     for (const { owner, ...i } of await this.membershipItems(userId)) {
       const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
       if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
-      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm") });
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps") });
     }
     return out;
   }
@@ -226,7 +226,7 @@ export class MemberStore {
     const found = await this.byRef(userId, ref);
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
-    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages") } : null;
+    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages"), maps: can(list, userId, "editMaps") } : null;
   }
 
   /**
@@ -298,5 +298,5 @@ export class MemberStore {
 }
 
 export type Membership = { owner: string; campaignId: string; campaign: string; world: string; ownerName: string; role: string; groups: string[]; asking: boolean; at: string };
-export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean };
+export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean; maps?: boolean };
 export type Notice = { id: string; kind: "ask" | "join" | "left"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };

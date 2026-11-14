@@ -3,6 +3,7 @@ import {useEffect,useMemo,useState} from "react";
 import {Search} from "lucide-react";
 import {circleStyle} from "@/lib/encyclopedia/picture";
 import type {Picture} from "@/lib/encyclopedia/world-model";
+import {bookImageUrl,bookWorkspaceUrl} from "@/lib/maptable-member";
 
 export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc"|"creature";detail:string;world:string;hasStatblock:boolean;picture?:Picture};
 export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean};picture?:Picture}[]};
@@ -10,7 +11,7 @@ export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}
 let cached:Promise<EncyclopediaRaw>|null=null;
 /** The signed-in user's Encyclopedia, read-only and fetched once per page unless refreshed. */
 export function loadEncyclopedia(refresh=false):Promise<EncyclopediaRaw>{
- if(!cached||refresh){cached=fetch("/api/encyclopedia/workspace").then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Encyclopedia characters.":v.error??"Could not load your Encyclopedia.");return v.data??{};});cached.catch(()=>{cached=null;});}
+ if(!cached||refresh){cached=fetch(bookWorkspaceUrl()).then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Encyclopedia characters.":v.error??"Could not load your Encyclopedia.");return v.data??{};});cached.catch(()=>{cached=null;});}
  return cached;
 }
 
@@ -47,7 +48,7 @@ export default function EncyclopediaTokens({disabled,onAdd}:{disabled:boolean;on
   {added&&<p className="ency-token-hint" role="status">{added}</p>}
   {error?<p className="ency-token-hint" role="alert">{error}</p>:!list?<p className="ency-token-hint">Loading characters…</p>:!shown.length?<p className="ency-token-hint">{list.length?"No characters match.":"No characters in your Encyclopedia yet."}</p>:
    worlds.map(w=><div key={w}>{worlds.length>1&&<h4 className="ency-token-world">{w}</h4>}{shown.filter(c=>c.world===w).map(c=><div className="ency-token-row" key={c.id}>
-    {c.picture?<span className="ency-token-avatar ency-token-picture" aria-hidden="true" style={{boxShadow:`0 0 0 2px ${c.picture.ring??roleColor[c.role]}`,backgroundImage:`url("/api/encyclopedia/map-images?id=${encodeURIComponent(c.picture.imageId)}")`,...circleStyle(c.picture,30)}}/>
+    {c.picture?<span className="ency-token-avatar ency-token-picture" aria-hidden="true" style={{boxShadow:`0 0 0 2px ${c.picture.ring??roleColor[c.role]}`,backgroundImage:`url("${bookImageUrl(c.picture.imageId)}")`,...circleStyle(c.picture,30)}}/>
      :<span className="ency-token-avatar" style={{background:roleColor[c.role]}} aria-hidden="true">{initials(c.name)}</span>}
     <span className="ency-token-text"><strong>{c.name}</strong><small>{c.detail}</small></span>
     <button className="ency-token-add" disabled={disabled} onClick={async()=>{setAdded(c.picture?`Adding ${c.name}…`:"");try{await onAdd(c);setAdded(`${c.name} is on the map.`);}catch(e){setAdded(e instanceof Error?e.message:`Could not add ${c.name}.`);}}}>Add token</button>

@@ -134,7 +134,7 @@ test('members open the player pages signed in, and can leave',async()=>{
  const [mine]=await store.memberships(mara.userId);
  assert.match(mine.ref,/^[a-f0-9]{64}$/);assert.equal(mine.ref,await memberRef(gm.userId,C));assert.equal(mine.open,true);
  assert.doesNotMatch(JSON.stringify(mine),/supabase:gm/,'the owner\'s account id stays on the server');
- assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C,ownerName:'the GM',role:'Player',name:'Mara',edit:false});
+ assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C,ownerName:'the GM',role:'Player',name:'Mara',edit:false,maps:false});
  const shown=JSON.stringify(await enc.playerOf(await store.openAs(mara.userId,mine.ref)));
  assert.match(shown,/The Salt Road/);assert.doesNotMatch(shown,/secret-GM-notes/);
  assert.equal(await store.openAs('supabase:stranger',mine.ref),null,'someone else can\'t use the ref');
