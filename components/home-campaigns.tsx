@@ -23,7 +23,7 @@ const openHref = (r: CampaignRow) => `/campaigns/${encodeURIComponent(r.key)}`;
 const notesHref = (r: CampaignRow) => r.encyclopedia ? `/encyclopedia?campaign=${encodeURIComponent(r.encyclopedia.id)}` : null;
 const mapsHref = (r: CampaignRow) => r.maptable ? `/maptable?campaign=${encodeURIComponent(r.maptable.id)}` : null;
 const pageHref = (p: { id: string }) => `/encyclopedia?entry=${encodeURIComponent(p.id)}`;
-const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page" };
+const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page" };
 const kindName = (kind: string) => kindNames[kind] ?? "Page";
 function KindIcon({ kind }: { kind: string }) {
   return kind === "character" ? <User size={15} aria-hidden="true" /> : kind === "map" ? <MapIcon size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />;

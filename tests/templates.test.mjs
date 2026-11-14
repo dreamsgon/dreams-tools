@@ -32,7 +32,7 @@ test('a page made from a template gets its kind, text, tabs and info box values'
 
 test('starter templates are valid, and any page can be saved as a template',()=>{
  const starters=starterTemplates(newId,now);
- assert.deepEqual(starters.map(t=>t.name),['Settlement','Tavern','Faction','Item','Session']);
+ assert.deepEqual(starters.map(t=>t.name),['Settlement','Tavern','Organization','Item','Session']);
  const s=build([entry('bram',{kind:'character',character:{role:'npc',group:'',tags:[],location:'',faction:'',status:'active',statsVisibility:'gm',statsByCampaign:{}},tabs:[{id:'x',title:'Secrets',body:'Owes the Bog Hag.',visibility:'gm'}]})],starters);
  const t=templateFromPage(s,s.entries[0],'Ferryman',newId,now);
  assert.equal(t.kind,'character');assert.deepEqual(t.tabs,[{title:'Secrets',visibility:'gm'}]);assert.deepEqual(t.fields,[]);

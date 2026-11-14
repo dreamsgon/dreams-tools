@@ -6,6 +6,7 @@
 import { defaultCharacter, folderPath, searchableText, type Campaign, type Entry, type Workspace as Book } from "../encyclopedia/world-model.ts";
 import { categoryOf, defaultCategory, moveQuest, newQuest, nextStep, questCategories, questProgress, questsIn, stateNames, type QuestState } from "../encyclopedia/quests.ts";
 import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
+import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { rollDice } from "../rolls.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
@@ -235,7 +236,7 @@ const tools: Tool[] = [
   },
   {
     name: "read_page", title: "Read a page", level: "read", readOnly: true,
-    description: "Read one Encyclopedia page by title or id: its text, its tabs, character details and stats, quest details or codex entry. Text inside ':::secret' … ':::' blocks, tabs marked playersSee: false, and pages marked playersSee: false are for the GM only.",
+    description: "Read one Encyclopedia page by title or id: its text, its tabs, character details and stats, quest details, codex entry or an organization's profile (type, motto, people, facts, beliefs, holdings and its Right now bar). Text inside ':::secret' … ':::' blocks, tabs marked playersSee: false, and pages marked playersSee: false are for the GM only.",
     inputSchema: obj({ page: str("The page's title or id.") }, ["page"]),
     run: (c, a) => {
       const e = pick(pages(c), text(a, "page")!, x => x.id, x => x.title, "page"), fields = c.campaign.statFields ?? [];
@@ -252,6 +253,7 @@ const tools: Tool[] = [
           statsPlayersSee: e.character.statsVisibility === "players", statblock: e.character.statblock || undefined,
         } : undefined,
         quest: e.quest ? questDetails(c, e) : undefined,
+        profile: orgProfileText(e.org, id => c.book.entries.find(x => x.id === id)?.title ?? ""),
         codex: e.codex ? { category: e.codex.category, playerSummary: e.codex.summary, found: !!e.codex.found[c.campaign.id] } : undefined,
         children: children.length ? children : undefined,
         recap: e.recap ? {
@@ -477,6 +479,7 @@ const tools: Tool[] = [
           ...(players ? { overviewVisibility: "players" as const } : {}),
           ...(kind === "character" ? { character: { ...defaultCharacter(), role: role ?? "npc" } } : {}),
           ...(kind === "quest" ? { quest: newQuest("active", defaultCategory(questCategories(c.campaign))) } : {}),
+          ...(kind === "faction" ? { org: defaultOrg(full.worlds.find(w => w.id === c.campaign.worldId)) } : {}),
         };
         return { next: { ...full, entries: [...full.entries, entry] }, summary: `Created the ${kind} page “${title}”`, detail: players ? "Players can see it" : "GM only", reply: { created: { id, title, kind, folder: folder?.title, playersSee: players } } };
       };

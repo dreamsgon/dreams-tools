@@ -30,6 +30,7 @@ import {placeFromQuery,placeQuery} from "@/lib/encyclopedia/place";
 import { confirmDialog } from "../confirm-dialog";
 import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
+import {defaultOrg} from "@/lib/encyclopedia/org-profile";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
 import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,uploaded,workspaceUrl} from "./member-view";
 import Link from "next/link";
@@ -61,7 +62,7 @@ const PlayerSharing = dynamic(lazyParts.PlayerSharing);
 const preloadParts = Object.values(lazyParts);
 const PLACE_KEY = "encyclopedia:place";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal };
-const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Faction", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest" };
+const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest" };
 type Modal = {
     type: "world" | "campaign" | "entry" | "settings" | "library" | "rename" | "connections";
     id?: string;
@@ -360,8 +361,8 @@ export default function WorkspaceApp() {
                             const scopeId = shared ? null : campaignId;
                             navigation.open(shared?"lore":"notes");
                             const parentEntry = data.entries.find(e => e.id === parent && e.campaignId === scopeId);
-                            if (template) change({ ...data, entries: [...data.entries, pageFromTemplate(template.template, { id, title: name, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, values: template.values, newId })] });
-                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
+                            if (template) change({ ...data, entries: [...data.entries, pageFromTemplate(template.template, { id, title: name, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, values: template.values, newId, org: defaultOrg(world) })] });
+                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, org:kind==="faction"?defaultOrg(world):undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
                             setView("overview");
                             setSelected(id);
                             setEditing(true);
