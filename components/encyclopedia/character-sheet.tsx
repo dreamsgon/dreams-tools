@@ -1,7 +1,7 @@
 'use client';
 import {useState,type MouseEvent} from 'react';
 import dynamic from 'next/dynamic';
-import {ExternalLink,FileUp,Link as LinkIcon,MoreHorizontal,RefreshCw} from 'lucide-react';
+import {Download,ExternalLink,FileUp,Link as LinkIcon,MoreHorizontal,RefreshCw} from 'lucide-react';
 import {defaultCharacter,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {playerSheet,refreshSheet,sheetOpenUrl,timeAgo,TEMPLATE_TAB,type Sheet} from '@/lib/encyclopedia/sheet-link';
 import {GOOGLE_NOT_SET_UP,googleConfigured} from '@/lib/encyclopedia/google-client';
@@ -16,10 +16,11 @@ import {sheetRollGroups} from '@/lib/encyclopedia/sheet-rolls';
 import {rollInline} from './rolls';
 import './character-sheet.css';
 
-const loadDialog=()=>import('./sheet-dialog'),loadImport=()=>import('./sheet-import-dialog');
+const loadDialog=()=>import('./sheet-dialog'),loadImport=()=>import('./sheet-import-dialog'),loadExport=()=>import('./sheet-export-dialog');
 const SheetDialog=dynamic(loadDialog);
 const SheetImportDialog=dynamic(()=>loadImport().then(m=>m.SheetImportDialog));
-const preload=[loadDialog,loadImport];
+const SheetExportDialog=dynamic(()=>loadExport().then(m=>m.SheetExportDialog));
+const preload=[loadDialog,loadImport,loadExport];
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 
@@ -35,7 +36,7 @@ const withSheet=(id:string,f:(old:Sheet|undefined)=>Sheet|undefined)=>(w:Workspa
 export function CharacterSheetSection({entry,change,data,campaign}:{entry:Entry;change:Change;data?:Workspace;campaign?:Campaign}){
  useIdlePreload(preload);
  const sheet=entry.character?.sheet,coGm=!!memberRef(),visible=entry.character?.statsVisibility==='players';
- const [importing,setImporting]=useState(false),[dialog,setDialog]=useState<{read?:SheetRead}|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[holding,setHolding]=useState(false);
+ const [importing,setImporting]=useState(false),[exporting,setExporting]=useState(false),[dialog,setDialog]=useState<{read?:SheetRead}|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[holding,setHolding]=useState(false);
  const fail=(e:unknown)=>setNotice(e instanceof Error?e.message:'Something went wrong. Try again.');
 
  async function refresh(){
@@ -61,14 +62,16 @@ export function CharacterSheetSection({entry,change,data,campaign}:{entry:Entry;
 
  const canImport=!coGm&&!!data&&!!campaign;
  const importEl=importing&&data&&campaign&&<SheetImportDialog data={data} campaign={campaign} worldId={entry.worldId} update={entry} change={change} onClose={()=>setImporting(false)} onDone={(_id,msg)=>{setImporting(false);setNotice(msg);}}/>;
+ const exportEl=exporting&&data&&campaign&&<SheetExportDialog data={data} campaign={campaign} entry={entry} onClose={()=>setExporting(false)}/>;
  const dialogEl=dialog&&<SheetDialog characterName={entry.title} current={sheet?.source==='import'?undefined:sheet} read={dialog.read} onClose={()=>setDialog(null)} onSave={next=>{if(change(withSheet(entry.id,()=>next))!==false){setDialog(null);setNotice(`Linked ${next.title}.`);}}}/>;
 
  if(!sheet)return coGm?null:<>
   <div className="sheet-empty-card"><div><strong>Character sheet</strong><small>Import a sheet from any game through ChatGPT or Claude, or link a Google Sheet to keep its stats and rolls on this page.</small></div>
    {canImport&&<button type="button" className="button" onClick={()=>setImporting(true)}><FileUp size={14}/> Import a sheet</button>}
-   <button type="button" className="button" onClick={()=>setDialog({})}><LinkIcon size={14}/> Link a Google Sheet</button></div>
+   <button type="button" className="button" onClick={()=>setDialog({})}><LinkIcon size={14}/> Link a Google Sheet</button>
+   {canImport&&<button type="button" className="button" onClick={()=>setExporting(true)}><Download size={14}/> Export</button>}</div>
   {notice&&<p role="status" className="sheet-notice">{notice}</p>}
-  {dialogEl}{importEl}
+  {dialogEl}{importEl}{exportEl}
  </>;
 
  const imported=sheet.source==='import';
@@ -89,11 +92,11 @@ export function CharacterSheetSection({entry,change,data,campaign}:{entry:Entry;
     {imported&&canImport&&<button type="button" className="button small" onClick={()=>setImporting(true)}><FileUp size={13}/> Import again</button>}
     {!coGm&&!imported&&<button type="button" className="button small" disabled={busy||holding||needsGoogle} title={holding?'HP is still being written to the sheet.':why} onClick={()=>void refresh()}><RefreshCw size={13}/> {busy?'Reading…':'Refresh'}</button>}
     {!coGm&&<details className="sheet-menu"><summary className="button small icon-button" aria-label="More for this sheet"><MoreHorizontal size={15}/></summary>
-     <div className="sheet-menu-list">{!imported&&<button type="button" disabled={needsGoogle} title={why} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button>}{imported&&<button type="button" onClick={e=>{closeMenu(e);setDialog({});}}>Link a Google Sheet instead</button>}<button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>{imported?'Remove':'Unlink'}</button></div></details>}
+     <div className="sheet-menu-list">{!imported&&<button type="button" disabled={needsGoogle} title={why} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button>}{imported&&<button type="button" onClick={e=>{closeMenu(e);setDialog({});}}>Link a Google Sheet instead</button>}{canImport&&<button type="button" onClick={e=>{closeMenu(e);setExporting(true);}}>Export as .json</button>}<button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>{imported?'Remove':'Unlink'}</button></div></details>}
    </>}>
    <p className="sheet-visibility">{visible?'Players see the copied values, read only, because this character’s Stats tab is player visible.':sheet.linkedById?`Only you and ${sheet.linkedBy??'the player'} see this. Set the Stats tab to Player visible to show the copied values to every player.`:'Only you see this. Set the Stats tab to Player visible to show the copied values to players.'}</p>
    {notice&&<p role="status" className="sheet-notice">{notice}</p>}
   </SheetView>
-  {dialogEl}{importEl}
+  {dialogEl}{importEl}{exportEl}
  </>;
 }
