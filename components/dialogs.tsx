@@ -127,6 +127,7 @@ export function NumberField({
   min = 0,
   max = 1000000,
   step = 1,
+  title,
 }: {
   label: string;
   value: number;
@@ -134,6 +135,7 @@ export function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  title?: string;
 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
@@ -142,6 +144,7 @@ export function NumberField({
       <input
         type="number"
         aria-label={label}
+        title={title}
         value={draft}
         min={min}
         max={max}

@@ -17,6 +17,7 @@ import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
 import "./map-creator.css";
 import SaveChip from "./save-chip";
+import { WHEEL_IDLE_MS, CREATOR_LABEL_MAX, CREATOR_LABEL_MIN, accumulateWheel, stepLabelSize, wheelAmount, wheelScalable, wheelScaleShape } from "@/lib/wheel-resize";
 import { creatorTools, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, resizeMap, eraseWall, shiftSceneContents, type MapAnchor, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
 /** `shift` is how far the drawing has moved since it was opened, from growing or shrinking on its top or left; the scene's tokens and fog follow it on save. */
@@ -344,9 +345,39 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const y=b.y-h-labelSize*.6<0?b.y+b.h+labelSize*.6:b.y-h-labelSize*.6,x=Math.max(0,Math.min(draft.width-w,b.x+b.w/2-w/2));
     return <g className="creator-size-label" pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx={labelSize*.3} fill="#16191c" fillOpacity=".88"/><text x={x+w/2} y={y+h*.66} textAnchor="middle" fontSize={labelSize} fontWeight={500} fill="#ffffff">{text}</text></g>;})():null;
   const zoomBy=(step:number)=>setZoom(z=>Math.max(.5,Math.min(4,Math.round((z+step)*4)/4)));
+  // Shift + wheel resizes the selected shapes about their centres, or the shape under the pointer. A burst of steps is one undo entry.
+  const wheelCarry=useRef({carry:0,at:0}),wheelBurst=useRef<{at:number;before:Draft;after:Draft}|null>(null);
+  const wheelResize=(e:WheelEvent)=>{
+    if(gesture.current||polyPoints)return false;
+    const hit=(e.target as Element|null)?.closest?.("[data-shape]")?.getAttribute("data-shape");
+    const usable=(id:string)=>{const s=draft.drawing.shapes.find(s=>s.id===id);return !!s&&(s.type==="label"||wheelScalable(s))&&!layerState(draft.drawing,id).locked&&!layerState(draft.drawing,id).hidden;};
+    const ids=(selectedIds.length?selectedIds:hit?[hit]:[]).filter(usable);
+    if(!ids.length)return false;
+    const now=Date.now(),before=wheelCarry.current;
+    const {steps,carry}=accumulateWheel(now-before.at>WHEEL_IDLE_MS?0:before.carry,wheelAmount(e));
+    wheelCarry.current={carry,at:now};
+    if(!steps)return true;
+    const previous=current.current,next=structuredClone(previous);let changed=false;
+    for(const s of next.drawing.shapes){
+      if(!ids.includes(s.id))continue;
+      if(s.type==="label"){const size=stepLabelSize(s.thickness,steps,CREATOR_LABEL_MIN,CREATOR_LABEL_MAX);if(size!==s.thickness){s.thickness=size;changed=true;}}
+      else{const points=wheelScaleShape(s,steps,grid.size,next.width,next.height);if(points){s.points=points;changed=true;}}
+    }
+    if(!changed)return true;
+    const run=wheelBurst.current;
+    if(run&&run.after===previous&&undo.current.at(-1)===run.before&&now-run.at<WHEEL_IDLE_MS){current.current=next;setDraft(next);setDirty(true);setMessage("");}
+    else apply(next,previous);
+    wheelBurst.current={at:now,before:run&&run.after===previous&&undo.current.at(-1)===run.before?run.before:previous,after:next};
+    return true;
+  };
+  const wheelResizeRef=useRef(wheelResize);
+  useEffect(()=>{wheelResizeRef.current=wheelResize;});
   useEffect(()=>{
     const el=stage.current;if(!el)return;
-    const wheel=(e:WheelEvent)=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoomBy(e.deltaY<0?.25:-.25);};
+    const wheel=(e:WheelEvent)=>{
+      if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&wheelResizeRef.current(e)){e.preventDefault();return;}
+      if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoomBy(e.deltaY<0?.25:-.25);
+    };
     el.addEventListener("wheel",wheel,{passive:false});return()=>el.removeEventListener("wheel",wheel);
   },[]);
   useEffect(()=>{const up=(e:KeyboardEvent)=>{if(e.code==="Space")setSpaceHeld(false);};window.addEventListener("keyup",up);return()=>window.removeEventListener("keyup",up);},[]);
@@ -375,13 +406,13 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     </div>
     <label>Angle <output>{Math.round(single.rotation)}°</output><input type="range" min={0} max={345} step={15} value={((single.rotation%360)+360)%360} onChange={e=>turnStamp(+e.target.value-single.rotation,true)}/></label>
     <div className="creator-pair">
-      <label>Width (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].x-single.points[0].x)/grid.size*2)/2} onChange={e=>stampSize("w",+e.target.value)}/></label>
-      <label>Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>
+      <label title="Shift + scroll to resize">Width (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].x-single.points[0].x)/grid.size*2)/2} onChange={e=>stampSize("w",+e.target.value)}/></label>
+      <label title="Shift + scroll to resize">Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>
     </div>
   </>;
   const labelPanel=single?.type==="label"&&<>
     <label className="creator-check"><input type="checkbox" checked={!!single.fill} onChange={e=>patchShape({fill:e.target.checked?"#ffffff":null})}/>In a circle (for room numbers)</label>
-    <label>Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
+    <label title="Shift + scroll to resize">Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
     <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
   </>;
   const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink} custom={custom} addStamp={asset=>commit(w=>{w.assets.push(asset);})} resizeStamp={(assetId,squares)=>commit(w=>{const a=w.assets.find(a=>a.id===assetId);if(a)a.squares=squares;})}/>:<div className="creator-panel">
@@ -390,7 +421,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button onClick={()=>setNewMap(true)}><Sparkles size={15}/> Generate or trace a new map</button>
       <h3>New shapes</h3>{colours}{thicknessField}
       <h3>Shortcuts</h3>
-      <dl className="creator-keys">{creatorTools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
+      <dl className="creator-keys">{creatorTools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Shift</kbd> + scroll</dt><dd>Resize the selection</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
     </>}
     {single&&<>
       <label>{single.type==="label"?"Text":"Name"}<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} id="creator-shape-name" onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>

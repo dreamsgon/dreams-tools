@@ -5,6 +5,7 @@ import { countLabel } from "@/lib/plural";
 import StandardDiceTray, { type DicePanel } from "./standard-dice-tray";
 import { diceDockPosition } from "@/lib/dice-dock";
 import { attachSceneMap } from "@/lib/scene-map";
+import { WHEEL_IDLE_MS } from "@/lib/wheel-resize";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
 import TokenColor from "./token-color";
@@ -571,8 +572,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     timer.current = autosave.ref.current ? setTimeout(() => void save(), 700) : null;
   }, [save, autosave.ref]);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
+  // A burst of wheel resizes joins into one undo step: while the last change is still the latest one, the next folds into it.
+  const burst = useRef<{ at: number; before: Workspace; after: Workspace } | null>(null);
   const commit = useCallback(
-    (fn: (w: Workspace) => void) => {
+    (fn: (w: Workspace) => void, options?: { burst?: boolean }) => {
       const previous = state.current;
       if (!previous) return;
       const next = structuredClone(previous);
@@ -591,7 +594,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       if (JSON.stringify(next) === JSON.stringify(previous)) return;
       const ref = mapMemberRef(), co = memberInfo.current;
       if (ref && co) { const refused = maptableCoGmRefusal(previous, next, co.campaignId, ref, new Set(co.locked ?? [])); if (refused) { setNotice(refused); return; } }
-      history.current = [...history.current.slice(-29), previous];
+      const joining = !!options?.burst && !!burst.current && burst.current.after === previous && history.current.at(-1) === burst.current.before && Date.now() - burst.current.at < WHEEL_IDLE_MS;
+      if (!joining) history.current = [...history.current.slice(-29), previous];
+      burst.current = options?.burst ? { at: Date.now(), before: joining ? burst.current!.before : previous, after: next } : null;
       future.current = [];
       state.current = next;
       setWorkspace(next);
@@ -601,11 +606,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [schedule],
   );
   const updateScene = useCallback(
-    (fn: (s: Scene) => void) =>
+    (fn: (s: Scene) => void, options?: { burst?: boolean }) =>
       commit((w) => {
         const s = w.scenes.find((s) => s.id === w.activeId) || w.scenes[0];
         fn(s);
-      }),
+      }, options),
     [commit],
   );
   const undo = useCallback(() => {
@@ -1465,6 +1470,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       <div className="form-row">
                         <NumberField
                           label="Size (cells)"
+                          title="Shift + scroll on the map to resize"
                           min={0.25}
                           max={20}
                           step={0.25}
@@ -2237,9 +2243,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 : tool === "poi" ? "Click the map to place a point of interest or transition"
                 : tool === "select"
                   ? selectedIds.length > 1
-                    ? `${selectedIds.length} selected · Drag one to move them all · Ctrl C copies · Ctrl G groups · Delete removes`
+                    ? `${selectedIds.length} selected · Drag one to move them all · Ctrl C copies · Ctrl G groups · Shift + scroll resizes · Delete removes`
                     : selected
-                    ? (measureTokenMovement ? "Drag to measure movement | Q or Space adds a waypoint | Alt moves off the grid" : "Drag to move | Alt moves off the grid | [ ] turn | H V flip | - = size")
+                    ? (measureTokenMovement ? "Drag to measure movement | Q or Space adds a waypoint | Alt moves off the grid" : "Drag to move | Alt moves off the grid | [ ] turn | H V flip | - = size | Shift + scroll resizes")
                     : `Select ${selectionLabel} · Shift-click or Shift-drag selects several · Ctrl V pastes · Middle-drag to pan`
                   : tool === "marquee"
                     ? `Drag to select ${selectionLabel} · Shift adds · ${selectedIds.length + fogSelectedIndices.length} selected · Delete removes · Middle-drag pans`
@@ -2330,7 +2336,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </p>
             <p>
               <strong>4. Play.</strong> Reveal fog, measure paths, and place
-              effects. On touch screens, pinch to zoom. Drag a token to move it (hold Alt to place it off the grid). Shift-click or Shift-drag selects several tokens, and dragging one moves them all. Ctrl C and Ctrl V copy and paste tokens, also into another scene, Ctrl D duplicates, and Ctrl G groups them so they select and move together (Ctrl Shift G ungroups). A selected token has a gold handle to turn it and a corner handle to resize it, plus a small bar; [ and ] turn it, H and V flip it, - and = change its size. Right-click a token to turn, flip or add conditions;
+              effects. On touch screens, pinch to zoom. Drag a token to move it (hold Alt to place it off the grid). Shift-click or Shift-drag selects several tokens, and dragging one moves them all. Ctrl C and Ctrl V copy and paste tokens, also into another scene, Ctrl D duplicates, and Ctrl G groups them so they select and move together (Ctrl Shift G ungroups). A selected token has a gold handle to turn it and a corner handle to resize it, plus a small bar; [ and ] turn it, H and V flip it, - and = change its size, and so does holding Shift while you scroll over it (it works on areas and labels too). Right-click a token to turn, flip or add conditions;
               click or tap empty space to deselect. For touch waypoints, select a token, tap Plan move, tap each corner and destination, then tap Move token. Undo point removes the last corner; Cancel leaves the token in place.
             </p>
             <p>
