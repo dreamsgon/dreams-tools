@@ -205,7 +205,7 @@ export class MemberStore {
     for (const { owner, ...i } of await this.membershipItems(userId)) {
       const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
       if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
-      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer") });
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm") });
     }
     return out;
   }
@@ -217,12 +217,15 @@ export class MemberStore {
     return null;
   }
 
-  /** The owner and campaign a signed-in member may read the player pages of, or null. */
-  async openAs(userId: string, ref: string) {
+  /**
+   * The owner and campaign a signed-in member may open, or null: the player pages (seePlayer) or, for co-GMs,
+   * the whole campaign in the Encyclopedia (seeGm). `ownerName` and `role` are for the bar saying whose it is.
+   */
+  async openAs(userId: string, ref: string, permission: "seePlayer" | "seeGm" = "seePlayer") {
     const found = await this.byRef(userId, ref);
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
-    return list && can(list, userId, "seePlayer") ? { owner: found.owner, campaignId: found.campaignId } : null;
+    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member" } : null;
   }
 
   /** Leave campaign, or stop asking to join. The GM hears about a member leaving the way they hear about joins. */
@@ -276,5 +279,5 @@ export class MemberStore {
 }
 
 export type Membership = { owner: string; campaignId: string; campaign: string; world: string; ownerName: string; role: string; groups: string[]; asking: boolean; at: string };
-export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean };
+export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean };
 export type Notice = { id: string; kind: "ask" | "join" | "left"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };

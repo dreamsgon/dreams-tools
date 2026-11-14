@@ -34,7 +34,7 @@ export default function CampaignsJoined() {
       <div className="joined-top">
         <Avatar name={c.ownerName || c.campaign} seed={c.campaignId} />
         <div>
-          {c.open ? <Link className="joined-name" href={`/encyclopedia/player#m-${c.ref}`}>{c.campaign}</Link> : <strong>{c.campaign}</strong>}
+          {c.gm ? <a className="joined-name" href={`/encyclopedia#m-${c.ref}`}>{c.campaign}</a> : c.open ? <Link className="joined-name" href={`/encyclopedia/player#m-${c.ref}`}>{c.campaign}</Link> : <strong>{c.campaign}</strong>}
           <small>{c.world ? `${c.world} · ` : ""}Run by {c.ownerName || "the GM"}</small>
         </div>
         {c.asking ? <span className="mem-chip mem-sand"><Clock size={12} aria-hidden="true" />&nbsp;Asking to join</span>
@@ -48,6 +48,7 @@ export default function CampaignsJoined() {
         </div>
       </div> : <div className="joined-actions">
         {c.asking ? <span className="joined-note">The GM will let you in soon.</span>
+          : c.gm ? <a className="hub-button hub-button-primary" href={`/encyclopedia#m-${c.ref}`}><BookOpen size={15} aria-hidden="true" />Open in Encyclopedia</a>
           : c.open ? <Link className="hub-button hub-button-primary" href={`/encyclopedia/player#m-${c.ref}`}><BookOpen size={15} aria-hidden="true" />Open player pages</Link>
           : <span className="joined-note">Your groups can&apos;t see the player pages yet.</span>}
         <button type="button" className="hub-button" onClick={() => { setLeaving(c.ref); setError(""); }}>{c.asking ? "Stop asking" : "Leave"}</button>
