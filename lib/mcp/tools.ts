@@ -839,7 +839,7 @@ function questDetails(c: McpContext, e: Entry) {
     state: q.state, category: categoryOf(cats, q.type).name, progress: questProgress(q),
     giver: name(q.giverId), place: name(q.placeId), reward: [q.reward, ...(q.rewardIds ?? []).map(id => name(id))].filter(Boolean).join("; ") || undefined, rewardHiddenFromPlayers: q.rewardHidden || undefined, gmPrep: q.prep || undefined,
     objectives: q.objectives.map(o => ({ text: o.text, done: o.done, status: goalStatus(o) === "failed" || goalStatus(o) === "dropped" ? goalStatus(o) : undefined, note: o.note, hiddenFromPlayers: o.hidden || undefined })),
-    log: q.log.map(l => ({ when: l.label || l.at.slice(0, 10), text: l.text, playersSee: l.players })),
+    log: q.log.map(l => ({ when: l.label || l.at.slice(0, 10), text: l.text, playersSee: l.players, ...(l.author ? { by: l.author } : {}) })),
   };
 }
 

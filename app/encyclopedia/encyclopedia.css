@@ -707,19 +707,6 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .quest-objective:hover .quest-remove,.quest-remove:focus-visible{opacity:1}
 .quest-add-step{display:flex;align-items:center;gap:10px;color:var(--muted);min-height:32px}
 .quest-add-step input{flex:1;background:transparent;border:0;color:var(--ink);font-size:14px}
-.quest-log-composer{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);padding:8px 10px;display:flex;flex-direction:column;gap:8px}
-.quest-log-composer textarea{border:0;background:transparent;color:var(--ink);resize:vertical;font-size:15px;min-height:26px}
-.quest-log-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.quest-log-tools input{background:var(--hover);border:0;border-radius:4px;padding:4px 8px;font-size:12px;color:var(--ink);width:150px}
-.quest-log-tools .button{margin-left:auto}
-.quest-log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.quest-log li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:22px;padding:16px 0;border-top:1px solid var(--line)}
-.quest-log-when strong{display:block;color:var(--accent);font-weight:500;font-size:14px}
-.quest-log-when small{color:var(--muted)}
-.quest-log-text .prose{font-family:var(--font-reading);font-size:17px;line-height:1.55}
-.quest-log-text .prose p{margin:0}
-.quest-log-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
-.quest-log-actions .icon-button{width:26px;height:26px;opacity:.6}
 .quest-empty-page{padding:40px 0}
 .player-quest{display:flex;flex-direction:column;gap:14px;margin:4px 0 18px}
 .player-quest-chips{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
