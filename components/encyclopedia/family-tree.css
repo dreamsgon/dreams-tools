@@ -62,3 +62,49 @@ button.ft-rel-label:hover{text-decoration:underline}
 .ft-person small{display:block;font-size:12px;color:var(--muted)}
 .ft-kids{margin-left:14px;padding-left:12px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:6px}
 .rw-mode{align-self:flex-start}
+.ft-node.fresh .ft-box{stroke-dasharray:5 4}
+
+/* The generators (components/encyclopedia/relationship-generators.tsx). */
+.gen-body{display:grid;grid-template-columns:minmax(260px,330px) minmax(0,1fr);gap:22px;align-items:start;min-height:0}
+.gen-options{display:flex;flex-direction:column;gap:14px;min-width:0}
+.gen-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.gen-label{font-size:13px;font-weight:650;color:var(--ink)}
+.gen-label small{font-weight:400;color:var(--muted);margin-left:6px}
+.gen-field .segmented{align-self:flex-start;flex-wrap:wrap}
+.gen-check{display:flex;gap:10px;align-items:flex-start;font-size:13px;cursor:pointer}
+.gen-check input{width:auto!important;margin:3px 0 0!important;accent-color:var(--accent)}
+.gen-check strong{display:block}
+.gen-check small{display:block;color:var(--muted);font-size:12px;line-height:1.45}
+.gen-preview{display:flex;flex-direction:column;gap:8px;min-width:0}
+.gen-preview .eyebrow small{margin-left:6px;color:var(--muted)}
+.gen-hint{margin:0;font-size:12.5px}
+.gen-sub{margin-top:6px}
+.gen-twists{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+.gen-twists li{line-height:1.9}
+.gen-twists small{display:block;color:var(--muted);font-size:12.5px;line-height:1.45}
+.gen-chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.gen-chips li{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;font-size:12.5px;background:var(--panel);max-width:100%}
+.gen-chips li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gen-chips button{display:flex;padding:3px;border-radius:50%;color:var(--muted)}
+.gen-chips button:hover{background:var(--hover);color:var(--ink)}
+.gen-row{display:flex;flex-wrap:wrap;gap:6px}
+.gen-amounts{display:flex;flex-direction:column;gap:6px}
+.gen-amount{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.gen-amount>span{display:flex;align-items:center;gap:7px;font-weight:600}
+.gen-amount i{width:9px;height:9px;border-radius:50%;background:var(--tc,var(--muted))}
+.gen-amount .segmented button{padding:3px 8px;font-size:12px}
+.gen-suggestions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:min(calc(56vh / var(--ui-zoom, 1)),560px);overflow:auto}
+.gen-suggestions li{border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.gen-suggestions li.kept{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.gen-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13.5px}
+.gen-kind{width:auto!important;min-width:0;padding:3px 6px!important;font-size:12.5px!important;color:var(--tc)!important;font-weight:600;border-color:color-mix(in srgb,var(--tc) 45%,var(--line))!important}
+.gen-gm{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.gen-gm.on{color:#9a6514;border-color:color-mix(in srgb,#b7791f 50%,var(--line));background:color-mix(in srgb,#b7791f 12%,var(--panel))}
+:root[data-theme="dark"] .gen-gm.on{color:#e8b765}
+.gen-tools{margin-left:auto;display:flex;gap:2px}
+.gen-tools .icon-button{padding:5px}
+.gen-tools .icon-button[aria-pressed="true"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.gen-note{font-size:13px!important;padding:5px 8px!important}
+.gen-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+.gen-foot p{margin:0;font-size:12.5px}
+@media (max-width:860px){.gen-body{grid-template-columns:1fr}}

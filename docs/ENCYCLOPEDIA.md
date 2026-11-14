@@ -30,6 +30,18 @@ Every page except folders and task lists has a **Connections** tab (a quest show
 
 **Family trees**, the other half of Relationships, draws a family from its family ties (Parent of, Married to, Sibling of, Guardian of, and any kind of tie set to draw on a family tree): eldest at the top, couples side by side with a double line, children under them, wards on a dashed line and GM-only ties dashed in amber. Pick a family (each organization of type Noble house, House, Family, Clan or Dynasty, then any group of relatives no such organization covers) or **Start from a person**. A house's tree follows its own line: someone who married in is drawn without their own parents, and their box says which other house they come from. Click someone to see their family on the side and add a parent, partner, child or sibling, either a page that exists or a new character by name. Their role on the organization's Profile (Heir, Abbess) shows on their box. On a phone the tree is an outline, eldest first. Family organizations also get a **Family tree** tab.
 
+Two generators fill this in from built-in name and trait lists. Nothing is saved until you add the result.
+
+- **Generate a family**, on Family trees, builds a family around a character or starts a new one. You choose:
+  - how many generations go above (none, parents, or grandparents too);
+  - whether to add a partner and children;
+  - how many children each couple has;
+  - how many twists (quiet, some or scandalous). Twists include a secret child shown to players as a ward, rival or estranged siblings, an old flame and a betrayal, and most are GM only.
+  - a name style, and whether people who marry in take the family name. It can also make a Family organization page for them.
+
+  Reroll until you like it, then add every character and tie at once. New characters start GM only.
+- **Generate ties**, on the Web, takes the pages you pick (or a few at random, or an organization's members) and an amount of each group of tie, from Off to Lots. It then suggests ties that fit those pages, each with a note, skipping pairs that are already tied. You can change each suggestion's kind, note and GM-only setting, keep it through rerolls, or leave it out.
+
 ## Players and AI access
 
 Player links show only material explicitly shared with players, with private notes and unrevealed map areas filtered. Anyone holding a player link can read its shared content. Replace or revoke the link to stop subsequent access. Already issued signed image URLs can remain valid for up to five minutes; downloaded copies cannot be recalled.

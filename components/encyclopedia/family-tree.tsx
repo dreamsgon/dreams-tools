@@ -6,7 +6,7 @@
  * a page that exists, or a new character by name. On a phone the tree is an outline, eldest first.
  */
 import {useMemo,useState,type ReactNode} from 'react';
-import {ArrowUpRight,Eye,EyeOff,GitFork,Plus,Search,X} from 'lucide-react';
+import {ArrowUpRight,Dices,Eye,EyeOff,GitFork,Plus,Search,X} from 'lucide-react';
 import './ties.css';
 import './relationships.css';
 import './family-tree.css';
@@ -19,13 +19,14 @@ import {useNarrow} from './connection-list';
 import {Face,TargetPicker,kindName} from './quest-goals';
 import {useTies} from './page-connections';
 import {ZoomButtons,usePanZoom} from './pan-zoom';
+import {GenerateFamily} from './relationship-generators';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const cut=(t:string,n:number)=>t.length>n?t.slice(0,n-1).trimEnd()+'…':t;
 const statusWords:Record<string,string>={missing:'Missing',inactive:'Inactive'};
 
 /** What a person's box says besides their name. */
-type BoxInfo={badge?:string;sub?:string;dead:boolean;secret:boolean};
+export type BoxInfo={badge?:string;sub?:string;dead:boolean;secret:boolean;fresh?:boolean};
 
 function boxInfo(tree:FamilyTree,g:FamilyGraph,byId:Map<string,Entry>,roles:Map<string,string>,orgsOf:Map<string,Entry[]>,orgId:string|undefined,players:boolean,seeds:string[]):Map<string,BoxInfo>{
  const out=new Map<string,BoxInfo>();
@@ -50,16 +51,17 @@ function Line({line,players}:{line:TreeLine;players:boolean}){
 
 /** Screen pixels per unit below which names are too small to read: a big family starts zoomed in, around its first person. */
 const READABLE=0.9;
-function TreeCanvas({tree,info,titles,selected,players,focus,onPick}:{tree:FamilyTree;info:Map<string,BoxInfo>;titles:Map<string,string>;selected:string|null;players:boolean;focus?:string;onPick:(id:string)=>void}){
+/** With `whole`, the whole tree is shown however small (a preview); otherwise a big family opens zoomed in. */
+export function TreeCanvas({tree,info,titles,selected,players,focus,whole,onPick}:{tree:FamilyTree;info:Map<string,BoxInfo>;titles:Map<string,string>;selected:string|null;players:boolean;focus?:string;whole?:boolean;onPick:(id:string)=>void}){
  // A small family isn't blown up to fill the space: the drawing is at least as big as a few boxes across.
  const bounds=useMemo(()=>{const w=Math.max(tree.width+72,4*BOX_W),h=Math.max(tree.height+70,2.4*BOX_H+70);return {x:tree.width/2-w/2,y:-40,w,h};},[tree]);
- const {svg,viewBox,handlers,zoom,fit}=usePanZoom(bounds,'.ft-node',{minScale:READABLE,focus:focus?tree.at.get(focus):undefined});
+ const {svg,viewBox,handlers,zoom,fit}=usePanZoom(bounds,'.ft-node',whole?{}:{minScale:READABLE,focus:focus?tree.at.get(focus):undefined});
  return <div className="rw-canvas ft-canvas">
   <svg ref={svg} viewBox={viewBox} role="group" aria-label={`Family tree of ${tree.at.size} people`} {...handlers} style={{height:`min(calc(640px / var(--ui-zoom, 1)), max(calc(340px / var(--ui-zoom, 1)), ${Math.round(bounds.h/bounds.w*100)}cqw, calc(${Math.round(bounds.h*READABLE)}px / var(--ui-zoom, 1))))`}}>
    {tree.lines.map(l=><Line key={l.key} line={l} players={players}/>)}
    {[...tree.at].map(([id,p])=>{const i=info.get(id),name=cut(titles.get(id)??'',i?.dead?17:19);
     const bw=i?.badge?Math.min(BOX_W-24,cut(i.badge,18).length*6.4+12):0,top=i?.badge?33:i?.sub?24:31;
-    return <g key={id} className={`ft-node${tree.inLaws.has(id)?' inlaw':''}${selected===id?' on':''}${i?.secret?' secret':''}`} transform={`translate(${p.x-BOX_W/2} ${p.y})`} role="button" tabIndex={0}
+    return <g key={id} className={`ft-node${tree.inLaws.has(id)?' inlaw':''}${selected===id?' on':''}${i?.secret?' secret':''}${i?.fresh?' fresh':''}`} transform={`translate(${p.x-BOX_W/2} ${p.y})`} role="button" tabIndex={0}
      aria-label={`${titles.get(id)}${i?.dead?', died':''}${i?.badge?`, ${i.badge}`:''}${i?.sub?`, ${i.sub}`:''}`} aria-pressed={selected===id}
      onClick={()=>onPick(id)} onKeyDown={ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();onPick(id);}}}>
      <title>{titles.get(id)}</title>
@@ -75,7 +77,7 @@ function TreeCanvas({tree,info,titles,selected,players,focus,onPick}:{tree:Famil
 }
 
 /** The tree as nested lists, eldest first: each couple, then their children. For phones, and to read without the drawing. */
-function Outline({tree,g,info,byId,selected,onPick}:{tree:FamilyTree;g:FamilyGraph;info:Map<string,BoxInfo>;byId:Map<string,Entry>;selected:string|null;onPick:(id:string)=>void}){
+export function Outline({tree,g,info,byId,selected,onPick}:{tree:FamilyTree;g:FamilyGraph;info:Map<string,BoxInfo>;byId:Map<string,Entry>;selected:string|null;onPick:(id:string)=>void}){
  const units=new Map(tree.units.map(u=>[u.id,u]));
  const person=(id:string)=>{const e=byId.get(id),i=info.get(id);return <button type="button" className={`ft-person${selected===id?' on':''}${i?.secret?' secret':''}`} aria-pressed={selected===id} onClick={()=>onPick(id)}>
   <Face entry={e} size={34}/><span className="rw-text"><strong>{e?.title}{i?.dead?' †':''}</strong>{(i?.badge||i?.sub)&&<small>{[i?.badge,i?.sub].filter(Boolean).join(' · ')}</small>}</span></button>;};
@@ -144,7 +146,7 @@ export function FamilyTrees({data,worldId,campaign,change,onOpen,orgId,players:s
  const world=data.worlds.find(w=>w.id===worldId),campaignId=campaign?.id??null;
  const types=useMemo(()=>tieTypesOf(world),[world]);
  const [ownPlayers,setOwnPlayers]=useState(false),players=shownToPlayers??ownPlayers;
- const [choiceKey,setChoiceKey]=useState<string|null>(null),[selected,setSelected]=useState<string|null>(null),[picking,setPicking]=useState(false);
+ const [choiceKey,setChoiceKey]=useState<string|null>(null),[selected,setSelected]=useState<string|null>(null),[picking,setPicking]=useState(false),[generating,setGenerating]=useState(false);
  const narrow=useNarrow();
  const byId=useMemo(()=>new Map(data.entries.map(e=>[e.id,e])),[data.entries]);
  const readable=useMemo(()=>players&&campaign?new Set(playerCampaign(data,campaign.id).entries.map(e=>e.id)):null,[players,campaign,data]);
@@ -189,6 +191,7 @@ export function FamilyTrees({data,worldId,campaign,change,onOpen,orgId,players:s
     <button type="button" role="radio" aria-checked={!players} className={!players?'on':''} onClick={()=>setOwnPlayers(false)}><EyeOff size={13}/> As GM</button>
     <button type="button" role="radio" aria-checked={players} className={players?'on':''} onClick={()=>setOwnPlayers(true)}><Eye size={13}/> As players see it</button>
    </div>}
+   {!players&&<button type="button" className="button small" onClick={()=>setGenerating(true)}><Dices size={14}/> Generate a family</button>}
    {orgId&&person&&<button type="button" className="text-button" onClick={()=>pickFamily(`org:${orgId}`)}>Back to {byId.get(orgId)?.title}</button>}
   </div>
   {choice&&!empty&&<p className="muted ft-about">{choice.orgId?`From the people on ${choice.label}’s Profile. `:''}{tree!.at.size} {tree!.at.size===1?'person':'people'}, {generations} generation{generations===1?'':'s'}.{tree!.cut?' The family is very big, so the tree stops here. Start from a person to see the rest.':''}</p>}
@@ -210,5 +213,6 @@ export function FamilyTrees({data,worldId,campaign,change,onOpen,orgId,players:s
      :<section className="rw-panel"><span className="eyebrow">In the family</span><p className="muted">{players?'Click someone to see their family as players know it.':'Click someone to see their family, add a parent, partner, child or sibling, or change a tie.'}</p></section>}
    </aside>
   </div>}
+  {generating&&<GenerateFamily data={data} worldId={worldId} campaignId={campaignId} startId={chosen??(orgId?undefined:person)} change={change} onClose={()=>setGenerating(false)} onDone={id=>{setGenerating(false);if(orgId&&tree?.at.has(id)){setSelected(id);return;}setChoiceKey(`person:${id}`);setSelected(id);}}/>}
  </div>;
 }
