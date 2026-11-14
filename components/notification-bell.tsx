@@ -52,8 +52,8 @@ export default function NotificationBell() {
       {items.length ? <ul className="bell-list">{items.map(n => <li key={n.id} className={n.read ? undefined : "bell-unread"}>
         <Avatar name={n.name} seed={n.userId} />
         <div>
-          <p><strong>{n.name}</strong> {n.kind === "ask" ? "asked to join" : "joined"} <strong>{n.campaign}</strong>{n.group ? ` as ${n.group}` : ""}.</p>
-          <small>Used the {n.group || "invite"} link · {ago(n.at)}</small>
+          <p><strong>{n.name}</strong> {n.kind === "ask" ? "asked to join" : n.kind === "left" ? "left" : "joined"} <strong>{n.campaign}</strong>{n.group && n.kind !== "left" ? ` as ${n.group}` : ""}.</p>
+          <small>{n.kind === "left" ? (n.group ? `Was in ${n.group}` : "Left the campaign") : `Used the ${n.group || "invite"} link`} · {ago(n.at)}</small>
           {n.kind === "ask" && n.waiting && <div className="bell-actions">
             <button className="hub-button" disabled={!!busy} onClick={() => void answer(n, "decline")}>Decline</button>
             <button className="hub-button hub-button-primary" disabled={!!busy} onClick={() => void answer(n, "letIn")}>Let in</button>
@@ -62,7 +62,7 @@ export default function NotificationBell() {
           {n.kind === "join" && <a className="bell-link" href={hubHref(n.campaignId)}>Change their groups</a>}
         </div>
         {!n.read && <span className="bell-dot" aria-label="New" />}
-      </li>)}</ul> : <p className="hub-muted bell-empty">Nothing yet. When someone asks to join or joins one of your campaigns, it shows up here.</p>}
+      </li>)}</ul> : <p className="hub-muted bell-empty">Nothing yet. When someone asks to join, joins or leaves one of your campaigns, it shows up here.</p>}
       <p className="bell-foot">Choose what you&apos;re told about under Members › Invite links.</p>
     </div>}
   </div>;

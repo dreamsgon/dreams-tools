@@ -126,15 +126,20 @@ export class EncyclopediaStore {
     return grant;
   }
   async player(token: string) {
-    const grant=await this.grant(token);if(!grant)return null;
+    const grant=await this.grant(token);
+    return grant?this.playerOf(grant):null;
+  }
+  /** What a player sees of a campaign, for a grant from a player link or from campaign membership. */
+  async playerOf(grant: {owner:string;campaignId:string}) {
     const {data}=await this.read(grant.owner);
     return data.campaigns.some(c=>c.id===grant.campaignId)?playerCampaign(data,grant.campaignId):null;
   }
   async playerImageOwner(token:string,imageId:string) {
-    const grant=await this.grant(token);if(!grant)return null;
-    const {data}=await this.read(grant.owner);
-    if(!data.campaigns.some(c=>c.id===grant.campaignId))return null;
-    const shared=playerCampaign(data,grant.campaignId);
+    const grant=await this.grant(token);
+    return grant?this.playerImageOwnerOf(grant,imageId):null;
+  }
+  async playerImageOwnerOf(grant: {owner:string;campaignId:string},imageId:string) {
+    const shared=await this.playerOf(grant);if(!shared)return null;
     return shared.campaign.look?.banner?.imageId===imageId||shared.entries.some(e=>e.mapData?.imageId===imageId||e.picture?.imageId===imageId)?grant.owner:null;
   }
 }

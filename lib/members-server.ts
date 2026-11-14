@@ -9,13 +9,15 @@
  *   owner and campaign, the way player links do. The link itself is kept locked so the GM can copy it again.
  * - Each member's list of campaigns they're in (users/<member>/memberships.json) and each owner's
  *   notifications (users/<owner>/notifications.json), written only here.
+ * - A member's browser names one of those campaigns by its `ref`, a hash of the owner and campaign, so the owner's
+ *   account id stays on the server. Opening it checks the member list again every time.
  */
 import { createHmac, hkdfSync, randomBytes } from "node:crypto";
 import type { S3Bucket } from "./storage.ts";
 import { EncyclopediaStore, encyclopediaPrefix, hashToken } from "./encyclopedia/store.ts";
 import { lock, unlock } from "./ai/secret.ts";
 import {
-  MembersError, emptyMemberList, memberListSchema, join, liveLink, permissionInfo, permissionKeys, publicMembers, roleOf, bannedBy,
+  MembersError, emptyMemberList, memberListSchema, join, liveLink, permissionInfo, permissionKeys, publicMembers, roleOf, bannedBy, can, removeMember,
   type JoinOutcome, type MemberList,
 } from "./members.ts";
 
@@ -23,6 +25,8 @@ const listKey = (owner: string, campaignId: string) => encyclopediaPrefix(owner)
 const inviteKey = (hash: string) => `encyclopedia-invite-keys/${hash}.json`;
 const membershipsKey = (user: string) => `users/${encodeURIComponent(user)}/memberships.json`;
 const notificationsKey = (user: string) => `users/${encodeURIComponent(user)}/notifications.json`;
+/** The handle a member's browser uses for a campaign they're in. */
+export const memberRef = (owner: string, campaignId: string) => hashToken(`${owner}\n${campaignId}`);
 const put = (bucket: S3Bucket, key: string, value: unknown, etag?: string | null) =>
   bucket.put(key, JSON.stringify(value), { onlyIf: etag === undefined ? undefined : etag ? { etagMatches: etag } : { etagDoesNotMatch: "*" }, httpMetadata: { contentType: "application/json" } });
 
@@ -187,16 +191,55 @@ export class MemberStore {
     }
   }
 
-  /** The campaigns someone else runs that this person is in, checked against each member list. */
-  async memberships(userId: string) {
+  private async membershipItems(userId: string) {
     const object = await this.bucket.get(membershipsKey(userId));
-    const items = object ? (await object.json<{ items?: Membership[] }>().catch(() => ({ items: [] }))).items ?? [] : [];
-    const out: Membership[] = [];
-    for (const i of items) {
-      const { list } = await this.read(i.owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
-      if (list && (list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) out.push(i);
+    return object ? (await object.json<{ items?: Membership[] }>().catch(() => ({ items: [] }))).items ?? [] : [];
+  }
+
+  /**
+   * The campaigns someone else runs that this person is in, checked against each member list. `open` says
+   * whether their groups may see the front page and player pages.
+   */
+  async memberships(userId: string) {
+    const out: Joined[] = [];
+    for (const { owner, ...i } of await this.membershipItems(userId)) {
+      const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
+      if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer") });
     }
-    return out.map(({ owner: _owner, ...i }) => i);
+    return out;
+  }
+
+  /** Which campaign a member's `ref` names, from their own list of campaigns they're in. */
+  private async byRef(userId: string, ref: string) {
+    if (!/^[a-f0-9]{64}$/.test(ref)) return null;
+    for (const i of await this.membershipItems(userId)) if (await memberRef(i.owner, i.campaignId) === ref) return i;
+    return null;
+  }
+
+  /** The owner and campaign a signed-in member may read the player pages of, or null. */
+  async openAs(userId: string, ref: string) {
+    const found = await this.byRef(userId, ref);
+    if (!found) return null;
+    const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
+    return list && can(list, userId, "seePlayer") ? { owner: found.owner, campaignId: found.campaignId } : null;
+  }
+
+  /** Leave campaign, or stop asking to join. The GM hears about a member leaving the way they hear about joins. */
+  async leave(userId: string, ref: string, now = new Date()) {
+    const found = await this.byRef(userId, ref);
+    if (!found) throw new MembersError("You're not in that campaign.");
+    let left: { name: string; group: string } | null = null;
+    const { list } = await this.change(found.owner, found.campaignId, l => {
+      const m = l.members.find(x => x.userId === userId);
+      if (m) left = { name: m.name, group: m.groups.map(g => l.groups.find(x => x.id === g)?.name ?? "").filter(Boolean).join(", ") };
+      return removeMember(l, userId);
+    });
+    await this.syncMembership(found.owner, found.campaignId, userId);
+    const gone = left as { name: string; group: string } | null;
+    if (!gone) return;
+    if (list.notify.joins) await this.notify(found.owner, { kind: "left", campaignId: found.campaignId, campaign: found.campaign, userId, name: gone.name, group: gone.group }, now);
+    if (list.notify.discord) await this.discord(found.owner, found.campaignId, `**${gone.name}** left the campaign.`).catch(() => {});
   }
 
   // ---- Notifications ---------------------------------------------------------------------------------
@@ -233,4 +276,5 @@ export class MemberStore {
 }
 
 export type Membership = { owner: string; campaignId: string; campaign: string; world: string; ownerName: string; role: string; groups: string[]; asking: boolean; at: string };
-export type Notice = { id: string; kind: "ask" | "join"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };
+export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean };
+export type Notice = { id: string; kind: "ask" | "join" | "left"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };

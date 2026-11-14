@@ -187,8 +187,16 @@
 .joined { margin-top:28px; }
 .joined h2 { margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
 .joined-list { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
-.joined-card { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); }
-.joined-card > div { flex:1; min-width:0; display:flex; flex-direction:column; }
-.joined-card strong { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.joined-card { display:flex; flex-direction:column; gap:12px; padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); }
+.joined-top { display:flex; align-items:center; gap:12px; }
+.joined-top > div { flex:1; min-width:0; display:flex; flex-direction:column; }
+.joined-card strong, .joined-name { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); }
+.joined-name { text-decoration:none; }
+.joined-name:hover { text-decoration:underline; }
 .joined-card small { color:var(--muted); font-size:13px; }
+.joined-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.joined-actions .joined-note { margin-right:auto; color:var(--muted); font-size:13px; }
+.joined-actions a.hub-button { text-decoration:none; margin-right:auto; }
+.joined-confirm { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid var(--line); }
+.joined-confirm p { margin:0; font-size:14px; }
 .joined .campaigns-muted { margin-top:10px; font-size:13px; }
