@@ -9,20 +9,19 @@ import { WHEEL_IDLE_MS } from "@/lib/wheel-resize";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
 import TokenColor from "./token-color";
-import TokenBorder from "./token-border";
+import TokenEditor from "./token-editor";
+import TokenFace from "./token-face";
+import { ArmedPlacement } from "./token-placement";
 import TokenOptions from "./token-options";
-import TokenEditorTabs from "./token-editor-tabs";
 import SaveGalleryStats from "./save-gallery-stats";
 import {syncConditionRounds,conditionAge,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
 import { AiActivity, type SuggestedMove } from "./encyclopedia/ai-activity";
-import TokenPosition from "./token-position";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
 import { navigationStorageKey, parseNavigationState, phoneWidth, readRemembered, remember, type NavigationPanel } from "@/lib/navigation-state";
 import SavedMeasurements from "./saved-measurements";
 import FogRegions from "./fog-regions";
 import {sceneTargets} from "@/lib/exploration";
-import TokenImage from "./token-image";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
@@ -86,14 +85,14 @@ import ConditionEntry from "./condition-entry";
 import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter } from "./encyclopedia-tokens";
 import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
-import TokenNotesControl from "./token-notes-control";
-import TokenStatblock from "./token-statblock";
 import "./maptable-token-layout.css";
 import { applyWorkspaceHpStates } from "@/lib/token-hp-state";
-import TokenStatusControl from "./token-status-control";
-import TokenDisplayControls from "./token-display-controls";
 import CampaignTokenDefaults from "./campaign-token-defaults";
-import { resolvedToken } from "@/lib/token-defaults";
+import { resolvedToken, SIDE_COLOURS, type TokenSide } from "@/lib/token-defaults";
+import { sceneInitials, tokenInitials } from "@/lib/token-initials";
+import { roleSide } from "@/lib/token-gallery";
+import { encyclopediaEntryOf, type ArmedToken } from "@/lib/token-arming";
+import { TOKEN_CLIPBOARD_KEY, copyTokens, placedName } from "@/lib/token-clipboard";
 import ResizableSidebar from "./resizable-sidebar";
 import { FolderPreferenceScope } from "./folder-expansion";
 import SceneOrganizer, { LocationOptions } from "./scene-organizer";
@@ -210,6 +209,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [tokenEditRequest,setTokenEditRequest]=useState({id:"",count:0}),
     [tokenGalleryOpen,setTokenGalleryOpen]=useState(false),
     [galleryTab,setGalleryTab]=useState<"saved"|"encyclopedia">("saved"),
+    [armed,setArmed]=useState<ArmedToken|null>(null),
+    [quickOpen,setQuickOpen]=useState(false),[quickSide,setQuickSide]=useState<TokenSide>("enemy"),
     [tool, setTool] = useState<Tool>("select"),
     [player, setPlayer] = useState(false),
     [hideFog,setHideFog]=useState(false),
@@ -347,6 +348,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const destination = workspace?.collections.some((c) => c.id === location) && campaignFor(location) === campaignId ? location : campaignId;
   const token = scene?.tokens.find((t) => t.id === selected),
     effect = scene?.effects.find((e) => e.id === selected);
+  // Initials for the tokens without a picture: no two differently named tokens on the map share them.
+  const tokenInitialsById = useMemo(() => sceneInitials(scene?.tokens.filter(t => !t.pieceOf) ?? []), [scene?.tokens]);
   useEffect(() => {
     setGridAdjust(false);
   }, [scene?.id, panel, sidebar, dialog]);
@@ -765,6 +768,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setEffectTemplate(null);
     if(next!=="pan")setGridAdjust(false);
     setTool(next);
+    if(next!=="select")setArmed(null);
     if(next!=="marquee")setSelectedIds([]);
     setPlayer(false);
     if(next!=="select")setFogSelectedIndices([]);
@@ -842,7 +846,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const placeLibraryToken = (t: Workspace["tokenLibrary"][number], point?: Point) => {
     if (!scene || player) return;
     const copy={...structuredClone(t),id:uid(),sourceLibraryId:t.id,conditionRounds:{},attachedToId:null,...snap(point??{x:scene.width/2,y:scene.height/2},scene.grid,t.size)};
-    updateScene(s=>s.tokens.push(copy));setSelected(copy.id);setTool("select");setPlayer(false);
+    // Placing a saved token again numbers it (Goblin, Goblin 2), so every token keeps its own initials.
+    updateScene(s=>{copy.name=placedName(t.name,s.tokens.map(x=>x.name));s.tokens.push(copy);});setSelected(copy.id);setTool("select");setPlayer(false);
   };
   // Tokens from Encyclopedia characters live only in Maptable's data; a same-named library token in this campaign is reused.
   // A character's picture is copied into Maptable's assets once, framed the way its page frames the token.
@@ -855,21 +860,33 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     return id;
   };
   const pictureLook = (c: EncyclopediaCharacter, assetId: string) => c.picture ? { assetId, ...tokenImageFit(c.picture), borderColor: c.picture.ring ?? roleColor[c.role], size: c.picture.squares ?? 1 } : {};
-  const addEncyclopediaToken = async (c: EncyclopediaCharacter) => {
+  // Placing the same character twice quickly waits for the first run, so it finds the preset the first one made.
+  const encyclopediaRuns = useRef(new Map<string, Promise<void>>());
+  const addEncyclopediaToken = (c: EncyclopediaCharacter, point?: Point) => {
+    const runs = encyclopediaRuns.current;
+    const run = (runs.get(c.id) ?? Promise.resolve()).then(() => addEncyclopediaTokenNow(c, point));
+    const tail = run.catch(() => undefined);
+    runs.set(c.id, tail);
+    void tail.then(() => { if (runs.get(c.id) === tail) runs.delete(c.id); });
+    return run;
+  };
+  const addEncyclopediaTokenNow = async (c: EncyclopediaCharacter, point?: Point) => {
     if (!scene || player) return;
     const existing = state.current?.tokenLibrary.find(t => t.name === c.name && (state.current?.libraryCampaigns[t.id] ?? null) === campaignId);
     if (existing) {
       let look = {};
       if (c.picture && !existing.assetId) { const assetId = await pictureAsset(c); if (assetId) look = pictureLook(c, assetId); }
       commit(w => { const t = w.tokenLibrary.find(t => t.id === existing.id); if (t) Object.assign(t, { encyclopediaEntryId: t.encyclopediaEntryId ?? c.id }, look); });
-      placeLibraryToken({ ...existing, encyclopediaEntryId: existing.encyclopediaEntryId ?? c.id, ...look }); return;
+      placeLibraryToken({ ...existing, encyclopediaEntryId: existing.encyclopediaEntryId ?? c.id, ...look }, point); return;
     }
     const assetId = await pictureAsset(c);
-    const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), encyclopediaEntryId: c.id, color: roleColor[c.role], useDispositionColor: false,
-      rosterRole: c.role === "npc" || c.role === "creature" ? "npc" : "party", disposition: c.role === "pc" ? "party" : c.role === "companion" ? "ally" : c.role === "creature" ? "enemy" : "neutral",
+    // Without a picture the token takes its side's colours and initials: pc Party, companion Ally, NPC Neutral, creature Enemy.
+    const side = roleSide[c.role];
+    const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), encyclopediaEntryId: c.id, color: SIDE_COLOURS[side].fill, useDispositionColor: false, sideColours: true,
+      rosterRole: c.role === "npc" || c.role === "creature" ? "npc" : "party", disposition: side,
       ...(assetId ? pictureLook(c, assetId) : {}) };
     commit(w => { w.tokenLibrary.push(preset); w.libraryCampaigns[preset.id] = campaignId; });
-    placeLibraryToken(preset);
+    placeLibraryToken(preset, point);
   };
   // "Add to Maptable" on an Encyclopedia page opens Maptable with ?addCharacter=<page id>: add it once the scene is open.
   const pendingCharacter = useRef<string | null>(null);
@@ -883,10 +900,20 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     loadEncyclopedia(true).then(raw => { const c = encyclopediaCharacters(raw).find(c => c.id === id); if (!c) throw new Error("That character is no longer in your Encyclopedia."); return addEncyclopediaToken(c).then(() => setNotice(`${c.name} is on ${scene.name}.`)); })
       .catch(e => setNotice(e instanceof Error ? e.message : "Could not add the character."));
   });
-  const addToken = () => {
+  // On a phone the gallery covers the map, so arming a token puts it away to leave the map free to tap.
+  const armToken = (a: ArmedToken | null) => { setArmed(a); if (a && window.innerWidth <= 900) setTokenGalleryOpen(false); };
+  const disarmPlacement = useCallback(() => setArmed(null), []);
+  // Only armed while it can be placed: on a scene, in GM view, with the select tool, and (for a saved token) still in the library.
+  const armedNow = armed && scene && !player && tool === "select" && (armed.source !== "library" || workspace?.tokenLibrary.some(t => t.id === armed.id)) ? armed : null;
+  const armedToken = armedNow?.source === "library" ? workspace?.tokenLibrary.find(t => t.id === armedNow.id) : undefined;
+  const armedFace = armedNow && workspace ? <TokenFace token={armedToken ?? { ...newToken(armedNow.name), disposition: armedNow.side ?? "neutral", sideColours: true }} workspace={workspace} campaignId={campaignId} initials={tokenInitials(armedNow.name)} size={40} /> : null;
+  // Quick token asks which side it is on first; Enemy is picked to start.
+  const startQuickToken = () => { setSelectedIds([]); setQuickSide("enemy"); setQuickOpen(true); setPanel("tokens"); setSidebar(true); setTool("select"); setPlayer(false); };
+  const addToken = (side: TokenSide) => {
     setSelectedIds([]);
     setFogSelectedIndices([]);
-    const t = newToken(`Token ${(scene?.tokens.length || 0) + 1}`);
+    const t = { ...newToken(`Token ${(scene?.tokens.length || 0) + 1}`), disposition: side, sideColours: true, color: SIDE_COLOURS[side].fill };
+    setQuickOpen(false);
     updateScene((s) => {
       Object.assign(t, snap({ x: s.width / 2, y: s.height / 2 }, s.grid));
       s.tokens.push(t);
@@ -1439,193 +1466,61 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       Make token
                     </button>
                     <button
-                      title="Add a plain token with a name and colour, no image"
-                      onClick={addToken}
+                      title="Add a plain token with a name and a side, no image"
+                      aria-expanded={quickOpen}
+                      onClick={() => { setQuickSide("enemy"); setQuickOpen(open => !open); }}
                     >
                       <UserRound size={16} />
                       Quick token
                     </button>
                   </div>
+                  {quickOpen && <div className="quick-token" role="group" aria-label="Quick token">
+                    <h4>Which side is it on?</h4>
+                    <div className="side-chips" role="group" aria-label="Side">
+                      {(["party","ally","neutral","enemy"] as const).map(s => <button key={s} type="button" aria-pressed={quickSide === s} onClick={() => setQuickSide(s)}>
+                        <i style={{ background: SIDE_COLOURS[s].ring }} aria-hidden="true" />{s === "party" ? "Party" : s === "ally" ? "Ally" : s === "neutral" ? "Neutral" : "Enemy"}</button>)}
+                    </div>
+                    <div className="button-row"><button className="primary" onClick={() => addToken(quickSide)}>Add</button><button onClick={() => setQuickOpen(false)}>Cancel</button></div>
+                    <small>Enemy is picked to start, since most quick tokens are foes. It gets its side&apos;s colour and its initials; change either in Edit.</small>
+                  </div>}
                   <button className="token-gallery-link" onClick={()=>setTokenGalleryOpen(true)}><LayoutGrid size={16} />Add from the token gallery</button>
                   {token ? (
-                    <TokenOptions key={token.id} request={tokenEditRequest.id===token.id?tokenEditRequest.count:0} onRequestHandled={()=>setTokenEditRequest({id:"",count:0})} summary={<><span className="token-avatar" style={{ background: token.color }}>{token.assetId ? <img src={workspace.assets.find((a) => a.id === token.assetId)?.src} alt="" /> : token.name.slice(0, 2)}</span><span><small>Selected</small><strong>{token.name || "Unnamed token"}</strong></span></>}>
-                      <div className="section-heading">
-                        <h3>Selected token</h3>
-                        <button
-                          className="text-button"
-                          onClick={() => setSelected(null)}
-                        >
-                          Deselect
-                        </button>
-                      </div>
-                      <TokenEditorTabs sections={[
-                        {id: "general", label: "General", content: <>
-                      <Field label="Name">
-                        <input
-                          maxLength={120}
-                          value={token.name}
-                          onChange={(e) => patchToken({ name: e.target.value })}
-                        />
-                      </Field>
-                      <div className="form-row">
-                        <NumberField
-                          label="Size (cells)"
-                          title="Shift + scroll on the map to resize"
-                          min={0.25}
-                          max={20}
-                          step={0.25}
-                          value={token.size}
-                          onChange={(size) => patchToken({ size })}
-                        />
-                      </div>
-                      <TokenPosition scene={scene} token={token} update={updateScene}/>
-                      <div className="form-row">
-                        <NumberField
-                          label="X position (px)"
-                          max={scene.width}
-                          value={token.x}
-                          onChange={(x) => patchToken({ x })}
-                        />
-                        <NumberField
-                          label="Y position (px)"
-                          max={scene.height}
-                          value={token.y}
-                          onChange={(y) => patchToken({ y })}
-                        />
-                      </div>
-                      <Toggle
-                        label="Hidden from players"
-                        checked={token.hidden}
-                        onChange={(hidden) => patchToken({ hidden })}
-                      />
-                      <div className="button-row">
-                        <button
-                          onClick={() => {
-                            const t = {
-                              ...structuredClone(token),
-                              id: uid(),
-                              x: Math.min(
-                                scene.width,
-                                token.x + scene.grid.size,
-                              ),
-                            };
-                            updateScene((s) => s.tokens.push(t));
-                            setSelected(t.id);
-                          }}
-                        >
-                          <Copy size={15} />
-                          Duplicate
-                        </button>
-                        <button className="danger" onClick={removeSelected}>
-                          <Trash2 size={15} />
-                          Remove
-                        </button>
-                      </div>
-                      <p className="muted">
-                        Drag the token to move it. Click or tap empty space to
-                        deselect; drag empty space to pan.
-                      </p>
-                        </>},
-                        {id: "appearance", label: "Appearance", content: <>
-                      <div className="form-row">
-                        <Field label="Fill color">
-                          <TokenColor label="Fill color" value={token.color} onChange={color => patchToken({ color, borderColor: token.borderColor ?? token.color })} />
-                        </Field>
-                        <Field label="Border color">
-                          <TokenColor label="Border color" value={resolvedToken(workspace,scene.id,token).borderColor ?? token.color} onChange={borderColor => patchToken({ borderColor, useDispositionColor:false })} />
-                        </Field>
-                        <Field label="Text color">
-                          <TokenColor label="Text color" value={token.textColor ?? "#ffffff"} onChange={textColor => patchToken({ textColor })} />
-                        </Field>
-                      </div>
-                      <TokenBorder token={token} workspace={workspace} commit={commit} />
-                      <TokenImage token={token} workspace={workspace} commit={commit} />
-                      <TokenDisplayControls token={token} workspace={workspace} campaignId={campaignId} onChange={patchToken}/>
-                        </>},
-                        {id: "combat", label: "Combat", content: <>
-                      <TokenStatusControl zeroHpStatus={token.zeroHpStatus} onZeroHpChange={zeroHpStatus=>patchToken({zeroHpStatus})} value={token.status} onChange={status=>patchToken({status})} />
-                      <div className="form-row">
-                        <NumberField
-                          label="HP"
-                          value={token.hp}
-                          onChange={(hp) => patchToken({ hp })}
-                        />
-                        <NumberField
-                          label="Maximum HP"
-                          min={1}
-                          value={token.maxHp}
-                          onChange={(maxHp) => patchToken({ maxHp })}
-                        />
-                      </div>
-                      <div className="hp-buttons">
-                        <button
-                          onClick={() =>
-                            patchToken({ hp: Math.max(0, token.hp - 1) })
-                          }
-                        >
-                          −1 HP
-                        </button>
-                        <button
-                          onClick={() =>
-                            patchToken({
-                              hp: Math.min(token.maxHp, token.hp + 1),
-                            })
-                          }
-                        >
-                          +1 HP
-                        </button>
-                        <span>{address(token, scene.grid)}</span>
-                      </div>
-                      <TokenNotesControl section="combat" token={token} onChange={patchToken} sceneId={scene.id} campaignId={campaignId}/>
-                      <h3>Conditions</h3>
-                      <div className="condition-chips">
-{workspace.conditions.map((c) => (
-                          <button
-                            key={c.id}
-                            className={
-                              token.conditions.includes(c.id) ? "active" : ""
-                            }
-                            onClick={() =>
-                              patchToken({
-                                conditions: token.conditions.includes(c.id)
-                                  ? token.conditions.filter((id) => id !== c.id)
-                                  : [...token.conditions, c.id],
-                              })
-                            }
-                          >
-                            <span style={{ background: c.color }}>
-                              {c.assetId?<img className="condition-icon-image" src={workspace.assets.find(a=>a.id===c.assetId)?.src} alt=""/>:c.icon}
-                            </span>
-                            {c.name}{token.conditions.includes(c.id)&&<small> · {conditionAge(token,c.id,scene.initiativeState?.round??1)===null?"round added unknown":`${conditionAge(token,c.id,scene.initiativeState?.round??1)} rounds`}</small>}
-                          </button>
-                        ))}
-                      </div>
-                        </>},
-                        {id: "statblock", label: "Statblock", content: <TokenStatblock token={token} sceneId={scene.id} campaignId={campaignId} onLink={encyclopediaEntryId=>patchToken({encyclopediaEntryId})}/>},
-                        {id: "notes", label: "Notes", content: <>
-                      <TokenNotesControl section="notes" token={token} onChange={patchToken} sceneId={scene.id} campaignId={campaignId}/>
-                        </>},
-                        {id: "library", label: "Library", content: <>
-                      <SaveGalleryStats key={token.id} token={token} workspace={workspace} campaignId={campaignId} commit={commit} save={manualSave}/>
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          commit((w) => {
-                            const copy = {...structuredClone(token), id: uid(), sourceLibraryId:undefined, conditionRounds:undefined, attachedToId:null,rosterRole:"library" as const};
-                            w.tokenLibrary.push(copy);
-                            const placed=w.scenes.flatMap(s=>s.tokens).find(t=>t.id===token.id);if(placed)placed.sourceLibraryId=copy.id;
-                            w.libraryCampaigns[copy.id] = campaignId;
-                          });
-                          setNotice("Token saved to your library.");
+                    <TokenOptions key={token.id} request={tokenEditRequest.id===token.id?tokenEditRequest.count:0} onRequestHandled={()=>setTokenEditRequest({id:"",count:0})} onDeselect={()=>setSelected(null)}
+                      summary={<><TokenFace token={token} workspace={workspace} campaignId={campaignId} initials={tokenInitialsById.get(token.id)??""} /><span><small>Selected</small><strong>{token.name || "Unnamed token"}</strong></span></>}
+                      render={close=><TokenEditor mode="scene" token={token} workspace={workspace} campaignId={campaignId} initials={tokenInitialsById.get(token.id)??tokenInitials(token.name)}
+                        patch={patchToken} commit={commit} scene={scene} updateScene={updateScene} close={close}
+                        onDuplicate={() => {
+                          const t = { ...structuredClone(token), id: uid(), x: Math.min(scene.width, token.x + scene.grid.size) };
+                          updateScene((s) => s.tokens.push(t));
+                          setSelected(t.id);
                         }}
-                      >
-                        Save to token library
-                      </button>
-                      <div className="button-row">{(["npc","party"] as const).map(role=><button key={role} disabled={!campaignId} onClick={()=>{commit(w=>{const copy={...structuredClone(token),id:uid(),sourceLibraryId:undefined,conditionRounds:undefined,attachedToId:null,rosterRole:role};w.tokenLibrary.push(copy);const placed=w.scenes.flatMap(s=>s.tokens).find(t=>t.id===token.id);if(placed)placed.sourceLibraryId=copy.id;w.libraryCampaigns[copy.id]=campaignId;});setNotice(role==="npc"?"Saved to campaign NPCs.":"Saved to party.");}}>Save as {role==="npc"?"NPC":"party member"}</button>)}</div>
-                        </>},
-                      ]}/>
-                      
-                    </TokenOptions>
+                        onCopy={() => {
+                          const clip = copyTokens(scene, [token.id]);
+                          if (!clip) return;
+                          try { localStorage.setItem(TOKEN_CLIPBOARD_KEY, JSON.stringify(clip)); } catch { /* storage off */ }
+                          setNotice("Copied the token · Ctrl V pastes it on the map");
+                        }}
+                        onDelete={removeSelected}
+                        savedSummary="Save to library, stats"
+                        savedCopy={<section className="editor-card" aria-label="Saved copy">
+                          <h3>Saved copy</h3>
+                          <SaveGalleryStats key={token.id} token={token} workspace={workspace} campaignId={campaignId} commit={commit} save={manualSave}/>
+                          <button
+                            className="text-button"
+                            onClick={() => {
+                              commit((w) => {
+                                const copy = {...structuredClone(token), id: uid(), sourceLibraryId:undefined, conditionRounds:undefined, attachedToId:null,rosterRole:"library" as const};
+                                w.tokenLibrary.push(copy);
+                                const placed=w.scenes.flatMap(s=>s.tokens).find(t=>t.id===token.id);if(placed)placed.sourceLibraryId=copy.id;
+                                w.libraryCampaigns[copy.id] = campaignId;
+                              });
+                              setNotice("Token saved to your library.");
+                            }}
+                          >
+                            Save to token library
+                          </button>
+                          <div className="button-row">{(["npc","party"] as const).map(role=><button key={role} disabled={!campaignId} onClick={()=>{commit(w=>{const copy={...structuredClone(token),id:uid(),sourceLibraryId:undefined,conditionRounds:undefined,attachedToId:null,rosterRole:role};w.tokenLibrary.push(copy);const placed=w.scenes.flatMap(s=>s.tokens).find(t=>t.id===token.id);if(placed)placed.sourceLibraryId=copy.id;w.libraryCampaigns[copy.id]=campaignId;});setNotice(role==="npc"?"Saved to campaign NPCs.":"Saved to party.");}}>Save as {role==="npc"?"NPC":"party member"}</button>)}</div>
+                        </section>}/>}/>
                   ) : effect ? (
                     <>
                       <h3>Selected area effect</h3>
@@ -1697,22 +1592,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                           setPlayer(false);
                         }}
                       >
-                        <span
-                          className="token-avatar"
-                          style={{ background: t.color }}
-                        >
-                          {t.assetId ? (
-                            <img
-                              src={
-                                workspace.assets.find((a) => a.id === t.assetId)
-                                  ?.src
-                              }
-                              alt=""
-                            />
-                          ) : (
-                            t.name.slice(0, 2)
-                          )}
-                        </span>
+                        <TokenFace token={t} workspace={workspace} campaignId={campaignId} initials={tokenInitialsById.get(t.id) ?? ""} />
                         <span>
                           <strong>{t.name || "Unnamed token"}</strong>
                           <small>
@@ -2105,6 +1985,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               className={player ? "active" : ""}
               onClick={() => {
                 setPlayer(!player);
+                setArmed(null);
                 setSelected(null);
               }}
               aria-label={player?"Player view":"GM view"} title="Preview exactly what players see"
@@ -2114,6 +1995,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </button>
           </div>
           {saveRecovery}
+          {!player && <ArmedPlacement armed={armedNow} active={tool === "select"} disarm={disarmPlacement} face={armedFace}/>}
           {imageError && (
             <div className="error-banner" role="alert">
               {imageError}
@@ -2125,7 +2007,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <Board
             measureTokenMovement={measureTokenMovement}
             onMeasureTokenMovementChange={changeMeasureTokenMovement}
-            onLibraryTokenDrop={(id,point)=>{const item=workspace.tokenLibrary.find(t=>t.id===id);if(item)placeLibraryToken(item,point);}}
+            onLibraryTokenDrop={(id,point)=>{
+              const entry=encyclopediaEntryOf(id);
+              if(entry){loadEncyclopedia().then(raw=>{const c=encyclopediaCharacters(raw).find(c=>c.id===entry);if(!c)throw new Error("That character is no longer in your Encyclopedia.");return addEncyclopediaToken(c,point);}).catch(e=>setNotice(e instanceof Error?e.message:"Could not add the character."));return;}
+              const item=workspace.tokenLibrary.find(t=>t.id===id);if(item)placeLibraryToken(item,point);}}
             suggested={suggestedMoves}
             onEditElement={(kind,id)=>{
               setSidebar(true);setTool("select");setSelected(null);setSelectedIds([]);setFogSelectedIndices([]);setSelectedPoiId(null);
@@ -2184,7 +2069,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             fogControlsHost={fogControlsHost}
             cropControlsHost={cropControlsHost}
             onUploadMap={()=>setDialog("scene-map")}
-            onAddToken={addToken}
+            onAddToken={startQuickToken}
             fogSelectionRequest={fogSelectionRequest}
             onMeasurementChange={setMeasurementPoints}
             editToken={id=>{setSelectedIds([]);setFogSelectedIndices([]);setSelected(id);setPanel("tokens");setTokenEditRequest(r=>({id,count:r.count+1}));}}
@@ -2222,7 +2107,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               </button>
             ))}
             <div className="toolbar-divider" />
-            <button onClick={addToken} title="Add token">
+            <button onClick={startQuickToken} title="Add token">
               <Plus size={20} />
               <span>Add token</span>
             </button>
@@ -2260,7 +2145,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             <span>Any system. Your rules.</span>
           </footer>
         </section>
-        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-tabs" role="tablist" aria-label="Token sources"><button role="tab" aria-selected={galleryTab==="saved"} onClick={()=>setGalleryTab("saved")}>Saved tokens</button><button role="tab" aria-selected={galleryTab==="encyclopedia"} onClick={()=>setGalleryTab("encyclopedia")}>From the Encyclopedia</button></div><div className="token-gallery-content">{galleryTab==="saved"?<TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} onPlace={placeLibraryToken} save={manualSave}/>:<EncyclopediaTokens disabled={!scene} onAdd={addEncyclopediaToken} campaignId={activeCampaignId} coGm={!!member}/>}</div></ResizableSidebar>}
+        {tokenGalleryOpen && !player && <ResizableSidebar className="token-gallery-panel" edge="left" defaultWidth={320} storageKey={`maptable:token-gallery-width:${navigationScope ?? "local"}`}><header><h2>Token gallery</h2><button aria-label="Close token gallery" onClick={()=>setTokenGalleryOpen(false)}><X size={18}/></button></header><div className="token-gallery-tabs" role="tablist" aria-label="Token sources"><button role="tab" aria-selected={galleryTab==="saved"} onClick={()=>setGalleryTab("saved")}>Saved tokens</button><button role="tab" aria-selected={galleryTab==="encyclopedia"} onClick={()=>setGalleryTab("encyclopedia")}>From the Encyclopedia</button></div><div className="token-gallery-content">{galleryTab==="saved"?<TokenLibrary workspace={workspace} commit={commit} campaignId={campaignId} armed={armedNow} setArmed={armToken} onMakeToken={()=>setDialog("token")} save={manualSave}/>:<EncyclopediaTokens disabled={!scene} onAdd={c=>addEncyclopediaToken(c)} campaignId={activeCampaignId} coGm={!!member} workspace={workspace} armed={armedNow} setArmed={armToken}/>}</div></ResizableSidebar>}
       </div>
       <input
         hidden

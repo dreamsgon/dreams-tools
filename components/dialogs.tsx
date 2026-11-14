@@ -14,11 +14,16 @@ export function Modal({
   children,
   close,
   wide = false,
+  bare = false,
+  className,
 }: {
   title: string;
   children: ReactNode;
   close: () => void;
   wide?: boolean;
+  /** No built-in header or padding: the content brings its own header and close button. */
+  bare?: boolean;
+  className?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null),
     closeRef = useRef(close);
@@ -70,14 +75,14 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={"modal " + (wide ? "wide" : "")}
+        className={"modal " + (wide ? "wide " : "") + (bare ? "bare " : "") + (className ?? "")}
       >
-        <div className="modal-header">
+        {!bare && <div className="modal-header">
           <h2>{title}</h2>
           <button aria-label="Close dialog" onClick={close}>
             <X size={20} />
           </button>
-        </div>
+        </div>}
         {children}
       </div>
     </div>

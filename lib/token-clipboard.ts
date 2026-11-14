@@ -70,6 +70,13 @@ export function nextTokenName(name: string, taken: string[]): string {
   return `${base} ${Math.max(highest, plain) + 1}`.slice(0, 120);
 }
 
+/** A saved token placed again: "Goblin" beside "Goblin" becomes "Goblin 2", and "Dock Rat" beside "Dock Rat 1" and "Dock Rat 2" becomes "Dock Rat 3". */
+export function placedName(name: string, taken: string[]): string {
+  if (taken.includes(name)) return nextTokenName(name, taken);
+  const prefix = name + " ";
+  return taken.some(item => item.startsWith(prefix) && /^\d+$/.test(item.slice(prefix.length))) ? nextTokenName(name, [...taken, name]) : name;
+}
+
 /**
  * Paste the clipboard into the scene, centred on `at` and snapped like the first token,
  * keeping the tokens' spacing (scaled to this scene's grid). Pasted tokens are new: new ids,

@@ -3,12 +3,16 @@ import { uiZoom } from "@/lib/appearance";
 import { tokenDragPosition, startTokenMovePlan, appendTokenMovePoint, undoTokenMovePoint, tokenMovePlanValid, tokenMovePlanDestination, type TokenMovePlan } from "@/lib/token-movement";
 import MapCropEditor from "./map-crop";
 import { LIBRARY_TOKEN_DROP, libraryTokenDropPoint, type LibraryTokenDrop } from "@/lib/library-token-drop";
-import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
+import { encyclopediaEntryOf } from "@/lib/token-arming";
+import { sceneInitials } from "@/lib/token-initials";
+import TokenFace from "./token-face";
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, ExternalLink, FlipHorizontal2, FlipVertical2, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, Trash2, Upload, X } from "lucide-react";
 import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
+import { tokenCampaignId } from "@/lib/token-defaults";
 import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { drawRulerCells, drawRulerPath, measureRuler } from "@/lib/drag-ruler-draw";
 import { dragRuler } from "@/lib/drag-ruler";
@@ -262,13 +266,14 @@ export default function Board(p: Props) {
     if (!target || p.player || cropEditing || !p.onLibraryTokenDrop) return;
     const drop = (event: Event) => {
       const detail = (event as CustomEvent<LibraryTokenDrop>).detail;
-      if (!detail || !p.workspace.tokenLibrary.some(token => token.id === detail.tokenId)) return;
+      if (!detail || !(encyclopediaEntryOf(detail.tokenId) || p.workspace.tokenLibrary.some(token => token.id === detail.tokenId))) return;
       const bounds = cropFocus ? mapCrop(p.scene) : null;
       const z = uiZoom(), box = target.getBoundingClientRect();
       const point = libraryTokenDropPoint({ x: detail.clientX / z, y: detail.clientY / z }, { left: box.left / z, top: box.top / z }, view,
         bounds ?? { x: 0, y: 0, width: p.scene.width, height: p.scene.height });
-      if (!point || p.scene.tokens.length >= 500) return;
+      if (!point) return;
       event.preventDefault();
+      if (p.scene.tokens.length >= 500) { if (!detail.previewOnly) setNotice("This scene has the most tokens it can hold."); return; }
       if (!detail.previewOnly) p.onLibraryTokenDrop?.(detail.tokenId, point);
     };
     target.addEventListener(LIBRARY_TOKEN_DROP, drop);
@@ -1401,6 +1406,8 @@ export default function Board(p: Props) {
         {p.scene.crop&&<><button style={{pointerEvents:"auto"}} onClick={()=>{setNewCrop(false);setCropEditing(true);}}>Edit crop</button><button style={{pointerEvents:"auto"}} onClick={()=>setCropFocus(value=>!value)}>{cropFocus?"Show full map":"Focus crop"}</button><button style={{pointerEvents:"auto"}} onClick={()=>{p.update(s=>{s.cropFocus=false;s.savedCrops=s.savedCrops.filter(c=>c.id!==s.activeCropId);s.activeCropId=null;s.crop=null;});}}>Delete crop</button></>}
         </div>
   );
+  const sceneTokenInitials = useMemo(() => sceneInitials(p.scene.tokens.filter(t => !t.pieceOf)), [p.scene.tokens]);
+  const menuTokenInitials = contextMenu?.kind === "token" ? sceneTokenInitials.get(String(contextMenu.id)) : undefined;
   const menuItem = contextMenu?.kind === "token" ? p.scene.tokens.find(item => item.id === contextMenu.id)
     : contextMenu?.kind === "effect" ? p.scene.effects.find(item => item.id === contextMenu.id)
     : contextMenu?.kind === "poi" ? p.scene.pointsOfInterest.find(item => item.id === contextMenu.id)
@@ -1534,7 +1541,7 @@ export default function Board(p: Props) {
       })()}
       {contextMenu && createPortal(<div ref={menuRef} className="context-menu" role="menu" aria-label={`${contextMenu.kind} actions`} onContextMenu={event => event.preventDefault()} style={{ left: contextMenu.x, top: contextMenu.y }}>
         {contextMenu.kind === "map" ? menuAction(`Paste ${clipboard ? plural(clipboard.tokens.length) : "tokens"} here`, () => pasteAt(contextMenu.at ?? null), { icon: <ClipboardPaste size={15} />, shortcut: "Ctrl V" }) : <>
-        {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{menuItem.name}</div>}
+        {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{contextMenu.kind === "token" && menuTokenInitials !== undefined && <TokenFace token={menuItem as Token} workspace={p.workspace} campaignId={tokenCampaignId(p.workspace, p.scene.id)} initials={menuTokenInitials} size={22} className="context-menu-face" />}<span>{menuItem.name}</span></div>}
         {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget, { icon: contextMenu.kind === "measurement" ? <MousePointer2 size={15} /> : <Pencil size={15} /> })}
         {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"), { icon: menuItem.hidden ? <Eye size={15} /> : <EyeOff size={15} /> })}
         {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && !(contextMenu.kind === "token" && menuTokenIds(String(contextMenu.id)).length > 1) && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}

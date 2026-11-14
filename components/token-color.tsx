@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 
-export default function TokenColor({ label, value, onChange }: {
-  label: string; value: string; onChange: (color: string) => void;
+export default function TokenColor({ label, value, onChange, disabled = false }: {
+  label: string; value: string; onChange: (color: string) => void; disabled?: boolean;
 }) {
   const [hex, setHex] = useState(value);
   useEffect(() => setHex(value), [value]);
   return <span className="token-color-control">
-    <input type="color" aria-label={label} value={value} onChange={e => { setHex(e.target.value); onChange(e.target.value); }} />
-    <input type="text" aria-label={`${label} hex`} value={hex} spellCheck={false} placeholder="#388565"
+    <input type="color" aria-label={label} value={value} disabled={disabled} onChange={e => { setHex(e.target.value); onChange(e.target.value); }} />
+    <input type="text" aria-label={`${label} hex`} value={hex} disabled={disabled} spellCheck={false} placeholder="#388565"
       onChange={e => {
         const next = e.target.value.trim();
         setHex(next);

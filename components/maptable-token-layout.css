@@ -2,7 +2,7 @@
 .token-gallery-panel{display:flex;flex-direction:column;flex-shrink:0;min-height:0;border-left:1px solid var(--line);background:var(--ui-surface-ffffff);overflow:hidden;}
 .token-gallery-panel>header{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--line);}
 .token-gallery-panel h2{font-size:15px;margin:0;}
-.token-gallery-content{overflow:auto;padding:14px;min-height:0;flex:1;}
+.token-gallery-content{overflow:hidden;padding:0;min-height:0;flex:1;display:flex;flex-direction:column;}
 @media(max-width:900px){.workspace>.token-gallery-panel{position:absolute;right:8px;top:8px;bottom:65px;width:min(380px,calc(100% - 16px));z-index:35;box-shadow:0 8px 32px #0005;border:1px solid var(--line);border-radius:var(--radius);}}
 
 .workspace:has(>.token-gallery-panel){position:relative;}

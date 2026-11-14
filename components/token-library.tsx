@@ -1,231 +1,178 @@
 "use client";
-import { uiZoom } from "@/lib/appearance";
-
 import "./token-library.css";
-
-import TokenStatusControl from "./token-status-control";
-import TokenNotesControl from "./token-notes-control";
-import TokenEditorTabs from "./token-editor-tabs";
-import { InitiativeField } from "./map-initiative";
-import TokenDisplayControls from "./token-display-controls";
-import TokenColor from "./token-color";
-
-import TokenBorder from "./token-border";
-
-import TokenImage from "./token-image";
-
-import { useEffect, useRef, useState } from "react";
-import { LIBRARY_TOKEN_DROP, libraryTokenDropTarget } from "@/lib/library-token-drop";
+import "./token-ui.css";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown, ChevronRight, Copy as CopyIcon, FolderPlus, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
 import { Modal } from "./dialogs";
-
-import { Pencil } from "lucide-react";
-
-import { canMoveCollection, collectionPath, createTokenFolder, moveLibraryTokenToCampaign, moveTokenToFolder, tokenFoldersForCampaign, newToken, type Token, type Workspace } from "@/lib/model";
-
+import { confirmDialog } from "./confirm-dialog";
+import { useFolderExpansion } from "./folder-expansion";
 import LibraryOrganizer from "./library-organizer";
+import TokenFace from "./token-face";
+import TokenEditor from "./token-editor";
+import { TokenTile, usePlacementGesture } from "./token-placement";
+import { canMoveCollection, collectionPath, createTokenFolder, moveLibraryTokenToCampaign, moveTokenToFolder, tokenFoldersForCampaign, newToken, uid, type Token, type Workspace } from "@/lib/model";
+import { tokenDisposition } from "@/lib/token-defaults";
+import { tokenInitials } from "@/lib/token-initials";
+import { filterGalleryTokens, galleryGroups, GALLERY_SIDES, type GallerySide } from "@/lib/token-gallery";
+import { toggleArmed, type ArmedToken } from "@/lib/token-arming";
 
+const SIDE_DOT: Record<string, string> = { party: "#6f9cf2", ally: "#4fcf9a", neutral: "#e8a93a", enemy: "#f0685f" };
 
-
-export default function TokenLibrary({ workspace: w, commit, campaignId, onPlace, save }: {
-
-  workspace: Workspace; commit: (fn: (w: Workspace) => void) => void;
-
-  campaignId: string | null; onPlace: (token: Token) => void; save?: () => Promise<unknown>;
-
+/** Saved tokens as a compact grid: search, side chips, folders as groups. Click a tile to arm it, then click the map; or drag it on. */
+export default function TokenLibrary({ workspace: w, commit, campaignId, armed, setArmed, onMakeToken, save }: {
+  workspace: Workspace; commit: (fn: (w: Workspace) => void) => void; campaignId: string | null;
+  armed: ArmedToken | null; setArmed: (a: ArmedToken | null) => void; onMakeToken: () => void; save?: () => Promise<unknown>;
 }) {
-
-  const [location, setLocation] = useState<string | null>(null);
-
-  const [saveMessage,setSaveMessage]=useState("");
-  const [editing, setEditing] = useState<string | null>(null);
-  const placementDrag = useRef<{ pointerId: number; tokenId: string; x: number; y: number; active: boolean } | null>(null);
-  const suppressClick = useRef(false);
-  const [dragPreview, setDragPreview] = useState<{ name: string; x: number; y: number; ready: boolean } | null>(null);
-  const [dragMessage, setDragMessage] = useState("");
-  const resetPlacement = () => { placementDrag.current = null; setDragPreview(null); };
-  useEffect(() => {
-    const cancel = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && placementDrag.current) {
-        suppressClick.current = true; placementDrag.current = null; setDragPreview(null); setDragMessage("Placement cancelled.");
-      }
-    };
-    const blur = () => { placementDrag.current = null; setDragPreview(null); };
-    window.addEventListener("keydown", cancel); window.addEventListener("blur", blur);
-    return () => { window.removeEventListener("keydown", cancel); window.removeEventListener("blur", blur); };
-  }, []);
+  const [query, setQuery] = useState(""), [side, setSide] = useState<GallerySide>("all"), [scope, setScope] = useState<"campaign" | "all">("campaign");
+  const [editing, setEditing] = useState<string | null>(null), [menu, setMenu] = useState<string | null>(null), [organizing, setOrganizing] = useState(false);
+  const [creating, setCreating] = useState(false), [folderName, setFolderName] = useState(""), [location, setLocation] = useState<string | null>(null);
+  const [closed, setClosed] = useFolderExpansion("token-gallery");
+  const gesture = usePlacementGesture(token => setArmed(toggleArmed(armed, token)));
+  const menuBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const closeForRoll = () => setEditing(null);
     window.addEventListener("maptable-tray-roll", closeForRoll);
     return () => window.removeEventListener("maptable-tray-roll", closeForRoll);
   }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const away = (e: PointerEvent) => { if (!menuBox.current?.contains(e.target as Node)) setMenu(null); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setMenu(null); } };
+    document.addEventListener("pointerdown", away); document.addEventListener("keydown", esc, true);
+    return () => { document.removeEventListener("pointerdown", away); document.removeEventListener("keydown", esc, true); };
+  }, [menu]);
 
-  const [roster,setRoster]=useState("all");
-
-  const [filter, setFilter] = useState("current");
-
-  const folders = filter === "all" ? w.tokenFolders : tokenFoldersForCampaign(w, campaignId);
-  const folder = folders.some(f => f.id === location) ? location : null;
-  const items = w.tokenLibrary.filter(t => (roster === "all" || (t.rosterRole ?? "library") === roster) &&
-    (filter === "all" || !w.libraryCampaigns[t.id] || w.libraryCampaigns[t.id] === campaignId));
-
+  const folders = scope === "all" ? w.tokenFolders : tokenFoldersForCampaign(w, campaignId);
+  const narrowed = side !== "all" || !!query.trim();
+  const tokens = useMemo(() => filterGalleryTokens(w, { campaignId, scope, side, query }), [w, campaignId, scope, side, query]);
+  const groups = galleryGroups(folders, tokens, w.tokenFolderLocations, narrowed);
   const partyMarker = w.tokenLibrary.find(t => t.partyMarker && w.libraryCampaigns[t.id] === campaignId);
-
+  const patch = (id: string, update: Partial<Token>) => commit(next => { const token = next.tokenLibrary.find(t => t.id === id); if (token) Object.assign(token, update); });
   const createPartyMarker = () => {
-
     if (!campaignId) return;
-
-    if (partyMarker) { setEditing(partyMarker.id); setLocation(w.tokenFolderLocations[partyMarker.id] ?? null); return; }
-
-    const token: Token = { ...newToken("Party"), rosterRole: "party", partyMarker: true, showHp: false, hp: 0, maxHp: 1, color: "#d69b36" };
-
+    if (partyMarker) { setEditing(partyMarker.id); return; }
+    const token: Token = { ...newToken("Party"), rosterRole: "party", disposition: "party", partyMarker: true, showHp: false, hp: 0, maxHp: 1, color: "#d69b36", sideColours: false };
     commit(next => { next.tokenLibrary.push(token); next.libraryCampaigns[token.id] = campaignId; });
+    setEditing(token.id);
+  };
+  const remove = async (t: Token) => {
+    if (!await confirmDialog({ title: `Delete ${t.name || "this saved token"}?`, message: "Tokens already on maps keep their settings.", confirm: "Delete saved token", danger: true })) return;
+    commit(next => { next.tokenLibrary = next.tokenLibrary.filter(token => token.id !== t.id); delete next.tokenFolderLocations[t.id]; delete next.libraryLocations[t.id]; delete next.libraryCampaigns[t.id]; });
+    if (armed?.id === t.id) setArmed(null);
+    setEditing(null); setMenu(null);
+  };
+  const duplicate = (t: Token) => {
+    const copy: Token = { ...structuredClone(t), id: uid(), name: `${t.name} copy`.slice(0, 120), sourceLibraryId: undefined, conditionRounds: undefined, attachedToId: null };
+    commit(next => { next.tokenLibrary.push(copy); next.libraryCampaigns[copy.id] = next.libraryCampaigns[t.id] ?? null; next.tokenFolderLocations[copy.id] = next.tokenFolderLocations[t.id] ?? null; });
+    setEditing(copy.id);
+  };
+  const editor = w.tokenLibrary.find(t => t.id === editing);
+  const owner = (t: Token) => w.libraryCampaigns[t.id] ?? campaignId;
 
-    setEditing(token.id); setLocation(null);
-
+  const tile = (t: Token) => {
+    const isArmed = armed?.id === t.id;
+    const folderChoices = w.tokenFolders.filter(f => f.campaignId === (w.libraryCampaigns[t.id] ?? null));
+    return <TokenTile key={t.id} armed={isArmed} name={t.name} tint={tokenDisposition(t)}
+      title={`${t.name}. Click, then click the map to place it, or drag it onto the map.`}
+      gesture={gesture.bind({ id: t.id, name: t.name, source: "library" })}
+      face={<TokenFace token={t} workspace={w} campaignId={owner(t)} initials={tokenInitials(t.name)} size={32} />}
+      tools={<>
+        <button type="button" aria-label={`Edit ${t.name}`} title="Edit" onClick={() => setEditing(t.id)}><Pencil size={12} /></button>
+        <div className="token-tile-menu" ref={menu === t.id ? menuBox : undefined}>
+          <button type="button" aria-label={`More for ${t.name}`} aria-haspopup="menu" aria-expanded={menu === t.id} title="More" onClick={() => setMenu(menu === t.id ? null : t.id)}><MoreHorizontal size={12} /></button>
+          {menu === t.id && <div className="token-tile-popover" role="menu" aria-label={`${t.name} actions`}>
+            <label>Move to folder<select value={w.tokenFolderLocations[t.id] ?? ""} onChange={e => { const target = e.target.value || null; commit(next => { moveTokenToFolder(next, t.id, target); }); setMenu(null); }}>
+              <option value="">Not in a folder</option>{folderChoices.map(f => <option key={f.id} value={f.id}>{collectionPath(w.tokenFolders, f.id)}</option>)}
+            </select></label>
+            <button type="button" role="menuitem" onClick={() => { duplicate(t); setMenu(null); }}><CopyIcon size={13} /> Duplicate</button>
+            <button type="button" role="menuitem" className="danger" onClick={() => void remove(t)}>Delete…</button>
+          </div>}
+        </div>
+      </>} />;
   };
 
-  const patch = (id: string, update: Partial<Token>) => commit(next => {
+  const organizerItems = w.tokenLibrary.filter(t => scope === "all" || !w.libraryCampaigns[t.id] || w.libraryCampaigns[t.id] === campaignId);
+  const organizerFolder = folders.some(f => f.id === location) ? location : null;
 
-    const token = next.tokenLibrary.find(t => t.id === id);
-
-    if (token) Object.assign(token, update);
-
-  });
-
-  return <section className="saved-token-library">
-
-    <div className="button-row token-roster-filters">{[["all","All tokens"],["library","Library"],["npc","Campaign NPCs"],["party","Party"]].map(([value,label])=><button key={value} aria-pressed={roster===value} onClick={()=>{setRoster(value);setLocation(null);setEditing(null);}}>{label}</button>)}</div>
-
-    <h3>{roster==="npc"?"Campaign NPCs":roster==="party"?"Party":roster==="all"?"All tokens":"Token library"} <span className="count">{items.length}</span></h3>
-
-    {roster === "party" && <div className="party-marker-callout"><strong>Overworld party marker</strong><p>One reusable marker for the whole group. Place a copy on any campaign map.</p><button disabled={!campaignId} onClick={createPartyMarker}>{partyMarker ? "Edit party marker" : "Create party marker"}</button>{partyMarker && <button onClick={() => onPlace(partyMarker)}>Place {partyMarker.name || "Party"}</button>}</div>}
-
-    {(roster==="npc" || roster==="party")&&<><button disabled={!campaignId} onClick={()=>{const t={...newToken(roster==="npc"?"New NPC":"New party member"),rosterRole:roster as "npc"|"party"};commit(next=>{next.tokenLibrary.push(t);next.libraryCampaigns[t.id]=campaignId;});setEditing(t.id);setLocation(null);}}>New {roster==="npc"?"NPC":"party member"}</button><p className="muted">{campaignId?"Saved for this campaign. Click a name to place a copy in this scene.":"Open a campaign to save NPCs and party members."}</p></>}
-
-    {<label>Show<select aria-label="Token library campaign filter" value={filter} onChange={e => setFilter(e.target.value)}><option value="current">This campaign + shared</option><option value="all">All campaigns</option></select></label>}
-
-    <LibraryOrganizer gallery key={`${roster}:${campaignId ?? "shared"}`} title={roster === "party" ? "Party" : roster === "npc" ? "Campaign NPCs" : "Token library"} folders={folders} items={items} locations={w.tokenFolderLocations} location={folder} setLocation={setLocation}
-
-      onCreateFolder={name => commit(next => { createTokenFolder(next, campaignId, name); })}
-
-      onRenameFolder={(id, name) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && name.trim()) f.name = name.trim().slice(0, 120); })}
-
-      canMoveFolder={(id, parentId) => parentId === null || w.tokenFolders.find(f => f.id === id)?.campaignId === w.tokenFolders.find(f => f.id === parentId)?.campaignId}
-
-      onMoveFolder={(id, parentId) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && (parentId === null || next.tokenFolders.some(parent => parent.id === parentId && parent.campaignId === f.campaignId)) && canMoveCollection(next.tokenFolders, id, parentId)) f.parentId = parentId; })}
-
-      onRemoveFolder={id => commit(next => {
-
-        const f = next.tokenFolders.find(f => f.id === id); if (!f) return;
-
-        next.tokenFolders = next.tokenFolders.filter(f => f.id !== id);
-
-        next.tokenFolders.forEach(child => { if (child.parentId === id) child.parentId = f.parentId; });
-
-        for (const locations of [next.tokenFolderLocations]) for (const key in locations) if (locations[key] === id) locations[key] = f.parentId;
-
-      })}
-
-      onMoveItem={(id, target) => commit(next => { moveTokenToFolder(next, id, target); })}
-
-      renderItem={t => <div className="token-library-item">
-
-        <div className="library-row">
-
-          <button type="button" title={`Click to place ${t.name}, or drag onto the map`} aria-label={`Place ${t.name} on map`}
-            style={{ touchAction: "none" }} onDragStart={event => event.preventDefault()}
-            onPointerDown={event => {
-              if (event.button !== 0 || !event.isPrimary) return;
-              suppressClick.current = false;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              placementDrag.current = { pointerId: event.pointerId, tokenId: t.id, x: event.clientX, y: event.clientY, active: false };
-            }}
-            onPointerMove={event => {
-              const d = placementDrag.current;
-              if (!d || d.pointerId !== event.pointerId) return;
-              if (!d.active && Math.hypot(event.clientX - d.x, event.clientY - d.y) >= 6) { d.active = true; suppressClick.current = true; setDragMessage(""); }
-              if (d.active) { event.preventDefault(); setDragPreview({ name: t.name, x: event.clientX, y: event.clientY, ready: !!libraryTokenDropTarget(event.clientX, event.clientY, d.tokenId) }); }
-            }}
-            onPointerUp={event => {
-              const d = placementDrag.current;
-              if (!d || d.pointerId !== event.pointerId) return;
-              if (d.active) {
-                const target = libraryTokenDropTarget(event.clientX, event.clientY, d.tokenId);
-                const accepted = target && !target.dispatchEvent(new CustomEvent(LIBRARY_TOKEN_DROP, { cancelable: true, detail: { tokenId: d.tokenId, clientX: event.clientX, clientY: event.clientY } }));
-                setDragMessage(accepted ? `Placed ${t.name} on map.` : "Not placed. Drop onto the map to place a token.");
-              }
-              resetPlacement();
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-            }}
-            onPointerCancel={() => { suppressClick.current = true; resetPlacement(); }}
-            onLostPointerCapture={() => { if (placementDrag.current?.active) suppressClick.current = true; resetPlacement(); }}
-            onClick={event => { if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; } suppressClick.current = false; onPlace(t); }}>
-
-            <span className="token-avatar" style={{ background: t.color }}>{t.assetId && w.assets.some(a => a.id === t.assetId) ? <img src={w.assets.find(a => a.id === t.assetId)?.src} alt="" /> : t.name.slice(0, 2)}</span><span className="saved-token-label"><strong>{t.name || "Unnamed token"}</strong><small>{t.partyMarker ? "Group marker · no HP" : t.rosterRole === "party" ? "Party member" : t.rosterRole === "npc" ? "Campaign NPC" : "Library token"}</small></span>
-
-          </button>
-
-          <button type="button" aria-label={`Edit ${t.name}`} aria-expanded={editing === t.id} onClick={() => setEditing(editing === t.id ? null : t.id)}><Pencil size={14} /></button>
-
+  return <section className="saved-token-library token-gallery-body">
+    <div className="gallery-scroll">
+      <label className="gallery-search"><Search size={14} aria-hidden="true" /><input aria-label="Find a token" placeholder="Find a token" value={query} onChange={e => setQuery(e.target.value)} /></label>
+      <div className="gallery-chips" role="group" aria-label="Side">
+        {GALLERY_SIDES.map(s => <button key={s.id} type="button" aria-pressed={side === s.id} onClick={() => setSide(s.id)}>
+          {s.id !== "all" && <i style={{ background: SIDE_DOT[s.id] }} aria-hidden="true" />}{s.label}</button>)}
+      </div>
+      <div className="gallery-scope"><span>Showing</span>
+        <div className="segmented" role="group" aria-label="Token library campaign filter">
+          <button type="button" aria-pressed={scope === "campaign"} onClick={() => setScope("campaign")}>This campaign</button>
+          <button type="button" aria-pressed={scope === "all"} onClick={() => setScope("all")}>All campaigns</button>
         </div>
-
-
-
-      </div>} />
-
-    {(() => { const t = w.tokenLibrary.find(token => token.id === editing); return t && createPortal(<Modal title={`Edit ${t.name || "saved token"}`} close={() => setEditing(null)}>        <div className="organizer-editor token-library-editor">
-
-          <TokenEditorTabs key={t.id} sections={[
-            {id: "general", label: "General", content: <>
-          <label>Name<input aria-label="Saved token name" maxLength={120} value={t.name} onChange={e => patch(t.id, { name: e.target.value })} /></label>
-          <label><input type="checkbox" checked={t.hidden} onChange={e => patch(t.id, { hidden: e.target.checked })} /> Hidden from players</label>
-
-            </>},
-            {id: "appearance", label: "Appearance", content: <>
-          <div className="two-col"><label>Size<input type="number" min={0.25} max={20} step={0.25} value={t.size} onChange={e => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) patch(t.id, { size: Math.max(0.25, Math.min(20, n)) }); }} /></label><label>Fill color<TokenColor label="Fill color" value={t.color} onChange={color => patch(t.id, { color, borderColor: t.borderColor ?? t.color })} /></label></div>
-
-          <label>Border color<TokenColor label="Border color" value={t.borderColor ?? t.color} onChange={borderColor => patch(t.id, { borderColor, useDispositionColor: false })} /></label><label>Text color<TokenColor label="Text color" value={t.textColor ?? "#ffffff"} onChange={textColor => patch(t.id, { textColor })} /></label>
-
-          <TokenBorder token={t} workspace={w} commit={commit} saved /><TokenImage token={t} workspace={w} commit={commit} saved /><TokenDisplayControls token={t} workspace={w} campaignId={w.libraryCampaigns[t.id] ?? campaignId} onChange={update => patch(t.id, update)} />
-
-          
-
-            </>},
-            {id: "combat", label: "Combat", content: <>
-          <TokenStatusControl zeroHpStatus={t.zeroHpStatus} onZeroHpChange={zeroHpStatus=>patch(t.id,{zeroHpStatus})} value={t.status} onChange={status=>patch(t.id,{status})} />
-          <label>Initiative<InitiativeField label="Saved token initiative" value={t.initiative} onCommit={initiative=>patch(t.id,{initiative})}/></label>
-          {!t.partyMarker && <div className="two-col"><label>HP<input type="number" min={0} max={1000000} value={t.hp} onChange={e => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) patch(t.id, { hp: Math.max(0, Math.min(1000000, n)) }); }} /></label><label>Max HP<input type="number" min={1} max={1000000} value={t.maxHp} onChange={e => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) patch(t.id, { maxHp: Math.max(1, Math.min(1000000, n)) }); }} /></label></div>}
-
-          <TokenNotesControl section="combat" token={t}  campaignId={w.libraryCampaigns[t.id] ?? campaignId} onChange={update => patch(t.id, update)} />
-
-            </>},
-            {id: "notes", label: "Notes", content: <>
-          <TokenNotesControl section="notes" token={t} sceneId={!w.libraryCampaigns[t.id] || w.libraryCampaigns[t.id] === campaignId ? w.activeId : undefined} campaignId={w.libraryCampaigns[t.id] ?? campaignId} onChange={update => patch(t.id, update)} />
-
-            </>},
-            {id: "library", label: "Library", content: <>
-          {!t.partyMarker && <label>Save as<select value={t.rosterRole??"library"} onChange={e=>{const role=e.target.value as "library"|"npc"|"party";commit(next=>{const saved=next.tokenLibrary.find(item=>item.id===t.id)!;saved.rosterRole=role;if(role!=="library")moveLibraryTokenToCampaign(next,t.id,campaignId);});setRoster(role);}}><option value="library">Library token</option><option value="npc" disabled={!campaignId}>Campaign NPC</option><option value="party" disabled={!campaignId}>Party member</option></select></label>}
-
-          <label>Folder<select value={w.tokenFolderLocations[t.id] ?? ""} onChange={e => commit(next => { moveTokenToFolder(next, t.id, e.target.value || null); })}><option value="">Library root</option>{w.tokenFolders.filter(f => f.campaignId === (w.libraryCampaigns[t.id] ?? null)).map(f => <option key={f.id} value={f.id}>{collectionPath(w.tokenFolders, f.id)}</option>)}</select></label>
-
-          {!t.partyMarker && <label>Campaign<select value={w.libraryCampaigns[t.id] ?? ""} onChange={e => commit(next => moveLibraryTokenToCampaign(next, t.id, e.target.value || null))}>{(t.rosterRole??"library")==="library"&&<option value="">Shared</option>}{w.collections.filter(c => c.kind === "campaign").map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
-
-          <button type="button" onClick={() => { commit(next => { next.tokenLibrary = next.tokenLibrary.filter(token => token.id !== t.id); delete next.tokenFolderLocations[t.id]; delete next.libraryLocations[t.id]; delete next.libraryCampaigns[t.id]; }); setEditing(null); }}>Delete saved token</button>
-
-            </>},
-          ]}/>
-          <button type="button" onClick={async()=>{setSaveMessage("Saving…");try{const result=await save?.();setSaveMessage(result===false?"Cloud save failed. Retry using Save.":"Gallery token saved.");}catch{setSaveMessage("Cloud save failed. Retry using Save.");}}}>Save gallery token</button><small role="status">{saveMessage}</small>
-          <small>Edits and deletion affect this saved token. Placed tokens keep their settings.</small>
-
-        </div></Modal>, document.body); })()}
-    {dragPreview && createPortal(<div aria-hidden="true" className="token-drag-preview" data-ready={dragPreview.ready ? "true" : "false"} style={{ left: dragPreview.x / uiZoom() + 14, top: dragPreview.y / uiZoom() + 14 }}>{dragPreview.name || "Token"} · {dragPreview.ready ? "Release to place" : "Drag onto map"}</div>, document.body)}
-    <p className="empty-small">Click a token’s icon or name to place it, or drag it onto the map. Use the grip to move it between folders. Escape cancels a drag.</p>
-    <p role="status" className="empty-small">{dragMessage}</p>
-
+      </div>
+      {campaignId && <p className="gallery-party-marker">Party marker for the overworld map <button type="button" className="text-button" onClick={createPartyMarker}>{partyMarker ? "Edit" : "Create"}</button></p>}
+      {groups.map(g => {
+        const key = g.id ?? "loose", shut = closed.has(key) && !query.trim();
+        return <section key={key} className="gallery-group" aria-label={g.name}>
+          <h3><button type="button" aria-expanded={!shut} onClick={() => setClosed(old => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; })}>
+            {shut ? <ChevronRight size={13} /> : <ChevronDown size={13} />}<span>{g.name}</span><small>{g.tokens.length}</small></button></h3>
+          {!shut && (g.tokens.length ? <div className="token-tile-grid">{g.tokens.map(tile)}</div> : <p className="gallery-empty">Empty folder. Move tokens here from a tile&apos;s ⋯ menu or Organize.</p>)}
+        </section>;
+      })}
+      {!tokens.length && <p className="gallery-empty">{narrowed ? "No tokens match." : scope === "campaign" ? "No saved tokens for this campaign yet. Make one below, or switch to All campaigns." : "No saved tokens yet. Make one below."}</p>}
+      <p className="gallery-hint">Click a token, then click the map. Or drag it straight on. Hover a token to edit it or move it to a folder.</p>
+      <p role="status" className="gallery-hint">{gesture.message}</p>
+      {creating && <form className="gallery-folder-form" onSubmit={e => { e.preventDefault(); if (!folderName.trim()) return; commit(next => { createTokenFolder(next, campaignId, folderName.trim()); }); setCreating(false); setFolderName(""); }}>
+        <label>Folder name<input autoFocus required maxLength={120} value={folderName} onChange={e => setFolderName(e.target.value)} /></label>
+        <div className="button-row"><button className="primary" disabled={!folderName.trim()}>Create folder</button><button type="button" onClick={() => setCreating(false)}>Cancel</button></div>
+      </form>}
+    </div>
+    <footer className="gallery-footer">
+      <button type="button" className="primary" onClick={onMakeToken}><Plus size={14} /> Make token</button>
+      <button type="button" onClick={() => { setCreating(true); setFolderName(""); }}><FolderPlus size={13} /> New folder</button>
+      <button type="button" className="gallery-organize" onClick={() => setOrganizing(true)}>Organize…</button>
+    </footer>
+    {organizing && createPortal(<Modal title="Organize saved tokens" wide close={() => setOrganizing(false)}>
+      <LibraryOrganizer title="Token library" folders={folders} items={organizerItems} locations={w.tokenFolderLocations} location={organizerFolder} setLocation={setLocation}
+        onCreateFolder={name => commit(next => { createTokenFolder(next, campaignId, name); })}
+        onRenameFolder={(id, name) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && name.trim()) f.name = name.trim().slice(0, 120); })}
+        canMoveFolder={(id, parentId) => parentId === null || w.tokenFolders.find(f => f.id === id)?.campaignId === w.tokenFolders.find(f => f.id === parentId)?.campaignId}
+        onMoveFolder={(id, parentId) => commit(next => { const f = next.tokenFolders.find(f => f.id === id); if (f && (parentId === null || next.tokenFolders.some(parent => parent.id === parentId && parent.campaignId === f.campaignId)) && canMoveCollection(next.tokenFolders, id, parentId)) f.parentId = parentId; })}
+        onRemoveFolder={id => commit(next => {
+          const f = next.tokenFolders.find(f => f.id === id); if (!f) return;
+          next.tokenFolders = next.tokenFolders.filter(f => f.id !== id);
+          next.tokenFolders.forEach(child => { if (child.parentId === id) child.parentId = f.parentId; });
+          for (const key in next.tokenFolderLocations) if (next.tokenFolderLocations[key] === id) next.tokenFolderLocations[key] = f.parentId;
+        })}
+        onMoveItem={(id, target) => commit(next => { moveTokenToFolder(next, id, target); })}
+        renderItem={t => <div className="library-row"><button type="button" className="organizer-token" onClick={() => { setOrganizing(false); setEditing(t.id); }} title={`Edit ${t.name}`}>
+          <TokenFace token={t} workspace={w} campaignId={owner(t)} initials={tokenInitials(t.name)} size={26} /><span>{t.name || "Unnamed token"}</span><Pencil size={13} /></button></div>} />
+    </Modal>, document.body)}
+    {editor && <TokenEditor key={editor.id} mode="saved" token={editor} workspace={w} campaignId={owner(editor)} initials={tokenInitials(editor.name)}
+      patch={update => patch(editor.id, update)} commit={commit} close={() => setEditing(null)}
+      onDuplicate={() => duplicate(editor)} onDelete={() => void remove(editor)}
+      savedSummary={w.tokenFolderLocations[editor.id] ? collectionPath(w.tokenFolders, w.tokenFolderLocations[editor.id]!) : "Not in a folder"}
+      savedCopy={<SavedTokenCopy token={editor} workspace={w} campaignId={campaignId} commit={commit} save={save} remove={() => void remove(editor)} />} />}
+    {gesture.ghost}
   </section>;
-
 }
 
-
-
+/** The old Library tab for a saved token: what it is saved as, where it lives, and the cloud save. */
+function SavedTokenCopy({ token: t, workspace: w, campaignId, commit, save, remove }: {
+  token: Token; workspace: Workspace; campaignId: string | null; commit: (fn: (w: Workspace) => void) => void; save?: () => Promise<unknown>; remove: () => void;
+}) {
+  const [message, setMessage] = useState("");
+  return <SavedCopyShell>
+    {!t.partyMarker && <label>Save as<select value={t.rosterRole ?? "library"} onChange={e => { const role = e.target.value as "library" | "npc" | "party"; commit(next => { const saved = next.tokenLibrary.find(item => item.id === t.id)!; saved.rosterRole = role; if (role !== "library") moveLibraryTokenToCampaign(next, t.id, campaignId); }); }}>
+      <option value="library">Library token</option><option value="npc" disabled={!campaignId}>Campaign NPC</option><option value="party" disabled={!campaignId}>Party member</option></select></label>}
+    <label>Folder<select value={w.tokenFolderLocations[t.id] ?? ""} onChange={e => commit(next => { moveTokenToFolder(next, t.id, e.target.value || null); })}>
+      <option value="">Library root</option>{w.tokenFolders.filter(f => f.campaignId === (w.libraryCampaigns[t.id] ?? null)).map(f => <option key={f.id} value={f.id}>{collectionPath(w.tokenFolders, f.id)}</option>)}</select></label>
+    {!t.partyMarker && <label>Campaign<select value={w.libraryCampaigns[t.id] ?? ""} onChange={e => commit(next => moveLibraryTokenToCampaign(next, t.id, e.target.value || null))}>
+      {(t.rosterRole ?? "library") === "library" && <option value="">Shared</option>}{w.collections.filter(c => c.kind === "campaign").map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+    <div className="button-row">
+      <button type="button" onClick={async () => { setMessage("Saving…"); try { const result = await save?.(); setMessage(result === false ? "Cloud save failed. Retry using Save." : "Gallery token saved."); } catch { setMessage("Cloud save failed. Retry using Save."); } }}>Save gallery token</button>
+      <button type="button" className="danger" onClick={remove}>Delete saved token</button>
+    </div>
+    <small role="status">{message}</small>
+    <small>Edits and deletion affect this saved token. Placed tokens keep their settings.</small>
+  </SavedCopyShell>;
+}
+function SavedCopyShell({ children }: { children: React.ReactNode }) { return <div className="editor-card"><h3>Saved copy</h3>{children}</div>; }

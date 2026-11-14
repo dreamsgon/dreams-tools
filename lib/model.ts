@@ -49,6 +49,8 @@ export const tokenSchema = z.object({
   hpVisibility: z.enum(["inherit", "show", "hide"]).optional(),
   disposition: z.enum(["enemy", "party", "ally", "neutral"]).optional(),
   useDispositionColor: z.boolean().optional(),
+  /** Fill, ring and letters follow the token's side (party/ally/neutral/enemy). Unset: only the old default fill does. False: never. */
+  sideColours: z.boolean().optional(),
   rosterRole: z.enum(["library","npc","party"]).default("library"),
   id: short,
   name: short,
@@ -274,6 +276,8 @@ export const collectionSchema = z.object({
   hpSpacing: finite.min(0).max(60).optional(),
   nameHpSpacing: finite.min(0).max(60).optional(),
     hpBarColor: color.nullable().optional(),
+    /** Campaign override of each side's fill; the ring is derived from it. */
+    sideColours: z.object({ party: color.optional(), ally: color.optional(), neutral: color.optional(), enemy: color.optional() }).optional(),
     namePosition: z.enum(["bottom", "top", "side", "wrap"]).optional(),
     hpPosition: z.enum(["bottom", "top", "side", "wrap"]).optional(),
     showName: z.boolean(),

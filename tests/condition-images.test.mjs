@@ -8,6 +8,7 @@ import { initialWorkspace, newToken, tokenRadius, workspaceSchema } from "../lib
 const renderSource = stripTypeScriptTypes(await readFile(new URL("../lib/render.ts", import.meta.url), "utf8"))
   .replaceAll('"./model"', JSON.stringify(new URL("../lib/model.ts", import.meta.url).href))
   .replaceAll('"./token-defaults"', JSON.stringify(new URL("../lib/token-defaults.ts", import.meta.url).href))
+  .replaceAll('"./token-initials"', JSON.stringify(new URL("../lib/token-initials.ts", import.meta.url).href))
   .replaceAll('"./token-name"', JSON.stringify(new URL("../lib/token-name.ts", import.meta.url).href))
   .replaceAll('"./token-display-layout"', JSON.stringify(new URL("../lib/token-display-layout.ts", import.meta.url).href))
   .replaceAll('"./map-drawing"', JSON.stringify(new URL("../lib/map-drawing.ts", import.meta.url).href))

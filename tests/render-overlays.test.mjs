@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import ts from 'typescript';
 import {newScene, newToken, initialWorkspace, workspaceSchema, tokenSchema, tokenRadius} from '../lib/model.ts';
 const source=fs.readFileSync(new URL('../lib/render.ts',import.meta.url),'utf8');
-const javascript=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from "\.\/(model|effects|map-drawing|map-style|token-defaults|token-name|token-display-layout)"/g,(_,name)=>`from "${new URL('../lib/'+name+'.ts',import.meta.url).href}"`);
+const javascript=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from "\.\/(model|effects|map-drawing|map-style|token-defaults|token-initials|token-name|token-display-layout)"/g,(_,name)=>`from "${new URL('../lib/'+name+'.ts',import.meta.url).href}"`);
 const {drawSceneBackdrop,renderScene,strokeFog,drawGrid,drawPerimeterLabels,conditionBadgeRadius}=await import('data:text/javascript;base64,'+Buffer.from(javascript).toString('base64'));
 function context(){const calls=[];return new Proxy({calls,measureText:()=>({width:20})},{get:(o,k)=>k in o?o[k]:(...args)=>calls.push([k,...args]),set:(o,k,v)=>{o[k]=v;calls.push(['set',k,v]);return true;}});}
 

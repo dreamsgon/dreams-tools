@@ -14,6 +14,7 @@ import {
   type Token,
 } from "./model";
 import { resolvedToken } from "./token-defaults";
+import { sceneInitials } from "./token-initials";
 import { drawTokenName } from "./token-name";
 import { drawTokenHp, tokenHpLayout, tokenNameFontSize } from "./token-display-layout";
 import { drawMapDrawing } from "./map-style";
@@ -55,6 +56,34 @@ function drawPiece(ctx: CanvasRenderingContext2D, t: Token, side: number, img: C
   }
   ctx.restore();
 }
+/** Bold letters centred in a picture-less token, sized to fit inside the circle. */
+export function drawTokenInitials(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, text: string, colour: string) {
+  if (!text) return;
+  ctx.save();
+  ctx.fillStyle = colour;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let size = r * 0.95;
+  ctx.font = `700 ${size}px system-ui, sans-serif`;
+  const width = ctx.measureText(text).width, room = r * 1.45;
+  if (width > room) { size = Math.max(4, size * room / width); ctx.font = `700 ${size}px system-ui, sans-serif`; }
+  ctx.fillText(text, x, y + size * 0.04);
+  ctx.restore();
+}
+
+/** A thin white edge just outside a token, so it stands out on any map. About 1.5 map pixels, a little more on big tokens. */
+export function drawTokenEdge(ctx: CanvasRenderingContext2D, x: number, y: number, outer: number) {
+  const edge = Math.max(1.5, outer * 0.03);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, outer + edge / 2, 0, Math.PI * 2);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = edge;
+  ctx.shadowColor = "transparent";
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** A small arrow on the ring showing which way a turned token faces. */
 export function drawFacingNotch(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, facing: number, color: string) {
   const size = Math.max(6, Math.min(14, radius * 0.28));
@@ -359,6 +388,8 @@ export function renderScene(
     ctx.restore();
   }
   options.underTokens?.(ctx);
+  // Initials for picture-less tokens: no two differently named tokens share them. Players only count the tokens they can see.
+  const initials = sceneInitials(s.tokens.filter(t => !t.pieceOf && !(options.player && t.hidden)));
   // Map pieces lie on the floor, under everyone else.
   for (const storedToken of [...s.tokens.filter(t => t.pieceOf), ...s.tokens.filter(t => !t.pieceOf)]) {
     const t = resolvedToken(w, s.id, storedToken);
@@ -392,6 +423,7 @@ export function renderScene(
       ctx.drawImage(img, -img.width*scale/2, -img.height*scale/2, img.width*scale, img.height*scale);
       ctx.restore();
     }
+    if (!t.assetId) drawTokenInitials(ctx, t.x, t.y, r, initials.get(t.id) ?? "", t.textColor ?? "#ffffff");
     ctx.strokeStyle = t.borderColor ?? t.color;
     const borderImage = t.borderAssetId ? images.get(t.borderAssetId) : null;
     if (borderImage) ctx.drawImage(borderImage, t.x-r, t.y-r, r*2, r*2);
@@ -399,6 +431,8 @@ export function renderScene(
       ctx.lineWidth = t.borderWidth ?? 4;
       ctx.stroke();
     }
+    // No edge on a token whose border was set to nothing.
+    if (!t.assetId && (borderImage || (t.borderWidth ?? 4) > 0)) drawTokenEdge(ctx, t.x, t.y, r + (borderImage ? 0 : (t.borderWidth ?? 4) / 2));
     if (t.facing !== undefined) drawFacingNotch(ctx, t.x, t.y, r, t.facing, t.borderColor ?? t.color);
     drawTokenStatus(ctx, t.x, t.y, r, t.status);
     if (t.id === options.selected && !options.player) {
