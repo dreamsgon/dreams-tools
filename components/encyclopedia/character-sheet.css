@@ -114,3 +114,28 @@
 .sheet-way p>svg{vertical-align:-1px;color:var(--accent)}
 .sheet-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .sheet-cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sheet-roll-panel{display:flex;flex-direction:column;gap:10px}
+.sheet-mode{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:999px;padding:2px;gap:2px;background:var(--panel)}
+.sheet-mode button{border:0;background:transparent;color:var(--ink);font:inherit;font-size:12px;padding:4px 12px;border-radius:999px;cursor:pointer}
+.sheet-mode button.on{background:var(--accent);color:var(--on-accent,#fff)}
+.sheet-mode-hint{color:var(--muted);font-size:11px;line-height:1.4}
+.sheet-roll-panel li.sheet-roll-single{display:block;border:0;padding:0;border-radius:0}
+.sheet-roll-panel li.sheet-roll-pair{flex-direction:column;align-items:stretch;gap:6px;padding:8px 10px}
+.sheet-roll-name{font-weight:600;font-size:13px}
+.sheet-roll-buttons{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.sheet-roll-button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:36px;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:4px 10px;cursor:pointer;text-align:left}
+.sheet-roll-pair .sheet-roll-button{flex:1 1 130px;width:auto}
+.sheet-roll-button:hover,.sheet-roll-button:focus-visible{border-color:var(--accent);outline:none}
+.sheet-roll-button span{overflow-wrap:anywhere;min-width:0}
+.sheet-roll-button code{flex:none;align-self:center}
+.sheet-roll-panel.compact{gap:6px}
+.sheet-roll-panel.compact .sheet-roll-group h4{margin-bottom:4px}
+.sheet-roll-panel.compact ul{grid-template-columns:1fr;gap:4px}
+.sheet-roll-panel.compact .sheet-roll-button{min-height:32px;padding:2px 8px;font-size:12px}
+.sheet-roll-panel.compact li.sheet-roll-pair{padding:6px 8px;gap:4px}
+.sheet-dice-help summary{cursor:pointer;font-size:12px;color:var(--muted)}
+.sheet-dice-help p{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+.sheet-log{display:flex;flex-direction:column;gap:6px}
+.sheet-roll-log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.sheet-roll-log li{display:flex;flex-direction:column}
+.sheet-roll-log small,.sheet-log-empty{color:var(--muted);font-size:11px;margin:0}

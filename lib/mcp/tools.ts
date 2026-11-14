@@ -8,7 +8,7 @@ import { categoryOf, defaultCategory, moveQuest, newQuest, nextStep, questCatego
 import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
 import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { characterProfileText, defaultProfile, organizationsOf } from "../encyclopedia/character-profile.ts";
-import { rollDice } from "../rolls.ts";
+import { rollDice, partText, termLabel } from "../rolls.ts";
 import { playerSheet } from "../encyclopedia/sheet-link.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
@@ -430,14 +430,14 @@ const tools: Tool[] = [
   // ---- Assist: dice and writing. Each change is logged in the AI activity log, where the GM can undo it. ----
   {
     name: "roll", title: "Roll dice", level: "assist", readOnly: false,
-    description: "Roll dice in the open, such as 1d20+5 or 2d6+3. The result is shown to the GM in the AI activity log and posted to the campaign's Discord as a card when one is set up. Say what the roll is for, and who is rolling so their picture goes on the card.",
+    description: "Roll dice in the open, such as 1d20+5 or 2d6+3. Notation also covers 4d6kh3 or 2d20kl1 (keep highest or lowest), 2d6! (exploding), 5d10>=8 (count successes) and 4dF (plus/minus dice, -1 to +1 each). The result is shown to the GM in the AI activity log and posted to the campaign's Discord as a card when one is set up. Say what the roll is for, and who is rolling so their picture goes on the card.",
     inputSchema: obj({ dice: str("Dice and modifiers, such as 1d20+5 or 2d6+1d4+3.", 200), for: str("What the roll is for, such as \"Claws against Bram\".", 200), as: str("Who is rolling: a creature, character or token name, such as \"Bog Hag\". Optional.", 120), discord: { type: "boolean", description: "Post to Discord when the campaign has a channel (default true). Use false for a secret roll." } }, ["dice", "for"]),
     write: a => {
       const dice = text(a, "dice")!, label = text(a, "for")!, who = text(a, "as", false, 120);
       if (a.discord !== undefined && typeof a.discord !== "boolean") fail("discord must be true or false.");
       let roll: ReturnType<typeof rollDice>;
       try { roll = rollDice(dice, secureRandom); } catch (e) { return fail((e as Error).message); }
-      const shown = roll.parts.filter(p => p.count).map(p => `${p.count}d${p.sides}: ${p.dice.join(", ")}`).join("; ");
+      const shown = roll.parts.filter(p => p.count).map(p => `${termLabel(p)}: ${p.keep || p.explode || p.target !== undefined || p.pm ? partText(p) : p.dice.join(", ")}`).join("; ");
       const post = (c: McpContext) => a.discord !== false && hasDiscord(c) && permsFor(c).postDiscord !== "off";
       return (_full, c) => ({
         summary: `Rolled ${dice} = ${roll.total} for ${who ? `${who}: ` : ""}${label}`, detail: shown || undefined,

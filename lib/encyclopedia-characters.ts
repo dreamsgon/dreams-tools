@@ -1,7 +1,7 @@
 import type {Picture} from "./encyclopedia/world-model.ts";
 
 export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc"|"creature";detail:string;world:string;worldId:string;campaignId:string|null;/** Set only when a campaign is paired: where a character in that campaign's world comes from. */origin?:string;hasStatblock:boolean;picture?:Picture};
-export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean};picture?:Picture}[]};
+export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean;sheet?:{items?:{id:string;name:string;kind:string;label?:string;value?:string;formula?:string}[]}};picture?:Picture}[]};
 
 const roleName={pc:"Player character",companion:"Companion",npc:"NPC",creature:"Creature"} as const;
 

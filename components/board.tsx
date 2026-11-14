@@ -8,7 +8,7 @@ import { sceneInitials } from "@/lib/token-initials";
 import TokenFace from "./token-face";
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, ExternalLink, FlipHorizontal2, FlipVertical2, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, Trash2, Upload, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, ClipboardPaste, Copy, CopyPlus, Dices, ExternalLink, FlipHorizontal2, FlipVertical2, Group, Ungroup, Eye, EyeOff, Maximize, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, Trash2, Upload, X } from "lucide-react";
 import "./context-menu.css";
 import { PAGE_DRAG } from "@/lib/map-notes";
 import type { PointOfInterest } from "@/lib/model";
@@ -134,6 +134,10 @@ type Props = {
   renderNote?: (poi: PointOfInterest, at: { x: number; y: number; width: number; height: number }) => ReactNode;
   /** Player view: a tap on a marker (or on nothing, with null). */
   onPlayerPoiTap?: (id: string | null) => void;
+  /** The name of the Encyclopedia character a token's linked sheet belongs to, when it has rolls. Not given to players. */
+  sheetCharacterOf?: (tokenId: string) => string | undefined;
+  /** Opens the roll list of that sheet, beside where the menu was. */
+  onRollFromSheet?: (tokenId: string, at: { x: number; y: number }) => void;
   /** An Encyclopedia page dropped on the map, with the marker it landed on. */
   onPageDrop?: (entryId: string, point: Point, poiId: string | null) => void;
   /** Map notes: layers drawn over the map in screen space (areas, their cards, drawing a new area). */
@@ -1550,6 +1554,7 @@ export default function Board(p: Props) {
           const ids = menuTokenIds(id);
           const grouped = !!p.scene.tokens.find(token => token.id === id)?.groupId;
           return <>
+            {!p.player && ids.length === 1 && p.sheetCharacterOf?.(id) && menuAction(`Roll from ${p.sheetCharacterOf(id)}’s sheet`, () => p.onRollFromSheet?.(id, { x: contextMenu.x, y: contextMenu.y }), { icon: <Dices size={15} /> })}
             {menuAction(ids.length > 1 ? `Copy ${plural(ids.length)}` : "Copy", () => copySelection(ids), { icon: <Copy size={15} />, shortcut: "Ctrl C" })}
             {ids.length > 1 && menuAction(`Duplicate ${plural(ids.length)}`, () => duplicateSelection(ids), { icon: <CopyPlus size={15} />, shortcut: "Ctrl D" })}
             {grouped ? menuAction("Ungroup", () => ungroupSelection([id]), { icon: <Ungroup size={15} />, shortcut: "Ctrl Shift G" })
