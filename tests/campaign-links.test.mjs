@@ -179,9 +179,14 @@ import {moveOptions} from '../lib/campaign-links.ts';
 test('moveOptions lists Top level then folder paths and marks where the campaign is now',()=>{
   const folders=[{id:'a',name:'One-shots',parentId:null},{id:'b',name:'Finished',parentId:null},{id:'c',name:'Old',parentId:'b'}];
   const at=id=>moveOptions(folders,id).filter(o=>o.here).map(o=>o.id);
-  assert.deepEqual(moveOptions(folders,null).map(o=>o.label),['Top level','Finished','Finished / Old','One-shots']);
+  assert.deepEqual(moveOptions(folders,null).map(o=>o.label),['Top level','One-shots','Finished','Finished / Old']);
   assert.deepEqual(at(null),[null]);
   assert.deepEqual(at('c'),['c']);
   assert.deepEqual(at('gone'),[null]);
   assert.equal(moveOptions([],null).length,1);
+});
+
+test('folder pickers follow the folders\' saved order, as the list does, not the alphabet', () => {
+  const folders=[{id:'b',name:'One-shots',parentId:null},{id:'a',name:'Finished',parentId:null},{id:'c',name:'Old',parentId:'b'}];
+  assert.deepEqual(folderChoices(folders).map(f=>f.path),['One-shots','One-shots / Old','Finished']);
 });
