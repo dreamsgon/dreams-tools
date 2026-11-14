@@ -38,23 +38,27 @@ function restore(edited: Entry, full: Entry, campaignId: string): Entry {
 /**
  * Why a co-GM's copy can't become `after`, or null when it can. `before` is the copy as they got it. The app asks
  * this before each change so a co-GM never gets stuck on a save the server would refuse; the server asks it again.
+ * `allowed` is picture ids that aren't in the copy yet but are known to be in the GM's storage (pictures the co-GM added).
  */
-export function coGmRefusal(before: Workspace, after: Workspace): string | null {
+export function coGmRefusal(before: Workspace, after: Workspace, allowed: ReadonlySet<string> = new Set()): string | null {
   const was = before.campaigns[0], mine = after.campaigns[0];
   if (after.campaigns.length !== 1 || mine?.id !== was?.id) return 'A co-GM can only change the campaign they were invited to.';
   if (after.worlds.length !== 1 || !same(after.worlds[0], before.worlds[0])) return 'Only the GM can change the world and its templates.';
   for (const key of ownerOnly) if (!same(mine[key], was[key])) return 'Only the GM can change where this campaign is linked.';
-  // Co-GMs can't upload pictures yet, so every picture they use must already be in this campaign.
+  // Every picture they use must already be in this campaign, or be one they added to the GM's storage.
   const known = images(before);
-  for (const id of images(after)) if (!known.has(id)) return 'Co-GMs can use the pictures already in this campaign. Adding new ones comes later.';
+  for (const id of images(after)) if (!known.has(id) && !allowed.has(id)) return "That picture isn't in this campaign's storage. Add it again.";
   return null;
 }
 
-export function applyCoGmEdit(full: Workspace, campaignId: string, input: Workspace): Workspace {
+/** The picture ids a co-GM's copy uses that the campaign's current copy doesn't: the ones the server must find in storage. */
+export const newImageIds = (before: Workspace, after: Workspace): string[] => { const known = images(before); return [...images(after)].filter(id => !known.has(id)); };
+
+export function applyCoGmEdit(full: Workspace, campaignId: string, input: Workspace, allowed: ReadonlySet<string> = new Set()): Workspace {
   const edited = workspaceSchema.parse(input);
   const campaign = full.campaigns.find(c => c.id === campaignId) ?? no('This campaign is gone.');
   const before = campaignExport(full, campaignId);
-  const refused = coGmRefusal(before, edited);
+  const refused = coGmRefusal(before, edited, allowed);
   if (refused) no(refused);
   const mine = edited.campaigns[0];
 

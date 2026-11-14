@@ -3,10 +3,11 @@ import {useEffect,useRef,useState} from 'react';
 import {cellShape,fogBasis,fogImageReady,type MapData} from '@/lib/encyclopedia/map-model';
 import type {Workspace} from '@/lib/encyclopedia/world-model';
 import {uploadMapImage} from './map-transfer';
+import {imageSrc} from './member-view';
 
 // Generate a separate raster containing only explored pixels. Never send the original to players.
 export async function renderFogImage(map:MapData,signal?:AbortSignal){
- const response=await fetch('/api/encyclopedia/map-images?id='+encodeURIComponent(map.imageId!),{signal});
+ const response=await fetch(imageSrc(map.imageId!),{signal});
  if(!response.ok)throw new Error('The original map image is unavailable. Restore its map package first.');
  const bitmap=await createImageBitmap(await response.blob());
  try{

@@ -31,7 +31,7 @@ import { confirmDialog } from "../confirm-dialog";
 import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
-import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,workspaceUrl} from "./member-view";
+import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,uploaded,workspaceUrl} from "./member-view";
 import Link from "next/link";
 
 // Sections and the article editor load as separate chunks so the dashboard appears sooner;
@@ -220,7 +220,7 @@ export default function WorkspaceApp() {
     useEffect(() => { pollRef.current = poll; });
     useEffect(() => { if (!loaded) return; const tick = setInterval(() => void pollRef.current(), 8000), look = () => { if (!document.hidden) void pollRef.current(); }; document.addEventListener("visibilitychange", look); window.addEventListener("focus", look); return () => { clearInterval(tick); document.removeEventListener("visibilitychange", look); window.removeEventListener("focus", look); }; }, [loaded]);
     /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
-    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberReadOnly()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const refused = memberRef() ? coGmRefusal(current.current, next) : null; if (refused) { setToast(refused); return false; } const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
+    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberReadOnly()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const refused = memberRef() ? coGmRefusal(current.current, next, uploaded()) : null; if (refused) { setToast(refused); return false; } const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
         clearTimeout(timer.current); timer.current = autosave.ref.current ? setTimeout(save, 600) : null; return true; }
     function updateEntry(id: string, patch: Partial<Entry>) { change({ ...current.current, entries: current.current.entries.map(e => e.id === id ? { ...e, ...patch, editedBy: undefined, updatedAt: new Date().toISOString() } : e) }); }
     /** Clicking a tag opens search with that tag, across pages, scenes and campaigns. */

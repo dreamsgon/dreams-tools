@@ -1,8 +1,9 @@
 import { getBucket } from '../storage';
 import { MemberStore } from '../members-server';
 import { EncyclopediaStore } from './store';
-import { campaignExport, type Workspace } from './world-model';
-import { applyCoGmEdit } from './co-gm-edit';
+import { campaignExport, workspaceSchema, type Workspace } from './world-model';
+import { applyCoGmEdit, newImageIds } from './co-gm-edit';
+import { isCoGmUpload } from './map-images-server';
 
 /**
  * A co-GM's copy of one campaign: the campaign, its world and the pages it can see, GM notes included, and
@@ -21,7 +22,12 @@ export async function coGmSave(grant:{owner:string;campaignId:string;name:string
   const store = new EncyclopediaStore(getBucket());
   const read = await store.read(grant.owner);
   if (read.revision !== revision) return null;
-  return store.saveTagged(grant.owner, applyCoGmEdit(read.data, grant.campaignId, data), revision, { name: grant.name, as: 'co-gm' });
+  // Pictures new to the copy must be ones a co-GM uploaded for this campaign.
+  const incoming = workspaceSchema.safeParse(data);
+  const fresh = incoming.success ? newImageIds(campaignExport(read.data, grant.campaignId), incoming.data) : [];
+  const allowed = new Set<string>();
+  for (const id of fresh) if (await isCoGmUpload(grant.owner, grant.campaignId, id)) allowed.add(id);
+  return store.saveTagged(grant.owner, applyCoGmEdit(read.data, grant.campaignId, data, allowed), revision, { name: grant.name, as: 'co-gm' });
 }
 export const coGmReadOnly = 'The GM has set your group to read this campaign, not edit it.';
 export const coGmGone = 'You can no longer open this campaign. You may have left it, or the GM changed what your group can see.';
