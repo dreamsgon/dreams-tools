@@ -5,8 +5,8 @@
  * players see. Clicking a line lists the ties on it and opens them for editing; clicking a page focuses it. Drag to move
  * around, scroll or use the buttons to zoom. The side panel also works as a plain list for keyboards and screen readers.
  */
-import {useEffect,useMemo,useRef,useState,type PointerEvent as ReactPointerEvent} from 'react';
-import {ArrowUpRight,Eye,EyeOff,ListTree,Maximize2,Minus,Network,Plus,Search,X} from 'lucide-react';
+import {useMemo,useState} from 'react';
+import {ArrowUpRight,Eye,EyeOff,GitFork,ListTree,Network,Plus,Search,X} from 'lucide-react';
 import './quest-connections.css';
 import './ties.css';
 import './relationships.css';
@@ -18,6 +18,8 @@ import {ConnectionGroups,tieTone,type ConnectionRow} from './connection-list';
 import {Face,TargetPicker,kindName} from './quest-goals';
 import {useTies} from './page-connections';
 import {TieKinds} from './tie-types';
+import {ZoomButtons,usePanZoom} from './pan-zoom';
+import {FamilyTrees} from './family-tree';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const MAX_NODES=150;
@@ -34,30 +36,16 @@ function capWeb(web:Web):Web{
  return {nodes:web.nodes.filter(n=>keep.has(n.id)),edges:web.edges.filter(e=>keep.has(e.a)&&keep.has(e.b))};
 }
 
-type View={x:number;y:number;k:number};
 function Canvas({web,at,focus,selected,players,onPage,onEdge}:{web:Web;at:Map<string,Point>;focus:string|null;selected:string|null;players:boolean;onPage:(id:string)=>void;onEdge:(key:string)=>void}){
- const svg=useRef<SVGSVGElement>(null),drag=useRef<{x:number;y:number;view:View;moved:boolean}|null>(null);
- const [moved,setMoved]=useState<{view:View;for:unknown}>({view:{x:0,y:0,k:1},for:null}),[hover,setHover]=useState<string|null>(null);
+ const [hover,setHover]=useState<string|null>(null);
  // Fit the drawing whenever what is drawn changes.
  const bounds=useMemo(()=>{const ps=[...at.values()];if(!ps.length)return {x:-100,y:-100,w:200,h:200};const xs=ps.map(p=>p.x),ys=ps.map(p=>p.y),px=110,py=60;const x0=Math.min(...xs)-px,y0=Math.min(...ys)-py;return {x:x0,y:y0,w:Math.max(...xs)+px-x0,h:Math.max(...ys)+py+20-y0};},[at]);
- // Moving and zooming belong to one drawing: when what is drawn changes, it is fitted again.
- const view=moved.for===bounds?moved.view:{x:0,y:0,k:1};
- const setView=(next:View|((v:View)=>View))=>setMoved(m=>{const cur=m.for===bounds?m.view:{x:0,y:0,k:1};return {view:typeof next==='function'?next(cur):next,for:bounds};});
+ const {svg,viewBox,k,handlers,zoom,fit}=usePanZoom(bounds,'.rw-node,.rw-edge');
  const near=useMemo(()=>{if(!hover)return null;const s=new Set([hover]);for(const e of web.edges)if(e.a===hover||e.b===hover){s.add(e.a);s.add(e.b);}return s;},[hover,web.edges]);
- const unit=()=>{const el=svg.current;return el&&el.clientWidth?bounds.w/view.k/el.clientWidth:1;};
- const zoom=(f:number)=>setView(v=>({...v,k:Math.min(6,Math.max(0.3,v.k*f))}));
- // The wheel listener is added once (it must not be passive), so it calls the latest zoom through a ref.
- const zoomRef=useRef(zoom);
- useEffect(()=>{zoomRef.current=zoom;});
- useEffect(()=>{const el=svg.current;if(!el)return;const wheel=(e:WheelEvent)=>{e.preventDefault();zoomRef.current(e.deltaY<0?1.15:1/1.15);};el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel);},[]);
- const down=(e:ReactPointerEvent)=>{if((e.target as Element).closest('.rw-node,.rw-edge'))return;drag.current={x:e.clientX,y:e.clientY,view,moved:false};(e.currentTarget as Element).setPointerCapture(e.pointerId);};
- const move=(e:ReactPointerEvent)=>{const d=drag.current;if(!d)return;const u=unit(),dx=(e.clientX-d.x)*u,dy=(e.clientY-d.y)*u;if(Math.abs(dx)+Math.abs(dy)>2)d.moved=true;setView({...d.view,x:d.view.x-dx,y:d.view.y-dy});};
- const up=()=>{drag.current=null;};
- const w=bounds.w/view.k,h=bounds.h/view.k,cx=bounds.x+bounds.w/2+view.x,cy=bounds.y+bounds.h/2+view.y;
  const kindOf=new Map(web.nodes.map(n=>[n.id,n.kind]));
- const labels=web.nodes.length<=40||view.k>1.6;
+ const labels=web.nodes.length<=40||k>1.6;
  return <div className="rw-canvas">
-  <svg ref={svg} viewBox={`${cx-w/2} ${cy-h/2} ${w} ${h}`} role="img" aria-label={`Relationship web: ${web.nodes.length} pages and ${web.edges.length} lines`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className={hover?'hovering':''}>
+  <svg ref={svg} viewBox={viewBox} role="img" aria-label={`Relationship web: ${web.nodes.length} pages and ${web.edges.length} lines`} {...handlers} className={hover?'hovering':''}>
    {web.edges.map(e=>{const a=at.get(e.a),b=at.get(e.b);if(!a||!b)return null;const t=e.ties[0],gm=!players&&e.ties.every(x=>x.gm),worked=e.ties.every(x=>x.source==='worked');
     const lit=!near||(near.has(e.a)&&near.has(e.b)&&(e.a===hover||e.b===hover)),from=focus&&(e.a===focus||e.b===focus)?focus:e.a,mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
     const said=e.ties.map(x=>`${titleOf(web,x.fromId)} ${x.name} ${titleOf(web,x.toId)}${!players&&x.gm?' (GM only)':''}`).join('; ');
@@ -75,11 +63,7 @@ function Canvas({web,at,focus,selected,players,onPage,onEdge}:{web:Web;at:Map<st
      {(labels||n.id===focus||lit&&near)&&<text className="rw-name" y={r+15} textAnchor="middle">{cut(n.title,22)}</text>}
     </g>;})}
   </svg>
-  <div className="rw-zoom">
-   <button type="button" className="icon-button" aria-label="Zoom in" onClick={()=>zoom(1.3)}><Plus size={15}/></button>
-   <button type="button" className="icon-button" aria-label="Zoom out" onClick={()=>zoom(1/1.3)}><Minus size={15}/></button>
-   <button type="button" className="icon-button" aria-label="Fit to the screen" onClick={()=>setView({x:0,y:0,k:1})}><Maximize2 size={15}/></button>
-  </div>
+  <ZoomButtons zoom={zoom} fit={fit}/>
  </div>;
 }
 const titleOf=(web:Web,id:string)=>web.nodes.find(n=>n.id===id)?.title??'';
@@ -138,7 +122,7 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
  const [worked,setWorked]=useState(false),[players,setPlayers]=useState(false);
  const [hiddenGroups,setHiddenGroups]=useState<Set<string>>(()=>new Set()),[hiddenKinds,setHiddenKinds]=useState<Set<WebPageKind>>(()=>new Set());
  const [focus,setFocus]=useState<string|null>(null),[depth,setDepth]=useState(1),[edgeKey,setEdgeKey]=useState<string|null>(null);
- const [picking,setPicking]=useState(false),[kinds,setKinds]=useState(false);
+ const [picking,setPicking]=useState(false),[kinds,setKinds]=useState(false),[mode,setMode]=useState<'web'|'trees'>('web');
  const all=useMemo(()=>webTies(data,worldId,campaignId,{worked,types}),[data,worldId,campaignId,worked,types]);
  const readable=useMemo(()=>players&&campaign?new Set(playerCampaign(data,campaign.id).entries.map(e=>e.id)):null,[players,campaign,data]);
  const ties=useMemo(()=>readable?playersWebTies(all,id=>readable.has(id),id=>data.entries.find(e=>e.id===id)?.profile?.visibility==='players'):all,[all,readable,data.entries]);
@@ -160,8 +144,12 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
  return <section className="page-content relationships-page">
   <div className="dashboard-intro rw-intro">
    <div><span className="eyebrow">{campaign?campaign.name:`${world?.name??'World'} · shared lore`}</span><h1>Relationships</h1>
-    <p className="subtitle">{web.nodes.length?`${web.nodes.length} page${web.nodes.length===1?'':'s'} and ${tieCount} tie${tieCount===1?'':'s'}${players?' players can see':`, ${sharedCount} players can see and ${gmCount} GM only`}.`:'Every tie in this campaign, drawn as one web.'}</p></div>
+    <p className="subtitle">{mode==='trees'?'Families drawn from their family ties: parents, partners, siblings and wards.':web.nodes.length?`${web.nodes.length} page${web.nodes.length===1?'':'s'} and ${tieCount} tie${tieCount===1?'':'s'}${players?' players can see':`, ${sharedCount} players can see and ${gmCount} GM only`}.`:'Every tie in this campaign, drawn as one web.'}</p></div>
    <div className="button-row">
+    <div className="segmented" role="radiogroup" aria-label="Show">
+     <button type="button" role="radio" aria-checked={mode==='web'} className={mode==='web'?'on':''} onClick={()=>setMode('web')}><Network size={13}/> Web</button>
+     <button type="button" role="radio" aria-checked={mode==='trees'} className={mode==='trees'?'on':''} onClick={()=>setMode('trees')}><GitFork size={13}/> Family trees</button>
+    </div>
     {!players&&<button type="button" className="button small" onClick={()=>setKinds(true)}><ListTree size={14}/> Kinds of tie</button>}
     {campaign&&<div className="segmented" role="radiogroup" aria-label="Whose view">
      <button type="button" role="radio" aria-checked={!players} className={!players?'on':''} onClick={()=>setPlayers(false)}><EyeOff size={13}/> GM view</button>
@@ -169,7 +157,8 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
     </div>}
    </div>
   </div>
-  {players&&<p className="sharing-hint">This is the web as players would see it: shared ties, and cover stories in place of GM-only ties, between pages they can read. Players don’t have this page yet.</p>}
+  {players&&<p className="sharing-hint">{mode==='trees'?'This is how players would see these families: shared ties, and cover stories in place of GM-only ties, between people they can read about. Players don’t have this page yet.':'This is the web as players would see it: shared ties, and cover stories in place of GM-only ties, between pages they can read. Players don’t have this page yet.'}</p>}
+  {mode==='trees'?<FamilyTrees data={data} worldId={worldId} campaign={campaign} change={change} onOpen={onOpen} players={players}/>:<>
   {web.nodes.length>0&&<div className="rw-filters">
    <div className="tie-filter" role="group" aria-label="Kinds of tie shown">
     {tieGroups.filter(g=>groupCounts.has(g)).map(g=><button type="button" key={g} className={tieTone(g)} aria-pressed={!hiddenGroups.has(g)} onClick={()=>setHiddenGroups(toggle(hiddenGroups,g))} title={tieGroupInfo[g].about}><i aria-hidden="true"/>{tieGroupInfo[g].name} <small>{groupCounts.get(g)}</small></button>)}
@@ -203,6 +192,7 @@ export function RelationshipsSection({data,worldId,campaign,change,onOpen}:{data
      </section>}
    </aside>
   </div>}
+  </>}
   {kinds&&world&&<TieKinds world={world} data={data} change={change} onClose={()=>setKinds(false)}/>}
  </section>;
 }

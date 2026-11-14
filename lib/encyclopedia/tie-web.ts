@@ -1,5 +1,5 @@
 import type { Entry, Workspace } from "./world-model.ts";
-import { tieLabel, tieTypeById, tieTypesOf, type TieGroup, type TieType } from "./ties.ts";
+import { tieLabel, tieTypeById, tieTypesOf, type TieGroup, type TieType, type TreeRole } from "./ties.ts";
 import { worldTies, type TieSource } from "./tie-connections.ts";
 import { vehicleRolesOf, vehicleTypeOf } from "./vehicles.ts";
 
@@ -24,8 +24,10 @@ export type WebTie = {
   /** Its name read from where it starts (Parent of), and from where it goes (Child of). */
   name: string; reverse: string;
   group: TieGroup | "worked"; gm: boolean; note?: string;
+  /** How it draws on a family tree, when its kind counts as family. */
+  tree?: TreeRole;
   /** On a GM-only tie: what players believe instead, named the same way. */
-  cover?: { name: string; reverse: string; group: TieGroup; note?: string; reversed: boolean };
+  cover?: { name: string; reverse: string; group: TieGroup; note?: string; reversed: boolean; tree?: TreeRole };
 };
 export type WebNode = { id: string; title: string; kind: WebPageKind; degree: number };
 /** A line between two pages (`a` sorts before `b`) and every tie between them. */
@@ -46,8 +48,8 @@ export function webTies(s: Workspace, worldId: string, campaignId: string | null
     if (!scope.has(x.fromId) || !scope.has(x.toId) || x.fromId === x.toId) continue;
     const c = x.tie.cover, ct = c ? tieTypeById(types, c.typeId) : undefined;
     out.push({ key: x.key, source: x.source, ownerId: x.ownerId, id: x.tie.id, fromId: x.fromId, toId: x.toId, name: tieLabel(x.type, true), reverse: tieLabel(x.type, false), group: x.type.group, gm: !!x.tie.gm,
-      ...(x.tie.note ? { note: x.tie.note } : {}),
-      ...(c && ct ? { cover: { name: tieLabel(ct, true), reverse: tieLabel(ct, false), group: ct.group, reversed: !!c.reversed, ...(c.note ? { note: c.note } : {}) } } : {}) });
+      ...(x.tie.note ? { note: x.tie.note } : {}), ...(x.type.tree ? { tree: x.type.tree } : {}),
+      ...(c && ct ? { cover: { name: tieLabel(ct, true), reverse: tieLabel(ct, false), group: ct.group, reversed: !!c.reversed, ...(c.note ? { note: c.note } : {}), ...(ct.tree ? { tree: ct.tree } : {}) } } : {}) });
   }
   if (opts.worked) {
     const world = s.worlds.find(w => w.id === worldId);
@@ -80,7 +82,7 @@ export function playersWebTies(ties: WebTie[], readable: (id: string) => boolean
     if (!t.gm) { const { cover: _c, ...rest } = t; void _c; return [rest]; }
     if (!t.cover) return [];
     const c = t.cover, [fromId, toId] = c.reversed ? [t.toId, t.fromId] : [t.fromId, t.toId];
-    return [{ key: t.key, source: t.source, fromId, toId, name: c.name, reverse: c.reverse, group: c.group, gm: false, ...(c.note ? { note: c.note } : {}) }];
+    return [{ key: t.key, source: t.source, fromId, toId, name: c.name, reverse: c.reverse, group: c.group, gm: false, ...(c.note ? { note: c.note } : {}), ...(c.tree ? { tree: c.tree } : {}) }];
   });
 }
 

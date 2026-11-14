@@ -1,0 +1,64 @@
+/* Family trees (components/encyclopedia/family-tree.tsx). Uses the relationship web's canvas and side panel. */
+.ft-wrap{display:flex;flex-direction:column;gap:12px}
+.ft-bar-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.ft-pick{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.ft-pick select{min-width:200px;max-width:100%}
+.ft-about{margin:0;font-size:13px}
+.ft-canvas{container-type:inline-size}
+.ft-canvas>svg{cursor:grab}
+.ft-line{fill:none;stroke:var(--line-strong);stroke-width:1.6;stroke-linejoin:round}
+.ft-line.ward{stroke-dasharray:6 5}
+.ft-line.sibling{stroke:var(--muted)}
+.ft-line.coparent{stroke-dasharray:2 4}
+.ft-line.partner .ft-outer{fill:none;stroke:var(--accent);stroke-width:6}
+.ft-line.partner .ft-inner{fill:none;stroke:var(--panel);stroke-width:2}
+.ft-line.gm,.ft-line.partner.gm .ft-outer{stroke:#b7791f;stroke-dasharray:6 4}
+:root[data-theme="dark"] .ft-line.gm,:root[data-theme="dark"] .ft-line.partner.gm .ft-outer{stroke:#e8b765}
+.ft-node{cursor:pointer}
+.ft-node:focus{outline:none}
+.ft-box{fill:var(--panel);stroke:var(--line-strong);stroke-width:1.2}
+.ft-bar{fill:var(--accent)}
+.ft-node.inlaw .ft-bar{fill:var(--muted)}
+.ft-node:hover .ft-box,.ft-node:focus-visible .ft-box{stroke:var(--accent);stroke-width:2}
+.ft-node.on .ft-box{stroke:var(--accent);stroke-width:3}
+.ft-node.secret .ft-box{stroke:#b7791f;stroke-dasharray:5 4;fill:color-mix(in srgb,#b7791f 6%,var(--panel))}
+.ft-name{font-size:12.5px;font-weight:650;fill:var(--ink);pointer-events:none}
+.ft-sub{font-size:11px;fill:var(--muted);pointer-events:none}
+.ft-badge rect{fill:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+.ft-badge text{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;fill:var(--accent);pointer-events:none}
+.ft-node.secret .ft-badge rect{fill:color-mix(in srgb,#b7791f 16%,var(--panel))}
+.ft-node.secret .ft-badge text{fill:#9a6514}
+:root[data-theme="dark"] .ft-node.secret .ft-badge text{fill:#e8b765}
+.ft-legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted)}
+.ft-legend li{display:flex;align-items:center;gap:7px}
+.ft-legend i{display:inline-block;width:24px;height:0;border-top:1.6px solid var(--line-strong)}
+.ft-legend i.partner{height:6px;border-top:2px solid var(--accent);border-bottom:2px solid var(--accent)}
+.ft-legend i.ward{border-top-style:dashed}
+.ft-legend i.gm{border-top:2px dashed #b7791f}
+.ft-legend b{color:var(--ink)}
+.ft-families{display:flex;flex-wrap:wrap;gap:6px}
+.ft-relatives{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.ft-relatives li{display:flex;align-items:center;gap:10px;padding:3px 0}
+.ft-rel-face{display:flex;border-radius:50%}
+.ft-rel-text{flex:1;min-width:0;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}
+.ft-rel-label{display:inline-flex;align-items:center;gap:4px;color:var(--tc,var(--accent));font-weight:600;font-size:13.5px;padding:0}
+button.ft-rel-label:hover{text-decoration:underline}
+.ft-rel-name{font-weight:600;padding:0;text-align:left}
+.ft-rel-name:hover{text-decoration:underline}
+.ft-add{display:flex;flex-wrap:wrap;gap:6px}
+.ft-add .goal-pop{left:0}
+.ft-hint{margin:0;font-size:12.5px}
+.ft-outline{display:flex;flex-direction:column;gap:14px}
+.ft-outline ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ft-outline>section>ul{margin-top:6px}
+.ft-unit{display:flex;flex-direction:column;gap:8px}
+.ft-couple{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--radius-lg,6px);background:var(--panel);padding:6px 8px;display:flex;flex-direction:column}
+.ft-joined{display:block;font-size:12px;font-weight:600;color:var(--accent);padding:0 6px}
+.ft-person{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:6px;border-radius:var(--radius)}
+.ft-person:hover{background:var(--hover)}
+.ft-person.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.ft-person.secret{outline:1.5px dashed #b7791f;outline-offset:-2px}
+.ft-person strong{display:block;font-size:14.5px}
+.ft-person small{display:block;font-size:12px;color:var(--muted)}
+.ft-kids{margin-left:14px;padding-left:12px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.rw-mode{align-self:flex-start}
