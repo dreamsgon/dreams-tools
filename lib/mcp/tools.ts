@@ -9,6 +9,7 @@ import { codexCategories, codexIn, setFound } from "../encyclopedia/codex.ts";
 import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { characterProfileText, defaultProfile, organizationsOf } from "../encyclopedia/character-profile.ts";
 import { rollDice } from "../rolls.ts";
+import { playerSheet } from "../encyclopedia/sheet-link.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
 import { address, distance, hexCenter, type Grid, type Point, type Scene, type Token, type Workspace as Maps } from "../model.ts";
@@ -252,6 +253,7 @@ const tools: Tool[] = [
           faction: e.character.faction || undefined, tags: e.character.tags.length ? e.character.tags : undefined,
           stats: stats ? Object.fromEntries(fields.filter(f => stats[f.id] !== undefined && stats[f.id] !== null && stats[f.id] !== "").map(f => [f.label, stats[f.id]])) : undefined,
           statsPlayersSee: e.character.statsVisibility === "players", statblock: e.character.statblock || undefined,
+          sheet: e.character.sheet ? playerSheet(e.character.sheet) : undefined,
         } : undefined,
         quest: e.quest ? questDetails(c, e) : undefined,
         profile: e.org ? orgProfileText(e.org, id => c.book.entries.find(x => x.id === id)?.title ?? "") : e.kind === "character" ? characterProfileText(e.profile, id => c.book.entries.find(x => x.id === id)?.title ?? "", organizationsOf(c.book.entries, e.id)) : undefined,

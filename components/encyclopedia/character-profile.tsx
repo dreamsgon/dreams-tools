@@ -13,6 +13,7 @@ import {PageDrop} from './page-drag';
 import {applyDrop,dropRefusal,type DropTarget} from '@/lib/encyclopedia/profile-drop';
 import {AddBlockMenu,ArrangeBar,BarEditor,BeliefsList,Board,BlockFrame,ItemTools,StandingSelect,TextBlockBody,type Arrange} from './profile-board';
 import {CharacterReadOnly,OrgLine,TraitChip} from './character-parts';
+import {CharacterSheetSection} from './character-sheet';
 import {fillable,suggestTrait} from '@/lib/encyclopedia/profile-suggest';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
@@ -167,6 +168,7 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Prop
   {profile.visibility==='gm'&&<p className="org-hint">Players can’t see this tab yet. Use Tab visibility above to share it.</p>}
   {notice&&<p role="status" className="info-note org-notice">{notice}</p>}
   <Traits profile={profile} setProfile={setProfile}/>
+  <CharacterSheetSection entry={entry} change={change}/>
   {arranging&&<ArrangeBar what="characters" scope={scope} setScope={setScope} coGm={coGm} onDone={()=>void done()}/>}
   <Board blocks={profile.blocks} arranging={arranging} dragId={dragId} overId={overId} setOver={setOver} drop={arrange.drop} render={b=><Block key={b.id} b={b} ctx={ctx} arrange={arrange}/>}/>
   {arranging&&<AddBlockMenu count={profile.blocks.length} kinds={profileBlockKinds.map(k=>({kind:k,name:profileBlockInfo[k].name,blurb:profileBlockInfo[k].blurb,taken:singleProfileKinds.includes(k)&&profile.blocks.some(b=>b.kind===k)}))} onAdd={k=>addBlock(k as ProfileBlockKind)}/>}

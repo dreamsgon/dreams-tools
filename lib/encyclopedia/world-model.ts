@@ -11,6 +11,7 @@ import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts'
 import {lookSchema,playerLook} from './look.ts';
 import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
+import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(160);
@@ -34,6 +35,8 @@ export const characterSchema = z.object({
   statsByCampaign:z.record(id,z.record(id,statValueSchema)),
   // Optional (added later): a pasted statblock, kept exactly as pasted. GM-only; never sent to players.
   statblock:z.string().max(50000).optional(), statblockRolls:z.boolean().optional(),
+  // Optional (added later): one linked Google Sheet and the cells read from it (see sheet-link.ts). GM data; players get playerSheet() only when stats are player visible.
+  sheet:sheetSchema.optional(),
 });
 export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
@@ -284,10 +287,11 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
    const shareOrg=(e.kind==='faction'&&e.org?.visibility==='players')||(e.kind==='character'&&e.profile?.visibility==='players');
-   if(!tabs.length&&!(showStats&&fields.length)&&!mapData&&!codex&&!shareOrg)return [];
+   const sheet=showStats&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
+   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,profile:undefined as PlayerProfile|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,profile:undefined as PlayerProfile|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c)):undefined,sheet,stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
