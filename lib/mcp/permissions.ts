@@ -89,7 +89,7 @@ export function toolAction(tool: string, args: Record<string, unknown> = {}): Ac
     case "view_scene": return "seePicture";
     case "roll": return args.discord === false ? "rollSecret" : "rollOpen";
     case "post_to_discord": return "postDiscord";
-    case "create_page": case "append_to_page": return "writePages";
+    case "create_page": case "append_to_page": case "tie_pages": return "writePages";
     case "add_quest_log": case "set_objective": case "set_quest_state": case "add_codex_find": return "quests";
     case "write_session_notes": case "save_recap": case "rewrite_recap": return "notes";
     case "move_token": return "moveTokens";
