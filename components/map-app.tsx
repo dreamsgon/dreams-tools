@@ -65,6 +65,10 @@ import {
   FolderPlus,
   Users,
   MoreHorizontal,
+  Home,
+  BookOpen,
+  MessagesSquare,
+  Images as ImagesIcon,
 } from "lucide-react";
 import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
@@ -1230,10 +1234,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         {saveChip}{syncNote && <span className="map-sync-note" role="status">{syncNote}</span>}
         <button className="mobile-only mobile-menu-button" aria-expanded={mobileHeaderOpen} aria-haspopup="menu" aria-label="Map menu" title="Map menu" onClick={()=>setMobileHeaderOpen(v=>!v)}><MoreHorizontal size={20} aria-hidden="true" /></button>
         <div className="header-actions" data-mobile-open={mobileHeaderOpen} onKeyDown={(e)=>{if(e.key==="Escape"&&mobileHeaderOpen){setMobileHeaderOpen(false);(e.currentTarget.parentElement?.querySelector(".mobile-menu-button") as HTMLElement|null)?.focus();}}}>
-          <NextLink className="mobile-only header-menu-link" href="/">RPG Tools home</NextLink>
-          <a className="mobile-only header-menu-link" href={encyclopediaHref ?? "/encyclopedia"}>Encyclopedia</a>
+          <NextLink className="mobile-only header-menu-link" href="/"><Home size={18} aria-hidden="true" />RPG Tools home</NextLink>
+          <a className="mobile-only header-menu-link" href={encyclopediaHref ?? "/encyclopedia"}><BookOpen size={18} aria-hidden="true" />Encyclopedia</a>
+          <NextLink className="mobile-only header-menu-link" href="/forums"><MessagesSquare size={18} aria-hidden="true" />Forums<span className="header-menu-soon">Soon</span></NextLink>
           <AppearanceMenu />
-          <button aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}>Token gallery</button>
+          <button className="header-menu-button" aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}><ImagesIcon className="header-menu-icon" size={18} aria-hidden="true" />Token gallery</button>
           {!member && <button
             className="icon-button"
             title="Connections"

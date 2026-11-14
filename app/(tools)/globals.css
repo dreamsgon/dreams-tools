@@ -2296,43 +2296,55 @@ button.primary, .rpg-open { font-weight:500; }
 
 /* Maptable phone top bar: back, scene name, save chip and one more menu. The rest of the old header lives in that menu. */
 .header-scene-phone { display:none; }
+.header-menu-icon { display:none; }
 .board-hint-short { display:none !important; }
+.scene-sheet, .scene-sheet-backdrop { display:none; }
 @media(max-width:799px) {
  .app-shell .app-header { gap:6px; padding:6px 8px; }
  .app-shell .app-header .tool-switch, .app-shell .app-header .header-scene { display:none; }
  .app-shell .app-header .header-campaigns-compact { display:inline-flex; align-items:center; justify-content:center; width:40px; min-width:40px; min-height:40px; padding:0; margin:0; border:0; border-radius:var(--radius); }
  .app-shell .app-header .header-campaigns-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
  .app-shell .app-header .header-campaigns-compact svg { width:24px; height:24px; }
- .app-shell .app-header > .header-scene-phone { display:flex; flex:1 1 0; min-width:0; }
+ .app-shell .app-header > .header-scene-phone { display:flex; flex:1 1 0; min-width:90px; }
  .header-scene-phone .scene-switcher { flex:1; min-width:0; }
  .app-shell .app-header .header-scene-phone .scene-switcher-trigger { flex:1; min-width:0; max-width:none; min-height:40px; padding:4px 10px; justify-content:flex-start; font-size:15px; border:1px solid var(--chrome-line); }
  .app-shell .app-header .header-scene-phone .scene-switcher-trigger span { flex:0 1 auto; min-width:0; }
  .app-shell .app-header .header-scene-phone .scene-switcher-trigger svg { flex:none; margin-left:auto; }
  .app-shell .app-header > .save-chip-group, .app-shell .app-header > .save-chip { margin-left:0; }
+ /* The AI chip is just its icon on a phone, so the scene name keeps its room. */
+ .app-shell .app-header .ai-chip { width:40px; min-width:40px; height:40px; padding:0; justify-content:center; flex:none; }
+ .app-shell .app-header .ai-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
  .app-shell .app-header .mobile-menu-button { width:40px; min-width:40px; min-height:40px; padding:0; justify-content:center; align-items:center; }
+ /* The map menu: every row is an icon and a label, left-aligned, the same height. */
  .app-shell .app-header .header-actions[data-mobile-open="true"] { top:60px; flex-direction:column; align-items:stretch; gap:2px; padding:6px; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button, .appearance) { width:100%; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button), .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-trigger { display:flex; align-items:center; justify-content:flex-start; gap:12px; min-height:48px; height:auto; padding:0 12px; text-align:left; font-size:15px; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button, .appearance) { width:100%; flex:none; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) { display:flex; align-items:center; justify-content:flex-start; gap:12px; width:100%; min-height:48px; height:auto; padding:0 12px; margin:0; border:0; border-radius:var(--radius); background:transparent; color:var(--chrome-text); font-size:15px; font-weight:500; text-align:left; text-decoration:none; position:relative; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button):hover { background:var(--chrome-hover); }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .header-menu-icon { display:block; flex:none; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) svg { width:18px; height:18px; flex:none; }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .share-button { color:var(--accent); }
  .app-shell .app-header .header-actions[data-mobile-open="true"] .icon-button::after { content:attr(aria-label); font-size:15px; font-weight:500; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-trigger { position:relative; }
  .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-dot { position:absolute; left:26px; top:12px; margin:0; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .share-button { justify-content:center; margin-top:4px; }
- .app-shell .app-header .header-menu-link { align-items:center; min-height:44px; padding:0 12px; color:var(--chrome-text); font-weight:500; border-radius:var(--radius); text-decoration:none; }
- .app-shell .app-header .header-menu-link:hover { background:var(--chrome-hover); }
- /* The scene list opens as a bottom sheet. */
- .app-shell .app-header .scene-switcher.is-phone .scene-switcher-panel { position:fixed; top:auto; left:0; right:0; bottom:0; width:auto; max-width:none; border-radius:16px 16px 0 0; border-width:1px 0 0; padding-bottom:env(safe-area-inset-bottom); z-index:var(--z-modal, 200); box-shadow:0 -12px 40px rgb(0 0 0 / .35); }
- .app-shell .app-header .scene-switcher.is-phone .scene-switcher-list { max-height:min(60dvh / var(--ui-zoom, 1), 460px); }
- .app-shell .app-header .scene-switcher.is-phone .scene-switcher-list button { min-height:48px; padding:8px 16px; }
- .app-shell .app-header .scene-switcher.is-phone .scene-switcher-foot button { min-height:44px; }
- .app-shell .app-header .scene-switcher.is-phone .scene-switcher-search { padding:6px 16px; }
- .scene-switcher-grab { display:block; width:40px; height:4px; border-radius:2px; background:var(--line-strong, var(--line)); margin:8px auto 2px; }
- .scene-switcher-backdrop { position:fixed; inset:0; z-index:calc(var(--z-modal, 200) - 1); background:rgb(0 0 0 / .5); }
+ .app-shell .app-header .header-actions[data-mobile-open="true"] .header-menu-soon { margin-left:auto; font-size:12px; color:var(--chrome-muted); font-weight:400; }
+ /* The scene list is a bottom sheet drawn over the whole page (in the page body, above the dice dock and tray). */
+ .scene-sheet-backdrop { display:block; position:fixed; inset:0; z-index:400; background:rgb(0 0 0 / .5); }
+ .scene-sheet { display:block; position:fixed; left:0; right:0; bottom:0; z-index:401; max-height:calc(85dvh / var(--ui-zoom, 1)); overflow:hidden; display:flex; flex-direction:column; background:var(--panel); color:var(--ink); border-top:1px solid var(--line); border-radius:16px 16px 0 0; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -12px 40px rgb(0 0 0 / .35); outline:none; }
+ .scene-sheet .scene-switcher-search-row { display:flex; align-items:center; border-bottom:1px solid var(--line); padding-right:8px; }
+ .scene-sheet .scene-switcher-search { flex:1; min-width:0; border-bottom:0; padding:6px 16px; }
+ .scene-sheet-step { display:inline-flex; gap:2px; }
+ .scene-sheet-step .icon-button { width:40px; height:40px; min-height:40px; padding:0; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:var(--ink); }
+ .scene-sheet-step .icon-button:disabled { opacity:.35; }
+ .scene-sheet .scene-switcher-list { flex:1; min-height:0; max-height:none; overflow:auto; }
+ .scene-sheet .scene-switcher-list button { min-height:48px; padding:8px 16px; }
+ .scene-sheet .scene-switcher-foot button { min-height:44px; }
+ .scene-switcher-grab { display:block; width:40px; height:4px; border-radius:2px; background:var(--line-strong, var(--line)); margin:8px auto 2px; flex:none; }
  /* The empty-scene card becomes a slim banner across the top of the board. */
- .board-hint { top:8px; left:8px; right:8px; width:auto; max-width:none; transform:none; display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; padding:8px 8px 8px 12px; box-shadow:0 4px 14px rgba(15,23,42,.18); z-index:6; }
+ .board-hint { top:8px; left:8px; right:8px; width:auto; max-width:none; transform:none; display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; padding:8px 12px; box-shadow:0 4px 14px rgba(15,23,42,.18); z-index:6; }
  .board-hint > strong, .board-hint > .board-hint-text { display:none !important; }
- .board-hint > .board-hint-short { display:block !important; flex:1 1 100%; margin:0; padding-right:36px; font-size:13px; line-height:1.35; color:var(--ink); }
- .board-hint > span.board-hint-actions { margin:0; gap:6px; flex:1 1 100%; }
- .board-hint-actions button { min-height:36px; padding:4px 12px; font-size:13px; }
- .board-hint-close { top:4px; right:4px; width:40px; height:40px; }
- .board:has(.board-hint) .crop-controls { top:112px; }
+ .board-hint > .board-hint-short { display:block !important; flex:1 1 100%; margin:0; padding-right:44px; font-size:13px; line-height:1.35; color:var(--ink); }
+ .board-hint > span.board-hint-actions { margin:0; gap:8px; flex:1 1 100%; }
+ .board-hint-actions button { min-height:40px; padding:4px 12px; font-size:13px; }
+ .board-hint-close { top:0; right:0; width:40px; height:40px; }
+ /* With the banner showing, Crops moves to the bottom-left so a taller banner can never sit on top of it. */
+ .board:has(.board-hint) .crop-controls { top:auto; bottom:34px; left:12px; right:auto; align-items:flex-start; }
 }
