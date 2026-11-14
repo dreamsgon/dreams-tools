@@ -5,6 +5,8 @@ import {applyCoGmEdit,CoGmEditError,coGmRefusal} from '../lib/encyclopedia/co-gm
 import {savePlayerEdit} from '../lib/encyclopedia/player-edit.ts';
 import {pageFromTemplate,starterTemplates} from '../lib/encyclopedia/templates.ts';
 import {callTool} from '../lib/mcp/tools.ts';
+import {narrow} from '../lib/mcp/players-only.ts';
+import {presets} from '../lib/mcp/permissions.ts';
 import {addOrgType,applyOrgLayout,boardSegments,defaultLayout,defaultOrg,layoutOf,layOutOrg,moveBlockBy,newBlock,orgMembersOf,orgOf,orgProfileText,placeBlock,playerOrg,switchColumn} from '../lib/encyclopedia/org-profile.ts';
 import {playerText} from '../lib/encyclopedia/world-model.ts';
 
@@ -322,4 +324,13 @@ test('laying out a layout with a new block of a kind the page already has never 
  assert.equal(kept.bar.fields.find(f=>f.id==='wants').value,'Peace');
  const s=world({org:withFacts});
  assert.equal(workspaceSchema.safeParse(applyOrgLayout(s,'demo-world',layout)).success,true);
+});
+
+test('a players-only AI connection reads no organization profile', async () => {
+ const s=world({org:rich()}),full=campaignExport(s,C);
+ const limited=narrow({book:full,campaign:full.campaigns[0],maps:null,level:'read',perms:{...presets.gm,seeSecrets:'off'}});
+ const read=await callTool(limited,'read_page',{page:'Saltmere Barge Union'});
+ assert.equal(JSON.parse(read.content[0].text.replace(/^Campaign text.*\n/,'')).profile,undefined,'GM-only spots, members and plans stay out');
+ const found=JSON.stringify((await callTool(limited,'search',{query:'Sell the tolls'})).content[0].text);
+ assert.doesNotMatch(found,/Saltmere/,'search does not look inside the profile');
 });
