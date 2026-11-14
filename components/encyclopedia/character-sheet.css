@@ -65,7 +65,7 @@
 .sheet-foot-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
 
 /* Pick cells */
-.sheet-pick{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:18px;min-width:0}
+.sheet-pick{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(380px,1fr);gap:18px;min-width:0}
 .sheet-grid-pane{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:var(--radius)}
 .sheet-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--line)}
 .sheet-status code{font-family:var(--font-mono,ui-monospace,monospace);background:var(--raised);border-radius:4px;padding:1px 6px}
@@ -99,6 +99,10 @@
 .sheet-picked th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 6px}
 .sheet-picked td{padding:4px 6px;border-top:1px solid var(--line);vertical-align:middle}
 .sheet-picked input,.sheet-picked select{width:100%;min-width:0;font-size:12px;padding:4px 6px}
+.sheet-picked td:first-child{min-width:140px}
+.sheet-picked td:first-child input+input{margin-top:4px}
+.sheet-picked td:nth-child(3) select{min-width:104px}
+.sheet-picked td:nth-child(4){min-width:84px}
 .sheet-picked code{font-family:var(--font-mono,ui-monospace,monospace);font-size:11px;color:var(--muted)}
 .sheet-picked-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
 @media(max-width:900px){.sheet-pick{grid-template-columns:1fr}}
