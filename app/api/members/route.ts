@@ -17,6 +17,7 @@ const owned = { campaignId: id };
 const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("invite"), token }),
   z.object({ action: z.literal("join"), token, name: z.string().max(80) }),
+  z.object({ action: z.literal("leave"), ref: token }),
   z.object({ action: z.literal("newLink"), ...owned, groupId: id, approve: z.boolean(), expires: expiry.optional() }),
   z.object({ action: z.literal("linkSettings"), ...owned, groupId: id, approve: z.boolean().optional(), expires: expiry.optional() }),
   z.object({ action: z.literal("linkOff"), ...owned, groupId: id }),
@@ -32,7 +33,7 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unban"), ...owned, banId: id }),
   z.object({ action: z.literal("notify"), ...owned, joins: z.boolean(), discord: z.boolean() }),
 ]);
-type Owned = Exclude<z.infer<typeof action>, { action: "invite" | "join" }>;
+type Owned = Exclude<z.infer<typeof action>, { action: "invite" | "join" | "leave" }>;
 
 const headers = { "Cache-Control": "private, no-store" };
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers });
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
     if (!who) return json({ error: "Sign in required" }, 401);
     const store = new MemberStore(getBucket());
     if (body.action === "join") return json(await store.join(body.token, who, body.name));
+    // Leave campaign, from Campaigns you're in.
+    if (body.action === "leave") { await store.leave(who.userId, body.ref); return json({ campaigns: await store.memberships(who.userId) }); }
     // Everything else is the owner's, on their own campaign.
     await store.campaign(who.userId, body.campaignId);
     await manage(store, who, body);

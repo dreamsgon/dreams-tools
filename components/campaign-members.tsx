@@ -258,7 +258,7 @@ function Links({ view, act, busy }: Part) {
         <h2 className="mem-bell-head"><Bell size={14} aria-hidden="true" />Tell me when someone</h2>
         <ul className="mem-toggles">
           <li><Toggle on disabled label="Asks to join" /><span><strong>Asks to join</strong><small>On the bell in RPG Tools, and as a count on the Members tab.</small></span></li>
-          <li><Toggle on={view.notify.joins} disabled={busy} label="Joins straight away" flip={() => void act({ action: "notify", joins: !view.notify.joins, discord: view.notify.discord })} /><span><strong>Joins straight away</strong><small>On the bell, so you know who came in.</small></span></li>
+          <li><Toggle on={view.notify.joins} disabled={busy} label="Joins and leaves" flip={() => void act({ action: "notify", joins: !view.notify.joins, discord: view.notify.discord })} /><span><strong>Joins and leaves</strong><small>On the bell, so you know who came in or left.</small></span></li>
           <li><Toggle on={view.notify.discord} disabled={busy} label="Also post it in Discord" flip={() => void act({ action: "notify", joins: view.notify.joins, discord: !view.notify.discord })} /><span><strong>Also post it in Discord</strong><small>Where you send &ldquo;People joining&rdquo; in your Discord settings.</small></span></li>
         </ul>
       </section>

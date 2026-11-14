@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.AI_KEY_SECRET='test-secret-for-members';
 const M=await import('../lib/members.ts');
-const {MemberStore,seenHash,requestIp}=await import('../lib/members-server.ts');
+const {MemberStore,seenHash,requestIp,memberRef}=await import('../lib/members-server.ts');
 const {EncyclopediaStore}=await import('../lib/encyclopedia/store.ts');
 const {demoWorkspace}=await import('../lib/encyclopedia/world-model.ts');
 
@@ -123,4 +123,36 @@ test('end to end: a link, the join page, asking, the bell, letting in, Campaigns
  await assert.rejects(store.join(next,{...mara,userId:'supabase:mara2'},'Mara',NOW),/can't join/,'a new account with the banned email');
  await assert.rejects(store.join(next,gm,'Me',NOW),/your own campaign/);
  await store.linkOff(gm.userId,C,'players');assert.equal(await store.describe(next,mara,NOW),null);
+});
+
+test('members open the player pages signed in, and can leave',async()=>{
+ const b=bucket(),store=new MemberStore(b),enc=new EncyclopediaStore(b);
+ await enc.save(gm.userId,demoWorkspace(),0);
+ const token=await store.newLink(gm.userId,C,'players',{approve:false,expiresAt:null},NOW);
+ await store.join(token,mara,'Mara',NOW);
+ const [mine]=await store.memberships(mara.userId);
+ assert.match(mine.ref,/^[a-f0-9]{64}$/);assert.equal(mine.ref,await memberRef(gm.userId,C));assert.equal(mine.open,true);
+ assert.doesNotMatch(JSON.stringify(mine),/supabase:gm/,'the owner\'s account id stays on the server');
+ assert.deepEqual(await store.openAs(mara.userId,mine.ref),{owner:gm.userId,campaignId:C});
+ const shown=JSON.stringify(await enc.playerOf(await store.openAs(mara.userId,mine.ref)));
+ assert.match(shown,/The Salt Road/);assert.doesNotMatch(shown,/secret-GM-notes/);
+ assert.equal(await store.openAs('supabase:stranger',mine.ref),null,'someone else can\'t use the ref');
+ assert.equal(await store.openAs(mara.userId,'f'.repeat(64)),null);assert.equal(await store.openAs(mara.userId,'nope'),null);
+ // A group that can't see the player pages.
+ await store.change(gm.userId,C,l=>M.setPermission(l,'players','seePlayer','no'));
+ assert.equal(await store.openAs(mara.userId,mine.ref),null);assert.equal((await store.memberships(mara.userId))[0].open,false);
+ await store.change(gm.userId,C,l=>({...M.setPermission(l,'players','seePlayer','yes'),notify:{joins:true,discord:false}}));
+ // Leave campaign.
+ await store.leave(mara.userId,mine.ref,NOW);
+ assert.deepEqual(await store.memberships(mara.userId),[]);assert.equal(await store.openAs(mara.userId,mine.ref),null);
+ assert.equal((await store.read(gm.userId,C)).list.members.length,0);
+ const bell=await store.notifications(gm.userId);
+ assert.equal(bell.items[0].kind,'left');assert.equal(bell.items[0].name,'Mara');assert.equal(bell.items[0].group,'Players');
+ await assert.rejects(store.leave(mara.userId,mine.ref,NOW),/not in that campaign/);
+ // Someone still asking can stop asking.
+ const ask=await store.newLink(gm.userId,C,'players',{approve:true,expiresAt:null},NOW);
+ await store.join(ask,mara,'Mara',NOW);const [asking]=await store.memberships(mara.userId);
+ assert.equal(asking.asking,true);assert.equal(asking.open,false);
+ await store.leave(mara.userId,asking.ref,NOW);
+ assert.equal((await store.read(gm.userId,C)).list.requests.length,0);assert.deepEqual(await store.memberships(mara.userId),[]);
 });

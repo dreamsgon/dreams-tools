@@ -12,9 +12,9 @@ export async function readMapImage(owner:string,id:string){
  const bucket=getBucket(),path=key(owner,id),object=await bucket.head(path);
  return object?{url:await bucket.signedGet(path)}:null;
 }
-export async function readPlayerMapImage(token:string,id:string){
+export async function readPlayerMapImage(grant:{owner:string;campaignId:string},id:string){
  if(!imageIdSchema.safeParse(id).success)return null;
- const owner=await new EncyclopediaStore(getBucket()).playerImageOwner(token,id);
+ const owner=await new EncyclopediaStore(getBucket()).playerImageOwnerOf(grant,id);
  return owner?readMapImage(owner,id):null;
 }
 export async function readImageUpload(request:Request,owner:string){

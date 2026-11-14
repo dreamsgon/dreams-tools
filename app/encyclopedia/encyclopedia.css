@@ -60,7 +60,8 @@ select option { background:var(--paper);color:var(--ink); }
 [data-theme="dark"] .theme-track>span { transform:translateX(11px); }
 .welcome { position:relative; }
 .welcome-theme { position:absolute;right:24px;top:24px; }
-.player-refresh .theme-toggle { margin-right:auto; }
+.player-refresh .player-back { margin-right:auto; color:var(--ink); font-size:13px; font-weight:500; text-decoration:none; }
+.player-refresh .player-back:hover { text-decoration:underline; }
 @media(max-width:1200px) { .topbar .theme-label { display:none; } }
 @media(max-width:720px) { .topbar .theme-toggle { padding:8px;min-width:36px; }.topbar .theme-track { display:none; } }
 
@@ -112,7 +113,7 @@ select option { background:var(--paper);color:var(--ink); }
 .active-dot,.status-dot{background:var(--accent)}
 .toast{background:var(--accent);color:var(--on-accent)}
 .topbar .appearance-trigger,.welcome-theme .appearance-trigger,.player-refresh .appearance-trigger{border:1px solid var(--line);border-radius:var(--radius);color:var(--muted);background:transparent}
-.player-refresh .appearance{margin-right:auto}
+.player-refresh .appearance{margin-right:auto}.player-refresh:has(.player-back) .appearance{margin-right:0}
 /* Shared RPG Tools look: tokens, fonts and accent from app/appearance.css. */
 :root{font-family:var(--font-sans);color:var(--ink);background:var(--bg)}
 body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
