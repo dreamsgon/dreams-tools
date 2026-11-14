@@ -1,6 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {Check,Eye,LayoutGrid,Pencil,Plus,Trash2} from 'lucide-react';
+import {Check,Eye,LayoutGrid,Pencil,Plus,Sparkles,Trash2} from 'lucide-react';
 import {defaultCharacter,newId,playerCampaign,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {emblemSymbols,moveBlockBy,placeBlock,switchColumn,type EmblemSymbol} from '@/lib/encyclopedia/org-profile';
 import {applyCharacterLayout,defaultProfile,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
@@ -9,8 +9,11 @@ import {memberRef} from './member-view';
 import {ToolDialog} from './tool-dialog';
 import {BottomBar,Emblem,PageLink,PersonLine,symbolIcons,symbolNames} from './org-parts';
 import {OrgJoinPicker,PagePicker} from './org-picker';
+import {PageDrop} from './page-drag';
+import {applyDrop,dropRefusal,type DropTarget} from '@/lib/encyclopedia/profile-drop';
 import {AddBlockMenu,ArrangeBar,BarEditor,BeliefsList,Board,BlockFrame,ItemTools,StandingSelect,TextBlockBody,type Arrange} from './profile-board';
 import {CharacterReadOnly,OrgLine,TraitChip} from './character-parts';
+import {fillable,suggestTrait} from '@/lib/encyclopedia/profile-suggest';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 type Props={entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[]};
@@ -23,14 +26,19 @@ type Ctx={
  /** Makes a new NPC page and then lets `add` put it on the profile in the same save. */
  createNpc:(name:string,add:(p:Profile,id:string)=>Profile)=>void;
  linked:Entry[];
+ /** What a dragged page needs to land on this part of the profile (see PageDrop). */
+ drop:(target:DropTarget,label:string)=>{label:string;check:(pageId:string)=>string|null;onPage:(pageId:string)=>void;onRefuse:(why:string)=>void};
 };
 
 /* ---- Traits ---- */
 
-function TraitForm({initial,onSave,onCancel}:{initial?:{label:string;symbol?:EmblemSymbol;gm?:boolean};onSave:(t:{label:string;symbol?:EmblemSymbol;gm?:boolean})=>void;onCancel:()=>void}){
- const [label,setLabel]=useState(initial?.label??''),[symbol,setSymbol]=useState<EmblemSymbol|undefined>(initial?.symbol),[gm,setGm]=useState(!!initial?.gm);
+function TraitForm({initial,have=[],onSave,onCancel}:{initial?:{label:string;symbol?:EmblemSymbol;gm?:boolean};have?:string[];onSave:(t:{label:string;symbol?:EmblemSymbol;gm?:boolean})=>void;onCancel:()=>void}){
+ const [label,setLabel]=useState(initial?.label??''),[symbol,setSymbol]=useState<EmblemSymbol|undefined>(initial?.symbol),[gm,setGm]=useState(!!initial?.gm),[lastLabel,setLastLabel]=useState<string>();
+ // Suggest fills an empty trait, or one it filled itself and nobody has changed since.
+ const suggest=()=>{const t=suggestTrait(label,{label:lastLabel},have);if(t){setLastLabel(t);setLabel(t);}};
  return <form className="char-trait-form" aria-label={initial?'Edit trait':'Add a trait'} onSubmit={e=>{e.preventDefault();if(label.trim())onSave({label:label.trim(),symbol,gm:gm||undefined});}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();onCancel();}}}>
   <input className="org-input" aria-label="Trait" autoFocus required maxLength={30} placeholder="For example Shrewd" value={label} onChange={e=>setLabel(e.target.value)}/>
+  {fillable(label,lastLabel)&&<button type="button" className="text-button org-suggest" aria-label="Suggest a trait" onClick={suggest}><Sparkles size={12}/> Suggest</button>}
   <div className="org-gallery char-gallery" role="group" aria-label="Trait symbol">
    <button type="button" className="org-gallery-item char-no-symbol" aria-label="No symbol" title="No symbol" aria-pressed={!symbol} onClick={()=>setSymbol(undefined)}>None</button>
    {emblemSymbols.map(s=>{const Icon=symbolIcons[s];return <button type="button" key={s} className="org-gallery-item" aria-label={symbolNames[s]} title={symbolNames[s]} aria-pressed={symbol===s} onClick={()=>setSymbol(s)}><Icon size={16}/></button>;})}</div>
@@ -49,8 +57,8 @@ function Traits({profile,setProfile}:{profile:Profile;setProfile:(f:(p:Profile)=
     <ItemTools gm={t.gm} what={t.label||'this trait'} onEdit={()=>setForm(form===t.id?null:t.id)} onGm={()=>set(l=>l.map(x=>x.id===t.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>{set(l=>l.filter(x=>x.id!==t.id));if(form===t.id)setForm(null);}}/></TraitChip></span>)}
    <button type="button" className="char-trait-add" disabled={profile.traits.length>=maxTraits} onClick={()=>setForm(form==='new'?null:'new')}><Plus size={13}/> Trait{profile.traits.length>=maxTraits?` (up to ${maxTraits})`:''}</button>
   </div>
-  {form==='new'&&<TraitForm onCancel={()=>setForm(null)} onSave={t=>{set(l=>[...l,{id:newId(),...t}]);setForm(null);}}/>}
-  {editing&&<TraitForm key={editing.id} initial={editing} onCancel={()=>setForm(null)} onSave={t=>{set(l=>l.map(x=>x.id===editing.id?{id:x.id,...t}:x));setForm(null);}}/>}
+  {form==='new'&&<TraitForm have={profile.traits.map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>[...l,{id:newId(),...t}]);setForm(null);}}/>}
+  {editing&&<TraitForm key={editing.id} initial={editing} have={profile.traits.filter(t=>t.id!==editing.id).map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>l.map(x=>x.id===editing.id?{id:x.id,...t}:x));setForm(null);}}/>}
  </div>;
 }
 
@@ -84,7 +92,7 @@ function TiesBody({b,ctx}:{b:ProfileBlockOf<'ties'>;ctx:Ctx}){
  const set=(f:(m:ProfileBlockOf<'ties'>['ties'])=>ProfileBlockOf<'ties'>['ties'])=>ctx.patch(b.id,'ties',x=>({...x,ties:f(x.ties)}));
  const key=b.id,target=(id:string)=>ctx.data.entries.find(e=>e.id===id);
  const lead=(id:string)=>{const t=target(id);return t?.kind==='faction'?<Emblem emblem={t.org?.emblem??{shape:'shield'}} size={30} initial={t.title}/>:undefined;};
- return <>
+ return <PageDrop {...ctx.drop({kind:'ties',characterId:ctx.entry.id,blockId:b.id},'Drop to add a tie')}>
   {b.ties.map(t=>{const tools=<ItemTools gm={t.gm} editing={ctx.editing===t.id} what={ctx.title(t.entryId)||'this tie'} onEdit={()=>ctx.setEditing(ctx.editing===t.id?null:t.id)} onGm={()=>set(l=>l.map(x=>x.id===t.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>set(l=>l.filter(x=>x.id!==t.id))}/>;
    return <div className={`org-item${t.gm?' is-gm':''}`} key={t.id}>{ctx.editing===t.id
     ?<div className="org-edit-row"><strong>{ctx.title(t.entryId)||'Missing page'}</strong><input className="org-input" aria-label="Note" placeholder="Rival · owes her a debt she won’t forgive" maxLength={200} autoFocus value={t.note??''} onChange={e=>set(l=>l.map(x=>x.id===t.id?{...x,note:e.target.value||undefined}:x))}/>{tools}</div>
@@ -94,7 +102,7 @@ function TiesBody({b,ctx}:{b:ProfileBlockOf<'ties'>;ctx:Ctx}){
    {ctx.picker===key&&<PagePicker characters={false} ties label="Add a tie" data={ctx.data} org={ctx.entry} exclude={b.ties.map(t=>t.entryId)} onClose={()=>ctx.setPicker(null)}
     onChoose={entryId=>{const id=newId();set(l=>[...l,{id,entryId}]);ctx.setPicker(null);ctx.setEditing(id);}}
     onCreate={name=>{const id=newId();ctx.createNpc(name,(p,npc)=>({...p,blocks:p.blocks.map(x=>x.id===b.id&&x.kind==='ties'?{...x,ties:[...x.ties,{id,entryId:npc}]}:x)}));ctx.setPicker(null);ctx.setEditing(id);}}/>}</div>
- </>;
+ </PageDrop>;
 }
 
 function LinkedBody({ctx}:{ctx:Ctx}){
@@ -123,7 +131,9 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Prop
  const setProfile=(f:(p:Profile)=>Profile,extra:Entry[]=[])=>change(w=>({...w,entries:[...w.entries.map(e=>e.id===entry.id?{...e,profile:f(e.profile??defaultProfile(w.worlds.find(x=>x.id===e.worldId))),editedBy:undefined,updatedAt:new Date().toISOString()}:e),...extra]}));
  const patch:Ctx['patch']=(id,kind,f)=>setProfile(p=>({...p,blocks:p.blocks.map(b=>b.id===id&&b.kind===kind?f(b as never) as ProfileBlock:b)}));
  const createNpc:Ctx['createNpc']=(name,add)=>{const id=newId(),now=new Date().toISOString();setProfile(p=>add(p,id),[{id,worldId:entry.worldId,campaignId:entry.campaignId,parentId:null,title:name.slice(0,160),kind:'character',character:defaultCharacter(),profile:defaultProfile(world),body:'',updatedAt:now}]);};
- const ctx:Ctx={entry,data,change,open:onOpen,patch,title:titleOf,picker,setPicker,editing,setEditing,createNpc,linked};
+ const drop:Ctx['drop']=(target,label)=>({label,check:id=>dropRefusal(data,target,id),onRefuse:setNotice,
+  onPage:id=>{if(change(w=>applyDrop(w,target,id))!==false)setNotice(`Added ${titleOf(id)}.`);}});
+ const ctx:Ctx={entry,data,change,open:onOpen,patch,title:titleOf,picker,setPicker,editing,setEditing,createNpc,linked,drop};
 
  const edit=(id:string,f:(b:ProfileBlock)=>ProfileBlock)=>setProfile(p=>({...p,blocks:p.blocks.map(b=>b.id===id?f(b):b)}));
  const canMove=(id:string,dir:-1|1)=>{const next=moveBlockBy(profile.blocks,id,dir);return next.some((b,i)=>b.id!==profile.blocks[i].id);};
@@ -155,7 +165,7 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Prop
    <button type="button" className="button small" onClick={()=>setShowPlayer(true)}><Eye size={14}/> Player view</button>
   </div>
   {profile.visibility==='gm'&&<p className="org-hint">Players can’t see this tab yet. Use Tab visibility above to share it.</p>}
-  {notice&&<p role="status" className="info-note">{notice}</p>}
+  {notice&&<p role="status" className="info-note org-notice">{notice}</p>}
   <Traits profile={profile} setProfile={setProfile}/>
   {arranging&&<ArrangeBar what="characters" scope={scope} setScope={setScope} coGm={coGm} onDone={()=>void done()}/>}
   <Board blocks={profile.blocks} arranging={arranging} dragId={dragId} overId={overId} setOver={setOver} drop={arrange.drop} render={b=><Block key={b.id} b={b} ctx={ctx} arrange={arrange}/>}/>

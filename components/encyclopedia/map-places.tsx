@@ -8,13 +8,14 @@ import {ArrowUpRight,BookOpen,Eye,EyeOff,Map as MapIcon,MapPin,Pencil,Plus,Searc
 import {linkedCount,mapThings,placeCard,type MapThing} from '@/lib/encyclopedia/map-places';
 import {visibleEntries,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {kindLabel} from '@/lib/map-notes';
+import type {Holder} from '@/lib/encyclopedia/org-holdings';
 import {ToolDialog} from './tool-dialog';
 import './map-places.css';
 
 const initial=(t:string)=>t.trim().charAt(0).toUpperCase()||'?';
 const tint=(kind:string)=>/character|npc|creature|companion/i.test(kind)?'#6a4f8a':/place|map|town|city|village/i.test(kind)?'#3f6f58':/faction|lore/i.test(kind)?'#5f5a8a':/quest/i.test(kind)?'#a0782c':'#8a5a2c';
 
-export function PlaceCardView({data,map,thing,onOpen,onLink,onEdit,onRemove,onClose}:{data:Workspace;map:Entry;thing:MapThing;onOpen:(id:string)=>void;onLink:()=>void;onEdit?:()=>void;onRemove?:()=>void;onClose:()=>void}){
+export function PlaceCardView({data,map,thing,holders,onOpen,onLink,onEdit,onRemove,onClose}:{holders?:Holder[];data:Workspace;map:Entry;thing:MapThing;onOpen:(id:string)=>void;onLink:()=>void;onEdit?:()=>void;onRemove?:()=>void;onClose:()=>void}){
  const card=placeCard(data,map,thing.entryId),page=card.page,area=thing.areaMapId?data.entries.find(e=>e.id===thing.areaMapId):undefined;
  return <section className={`place-card${thing.x<.5?' right':''}`} aria-label={thing.title}>
   <header>
@@ -29,6 +30,7 @@ export function PlaceCardView({data,map,thing,onOpen,onLink,onEdit,onRemove,onCl
    {page?<>
     {page.title!==thing.title&&<p className="place-card-page"><BookOpen size={12}/> {page.title}</p>}
     {card.lead&&<p className="place-card-lead">{card.lead}</p>}
+    {!!holders?.length&&<div className="place-card-held"><h4>Held by</h4><ul>{holders.map((h,i)=><li key={h.id}><i style={{background:h.colour}} aria-hidden="true"/><button className="wiki-link" onClick={()=>onOpen(h.id)}>{h.title}</button>{i===0&&holders.length>1&&<small>colours the map</small>}{h.gm&&<small className="gm"><EyeOff size={10}/> GM only</small>}</li>)}</ul></div>}
     {card.info.length>0&&<dl className="place-card-info">{card.info.slice(0,6).map(r=><div key={r.id}><dt>{r.label}{r.gm&&<EyeOff size={10} aria-label="GM only"/>}</dt><dd>{r.pageId?<button className="wiki-link" onClick={()=>onOpen(r.pageId!)}>{r.value}</button>:r.value}</dd></div>)}</dl>}
     {thing.notes&&<p className="place-card-notes">{thing.notes}</p>}
     {card.secrets.length>0&&<><h4>GM notes</h4><div className="place-card-secret">{card.secrets.map((t,i)=><p key={i}>{t}</p>)}</div></>}

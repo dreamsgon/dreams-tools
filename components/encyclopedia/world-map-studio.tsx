@@ -1,8 +1,9 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Route, Shield, Type, Undo2, Waves } from 'lucide-react';
 import { decodePaint, encodePaint, fogBrush, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
-import { newId, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
+import { newId, playerCampaign, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
+import { holdersByPlace, pinTints, playerHoldersByPlace } from '@/lib/encyclopedia/org-holdings';
 import { paintStroke, thinLine } from '@/lib/encyclopedia/terrain-art';
 import { crawlPlan, type Pace } from '@/lib/encyclopedia/hex-crawl';
 import type { Calendar } from '@/lib/encyclopedia/calendar-model';
@@ -62,6 +63,11 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const [playerView, setPlayerView] = useState(false), [using, setUsing] = useState(false);
   const seen = playerView ? playerMap(map) : map;
   const { url } = useMapImage(seen);
+  // Pins of places an organization holds are tinted in its map colour; the player preview follows what players may see.
+  const tints = useMemo(() => {
+    if (!playerView) return pinTints(map.pins, holdersByPlace(data.entries, { worldId: entry.worldId, campaignId: campaign?.id ?? entry.campaignId }));
+    try { return campaign ? pinTints(map.pins, playerHoldersByPlace(playerCampaign(data, campaign.id).entries)) : {}; } catch { return {}; }
+  }, [playerView, map.pins, data, entry.worldId, entry.campaignId, campaign]);
   const pin = map.pins.find(p => p.id === selected), path = map.paths?.find(p => p.id === selected), label = map.labels?.find(l => l.id === selected);
   const current = live ?? (painted ? mapPaint(map) : null);
   const areaMaps = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.kind === 'map' && e.id !== entry.id);
@@ -175,7 +181,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       </nav>
       <section className="world-studio-map">
         <MapViewport map={map} editing={tool !== 'select' && !playerView}>
-          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player"/> : <MapCanvas map={map} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
+          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
             brush={brush} fogEditing={tool === 'fog'} onCell={tool === 'fog' ? explore : undefined}
             selectedItem={selected} onItem={tool === 'select' ? select : undefined}
             onPlace={tool === 'place' ? place : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>}

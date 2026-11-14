@@ -217,3 +217,25 @@ textarea.org-input{resize:vertical;line-height:1.5}
 .org-edit-row .org-hint{flex:1 1 100%;margin:0}
 .org-picker-standing .org-input{flex:1;min-width:0;max-width:170px}
 .char-profile.is-readonly .char-traits{margin-bottom:2px}
+
+/* ---- Part 3: dragging pages in, Suggest, held places and the Organizations lists ---- */
+.org-notice{position:sticky;top:8px;z-index:5}
+.page-drop{border-radius:var(--radius);transition:box-shadow .12s,background .12s}
+.page-drop.can-drop{outline:2px dashed color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:5px}
+.page-drop.can-drop.is-over{outline:2px solid var(--accent);background:var(--accent-soft);position:relative}
+.page-drop.can-drop.is-over::after{content:attr(data-drop-label);position:absolute;inset:auto 6px 6px auto;max-width:calc(100% - 12px);padding:3px 8px;border-radius:999px;background:var(--accent);color:var(--bg);font-size:11px;font-weight:600;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.org-suggest{display:inline-flex;align-items:center;gap:4px;font-size:12px;align-self:flex-start}
+.org-dot{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 22%,transparent)}
+.org-side-row .tree-item{gap:9px}
+.player-orgs{margin:4px 0 10px;display:flex;flex-direction:column}
+.player-side-heading{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 10px}
+.player-layout>aside .player-orgs>button{display:flex;align-items:center;gap:9px;text-align:left;padding:12px 10px;width:100%;font-size:13px;border-radius:var(--radius);overflow-wrap:anywhere}
+.player-layout>aside .player-orgs>button.active{background:var(--green-pale)}
+.place-card-held h4{margin:14px 0 6px}
+.place-card-held ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.place-card-held li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.place-card-held li i,.held-chip i{flex:none;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 25%,transparent)}
+.place-card-held li small{color:var(--muted);font-size:11px}
+.pin-readout p.pin-held{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 14px}
+.held-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px}
+@media(prefers-reduced-motion:reduce){.page-drop{transition:none}}

@@ -10,6 +10,8 @@ import {BottomBar,GmChip,OrgBanner,OrgReadOnly,PageLink,PersonLine,Stack} from '
 import {AddBlockMenu,ArrangeBar,BarEditor,BeliefsList,Board,BlockFrame,ItemTools,StandingSelect,TextBlockBody,type Arrange} from './profile-board';
 import {OrgPanel} from './org-panel';
 import {PagePicker} from './org-picker';
+import {PageDrop} from './page-drag';
+import {applyDrop,dropRefusal,type DropTarget} from '@/lib/encyclopedia/profile-drop';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 type Props={entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;onRename:()=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[]};
@@ -23,6 +25,8 @@ type Ctx={
  /** Makes a new NPC page and then lets `add` put it on the profile in the same save. */
  createNpc:(name:string,add:(o:Org,id:string)=>Org)=>void;
  linked:Entry[];askSubgroup:()=>void;
+ /** What a dragged page needs to land on this part of the profile (see PageDrop). */
+ drop:(target:DropTarget,label:string)=>{label:string;check:(pageId:string)=>string|null;onPage:(pageId:string)=>void;onRefuse:(why:string)=>void};
 };
 
 /* ---- Block bodies ---- */
@@ -32,7 +36,7 @@ function SpotsBody({b,ctx}:{b:BlockOf<'spots'>;ctx:Ctx}){
  const set=(f:(s:BlockOf<'spots'>['spots'])=>BlockOf<'spots'>['spots'])=>ctx.patch(b.id,'spots',x=>({...x,spots:f(x.spots)}));
  const addSpot=()=>{if(b.spots.length>=maxSpots)return;const id=newId();set(s=>[...s,{id,title:adding.trim().slice(0,80),people:[]}]);setAdding('');setOpen(false);};
  return <>
-  {b.spots.map(s=>{const key=`${b.id}:${s.id}`;return <div className={`org-spot org-item${s.gm?' is-gm':''}`} key={s.id}>
+  {b.spots.map(s=>{const key=`${b.id}:${s.id}`;return <PageDrop key={s.id} {...ctx.drop({kind:'spot',orgId:ctx.entry.id,blockId:b.id,spotId:s.id},`Drop to add to ${s.title||'this spot'}`)} className={`org-spot org-item${s.gm?' is-gm':''}`}>
    <div className="org-spot-head">{ctx.editing===s.id?<input className="org-input" aria-label="Spot title" autoFocus maxLength={80} value={s.title} onChange={e=>set(l=>l.map(x=>x.id===s.id?{...x,title:e.target.value}:x))}/>:<h4>{s.title||'Untitled spot'}</h4>}{s.gm&&<GmChip/>}
     <ItemTools gm={s.gm} editing={ctx.editing===s.id} what={`the spot ${s.title||''}`} onEdit={()=>ctx.setEditing(ctx.editing===s.id?null:s.id)} onGm={()=>set(l=>l.map(x=>x.id===s.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>set(l=>l.filter(x=>x.id!==s.id))}/></div>
    {s.people.map(p=><div className={`org-item${p.gm?' is-gm':''}`} key={p.id}>{ctx.editing===p.id
@@ -43,7 +47,7 @@ function SpotsBody({b,ctx}:{b:BlockOf<'spots'>;ctx:Ctx}){
     {ctx.picker===key&&<PagePicker characters label={`Add a person to ${s.title||'this spot'}`} data={ctx.data} org={ctx.entry} exclude={s.people.map(p=>p.entryId)} onClose={()=>ctx.setPicker(null)}
      onChoose={(entryId,standing)=>{const id=newId();set(l=>l.map(x=>x.id===s.id?{...x,people:[...x.people,{id,entryId,standing}]}:x));ctx.setPicker(null);ctx.setEditing(id);}}
      onCreate={(name,standing)=>{const id=newId();ctx.createNpc(name,(o,npc)=>({...o,blocks:o.blocks.map(x=>x.id===b.id&&x.kind==='spots'?{...x,spots:x.spots.map(y=>y.id===s.id?{...y,people:[...y.people,{id,entryId:npc,standing}]}:y)}:x)}));ctx.setPicker(null);ctx.setEditing(id);}}/>}</div>
-  </div>;})}
+  </PageDrop>;})}
   {!b.spots.length&&<p className="org-empty">No spots yet. Add one for each role you want to keep track of.</p>}
   {open?<form className="org-inline-form" onSubmit={e=>{e.preventDefault();addSpot();}}><input className="org-input" aria-label="Spot title" autoFocus maxLength={80} placeholder="For example Warden-Captains" value={adding} onChange={e=>setAdding(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setOpen(false);}}/><button className="button small primary" type="submit">Add</button><button className="button small" type="button" onClick={()=>setOpen(false)}>Cancel</button></form>
    :<button type="button" className="text-button org-add" disabled={b.spots.length>=maxSpots} onClick={()=>setOpen(true)}><Plus size={13}/> Add a spot{b.spots.length>=maxSpots?` (up to ${maxSpots})`:''}</button>}
@@ -53,7 +57,7 @@ function SpotsBody({b,ctx}:{b:BlockOf<'spots'>;ctx:Ctx}){
 function MembersBody({b,ctx}:{b:BlockOf<'members'>;ctx:Ctx}){
  const set=(f:(m:BlockOf<'members'>['members'])=>BlockOf<'members'>['members'])=>ctx.patch(b.id,'members',x=>({...x,members:f(x.members)}));
  const key=b.id;
- return <>
+ return <PageDrop {...ctx.drop({kind:'members',orgId:ctx.entry.id,blockId:b.id},'Drop to add a member')}>
   {b.members.map(m=><div className={`org-item${m.gm?' is-gm':''}`} key={m.id}>{ctx.editing===m.id
    ?<div className="org-edit-row"><strong>{ctx.title(m.entryId)||'Missing page'}</strong><input className="org-input" aria-label="Role" placeholder="Role, for example Ferry-warden" maxLength={80} autoFocus value={m.role??''} onChange={e=>set(l=>l.map(x=>x.id===m.id?{...x,role:e.target.value||undefined}:x))}/><StandingSelect value={m.standing} onChange={standing=>set(l=>l.map(x=>x.id===m.id?{...x,standing}:x))}/>
      <ItemTools gm={m.gm} editing what={ctx.title(m.entryId)} onEdit={()=>ctx.setEditing(null)} onGm={()=>set(l=>l.map(x=>x.id===m.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>set(l=>l.filter(x=>x.id!==m.id))}/></div>
@@ -63,7 +67,7 @@ function MembersBody({b,ctx}:{b:BlockOf<'members'>;ctx:Ctx}){
    {ctx.picker===key&&<PagePicker characters label="Add a member" data={ctx.data} org={ctx.entry} exclude={b.members.map(m=>m.entryId)} onClose={()=>ctx.setPicker(null)}
     onChoose={(entryId,standing)=>{const id=newId();set(l=>[...l,{id,entryId,standing}]);ctx.setPicker(null);ctx.setEditing(id);}}
     onCreate={(name,standing)=>{const id=newId();ctx.createNpc(name,(o,npc)=>({...o,blocks:o.blocks.map(x=>x.id===b.id&&x.kind==='members'?{...x,members:[...x.members,{id,entryId:npc,standing}]}:x)}));ctx.setPicker(null);ctx.setEditing(id);}}/>}</div>
- </>;
+ </PageDrop>;
 }
 
 function FactsBody({b,ctx}:{b:BlockOf<'facts'>;ctx:Ctx}){
@@ -88,12 +92,12 @@ function BeliefsBody({b,ctx}:{b:BlockOf<'beliefs'>;ctx:Ctx}){
 function HoldingsBody({b,ctx}:{b:BlockOf<'holdings'>;ctx:Ctx}){
  const set=(f:(m:BlockOf<'holdings'>['holdings'])=>BlockOf<'holdings'>['holdings'])=>ctx.patch(b.id,'holdings',x=>({...x,holdings:f(x.holdings)}));
  const key=b.id,kind=(id:string)=>ctx.data.entries.find(e=>e.id===id)?.kind;
- return <>
+ return <PageDrop {...ctx.drop({kind:'holdings',orgId:ctx.entry.id,blockId:b.id},'Drop to add a holding')}>
   {b.holdings.map(h=><div className={`org-holding org-item${h.gm?' is-gm':''}`} key={h.id}><PageLink id={h.entryId} open={ctx.open}>{ctx.title(h.entryId)||'Missing page'}</PageLink><small>{kind(h.entryId)==='faction'?'organization':kind(h.entryId)}</small>{h.gm&&<GmChip/>}<ItemTools gm={h.gm} what={ctx.title(h.entryId)||'this holding'} onGm={()=>set(l=>l.map(x=>x.id===h.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>set(l=>l.filter(x=>x.id!==h.id))}/></div>)}
   {!b.holdings.length&&<p className="org-empty">No pages yet. Pick the places, ships and notes they own.</p>}
   <div className="org-add-wrap"><button type="button" className="text-button org-add" disabled={b.holdings.length>=40} onClick={()=>ctx.setPicker(ctx.picker===key?null:key)}><Plus size={13}/> Add</button>
    {ctx.picker===key&&<PagePicker characters={false} label="Add a page they own" data={ctx.data} org={ctx.entry} exclude={b.holdings.map(h=>h.entryId)} onClose={()=>ctx.setPicker(null)} onChoose={entryId=>{set(l=>[...l,{id:newId(),entryId}]);ctx.setPicker(null);}}/>}</div>
- </>;
+ </PageDrop>;
 }
 
 function TextBody({b,ctx}:{b:BlockOf<'text'>;ctx:Ctx}){
@@ -135,7 +139,9 @@ export function OrgProfile({entry,data,campaign,change,onOpen,onRename,linked}:P
  const setOrg=(f:(o:Org)=>Org,extra:Entry[]=[])=>change(w=>({...w,entries:[...w.entries.map(e=>e.id===entry.id?{...e,org:f(e.org??defaultOrg(w.worlds.find(x=>x.id===e.worldId))),editedBy:undefined,updatedAt:new Date().toISOString()}:e),...extra]}));
  const patch:Ctx['patch']=(id,kind,f)=>setOrg(o=>({...o,blocks:o.blocks.map(b=>b.id===id&&b.kind===kind?f(b as never) as OrgBlock:b)}));
  const createNpc:Ctx['createNpc']=(name,add)=>{const id=newId(),now=new Date().toISOString();setOrg(o=>add(o,id),[{id,worldId:entry.worldId,campaignId:entry.campaignId,parentId:null,title:name.slice(0,160),kind:'character',character:defaultCharacter(),body:'',updatedAt:now}]);};
- const ctx:Ctx={entry,data,open:onOpen,patch,title:titleOf,picker,setPicker,editing,setEditing,createNpc,linked,askSubgroup:()=>setNaming(true)};
+ const drop:Ctx['drop']=(target,label)=>({label,check:id=>dropRefusal(data,target,id),onRefuse:setNotice,
+  onPage:id=>{if(change(w=>applyDrop(w,target,id))!==false)setNotice(`Added ${titleOf(id)}.`);}});
+ const ctx:Ctx={entry,data,open:onOpen,patch,title:titleOf,picker,setPicker,editing,setEditing,createNpc,linked,askSubgroup:()=>setNaming(true),drop};
 
  const edit=(id:string,f:(b:OrgBlock)=>OrgBlock)=>setOrg(o=>({...o,blocks:o.blocks.map(b=>b.id===id?f(b):b)}));
  const canMove=(id:string,dir:-1|1)=>{const next=moveBlockBy(org.blocks,id,dir);return next.some((b,i)=>b.id!==org.blocks[i].id);};
@@ -171,7 +177,7 @@ export function OrgProfile({entry,data,campaign,change,onOpen,onRename,linked}:P
   <OrgBanner emblem={org.emblem} banner={org.banner} type={org.type} motto={org.motto} title={entry.title} campaignName={entry.campaignId?campaign?.name:'Shared world lore'} actions={actions}
    rename={<button type="button" className="org-rename" aria-label="Rename entry" onClick={onRename}><Pencil size={16}/></button>}/>
   {org.visibility==='gm'&&<p className="org-hint">Players can’t see this tab yet. Use Tab visibility above to share it.</p>}
-  {notice&&<p role="status" className="info-note">{notice}</p>}
+  {notice&&<p role="status" className="info-note org-notice">{notice}</p>}
   {arranging&&<ArrangeBar what="organizations" scope={scope} setScope={setScope} coGm={coGm} onDone={()=>void done()}/>}
   <Board blocks={org.blocks} arranging={arranging} dragId={dragId} overId={overId} setOver={setOver} drop={arrange.drop} render={b=><Block key={b.id} b={b} ctx={ctx} arrange={arrange}/>}/>
   {arranging&&<AddBlockMenu count={org.blocks.length} kinds={blockKinds.map(k=>({kind:k,name:blockKindInfo[k].name,blurb:blockKindInfo[k].blurb,taken:singleBlockKinds.includes(k)&&org.blocks.some(b=>b.kind===k)}))} onAdd={k=>addBlock(k as BlockKind)}/>}
