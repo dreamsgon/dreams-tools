@@ -10,7 +10,6 @@ export default function ToolSwitch({ active, maptableHref = "/maptable", encyclo
     <nav aria-label="RPG tools">
       <a href={maptableHref} aria-current={active === "maptable" ? "page" : undefined}>Maptable</a>
       <a href={encyclopediaHref} aria-current={active === "encyclopedia" ? "page" : undefined}>Encyclopedia</a>
-      <Link href="/forums">Forums<span className="soon-pill">Soon</span></Link>
     </nav>
   </div>;
 }
