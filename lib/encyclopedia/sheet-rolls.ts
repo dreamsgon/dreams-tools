@@ -58,6 +58,6 @@ export const sheetHasRolls = (sheet: Pick<PlayerSheet, "items">) => sheetRollGro
 
 /** The notations the dice help lists. */
 export const DICE_HELP = [
-  ["1d20+5", "add up"], ["4d6kh3 / 2d20kl1", "keep high or low"], ["2d6!", "exploding"], ["5d10>=8", "count successes"], ["4dF", "Fate dice"],
+  ["1d20+5", "add up"], ["4d6kh3 / 2d20kl1", "keep high or low"], ["2d6!", "exploding"], ["5d10>=8", "count successes"], ["4dF", "plus/minus dice, −4 to +4"],
 ] as const;
 export const diceHelpText = DICE_HELP.map(([f, what]) => `${f} ${what}`).join(" · ");

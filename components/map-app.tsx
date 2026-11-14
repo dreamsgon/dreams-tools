@@ -82,7 +82,7 @@ import SceneSwitcher from "./scene-switcher";
 import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
 import ConditionEntry from "./condition-entry";
-import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter } from "./encyclopedia-tokens";
+import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter, type EncyclopediaRaw } from "./encyclopedia-tokens";
 import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import "./maptable-token-layout.css";
@@ -171,6 +171,12 @@ const tools = [
   { id: "measure", label: "Measure", Icon: Ruler },
 ] as const;
 
+/** The roll lists of the linked characters' sheets, by Encyclopedia entry id. */
+function sheetsFrom(raw:EncyclopediaRaw,ids:string):Map<string,{name:string;groups:SheetRollGroup[]}>{
+  const found=new Map<string,{name:string;groups:SheetRollGroup[]}>();
+  for(const id of ids.split(",")){const e=raw.entries?.find(x=>x.id===id&&x.kind==="character"),items=e?.character?.sheet?.items;if(!e||!items)continue;const groups=sheetRollGroups({items:items.map(i=>({...i,kind:i.kind as SheetKind}))});if(groups.length)found.set(id,{name:e.title,groups});}
+  return found;
+}
 export default function MapApp(props: { navigationScope?: string } = {}) {
   useIdlePreload(preloadParts);
   return <FolderPreferenceScope.Provider value={props.navigationScope ?? "local"}><MapAppContent {...props} /></FolderPreferenceScope.Provider>;
@@ -341,15 +347,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const linkable=useMemo(()=>linkablePages(book,campaignId),[book,campaignId]);
   // Rolls from the sheets of Encyclopedia characters linked to this scene's tokens (GM only), read from the same cached Encyclopedia the statblock tab uses.
   const [sheetRolls,setSheetRolls]=useState<Map<string,{name:string;groups:SheetRollGroup[]}>>(()=>new Map());
-  const [sheetPanel,setSheetPanel]=useState<{tokenId:string;x:number;y:number}|null>(null);
+  const [sheetPanel,setSheetPanel]=useState<{tokenId:string;sceneId:string;x:number;y:number}|null>(null);
   const linkedEntryIds=useMemo(()=>[...new Set((scene?.tokens??[]).map(t=>t.encyclopediaEntryId).filter((id):id is string=>!!id))].sort().join(","),[scene?.tokens]);
   useEffect(()=>{
    if(player||!linkedEntryIds)return;let live=true;
-   loadEncyclopedia().then(raw=>{
-    if(!live)return;const found=new Map<string,{name:string;groups:SheetRollGroup[]}>();
-    for(const id of linkedEntryIds.split(",")){const e=raw.entries?.find(x=>x.id===id&&x.kind==="character"),items=e?.character?.sheet?.items;if(!e||!items)continue;const groups=sheetRollGroups({items:items.map(i=>({...i,kind:i.kind as SheetKind}))});if(groups.length)found.set(id,{name:e.title,groups});}
-    setSheetRolls(found);
-   }).catch(()=>{/* Maptable works without the Encyclopedia */});
+   loadEncyclopedia().then(raw=>{if(live)setSheetRolls(sheetsFrom(raw,linkedEntryIds));}).catch(()=>{/* Maptable works without the Encyclopedia */});
    return()=>{live=false;};
   },[player,linkedEntryIds]);
   const sheetOfToken=(tokenId:string)=>{const id=scene?.tokens.find(t=>t.id===tokenId)?.encyclopediaEntryId;return id?sheetRolls.get(id):undefined;};
@@ -2102,7 +2104,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             update={updateScene}
             player={player}
             sheetCharacterOf={player?undefined:id=>sheetOfToken(id)?.name}
-            onRollFromSheet={(tokenId,at)=>setSheetPanel({tokenId,...at})}
+            onRollFromSheet={(tokenId,at)=>{setSheetPanel({tokenId,sceneId:scene.id,...at});loadEncyclopedia(true).then(raw=>setSheetRolls(sheetsFrom(raw,linkedEntryIds))).catch(()=>{/* keep the list we have */});}}
             brushSize={brushSize}
             fogShape={fogShape}
             effectSize={effectSize}
@@ -2112,7 +2114,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             onView={setView}
             onMeasure={setMeasure}
           />
-          {sheetPanel&&!player&&scene&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)}/>}
+          {sheetPanel&&!player&&scene&&sheetPanel.sceneId===scene.id&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)}/>}
           <div className="toolbar" role="toolbar" aria-label="Map tools" ref={toolbarRef}>
             {tools.map(({ id, label, Icon }) => (
               <button

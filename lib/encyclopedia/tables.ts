@@ -65,7 +65,7 @@ export const librarySchema = z.object({
       if (!t.rows || !t.mode) ctx.addIssue({ code: 'custom', message: `“${t.name}” needs rows` });
       if (t.mode === 'ranges') {
         if (!t.formula) ctx.addIssue({ code: 'custom', message: `“${t.name}” needs a roll, such as d20` });
-        else try { parseDice(diceFormula(t.formula)); } catch { ctx.addIssue({ code: 'custom', message: `“${t.name}” has a roll that isn’t dice, such as d20 or 2d6` }); }
+        else try { tableDice(t.formula); } catch { ctx.addIssue({ code: 'custom', message: `“${t.name}” has a roll that isn’t dice, such as d20 or 2d6` }); }
       }
       if (new Set(t.rows?.map(r => r.id)).size !== (t.rows?.length ?? 0)) ctx.addIssue({ code: 'custom', message: 'Row IDs must be unique within a table' });
     }
@@ -94,10 +94,16 @@ export function campaignTables(library: TableLibrary, campaignId: string | null)
 }
 /** What a table rolls, in a few characters: "d8", "2d6", "list", "pair", "generator", "d100". */
 export const rollLabel = (t: RandomTable) => t.kind === 'generator' ? 'generator' : t.kind === 'pair' ? 'pair' : t.kind === 'oracle' ? 'd100' : t.mode === 'ranges' ? t.formula ?? '' : 'list';
+/** A table's dice: plain dice, modifiers and keep (kh, kl). Exploding, success counting and plus/minus dice don't give a total to look a row up by. */
+export function tableDice(formula: string) {
+  const terms = parseDice(diceFormula(formula));
+  if (terms.some(t => t.explode || t.target !== undefined || t.pm)) throw Error('A table roll can use plain dice, modifiers and keep highest or lowest, not !, >= or dF.');
+  return terms;
+}
 /** Lowest and highest totals a formula can roll. */
 export function formulaRange(formula: string): [number, number] {
   let lo = 0, hi = 0;
-  for (const t of parseDice(diceFormula(formula))) {
+  for (const t of tableDice(formula)) {
     const [a, b] = termRange(t);
     if (t.sign > 0) { lo += a; hi += b; } else { lo -= b; hi -= a; }
   }

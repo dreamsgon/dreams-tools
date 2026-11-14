@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {parseDice,rollDice,describeParts,partText,withKeepMode,isSingleD20,rollTwice,termRange,MAX_EXPLOSIONS} from '../lib/rolls.ts';
+import {parseDice,rollDice,describeParts,partText,withKeepMode,isSingleD20,rollTwice,termRange,termLabel,MAX_EXPLOSIONS} from '../lib/rolls.ts';
 import {sheetRollGroups,itemFormula,diceHelpText} from '../lib/encyclopedia/sheet-rolls.ts';
 import {sheetSchema,templateItems,templateRows,playerSheet,withoutLinkDetails} from '../lib/encyclopedia/sheet-link.ts';
-import {formulaRange} from '../lib/encyclopedia/tables.ts';
+import {formulaRange,tableDice,librarySchema as tableLibrarySchema} from '../lib/encyclopedia/tables.ts';
 
 /** A random source that answers with the given die faces in turn (each die has `sides` sides). */
 const faces=(sides,...values)=>{let i=0;return()=>{const v=values[i++];if(v===undefined)throw Error('ran out of dice');return (v-0.5)/sides;};};
@@ -62,7 +62,7 @@ test('success counting', () => {
  assert.deepEqual(termRange(parseDice('5d10>=8')[0]),[0,5]);
 });
 
-test('Fate dice are -1, 0 or +1 each', () => {
+test('plus/minus dice (dF) are -1, 0 or +1 each', () => {
  const r=rollDice('4dF',faces(6,1,2,3,5));
  assert.deepEqual(r.parts[0].dice,[-1,-1,0,1]);assert.equal(r.total,-1);assert.equal(describeParts(r.parts),'(−, −, 0, +)');
  assert.equal(rollDice('4df+2',faces(6,6,6,6,6)).total,6);
@@ -141,7 +141,7 @@ test('a roll with only a bonus rolls 1d20 plus it; other items roll nothing', ()
  assert.equal(itemFormula({kind:'roll',formula:'nope'}),null);
  assert.deepEqual(sheetRollGroups({items:[]}),[]);
  const g=sheetRollGroups({items:[{id:'a',name:'Bram Stealth',kind:'roll',value:'+6'}]});assert.equal(g[0].rows[0].buttons[0].formula,'1d20+6');
- const f=sheetRollGroups({items:[{id:'a',name:'Fate',kind:'roll',formula:'4dF'},{id:'b',name:'Fury',kind:'roll',formula:'5d10>=8'}]});
+ const f=sheetRollGroups({items:[{id:'a',name:'Plus-minus',kind:'roll',formula:'4dF'},{id:'b',name:'Fury',kind:'roll',formula:'5d10>=8'}]});
  assert.deepEqual(f[0].title,'Other');assert.equal(f[0].rows.length,2);
 });
 
@@ -158,4 +158,25 @@ test('rolling from a sheet never involves link details, and players get no rolli
  assert.ok(/rolling\?:ReactNode/.test(view)&&!/rollInline/.test(view),'SheetView only shows rolls it is given');
  const mapApp=await readFile(new URL('../components/map-app.tsx',import.meta.url),'utf8');
  assert.ok(mapApp.includes('sheetCharacterOf={player?undefined'),'Maptable gives players no sheet menu');
+});
+
+test('random tables take plain dice, not exploding, success or plus/minus dice', () => {
+ for(const bad of ['2d6!','5d10>=8','4dF'])assert.throws(()=>tableDice(bad),bad);
+ for(const good of ['d20','2d6+1','4d6kh3'])assert.doesNotThrow(()=>tableDice(good),good);
+ assert.throws(()=>parseDice('-5d10>=8'),'a success count cannot be subtracted');
+ const table={id:'t1',name:'Weather',kind:'table',category:'weather',campaignIds:[],updatedAt:'2026-01-01T00:00:00.000Z',mode:'ranges',formula:'2d6!',rows:[{id:'r1',text:'Rain',min:2,max:12}]};
+ const parsed=tableLibrarySchema.safeParse({schemaVersion:1,tables:[table]});
+ assert.equal(parsed.success,false);
+ assert.match(JSON.stringify(parsed.error.issues),/isn’t dice/);
+ assert.deepEqual(formulaRange('4d6kh3'),[3,18]);
+});
+
+test('the AI roll tool describes the new notation', async () => {
+ for(const [dice,pattern] of [['4d6kh3',/4d6kh3: \(\d, \d, \d\) \(dropped \d\)/],['2d6!',/2d6!: /],['5d10>=8',/5d10>=8: \(.*\) \d+ success/],['4dF',/4dF: \([+−0, ]+\)/]]){
+  const roll=rollDice(dice);
+  const shown=roll.parts.filter(p=>p.count).map(p=>`${termLabel(p)}: ${p.keep||p.explode||p.target!==undefined||p.pm?partText(p):p.dice.join(', ')}`).join('; ');
+  assert.match(shown,pattern);
+ }
+ const tools=await readFile(new URL('../lib/mcp/tools.ts',import.meta.url),'utf8');
+ assert.ok(tools.includes('termLabel(p)')&&tools.includes('4d6kh3 or 2d20kl1'));
 });
