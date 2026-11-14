@@ -68,7 +68,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  const readWrite=<div className="segmented"><button className={!editing?'on':''} onClick={()=>setEditing(false)}><BookOpen size={14}/> Read</button><button className={editing?'on':''} onClick={()=>setEditing(true)}><Pencil size={14}/> Write</button></div>;
  return <section className={`article-layout ${entry.kind==='map'?'map-article-layout':''} ${isProfile?'org-layout':''} ${recap||entry.kind==='session'?'recap-layout':''}`}><article className="article">
  
- <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind==='faction'?'organization':entry.kind}</span><span>{entry.campaignId?campaign?.name:'Shared world lore'}</span><span className="article-access"><EditedBy entry={entry}/>{campaign&&<WhoCanEdit entry={entry} campaignId={campaign.id}/>}</span></div>
+ <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind==='faction'?'organization':entry.kind}</span><span className={entry.campaignId?'article-place':undefined}>{entry.campaignId?campaign?.name:'Shared world lore'}</span><span className="article-access"><EditedBy entry={entry}/>{campaign&&<WhoCanEdit entry={entry} campaignId={campaign.id}/>}</span></div>
  {recap&&<RecapChips recap={recap}/>}
  {!(isProfile&&org)&&<div className="article-title"><h1>{entry.title}</h1><button aria-label="Rename entry" onClick={onRename}><Pencil size={17}/></button></div>}
  {entry.kind!=='folder'&&<TagRow className="article-tags" targets={[`entry:${entry.id}`]} onTagClick={onTag}/>}

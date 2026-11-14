@@ -1177,3 +1177,36 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .maps-grid{gap:14px}.map-thumbnail{height:auto;aspect-ratio:3/2;max-height:240px}.map-thumbnail .map-canvas{object-fit:cover}.map-kind-badge,.map-card-body>.eyebrow,.map-card-body>p,.map-card .card-footer{display:none}
 .map-card-body{padding:12px 14px 14px}.map-card-body h3{font-size:20px;margin:0 0 2px}.map-card-type{display:block;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--accent)}.map-card-meta{display:block;margin-top:6px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
+/* Entry pages on a phone: the base rules above come later than the 720px block near the top, so restate them here. */
+@media(max-width:720px){
+.article-layout{padding:18px 16px 40px}
+.article-meta{flex-wrap:wrap;row-gap:8px;margin-bottom:10px}
+.article-meta>.kind-pill,.article-meta>.article-place{white-space:nowrap}
+.article-access{flex-wrap:wrap;min-width:0;justify-content:flex-end}
+.article-meta>.article-place{display:none}
+.article-access .who-button{white-space:nowrap;padding:5px 10px}
+.article-title{gap:8px;align-items:flex-start}
+.article-title h1{font-size:34px;line-height:1.1}
+.article-title button{margin-left:auto;margin-top:2px}
+.article-tags{margin:8px 0 14px}
+.character-summary{gap:8px;margin-bottom:18px}
+.character-summary>.button{padding:7px 12px;min-height:36px}
+.character-summary>span{padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--raised);color:var(--ink);font-size:12px;line-height:1.2}
+.character-summary>span:empty{display:none}
+.picture-panel{display:grid;grid-template-columns:minmax(0,44%) minmax(0,1fr);gap:12px 14px;align-items:start;margin:4px 0 18px;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.picture-panel.picture-empty{display:flex;padding:0;border:0;background:none}
+.article-aside{gap:0 20px;padding-top:12px}
+.article-aside .aside-section{flex:1 1 100%}
+.article-aside>.save-template,.article-aside>.delete-entry{display:inline-flex;align-items:center;gap:6px;margin:16px 24px 0 0;min-height:36px}
+.picture-full{grid-column:1;grid-row:1 / span 2;max-width:180px}
+.picture-side{display:contents}
+.picture-side>*{grid-column:2}
+.picture-side>p,.picture-side>a{grid-column:1 / -1}
+.picture-full img{width:100%;max-width:none;max-height:340px;object-fit:cover;object-position:50% 20%}
+.picture-full>span{width:100%;height:160px}
+.picture-token-row{gap:10px}
+.picture-actions{flex-direction:column;align-items:stretch;width:100%}
+.picture-actions>.button{justify-content:flex-start}
+.picture-actions>.icon-button{align-self:flex-start}
+.picture-side .aside-hint{font-size:12px;line-height:1.45}
+}
