@@ -113,7 +113,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         <button role="tab" aria-selected={tab === "dashboard"} onClick={() => choose("dashboard")}><LayoutDashboard size={16} aria-hidden="true" />Dashboard</button>
         <button role="tab" aria-selected={tab === "front"} onClick={() => choose("front")}><House size={16} aria-hidden="true" />Front page</button>
         {e && <button role="tab" aria-selected={tab === "members"} onClick={() => choose("members")}><Users size={16} aria-hidden="true" />Members{members && <span className={`mem-count${members.requests.length ? " mem-count-warn" : ""}`} title={members.requests.length ? `${members.requests.length} asking to join` : undefined}>{members.requests.length ? members.requests.length : members.members.length + 1}</span>}</button>}
-        {e && <span className="hub-tab-later" aria-disabled="true"><MessagesSquare size={16} aria-hidden="true" />Forum<small>Coming later</small></span>}
+        <span className="hub-tab-later" aria-disabled="true" title="Each campaign will get its own forum for roleplay. Not built yet."><MessagesSquare size={16} aria-hidden="true" />Forum<small>Coming soon</small></span>
         {m && <a href={mapsHref(m.id)}>Maps<ArrowUpRight size={13} aria-hidden="true" /></a>}
         {e && <a href={notesHref(e.id)}>Notes<ArrowUpRight size={13} aria-hidden="true" /></a>}
       </div>

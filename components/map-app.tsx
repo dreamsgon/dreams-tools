@@ -67,7 +67,6 @@ import {
   MoreHorizontal,
   Home,
   BookOpen,
-  MessagesSquare,
   Images as ImagesIcon,
 } from "lucide-react";
 import NextLink from "next/link";
@@ -1236,7 +1235,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         <div className="header-actions" data-mobile-open={mobileHeaderOpen} onKeyDown={(e)=>{if(e.key==="Escape"&&mobileHeaderOpen){setMobileHeaderOpen(false);(e.currentTarget.parentElement?.querySelector(".mobile-menu-button") as HTMLElement|null)?.focus();}}}>
           <NextLink className="mobile-only header-menu-link" href="/"><Home size={18} aria-hidden="true" />RPG Tools home</NextLink>
           <a className="mobile-only header-menu-link" href={encyclopediaHref ?? "/encyclopedia"}><BookOpen size={18} aria-hidden="true" />Encyclopedia</a>
-          <NextLink className="mobile-only header-menu-link" href="/forums"><MessagesSquare size={18} aria-hidden="true" />Forums<span className="header-menu-soon">Soon</span></NextLink>
           <AppearanceMenu />
           <button className="header-menu-button" aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}><ImagesIcon className="header-menu-icon" size={18} aria-hidden="true" />Token gallery</button>
           {!member && <button
