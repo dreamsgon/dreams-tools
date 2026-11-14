@@ -10,7 +10,7 @@ import { sheetSchema } from './sheet-link.ts';
 import { readPublishedSheet, SheetReadError } from './sheet-published.ts';
 import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
 import { rollWithMode } from './roll-mode.ts';
-import { checkProof, proveRoll } from './player-dice.ts';
+import { PROOF_MINUTES, checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
 import type { Rights } from './player-edit.ts';
 import type { Workspace } from './world-model.ts';
@@ -28,8 +28,8 @@ export type Deps = {
 };
 
 export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000;
-const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000);
-export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); };
+const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000);
+export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const ref = z.string().regex(/^[a-f0-9]{64}$/), id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -127,8 +127,12 @@ const diceAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('send'), ref, label: z.string().max(120).optional(),
     proof: z.object({ formula: z.string().max(200), total: z.number().finite(), detail: z.string().max(1200), at: z.number().int(), sig: z.string().regex(/^[a-f0-9]{64}$/) }) }),
 ]);
-const sent = new Set<string>();
+/** Proofs already posted, with when they were made. Per server instance: another instance may post the same roll twice (a duplicate, never a forgery). */
+const sent = new Map<string, number>();
+const forget = (now: number) => { for (const [sig, at] of sent) if (now - at > PROOF_MINUTES * 60_000) sent.delete(sig); };
 const oneLine = (text: string | undefined, max: number) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+/** A label a member typed, without Discord's text-formatting characters. */
+const plainLabel = (text: string | undefined, max: number) => oneLine((text ?? '').replace(/[*_~`|>#]/g, ''), max);
 
 /**
  * POST /api/encyclopedia/player-dice: a signed-in member's own dice tray. `roll` rolls any formula here (the dice limits
@@ -142,11 +146,11 @@ export async function handlePlayerDice(request: Request, deps: Deps) {
     const body = diceAction.parse(JSON.parse(got.text)), found = await memberOf(deps, body.ref);
     if (found.fail) return found.fail;
     const m = found.m, who = { owner: m.owner, campaignId: m.campaignId, userId: m.userId }, now = deps.now ?? Date.now();
-    if (rollThrottle.hit(m.userId, deps.now)) return json({ error: 'Rolling too quickly. Wait a few seconds and try again.' }, 429);
+    if ((body.action === 'send' ? sendThrottle : rollThrottle).hit(m.userId, deps.now)) return json({ error: 'Rolling too quickly. Wait a few seconds and try again.' }, 429);
     const { data } = await deps.store.read(m.owner);
     let channel = true;
     try { discordTarget(data, m.campaignId); } catch { channel = false; }
-    const title = (formula: string) => `${oneLine(m.name, 60) || 'A player'} · ${oneLine(body.label, 80) || formula}`;
+    const title = (formula: string) => `${oneLine(m.name, 60) || 'A player'} · ${plainLabel(body.label, 80) || formula}`;
     if (body.action === 'roll') {
       let rolled;
       try { rolled = rollWithMode(body.formula, 'normal', deps.random); } catch (e) { return json({ error: e instanceof Error ? e.message : 'That formula can’t be rolled.' }, 400); }
@@ -155,13 +159,13 @@ export async function handlePlayerDice(request: Request, deps: Deps) {
     }
     const p = body.proof;
     if (!checkProof(who, p, now)) return json({ error: 'This roll can no longer be sent. Roll again.' }, 400);
+    forget(now);
     if (sent.has(p.sig)) return json({ error: 'This roll was already sent.' }, 409);
     if (!channel || !deps.post) return json({ error: 'This campaign has no Discord channel set up.' }, 400);
+    sent.set(p.sig, p.at);
     let result;
     try { result = await deps.post(m, { kind: 'roll', title: title(p.formula), formula: p.formula, total: p.total, detail: p.detail, who: oneLine(m.name, 60) || 'A player', avatarOf: '' }); }
-    catch { return json({ error: 'Could not post to Discord. Try again.' }, 502); }
-    if (sent.size > 500) sent.clear();
-    sent.add(p.sig);
+    catch { sent.delete(p.sig); return json({ error: 'Could not post to Discord. Try again.' }, 502); }
     return json({ discord: result.skipped ? 'skipped' : 'sent' });
   } catch (e) { return failure(e, 'Could not roll. Try again.'); }
 }

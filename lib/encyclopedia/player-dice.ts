@@ -3,7 +3,7 @@
  * browser, the server hands back a proof: an HMAC (with the server's existing secret) over who rolled and what came up.
  * Sending it again checks the proof, so only a roll the server made, for that member, a few minutes ago, can be posted. Server only.
  */
-import { createHmac, hkdfSync } from 'node:crypto';
+import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 
 export type RollProof = { formula: string; total: number; detail: string; at: number; sig: string };
 export const PROOF_MINUTES = 10;
@@ -15,7 +15,7 @@ function key(env: NodeJS.ProcessEnv) {
   return Buffer.from(hkdfSync('sha256', material, 'rpg-tools', 'player-dice-proof', 32));
 }
 const sign = (who: Who, r: Omit<RollProof, 'sig'>, env: NodeJS.ProcessEnv) =>
-  createHmac('sha256', key(env)).update([who.owner, who.campaignId, who.userId, r.formula, String(r.total), r.detail, String(r.at)].join('\n')).digest('hex');
+  createHmac('sha256', key(env)).update(JSON.stringify([who.owner, who.campaignId, who.userId, r.formula, r.total, r.detail, r.at])).digest('hex');
 
 export function proveRoll(who: Who, roll: { formula: string; total: number; detail: string }, at: number, env: NodeJS.ProcessEnv = process.env): RollProof {
   const body = { ...roll, at };
@@ -26,5 +26,6 @@ export function proveRoll(who: Who, roll: { formula: string; total: number; deta
 export function checkProof(who: Who, proof: RollProof, now: number, env: NodeJS.ProcessEnv = process.env): boolean {
   if (!Number.isFinite(proof.at) || proof.at > now + 5_000 || now - proof.at > PROOF_MINUTES * 60_000) return false;
   const expected = sign(who, proof, env);
-  return expected.length === proof.sig.length && Buffer.from(expected).equals(Buffer.from(proof.sig));
+  const a = Buffer.from(expected), b = Buffer.from(proof.sig);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

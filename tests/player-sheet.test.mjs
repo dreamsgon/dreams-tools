@@ -369,3 +369,34 @@ test('the Discord sender never allows mentions in a roll card, whatever the memb
  assert.match(src,/allowed_mentions:\s*\{\s*parse:\s*\[\]/,'every webhook post carries allowed_mentions with nothing parsed');
  assert.ok(send);
 });
+
+test('player dice: Send has its own throttle, a failed post can be retried, and Discord markdown is stripped from the label',async()=>{
+ R.resetThrottles();
+ const s=withChannel(setup());
+ const rolled=await (await diceCall(s,{action:'roll',formula:'1d12',label:'**bold** _it_ ~~x~~ `c` ||spoiler|| > #head'})).json();
+ assert.equal(rolled.title,'Mara · bold it x c spoiler head','member name stays, label is plain');
+ // Ten rolls used up the roll bucket; Send is counted separately.
+ for(let i=0;i<9;i++)await diceCall(s,{action:'roll',formula:'1d20'});
+ assert.equal((await diceCall(s,{action:'roll',formula:'1d20'})).status,429);
+ const real=s.deps.post;let fail=true;
+ s.deps.post=async(...a)=>{if(fail)throw Error('down');return real(...a);};
+ assert.equal((await diceCall(s,{action:'send',proof:rolled.proof})).status,502);
+ fail=false;
+ const again=await diceCall(s,{action:'send',proof:rolled.proof});
+ assert.equal(again.status,200,'a failed post does not use up the roll');assert.equal((await again.json()).discord,'sent');
+ assert.equal((await diceCall(s,{action:'send',proof:rolled.proof})).status,409);
+ assert.equal(s.state.posts.length,1);
+ let last=0;for(let i=0;i<12;i++)last=(await diceCall(s,{action:'send',proof:rolled.proof})).status;
+ assert.equal(last,429,'sends are throttled on their own');
+});
+test('player dice proofs are signed over a JSON payload and compared in constant time',async()=>{
+ const {proveRoll,checkProof}=await import('../lib/encyclopedia/player-dice.ts');
+ const env={AI_KEY_SECRET:'test-secret'},who={owner:'o',campaignId:'c',userId:'u'};
+ const p=proveRoll(who,{formula:'1d20',total:5,detail:'5'},1000,env);
+ assert.ok(checkProof(who,p,2000,env));
+ assert.ok(!checkProof({...who,userId:'u\nx'},p,2000,env));
+ // Fields that used to run together with a newline now stay apart.
+ const a=proveRoll({owner:'o',campaignId:'c\nu',userId:'x'},{formula:'1d20',total:5,detail:'5'},1000,env),b=proveRoll({owner:'o',campaignId:'c',userId:'u\nx'},{formula:'1d20',total:5,detail:'5'},1000,env);
+ assert.notEqual(a.sig,b.sig);
+ assert.ok(!checkProof(who,{...p,sig:'0'.repeat(64)},2000,env));assert.ok(!checkProof(who,{...p,sig:'ab'},2000,env));
+});
