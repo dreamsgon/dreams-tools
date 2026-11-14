@@ -82,6 +82,12 @@ export const questSchema = z.object({
   giverId: qid.nullable().optional(),
   placeId: qid.nullable().optional(),
   reward: z.string().trim().max(300).optional(),
+  /** Pages the party gets (an item, a deed, a ship), beside the reward's words. */
+  rewardIds: z.array(qid).max(20).optional(),
+  /** Players don't see the reward until the GM shows it. */
+  rewardHidden: z.boolean().optional(),
+  /** The GM's private preparation: what is really going on. Never sent to players or a players-only AI. */
+  prep: z.string().max(20000).optional(),
   objectives: z.array(objectiveSchema).max(50),
   log: z.array(questLogSchema).max(500),
 });
@@ -197,7 +203,8 @@ const unlink = (t: string) => t.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g,
 export function playerQuest(q: Quest, readable: (id: string) => boolean, clean: (text: string) => string, categories: QuestCategory[] = defaultQuestCategories()) {
   const category = categoryOf(categories, q.type);
   return {
-    state: q.state, type: q.type, category: { name: category.name, color: category.color }, reward: q.reward ?? "",
+    state: q.state, type: q.type, category: { name: category.name, color: category.color },
+    reward: q.rewardHidden ? "" : q.reward ?? "", rewardIds: q.rewardHidden ? [] : (q.rewardIds ?? []).filter(readable), rewardHidden: !!q.rewardHidden,
     giverId: q.giverId && readable(q.giverId) ? q.giverId : null,
     placeId: q.placeId && readable(q.placeId) ? q.placeId : null,
     objectives: q.objectives.filter(o => !o.hidden).map(o => ({

@@ -1,0 +1,50 @@
+/* A quest's header tabs, Overview side (Given by, Reward, Where) and GM prep (components/encyclopedia/quest-facts.tsx). */
+.quest-tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);margin-top:2px}
+.quest-tabs::-webkit-scrollbar{display:none}
+.quest-tabs button{display:inline-flex;align-items:center;gap:6px;padding:9px 12px 10px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);font:inherit;font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer;margin-bottom:-1px}
+.quest-tabs button:hover{color:var(--ink)}
+.quest-tabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.quest-tabs .count{font-size:11px;font-weight:600;padding:0 6px;border-radius:999px;background:var(--raised,var(--hover));border:1px solid var(--line);color:var(--muted)}
+.quest-tabs .lock{color:var(--warning)}
+/* On a computer the facts sit in a row of three above the goals; on a phone the goals come first and the facts stack under them.
+   (Media queries, not container queries: a size container would trap the goal pickers' bottom sheet.) */
+.quest-overview{display:flex;flex-direction:column;gap:20px}
+.quest-overview>*{min-width:0}
+.quest-facts-v2{display:flex;flex-direction:column;gap:14px}
+@media (min-width:761px){.quest-facts-v2{order:-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}}
+.quest-fact-slot{display:flex;flex-direction:column;gap:8px;min-width:0}
+.quest-fact-slot .eyebrow{display:inline-flex;align-items:center;gap:6px;margin:0}
+.quest-fact-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
+.quest-fact-drop,.quest-reward-drop{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;border-radius:var(--radius-lg,6px)}
+.quest-fact-drop.can-drop,.quest-reward-drop.can-drop{outline:2px dashed color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:3px}
+.quest-fact-drop.is-over,.quest-reward-drop.is-over{outline-style:solid;background:var(--accent-soft)}
+.quest-fact-card{display:flex;align-items:center;gap:6px;padding:8px 6px 8px 10px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.quest-fact-page{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.quest-fact-page strong{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quest-fact-page small{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quest-fact-page>span:last-child{min-width:0}
+.quest-fact-page:hover strong{color:var(--accent)}
+.quest-fact-icon{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:var(--radius);background:var(--raised,var(--hover));border:1px solid var(--line);color:var(--muted);flex-shrink:0}
+.quest-fact-empty{display:flex;align-items:center;gap:6px;width:100%;min-height:40px;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:var(--radius-lg,6px);background:transparent;color:var(--muted);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.quest-fact-empty.small{min-height:34px;font-size:12px}
+.quest-fact-empty:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.quest-fact-refused{margin:0;font-size:12px;color:var(--danger)}
+.quest-fact-note{display:flex;align-items:center;gap:5px;margin:0;font-size:12px;color:var(--warning)}
+.quest-reward-slot .goal-eye.off{color:var(--warning)}
+.quest-reward-slot.is-hidden .quest-reward-pages,.quest-reward-slot.is-hidden .quest-reward-text{opacity:.6}
+.quest-reward-pages{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.quest-reward-pages li{display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:999px;background:var(--raised,var(--hover));max-width:100%}
+.quest-reward-page{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:3px 4px 3px 4px;border:0;background:none;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quest-reward-gem{width:20px;height:20px;border-radius:50%;flex-shrink:0;background:radial-gradient(circle at 35% 35%,#e5c27a,#7a5a12)}
+.quest-reward-remove{display:inline-grid;place-items:center;width:30px;height:30px;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer}
+.quest-reward-remove:hover{color:var(--danger)}
+.quest-reward-text{width:100%;min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--control,var(--panel));color:var(--ink);font:inherit;font-size:14px}
+.quest-prep{display:flex;flex-direction:column;gap:12px;max-width:72ch}
+.quest-prep-banner{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--warning) 40%,var(--line));border-radius:var(--radius-lg,6px);background:color-mix(in srgb,var(--warning) 12%,transparent);color:var(--warning);font-size:13px;font-weight:600}
+.quest-prep-text{width:100%;min-height:180px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--control,var(--panel));color:var(--ink);font-family:var(--font-reading,inherit);font-size:16px;line-height:1.55;resize:vertical;field-sizing:content}
+.quest-prep>.button{align-self:flex-start}
+@media (max-width:760px){
+  .quest-tabs{margin-left:-4px;margin-right:-4px}
+  .quest-tabs button{padding:9px 10px 10px}
+  .quest-fact-card,.quest-fact-empty{min-height:44px}
+}

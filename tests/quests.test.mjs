@@ -138,3 +138,24 @@ test('a goal can only point at pages in its campaign, and players only get links
   assert.equal(workspaceSchema.safeParse(elsewhere).success,true);
   assert.equal(workspaceSchema.safeParse(pointing).success,false);
 });
+
+test('reward pages, the reward eye and GM prep: players never get prep or a hidden reward', async () => {
+  const {playersBook}=await import('../lib/mcp/players-only.ts');
+  const secret={id:'secret-relic',worldId:'demo-world',campaignId:'demo-campaign',parentId:null,title:'The Drowned Crown',kind:'note',body:'',updatedAt:now};
+  const base={reward:'120 gp',rewardIds:['secret-relic','demo-mara'],prep:'THE CHOIR IS REAL'};
+  let s=world([secret,{...quest('bell','active',base),overviewVisibility:'players'}]);
+  let q=playerCampaign(s,'demo-campaign').entries.find(e=>e.id==='bell').quest;
+  assert.equal(q.reward,'120 gp');assert.equal(q.rewardHidden,false);
+  assert(!q.rewardIds.includes('secret-relic'),'a reward page players can’t read is left out');
+  assert(!JSON.stringify(playerCampaign(s,'demo-campaign')).includes('THE CHOIR IS REAL'));
+  assert.equal(playersBook(s,'demo-campaign').entries.find(e=>e.id==='bell').quest.prep,undefined);
+  // Hidden reward: neither the words nor the pages reach players or a players-only AI.
+  s=world([secret,{...quest('bell','active',{...base,rewardHidden:true}),overviewVisibility:'players'}]);
+  q=playerCampaign(s,'demo-campaign').entries.find(e=>e.id==='bell').quest;
+  assert.deepEqual([q.reward,q.rewardIds,q.rewardHidden],['',[],true]);
+  const ai=playersBook(s,'demo-campaign').entries.find(e=>e.id==='bell').quest;
+  assert.equal(ai.reward,undefined);assert.equal(ai.rewardIds,undefined);
+  // Reward pages stay in the campaign.
+  const far={id:'far',worldId:'demo-world',campaignId:'demo-campaign-two',parentId:null,title:'Far',kind:'note',body:'',updatedAt:now};
+  assert.equal(workspaceSchema.safeParse({...s,entries:[...s.entries,far].map(e=>e.id==='bell'?{...e,quest:{...e.quest,rewardIds:['far']}}:e)}).success,false);
+});
