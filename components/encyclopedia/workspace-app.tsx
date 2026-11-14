@@ -93,7 +93,7 @@ const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not ed
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
     const [member, setMember] = useState<CoGm | null>(null);
-    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [writing, setWriting] = useState<WritingKind | null>(null), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
+    const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [writing, setWriting] = useState<WritingKind | "chat" | null>(null), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
     const pagesBtn = useRef<HTMLButtonElement>(null), moreBtn = useRef<HTMLButtonElement>(null), drawerWas = useRef(false);
     // Phone page sheet: focus moves into it when it opens and back to the Pages button when it closes.
@@ -138,7 +138,7 @@ export default function WorkspaceApp() {
         const query = (linkQuery.current ??= new URLSearchParams(window.location.search));
         // ?styles=story (from the Campaigns page's The story so far) opens How the AI writes.
         const styles = query.get("styles");
-        if (styles) setWriting((writingKinds as readonly string[]).includes(styles) ? styles as WritingKind : "recap");
+        if (styles) setWriting([...writingKinds, "chat"].includes(styles) ? styles as WritingKind | "chat" : "recap");
         // A co-GM opens the one campaign they were let into.
         const shared = body.member ? checked.campaigns.find(c => c.id === body.member!.campaignId) : undefined;
         if (body.member && shared) {

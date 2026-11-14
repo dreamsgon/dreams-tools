@@ -1040,6 +1040,12 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .writing-save{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-radius:var(--radius);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}.writing-save>span{flex:1 1 160px}.writing-save input{flex:1 1 180px;width:auto}
 .writing-sample{display:grid;gap:10px;padding:14px;border:1px dashed var(--line);border-radius:var(--radius);min-width:0}.writing-sample .aside-hint{margin:0}.writing-sample select{width:100%}
 .writing-sample-text{display:grid;gap:8px;justify-items:start}.writing-sample-text>div{white-space:pre-wrap;font:15px/1.6 var(--font-reading,Georgia,serif);color:var(--ink)}
+.writing-own{display:grid;gap:6px;justify-items:start;padding:10px 12px;margin-bottom:14px;border-radius:var(--radius);background:var(--raised);font-size:12px;line-height:1.5;color:var(--muted)}.writing-own p{margin:0}.writing-own b{color:var(--ink)}
+.writing-more{margin:0 0 14px;border-top:1px solid var(--line);padding-top:10px}.writing-more>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink)}.writing-more>summary small{font-weight:500;color:var(--muted)}
+.writing-more>textarea{width:100%;margin-top:8px}.writing-more>.aside-hint{display:block;margin-top:6px}.writing-more textarea.reading{font:15px/1.55 var(--font-reading,Georgia,serif)}
+.writing-wording{display:grid;gap:6px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised)}
+.writing-wording .locked{display:flex;gap:7px;align-items:baseline;margin:0;font-size:12px;line-height:1.5;color:var(--muted)}.writing-wording .locked svg{flex:none;position:relative;top:1px}
+.writing-wording textarea{width:100%;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
 @media(max-width:760px){.writing-body{grid-template-columns:1fr}.writing-pair{grid-template-columns:1fr}}
 .recap-choice{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink)}
 .recap-choice:hover{border-color:var(--accent)}.recap-choice svg{flex:none;margin-top:2px;color:var(--accent)}

@@ -9,6 +9,7 @@ import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
 import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
 import { unlock } from "./secret.ts";
+import { chatLines } from "../encyclopedia/ai-styles.ts";
 import { CONTEXT_TURNS, saveExchange } from "./chats.ts";
 
 const MAX_TEXT = 8000;
@@ -43,7 +44,7 @@ export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: stri
   };
   const system = [
     serverInstructions(ctx),
-    `You are ${c.name}, talking with the GM in the AI panel inside RPG Tools. Keep replies short and useful at the table: a few sentences, or a short list.`,
+    [`You are ${c.name}, talking with the GM in the AI panel inside RPG Tools.`, ...chatLines(ctx.campaign.aiWriting?.chat)].join(" "),
     "Look things up with the tools instead of guessing. When something waits for the GM's OK, say so in a few words: the GM approves it right under your reply.",
     ...(scene ? [`The GM has the Maptable scene "${scene.slice(0, 120)}" open.`] : []),
   ].join("\n\n");

@@ -159,8 +159,8 @@ export async function writeStory(bucket: S3Bucket, owner: string, campaignId: st
   const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
   if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
   const before = opts.keep === false ? "" : opts.before ?? storyNow(ctx.campaign);
-  const chosen = styleFor(ctx.campaign.aiWriting, "story", opts.styleId), style = opts.length ? { ...chosen, length: opts.length } : chosen;
-  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before, note: opts.note?.slice(0, 500), style });
+  const style = styleFor(ctx.campaign.aiWriting, "story", opts.styleId);
+  const prompt = storyPrompt({ campaign: ctx.campaign.name, recaps, left, before, note: opts.note?.slice(0, 500), style, length: opts.length });
   return counted(bucket, owner, campaignId, c.id, async add => {
     const out = await runOnce(target, RECAP_SYSTEM, prompt, null, 2_000, fetchImpl);
     add(out.tokens);
