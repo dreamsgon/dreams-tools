@@ -156,6 +156,7 @@ Updated 2026-11-13. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Shift and scroll to resize: in Maptable, hold Shift and scroll over a selected or hovered token, area, aura, object or text label to step its size (tokens through the same sizes as the size buttons; areas by a quarter, half or whole square as they grow; labels by text size). In the Map Creator it scales stamps (half a square to 20 squares), rooms, paths and labels by 10% a step, staying on the map; doors, windows and merged rooms are left alone. Plain scrolling still zooms, and a quick run of steps undoes as one. Logic in `lib/wheel-resize.ts`, tests in `tests/wheel-resize.test.mjs`.
 - [ ] Later for co-GMs: a limit on pictures they add to the GM's storage (Maptable and Encyclopedia), and clearing out ones never saved; the campaign hub page for co-GMs.
 - [ ] Members and groups, part 5: the campaign forum, using the forum permissions.
+- [x] Dice tray: right-click a die (or long-press it on a phone) to remove one, the reverse of clicking it (2d6 becomes 1d6). In a campaign scene, an optional Roll name for Discord ("Attack on goblin") becomes the title of the roll's Discord card, for Post and Always; a name typed after rolling applies when you press Post. The name shows in the tray history and roll log. Helpers and tests in `lib/dice-tray.ts` and `tests/dice-tray.test.mjs`; no saved-data change.
 
 ## Map acceptance and maintenance
 
