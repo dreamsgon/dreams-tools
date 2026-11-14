@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import type { Notice } from "@/lib/members-server";
-import { Avatar } from "./campaign-members";
-import { when } from "./home-campaigns";
+import { Avatar, ago } from "./campaign-members";
 import "./campaign-hub.css";
 import "./campaign-members.css";
 
@@ -54,7 +53,7 @@ export default function NotificationBell() {
         <Avatar name={n.name} seed={n.userId} />
         <div>
           <p><strong>{n.name}</strong> {n.kind === "ask" ? "asked to join" : "joined"} <strong>{n.campaign}</strong>{n.group ? ` as ${n.group}` : ""}.</p>
-          <small>Used the {n.group || "invite"} link · {when(n.at).toLowerCase()}</small>
+          <small>Used the {n.group || "invite"} link · {ago(n.at)}</small>
           {n.kind === "ask" && n.waiting && <div className="bell-actions">
             <button className="hub-button" disabled={!!busy} onClick={() => void answer(n, "decline")}>Decline</button>
             <button className="hub-button hub-button-primary" disabled={!!busy} onClick={() => void answer(n, "letIn")}>Let in</button>

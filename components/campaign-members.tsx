@@ -18,6 +18,8 @@ export async function membersAction(body: object): Promise<MembersView> {
   if (!r.ok) throw new Error(out.error || "That didn't save. Try again.");
   return out;
 }
+/** "2h ago", "yesterday" or "Nov 12", to sit mid-sentence. */
+export const ago = (iso: string) => { const w = when(iso); return /^[A-Z][a-z]{2} \d/.test(w) ? w : w.toLowerCase(); };
 export const initial = (name: string) => (name.trim()[0] ?? "?").toUpperCase();
 const date = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
 const choiceNames: Record<Choice, string> = { yes: "Yes", no: "No", never: "Never" };
@@ -72,7 +74,7 @@ function People({ view, act, busy, go, ban }: Part & { go: (s: Sub) => void; ban
         <h2>Asking to join</h2>
         <ul className="mem-list">{view.requests.map(r => <li key={r.userId}>
           <Avatar name={r.name} seed={r.userId} />
-          <span className="mem-who"><strong>{r.name}</strong><small>Used the {groupOf(r.groupId)?.name ?? "invite"} link · {when(r.at).toLowerCase()}</small></span>
+          <span className="mem-who"><strong>{r.name}</strong><small>Used the {groupOf(r.groupId)?.name ?? "invite"} link · {ago(r.at)}</small></span>
           <span className="mem-actions">
             <button className="hub-button" disabled={busy} onClick={() => void act({ action: "decline", userId: r.userId })}>Decline</button>
             <button className="hub-button hub-button-primary" disabled={busy} onClick={() => void act({ action: "letIn", userId: r.userId })}><Check size={15} aria-hidden="true" />Let in</button>
