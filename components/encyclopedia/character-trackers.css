@@ -1,0 +1,30 @@
+/* Trackers on a character (components/encyclopedia/character-trackers.tsx). */
+.character-trackers{margin-bottom:24px}
+.player-trackers{margin:16px 0 20px}
+.player-trackers h2{font-size:16px;margin:0 0 10px}
+.tracker-list{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));align-items:start;max-width:880px}
+.tracker{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.tracker.is-hidden{border-style:dashed;border-color:var(--warning)}
+.tracker-top{display:flex;align-items:center;gap:4px;min-width:0}
+.tracker-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.tracker-num{font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap;margin-right:4px}
+.tracker-num small{color:var(--muted)}
+.tracker .icon-button{padding:5px}
+.tracker-eye.off{color:var(--warning)}
+.tracker-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.tracker-bar i{display:block;height:100%;border-radius:4px;transition:width .2s}
+.tracker-pips{display:flex;gap:4px}
+.tracker-pips i{flex:1;height:8px;border-radius:2px;background:var(--line)}
+.tracker .t-green{background:#3f9a63}.tracker .t-blue{background:#4a7fd0}.tracker .t-amber{background:#c58a2b}.tracker .t-purple{background:#8a6cc9}.tracker .t-red{background:var(--danger,#c0392b)}
+.tracker-empty{margin:0;font-size:13px;grid-column:1/-1}
+.tracker-add{justify-self:start;grid-column:1/-1}
+.tracker-form{grid-column:1/-1;display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--accent);border-radius:var(--radius-lg,6px);background:var(--panel);max-width:520px}
+.tracker-form input,.tracker-form select{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);padding:7px 9px;font:inherit;font-size:14px}
+.tracker-form .field-label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.tracker-form-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tracker-form-actions{display:flex;justify-content:flex-end;gap:8px}
+.tracker-presets{display:flex;flex-wrap:wrap;gap:6px}
+.tracker-preset{border:1px solid var(--line);border-radius:999px;background:var(--raised,var(--hover));padding:3px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
+.tracker-preset:hover{border-color:var(--accent);color:var(--accent)}
+@media (max-width:560px){.tracker-form-row{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.tracker-bar i{transition:none}}

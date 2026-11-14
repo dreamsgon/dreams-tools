@@ -41,7 +41,7 @@ Updated 2026-11-14. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Part 4: Vehicle types editor: make, copy and change a world's types (`vehicleTypesOf(world)` returns only the starter types for now).
 - [ ] Part 5: New vehicle generator with templates and name lists.
 - [ ] Part 6: Log tab, and Add to Maptable as a large token.
-- [ ] Character gauges: the same customizable gauges (Shields, Stress…) on character pages, which a player can change on their own character.
+- [x] Character trackers: up to 8 small gauges on a character (`character.trackers`, logic in `lib/encyclopedia/trackers.ts`), each a bar or pips (up to 20) with a maximum, a colour and its own eye, with ready-made Shields, Stress, Ammo, Fuel and Hit dice. The GM keeps them at the top of the Stats tab. Players get the shown ones when the stats are shared, or on a character they may edit; there a signed-in member moves them with − and + and adds, changes or removes their own (`POST /api/encyclopedia/player-tracker`, `lib/encyclopedia/player-trackers.ts`: same origin, small bodies, 30 changes per 10 seconds, rights checked on every call, GM-only trackers out of reach, the page's updatedAt left alone). Tests in `tests/trackers.test.mjs`. Not checked against a real signed-in account.
 - [ ] MCP: create and read vehicle pages (the create_page tool doesn't offer the vehicle kind yet).
 
 ## Google Sheets character sheets, next parts
