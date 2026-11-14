@@ -89,6 +89,8 @@ export const entrySchema = z.object({
     templateId:id.optional(), fields:z.record(id, z.union([z.string().max(2000), z.number().finite()])).optional(),
     // Optional (added later): on a session page, the recap an AI drafted (timeline, quotes, GM notes, things to check).
     recap:recapSchema.optional(),
+    // Optional (added later): who last changed the page when it wasn't the GM: a co-GM, or a player on their own page.
+    editedBy:z.object({name:z.string().trim().min(1).max(80), as:z.enum(["co-gm","player"])}).optional(),
     updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
@@ -254,10 +256,11 @@ export const MAPTABLE_LINK=/\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]
 export const maptableLinks=(text:string)=>[...text.matchAll(MAPTABLE_LINK)].map(m=>({sceneId:m[1],label:(m[2]??"").trim()||"Battle map"}));
 export function playerText(text:string){return playerInline(stripSecrets(text).replace(MAPTABLE_LINK,(_,_id,label)=>(label??"").trim()));}
 // Player payloads are explicit allowlists, never the GM workspace with CSS hiding.
-export function playerCampaign(s:Workspace,campaignId:string){
+// `mine` are pages a signed-in member may edit (their Who can edit): they read those as if shared with players.
+export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<string>){
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  // A draft recap never reaches players, whatever its tabs say.
- const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft');
+ const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];

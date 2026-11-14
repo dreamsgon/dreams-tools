@@ -24,6 +24,7 @@ import {confirmDialog} from '../confirm-dialog';
 import {RecapCheck,RecapChips,RecapStart,RecapWaiting,QuotesTab,TimelineTab,TranscriptTab,WriteAgain} from './recap-panel';
 import {RecapDialog} from './recap-dialog';
 import {waitingForAi} from '@/lib/encyclopedia/recap-request';
+import {EditedBy,WhoCanEdit} from './who-can-edit';
 type Props={entry:Entry;data:Workspace;campaign?:Campaign;editing:boolean;setEditing:(v:boolean)=>void;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void;onOverview:()=>void;onRename:()=>void;onDelete:()=>void;onNew:(parent?:string)=>void;onForm:()=>void;onTag?:(tag:Tag)=>void};
 export function ArticleEditor({entry,data,campaign,editing,setEditing,update,change,onOpen,onRename,onDelete,onNew,onForm,onTag}:Props){
  const [selected,setSelected]=useState(entry.kind==='map'?'map':'overview'),[details,setDetails]=useState(false),[tabDialog,setTabDialog]=useState<'new'|'rename'|null>(null),[notice,setNotice]=useState('');
@@ -58,7 +59,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  const readWrite=<div className="segmented"><button className={!editing?'on':''} onClick={()=>setEditing(false)}><BookOpen size={14}/> Read</button><button className={editing?'on':''} onClick={()=>setEditing(true)}><Pencil size={14}/> Write</button></div>;
  return <section className={`article-layout ${entry.kind==='map'?'map-article-layout':''} ${recap||entry.kind==='session'?'recap-layout':''}`}><article className="article">
  
- <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind}</span><span>{entry.campaignId?campaign?.name:'Shared world lore'}</span></div>
+ <div className="article-meta"><span className="kind-pill">{entry.kind==='character'?roles[character.role]:entry.kind}</span><span>{entry.campaignId?campaign?.name:'Shared world lore'}</span><span className="article-access"><EditedBy entry={entry}/>{campaign&&<WhoCanEdit entry={entry} campaignId={campaign.id}/>}</span></div>
  {recap&&<RecapChips recap={recap}/>}
  <div className="article-title"><h1>{entry.title}</h1><button aria-label="Rename entry" onClick={onRename}><Pencil size={17}/></button></div>
  {entry.kind!=='folder'&&<TagRow className="article-tags" targets={[`entry:${entry.id}`]} onTagClick={onTag}/>}
