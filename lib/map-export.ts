@@ -1,6 +1,7 @@
 import { newToken, type MapDrawing, type PointOfInterest, type Scene, type Token } from "./model.ts";
 import { orderedShapes } from "./map-drawing.ts";
 import { customStampAsset, stampById } from "./map-stamps.ts";
+import { hexGridFor } from "./hexmap/layout.ts";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 import { cutOpenings, wallSegments } from "./map-creator.ts";
@@ -84,7 +85,10 @@ export function placePieces(scene: Scene, assets: Record<string, string> | null,
 
 /** Sets a scene up for a drawn map: the grid lined up with the drawing, fog, room markers and stamps as pieces. */
 export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
-  Object.assign(scene.grid, { type: "square", size: options.grid.size, offsetX: 0, offsetY: 0, units: options.grid.units, unit: options.grid.unit });
+  const hexes = scene.drawing?.hexes;
+  // A hex map gets a hex grid laid exactly over its hexes, counted in miles; other drawings get squares.
+  if (hexes) { Object.assign(scene.grid, hexGridFor(hexes), { units: hexes.miles, unit: "mi" }); scene.mapType = "area"; }
+  else Object.assign(scene.grid, { type: "square", size: options.grid.size, offsetX: 0, offsetY: 0, units: options.grid.units, unit: options.grid.unit });
   if (options.fog) scene.fog = { enabled: true, base: true, strokes: [] };
   if (options.markers && scene.drawing) {
     const kept = (scene.pointsOfInterest ?? []).filter(p => !p.id.startsWith(roomMarkerPrefix));
