@@ -38,3 +38,16 @@
   .hexmap-section > .creator-panel { padding:2px 14px 16px; }
 }
 @media(prefers-reduced-motion:reduce) { .hexmap-preview svg[data-stale] { transition:none; } }
+/* Presets as chips; the custom mix as rows of biome, share, move up and remove. */
+.hexmap-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.hexmap-presets button { min-height:30px; padding:4px 10px; border:1px solid var(--line); border-radius:99px; background:var(--panel); color:var(--ink); font-size:12px; font-weight:500; box-shadow:none; }
+.hexmap-presets button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.hexmap-mix { display:flex; flex-direction:column; gap:6px; }
+.hexmap-mix-row { display:grid; grid-template-columns:28px minmax(0, 1fr) minmax(60px, 92px) 28px 28px; align-items:center; gap:6px; font-size:12px; }
+.hexmap-mix-row svg { width:28px; height:25px; }
+.hexmap-mix-row > span { display:flex; flex-direction:column; min-width:0; line-height:1.25; }
+.hexmap-mix-row small { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.hexmap-mix-row input[type=range] { width:100%; min-width:0; accent-color:var(--accent); }
+.hexmap-mix-row button { display:grid; place-items:center; width:28px; height:28px; min-height:0; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--muted); box-shadow:none; }
+.hexmap-mix-row button:hover:not(:disabled) { background:var(--hover); color:var(--ink); }
+.hexmap-mix-row button:disabled { opacity:.35; }

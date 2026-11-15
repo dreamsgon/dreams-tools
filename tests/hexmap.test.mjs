@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaultHexOptions, generateHexMap, normalizeHexOptions, climateBiome, hexLands, randomHexSeed } from "../lib/hexmap/generate.ts";
+import { defaultHexOptions, generateHexMap, normalizeHexOptions, climateBiome, hexLands, randomHexSeed, readMix, writeMix, mixLayouts } from "../lib/hexmap/generate.ts";
+import { applyHexPreset, hexPresets, matchingHexPreset } from "../lib/hexmap/presets.ts";
+import { hashText } from "../lib/hexmap/noise.ts";
 import { hexCells, hexGridFor, hexMapSize, hexNeighbours, fittingHexSize } from "../lib/hexmap/layout.ts";
-import { readHex, isWaterTerrain, biomeIds } from "../lib/hexmap/biomes.ts";
+import { readHex, isWaterTerrain, biomeIds, biomes } from "../lib/hexmap/biomes.ts";
 import { hexLayerOps } from "../lib/hexmap/art.ts";
 import { groundOps } from "../lib/map-style.ts";
 import { resizeMap } from "../lib/map-creator.ts";
@@ -103,7 +105,7 @@ test("the climate table never puts a special biome on the map by itself", () => 
 });
 
 test("options read back from a save are checked and filled in", () => {
-  const o = normalizeHexOptions({ cols: 500, rows: -3, biome: "lava", mode: "mix", coast: "nnxse", water: "lots", seed: 4 });
+  const o = normalizeHexOptions({ cols: 500, rows: -3, biome: "lava", mode: "mixed", coast: "nnxse", water: "lots", seed: 4 });
   assert.equal(o.cols, 100); assert.equal(o.rows, 8);
   assert.equal(o.biome, defaultHexOptions.biome); assert.equal(o.mode, defaultHexOptions.mode);
   assert.equal(o.coast, "nse"); assert.equal(o.water, defaultHexOptions.water); assert.equal(o.seed, defaultHexOptions.seed);
@@ -160,4 +162,102 @@ test("every biome can be drawn as one biome", () => {
     const { layer } = generateHexMap(small({ mode: "single", biome, cols: 12, rows: 10 }));
     assert.ok(hexLayerOps(layer).length > 3, biome);
   }
+});
+
+const plainMix = (mix, extra = {}) => small({ mode: "mix", mix, smart: false, blend: "sharp", wonders: 0, ...extra });
+const landHexes = layer => hexesOf(layer).filter(c => c && !isWaterTerrain(c.terrain));
+const shareOf = (layer, biome) => { const l = landHexes(layer); return l.filter(c => c.biome === biome).length / l.length; };
+
+test("maps saved before mixing existed make exactly the same map again", () => {
+  // Options saved by the first version have no mixing settings; these hashes are that version's maps.
+  const saved = [[{}, 3249630446], [{ land: "island", seed: "moss-27", variety: 1 }, 2434875883], [{ mode: "single", biome: "desert", land: "archipelago", orient: "pointy", outline: "hex" }, 4086263831]];
+  for (const [extra, hash] of saved) {
+    const before = small(extra);
+    for (const key of ["mix", "mixLayout", "biomeSize", "blend", "smart", "wonders"]) delete before[key];
+    const { layer } = generateHexMap(normalizeHexOptions(before));
+    assert.equal(hashText(layer.cells + JSON.stringify(layer.rivers)), hash, JSON.stringify(extra));
+  }
+  const filled = normalizeHexOptions({});
+  assert.equal(filled.blend, "sharp"); assert.equal(filled.smart, false); assert.equal(filled.wonders, 0);
+  assert.equal(defaultHexOptions.blend, "soft"); assert.equal(defaultHexOptions.smart, true);
+});
+
+test("a custom mix uses only its biomes, at about the shares asked for, in every arrangement", () => {
+  for (const { id } of mixLayouts) {
+    const { layer } = generateHexMap(plainMix("temperate:3,desert:2,glacier:1", { mixLayout: id }));
+    assert.deepEqual(new Set(hexesOf(layer).map(c => c.biome)), new Set(["temperate", "desert", "glacier"]), id);
+    for (const [biome, want] of [["temperate", 0.5], ["desert", 1 / 3], ["glacier", 1 / 6]]) {
+      const got = shareOf(layer, biome);
+      assert.ok(Math.abs(got - want) < 0.1, `${id}: ${biome} covers ${Math.round(got * 100)}% of the land, not about ${Math.round(want * 100)}%`);
+    }
+  }
+});
+
+test("mix arrangements put the first biome north, west, in the middle or low down", () => {
+  const avg = (layer, biome, of) => { const cells = hexCells({ ...layer, outline: "rect" }).filter(h => readHex(layer.cells, h.i)?.biome === biome && !isWaterTerrain(readHex(layer.cells, h.i).terrain)); return cells.reduce((a, h) => a + of(h), 0) / cells.length; };
+  const ns = generateHexMap(plainMix("boreal:1,savanna:1", { mixLayout: "ns" })).layer;
+  assert.ok(avg(ns, "boreal", h => h.r) < avg(ns, "savanna", h => h.r));
+  const we = generateHexMap(plainMix("boreal:1,savanna:1", { mixLayout: "we" })).layer;
+  assert.ok(avg(we, "boreal", h => h.c) < avg(we, "savanna", h => h.c));
+  const rings = generateHexMap(plainMix("boreal:1,savanna:1", { mixLayout: "rings", land: "lakes" })).layer;
+  const fromMiddle = h => Math.hypot(h.c - rings.cols / 2, h.r - rings.rows / 2);
+  assert.ok(avg(rings, "boreal", fromMiddle) < avg(rings, "savanna", fromMiddle));
+  const height = hexesOf(generateHexMap(plainMix("jungle:1,volcanic:1", { mixLayout: "height", mountains: 0.8 })).layer);
+  assert.ok(height.filter(c => c.terrain === "peak").every(c => c.biome === "volcanic"), "the peaks get the last biome");
+});
+
+test("smooth harsh borders keeps ice and desert apart", () => {
+  const touching = layer => {
+    const shape = { cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: layer.outline, size: 10 }, nb = hexNeighbours(shape, hexCells(shape));
+    let n = 0; nb.forEach((list, i) => { const a = readHex(layer.cells, i); if (a?.biome === "glacier") n += list.filter(j => readHex(layer.cells, j)?.biome === "desert").length; }); return n;
+  };
+  const harsh = plainMix("glacier:1,desert:1", { mixLayout: "we" });
+  assert.ok(touching(generateHexMap(harsh).layer) > 0);
+  const smooth = generateHexMap({ ...harsh, smart: true }).layer;
+  assert.equal(touching(smooth), 0);
+  assert.ok(hexesOf(smooth).some(c => c.biome === "temperate"), "a middle biome goes between them");
+  assert.ok(hexesOf(generateHexMap({ ...harsh, smart: true, mix: "glacier:1,swamp:1,desert:1" }).layer).every(c => c.biome !== "temperate"), "a middle biome from the mix comes first");
+});
+
+test("blended borders mix the edges, and bigger biomes have fewer edges", () => {
+  const borders = layer => {
+    const shape = { cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: layer.outline, size: 10 }, nb = hexNeighbours(shape, hexCells(shape));
+    let n = 0; nb.forEach((list, i) => { n += list.filter(j => readHex(layer.cells, j).biome !== readHex(layer.cells, i).biome).length; }); return n;
+  };
+  const base = plainMix("temperate:1,boreal:1,savanna:1", { cols: 40, rows: 30 });
+  const sharp = borders(generateHexMap(base).layer), soft = borders(generateHexMap({ ...base, blend: "soft" }).layer), wide = borders(generateHexMap({ ...base, blend: "wide" }).layer);
+  assert.ok(soft > sharp && wide > soft, `${sharp} < ${soft} < ${wide}`);
+  const climate = size => borders(generateHexMap(small({ cols: 40, rows: 30, biomeSize: size, blend: "sharp", smart: false, wonders: 0 })).layer);
+  assert.ok(climate(0) > climate(3), "small biomes have more borders than huge ones");
+});
+
+test("rare wonders drop a few small strange patches, never on one-biome maps", () => {
+  const special = layer => landHexes(layer).filter(c => biomes[c.biome].special).length;
+  const options = small({ wonders: 0, smart: false, blend: "sharp" });
+  assert.equal(special(generateHexMap(options).layer), 0);
+  const many = special(generateHexMap({ ...options, wonders: 3 }).layer);
+  assert.ok(many > 6 && many < landHexes(generateHexMap(options).layer).length * 0.3, `${many} wonder hexes`);
+  assert.ok(hexesOf(generateHexMap(small({ mode: "single", biome: "boreal", wonders: 3 })).layer).every(c => c.biome === "boreal"));
+});
+
+test("a custom mix is saved as short text and read back safely", () => {
+  assert.deepEqual(readMix("desert:9,lava:2,swamp:x,desert:1,fey:0"), [{ id: "desert", w: 6 }, { id: "swamp", w: 1 }, { id: "fey", w: 1 }]);
+  assert.equal(writeMix(readMix("jungle:4, savanna:1")), "jungle:4");
+  assert.equal(normalizeHexOptions({ mix: "nothing" }).mix, defaultHexOptions.mix);
+  assert.equal(normalizeHexOptions({ mode: "mix", mixLayout: "spiral" }).mixLayout, "patches");
+  assert.ok(hexesOf(generateHexMap(small({ mode: "mix", mix: "" })).layer).length > 0, "an empty mix still makes a map");
+});
+
+test("presets fill in the settings but keep the seed and size, until something changes", () => {
+  const mine = small({ seed: "reed-11", cols: 30, rows: 20, orient: "pointy", miles: 12 });
+  for (const preset of hexPresets) {
+    const o = applyHexPreset(mine, preset);
+    assert.equal(o.seed, "reed-11"); assert.equal(o.cols, 30); assert.equal(o.orient, "pointy"); assert.equal(o.miles, 12);
+    assert.equal(matchingHexPreset(o)?.id, preset.id);
+    const { layer } = generateHexMap(o);
+    assert.equal(mapDrawingSchema.parse(drawingOf(layer)).hexes.cells, layer.cells, preset.name);
+    assert.equal(matchingHexPreset({ ...o, rivers: o.rivers === 0 ? 1 : 0 }), undefined);
+  }
+  assert.equal(new Set(hexPresets.map(p => p.id)).size, hexPresets.length);
+  assert.equal(matchingHexPreset(defaultHexOptions), undefined);
 });

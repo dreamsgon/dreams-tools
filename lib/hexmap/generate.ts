@@ -5,7 +5,9 @@ import { clamp, hashText, layeredNoise, quantile, ranks, seededRandom } from "./
 /**
  * The hex map generator. Land and sea come from the kind of land chosen, mountains follow
  * ridges, rivers run downhill to water, and each hex's biome is either the one chosen or picked
- * by hidden temperature and rainfall maps (the way Minecraft picks biomes from its climate).
+ * by hidden temperature and rainfall maps (the way Minecraft picks biomes from its climate), or
+ * laid out from a custom mix. Borders can be blended, harsh neighbours (ice beside desert) get a
+ * middle biome between them, and rare wonders drop small strange patches.
  * The same options always make the same map.
  */
 export const hexLands = [
@@ -22,12 +24,44 @@ export const hexLands = [
 export type HexLand = typeof hexLands[number]["id"];
 export type HexRelief = "flat" | "rolling" | "rugged" | "towering";
 export type Side = "n" | "s" | "w" | "e";
+export type HexMode = "single" | "climate" | "mix";
+export type MixLayout = "patches" | "ns" | "we" | "rings" | "height";
+export type HexBlend = "sharp" | "soft" | "wide";
+export const mixLayouts: { id: MixLayout; name: string; hint: string }[] = [
+  { id: "patches", name: "Patches", hint: "Each biome gets its own regions, sized by its share." },
+  { id: "ns", name: "N to S", hint: "Bands from north (top of the list) to south." },
+  { id: "we", name: "W to E", hint: "Bands from west (top of the list) to east." },
+  { id: "rings", name: "Rings", hint: "The first biome in the middle, the last at the edges." },
+  { id: "height", name: "By height", hint: "The first biome on low ground, the last on the peaks." },
+];
+/** One biome in a custom mix and its share (1 to 6). */
+export type MixEntry = { id: BiomeId; w: number };
+export const MIX_WEIGHT = [1, 6] as const;
+/** A custom mix as it is saved: "temperate:3,boreal:2". Unknown biomes and repeats are dropped. */
+export function readMix(text: string): MixEntry[] {
+  const out: MixEntry[] = [];
+  for (const part of text.split(",")) {
+    const [id, w] = part.split(":");
+    if (biomeIds.includes(id as BiomeId) && !out.some(m => m.id === id)) out.push({ id: id as BiomeId, w: Math.round(clamp(Number(w) || 1, MIX_WEIGHT[0], MIX_WEIGHT[1])) });
+  }
+  return out;
+}
+export const writeMix = (mix: MixEntry[]) => mix.map(m => `${m.id}:${m.w}`).join(",");
 
 export type HexMapOptions = {
   seed: string;
-  /** "single": every hex has `biome`. "climate": temperature and rainfall pick each hex's biome. */
-  mode: "single" | "climate";
+  /** "single": every hex has `biome`. "climate": temperature and rainfall pick each hex's biome. "mix": the biomes in `mix`, arranged by `mixLayout`. */
+  mode: HexMode;
   biome: BiomeId;
+  /** The custom mix, saved as text (see `readMix`). */
+  mix: string; mixLayout: MixLayout;
+  /** 0 small, 1 normal, 2 large, 3 huge (like Minecraft's Large Biomes). */
+  biomeSize: number;
+  blend: HexBlend;
+  /** Put a middle biome between harsh neighbours, such as temperate land between ice and desert. */
+  smart: boolean;
+  /** Rare small patches of volcanic, blighted or fey land: 0 none to 3 many. */
+  wonders: number;
   /** Climate: -1 (freezing) to 1 (scorching), -1 (arid) to 1 (soaked), and how wide a range of climates (0 to 1). */
   temp: number; rain: number; variety: number;
   /** Colder to the north and warmer to the south. */
@@ -47,7 +81,8 @@ export type HexMapOptions = {
 };
 export const HEX_LIMITS = { cols: [10, 100], rows: [8, 80], rivers: [0, 12] } as const;
 export const defaultHexOptions: HexMapOptions = {
-  seed: "ember-42", mode: "climate", biome: "temperate", temp: 0, rain: 0, variety: 0.65, latitude: true,
+  seed: "ember-42", mode: "climate", biome: "temperate", mix: "temperate:3,boreal:2,swamp:1", mixLayout: "patches",
+  biomeSize: 1, blend: "soft", smart: true, wonders: 1, temp: 0, rain: 0, variety: 0.65, latitude: true,
   land: "mainland", coast: "se", joins: "s", water: 0.5, shallows: -1,
   mountains: 0.5, relief: "rolling", forest: 0.5, rivers: 4, lakes: 0.35, wetlands: 0.4,
   outline: "rect", cols: 35, rows: 25, orient: "flat", miles: 6,
@@ -56,13 +91,25 @@ export const defaultHexOptions: HexMapOptions = {
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => allowed.includes(value as T) ? value as T : fallback;
 const num = (value: unknown, lo: number, hi: number, fallback: number) => typeof value === "number" && Number.isFinite(value) ? clamp(value, lo, hi) : fallback;
 const whole = (value: unknown, lo: number, hi: number, fallback: number) => Math.round(num(value, lo, hi, fallback));
+/**
+ * Maps saved before custom mixes have none of the mixing options. They are filled in with what
+ * the generator did then (no blending, no middle biomes, no wonders), so regenerating an older
+ * map from its options still makes the same map.
+ */
+const BEFORE_MIXING = { blend: "sharp", smart: false, wonders: 0 } as const;
 /** Options read back from a saved map (or anything else), with every value checked and missing ones filled in. */
 export function normalizeHexOptions(raw: unknown): HexMapOptions {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>, d = defaultHexOptions;
+  const mix = typeof o.mix === "string" ? writeMix(readMix(o.mix).slice(0, biomeIds.length)) : "";
   return {
     seed: typeof o.seed === "string" ? o.seed.slice(0, 40) : d.seed,
-    mode: pick(o.mode, ["single", "climate"] as const, d.mode),
+    mode: pick(o.mode, ["single", "climate", "mix"] as const, d.mode),
     biome: pick(o.biome, biomeIds, d.biome),
+    mix: mix || d.mix, mixLayout: pick(o.mixLayout, mixLayouts.map(l => l.id), d.mixLayout),
+    biomeSize: whole(o.biomeSize, 0, 3, d.biomeSize),
+    blend: pick(o.blend, ["sharp", "soft", "wide"] as const, BEFORE_MIXING.blend),
+    smart: typeof o.smart === "boolean" ? o.smart : BEFORE_MIXING.smart,
+    wonders: whole(o.wonders, 0, 3, BEFORE_MIXING.wonders),
     temp: num(o.temp, -1, 1, d.temp), rain: num(o.rain, -1, 1, d.rain), variety: num(o.variety, 0, 1, d.variety),
     latitude: typeof o.latitude === "boolean" ? o.latitude : d.latitude,
     land: pick(o.land, hexLands.map(l => l.id), d.land),
@@ -93,6 +140,8 @@ export type GeneratedHexMap = { layer: HexLayer; width: number; height: number; 
 /** Hexes are generated at a fixed size, so the same options shape the same land at any drawing size. */
 const U = 10;
 const RELIEF: Record<HexRelief, number> = { flat: 0.45, rolling: 1, rugged: 1.5, towering: 2.2 };
+/** How far apart biomes are for each biome size. */
+const BIOME_SCALE = [0.55, 1, 1.7, 2.8];
 const VEG_BIAS: Record<BiomeId, number> = { temperate: 0.05, boreal: 0.12, tundra: -0.18, glacier: -0.45, desert: -0.4, savanna: -0.12, jungle: 0.28, swamp: 0.05, badlands: -0.3, volcanic: -0.25, blighted: 0, fey: 0.15 };
 /** The biome for a temperature and rainfall, both from 0 to 1 (a Minecraft-style climate table). */
 export function climateBiome(t: number, m: number): BiomeId {
@@ -175,8 +224,9 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   const lowland = new Float32Array(N); { const r = ranks(landE); land.forEach((i, k) => { lowland[i] = r[k]; }); }
 
   // Climate: hidden temperature and rainfall maps, cooler on high ground.
-  const tRaw = inside.map(i => { const h = cells[i], n = tN(h.x / (U * 17), h.y / (U * 17)); return o.latitude ? n * 0.55 + (h.y / H) * 0.45 : n; });
-  const mRaw = inside.map(i => hN(cells[i].x / (U * 15.6) + 50, cells[i].y / (U * 15.6) + 50));
+  const bs = BIOME_SCALE[o.biomeSize];
+  const tRaw = inside.map(i => { const h = cells[i], n = tN(h.x / (U * 17 * bs), h.y / (U * 17 * bs)); return o.latitude ? n * 0.55 + (h.y / H) * 0.45 : n; });
+  const mRaw = inside.map(i => hN(cells[i].x / (U * 15.6 * bs) + 50, cells[i].y / (U * 15.6 * bs) + 50));
   const tR = ranks(tRaw), mR = ranks(mRaw), spread = 0.25 + 0.95 * o.variety;
   const T = new Float32Array(N), M = new Float32Array(N);
   inside.forEach((i, k) => {
@@ -186,6 +236,13 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   });
   const biome: BiomeId[] = new Array(N).fill(o.biome);
   if (o.mode === "climate") for (const i of inside) biome[i] = climateBiome(T[i], M[i]);
+  const mix = readMix(o.mix);
+  if (o.mode === "mix") mixBiomes(biome, mix.length ? mix : [{ id: o.biome, w: 1 }], o.mixLayout, bs);
+  if (o.mode !== "single") {
+    addWonders();
+    if (o.smart) smoothHarshBorders();
+    if (o.blend !== "sharp") blendBorders(o.blend === "wide");
+  }
 
   // Extra lakes, then wetlands, forests and beaches on open land.
   const r2 = seededRandom(seedN ^ 0x5eed);
@@ -229,6 +286,83 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
     }
     if (!ok && path.length > 3) { const end = path[path.length - 1]; if (terrain[end] === "flat" || terrain[end] === "forest" || terrain[end] === "marsh") { terrain[end] = "lake"; water[end] = 1; ok = true; } }
     if (ok && path.length >= 3) { rivers.push(path); for (const p of path) if (!water[p]) onRiver[p] = 1; }
+  }
+
+  /**
+   * A custom mix: wobbly patches, or bands across the map, up the land's height or out from the
+   * middle. Shares are counted on land, so a biome at 3 of 6 covers about half the land.
+   */
+  function mixBiomes(out: BiomeId[], entries: MixEntry[], layout: MixLayout, scale: number) {
+    const total = entries.reduce((a, m) => a + m.w, 0), r = seededRandom(seedN ^ 0x51ed27), jit = layeredNoise(seedN + 9, 2);
+    const landCount = Math.max(1, land.length), target = entries.map(m => m.w / total * landCount);
+    if (layout === "patches") {
+      const count = Math.max(entries.length, Math.round(inside.length / (26 * scale * scale)));
+      const seeds = Array.from({ length: count }, () => ({ x: r() * W, y: r() * H, land: 0, b: entries[0].id }));
+      const owner = new Int32Array(N);
+      for (const i of inside) {
+        const h = cells[i], wx = h.x + (jit(h.x / 60, h.y / 60) - 0.5) * U * 9 * scale, wy = h.y + (jit(h.x / 60 + 9, h.y / 60 + 9) - 0.5) * U * 9 * scale;
+        let best = 0, bd = Infinity;
+        seeds.forEach((s, k) => { const d = (s.x - wx) ** 2 + (s.y - wy) ** 2; if (d < bd) { bd = d; best = k; } });
+        owner[i] = best; if (!water[i]) seeds[best].land++;
+      }
+      // Each patch goes to the biome furthest short of its share, so every biome gets land.
+      const got = entries.map(() => 0);
+      for (const s of seeds) {
+        if (!s.land) continue;
+        let k = 0; for (let j = 1; j < entries.length; j++) if ((target[j] - got[j]) / target[j] > (target[k] - got[k]) / target[k]) k = j;
+        s.b = entries[k].id; got[k] += s.land;
+      }
+      for (const i of inside) out[i] = seeds[owner[i]].b;
+      return;
+    }
+    const p = new Float64Array(N);
+    for (const i of inside) {
+      const h = cells[i], wobble = (jit(h.x / (U * 9 * scale), h.y / (U * 9 * scale)) - 0.5) * 0.22;
+      p[i] = layout === "height" ? (water[i] ? -1 : e[i]) : (layout === "ns" ? h.y / H : layout === "we" ? h.x / W : Math.hypot(h.x / W - 0.5, h.y / H - 0.5)) + wobble;
+    }
+    // Split the land at its shares along the band, then give the water the band it lies in.
+    const landP = land.map(i => p[i]); let acc = 0;
+    const cuts = entries.slice(0, -1).map(m => { acc += m.w / total; return quantile(landP, acc); });
+    for (const i of inside) { let k = 0; while (k < cuts.length && p[i] >= cuts[k]) k++; out[i] = entries[k].id; }
+  }
+
+  /** Rare wonders: a few small patches of volcanic, blighted or fey land, more on bigger maps. */
+  function addWonders() {
+    if (!o.wonders || !land.length) return;
+    const r = seededRandom(seedN ^ 0x7a11), count = Math.round([0, 1, 3, 6][o.wonders] * Math.max(1, inside.length / 900));
+    for (let k = 0; k < count; k++) {
+      const start = land[Math.floor(r() * land.length)];
+      const kind: BiomeId = terrain[start] === "mountain" || terrain[start] === "peak" ? "volcanic" : (["blighted", "fey", "volcanic"] as const)[Math.floor(r() * 3)];
+      const size = 3 + Math.floor(r() * 7), patch = new Set([start]), queue = [start];
+      while (queue.length && patch.size < size) { const cur = queue.shift()!; for (const j of nb[cur]) if (!water[j] && !patch.has(j) && r() < 0.75) { patch.add(j); queue.push(j); } }
+      for (const j of patch) biome[j] = kind;
+    }
+  }
+
+  /** Hexes beside a much hotter or colder neighbour take a biome in between, from the mix when it has one. */
+  function smoothHarshBorders() {
+    const before = biome.slice(), normal = biomeIds.filter(b => !biomes[b].special);
+    const own = o.mode === "mix" ? mix.map(m => m.id).filter(b => !biomes[b].special) : [];
+    for (const i of inside) {
+      const a = biomes[before[i]]; if (a.special) continue;
+      for (const j of nb[i]) {
+        const b = biomes[before[j]]; if (b.special || Math.abs(a.heat - b.heat) < 2.2) continue;
+        const lo = Math.min(a.heat, b.heat), hi = Math.max(a.heat, b.heat), mid = (lo + hi) / 2;
+        const between = own.filter(id => biomes[id].heat > lo + 0.4 && biomes[id].heat < hi - 0.4);
+        const pool = between.length ? between : normal;
+        biome[i] = pool.reduce((best, id) => Math.abs(biomes[id].heat - mid) < Math.abs(biomes[best].heat - mid) ? id : best, pool[0]);
+        break;
+      }
+    }
+  }
+
+  /** Blended borders: some hexes along a border take a neighbour's biome, once or twice over. */
+  function blendBorders(wide: boolean) {
+    const r = seededRandom(seedN ^ 0xb1e4d), chance = wide ? 0.45 : 0.32;
+    for (let pass = 0; pass < (wide ? 2 : 1); pass++) {
+      const before = biome.slice();
+      for (const i of inside) { const other = nb[i].filter(j => before[j] !== before[i]); if (other.length && r() < chance) biome[i] = before[other[Math.floor(r() * other.length)]]; }
+    }
   }
 
   let code = "";
