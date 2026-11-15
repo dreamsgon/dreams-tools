@@ -81,7 +81,7 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
   draft: Draft; grid: { size: number; units: number; unit: string }; workspace: Workspace;
   sceneName: string | null; hadPieces: boolean; destination: string | null; close: () => void; use: (choice: UseChoice) => void;
 }) {
-  const numbers = roomNumbers(draft.drawing).length, stamped = stampPieces(draft.drawing, grid.size).length;
+  const numbers = roomNumbers(draft.drawing).length + (draft.drawing.hexes?.places.length ?? 0), stamped = stampPieces(draft.drawing, grid.size).length;
   const options = places(workspace, destination);
   const [fog, setFog] = useState(!sceneName), [markers, setMarkers] = useState(numbers > 0), [pieces, setPieces] = useState(stamped > 0 && (!sceneName || hadPieces)), [place, setPlace] = useState(destination);
   const [busy, setBusy] = useState(""), [error, setError] = useState("");
@@ -98,7 +98,7 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
         <div className="creator-panel">
           <div className="creator-use-summary">
             <svg viewBox={`0 0 ${draft.width} ${draft.height}`} aria-hidden="true">
-              <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
+              <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height} secrets/>
               {orderedShapes(draft.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={draft.drawing} prefix="use"/>)}
             </svg>
             <div><strong>{draft.name}</strong><span>{hexes ? `${hexes.cols} × ${hexes.rows} hexes · ${hexes.miles} ${hexes.miles === 1 ? "mile" : "miles"} each` : `${cols} × ${rows} squares · ${Math.round(cols * grid.units)} × ${Math.round(rows * grid.units)} ${grid.unit}`}</span></div>
@@ -108,7 +108,7 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
           <p className="creator-measure"><strong>The grid lines up:</strong> {hexes ? `a hex grid of ${hexes.miles}-mile hexes laid exactly over the map's hexes.` : `${grid.units} ${grid.unit} squares of ${grid.size} px, matching the drawing exactly.`}</p>
           <div className="creator-checks">
             <label className="creator-check"><input type="checkbox" checked={fog} onChange={e => setFog(e.target.checked)}/><span>Start with fog over the whole map<small>{hexes ? "Reveal hexes as the party explores." : "Reveal rooms as the party explores."}{sceneName ? " This clears the fog you have already revealed." : ""}</small></span></label>
-            <label className="creator-check"><input type="checkbox" checked={markers} disabled={!numbers} onChange={e => setMarkers(e.target.checked)}/><span>Numbered rooms become markers<small>{numbers ? `${numbers} room number${numbers === 1 ? "" : "s"} become GM-only markers you can add notes to.` : "Add room numbers with the Label tool (in a circle) to get markers."}</small></span></label>
+            <label className="creator-check"><input type="checkbox" checked={markers} disabled={!numbers} onChange={e => setMarkers(e.target.checked)}/><span>{hexes ? "Places become markers" : "Numbered rooms become markers"}<small>{numbers ? `${numbers} ${hexes ? (numbers === 1 ? "place" : "places") : `room number${numbers === 1 ? "" : "s"}`} become GM-only markers you can add notes to.` : hexes ? "Add settlements, ruins or lairs when making the hex map to get markers." : "Add room numbers with the Label tool (in a circle) to get markers."}</small></span></label>
             <label className="creator-check"><input type="checkbox" checked={pieces} disabled={!stamped && !hadPieces} onChange={e => setPieces(e.target.checked)}/><span>Stamps become movable pieces<small>{stamped ? `${stamped} stamp${stamped === 1 ? "" : "s"} (crates, tables, rocks…) become pieces you can drag and turn on the table, so the terrain can change mid-fight. Walls and floors stay in the map.${sceneName && hadPieces ? " Pieces you have moved stay where they are." : ""}` : hadPieces ? "Untick to take the pieces off the table." : "Add stamps from the Stamp tool to get pieces."}</small></span></label>
           </div>
           {error && <p className="creator-error" role="alert">{error}</p>}

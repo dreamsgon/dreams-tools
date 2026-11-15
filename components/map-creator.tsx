@@ -530,7 +530,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
               change(d=>{d.drawing.layerOrder=[...layerIds(d.drawing),id];d.drawing.shapes.push({id,type:"stamp",stamp:stamp.id,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:`${stamp.name} ${d.drawing.shapes.length+1}`,folderId:null,smooth:false,points:stampBox(stamp,raw,snap&&!e.altKey?grid.size:null,grid.size,d.width,d.height),fill:null,stroke,thickness:1,closed:false});});
               setStampId(stamp.id);choose(id);}}>
             <defs><pattern id="creator-grid" width={grid.size} height={grid.size} patternUnits="userSpaceOnUse"><path d={`M ${grid.size} 0 H 0 V ${grid.size}`} fill="none" stroke="#ffffff" strokeOpacity=".22" strokeWidth="1"/></pattern></defs>
-            <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
+            <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height} secrets/>
             {!draft.drawing.hexes&&<rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>}
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
             {trace&&<image href={trace.url} x={trace.x} y={trace.y} width={trace.w} height={trace.h} opacity={trace.opacity} preserveAspectRatio="none" pointerEvents="none"/>}

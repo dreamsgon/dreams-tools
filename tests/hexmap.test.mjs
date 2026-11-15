@@ -5,7 +5,10 @@ import { applyHexPreset, hexPresets, matchingHexPreset } from "../lib/hexmap/pre
 import { hashText } from "../lib/hexmap/noise.ts";
 import { hexCells, hexGridFor, hexMapSize, hexNeighbours, fittingHexSize } from "../lib/hexmap/layout.ts";
 import { readHex, isWaterTerrain, biomeIds, biomes } from "../lib/hexmap/biomes.ts";
-import { hexLayerOps, hexLegendRows } from "../lib/hexmap/art.ts";
+import { hexLayerOps, hexLegendRows, hexSiteOps } from "../lib/hexmap/art.ts";
+import { isSettlement } from "../lib/hexmap/places.ts";
+import { hexSettingsCode, readHexSettingsCode } from "../lib/hexmap/code.ts";
+import { hexDistance } from "../lib/hexmap/layout.ts";
 import { groundOps } from "../lib/map-style.ts";
 import { resizeMap } from "../lib/map-creator.ts";
 import { setUpDrawnMapScene } from "../lib/map-export.ts";
@@ -154,7 +157,7 @@ test("a hex map draws under the shapes as a few grouped paths and moves when the
   assert.ok(ops.length > 10 && ops.length < 300, `${ops.length} paths`);
   assert.equal(hexLayerOps(layer), ops, "drawn once and reused");
   assert.equal(hexLayerOps({ ...layer }), ops, "a copy of the same map reuses the drawing too");
-  assert.ok(ops.every(op => op.d && (op.fill || op.stroke)));
+  assert.ok(ops.every(op => op.text || (op.d && (op.fill || op.stroke))));
   const ground = groundOps(drawingOf(layer), width, height);
   assert.equal(ground.length, ops.length + 1, "background first, then the hexes");
   const grown = resizeMap({ width, height, drawing: drawingOf(layer) }, width + 140, height + 140, { x: 1, y: 1 }, 70);
@@ -278,7 +281,7 @@ test("older hex maps keep the painted look, and a look is checked when read back
 });
 
 test("Flat colours draws no symbols, Ink draws on paper, and outlines can be hidden", () => {
-  const { layer } = generateHexMap(small({ rivers: 4 }));
+  const { layer } = generateHexMap(small({ rivers: 4, settlements: 0, sites: 0 }));
   const painted = hexLayerOps(layer), flat = hexLayerOps({ ...layer, look: "flat" }), ink = hexLayerOps({ ...layer, look: "ink" });
   assert.ok(flat.length < painted.length, `${flat.length} flat paths, ${painted.length} painted`);
   assert.equal(flat.filter(op => !op.fill).length, 1 + layer.rivers.length, "only ground, outlines and rivers");
@@ -293,7 +296,7 @@ test("Flat colours draws no symbols, Ink draws on paper, and outlines can be hid
 
 test("hex numbers give every hex inside the outline its column and row", () => {
   const { layer } = generateHexMap(small({ outline: "circle" }));
-  const texts = hexLayerOps({ ...layer, numbers: true }).filter(op => op.text);
+  const texts = hexLayerOps({ ...layer, numbers: true }).filter(op => /^\d{4}$/.test(op.text?.value ?? ""));
   assert.equal(texts.length, hexesOf(layer).filter(Boolean).length);
   const plain = generateHexMap(small()).layer, first = hexLayerOps({ ...plain, numbers: true }).find(op => op.text);
   assert.equal(first.text.value, "0101");
@@ -309,13 +312,116 @@ test("the legend lists what is on the map and sits in the chosen corner, inside 
   const { width, height } = hexMapSize(layer);
   for (const corner of ["nw", "ne", "sw", "se"]) {
     const ops = hexLayerOps({ ...layer, x: 30, y: 40, legend: corner }), box = ops.find(op => op.fill && op.opacity === 0.95);
-    const [x, y] = box.d.slice(1).split(/[ h]/).map(Number);
-    assert.ok(x >= 30 && y >= 40 && x < 30 + width && y < 40 + height, `${corner} box at ${x},${y}`);
-    assert.equal(x < 30 + width / 2, corner.endsWith("w")); assert.equal(y < 40 + height / 2, corner.startsWith("n"));
+    const [x, y, w, h] = box.d.match(/^M([\d.-]+) ([\d.-]+)h([\d.]+)v([\d.]+)/).slice(1).map(Number);
+    assert.ok(x >= 30 && y >= 40 && x + w <= 30 + width && y + h <= 40 + height, `${corner} box at ${x},${y}`);
+    assert.ok(corner.endsWith("w") ? x - 30 < width * 0.05 : 30 + width - (x + w) < width * 0.05, `${corner} side`);
+    assert.ok(corner.startsWith("n") ? y - 40 < height * 0.05 : 40 + height - (y + h) < height * 0.05, `${corner} top or bottom`);
     assert.ok(ops.some(op => op.text?.value === "One hex: 6 miles"));
   }
   const tiny = generateHexMap(small({ cols: 10, rows: 8, mode: "climate", variety: 1 })).layer, size = hexMapSize(tiny);
   const box = hexLayerOps({ ...tiny, legend: "se" }).find(op => op.fill && op.opacity === 0.95);
   const [, , w, h] = box.d.match(/^M([\d.-]+) ([\d.-]+)h([\d.]+)v([\d.]+)/).slice(1).map(Number);
-  assert.ok(w <= size.width * 0.4 + 1 && h <= size.height * 0.8 + 1, "a small map gets a smaller legend");
+  assert.ok(w <= size.width * 0.35 + 1 && h <= size.height * 0.6 + 1, "a small map gets a smaller legend");
+});
+
+const shapeOf = layer => { const shape = { cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: layer.outline, size: 10 }; const cells = hexCells(shape); return { cells, nb: hexNeighbours(shape, cells) }; };
+
+test("settlements go on open land, spread apart: a city, two towns, then villages", () => {
+  const { layer } = generateHexMap(small({ settlements: 6, sites: 0 }));
+  const { cells } = shapeOf(layer), towns = layer.places;
+  assert.equal(towns.length, 6);
+  assert.deepEqual(towns.map(p => p.kind), ["city", "town", "town", "village", "village", "village"]);
+  for (const p of towns) {
+    const hex = readHex(layer.cells, p.i);
+    assert.ok(["flat", "beach", "forest", "hills"].includes(hex.terrain), `${p.name} on ${hex.terrain}`);
+    assert.match(p.name, /^[A-Z][a-z]+$/);
+  }
+  for (const a of towns) for (const b of towns) if (a !== b) assert.ok(hexDistance(cells[a.i], cells[b.i]) >= 3);
+  const plain = generateHexMap(small({ settlements: 3, sites: 2, names: false })).layer.places.map(p => p.name);
+  assert.deepEqual(plain.slice(0, 3), ["City", "Town 1", "Town 2"]);
+  assert.match(plain[3], /^(Ruin|Tower|Cave|Shrine|Lair) 1$/);
+});
+
+test("ruins and lairs go in the wilds, never on water or on top of another place", () => {
+  const { layer } = generateHexMap(small({ settlements: 4, sites: 8 }));
+  const { cells } = shapeOf(layer), sites = layer.places.filter(p => !isSettlement(p.kind));
+  assert.ok(sites.length >= 5, `${sites.length} sites`);
+  for (const p of sites) assert.ok(!isWaterTerrain(readHex(layer.cells, p.i).terrain));
+  for (const a of layer.places) for (const b of layer.places) if (a !== b) assert.ok(hexDistance(cells[a.i], cells[b.i]) >= 3);
+});
+
+test("roads join the settlements over land, one neighbouring hex at a time", () => {
+  const { layer } = generateHexMap(small({ settlements: 6, land: "lakes" }));
+  const { nb } = shapeOf(layer), towns = new Set(layer.places.filter(p => isSettlement(p.kind)).map(p => p.i));
+  // A settlement cut off by water or high peaks gets no road; the rest are all joined.
+  assert.ok(layer.roads.length >= towns.size - 2 && layer.roads.length <= towns.size - 1, `${layer.roads.length} roads for ${towns.size} settlements`);
+  for (const road of layer.roads) {
+    assert.ok(towns.has(road[0]) && towns.has(road.at(-1)), "a road runs from one settlement to another");
+    for (let k = 1; k < road.length; k++) assert.ok(nb[road[k - 1]].includes(road[k]));
+    for (const i of road.slice(1, -1)) assert.ok(!isWaterTerrain(readHex(layer.cells, i).terrain) && readHex(layer.cells, i).terrain !== "peak");
+  }
+  assert.equal(generateHexMap(small({ settlements: 6, roads: false })).layer.roads.length, 0);
+});
+
+test("Reroll places moves the places but keeps the land, and older options make no places", () => {
+  const a = generateHexMap(small()).layer, b = generateHexMap(small({ placesRoll: 1 })).layer;
+  assert.equal(a.cells, b.cells); assert.deepEqual(a.rivers, b.rivers);
+  assert.notDeepEqual(a.places, b.places);
+  const older = small(); delete older.settlements; delete older.sites;
+  assert.equal(generateHexMap(normalizeHexOptions(older)).layer.places.length, 0);
+  assert.equal(normalizeHexOptions(older).settlements, 0);
+});
+
+test("places and roads are saved with the map and checked when read back", () => {
+  const { layer } = generateHexMap(small({ settlements: 5, sites: 3 }));
+  const parsed = mapDrawingSchema.parse(drawingOf(layer)).hexes;
+  assert.deepEqual(parsed.places, layer.places); assert.deepEqual(parsed.roads, layer.roads);
+  const older = { ...layer }; delete older.places; delete older.roads; delete older.labels;
+  const old = mapDrawingSchema.parse(drawingOf(older)).hexes;
+  assert.deepEqual(old.places, []); assert.deepEqual(old.roads, []); assert.equal(old.labels, true);
+  assert.throws(() => mapDrawingSchema.parse(drawingOf({ ...layer, places: [{ i: layer.cols * layer.rows, kind: "town", name: "Far" }] })));
+  assert.throws(() => mapDrawingSchema.parse(drawingOf({ ...layer, places: [{ i: 0, kind: "castle", name: "Keep" }] })));
+  assert.throws(() => mapDrawingSchema.parse(drawingOf({ ...layer, roads: [[0, layer.cols * layer.rows]] })));
+});
+
+test("settlements and roads are drawn on the map; ruins and lairs only in the GM's view", () => {
+  const { layer } = generateHexMap(small({ settlements: 4, sites: 4 }));
+  const ops = hexLayerOps(layer), names = ops.filter(op => op.text).map(op => op.text.value);
+  for (const p of layer.places) assert.equal(names.includes(p.name), isSettlement(p.kind), p.name);
+  assert.equal(ops.filter(op => op.dash).length, layer.roads.length, "each road is a dashed line");
+  const secret = hexSiteOps(layer).filter(op => op.text).map(op => op.text.value);
+  assert.deepEqual(secret.sort(), layer.places.filter(p => !isSettlement(p.kind)).map(p => p.name).sort());
+  assert.ok(!hexLayerOps({ ...layer, labels: false }).some(op => op.text), "names can be left off");
+  assert.ok(hexLegendRows(layer, "painted").some(r => r.label === "Road"));
+});
+
+test("Use in Maptable can make every place a GM-only marker on its hex, replacing the last ones", () => {
+  const { layer, width, height } = generateHexMap(small({ settlements: 3, sites: 2 }));
+  const scene = Object.assign(newScene("Hexes"), { width, height, drawing: drawingOf({ ...layer, x: 20, y: 10 }) });
+  setUpDrawnMapScene(scene, { fog: false, markers: true, grid: { size: 70, units: 5, unit: "ft" } });
+  const markers = scene.pointsOfInterest;
+  assert.equal(markers.length, layer.places.length);
+  assert.ok(markers.every(m => m.hidden));
+  const grid = scene.grid, cells = hexCells({ ...layer, outline: "rect" });
+  layer.places.forEach((p, n) => {
+    const c = hexCenter(cells[p.i].q, cells[p.i].ar, grid);
+    assert.ok(Math.abs(markers[n].x - c.x) < 0.01 && Math.abs(markers[n].y - c.y) < 0.01, "on the hex's centre");
+    assert.equal(markers[n].name, p.name);
+  });
+  setUpDrawnMapScene(scene, { fog: false, markers: true, grid: { size: 70, units: 5, unit: "ft" } });
+  assert.equal(scene.pointsOfInterest.length, layer.places.length, "using it again replaces them");
+});
+
+test("a settings code gives back the same map and look, and anything else is refused", () => {
+  const options = small({ mode: "mix", mix: "fey:2,jungle:1", seed: "ëmber-9", settlements: 9, placesRoll: 3 });
+  const code = hexSettingsCode(options, { look: "ink", lines: true, numbers: true, legend: "sw", labels: false });
+  assert.match(code, /^HEX1-[A-Za-z0-9_-]+$/);
+  const read = readHexSettingsCode(code);
+  assert.deepEqual(read.options, normalizeHexOptions(options));
+  assert.deepEqual(read.look, { look: "ink", lines: true, numbers: true, legend: "sw", labels: false });
+  assert.equal(generateHexMap(read.options).layer.cells, generateHexMap(options).layer.cells);
+  assert.ok(hexSettingsCode(defaultHexOptions).length < 40, "defaults make a short code");
+  for (const bad of ["", "HEX1-", "HEX1-!!!", "HEX2-eyJ9", "HEX1-" + btoa("[1,2]"), "hello"]) assert.equal(readHexSettingsCode(bad), null, bad);
+  const odd = readHexSettingsCode("HEX1-" + btoa(JSON.stringify({ cols: 9000, "look.look": "neon", "look.numbers": "yes", wild: 1 })).replace(/=+$/, ""));
+  assert.equal(odd.options.cols, 100); assert.equal(odd.look.look, "painted"); assert.equal(odd.look.numbers, false);
 });

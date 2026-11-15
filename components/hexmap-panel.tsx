@@ -4,6 +4,7 @@ import { ArrowUp, Dices, X } from "lucide-react";
 import { biomeIds, biomes, type BiomeId } from "@/lib/hexmap/biomes";
 import { defaultHexLook, defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, randomHexSeed, readMix, writeMix, type HexBlend, type HexLook, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
 import { applyHexPreset, hexPresets, matchingHexPreset } from "@/lib/hexmap/presets";
+import { hexSettingsCode, readHexSettingsCode } from "@/lib/hexmap/code";
 import type { GeneratedMap } from "@/lib/map-generator";
 import { DrawingBackground } from "./drawing-shape";
 import "./hexmap-panel.css";
@@ -22,6 +23,13 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
   const [o, setO] = useState<HexMapOptions>(() => ({ ...defaultHexOptions, seed: randomHexSeed() }));
   const [big, setBig] = useState(false);
   const [look, setLook] = useState<HexLook>(defaultHexLook);
+  const [pasted, setPasted] = useState(""), [copied, setCopied] = useState(false);
+  const code = hexSettingsCode(o, look);
+  const paste = (text: string) => {
+    setPasted(text);
+    const read = readHexSettingsCode(text);
+    if (read) { setO(read.options); setLook(read.look); setBig(read.options.cols > 60 || read.options.rows > 45); setPasted(""); }
+  };
   const shown = useDeferredValue(o);
   const map = useMemo(() => generateHexMap(shown), [shown]);
   const set = <K extends keyof HexMapOptions>(key: K, value: HexMapOptions[K]) => setO(prev => ({ ...prev, [key]: value }));
@@ -38,7 +46,7 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
   const setMix = (next: MixEntry[]) => set("mix", writeMix(next));
   const biomeSummary = o.mode === "single" ? biomes[o.biome].name : o.mode === "climate" ? `Climate, ${varietyWord(o.variety).toLowerCase()}` : mix.map(m => biomes[m.id].name).join(", ");
 
-  const slider = (key: "temp" | "rain" | "variety" | "water" | "mountains" | "forest" | "lakes" | "wetlands" | "rivers" | "cols" | "rows", label: string, min: number, max: number, step: number, say: (v: number) => string) =>
+  const slider = (key: "temp" | "rain" | "variety" | "water" | "mountains" | "forest" | "lakes" | "wetlands" | "rivers" | "cols" | "rows" | "settlements" | "sites", label: string, min: number, max: number, step: number, say: (v: number) => string) =>
     <div className="hexmap-row"><label htmlFor={`hexmap-${key}`}>{label}</label>
       <input id={`hexmap-${key}`} type="range" min={min} max={max} step={step} value={o[key]} onChange={e => set(key, Number(e.target.value))}/>
       <output htmlFor={`hexmap-${key}`}>{say(o[key])}</output></div>;
@@ -109,6 +117,13 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
           {slider("lakes", "Lakes", 0, 1, 0.05, word)}
           {slider("wetlands", "Wetlands", 0, 1, 0.05, word)}
         </Section>
+        <Section title="Places" summary={o.settlements || o.sites ? `${o.settlements} ${o.settlements === 1 ? "settlement" : "settlements"}, ${o.sites} wild` : "None"}>
+          {slider("settlements", "Settlements", 0, HEX_LIMITS.settlements[1], 1, v => v ? String(v) : "None")}
+          <label className="creator-check"><input type="checkbox" checked={o.roads} onChange={e => set("roads", e.target.checked)}/>Roads between settlements</label>
+          {slider("sites", "Ruins & lairs", 0, HEX_LIMITS.sites[1], 1, v => v ? String(v) : "None")}
+          <label className="creator-check"><input type="checkbox" checked={o.names} onChange={e => set("names", e.target.checked)}/>Make up names</label>
+          <p className="creator-measure">The first settlement is a city, the next two towns, the rest villages. Ruins, towers, caves, shrines and lairs show only to you, never on the map players see. In Maptable every place can become a GM-only marker.</p>
+        </Section>
         <Section title="Size" summary={`${o.cols} × ${o.rows} hexes`}>
           {choice("Outline", o.outline, [["rect", "Rectangle"], ["hex", "Hexagon"], ["circle", "Circle"]], v => set("outline", v))}
           {slider("cols", "Width", HEX_LIMITS.cols[0], maxCols, 1, v => `${v} hexes`)}
@@ -122,13 +137,21 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
         <Section title="Look" summary={lookSummary(look)}>
           <HexLookFields look={look} change={part => setLook(prev => ({ ...prev, ...part }))}/>
         </Section>
+        <Section title="Settings code" summary="">
+          <div className="creator-seed"><input readOnly aria-label="Settings code" value={code} className="hexmap-code" onFocus={e => e.target.select()}/>
+            <button type="button" onClick={() => { navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {}); }}>{copied ? "Copied" : "Copy"}</button></div>
+          <input aria-label="Paste a settings code" className="hexmap-code" placeholder="Paste a code to load it" value={pasted} onChange={e => paste(e.target.value)}/>
+          {pasted.trim() && <p className="creator-error" role="alert">That isn&apos;t a hex map settings code. Codes start with HEX1-.</p>}
+          <p className="creator-measure">The code holds the seed and every setting, so a friend who pastes it gets the same map.</p>
+        </Section>
       </div>
       <div className="creator-preview hexmap-preview">
         <div className="creator-field"><span>Seed (the same seed always makes the same map)</span>
           <div className="creator-seed"><input aria-label="Seed" value={o.seed} maxLength={40} spellCheck={false} onChange={e => set("seed", e.target.value)}/>
-            <button type="button" onClick={() => set("seed", randomHexSeed())}><Dices size={15}/> Reroll</button></div></div>
+            <button type="button" onClick={() => set("seed", randomHexSeed())}><Dices size={15}/> Reroll</button>
+            {(o.settlements > 0 || o.sites > 0) && <button type="button" title="Move the places and keep the land" onClick={() => set("placesRoll", (o.placesRoll + 1) % 10000)}><Dices size={15}/> Reroll places</button>}</div></div>
         <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated hex map" data-stale={shown !== o || undefined}>
-          <DrawingBackground drawing={drawing} width={map.width} height={map.height}/>
+          <DrawingBackground drawing={drawing} width={map.width} height={map.height} secrets/>
         </svg>
         {shares.length > 0 && <div className="hexmap-share" aria-label="Biomes on this map">
           <div className="hexmap-share-bar">{shares.map(([id, n]) => <span key={id} style={{ flex: n, background: biomes[id].flat }} title={biomes[id].name}/>)}</div>
@@ -158,6 +181,7 @@ export function HexLookFields({ look, change }: { look: HexLook; change: (part: 
     <p className="creator-measure">{look.look === "painted" ? "Colour with trees, peaks and dunes drawn on." : look.look === "flat" ? "Plain colours, easy to read at a glance." : "Black and white, for printing."}</p>
     <label className="creator-check"><input type="checkbox" checked={look.lines} onChange={e => change({ lines: e.target.checked })}/>Hex outlines</label>
     <label className="creator-check"><input type="checkbox" checked={look.numbers} onChange={e => change({ numbers: e.target.checked })}/>Hex numbers (column, then row)</label>
+    <label className="creator-check"><input type="checkbox" checked={look.labels} onChange={e => change({ labels: e.target.checked })}/>Place names on the map</label>
     <label className="hexmap-select">Legend<select value={look.legend} onChange={e => change({ legend: e.target.value as HexLook["legend"] })}>
       {LEGENDS.map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select></label>
   </>;

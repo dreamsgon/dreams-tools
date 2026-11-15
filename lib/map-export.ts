@@ -1,7 +1,8 @@
 import { newToken, type MapDrawing, type PointOfInterest, type Scene, type Token } from "./model.ts";
 import { orderedShapes } from "./map-drawing.ts";
 import { customStampAsset, stampById } from "./map-stamps.ts";
-import { hexGridFor } from "./hexmap/layout.ts";
+import { hexCells, hexGridFor } from "./hexmap/layout.ts";
+import { isSettlement, placeKindNames } from "./hexmap/places.ts";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 import { cutOpenings, wallSegments } from "./map-creator.ts";
@@ -27,6 +28,16 @@ export function roomMarkers(d: MapDrawing): PointOfInterest[] {
   return roomNumbers(d).map(n => ({
     id: `${roomMarkerPrefix}${n.id}`.slice(0, 120), name: (/^\d+$/.test(n.text) ? `Room ${n.text}` : n.text).slice(0, 120),
     x: n.x, y: n.y, color: "#e3b341", hidden: true, folderId: null, targetSceneId: null, activation: "double",
+  }));
+}
+
+/** A hex map's settlements, ruins and lairs as GM-only markers on their hexes, named and noted with their kind. */
+export function hexPlaceMarkers(d: MapDrawing): PointOfInterest[] {
+  const h = d.hexes; if (!h?.places.length) return [];
+  const cells = hexCells({ cols: h.cols, rows: h.rows, orient: h.orient, outline: "rect", size: h.size });
+  return h.places.filter(p => cells[p.i]).map((p, n) => ({
+    id: `${roomMarkerPrefix}hex-${n}`, name: p.name.slice(0, 120), x: round(cells[p.i].x + h.x), y: round(cells[p.i].y + h.y),
+    color: isSettlement(p.kind) ? "#e3b341" : "#c0583f", hidden: true, folderId: null, targetSceneId: null, activation: "double", notes: placeKindNames[p.kind],
   }));
 }
 
@@ -96,7 +107,7 @@ export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
   if (options.fog) scene.fog = { enabled: true, base: true, strokes: [] };
   if (options.markers && scene.drawing) {
     const kept = (scene.pointsOfInterest ?? []).filter(p => !p.id.startsWith(roomMarkerPrefix));
-    scene.pointsOfInterest = [...kept, ...roomMarkers(scene.drawing)].slice(0, 500);
+    scene.pointsOfInterest = [...kept, ...roomMarkers(scene.drawing), ...hexPlaceMarkers(scene.drawing)].slice(0, 500);
   }
   if (options.pieces !== undefined) placePieces(scene, options.pieces, options.grid.size);
 }

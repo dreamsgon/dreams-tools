@@ -51,3 +51,6 @@
 .hexmap-mix-row button { display:grid; place-items:center; width:28px; height:28px; min-height:0; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--muted); box-shadow:none; }
 .hexmap-mix-row button:hover:not(:disabled) { background:var(--hover); color:var(--ink); }
 .hexmap-mix-row button:disabled { opacity:.35; }
+/* Settings code: the whole code in one line of small monospace text. */
+.creator-panel input.hexmap-code { min-width:0; height:32px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:11px; }
+.hexmap-preview .creator-seed { flex-wrap:wrap; }
