@@ -167,7 +167,7 @@ export function addFamily(s: Workspace, f: GeneratedFamily, where: { worldId: st
   for (const p of f.people) {
     if (p.existingId) { if (!s.entries.some(e => e.id === p.existingId)) return { error: "The character it started from is gone." }; ids.set(p.key, p.existingId); continue; }
     const id = newId(); ids.set(p.key, id);
-    entries.push({ id, worldId: where.worldId, campaignId: where.campaignId, parentId: null, title: p.name.slice(0, 160), kind: "character", body: p.note ? `${p.note}.` : "", overviewVisibility: "gm", tabs: [], character: { ...defaultCharacter(), ...(p.dead ? { status: "deceased" as const } : {}) }, updatedAt: now });
+    entries.push({ id, worldId: where.worldId, campaignId: where.campaignId, parentId: null, title: p.name.slice(0, 160), kind: "character", body: p.note ? (/[.!?…]$/.test(p.note) ? p.note : `${p.note}.`) : "", overviewVisibility: "gm", tabs: [], character: { ...defaultCharacter(), ...(p.dead ? { status: "deceased" as const } : {}) }, updatedAt: now });
   }
   let next: Workspace = { ...s, entries: [...s.entries, ...entries] };
   let houseId: string | undefined;

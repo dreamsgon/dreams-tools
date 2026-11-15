@@ -42,6 +42,8 @@ Two generators fill this in from built-in name and trait lists. Nothing is saved
   Reroll until you like it, then add every character and tie at once. New characters start GM only.
 - **Generate ties**, on the Web, takes the pages you pick (or a few at random, or an organization's members) and an amount of each group of tie, from Off to Lots. It then suggests ties that fit those pages, each with a note, skipping pairs that are already tied. You can change each suggestion's kind, note and GM-only setting, keep it through rerolls, or leave it out.
 
+In a campaign with an AI connection made with your own API key, both generators also have **Write with AI**. Add an optional steer (a tone, a theme, a hook) and it rewrites the notes from what the pages say. For a generated family it also writes a line about each new person, which becomes their page. It reads only what that connection may see: a connection kept to what players see leaves GM-only pages and ties out, and those keep their built-in notes. Ticked suggestions keep their notes unless every one is ticked, and a reroll goes back to the built-in notes. Nothing is saved until you add the result, and the tokens count against the connection's monthly limit.
+
 ## Players and AI access
 
 Player links show only material explicitly shared with players, with private notes and unrevealed map areas filtered. Anyone holding a player link can read its shared content. Replace or revoke the link to stop subsequent access. Already issued signed image URLs can remain valid for up to five minutes; downloaded copies cannot be recalled.

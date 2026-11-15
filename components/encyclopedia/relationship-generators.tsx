@@ -3,9 +3,10 @@
  * The built-in generators. Generate a family: options on the left, the family drawn on the right (new people dashed),
  * reroll until it fits, then add every character and tie at once. Generate ties: pick pages and how many ties of each
  * group, then keep, change or drop each suggestion, reroll the rest, and add them. Nothing is saved until Add.
+ * Both write their notes from built-in lists; in a campaign with the GM's own AI key, Write with AI rewrites them.
  */
-import {useMemo,useState,type ReactNode} from 'react';
-import {Check,Dices,EyeOff,Plus,Users,X} from 'lucide-react';
+import {useEffect,useMemo,useState,type ReactNode} from 'react';
+import {Check,Dices,EyeOff,Plus,Sparkles,Users,X} from 'lucide-react';
 import './ties.css';
 import './relationships.css';
 import './family-tree.css';
@@ -15,7 +16,7 @@ import {tieChoices} from '@/lib/encyclopedia/tie-edit';
 import {orgPeople} from '@/lib/encyclopedia/tie-connections';
 import {webPages,webTies} from '@/lib/encyclopedia/tie-web';
 import {familyGraph,familyTree} from '@/lib/encyclopedia/family-tree';
-import {addFamily,addSuggestions,defaultFamilyOptions,defaultTieAmounts,generateFamily,generatedLinks,nameStyleNames,nameStyles,suggestTies,tieAmountNames,tieAmounts,type FamilyOptions,type NameStyle,type Suggestion,type TieAmount} from '@/lib/encyclopedia/relationship-generators';
+import {addFamily,addSuggestions,type GeneratedFamily,defaultFamilyOptions,defaultTieAmounts,generateFamily,generatedLinks,nameStyleNames,nameStyles,suggestTies,tieAmountNames,tieAmounts,type FamilyOptions,type NameStyle,type Suggestion,type TieAmount} from '@/lib/encyclopedia/relationship-generators';
 import {ToolDialog} from './tool-dialog';
 import {Outline,TreeCanvas,type BoxInfo} from './family-tree';
 import {tieTone,useNarrow} from './connection-list';
@@ -32,6 +33,65 @@ function Pick<T extends string|number|boolean>({label,value,options,onChange}:{l
  </div>;
 }
 
+type KeyWriter={id:string;name:string;model:string};
+/** The campaign's connections made with the GM's own AI key. Reading is all these writers need. */
+function useKeyWriters(campaignId:string|null){
+ const [keys,setKeys]=useState<KeyWriter[]|null>(null);
+ useEffect(()=>{
+  if(!campaignId)return;
+  let live=true;
+  fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r=>r.ok?r.json():{connections:[]}).then((b:{connections?:{id:string;name:string;api?:{model:string}}[]})=>{
+   if(live)setKeys((b.connections??[]).flatMap(c=>c.api?[{id:c.id,name:c.name,model:c.api.model}]:[]));
+  }).catch(()=>{if(live)setKeys([]);});
+  return ()=>{live=false;};
+ },[campaignId]);
+ return campaignId?keys:null;
+}
+
+type TieRequest={brief?:string;family?:string;ties:{key:string;from:{id?:string;name:string};to:{id?:string;name:string};tie:string;gm:boolean}[];people?:{key:string;name:string;note?:string}[]};
+type Written={notes:Record<string,string>;bios:Record<string,string>;skipped:number;by:string;tokens:number};
+async function writeNotes(campaignId:string,connectionId:string,request:TieRequest):Promise<Written>{
+ const r=await fetch('/api/encyclopedia/tie-writer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId,connectionId,request})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+ if(!r.ok)throw Error(r.b.error??'Could not write the notes.');
+ return r.b as Written;
+}
+const writtenWords=(w:Written,what:string)=>`${w.by} wrote ${what} (${w.tokens.toLocaleString('en-US')} tokens).${w.skipped?` It left out ${w.skipped} tie${w.skipped===1?'':'s'} it isn’t allowed to read, which keep their built-in notes.`:''}`;
+
+/** Write with AI: a short brief, which key (when there are several), and the button. Hidden without a key. */
+function WriteWithAi({campaignId,what,disabled,run}:{campaignId:string|null;what:string;disabled?:boolean;run:(connectionId:string,brief:string)=>Promise<string>}){
+ const keys=useKeyWriters(campaignId);
+ const [id,setId]=useState(''),[brief,setBrief]=useState(''),[busy,setBusy]=useState(false),[said,setSaid]=useState('');
+ if(!keys?.length)return null;
+ const chosen=keys.find(k=>k.id===id)??keys[0];
+ const go=async()=>{setBusy(true);setSaid('');try{setSaid(await run(chosen.id,brief.trim()));}catch(e){setSaid(e instanceof Error?e.message:'Could not write the notes.');}finally{setBusy(false);}};
+ return <div className="gen-ai">
+  <span className="eyebrow">Write with AI</span>
+  <div className="gen-ai-row">
+   <input aria-label="What the AI should lean into" placeholder="Lean into… (optional: a tone, a theme, a hook)" value={brief} maxLength={500} onChange={e=>setBrief(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!busy&&!disabled){e.preventDefault();void go();}}}/>
+   {keys.length>1&&<select aria-label="Which AI" value={chosen.id} onChange={e=>setId(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} ({k.model})</option>)}</select>}
+   <button type="button" className="button small" disabled={busy||disabled} onClick={()=>void go()}><Sparkles size={13}/> {busy?'Writing…':`Write ${what}`}</button>
+  </div>
+  {said?<p className="muted gen-hint" role="status">{said}</p>:<p className="muted gen-hint">Uses {keys.length>1?'the chosen':`${chosen.name}’s`} API key and counts against its monthly limit. It reads only the pages that connection may see.</p>}
+ </div>;
+}
+
+/** What the AI is told about each new person: their own note, and who they are to the rest of the family. */
+function familyRequest(f:GeneratedFamily,types:ReturnType<typeof tieTypesOf>):TieRequest{
+ const name=new Map(f.people.map(p=>[p.key,p.name])),about=new Map<string,string[]>();
+ const say=(k:string,line:string)=>about.set(k,[...(about.get(k)??[]),line]);
+ const ties:TieRequest['ties']=[];
+ for(const t of f.ties){
+  const type=tieTypeById(types,t.typeId);
+  if(type.tree==='parent'){say(t.to,`child of ${name.get(t.from)}`);continue;}
+  if(type.tree==='partner'){say(t.from,`partner of ${name.get(t.to)}`);say(t.to,`partner of ${name.get(t.from)}`);continue;}
+  if(type.tree)continue;
+  const end=(k:string)=>{const p=f.people.find(x=>x.key===k);return {...(p?.existingId?{id:p.existingId}:{}),name:name.get(k)??''};};
+  ties.push({key:t.key,from:end(t.from),to:end(t.to),tie:type.name,gm:!!t.gm});
+ }
+ const people=f.people.filter(p=>!p.existingId).map(p=>({key:p.key,name:p.name,note:[p.note,p.dead?'died':'',...(about.get(p.key)??[])].filter(Boolean).join('; ').slice(0,400)||undefined}));
+ return {family:f.surname,ties,people};
+}
+
 function Footer({hint,children}:{hint:string;children:ReactNode}){
  return <div className="gen-foot"><p className="muted">{hint}</p><div className="button-row">{children}</div></div>;
 }
@@ -45,14 +105,18 @@ export function GenerateFamily({data,worldId,campaignId,startId,change,onClose,o
  const [o,setO]=useState<FamilyOptions>(()=>defaultFamilyOptions(newSeed())),[notice,setNotice]=useState('');
  const set=(patch:Partial<FamilyOptions>)=>setO(x=>({...x,...patch}));
  const startEntry=people.find(p=>p.id===start);
- const family=useMemo(()=>generateFamily(o,startEntry?{id:startEntry.id,title:startEntry.title}:undefined),[o,startEntry]);
+ const made=useMemo(()=>generateFamily(o,startEntry?{id:startEntry.id,title:startEntry.title}:undefined),[o,startEntry]);
+ // What the AI wrote, for this family only: a reroll or a new option goes back to the built-in notes.
+ const [written,setWritten]=useState<{for:GeneratedFamily;notes:Record<string,string>;bios:Record<string,string>}|null>(null);
+ const family=useMemo(()=>written?.for!==made?made:{...made,people:made.people.map(p=>written.bios[p.key]?{...p,note:written.bios[p.key]}:p),ties:made.ties.map(t=>written.notes[t.key]?{...t,note:written.notes[t.key]}:t)},[made,written]);
+ const bios=written?.for===made?made.people.filter(p=>written.bios[p.key]).map(p=>({key:p.key,name:p.name,text:written.bios[p.key]})):[];
  const graph=useMemo(()=>familyGraph(generatedLinks(family,types)),[family,types]);
  const tree=useMemo(()=>familyTree(graph,['p0']),[graph]);
  // The outline on a phone shows each person by name, as a page would be.
  const faces=useMemo(()=>new Map(family.people.map(p=>[p.key,{id:p.key,title:p.name} as unknown as Entry])),[family]);
  const narrow=useNarrow();
  const titles=useMemo(()=>new Map(family.people.map(p=>[p.key,p.name])),[family]);
- const info=useMemo(()=>{const m=new Map<string,BoxInfo>();for(const p of family.people){const mine=family.ties.filter(t=>t.from===p.key||t.to===p.key);m.set(p.key,{dead:!!p.dead,fresh:!p.existingId,secret:mine.length>0&&mine.every(t=>t.gm),badge:p.existingId?'Already here':mine.length>0&&mine.every(t=>t.gm)?'GM only':undefined,sub:p.note});}return m;},[family]);
+ const info=useMemo(()=>{const m=new Map<string,BoxInfo>();for(const p of made.people){const mine=family.ties.filter(t=>t.from===p.key||t.to===p.key);m.set(p.key,{dead:!!p.dead,fresh:!p.existingId,secret:mine.length>0&&mine.every(t=>t.gm),badge:p.existingId?'Already here':mine.length>0&&mine.every(t=>t.gm)?'GM only':undefined,sub:p.note});}return m;},[made,family]);
  const others=family.ties.filter(t=>!tieTypeById(types,t.typeId).tree);
  const newPeople=family.people.filter(p=>!p.existingId).length;
  const add=()=>{
@@ -80,6 +144,11 @@ export function GenerateFamily({data,worldId,campaignId,startId,change,onClose,o
     <label className="gen-field"><span className="gen-label">Marrying in</span>
      <select value={o.takeName?'take':'keep'} onChange={e=>set({takeName:e.target.value==='take'})}><option value="keep">Partners keep their own family name</option><option value="take">Partners take the family name</option></select></label>
     <label className="gen-check"><input type="checkbox" checked={o.house} onChange={e=>set({house:e.target.checked})}/><span><strong>Also make a page for the family</strong><small>An organization of type Family, with everyone born to it as members, so it gets a Family tree tab.</small></span></label>
+    <WriteWithAi campaignId={startEntry?startEntry.campaignId:campaignId} what={written?.for===made?'them again':'notes and a line for each person'} run={async(id,brief)=>{
+     const where=startEntry?startEntry.campaignId:campaignId,request={...familyRequest(made,types),...(brief?{brief}:{})};
+     const w=await writeNotes(where!,id,request);setWritten({for:made,notes:w.notes,bios:w.bios});
+     return writtenWords(w,'the notes and a line for each new person, which become their page');
+    }}/>
    </div>
    <div className="gen-preview">
     <span className="eyebrow">Preview</span>
@@ -87,6 +156,7 @@ export function GenerateFamily({data,worldId,campaignId,startId,change,onClose,o
     {narrow?<Outline tree={tree} g={graph} info={info} byId={faces} selected={null} onPick={()=>{}}/>:<TreeCanvas tree={tree} info={info} titles={titles} selected={null} players={false} whole onPick={()=>{}}/>}
     {others.length>0&&<><span className="eyebrow gen-sub">Other ties</span><ul className="gen-twists">{others.map(t=>{const type=tieTypeById(types,t.typeId);return <li key={t.key}><strong>{titleOf(t.from)}</strong> <span className={`qc-reason ${tieTone(type.group)}`}>{t.gm&&<EyeOff size={11} aria-label="GM only"/>}{type.name}</span> <strong>{titleOf(t.to)}</strong>{t.note&&<small>{t.note}</small>}</li>;})}</ul></>}
     {family.ties.some(t=>t.gm&&t.cover)&&<p className="muted gen-hint">A GM-only tie with a cover story shows players the cover instead, such as a secret child raised as a ward.</p>}
+    {bios.length>0&&<><span className="eyebrow gen-sub">New people</span><ul className="gen-twists">{bios.map(b=><li key={b.key}><strong>{b.name}</strong><small>{b.text}</small></li>)}</ul></>}
    </div>
   </div>
   {notice&&<p className="quest-fact-refused" role="status">{notice}</p>}
@@ -159,6 +229,13 @@ export function GenerateTies({data,worldId,campaignId,initial=[],change,onClose,
    </div>
   </div>
   {notice&&<p className="quest-fact-refused" role="status">{notice}</p>}
+  {list.length>0&&<WriteWithAi campaignId={campaignId} what="the notes" run={async(id,brief)=>{
+   // Ticked suggestions keep the notes the GM may have changed, unless every one is ticked.
+   const open=list.filter(x=>byId.has(x.fromId)&&byId.has(x.toId)),asked=open.some(x=>!x.keep)?open.filter(x=>!x.keep):open;
+   const w=await writeNotes(campaignId!,id,{...(brief?{brief}:{}),ties:asked.map(x=>({key:x.key,from:{id:x.fromId,name:byId.get(x.fromId)!.title},to:{id:x.toId,name:byId.get(x.toId)!.title},tie:tieTypeById(types,x.typeId).name,gm:x.gm}))});
+   setList(l=>l.map(x=>w.notes[x.key]?{...x,note:w.notes[x.key]}:x));
+   return writtenWords(w,`${Object.keys(w.notes).length} note${Object.keys(w.notes).length===1?'':'s'}`);
+  }}/>}
   <Footer hint="Each tie lands on both pages’ Connections tab. Nothing is saved until you add it.">
    <button type="button" className="button" disabled={picked.length<2} onClick={()=>setList(make(picked,amounts,kept()))}><Dices size={15}/> Reroll the rest</button>
    <button type="button" className="button" onClick={onClose}>Cancel</button>
