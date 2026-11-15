@@ -108,3 +108,7 @@ button.ft-rel-label:hover{text-decoration:underline}
 .gen-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
 .gen-foot p{margin:0;font-size:12.5px}
 @media (max-width:860px){.gen-body{grid-template-columns:1fr}}
+.gen-ai{display:flex;flex-direction:column;gap:6px;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.gen-ai-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.gen-ai-row input{flex:1 1 220px;min-width:0}
+.gen-ai-row select{width:auto;max-width:100%}
