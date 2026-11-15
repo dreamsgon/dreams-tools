@@ -1,6 +1,7 @@
 import { biomeIds, biomes, hexCode, OUTSIDE, type BiomeId, type TerrainId } from "./biomes.ts";
 import { fittingHexSize, hexCells, hexDistance, hexMapSize, hexNeighbours, type HexOrient, type HexOutline } from "./layout.ts";
 import { clamp, hashText, layeredNoise, quantile, ranks, seededRandom } from "./noise.ts";
+import { placeHexPlaces, type HexPlace } from "./places.ts";
 
 /**
  * The hex map generator. Land and sea come from the kind of land chosen, mountains follow
@@ -78,25 +79,30 @@ export type HexMapOptions = {
   outline: HexOutline; cols: number; rows: number; orient: HexOrient;
   /** Miles across one hex, flat side to flat side. */
   miles: number;
+  /** How many settlements (0 to 12) and ruins and lairs (0 to 10), roads between the settlements, made-up names. */
+  settlements: number; sites: number; roads: boolean; names: boolean;
+  /** Reroll places: a new placing of the same places on the same land. */
+  placesRoll: number;
 };
-export const HEX_LIMITS = { cols: [10, 100], rows: [8, 80], rivers: [0, 12] } as const;
+export const HEX_LIMITS = { cols: [10, 100], rows: [8, 80], rivers: [0, 12], settlements: [0, 12], sites: [0, 10] } as const;
 export const defaultHexOptions: HexMapOptions = {
   seed: "ember-42", mode: "climate", biome: "temperate", mix: "temperate:3,boreal:2,swamp:1", mixLayout: "patches",
   biomeSize: 1, blend: "soft", smart: true, wonders: 1, temp: 0, rain: 0, variety: 0.65, latitude: true,
   land: "mainland", coast: "se", joins: "s", water: 0.5, shallows: -1,
   mountains: 0.5, relief: "rolling", forest: 0.5, rivers: 4, lakes: 0.35, wetlands: 0.4,
   outline: "rect", cols: 35, rows: 25, orient: "flat", miles: 6,
+  settlements: 6, sites: 4, roads: true, names: true, placesRoll: 0,
 };
 
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => allowed.includes(value as T) ? value as T : fallback;
 const num = (value: unknown, lo: number, hi: number, fallback: number) => typeof value === "number" && Number.isFinite(value) ? clamp(value, lo, hi) : fallback;
 const whole = (value: unknown, lo: number, hi: number, fallback: number) => Math.round(num(value, lo, hi, fallback));
 /**
- * Maps saved before custom mixes have none of the mixing options. They are filled in with what
- * the generator did then (no blending, no middle biomes, no wonders), so regenerating an older
- * map from its options still makes the same map.
+ * Maps saved by earlier versions lack the newer options. They are filled in with what the
+ * generator did then (no blending, no middle biomes, no wonders, no places), so regenerating an
+ * older map from its options still makes the same map.
  */
-const BEFORE_MIXING = { blend: "sharp", smart: false, wonders: 0 } as const;
+const OLDER_MAPS = { blend: "sharp", smart: false, wonders: 0, settlements: 0, sites: 0 } as const;
 /** Options read back from a saved map (or anything else), with every value checked and missing ones filled in. */
 export function normalizeHexOptions(raw: unknown): HexMapOptions {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>, d = defaultHexOptions;
@@ -107,9 +113,9 @@ export function normalizeHexOptions(raw: unknown): HexMapOptions {
     biome: pick(o.biome, biomeIds, d.biome),
     mix: mix || d.mix, mixLayout: pick(o.mixLayout, mixLayouts.map(l => l.id), d.mixLayout),
     biomeSize: whole(o.biomeSize, 0, 3, d.biomeSize),
-    blend: pick(o.blend, ["sharp", "soft", "wide"] as const, BEFORE_MIXING.blend),
-    smart: typeof o.smart === "boolean" ? o.smart : BEFORE_MIXING.smart,
-    wonders: whole(o.wonders, 0, 3, BEFORE_MIXING.wonders),
+    blend: pick(o.blend, ["sharp", "soft", "wide"] as const, OLDER_MAPS.blend),
+    smart: typeof o.smart === "boolean" ? o.smart : OLDER_MAPS.smart,
+    wonders: whole(o.wonders, 0, 3, OLDER_MAPS.wonders),
     temp: num(o.temp, -1, 1, d.temp), rain: num(o.rain, -1, 1, d.rain), variety: num(o.variety, 0, 1, d.variety),
     latitude: typeof o.latitude === "boolean" ? o.latitude : d.latitude,
     land: pick(o.land, hexLands.map(l => l.id), d.land),
@@ -122,6 +128,9 @@ export function normalizeHexOptions(raw: unknown): HexMapOptions {
     outline: pick(o.outline, ["rect", "hex", "circle"] as const, d.outline),
     cols: whole(o.cols, HEX_LIMITS.cols[0], HEX_LIMITS.cols[1], d.cols), rows: whole(o.rows, HEX_LIMITS.rows[0], HEX_LIMITS.rows[1], d.rows),
     orient: pick(o.orient, ["flat", "pointy"] as const, d.orient), miles: num(o.miles, 0.1, 1000, d.miles),
+    settlements: whole(o.settlements, 0, HEX_LIMITS.settlements[1], OLDER_MAPS.settlements), sites: whole(o.sites, 0, HEX_LIMITS.sites[1], OLDER_MAPS.sites),
+    roads: typeof o.roads === "boolean" ? o.roads : d.roads, names: typeof o.names === "boolean" ? o.names : d.names,
+    placesRoll: whole(o.placesRoll, 0, 9999, d.placesRoll),
   };
 }
 
@@ -132,16 +141,20 @@ export type HexLayer = {
   cells: string;
   /** Each river as the hexes it runs through, from its source to the water it reaches. */
   rivers: number[][];
+  /** Settlements, ruins and lairs, by hex. Ruins and lairs are GM-only: they are never drawn into the map's picture. */
+  places: HexPlace[];
+  /** Each road as the hexes it runs through, between two settlements. */
+  roads: number[][];
   /** The options it was made with, so it can be made again. */
   options: Record<string, string | number | boolean>;
 } & HexLook;
 /**
  * How a hex map is drawn: Painted (colour and symbols), Flat colours or black and white Ink;
- * hex outlines, hex numbers (column then row, as in "0412") and a legend in one corner.
+ * hex outlines, hex numbers (column then row, as in "0412"), a legend in one corner and settlement names.
  * Kept apart from the options, so changing the look never changes the map.
  */
-export type HexLook = { look: "painted" | "flat" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se" };
-export const defaultHexLook: HexLook = { look: "painted", lines: true, numbers: false, legend: "none" };
+export type HexLook = { look: "painted" | "flat" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se"; labels: boolean };
+export const defaultHexLook: HexLook = { look: "painted", lines: true, numbers: false, legend: "none", labels: true };
 export type GeneratedHexMap = { layer: HexLayer; width: number; height: number; landShare: Partial<Record<BiomeId, number>> };
 
 /** Hexes are generated at a fixed size, so the same options shape the same land at any drawing size. */
@@ -372,6 +385,8 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
     }
   }
 
+  const { places, roads } = placeHexPlaces({ seed: o.seed, roll: o.placesRoll, settlements: o.settlements, sites: o.sites, roads: o.roads, names: o.names, cells, nb, land: land.filter(i => !water[i]), water, onRiver, terrain, biome });
+
   let code = "";
   for (const h of cells) code += h.inside ? hexCode(biome[h.i], terrain[h.i]) : OUTSIDE;
   const counts: Partial<Record<BiomeId, number>> = {}, landCount = inside.filter(i => !water[i]).length || 1;
@@ -379,7 +394,7 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   const landShare = Object.fromEntries(Object.entries(counts).map(([b, n]) => [b, n! / landCount])) as Partial<Record<BiomeId, number>>;
   const R = size ?? fittingHexSize(o.cols, o.rows, o.orient), drawn = hexMapSize({ ...shape, size: R });
   return {
-    layer: { ...defaultHexLook, x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, options: { ...o } },
+    layer: { ...defaultHexLook, x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, places, roads, options: { ...o } },
     width: Math.ceil(drawn.width), height: Math.ceil(drawn.height), landShare,
   };
 }

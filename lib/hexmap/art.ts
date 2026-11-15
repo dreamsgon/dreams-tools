@@ -2,6 +2,7 @@ import type { DrawOp } from "../map-style.ts";
 import { biomes, isWaterTerrain, readHex, terrainNames, type Biome, type BiomeId, type TerrainId } from "./biomes.ts";
 import { hexCells, hexMapSize, hexOutline, round, type HexOrient } from "./layout.ts";
 import { defaultHexLook, type HexLayer, type HexLook } from "./generate.ts";
+import { isSettlement, placeKindNames, type HexPlace, type HexPlaceKind } from "./places.ts";
 
 /**
  * Draws a hex map as a short list of paths, grouped by colour, so the Map Creator (SVG) and
@@ -10,7 +11,8 @@ import { defaultHexLook, type HexLayer, type HexLook } from "./generate.ts";
  * for printing), with optional hex numbers and a legend.
  */
 type Role = "main" | "dark" | "trunk" | "snow" | "lava" | "light" | "gold";
-type Part = { d: string; role: Role; stroke?: number };
+/** A symbol's piece: filled (or stroked, `stroke` wide) in its role's colour, with an optional `edge` around a fill. */
+type Part = { d: string; role: Role; stroke?: number; edge?: { role: Role; width: number } };
 /** A circle as four curves, so it can be moved and scaled like any other path. */
 function circle(cx: number, cy: number, r: number, ry = r) {
   const k = 0.5523;
@@ -42,6 +44,15 @@ const SYMBOLS: Record<string, Part[]> = {
   blight: [{ d: circle(-2, -0.6, 1.1) + circle(1.4, 1.2, 0.8) + circle(2, -1.8, 0.55), role: "main" }],
   spark: [{ d: "M0 -1.8L0.4 -0.4L1.8 0L0.4 0.4L0 1.8L-0.4 0.4L-1.8 0L-0.4 -0.4Z" + circle(-2.6, 1.4, 0.4), role: "gold" }],
   wave: [{ d: "M-2.4 0Q-1.2 -1 0 0Q1.2 1 2.4 0", role: "light", stroke: 0.45 }],
+  // Places: "main" is the ink, "light" the paper around it.
+  city: [{ d: circle(0, 0, 4.6), role: "light", edge: { role: "main", width: 1 } }, { d: "M-2.6 2L-2.6 -1.2L-1.6 -1.2L-1.6 -0.2L-0.5 -0.2L-0.5 -2.4L0.5 -2.4L0.5 -0.2L1.6 -0.2L1.6 -1.2L2.6 -1.2L2.6 2Z", role: "main" }],
+  town: [{ d: circle(0, 0, 3.6), role: "light", edge: { role: "main", width: 1 } }, { d: circle(0, 0, 1.6), role: "main" }],
+  village: [{ d: circle(0, 0, 2.6), role: "main", edge: { role: "light", width: 0.9 } }],
+  ruin: [{ d: "M-3 2.6L-3 -1.2Q-3 -3.4 0 -3.4Q1.6 -3.4 2.4 -2.4L1.2 -1.4L2.4 -0.6L1.6 0.4L1.6 2.6L0.6 2.6L0.6 -0.8Q0.6 -1.8 -0.6 -1.8Q-1.8 -1.8 -1.8 -0.8L-1.8 2.6Z", role: "main", edge: { role: "light", width: 0.6 } }],
+  tower: [{ d: "M-1.6 3L-1.6 -1.8L-2.2 -1.8L-2.2 -3.6L-1.2 -3.6L-1.2 -2.8L-0.4 -2.8L-0.4 -3.6L0.4 -3.6L0.4 -2.8L1.2 -2.8L1.2 -3.6L2.2 -3.6L2.2 -1.8L1.6 -1.8L1.6 3Z", role: "main", edge: { role: "light", width: 0.6 } }],
+  cave: [{ d: "M-3.4 2.4Q-3.2 -3 0 -3Q3.2 -3 3.4 2.4Z", role: "main", edge: { role: "light", width: 0.6 } }, { d: "M-1.4 2.4Q-1.4 -0.6 0 -0.6Q1.4 -0.6 1.4 2.4Z", role: "light" }],
+  shrine: [{ d: "M0 -3.6L3.2 2.6L-3.2 2.6Z", role: "main", edge: { role: "light", width: 0.6 } }, { d: circle(0, 0.8, 0.9), role: "light" }],
+  lair: [{ d: circle(0, 0, 3.2), role: "lava", edge: { role: "light", width: 0.7 } }, { d: "M-1.6 -1.2L-0.6 1.6M0 -1.6L0 1.8M1.6 -1.2L0.6 1.6", role: "light", stroke: 0.6 }],
 };
 
 /** Moves and scales a path made of absolute M, L, Q and C commands. */
@@ -101,6 +112,7 @@ class Painter {
         continue;
       }
       if (part.stroke) this.add(d, { stroke: colour, width: width(part.stroke) });
+      else if (part.edge && colours[part.edge.role]) this.add(d, { fill: colour, stroke: colours[part.edge.role], width: width(part.edge.width) });
       else this.add(d, { fill: colour });
     }
   }
@@ -116,7 +128,7 @@ function smoothPath(points: { x: number; y: number }[]) {
   return d + `L${round(last.x)} ${round(last.y)}`;
 }
 
-type Drawable = Pick<HexLayer, "x" | "y" | "size" | "cols" | "rows" | "orient" | "cells" | "rivers" | "miles"> & Partial<HexLook>;
+type Drawable = Pick<HexLayer, "x" | "y" | "size" | "cols" | "rows" | "orient" | "cells" | "rivers" | "miles"> & Partial<HexLook> & Partial<Pick<HexLayer, "places" | "roads">>;
 const cache = new WeakMap<Drawable, DrawOp[]>();
 // The Map Creator copies the drawing on every change, so recent layers are also kept by what they hold.
 const recent: { key: string; ops: DrawOp[] }[] = [];
@@ -124,14 +136,14 @@ const recent: { key: string; ops: DrawOp[] }[] = [];
 export function hexLayerOps(layer: Drawable): DrawOp[] {
   const hit = cache.get(layer); if (hit) return hit;
   const look = lookOf(layer);
-  const key = [layer.x, layer.y, layer.size, layer.cols, layer.rows, layer.orient, layer.miles, look.look, look.lines, look.numbers, look.legend, layer.cells, JSON.stringify(layer.rivers)].join("|");
+  const key = [layer.x, layer.y, layer.size, layer.cols, layer.rows, layer.orient, layer.miles, look.look, look.lines, look.numbers, look.legend, look.labels, layer.cells, JSON.stringify([layer.rivers, layer.roads, layer.places])].join("|");
   const kept = recent.find(r => r.key === key);
   if (kept) { cache.set(layer, kept.ops); return kept.ops; }
   const ops = buildOps(layer, look);
   cache.set(layer, ops); recent.unshift({ key, ops }); recent.length = Math.min(recent.length, 4);
   return ops;
 }
-const lookOf = (layer: Partial<HexLook>): HexLook => ({ look: layer.look ?? defaultHexLook.look, lines: layer.lines ?? defaultHexLook.lines, numbers: layer.numbers ?? defaultHexLook.numbers, legend: layer.legend ?? defaultHexLook.legend });
+const lookOf = (layer: Partial<HexLook>): HexLook => ({ look: layer.look ?? defaultHexLook.look, lines: layer.lines ?? defaultHexLook.lines, numbers: layer.numbers ?? defaultHexLook.numbers, legend: layer.legend ?? defaultHexLook.legend, labels: layer.labels ?? defaultHexLook.labels });
 
 /** The symbols on one hex, in the Painted or Ink look. */
 function hexMarks(marks: Painter, b: BiomeId, t: TerrainId, x: number, y: number, k: number, i: number, ink: boolean) {
@@ -188,15 +200,44 @@ function buildOps(layer: Drawable, look: HexLook): DrawOp[] {
     const source = readHex(layer.cells, river[0]), cold = !!source && biomes[source.biome].heat < 1.2;
     ops.push({ d: smoothPath(points), stroke: ink ? INK.river : cold ? WATER.coldRiver : WATER.river, width: round((ink ? 1.4 : 2.2) * k * 10) / 10, opacity: 0.95 });
   }
+  for (const road of layer.roads ?? []) {
+    const points = road.filter(i => i >= 0 && i < cells.length).map(i => ({ x: cells[i].x + layer.x, y: cells[i].y + layer.y }));
+    if (points.length >= 2) ops.push({ d: smoothPath(points), stroke: ink ? INK.ink : ROAD, width: round(1.1 * k * 10) / 10, opacity: 0.85, dash: [round(2.6 * k), round(1.8 * k)] });
+  }
   ops.push(...numbers);
+  // Settlements are on the map for everyone; ruins and lairs are GM-only, see `hexSiteOps`.
+  ops.push(...placeOps(layer, cells, (layer.places ?? []).filter(p => isSettlement(p.kind)), look.labels));
   if (look.legend !== "none") ops.push(...legendOps(layer, look, cells.length));
   return ops;
 }
 
-/** What a legend row shows: a coloured hex, a symbol on a hex, or a river line. */
-type LegendRow = { label: string; fill?: string; symbol?: { biome: BiomeId; terrain: TerrainId }; river?: boolean };
+const ROAD = "#7a5a3a", PLACE_COLOURS = { main: "#2b2620", light: "#fbf7ee", lava: "#7a1f1a" };
+const LABEL_SIZE: Record<HexPlaceKind, number> = { city: 7, town: 6, village: 5, ruin: 4.6, tower: 4.6, cave: 4.6, shrine: 4.6, lair: 4.6 };
+/** Place symbols and, with `labels`, their names above them. */
+function placeOps(layer: Drawable, cells: { x: number; y: number }[], places: HexPlace[], labels: boolean): DrawOp[] {
+  const k = layer.size / 10, marks = new Painter(k), names: DrawOp[] = [];
+  for (const p of places) {
+    const c = cells[p.i]; if (!c) continue;
+    const x = c.x + layer.x, y = c.y + layer.y, size = LABEL_SIZE[p.kind] * k;
+    marks.symbol(p.kind, x, y, 1.15, PLACE_COLOURS);
+    if (labels) names.push({ d: "", fill: "#221d18", text: { value: p.name, x: round(x), y: round(y - 5.6 * k - size * 0.5), size: round(size), weight: p.kind === "city" ? 600 : 500, serif: true, italic: !isSettlement(p.kind), halo: "#fbf7eecc" } });
+  }
+  return [...marks.ops(), ...names];
+}
+/** The GM-only places (ruins, towers, caves, shrines and lairs), drawn over the map in the Map Creator but never into its picture. */
+const siteCache = new WeakMap<Drawable, DrawOp[]>();
+export function hexSiteOps(layer: Drawable): DrawOp[] {
+  const hit = siteCache.get(layer); if (hit) return hit;
+  const sites = (layer.places ?? []).filter(p => !isSettlement(p.kind));
+  const ops = sites.length ? placeOps(layer, hexCells({ cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: "rect", size: layer.size }), sites, lookOf(layer).labels) : [];
+  siteCache.set(layer, ops);
+  return ops;
+}
+
+/** What a legend row shows: a coloured hex, a symbol on a hex, a place's symbol, or a river or road line. */
+type LegendRow = { label: string; fill?: string; symbol?: { biome: BiomeId; terrain: TerrainId }; river?: boolean; road?: boolean; place?: HexPlaceKind };
 /** The rows of a hex map's legend, from what is on the map, for a look. */
-export function hexLegendRows(layer: Pick<HexLayer, "cells" | "rivers">, look: HexLook["look"], count = layer.cells.length / 2): LegendRow[] {
+export function hexLegendRows(layer: Pick<HexLayer, "cells" | "rivers"> & Partial<Pick<HexLayer, "places" | "roads">>, look: HexLook["look"], count = layer.cells.length / 2): LegendRow[] {
   const biomeCount = new Map<BiomeId, number>(), terrainBiome = new Map<TerrainId, Map<BiomeId, number>>();
   for (let i = 0; i < count; i++) {
     const hex = readHex(layer.cells, i); if (!hex) continue;
@@ -217,6 +258,8 @@ export function hexLegendRows(layer: Pick<HexLayer, "cells" | "rivers">, look: H
   const sea = terrainBiome.has("deep") || terrainBiome.has("shallow"), lake = terrainBiome.has("lake");
   if (sea || lake) rows.push({ label: sea && lake ? "Sea and lakes" : sea ? "Sea" : "Lakes", fill: hexFill("temperate", sea ? "shallow" : "lake", 1, look) });
   if (layer.rivers.length) rows.push({ label: "River", river: true });
+  for (const kind of ["city", "town", "village"] as const) if (layer.places?.some(p => p.kind === kind)) rows.push({ label: placeKindNames[kind], place: kind });
+  if (layer.roads?.length) rows.push({ label: "Road", road: true });
   return rows;
 }
 
@@ -226,25 +269,27 @@ function legendOps(layer: Drawable, look: HexLook, count: number): DrawOp[] {
   const ink = look.look === "ink", { width: W, height: H } = hexMapSize(layer);
   const title = `One hex: ${+layer.miles.toFixed(1)} ${layer.miles === 1 ? "mile" : "miles"}`;
   const chars = Math.max(title.length * 1.08, ...rows.map(r => r.label.length));
-  // Sized in "legend units": a little bigger than a hex's symbols, but never more than 40% of the map's width or 80% of its height.
+  // Sized in "legend units": a little bigger than a hex's symbols, but never more than 35% of the map's width or 60% of its height.
   const boxW = 7 + 9 + chars * 2.9, boxH = 8 + 9 + rows.length * 9;
-  const u = Math.min(layer.size / 10 * 1.6, W * 0.4 / boxW, H * 0.8 / boxH), m = layer.size * 0.35;
+  const u = Math.min(layer.size / 10 * 1.3, W * 0.35 / boxW, H * 0.6 / boxH), m = layer.size * 0.35;
   const left = layer.x + (look.legend === "nw" || look.legend === "sw" ? m : W - m - boxW * u), top = layer.y + (look.legend === "nw" || look.legend === "ne" ? m : H - m - boxH * u);
   const at = (n: number) => Math.round(n * 10) / 10;
   const ops: DrawOp[] = [
     { d: `M${at(left)} ${at(top)}h${at(boxW * u)}v${at(boxH * u)}h${at(-boxW * u)}Z`, fill: ink ? INK.paper : "#fbf8f0", stroke: ink ? INK.ink : "#5a4632", width: at(0.4 * u), opacity: 0.95 },
     { d: "", fill: ink ? INK.ink : "#2b241d", text: { value: title, x: at(left + 4 * u), y: at(top + 8 * u), size: at(4.6 * u), align: "start", weight: 600 } },
   ];
-  const icons = new Painter(u * 0.5, ink), swatches = new Painter(u);
+  const icons = new Painter(u * 0.5, ink), swatches = new Painter(u), places = new Painter(u);
   rows.forEach((row, n) => {
     const cx = left + 8.5 * u, cy = top + (17.5 + n * 9) * u;
-    if (row.river) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy + 1.5 * u)}Q${at(cx - 2 * u)} ${at(cy - 2 * u)} ${at(cx)} ${at(cy)}T${at(cx + 4 * u)} ${at(cy - 1.5 * u)}`, stroke: ink ? INK.river : WATER.river, width: at((ink ? 1.4 : 2.2) * u * 0.8) });
+    if (row.place) places.symbol(row.place, cx, cy, 1, PLACE_COLOURS);
+    else if (row.road) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy)}L${at(cx + 4 * u)} ${at(cy)}`, stroke: ink ? INK.ink : ROAD, width: at(1.1 * u * 0.8), dash: [at(2 * u), at(1.4 * u)] });
+    else if (row.river) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy + 1.5 * u)}Q${at(cx - 2 * u)} ${at(cy - 2 * u)} ${at(cx)} ${at(cy)}T${at(cx + 4 * u)} ${at(cy - 1.5 * u)}`, stroke: ink ? INK.river : WATER.river, width: at((ink ? 1.4 : 2.2) * u * 0.8) });
     else {
       swatches.add(hexOutline(cx, cy, 4 * u, "flat"), { fill: row.fill, stroke: ink ? INK.ink : "#00000040", width: at(0.3 * u) });
       if (row.symbol) hexMarks(icons, row.symbol.biome, row.symbol.terrain, cx, cy - 0.4 * u, u * 0.5, 7, ink);
     }
     ops.push({ d: "", fill: ink ? INK.ink : "#2b241d", text: { value: row.label, x: at(left + 15 * u), y: at(cy), size: at(4.2 * u), align: "start", weight: 500 } });
   });
-  ops.splice(2, 0, ...swatches.ops(), ...icons.ops());
+  ops.splice(2, 0, ...swatches.ops(), ...icons.ops(), ...places.ops());
   return ops;
 }

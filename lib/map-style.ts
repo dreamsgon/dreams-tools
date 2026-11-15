@@ -41,7 +41,9 @@ export function applyMapStyle(d: MapDrawing, next: MapStyle, background: string 
 }
 
 /** One thing to draw: a path filled or stroked, maybe clipped to the inside of a room. */
-export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; image?: { assetId: string; w: number; h: number }; text?: { value: string; x: number; y: number; size: number; align?: "start" | "middle"; weight?: number } };
+/** The fonts for text in drawings: Inter, or a serif for place names on hex maps. */
+export const textFonts = { sans: "Inter, system-ui, sans-serif", serif: "'Source Serif 4', Georgia, 'Times New Roman', serif" };
+export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; dash?: number[]; matrix?: [number, number, number, number, number, number]; image?: { assetId: string; w: number; h: number }; text?: { value: string; x: number; y: number; size: number; align?: "start" | "middle"; weight?: number; serif?: boolean; italic?: boolean; halo?: string } };
 
 const ring = (pts: Point[]) => `M ${pts.map(p => `${round(p.x)} ${round(p.y)}`).join(" L ")} Z`;
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -216,13 +218,16 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp, images?: StampImages)
     ctx.restore(); return;
   }
   if (op.text) {
-    ctx.fillStyle = op.fill ?? "#000000"; ctx.font = `${op.text.weight ?? 600} ${op.text.size}px Inter, system-ui, sans-serif`;
-    ctx.textAlign = op.text.align === "start" ? "left" : "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
+    const t = op.text;
+    ctx.font = `${t.italic ? "italic " : ""}${t.weight ?? 600} ${t.size}px ${t.serif ? textFonts.serif : textFonts.sans}`;
+    ctx.textAlign = t.align === "start" ? "left" : "center"; ctx.textBaseline = "middle";
+    if (t.halo) { ctx.strokeStyle = t.halo; ctx.lineWidth = t.size * 0.28; ctx.lineJoin = "round"; ctx.strokeText(t.value, t.x, t.y); }
+    ctx.fillStyle = op.fill ?? "#000000"; ctx.fillText(t.value, t.x, t.y);
     ctx.restore(); return;
   }
   const path = pathOf(op);
   if (op.fill) { ctx.fillStyle = op.fill; ctx.fill(path); }
-  if (op.stroke) { ctx.lineCap = op.cap ?? "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.stroke; ctx.lineWidth = op.width ?? 1; ctx.stroke(path); }
+  if (op.stroke) { ctx.lineCap = op.cap ?? "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.stroke; ctx.lineWidth = op.width ?? 1; if (op.dash) ctx.setLineDash(op.dash); ctx.stroke(path); }
   ctx.restore();
 }
 /** Draws a map drawing onto a canvas, as Maptable shows it. Shapes in `skip` (stamps that are pieces on the table) are left out. */

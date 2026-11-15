@@ -207,8 +207,13 @@ export const hexLayerSchema = z.object({
   lines: z.boolean().default(true),
   numbers: z.boolean().default(false),
   legend: z.enum(["none", "nw", "ne", "sw", "se"]).default("none"),
+  labels: z.boolean().default(true),
+  // Settlements, ruins and lairs by hex (ruins and lairs are GM-only), and roads as lists of hexes.
+  places: z.array(z.object({ i: z.number().int().min(0).max(7999), kind: z.enum(["city", "town", "village", "ruin", "tower", "cave", "shrine", "lair"]), name: z.string().trim().min(1).max(60) })).max(40).default([]),
+  roads: z.array(z.array(z.number().int().min(0).max(7999)).min(2).max(400)).max(40).default([]),
 }).refine(h => h.cells.length === h.cols * h.rows * 2, "Hex cells must match the hex map's size")
-  .refine(h => h.rivers.every(r => r.every(i => i < h.cols * h.rows)), "Rivers must stay on the hex map");
+  .refine(h => h.rivers.every(r => r.every(i => i < h.cols * h.rows)), "Rivers must stay on the hex map")
+  .refine(h => h.roads.every(r => r.every(i => i < h.cols * h.rows)) && h.places.every(p => p.i < h.cols * h.rows), "Roads and places must stay on the hex map");
 export type HexLayerData = z.infer<typeof hexLayerSchema>;
 export const mapDrawingSchema = z.object({
   background: color,
