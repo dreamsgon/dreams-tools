@@ -1,8 +1,9 @@
 "use client";
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
-import { Dices } from "lucide-react";
+import { ArrowUp, Dices, X } from "lucide-react";
 import { biomeIds, biomes, type BiomeId } from "@/lib/hexmap/biomes";
-import { defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, randomHexSeed, type HexMapOptions, type HexRelief, type Side } from "@/lib/hexmap/generate";
+import { defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, randomHexSeed, readMix, writeMix, type HexBlend, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
+import { applyHexPreset, hexPresets, matchingHexPreset } from "@/lib/hexmap/presets";
 import type { GeneratedMap } from "@/lib/map-generator";
 import { DrawingBackground } from "./drawing-shape";
 import "./hexmap-panel.css";
@@ -14,6 +15,7 @@ const tempWord = (v: number) => ["Freezing", "Cold", "Cool", "Mild", "Warm", "Ho
 const rainWord = (v: number) => ["Arid", "Dry", "Dryish", "Average", "Damp", "Wet", "Soaked"][Math.round((v + 1) * 3)];
 const varietyWord = (v: number) => v < 0.2 ? "Narrow" : v < 0.45 ? "Some" : v < 0.75 ? "Wide" : "Every climate";
 const SIDES: [Side, string][] = [["n", "North"], ["s", "South"], ["w", "West"], ["e", "East"]];
+const BiomeIcon = ({ id }: { id: BiomeId }) => <svg viewBox="-11 -10 22 20" aria-hidden="true"><path d="M10 0L5 8.7L-5 8.7L-10 0L-5 -8.7L5 -8.7Z" fill={biomes[id].flat}/><path d="M0 -6L4 2L-4 2Z" fill={biomes[id].tree}/></svg>;
 
 /** Makes a hex map from a seed: the Hex map tab of Start a new map. */
 export default function HexMapPanel({ close, start }: { close: () => void; start: (map: GeneratedMap) => void }) {
@@ -31,6 +33,9 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
   const across = o.orient === "flat" ? (o.cols - 1) * 0.75 * 2 / Math.sqrt(3) + 1 : o.cols + 0.5;
   const down = o.orient === "flat" ? o.rows + 0.5 : (o.rows - 1) * 0.75 * 2 / Math.sqrt(3) + 1;
   const shares = Object.entries(map.landShare).sort((a, b) => b[1] - a[1]) as [BiomeId, number][];
+  const preset = matchingHexPreset(o), mix = readMix(o.mix), mixTotal = mix.reduce((a, m) => a + m.w, 0) || 1;
+  const setMix = (next: MixEntry[]) => set("mix", writeMix(next));
+  const biomeSummary = o.mode === "single" ? biomes[o.biome].name : o.mode === "climate" ? `Climate, ${varietyWord(o.variety).toLowerCase()}` : mix.map(m => biomes[m.id].name).join(", ");
 
   const slider = (key: "temp" | "rain" | "variety" | "water" | "mountains" | "forest" | "lakes" | "wetlands" | "rivers" | "cols" | "rows", label: string, min: number, max: number, step: number, say: (v: number) => string) =>
     <div className="hexmap-row"><label htmlFor={`hexmap-${key}`}>{label}</label>
@@ -43,17 +48,47 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
   return <>
     <div className="creator-dialog-body hexmap-body">
       <div className="hexmap-settings">
-        <Section title="Biomes" summary={o.mode === "single" ? biomes[o.biome].name : `Climate, ${varietyWord(o.variety).toLowerCase()}`} open>
-          {choice("How biomes are chosen", o.mode, [["single", "One biome"], ["climate", "Climate"]], v => set("mode", v))}
-          {o.mode === "single" ? <div className="hexmap-biomes" role="group" aria-label="Biome">
+        <Section title="Presets" summary={preset?.name ?? "Your own"} open>
+          <div className="hexmap-presets" role="group" aria-label="Presets">
+            {hexPresets.map(p => <button key={p.id} type="button" title={p.hint} aria-pressed={preset?.id === p.id} onClick={() => setO(applyHexPreset(o, p))}>{p.name}</button>)}
+          </div>
+          <p className="creator-measure">A preset fills in every setting below except the size. Change anything and it becomes your own.</p>
+        </Section>
+        <Section title="Biomes" summary={biomeSummary} open>
+          {choice<HexMode>("How biomes are chosen", o.mode, [["single", "One biome"], ["climate", "Climate"], ["mix", "Custom mix"]], v => set("mode", v))}
+          {o.mode === "single" && <div className="hexmap-biomes" role="group" aria-label="Biome">
             {biomeIds.map(id => <button key={id} type="button" aria-pressed={o.biome === id} title={biomes[id].hint} onClick={() => set("biome", id)}>
-              <svg viewBox="-11 -10 22 20" aria-hidden="true"><path d="M10 0L5 8.7L-5 8.7L-10 0L-5 -8.7L5 -8.7Z" fill={biomes[id].flat}/><path d="M0 -6L4 2L-4 2Z" fill={biomes[id].tree}/></svg>{biomes[id].name}</button>)}
-          </div> : <>
+              <BiomeIcon id={id}/>{biomes[id].name}</button>)}
+          </div>}
+          {o.mode === "climate" && <>
             <p className="creator-measure">Hidden temperature and rainfall maps pick each hex&apos;s biome, so cold forest turns to tundra and wet lowland to swamp.</p>
             {slider("temp", "Temperature", -1, 1, 1 / 3, tempWord)}
             {slider("rain", "Rainfall", -1, 1, 1 / 3, rainWord)}
             {slider("variety", "Variety", 0, 1, 0.05, varietyWord)}
             <label className="creator-check"><input type="checkbox" checked={o.latitude} onChange={e => set("latitude", e.target.checked)}/>Colder to the north, warmer to the south</label>
+          </>}
+          {o.mode === "mix" && <>
+            <div className="hexmap-mix" role="group" aria-label="Biomes in the mix">
+              {mix.map((m, k) => <div key={m.id} className="hexmap-mix-row">
+                <BiomeIcon id={m.id}/>
+                <span>{biomes[m.id].name}<small>{Math.round(m.w / mixTotal * 100)}%</small></span>
+                <input type="range" min={MIX_WEIGHT[0]} max={MIX_WEIGHT[1]} step={1} value={m.w} aria-label={`${biomes[m.id].name} share`} onChange={e => setMix(mix.map((x, j) => j === k ? { ...x, w: Number(e.target.value) } : x))}/>
+                <button type="button" aria-label={`Move ${biomes[m.id].name} up`} title="Move up" disabled={k === 0} onClick={() => setMix([...mix.slice(0, k - 1), m, mix[k - 1], ...mix.slice(k + 1)])}><ArrowUp size={14}/></button>
+                <button type="button" aria-label={`Remove ${biomes[m.id].name}`} title="Remove" disabled={mix.length < 2} onClick={() => setMix(mix.filter((_, j) => j !== k))}><X size={14}/></button>
+              </div>)}
+            </div>
+            {mix.length < biomeIds.length && <label className="hexmap-select"><select aria-label="Add a biome" value="" onChange={e => e.target.value && setMix([...mix, { id: e.target.value as BiomeId, w: 2 }])}>
+              <option value="">+ Add a biome</option>
+              {biomeIds.filter(id => !mix.some(m => m.id === id)).map(id => <option key={id} value={id}>{biomes[id].name}</option>)}</select></label>}
+            {choice<MixLayout>("Arrange them", o.mixLayout, mixLayouts.map(l => [l.id, l.name]), v => set("mixLayout", v))}
+            <p className="creator-measure">{mixLayouts.find(l => l.id === o.mixLayout)!.hint}</p>
+          </>}
+          {o.mode !== "single" && <>
+            {choice("Biome size", o.biomeSize, [[0, "Small"], [1, "Normal"], [2, "Large"], [3, "Huge"]], v => set("biomeSize", v))}
+            {choice<HexBlend>("Borders", o.blend, [["sharp", "Sharp"], ["soft", "Blended"], ["wide", "Wide blend"]], v => set("blend", v))}
+            <label className="creator-check"><input type="checkbox" checked={o.smart} onChange={e => set("smart", e.target.checked)}/>Smooth harsh borders (no desert next to ice)</label>
+            {choice("Rare wonders", o.wonders, [[0, "None"], [1, "Few"], [2, "Some"], [3, "Many"]], v => set("wonders", v))}
+            <p className="creator-measure">Wonders are small patches of volcanic, blighted or fey land.</p>
           </>}
         </Section>
         <Section title="Land" summary={hexLands.find(l => l.id === o.land)!.name} open>
