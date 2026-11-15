@@ -100,6 +100,15 @@ Unit tests use local fakes and do not prove your IAM, CORS, SMTP, or hosted envi
 - Callback expires or fails: initiate a fresh link and open it in the same browser; check the exact allowed redirect URL.
 - Production data is not stored in the Vercel filesystem. Do not expect old `.wrangler/state` files to migrate themselves.
 
+## Functions Storage (Hobby limit 10 GB)
+
+Vercel keeps the Function bundles of every retained deployment, previews included, and counts them under Usage > Deployment Storage > Functions Storage. Each push to a pull request branch makes a new preview deployment, and the latest preview of every branch is kept until the branch is deleted. To keep it down:
+
+- Project Settings > Build and Deployment > Deployment Retention Policy: keep Pre-Production (previews) for a short period, such as 7 days, and Canceled and Errored for 1 day. Production can stay longer for rollbacks.
+- Delete merged branches on GitHub (or turn on "Automatically delete head branches"), so their last previews stop being kept.
+- Usage changes the day after deleting deployments; amounts already recorded for earlier days stay.
+- Keep server code from pulling large native packages into many functions. `next.config.ts` drops sharp's musl build, which Vercel never uses. [Deployment Storage](https://vercel.com/docs/deployment-storage), [Optimize Deployment Storage](https://vercel.com/docs/deployment-storage/optimize)
+
 ## RPG Encyclopedia
 
 The same deployment now serves `/encyclopedia` alongside `/maptable`, linked from `/`. No extra database, bucket or environment variables are required. The existing private S3 bucket and Supabase account support both modules; the `MAPTABLE_` environment names are retained for compatibility. Encyclopedia saves and images are separate from Maptable.
