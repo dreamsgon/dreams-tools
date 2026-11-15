@@ -134,7 +134,14 @@ export type HexLayer = {
   rivers: number[][];
   /** The options it was made with, so it can be made again. */
   options: Record<string, string | number | boolean>;
-};
+} & HexLook;
+/**
+ * How a hex map is drawn: Painted (colour and symbols), Flat colours or black and white Ink;
+ * hex outlines, hex numbers (column then row, as in "0412") and a legend in one corner.
+ * Kept apart from the options, so changing the look never changes the map.
+ */
+export type HexLook = { look: "painted" | "flat" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se" };
+export const defaultHexLook: HexLook = { look: "painted", lines: true, numbers: false, legend: "none" };
 export type GeneratedHexMap = { layer: HexLayer; width: number; height: number; landShare: Partial<Record<BiomeId, number>> };
 
 /** Hexes are generated at a fixed size, so the same options shape the same land at any drawing size. */
@@ -372,7 +379,7 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   const landShare = Object.fromEntries(Object.entries(counts).map(([b, n]) => [b, n! / landCount])) as Partial<Record<BiomeId, number>>;
   const R = size ?? fittingHexSize(o.cols, o.rows, o.orient), drawn = hexMapSize({ ...shape, size: R });
   return {
-    layer: { x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, options: { ...o } },
+    layer: { ...defaultHexLook, x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, options: { ...o } },
     width: Math.ceil(drawn.width), height: Math.ceil(drawn.height), landShare,
   };
 }
