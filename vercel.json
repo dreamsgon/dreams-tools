@@ -10,5 +10,10 @@
     "app/api/**/route.ts": {
       "maxDuration": 60
     }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "claude/**": false
+    }
   }
 }

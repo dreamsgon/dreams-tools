@@ -23,8 +23,8 @@ export const rollerName = (title: string) => title.split(/\s+[·—–]\s+/)[0]?
 export type RollCard = {
   /** What the roll is for, e.g. "Claws against Bram". */
   title: string; formula: string; total: number; detail: string;
-  /** Who rolled, shown with their picture when `avatar` is set. */
-  who?: string; avatar?: boolean; enemy?: boolean;
+  /** Who rolled, shown with their picture: `avatar` is its link, or true for an attached avatar.png. */
+  who?: string; avatar?: boolean | string | null; enemy?: boolean;
   /** A small line under the card, e.g. "Greyfen marsh · rolled by the AI". */
   footer?: string; natural?: number | null;
 };
@@ -37,7 +37,7 @@ export function rollPost(r: RollCard): Post {
     color: crit ? colors.crit : fumble ? colors.fumble : r.enemy ? colors.enemy : colors.roll,
     title,
     description: `## ${r.total}\n\`${line(r.formula, 200).replace(/`/g, "'")}\`${r.detail ? ` · ${literal(line(r.detail, 900))}` : ""}`,
-    ...(r.who ? { author: { name: line(r.who, 120), ...(r.avatar ? { icon_url: "attachment://avatar.png" } : {}) } } : {}),
+    ...(r.who ? { author: { name: line(r.who, 120), ...(r.avatar ? { icon_url: typeof r.avatar === "string" ? r.avatar : "attachment://avatar.png" } : {}) } } : {}),
     ...(r.footer ? { footer: { text: line(r.footer, 200) } } : {}),
   };
   return { embeds: [embed] };

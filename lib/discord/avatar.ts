@@ -1,45 +1,71 @@
 /*
  * The small round picture on a roll card: a Maptable token's image, or an Encyclopedia page's picture
- * framed the way its token is. Read from the GM's own storage only, shrunk to 128 px, sent as a file.
- * Any problem just means no picture: a roll is never held up by its avatar.
+ * framed the way its token is. The card names it by a signed link to /api/discord/avatar, which Discord
+ * fetches; that one route reads the image from the GM's own storage and shrinks it to 128 px. Keeping the
+ * image work there keeps the image library (sharp) out of every other Vercel Function.
+ * No link (no site address or secret) just means no picture: a roll is never held up by its avatar.
  */
-import type { S3Bucket } from "../storage.ts";
+import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import type { Token, Workspace as Maps } from "../model.ts";
 import type { Picture } from "../encyclopedia/world-model.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
-import { assetBytes } from "../mcp/scene-picture.ts";
-import type { DiscordFile } from "./send.ts";
 
-const SIZE = 128, LIMIT = 15_000_000;
+/** Where the image is: the app's own bucket ("m") or the GM's optional S3 bucket ("s"), and the token circle to cut out. */
+export type AvatarSource = { b: "m" | "s"; k: string; p: string; c?: [x: number, y: number, size: number] };
 
-async function square(bytes: Uint8Array, crop?: { left: number; top: number; size: number }): Promise<DiscordFile | null> {
-  if (bytes.length > LIMIT) return null;
-  const { default: sharp } = await import("sharp");
-  let image = sharp(bytes).rotate();
-  if (crop) image = image.extract({ left: crop.left, top: crop.top, width: crop.size, height: crop.size });
-  const out = await image.resize(SIZE, SIZE, { fit: "cover" }).png().toBuffer();
-  return { name: "avatar.png", type: "image/png", bytes: new Uint8Array(out) };
+function secret(env: NodeJS.ProcessEnv) {
+  const material = env.AI_KEY_SECRET || env.MAPTABLE_AWS_SECRET_ACCESS_KEY;
+  return material ? Buffer.from(hkdfSync("sha256", material, "rpg-tools", "discord-avatar", 32)) : null;
+}
+const sign = (body: string, key: Buffer) => createHmac("sha256", key).update(body).digest("base64url");
+
+/** The public address Discord can fetch: APP_ORIGIN if set, else Vercel's production domain. */
+export function siteOrigin(env: NodeJS.ProcessEnv = process.env) {
+  if (env.APP_ORIGIN) return env.APP_ORIGIN.replace(/\/+$/, "");
+  return env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : null;
 }
 
-export async function tokenAvatar(bucket: S3Bucket, prefix: string, maps: Maps, token: Pick<Token, "assetId">): Promise<DiscordFile | null> {
+export function avatarUrl(source: AvatarSource, env: NodeJS.ProcessEnv = process.env): string | null {
+  const origin = siteOrigin(env), key = secret(env);
+  if (!origin || !key) return null;
+  const body = Buffer.from(JSON.stringify(source)).toString("base64url");
+  return `${origin}/api/discord/avatar?a=${body}.${sign(body, key)}`;
+}
+
+/** The source inside a link this server signed, or null. */
+export function readAvatarLink(a: string | null, env: NodeJS.ProcessEnv = process.env): AvatarSource | null {
+  const key = secret(env);
+  if (!key || !a || a.length > 2000) return null;
+  const [body, sig] = a.split(".");
+  if (!body || !sig) return null;
+  const want = Buffer.from(sign(body, key)), got = Buffer.from(sig);
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
   try {
-    const { bytes } = await assetBytes(bucket, prefix, maps, token.assetId);
-    return bytes ? await square(bytes) : null;
+    const s = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as AvatarSource;
+    if ((s.b !== "m" && s.b !== "s") || typeof s.k !== "string" || typeof s.p !== "string" || !/^users\/[^/]+\/$/.test(s.p)) return null;
+    if (s.b === "m" && !s.k.startsWith(s.p)) return null;
+    return s;
   } catch { return null; }
 }
 
-export async function pictureAvatar(bucket: S3Bucket, owner: string, picture: Picture): Promise<DiscordFile | null> {
-  try {
-    const object = await bucket.get(encyclopediaPrefix(owner) + "images/" + picture.imageId);
-    if (!object) return null;
-    const bytes = new Uint8Array(await object.arrayBuffer());
-    const { default: sharp } = await import("sharp");
-    const meta = await sharp(bytes).rotate().metadata();
-    const w = meta.width ?? picture.width, h = meta.height ?? picture.height;
-    // The token circle: centre (x, y) as fractions of the picture, diameter as a fraction of its shorter side.
-    const size = Math.max(1, Math.min(w, h, Math.round(picture.size * Math.min(w, h))));
-    const left = Math.min(w - size, Math.max(0, Math.round(picture.x * w - size / 2)));
-    const top = Math.min(h - size, Math.max(0, Math.round(picture.y * h - size / 2)));
-    return await square(bytes, { left, top, size });
-  } catch { return null; }
+/** A Maptable token's image, from the GM's uploads or their own S3 only. */
+export function tokenAvatar(prefix: string, maps: Maps, token: Pick<Token, "assetId">, env: NodeJS.ProcessEnv = process.env): string | null {
+  const asset = token.assetId ? maps.assets.find(a => a.id === token.assetId) : null;
+  if (!asset) return null;
+  const url = new URL(asset.src, "https://maptable.local");
+  if (asset.src.startsWith("/api/assets?")) {
+    const id = url.searchParams.get("id");
+    return id && /^[a-f0-9-]{36}$/.test(id) ? avatarUrl({ b: "m", k: prefix + "images/" + id, p: prefix }, env) : null;
+  }
+  if (asset.src.startsWith("/api/s3?")) {
+    const key = url.searchParams.get("key");
+    return key ? avatarUrl({ b: "s", k: key, p: prefix }, env) : null;
+  }
+  return null;
+}
+
+/** An Encyclopedia page's picture, cut to its token circle. */
+export function pictureAvatar(owner: string, picture: Picture, env: NodeJS.ProcessEnv = process.env): string | null {
+  const prefix = `users/${encodeURIComponent(owner)}/`;
+  return avatarUrl({ b: "m", k: encyclopediaPrefix(owner) + "images/" + picture.imageId, p: prefix, c: [picture.x, picture.y, picture.size] }, env);
 }

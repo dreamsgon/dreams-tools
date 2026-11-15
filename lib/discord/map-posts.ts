@@ -7,7 +7,6 @@ import { mapPost } from "./cards.ts";
 import { readDiscord, postForCampaign } from "./campaign.ts";
 import { mapKind, pickChannel, type MapRoute } from "./settings.ts";
 import { tokenAvatar } from "./avatar.ts";
-import type { DiscordFile } from "./send.ts";
 
 type Bucket = Pick<S3Bucket, "get" | "put" | "delete">;
 type Ctx = { bucket: Bucket; prefix: string; workspace: Workspace; fetcher?: typeof fetch };
@@ -38,9 +37,9 @@ export async function sendMapMessage(ctx: Ctx, input: unknown): Promise<{ skippe
   }
   const scene = workspace.scenes.find(s => s.id === message.sceneId)!;
   const token = message.avatarTokenId ? scene.tokens.find(t => t.id === message.avatarTokenId) : undefined;
-  const avatar: DiscordFile | null = token ? await tokenAvatar(bucket as S3Bucket, prefix, workspace, token) : null;
-  const post = { ...message.post, ...(avatar ? { files: [avatar] } : {}) };
-  if (!avatar) for (const e of post.embeds ?? []) if (e.author?.icon_url) delete e.author.icon_url;
+  const avatar = token ? tokenAvatar(prefix, workspace, token) : null;
+  const post = { ...message.post };
+  for (const e of post.embeds ?? []) if (e.author?.icon_url) { if (avatar) e.author.icon_url = avatar; else delete e.author.icon_url; }
   const sent = await postForCampaign(bucket, prefix, message.campaignId, kind, post, { legacyRoute: message.route, campaignName: campaignName(workspace, message.campaignId), edit, settings, fetcher: ctx.fetcher });
   if (message.kind === "initiative" && !updating && !sent.skipped) {
     if (!sent.id) throw new Error("Discord did not confirm the message ID. Check the channel before posting again.");
