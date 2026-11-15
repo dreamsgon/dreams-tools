@@ -41,7 +41,7 @@ export function applyMapStyle(d: MapDrawing, next: MapStyle, background: string 
 }
 
 /** One thing to draw: a path filled or stroked, maybe clipped to the inside of a room. */
-export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; image?: { assetId: string; w: number; h: number }; text?: { value: string; x: number; y: number; size: number } };
+export type DrawOp = { d: string; fill?: string; stroke?: string; width?: number; opacity?: number; clip?: string; cap?: "butt" | "round"; matrix?: [number, number, number, number, number, number]; image?: { assetId: string; w: number; h: number }; text?: { value: string; x: number; y: number; size: number; align?: "start" | "middle"; weight?: number } };
 
 const ring = (pts: Point[]) => `M ${pts.map(p => `${round(p.x)} ${round(p.y)}`).join(" L ")} Z`;
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -216,8 +216,8 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp, images?: StampImages)
     ctx.restore(); return;
   }
   if (op.text) {
-    ctx.fillStyle = op.fill ?? "#000000"; ctx.font = `600 ${op.text.size}px Inter, system-ui, sans-serif`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
+    ctx.fillStyle = op.fill ?? "#000000"; ctx.font = `${op.text.weight ?? 600} ${op.text.size}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = op.text.align === "start" ? "left" : "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
     ctx.restore(); return;
   }
   const path = pathOf(op);

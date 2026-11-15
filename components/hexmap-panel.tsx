@@ -2,7 +2,7 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import { ArrowUp, Dices, X } from "lucide-react";
 import { biomeIds, biomes, type BiomeId } from "@/lib/hexmap/biomes";
-import { defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, randomHexSeed, readMix, writeMix, type HexBlend, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
+import { defaultHexLook, defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, randomHexSeed, readMix, writeMix, type HexBlend, type HexLook, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
 import { applyHexPreset, hexPresets, matchingHexPreset } from "@/lib/hexmap/presets";
 import type { GeneratedMap } from "@/lib/map-generator";
 import { DrawingBackground } from "./drawing-shape";
@@ -21,13 +21,14 @@ const BiomeIcon = ({ id }: { id: BiomeId }) => <svg viewBox="-11 -10 22 20" aria
 export default function HexMapPanel({ close, start }: { close: () => void; start: (map: GeneratedMap) => void }) {
   const [o, setO] = useState<HexMapOptions>(() => ({ ...defaultHexOptions, seed: randomHexSeed() }));
   const [big, setBig] = useState(false);
+  const [look, setLook] = useState<HexLook>(defaultHexLook);
   const shown = useDeferredValue(o);
   const map = useMemo(() => generateHexMap(shown), [shown]);
   const set = <K extends keyof HexMapOptions>(key: K, value: HexMapOptions[K]) => setO(prev => ({ ...prev, [key]: value }));
-  const drawing = { background: HEX_BACKGROUND, style: null, hexes: map.layer };
+  const drawing = { background: HEX_BACKGROUND, style: null, hexes: { ...map.layer, ...look } };
   const use = () => {
     const made = generateHexMap(o);
-    start({ name: `Hex map (${o.seed.trim() || "map"})`, width: made.width, height: made.height, drawing: { background: HEX_BACKGROUND, style: null, shapes: [], folders: [], layerOrder: [], hexes: made.layer } });
+    start({ name: `Hex map (${o.seed.trim() || "map"})`, width: made.width, height: made.height, drawing: { background: HEX_BACKGROUND, style: null, shapes: [], folders: [], layerOrder: [], hexes: { ...made.layer, ...look } } });
   };
   const maxCols = big ? HEX_LIMITS.cols[1] : 60, maxRows = big ? HEX_LIMITS.rows[1] : 45;
   const across = o.orient === "flat" ? (o.cols - 1) * 0.75 * 2 / Math.sqrt(3) + 1 : o.cols + 0.5;
@@ -118,6 +119,9 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
           {choice("Hexes", o.orient, [["flat", "Flat top"], ["pointy", "Pointed top"]], v => set("orient", v))}
           <p className="creator-measure">About {Math.round(across * o.miles).toLocaleString()} × {Math.round(down * o.miles).toLocaleString()} miles. A day on foot crosses {+(24 / o.miles).toFixed(o.miles > 6 ? 1 : 0)} hexes.</p>
         </Section>
+        <Section title="Look" summary={lookSummary(look)}>
+          <HexLookFields look={look} change={part => setLook(prev => ({ ...prev, ...part }))}/>
+        </Section>
       </div>
       <div className="creator-preview hexmap-preview">
         <div className="creator-field"><span>Seed (the same seed always makes the same map)</span>
@@ -134,11 +138,28 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
       </div>
     </div>
     <footer>
-      <button type="button" onClick={() => { setO({ ...defaultHexOptions, seed: o.seed }); setBig(false); }}>Defaults</button>
+      <button type="button" onClick={() => { setO({ ...defaultHexOptions, seed: o.seed }); setBig(false); setLook(defaultHexLook); }}>Defaults</button>
       <span className="creator-spacer"/>
       <button type="button" onClick={close}>Cancel</button>
       <button type="button" className="primary" onClick={use}>Use this map</button>
     </footer>
+  </>;
+}
+
+const LOOKS: [HexLook["look"], string][] = [["painted", "Painted"], ["flat", "Flat colours"], ["ink", "Ink"]];
+const LEGENDS: [HexLook["legend"], string][] = [["none", "No legend"], ["nw", "Top left"], ["ne", "Top right"], ["sw", "Bottom left"], ["se", "Bottom right"]];
+const lookSummary = (look: HexLook) => [LOOKS.find(l => l[0] === look.look)![1], look.numbers && "numbers", look.legend !== "none" && "legend"].filter(Boolean).join(", ");
+
+/** How a hex map is drawn: here before it is made, and in the Map Creator's Map tab afterwards. */
+export function HexLookFields({ look, change }: { look: HexLook; change: (part: Partial<HexLook>) => void }) {
+  return <>
+    <div className="creator-field"><span>Art</span><div className="creator-seg" role="group" aria-label="Art">
+      {LOOKS.map(([v, name]) => <button key={v} type="button" aria-pressed={look.look === v} onClick={() => change({ look: v })}>{name}</button>)}</div></div>
+    <p className="creator-measure">{look.look === "painted" ? "Colour with trees, peaks and dunes drawn on." : look.look === "flat" ? "Plain colours, easy to read at a glance." : "Black and white, for printing."}</p>
+    <label className="creator-check"><input type="checkbox" checked={look.lines} onChange={e => change({ lines: e.target.checked })}/>Hex outlines</label>
+    <label className="creator-check"><input type="checkbox" checked={look.numbers} onChange={e => change({ numbers: e.target.checked })}/>Hex numbers (column, then row)</label>
+    <label className="hexmap-select">Legend<select value={look.legend} onChange={e => change({ legend: e.target.value as HexLook["legend"] })}>
+      {LEGENDS.map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select></label>
   </>;
 }
 

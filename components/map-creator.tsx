@@ -8,6 +8,7 @@ import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
+import { HexLookFields } from "./hexmap-panel";
 import UseMapDialog, { pieceArt, type UseChoice } from "./use-map-dialog";
 import { setUpDrawnMapScene } from "@/lib/map-export";
 import type { GeneratedMap } from "@/lib/map-generator";
@@ -467,6 +468,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       </div>
       <div className="creator-actions"><button onClick={()=>setTrace({...trace,x:0,y:0,h:trace.h*draft.width/trace.w,w:draft.width})}>Fit to the map</button><button onClick={()=>setTrace(null)}><Trash2 size={15}/> Remove</button></div>
     </>}
+    {draft.drawing.hexes&&<><h3>Hex map</h3>
+      <HexLookFields look={draft.drawing.hexes} change={part=>change(d=>{if(d.drawing.hexes)d.drawing.hexes={...d.drawing.hexes,...part};})}/></>}
     <h3>This map</h3>
     <div className="creator-pair">{squares("width")}{squares("height")}</div>
     <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>

@@ -87,7 +87,11 @@ export function placePieces(scene: Scene, assets: Record<string, string> | null,
 export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
   const hexes = scene.drawing?.hexes;
   // A hex map gets a hex grid laid exactly over its hexes, counted in miles; other drawings get squares.
-  if (hexes) { Object.assign(scene.grid, hexGridFor(hexes), { units: hexes.miles, unit: "mi" }); scene.mapType = "area"; }
+  if (hexes) {
+    Object.assign(scene.grid, hexGridFor(hexes), { units: hexes.miles, unit: "mi" }); scene.mapType = "area";
+    // A map with its own hex numbers does not need Maptable's cell names over them as well.
+    if (hexes.numbers) scene.grid.labels = false;
+  }
   else Object.assign(scene.grid, { type: "square", size: options.grid.size, offsetX: 0, offsetY: 0, units: options.grid.units, unit: options.grid.unit });
   if (options.fog) scene.fog = { enabled: true, base: true, strokes: [] };
   if (options.markers && scene.drawing) {

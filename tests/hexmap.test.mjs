@@ -5,7 +5,7 @@ import { applyHexPreset, hexPresets, matchingHexPreset } from "../lib/hexmap/pre
 import { hashText } from "../lib/hexmap/noise.ts";
 import { hexCells, hexGridFor, hexMapSize, hexNeighbours, fittingHexSize } from "../lib/hexmap/layout.ts";
 import { readHex, isWaterTerrain, biomeIds, biomes } from "../lib/hexmap/biomes.ts";
-import { hexLayerOps } from "../lib/hexmap/art.ts";
+import { hexLayerOps, hexLegendRows } from "../lib/hexmap/art.ts";
 import { groundOps } from "../lib/map-style.ts";
 import { resizeMap } from "../lib/map-creator.ts";
 import { setUpDrawnMapScene } from "../lib/map-export.ts";
@@ -139,6 +139,10 @@ test("Use in Maptable sets a hex grid in miles for a hex map and squares for oth
   assert.equal(scene.grid.type, "hex-pointy"); assert.equal(scene.grid.size, layer.size);
   assert.equal(scene.grid.units, 12); assert.equal(scene.grid.unit, "mi"); assert.equal(scene.mapType, "area");
   assert.equal(scene.fog.enabled, true);
+  assert.equal(scene.grid.labels, true, "Maptable names the cells");
+  const numbered = Object.assign(newScene("Numbered"), { width, height, drawing: drawingOf({ ...layer, numbers: true }) });
+  setUpDrawnMapScene(numbered, { fog: false, markers: false, grid: { size: 70, units: 5, unit: "ft" } });
+  assert.equal(numbered.grid.labels, false, "a map with its own hex numbers hides Maptable's cell names");
   const plain = Object.assign(newScene("Rooms"), { drawing: { background: "#ffffff", style: null, shapes: [], folders: [], layerOrder: [] } });
   setUpDrawnMapScene(plain, { fog: false, markers: false, grid: { size: 70, units: 5, unit: "ft" } });
   assert.equal(plain.grid.type, "square");
@@ -260,4 +264,58 @@ test("presets fill in the settings but keep the seed and size, until something c
   }
   assert.equal(new Set(hexPresets.map(p => p.id)).size, hexPresets.length);
   assert.equal(matchingHexPreset(defaultHexOptions), undefined);
+});
+
+test("older hex maps keep the painted look, and a look is checked when read back", () => {
+  const { layer } = generateHexMap(small());
+  const { look, lines, numbers, legend, ...before } = layer;
+  assert.deepEqual([look, lines, numbers, legend], ["painted", true, false, "none"]);
+  const parsed = mapDrawingSchema.parse(drawingOf(before)).hexes;
+  assert.deepEqual([parsed.look, parsed.lines, parsed.numbers, parsed.legend], ["painted", true, false, "none"]);
+  assert.deepEqual(hexLayerOps(before), hexLayerOps(layer), "a map without a look draws as before");
+  assert.throws(() => mapDrawingSchema.parse(drawingOf({ ...layer, look: "neon" })));
+  assert.throws(() => mapDrawingSchema.parse(drawingOf({ ...layer, legend: "middle" })));
+});
+
+test("Flat colours draws no symbols, Ink draws on paper, and outlines can be hidden", () => {
+  const { layer } = generateHexMap(small({ rivers: 4 }));
+  const painted = hexLayerOps(layer), flat = hexLayerOps({ ...layer, look: "flat" }), ink = hexLayerOps({ ...layer, look: "ink" });
+  assert.ok(flat.length < painted.length, `${flat.length} flat paths, ${painted.length} painted`);
+  assert.equal(flat.filter(op => !op.fill).length, 1 + layer.rivers.length, "only ground, outlines and rivers");
+  const inkColours = new Set(ink.flatMap(op => [op.fill, op.stroke]).filter(Boolean));
+  assert.ok(inkColours.has("#f8f5ee") && inkColours.has("#2f2b26"));
+  assert.ok(![...inkColours].some(c => ["#4d84a5", "#4f8fb4", "#ff7a3d"].includes(c)), "no painted water, rivers or lava in ink");
+  const outlines = ops => ops.filter(op => op.opacity !== undefined && op.opacity < 0.5).length;
+  assert.equal(outlines(painted), 1);
+  assert.equal(outlines(hexLayerOps({ ...layer, lines: false })), 0);
+  assert.notEqual(hexLayerOps({ ...layer }), ink, "each look is drawn on its own");
+});
+
+test("hex numbers give every hex inside the outline its column and row", () => {
+  const { layer } = generateHexMap(small({ outline: "circle" }));
+  const texts = hexLayerOps({ ...layer, numbers: true }).filter(op => op.text);
+  assert.equal(texts.length, hexesOf(layer).filter(Boolean).length);
+  const plain = generateHexMap(small()).layer, first = hexLayerOps({ ...plain, numbers: true }).find(op => op.text);
+  assert.equal(first.text.value, "0101");
+  assert.ok(hexLayerOps({ ...plain, numbers: true }).some(op => op.text?.value === `${plain.cols}${plain.rows}`));
+});
+
+test("the legend lists what is on the map and sits in the chosen corner, inside the map", () => {
+  const { layer } = generateHexMap(small({ mode: "mix", mix: "desert:2,jungle:1", wonders: 0, smart: false, rivers: 3 }));
+  const rows = hexLegendRows(layer, "painted").map(r => r.label);
+  assert.ok(rows.includes("Desert") && rows.includes("Jungle") && rows.includes("River"), rows.join(", "));
+  assert.ok(!rows.includes("Glacier"));
+  assert.ok(!hexLegendRows(layer, "ink").some(r => r.label === "Desert"), "ink has no biome colours to show");
+  const { width, height } = hexMapSize(layer);
+  for (const corner of ["nw", "ne", "sw", "se"]) {
+    const ops = hexLayerOps({ ...layer, x: 30, y: 40, legend: corner }), box = ops.find(op => op.fill && op.opacity === 0.95);
+    const [x, y] = box.d.slice(1).split(/[ h]/).map(Number);
+    assert.ok(x >= 30 && y >= 40 && x < 30 + width && y < 40 + height, `${corner} box at ${x},${y}`);
+    assert.equal(x < 30 + width / 2, corner.endsWith("w")); assert.equal(y < 40 + height / 2, corner.startsWith("n"));
+    assert.ok(ops.some(op => op.text?.value === "One hex: 6 miles"));
+  }
+  const tiny = generateHexMap(small({ cols: 10, rows: 8, mode: "climate", variety: 1 })).layer, size = hexMapSize(tiny);
+  const box = hexLayerOps({ ...tiny, legend: "se" }).find(op => op.fill && op.opacity === 0.95);
+  const [, , w, h] = box.d.match(/^M([\d.-]+) ([\d.-]+)h([\d.]+)v([\d.]+)/).slice(1).map(Number);
+  assert.ok(w <= size.width * 0.4 + 1 && h <= size.height * 0.8 + 1, "a small map gets a smaller legend");
 });
