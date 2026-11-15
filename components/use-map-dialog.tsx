@@ -85,6 +85,7 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
   const options = places(workspace, destination);
   const [fog, setFog] = useState(!sceneName), [markers, setMarkers] = useState(numbers > 0), [pieces, setPieces] = useState(stamped > 0 && (!sceneName || hadPieces)), [place, setPlace] = useState(destination);
   const [busy, setBusy] = useState(""), [error, setError] = useState("");
+  const hexes = draft.drawing.hexes;
   const cols = Math.round(draft.width / grid.size * 10) / 10, rows = Math.round(draft.height / grid.size * 10) / 10;
   const run = async (label: string, job: () => Promise<void>) => {
     setBusy(label); setError("");
@@ -100,13 +101,13 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
               <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height}/>
               {orderedShapes(draft.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={draft.drawing} prefix="use"/>)}
             </svg>
-            <div><strong>{draft.name}</strong><span>{cols} × {rows} squares · {Math.round(cols * grid.units)} × {Math.round(rows * grid.units)} {grid.unit}</span></div>
+            <div><strong>{draft.name}</strong><span>{hexes ? `${hexes.cols} × ${hexes.rows} hexes · ${hexes.miles} ${hexes.miles === 1 ? "mile" : "miles"} each` : `${cols} × ${rows} squares · ${Math.round(cols * grid.units)} × ${Math.round(rows * grid.units)} ${grid.unit}`}</span></div>
           </div>
           {sceneName ? <p className="creator-measure">Updates the scene “{sceneName}”. Its tokens and notes stay as they are.</p>
             : options.length > 1 && <label>Put the scene in<select value={place ?? ""} onChange={e => setPlace(e.target.value || null)}>{options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
-          <p className="creator-measure"><strong>The grid lines up:</strong> {grid.units} {grid.unit} squares of {grid.size} px, matching the drawing exactly.</p>
+          <p className="creator-measure"><strong>The grid lines up:</strong> {hexes ? `a hex grid of ${hexes.miles}-mile hexes laid exactly over the map's hexes.` : `${grid.units} ${grid.unit} squares of ${grid.size} px, matching the drawing exactly.`}</p>
           <div className="creator-checks">
-            <label className="creator-check"><input type="checkbox" checked={fog} onChange={e => setFog(e.target.checked)}/><span>Start with fog over the whole map<small>Reveal rooms as the party explores.{sceneName ? " This clears the fog you have already revealed." : ""}</small></span></label>
+            <label className="creator-check"><input type="checkbox" checked={fog} onChange={e => setFog(e.target.checked)}/><span>Start with fog over the whole map<small>{hexes ? "Reveal hexes as the party explores." : "Reveal rooms as the party explores."}{sceneName ? " This clears the fog you have already revealed." : ""}</small></span></label>
             <label className="creator-check"><input type="checkbox" checked={markers} disabled={!numbers} onChange={e => setMarkers(e.target.checked)}/><span>Numbered rooms become markers<small>{numbers ? `${numbers} room number${numbers === 1 ? "" : "s"} become GM-only markers you can add notes to.` : "Add room numbers with the Label tool (in a circle) to get markers."}</small></span></label>
             <label className="creator-check"><input type="checkbox" checked={pieces} disabled={!stamped && !hadPieces} onChange={e => setPieces(e.target.checked)}/><span>Stamps become movable pieces<small>{stamped ? `${stamped} stamp${stamped === 1 ? "" : "s"} (crates, tables, rocks…) become pieces you can drag and turn on the table, so the terrain can change mid-fight. Walls and floors stay in the map.${sceneName && hadPieces ? " Pieces you have moved stay where they are." : ""}` : hadPieces ? "Untick to take the pieces off the table." : "Add stamps from the Stamp tool to get pieces."}</small></span></label>
           </div>
@@ -115,11 +116,11 @@ export default function UseMapDialog({ draft, grid, workspace, sceneName, hadPie
       </div>
       <footer>
         <button disabled={!!busy} onClick={() => run("png", async () => download(await renderPng(draft, workspace.assets), exportName(draft.name, "png")))}><Download size={15}/> {busy === "png" ? "Exporting…" : "Export image"}</button>
-        <button disabled={!!busy} title="A Universal VTT file with walls and doors, for other virtual tabletops" onClick={() => run("vtt", async () => {
+        {!hexes && <button disabled={!!busy} title="A Universal VTT file with walls and doors, for other virtual tabletops" onClick={() => run("vtt", async () => {
           const image = await base64(await renderPng(draft, workspace.assets));
           const json = JSON.stringify(buildUvtt(draft.drawing, draft.width, draft.height, grid.size, image));
           download(new Blob([json], { type: "application/json" }), exportName(draft.name, "dd2vtt"));
-        })}><FileJson size={15}/> {busy === "vtt" ? "Exporting…" : "Export Universal VTT"}</button>
+        })}><FileJson size={15}/> {busy === "vtt" ? "Exporting…" : "Export Universal VTT"}</button>}
         <span className="creator-spacer"/>
         <button onClick={close}>Cancel</button>
         <button className="primary" disabled={!!busy} onClick={() => use({ fog, markers, pieces, destination: place })}>Use in Maptable</button>

@@ -195,7 +195,7 @@ export function touchingRooms<T extends Pick<MapShape, "id" | "type" | "closed" 
 
 /** Which edge or corner stays put when the map changes size: 0 = left/top, .5 = centre, 1 = right/bottom. */
 export type MapAnchor = { x: 0 | 0.5 | 1; y: 0 | 0.5 | 1 };
-type Sized = { width: number; height: number; drawing: { shapes: MapShape[]; layerOrder?: string[] } };
+type Sized = { width: number; height: number; drawing: { shapes: MapShape[]; layerOrder?: string[]; hexes?: { x?: number; y?: number } } };
 const clampPoint = (p: Point, w: number, h: number) => ({ x: Math.max(0, Math.min(w, p.x)), y: Math.max(0, Math.min(h, p.y)) });
 
 /**
@@ -215,7 +215,9 @@ export function resizeMap<T extends Sized>(d: T, width: number, height: number, 
     if (clamped.some((p, i) => p.x !== points[i].x || p.y !== points[i].y)) trimmed.push(s.id);
     return [{ ...s, points: clamped }];
   });
-  const drawing = { ...d.drawing, shapes, ...(d.drawing.layerOrder ? { layerOrder: d.drawing.layerOrder.filter(id => !gone.has(id)) } : {}) };
+  const drawing = { ...d.drawing, shapes, ...(d.drawing.layerOrder ? { layerOrder: d.drawing.layerOrder.filter(id => !gone.has(id)) } : {}),
+    // A hex map moves with the rest of the drawing when the map grows or shrinks on its top or left.
+    ...(d.drawing.hexes ? { hexes: { ...d.drawing.hexes, x: (d.drawing.hexes.x ?? 0) + dx, y: (d.drawing.hexes.y ?? 0) + dy } } : {}) };
   return { ...d, width: w, height: h, drawing, dx, dy, trimmed };
 }
 

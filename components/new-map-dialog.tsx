@@ -5,8 +5,9 @@ import { generateMap, generatorKinds, generatorSizes, randomSeed, suggestedStyle
 import { mapStylePresets } from "@/lib/map-style";
 import { orderedShapes } from "@/lib/map-drawing";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
+import HexMapPanel from "./hexmap-panel";
 
-type Tab = "generate" | "trace" | "blank";
+type Tab = "generate" | "hex" | "trace" | "blank";
 /**
  * Start a new map: generate one from a seed, trace over an image, or start blank.
  * Generated maps are ordinary shapes, so everything can be edited afterwards.
@@ -36,7 +37,7 @@ export default function NewMapDialog({ grid, close, start, trace }: {
     <div className="creator-dialog" role="dialog" aria-modal="true" aria-labelledby="new-map-title" onKeyDown={e => { if (e.key === "Escape") close(); }}>
       <header><h2 id="new-map-title">Start a new map</h2><button className="creator-icon" aria-label="Close" onClick={close}><X size={18}/></button></header>
       <div className="creator-tabs" role="tablist" aria-label="How to start">
-        {([["generate", "Generate"], ["trace", "Trace an image"], ["blank", "Blank map"]] as [Tab, string][]).map(([id, name]) =>
+        {([["generate", "Generate"], ["hex", "Hex map"], ["trace", "Trace an image"], ["blank", "Blank map"]] as [Tab, string][]).map(([id, name]) =>
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{name}</button>)}
       </div>
       {tab === "generate" && <div className="creator-dialog-body">
@@ -71,12 +72,12 @@ export default function NewMapDialog({ grid, close, start, trace }: {
           <label>Style<select value={style ?? ""} onChange={e => setStyle(e.target.value || null)}><option value="">Plain</option>{styles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         </div>
       </div>}
-      <footer>
+      {tab === "hex" ? <HexMapPanel close={close} start={start}/> : <footer>
         <button onClick={close}>Cancel</button>
         {tab === "generate" && <button className="primary" onClick={() => start(map)}>Use this map</button>}
         {tab === "trace" && <button className="primary" disabled={!file} onClick={() => file && trace(file, { cols, rows })}>Start tracing</button>}
         {tab === "blank" && <button className="primary" onClick={() => start(blank())}>Start drawing</button>}
-      </footer>
+      </footer>}
     </div>
   </div>;
 }

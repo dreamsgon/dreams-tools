@@ -186,8 +186,28 @@ export const mapStyleSchema = z.object({
   gridSize: finite.min(10).max(400).default(70),
   shadow: z.boolean().default(false),
 });
+/**
+ * A generated hex map under a drawing's shapes (lib/hexmap): its grid, two letters per hex
+ * (biome, then terrain; ".." outside the outline), rivers as lists of hexes, and the options it was made with.
+ */
+export const hexLayerSchema = z.object({
+  x: finite.min(-8000).max(8000).default(0),
+  y: finite.min(-8000).max(8000).default(0),
+  size: finite.min(20).max(500),
+  cols: z.number().int().min(4).max(100),
+  rows: z.number().int().min(4).max(80),
+  orient: z.enum(["flat", "pointy"]),
+  outline: z.enum(["rect", "hex", "circle"]).default("rect"),
+  miles: finite.min(0.1).max(1000).default(6),
+  cells: z.string().max(16000).regex(/^([a-l][dslbfwhmpx]|\.\.)*$/),
+  rivers: z.array(z.array(z.number().int().min(0).max(7999)).min(2).max(400)).max(40).default([]),
+  options: z.record(z.string().max(40), z.union([z.string().max(80), finite, z.boolean()])).refine(o => Object.keys(o).length <= 80, "Too many hex map options").default({}),
+}).refine(h => h.cells.length === h.cols * h.rows * 2, "Hex cells must match the hex map's size")
+  .refine(h => h.rivers.every(r => r.every(i => i < h.cols * h.rows)), "Rivers must stay on the hex map");
+export type HexLayerData = z.infer<typeof hexLayerSchema>;
 export const mapDrawingSchema = z.object({
   background: color,
+  hexes: hexLayerSchema.optional(),
   style: mapStyleSchema.nullable().default(null),
   shapes: z.array(mapShapeSchema).max(1000),
   folders: z.array(z.object({id:short,name:short,parentId:short.nullable(),hidden:z.boolean().default(false),locked:z.boolean().default(false)})).max(200).default([]),

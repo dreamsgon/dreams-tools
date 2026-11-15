@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { MapDrawing, MapShape } from "@/lib/model";
 import { shapePath } from "@/lib/map-drawing";
-import { shapeOps, backgroundOps, type DrawOp } from "@/lib/map-style";
+import { shapeOps, groundOps, type DrawOp } from "@/lib/map-style";
 
 /** Draws a list of paths as SVG; clipped paths get their own clip path. */
 /** Where uploaded stamps' pictures are, by asset id. */
@@ -23,9 +23,9 @@ export function DrawOps({ ops, id }: { ops: DrawOp[]; id: string }) {
   })}</>;
 }
 
-/** The outside of the rooms, in the drawing's style. */
-export function DrawingBackground({ drawing, width, height }: { drawing: Pick<MapDrawing, "background" | "style">; width: number; height: number }) {
-  return <g pointerEvents="none"><DrawOps ops={backgroundOps(drawing, width, height)} id="creator-bg"/></g>;
+/** The outside of the rooms, in the drawing's style, and the drawing's hex map if it has one. */
+export function DrawingBackground({ drawing, width, height }: { drawing: Pick<MapDrawing, "background" | "style"> & Partial<Pick<MapDrawing, "hexes">>; width: number; height: number }) {
+  return <g pointerEvents="none"><DrawOps ops={groundOps(drawing, width, height)} id="creator-bg"/></g>;
 }
 
 export default function DrawingShape({ shape: s, drawing, prefix = "shape" }: { shape: MapShape; drawing: Pick<MapDrawing, "background" | "style">; prefix?: string }) {

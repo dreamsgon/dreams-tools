@@ -2,6 +2,7 @@ import type { MapDrawing, MapShape, MapStyle, Point } from "./model.ts";
 import { orderedShapes, roomPaths, shapePath, openingPath, labelBox } from "./map-drawing.ts";
 import { roomPolygons, wallSegments } from "./map-creator.ts";
 import { customStampAsset, stampById, stampMatrix } from "./map-stamps.ts";
+import { hexLayerOps } from "./hexmap/art.ts";
 
 /**
  * Map styles: a preset look (Dungeon stone, Old parchment...) for the whole drawn map,
@@ -188,6 +189,20 @@ export function backgroundOps(d: Pick<MapDrawing, "background" | "style">, width
   return ops;
 }
 
+/** Paths that are drawn again and again (a hex map's) are parsed once. */
+const parsed = new WeakMap<DrawOp, Path2D>();
+function pathOf(op: DrawOp) {
+  if (op.d.length < 2000) return new Path2D(op.d);
+  let path = parsed.get(op);
+  if (!path) { path = new Path2D(op.d); parsed.set(op, path); }
+  return path;
+}
+/** What to draw under the shapes: the outside, then a generated hex map if there is one. */
+export function groundOps(d: Pick<MapDrawing, "background" | "style" | "hexes">, width: number, height: number): DrawOp[] {
+  const outside = backgroundOps(d, width, height);
+  return d.hexes ? [...outside, ...hexLayerOps(d.hexes)] : outside;
+}
+
 /** Pictures for uploaded stamps, by asset id. A picture not loaded yet is left out. */
 export type StampImages = ReadonlyMap<string, CanvasImageSource>;
 function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp, images?: StampImages) {
@@ -205,14 +220,14 @@ function drawOp(ctx: CanvasRenderingContext2D, op: DrawOp, images?: StampImages)
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(op.text.value, op.text.x, op.text.y);
     ctx.restore(); return;
   }
-  const path = new Path2D(op.d);
+  const path = pathOf(op);
   if (op.fill) { ctx.fillStyle = op.fill; ctx.fill(path); }
   if (op.stroke) { ctx.lineCap = op.cap ?? "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.stroke; ctx.lineWidth = op.width ?? 1; ctx.stroke(path); }
   ctx.restore();
 }
 /** Draws a map drawing onto a canvas, as Maptable shows it. Shapes in `skip` (stamps that are pieces on the table) are left out. */
 export function drawMapDrawing(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number, skip?: ReadonlySet<string>, images?: StampImages) {
-  for (const op of backgroundOps(d, width, height)) drawOp(ctx, op);
+  for (const op of groundOps(d, width, height)) drawOp(ctx, op);
   for (const shape of orderedShapes(d)) if (!skip?.has(shape.id)) for (const op of shapeOps(shape, d)) drawOp(ctx, op, images);
 }
 
