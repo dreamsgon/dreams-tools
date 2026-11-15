@@ -5,6 +5,7 @@ import { countLabel } from "@/lib/plural";
 import StandardDiceTray, { type DicePanel } from "./standard-dice-tray";
 import { diceDockPosition } from "@/lib/dice-dock";
 import { attachSceneMap } from "@/lib/scene-map";
+import { REVEAL_AROUND_MAX, revealAroundTokens } from "@/lib/hex-fog";
 import { WHEEL_IDLE_MS } from "@/lib/wheel-resize";
 import SaveConflictNotice from "./save-conflict-notice";
 import { saveWorkspace } from "@/lib/workspace-save";
@@ -628,6 +629,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       for(const scene of next.scenes)syncConditionRounds(scene,previous.scenes.find(s=>s.id===scene.id));
       applyWorkspaceHpStates(previous,next);
       next.scenes=next.scenes.map(scene=>syncTokenAttachments(previous.scenes.find(s=>s.id===scene.id) ?? scene,scene));
+      // Hex crawls: party tokens that moved clear the hexes around them, in the same undo step as the move.
+      for(const scene of next.scenes)revealAroundTokens(previous.scenes.find(s=>s.id===scene.id),scene);
       // Keep attached origins saved, and leave auras in place when their token is removed.
       for(const scene of next.scenes) for(const area of scene.effects){
         if(!area.tokenId)continue;
@@ -1861,6 +1864,13 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     }
                   />
                   <Toggle label="Temporarily hide fog (GM only)" checked={hideFog} onChange={setHideFog}/>
+                  {scene.grid.type.startsWith("hex")&&<Field label="Reveal around party tokens">
+                    <select value={scene.fog.around??"off"} onChange={e=>{const v=e.target.value;updateScene(s=>{if(v==="off")delete s.fog.around;else{s.fog.around=+v;s.fog.enabled=true;revealAroundTokens(undefined,s);}});}}>
+                      <option value="off">Off</option>
+                      {Array.from({length:REVEAL_AROUND_MAX+1},(_,n)=><option key={n} value={n}>{n===0?"Only the hex they stand on":`${n} ${n===1?"hex":"hexes"} around them`}</option>)}
+                    </select>
+                  </Field>}
+                  {scene.grid.type.startsWith("hex")&&scene.fog.around!==undefined&&<p className="muted">As a party token moves, the hexes around it clear for good, for everyone. Hidden tokens and pieces don’t clear fog.</p>}
                   <PanelTip more={<>
                     <p>Hiding fog for yourself only changes your GM view. The player view and map exports keep it.</p>
                     <p>Switching fog off keeps your edits for next time.</p>
@@ -1913,7 +1923,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     <button
                       onClick={() =>
                         updateScene((s) => {
-                          s.fog = { enabled: true, base: true, strokes: [] };
+                          s.fog = { enabled: true, base: true, strokes: [], around: s.fog.around };
                         })
                       }
                     >
@@ -1922,7 +1932,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     <button
                       onClick={() =>
                         updateScene((s) => {
-                          s.fog = { enabled: true, base: false, strokes: [] };
+                          s.fog = { enabled: true, base: false, strokes: [], around: s.fog.around };
                         })
                       }
                     >

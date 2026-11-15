@@ -54,3 +54,11 @@
 /* Settings code: the whole code in one line of small monospace text. */
 .creator-panel input.hexmap-code { min-width:0; height:32px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:11px; }
 .hexmap-preview .creator-seed { flex-wrap:wrap; }
+/* Regenerate: the generator over the Map Creator, with "Keep the hexes you painted" beside Defaults. */
+.creator-dialog .hexmap-keep { margin-left:6px; font-size:13px; }
+@media(max-width:700px) { .creator-dialog .hexmap-keep { flex-basis:100%; order:-1; margin-left:0; } }
+/* Paint hexes: the biome grid sits in the narrow inspector, so the buttons are a little smaller. */
+.hexmap-paint .hexmap-biomes button { font-size:10.5px; }
+.hexmap-paint .hexmap-biomes button svg { width:24px; height:22px; }
+.hexmap-paint > * { flex-shrink:0; }
+.creator-dialog .hexmap-keep { display:inline-flex; align-items:center; gap:8px; }

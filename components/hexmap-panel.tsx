@@ -2,7 +2,8 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import { ArrowUp, Dices, X } from "lucide-react";
 import { biomeIds, biomes, type BiomeId } from "@/lib/hexmap/biomes";
-import { defaultHexLook, defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, randomHexSeed, readMix, writeMix, type HexBlend, type HexLook, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
+import { defaultHexLook, defaultHexOptions, generateHexMap, HEX_LIMITS, hexLands, MIX_WEIGHT, mixLayouts, normalizeHexOptions, randomHexSeed, readMix, writeMix, type HexBlend, type HexLayer, type HexLook, type HexMapOptions, type HexMode, type HexRelief, type MixEntry, type MixLayout, type Side } from "@/lib/hexmap/generate";
+import { paintTerrains, regenerateHexLayer, type HexPaint, type PaintTerrain } from "@/lib/hexmap/paint";
 import { applyHexPreset, hexPresets, matchingHexPreset } from "@/lib/hexmap/presets";
 import { hexSettingsCode, readHexSettingsCode } from "@/lib/hexmap/code";
 import type { GeneratedMap } from "@/lib/map-generator";
@@ -18,11 +19,18 @@ const varietyWord = (v: number) => v < 0.2 ? "Narrow" : v < 0.45 ? "Some" : v < 
 const SIDES: [Side, string][] = [["n", "North"], ["s", "South"], ["w", "West"], ["e", "East"]];
 const BiomeIcon = ({ id }: { id: BiomeId }) => <svg viewBox="-11 -10 22 20" aria-hidden="true"><path d="M10 0L5 8.7L-5 8.7L-10 0L-5 -8.7L5 -8.7Z" fill={biomes[id].flat}/><path d="M0 -6L4 2L-4 2Z" fill={biomes[id].tree}/></svg>;
 
-/** Makes a hex map from a seed: the Hex map tab of Start a new map. */
-export default function HexMapPanel({ close, start }: { close: () => void; start: (map: GeneratedMap) => void }) {
-  const [o, setO] = useState<HexMapOptions>(() => ({ ...defaultHexOptions, seed: randomHexSeed() }));
-  const [big, setBig] = useState(false);
-  const [look, setLook] = useState<HexLook>(defaultHexLook);
+const lookOf = (l: HexLook): HexLook => ({ look: l.look, lines: l.lines, numbers: l.numbers, legend: l.legend, labels: l.labels });
+export type Regenerated = ReturnType<typeof regenerateHexLayer>;
+
+/**
+ * Makes a hex map from a seed: the Hex map tab of Start a new map. With `from`, it starts from an
+ * existing map's settings and Regenerate replaces that map, keeping the hexes painted by hand.
+ */
+export default function HexMapPanel({ close, start, from, regenerate }: { close: () => void; start?: (map: GeneratedMap) => void; from?: HexLayer; regenerate?: (made: Regenerated) => void }) {
+  const [o, setO] = useState<HexMapOptions>(() => from ? normalizeHexOptions(from.options) : ({ ...defaultHexOptions, seed: randomHexSeed() }));
+  const [big, setBig] = useState(() => !!from && (from.cols > 60 || from.rows > 45));
+  const [look, setLook] = useState<HexLook>(() => from ? lookOf(from) : defaultHexLook);
+  const [keep, setKeep] = useState(true);
   const [pasted, setPasted] = useState(""), [copied, setCopied] = useState(false);
   const code = hexSettingsCode(o, look);
   const paste = (text: string) => {
@@ -31,12 +39,13 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
     if (read) { setO(read.options); setLook(read.look); setBig(read.options.cols > 60 || read.options.rows > 45); setPasted(""); }
   };
   const shown = useDeferredValue(o);
-  const map = useMemo(() => generateHexMap(shown), [shown]);
+  const map = useMemo(() => from ? regenerateHexLayer(from, shown, defaultHexLook, keep) : generateHexMap(shown), [from, shown, keep]);
   const set = <K extends keyof HexMapOptions>(key: K, value: HexMapOptions[K]) => setO(prev => ({ ...prev, [key]: value }));
-  const drawing = { background: HEX_BACKGROUND, style: null, hexes: { ...map.layer, ...look } };
+  const drawing = { background: HEX_BACKGROUND, style: null, hexes: { ...map.layer, ...look, x: 0, y: 0 } };
   const use = () => {
+    if (from) { regenerate?.(regenerateHexLayer(from, o, look, keep)); return; }
     const made = generateHexMap(o);
-    start({ name: `Hex map (${o.seed.trim() || "map"})`, width: made.width, height: made.height, drawing: { background: HEX_BACKGROUND, style: null, shapes: [], folders: [], layerOrder: [], hexes: { ...made.layer, ...look } } });
+    start?.({ name: `Hex map (${o.seed.trim() || "map"})`, width: made.width, height: made.height, drawing: { background: HEX_BACKGROUND, style: null, shapes: [], folders: [], layerOrder: [], hexes: { ...made.layer, ...look } } });
   };
   const maxCols = big ? HEX_LIMITS.cols[1] : 60, maxRows = big ? HEX_LIMITS.rows[1] : 45;
   const across = o.orient === "flat" ? (o.cols - 1) * 0.75 * 2 / Math.sqrt(3) + 1 : o.cols + 0.5;
@@ -162,9 +171,10 @@ export default function HexMapPanel({ close, start }: { close: () => void; start
     </div>
     <footer>
       <button type="button" onClick={() => { setO({ ...defaultHexOptions, seed: o.seed }); setBig(false); setLook(defaultHexLook); }}>Defaults</button>
+      {!!from?.painted.length && <label className="creator-check hexmap-keep"><input type="checkbox" checked={keep} onChange={e => setKeep(e.target.checked)}/>Keep {from.painted.length === 1 ? "the hex" : `the ${from.painted.length} hexes`} you painted</label>}
       <span className="creator-spacer"/>
       <button type="button" onClick={close}>Cancel</button>
-      <button type="button" className="primary" onClick={use}>Use this map</button>
+      <button type="button" className="primary" onClick={use}>{from ? "Regenerate" : "Use this map"}</button>
     </footer>
   </>;
 }
@@ -192,4 +202,42 @@ function Section({ title, summary, open, children }: { title: string; summary: s
     <summary><span>{title}</span><span className="hexmap-summary">{summary}</span></summary>
     <div className="creator-panel">{children}</div>
   </details>;
+}
+
+/** Regenerate in the Map Creator: the generator with this map's settings, replacing the map. */
+export function HexRegenerateDialog({ layer, close, regenerate }: { layer: HexLayer; close: () => void; regenerate: (made: Regenerated) => void }) {
+  return <div className="creator-dialog-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
+    <div className="creator-dialog hexmap-regenerate" role="dialog" aria-modal="true" aria-labelledby="hex-regenerate-title" onKeyDown={e => { if (e.key === "Escape") close(); }}>
+      <header><h2 id="hex-regenerate-title">Regenerate the hex map</h2><button className="creator-icon" aria-label="Close" onClick={close}><X size={18}/></button></header>
+      <HexMapPanel close={close} from={layer} regenerate={regenerate}/>
+    </div>
+  </div>;
+}
+
+/** The Paint hexes tool's settings: the biome and terrain to paint, or restoring hexes as they were made. */
+export function HexPaintPanel({ paint, setPaint, restore, setRestore, painted, clear, regenerate }: {
+  paint: HexPaint; setPaint: (p: HexPaint) => void; restore: boolean; setRestore: (on: boolean) => void;
+  painted: number; clear: () => void; regenerate: () => void;
+}) {
+  return <div className="creator-panel hexmap-paint">
+    <h3>Paint hexes</h3>
+    <div className="creator-seg" role="group" aria-label="Paint or restore">
+      <button type="button" aria-pressed={!restore} onClick={() => setRestore(false)}>Paint</button>
+      <button type="button" aria-pressed={restore} onClick={() => setRestore(true)}>Restore</button>
+    </div>
+    {restore ? <p className="creator-measure">Click or drag across painted hexes to put them back as the generator made them.</p> : <>
+      <div className="hexmap-biomes" role="group" aria-label="Biome to paint">
+        {biomeIds.map(id => <button key={id} type="button" aria-pressed={paint.biome === id} title={biomes[id].hint} onClick={() => setPaint({ ...paint, biome: id })}>
+          <BiomeIcon id={id}/>{biomes[id].name}</button>)}
+      </div>
+      <label className="hexmap-select">Terrain<select value={paint.terrain} onChange={e => setPaint({ ...paint, terrain: e.target.value as PaintTerrain })}>
+        {paintTerrains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+      <p className="creator-measure">Click or drag across hexes. Water becomes shallows beside the sea and a lake anywhere else. Alt-click a hex to pick up its biome and terrain.</p>
+    </>}
+    <p className="creator-measure">{painted ? `${painted} ${painted === 1 ? "hex" : "hexes"} painted, shown with a dashed outline. They stay when you regenerate the map.` : "Painted hexes get a dashed outline and stay when you regenerate the map."}</p>
+    <div className="creator-actions">
+      <button type="button" onClick={regenerate}><Dices size={15}/> Regenerate…</button>
+      {painted > 0 && <button type="button" onClick={clear}>Restore all</button>}
+    </div>
+  </div>;
 }

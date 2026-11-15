@@ -3,6 +3,7 @@ import { orderedShapes } from "./map-drawing.ts";
 import { customStampAsset, stampById } from "./map-stamps.ts";
 import { hexCells, hexGridFor } from "./hexmap/layout.ts";
 import { isSettlement, placeKindNames } from "./hexmap/places.ts";
+import { revealAroundTokens } from "./hex-fog.ts";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 import { cutOpenings, wallSegments } from "./map-creator.ts";
@@ -15,6 +16,8 @@ export type UseOptions = {
   fog: boolean; markers: boolean; grid: { size: number; units: number; unit: string };
   /** Stamps become pieces on the table: the picture for each stamp's `look`, as an asset id. Null leaves stamps in the map. */
   pieces?: Record<string, string> | null;
+  /** On a hex map with fog: clear this many hexes around party tokens as they move (see lib/hex-fog.ts). */
+  around?: number | null;
 };
 
 /** Labels drawn in a circle are room numbers. */
@@ -104,7 +107,11 @@ export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
     if (hexes.numbers) scene.grid.labels = false;
   }
   else Object.assign(scene.grid, { type: "square", size: options.grid.size, offsetX: 0, offsetY: 0, units: options.grid.units, unit: options.grid.unit });
-  if (options.fog) scene.fog = { enabled: true, base: true, strokes: [] };
+  if (options.fog) {
+    scene.fog = { enabled: true, base: true, strokes: [], ...(hexes && options.around != null ? { around: Math.max(0, Math.min(3, Math.round(options.around))) } : {}) };
+    // Party tokens already on the scene clear their hexes straight away.
+    revealAroundTokens(undefined, scene);
+  }
   if (options.markers && scene.drawing) {
     const kept = (scene.pointsOfInterest ?? []).filter(p => !p.id.startsWith(roomMarkerPrefix));
     scene.pointsOfInterest = [...kept, ...roomMarkers(scene.drawing), ...hexPlaceMarkers(scene.drawing)].slice(0, 500);

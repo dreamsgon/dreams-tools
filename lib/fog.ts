@@ -182,3 +182,21 @@ export function flattenFogRegions(fog: Scene["fog"], width: number, height: numb
       : "The fog geometry could not be calculated. Your original fog is unchanged."};
   }
 }
+
+/** Whether a point is under the fog: the last stroke over it decides, or the base when none is. */
+export function fogged(s: Pick<Scene, "fog">, p: Point) {
+  if (!s.fog.enabled) return false;
+  let covered = s.fog.base;
+  for (const stroke of s.fog.strokes) {
+    const inside = stroke.shape === "brush"
+      ? stroke.points.some((q, i) => segmentDistance(p, stroke.points[Math.max(0, i - 1)], q) <= stroke.size / 2)
+      : fogRegionContains(stroke, p);
+    if (inside) covered = stroke.mode === "cover";
+  }
+  return covered;
+}
+function segmentDistance(p: Point, a: Point, b: Point) {
+  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
+  const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0;
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}

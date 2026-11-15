@@ -1,8 +1,9 @@
 import type { MapShape, Point } from "./model.ts";
 
-/** The drawing tools, in rail order, with their one-key shortcuts. */
+/** The drawing tools, in rail order, with their one-key shortcuts. Paint hexes is only there on a hex map. */
 export const creatorTools = [
   { id: "select", label: "Select", key: "V" },
+  { id: "hex", label: "Paint hexes", key: "B", hexOnly: true },
   { id: "rect", label: "Room", key: "R" },
   { id: "poly", label: "Shaped room", key: "P" },
   { id: "circle", label: "Round room", key: "C" },
@@ -16,7 +17,9 @@ export const creatorTools = [
   { id: "label", label: "Label", key: "T" },
 ] as const;
 export type CreatorTool = typeof creatorTools[number]["id"];
-export const toolForKey = (key: string): CreatorTool | null => creatorTools.find(t => t.key === key.toUpperCase())?.id ?? null;
+/** The tools a drawing offers: Paint hexes only when it has a hex map. */
+export const toolsFor = (hexMap: boolean) => creatorTools.filter(t => hexMap || !("hexOnly" in t));
+export const toolForKey = (key: string, hexMap = false): CreatorTool | null => toolsFor(hexMap).find(t => t.key === key.toUpperCase())?.id ?? null;
 
 /** How the drawing maps to the table: pixels per square, and what a square is worth. */
 export type CreatorGrid = { size: number; units: number; unit: string };

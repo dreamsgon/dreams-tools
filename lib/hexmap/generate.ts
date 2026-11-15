@@ -1,4 +1,4 @@
-import { biomeIds, biomes, hexCode, OUTSIDE, type BiomeId, type TerrainId } from "./biomes.ts";
+import { biomeIds, biomes, hexCode, isWaterTerrain, OUTSIDE, type BiomeId, type TerrainId } from "./biomes.ts";
 import { fittingHexSize, hexCells, hexDistance, hexMapSize, hexNeighbours, type HexOrient, type HexOutline } from "./layout.ts";
 import { clamp, hashText, layeredNoise, quantile, ranks, seededRandom } from "./noise.ts";
 import { placeHexPlaces, type HexPlace } from "./places.ts";
@@ -145,6 +145,8 @@ export type HexLayer = {
   places: HexPlace[];
   /** Each road as the hexes it runs through, between two settlements. */
   roads: number[][];
+  /** Hexes painted by hand in the Map Creator; Regenerate keeps them. */
+  painted: number[];
   /** The options it was made with, so it can be made again. */
   options: Record<string, string | number | boolean>;
 } & HexLook;
@@ -156,6 +158,8 @@ export type HexLayer = {
 export type HexLook = { look: "painted" | "flat" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se"; labels: boolean };
 export const defaultHexLook: HexLook = { look: "painted", lines: true, numbers: false, legend: "none", labels: true };
 export type GeneratedHexMap = { layer: HexLayer; width: number; height: number; landShare: Partial<Record<BiomeId, number>> };
+/** Hexes to keep as they are, by column and row, so they survive a change of map size. */
+export type HexKeep = { c: number; r: number; biome: BiomeId; terrain: TerrainId }[];
 
 /** Hexes are generated at a fixed size, so the same options shape the same land at any drawing size. */
 const U = 10;
@@ -170,7 +174,8 @@ export function climateBiome(t: number, m: number): BiomeId {
   return table[hot][wet];
 }
 
-export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHexMap {
+/** `keep`: hexes painted by hand, which win over what the generator makes; rivers and places work around them. */
+export function generateHexMap(input: HexMapOptions, size?: number, keep: HexKeep = []): GeneratedHexMap {
   const o = normalizeHexOptions(input);
   const shape = { cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, size: U };
   const cells = hexCells(shape), nb = hexNeighbours(shape, cells), { width: W, height: H } = hexMapSize(shape);
@@ -285,9 +290,24 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   // Water in the coldest places freezes.
   for (const i of inside) if (water[i] && o.mode === "climate" && T[i] < 0.12) biome[i] = "glacier";
 
+  // Painted hexes win. Painted shallows or lakes become whichever suits the water around them now.
+  const painted: number[] = [], seenPaint = new Set<number>();
+  for (const k of keep) {
+    if (k.c < 0 || k.r < 0 || k.c >= o.cols || k.r >= o.rows) continue;
+    const i = k.r * o.cols + k.c; if (!cells[i].inside || seenPaint.has(i)) continue;
+    painted.push(i); seenPaint.add(i); biome[i] = k.biome; terrain[i] = k.terrain; water[i] = isWaterTerrain(k.terrain) ? 1 : 0;
+  }
+  // Painted water joined to the sea (through more painted water) is shallows, the rest lakes.
+  const paintedWater = new Set(painted.filter(i => terrain[i] === "shallow" || terrain[i] === "lake")), bySea = new Set<number>();
+  const reach = [...paintedWater].filter(i => nb[i].some(j => !paintedWater.has(j) && (terrain[j] === "deep" || terrain[j] === "shallow")));
+  reach.forEach(i => bySea.add(i));
+  while (reach.length) { const i = reach.pop()!; for (const j of nb[i]) if (paintedWater.has(j) && !bySea.has(j)) { bySea.add(j); reach.push(j); } }
+  for (const i of paintedWater) terrain[i] = bySea.has(i) ? "shallow" : "lake";
+  painted.sort((a, b) => a - b);
+
   // Rivers: from high ground, downhill until they reach water or another river.
   const rivers: number[][] = [], onRiver = new Uint8Array(N);
-  const sources = land.filter(i => terrain[i] === "mountain" || terrain[i] === "hills" || terrain[i] === "peak");
+  const sources = land.filter(i => !water[i] && (terrain[i] === "mountain" || terrain[i] === "hills" || terrain[i] === "peak"));
   const r3 = seededRandom(seedN ^ 0x41fe5);
   for (let k = sources.length - 1; k > 0; k--) { const j = Math.floor(r3() * (k + 1)); [sources[k], sources[j]] = [sources[j], sources[k]]; }
   for (const src of sources) {
@@ -394,7 +414,7 @@ export function generateHexMap(input: HexMapOptions, size?: number): GeneratedHe
   const landShare = Object.fromEntries(Object.entries(counts).map(([b, n]) => [b, n! / landCount])) as Partial<Record<BiomeId, number>>;
   const R = size ?? fittingHexSize(o.cols, o.rows, o.orient), drawn = hexMapSize({ ...shape, size: R });
   return {
-    layer: { ...defaultHexLook, x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, places, roads, options: { ...o } },
+    layer: { ...defaultHexLook, x: 0, y: 0, size: R, cols: o.cols, rows: o.rows, orient: o.orient, outline: o.outline, miles: o.miles, cells: code, rivers, places, roads, painted, options: { ...o } },
     width: Math.ceil(drawn.width), height: Math.ceil(drawn.height), landShare,
   };
 }
