@@ -50,6 +50,7 @@ Do not commit `.env` files, credentials, account exports, campaign backups, `nod
 - Encyclopedia player shares must filter GM content on the server, including masked map images, private tabs, other campaigns and calendar/weather visibility. Never return the original image when fog requires a masked image.
 - Keep both tool styles in their route-group layouts; do not merge their global CSS. Use full-page anchor navigation between tools.
 - Do not commit secrets, MCP keys, webhooks, account data, .env files, .dev.vars, runtime storage, node_modules, build output, or campaign backups.
+- Keep Vercel Function bundles small (Hobby has a 10 GB Functions Storage limit across every kept deployment). Do not import large or native packages (sharp, pdfjs, tesseract, three) from modules that many API routes share; put that work in one route and reach it by link or call. After `npm run build`, check the `.next/server/**/*.nft.json` traces of the routes you touched. Do not undo the `outputFileTracingExcludes` in next.config.ts or the `claude/**` preview rule in vercel.json without the owner's say. See DEPLOY_VERCEL.md, Functions Storage.
 - Retain third-party license notices. Do not copy rulebook content into the project.
 
 ## Publishing
