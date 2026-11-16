@@ -24,12 +24,14 @@ Tools, in groups:
 
 | Group | Examples |
 |---|---|
-| Read | `list_worlds`, `read_campaign`, `search_campaign`, `read_article`, `read_page` (lists a page's ties), `read_recaps` |
-| Write pages | `create_page`, `append_to_page`, `add_quest_log`, `set_objective`, `set_quest_state`, `add_codex_find`, `write_session_notes`, `tie_pages` |
+| Read | `list_worlds`, `read_campaign`, `search_campaign`, `read_article`, `read_page` (lists a page's ties, or a vehicle's sheet), `read_recaps` |
+| Write pages | `create_page` (also makes vehicle pages), `append_to_page`, `add_quest_log`, `set_objective`, `set_quest_state`, `add_codex_find`, `write_session_notes`, `tie_pages` |
 | Dice | `roll` (fair server-side dice, posted to Discord when set up) |
 | Table (paired Maptable campaign only) | `move_token`, `damage`, `heal`, `set_condition`, `show_token`, `reveal_fog` |
 | Combat | `start_combat`, `next_turn`, `end_combat` |
 | Pictures | `view_scene` (the scene as an image: map, grid squares, tokens with names and HP, effects, fog, GM or players view) |
+
+Vehicles have no tools of their own. `create_page` with `kind` set to `vehicle` makes a vehicle page: `vehicleType` picks one of the world's vehicle types by name or id, and `rollUp` (with an optional `template`) fills it from the vehicle generator. A vehicle page always starts GM only. `read_page` returns the vehicle's sheet: type, owner, commander, stats, gauges, stations and crew, hold, systems and the latest 10 log entries, with GM-only parts marked. A players-only connection reads only what the vehicle's shared tabs show.
 
 Ready-made **prompts**: `prep_session`, `recap_session`, `run_scene`, `run_combat`, `story_so_far`.
 

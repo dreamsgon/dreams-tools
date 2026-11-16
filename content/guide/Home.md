@@ -18,27 +18,28 @@ This guide covers features that are finished and live. Each page explains what t
 
 3. [Maptable basics](Maptable-Basics): scenes, tokens, fog, initiative, token controls.
 4. [Dice, rolls and Discord](Dice-Rolls-and-Discord)
-5. [Map Creator](Map-Creator): draw dungeons, caves and villages, then use them in Maptable.
-6. [Hex map generator](Hex-Map-Generator)
-7. [World maps](World-Maps): painted world and planet maps, hex crawls, "Check with your AI".
-8. [Star systems and space](Star-Systems-and-Space): galaxies, sectors, star systems and planets.
+5. [Map Creator](Map-Creator): draw maps with stamps and lights, then use them in Maptable.
+6. [Dungeon generator](Dungeon-Generator): dungeons, caverns, buildings and villages with a room key, dressing and lighting.
+7. [Hex map generator](Hex-Map-Generator)
+8. [World maps](World-Maps): painted world and planet maps, hex crawls, "Check with your AI".
+9. [Star systems and space](Star-Systems-and-Space): galaxies, sectors, star systems and planets.
 
 ## The Encyclopedia
 
-9. [Encyclopedia basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, templates, random tables.
-10. [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
-11. [Sheet import, export and Google Sheets](Sheet-Import-Export-and-Google-Sheets)
-12. [Inventory, spells and stores](Inventory-Spells-and-Stores)
-13. [Quests and the Codex](Quests-and-Codex)
-14. [Relationships and family trees](Relationships-and-Family-Trees)
-15. [Ships and vehicles](Ships-and-Vehicles)
+10. [Encyclopedia basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, templates, random tables.
+11. [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
+12. [Sheet import, export and Google Sheets](Sheet-Import-Export-and-Google-Sheets)
+13. [Inventory, spells and stores](Inventory-Spells-and-Stores)
+14. [Quests and the Codex](Quests-and-Codex)
+15. [Relationships and family trees](Relationships-and-Family-Trees)
+16. [Ships and vehicles](Ships-and-Vehicles)
 
 ## AI and other tables
 
-16. [AI connections](AI-Connections): connect an AI app over MCP or use your own API key.
-17. [Session recaps and AI writing](Session-Recaps-and-AI-Writing)
-18. [VTT bridges (Foundry VTT)](VTT-Bridges)
-19. [Set up Foundry VTT](Foundry-VTT-Setup): step by step, from bridge key to your party in Foundry.
+17. [AI connections](AI-Connections): connect an AI app over MCP or use your own API key.
+18. [Session recaps and AI writing](Session-Recaps-and-AI-Writing)
+19. [VTT bridges (Foundry VTT)](VTT-Bridges)
+20. [Set up Foundry VTT](Foundry-VTT-Setup): step by step, from bridge key to your party in Foundry.
 
 ## Reference
 

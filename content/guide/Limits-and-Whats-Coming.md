@@ -13,14 +13,13 @@
 ## Planned or in progress
 
 - **Space and planets**: share the Galaxy, Hex map and Survey chart tabs with players (charted systems only).
-- **Hex maps**: painting hexes, regenerating while keeping painted hexes, and revealing hexes around tokens.
+- **Hex maps**: clearing fog around the party when an AI or a player moves a token (today only the GM's own moves in Maptable do), and a player-view fog preview in the generator.
 - **Stores**: a store as a Maptable token, calendar hours, restocking from a random table, live trading between players.
-- **Vehicles**: a New vehicle generator, a Log tab, and Add to Maptable as a large token; vehicle pages from the AI's `create_page`.
+- **Vehicles**: the vehicle Hold as a container for store-style taking and putting.
 - **Bridges**: more kinds in the Bridge API and Foundry module (scenes, tokens, tables, calendar, combat; quest changes made in Foundry); D&D Beyond link import (unofficial); Roll20 and Fantasy Grounds.
 - **Imported sheets**: HP − / + on the page and from tokens.
 - **Sheet formulas**: field references (so a skill can follow its ability).
 - **Members**: the campaign forum.
 - **AI**: a "Show earlier messages" control for long chats; reading private Drive files for recaps.
-- **Dungeons**: more generator controls (the Map Creator's Generate already makes dungeons, caves, villages and wilderness).
 
 The full, current list is in `TODO.md` in the repository.
