@@ -149,7 +149,7 @@ type Saver = (d: Dashboard) => Promise<void>;
 function DashboardView({ hub, layout, save, saveFront, customize }: { hub: CampaignHub; layout: Dashboard; save: Saver; saveFront: (p: FrontPage) => Promise<void>; customize?: () => void }) {
   if (!layout.widgets.length) return <div className="hub-card hub-empty"><h2>Nothing on the dashboard</h2><p>{customize ? <>Choose what to show with <button className="hub-text-button" onClick={customize}>Customize</button>.</> : "Choose what to show with Customize."}</p></div>;
   return <div className="hub-grid">
-    {layout.widgets.map(w => <section key={w.type} className={`hub-card hub-w-${w.type}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}>
+    {layout.widgets.map(w => <section key={w.type} className={`hub-card hub-w-${w.type}${w.h ? ` hub-h${w.h}` : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}>
       <WidgetBody type={w.type} size={w.size} h={w.h ?? 1} hub={hub} layout={layout} save={save} saveFront={saveFront} />
     </section>)}
   </div>;
@@ -164,7 +164,7 @@ function Customize({ hub, draft, setDraft: replace, halves }: { hub: CampaignHub
   const noop: Saver = async () => {};
   return <div className="hub-custom">
     <div className="hub-grid hub-grid-edit" onDragOver={ev => ev.preventDefault()}>
-      {draft.widgets.map((w, i) => <section key={w.type} className={`hub-card hub-w-${w.type}${dragging === w.type ? " dragging" : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}
+      {draft.widgets.map((w, i) => <section key={w.type} className={`hub-card hub-w-${w.type}${w.h ? ` hub-h${w.h}` : ""}${dragging === w.type ? " dragging" : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}
         draggable onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", w.type); setDragging(w.type); }} onDragEnd={() => setDragging(null)}
         onDragEnter={() => dragOver(w.type)}>
         <div className="hub-edit-bar">

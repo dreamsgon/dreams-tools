@@ -187,7 +187,7 @@
   .hub-banner { height:96px; }
 }
 @media (max-width:640px) {
-  .hub-grid > .hub-card { grid-column:1/-1 !important; grid-row:auto !important; }
+  .hub-grid > .hub-card { grid-column:1/-1 !important; grid-row:auto !important; min-height:0; }
   /* Heights are ignored on a phone: one column, each widget as tall as it needs. */
   .hub-heights { display:none; }
   .hub-board { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -219,3 +219,6 @@
 .hub-story-style { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
 .hub-story-style a { color:var(--accent); text-decoration:underline; padding-bottom:8px; }
 .hub-story-keep { display:flex !important; flex-direction:row !important; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
+
+/* A tall section spans 2 or 3 rows; the minimum keeps it visibly tall even where its neighbours are short or missing. */
+.hub-h2 { min-height:440px; } .hub-h3 { min-height:680px; }

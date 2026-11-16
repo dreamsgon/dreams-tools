@@ -84,7 +84,7 @@ export const presetNames: Record<HomePreset, string> = { standard: "Today's page
 /** type:size or type:size:height. */
 const presetWidgets: Record<HomePreset, string[]> = {
   standard: ["continue:l", "campaigns:l", "recent:l"],
-  gm: ["continue:l", "links:s:2", "campaigns:m", "folders:m", "todo:s:2", "quests:m", "sessions:s", "attention:s", "roll:s", "recent:m", "pinned:s", "notes:s"],
+  gm: ["continue:l", "campaigns:l", "links:s:2", "folders:m", "quests:m", "todo:s:2", "sessions:s", "attention:s", "recent:m", "roll:s", "pinned:s", "notes:s"],
   minimal: ["links:l", "campaigns:l"],
 };
 const presetOptions: Partial<Record<HomePreset, HomeOptions>> = { gm: { campaigns: { show: "recent", count: 8 }, recent: { count: 6 }, roll: { tables: true } } };

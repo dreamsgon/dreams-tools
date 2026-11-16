@@ -118,8 +118,8 @@ test('section heights: 1 to 3, optional, old saves stay valid', () => {
 
 test('GM prep has the new order with tall Quick links and To-do; the other presets are unchanged', () => {
   assert.deepEqual(presetLayout('gm').widgets,[
-    {type:'continue',size:'l'},{type:'links',size:'s',h:2},{type:'campaigns',size:'m'},{type:'folders',size:'m'},{type:'todo',size:'s',h:2},{type:'quests',size:'m'},
-    {type:'sessions',size:'s'},{type:'attention',size:'s'},{type:'roll',size:'s'},{type:'recent',size:'m'},{type:'pinned',size:'s'},{type:'notes',size:'s'}]);
+    {type:'continue',size:'l'},{type:'campaigns',size:'l'},{type:'links',size:'s',h:2},{type:'folders',size:'m'},{type:'quests',size:'m'},{type:'todo',size:'s',h:2},
+    {type:'sessions',size:'s'},{type:'attention',size:'s'},{type:'recent',size:'m'},{type:'roll',size:'s'},{type:'pinned',size:'s'},{type:'notes',size:'s'}]);
   assert.equal(homeLayoutSchema.safeParse(presetLayout('gm')).success,true);
   assert.deepEqual(presetLayout('standard').widgets,[{type:'continue',size:'l'},{type:'campaigns',size:'l'},{type:'recent',size:'l'}]);
   assert.deepEqual(presetLayout('minimal').widgets,[{type:'links',size:'l'},{type:'campaigns',size:'l'}]);

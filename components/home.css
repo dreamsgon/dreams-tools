@@ -112,7 +112,8 @@
 .home-grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-auto-flow:row dense; gap:24px 16px; align-items:stretch; }
 .home-w { display:flex; flex-direction:column; min-width:0; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg); }
 .home-w-s { grid-column:span 4; } .home-w-m { grid-column:span 8; } .home-w-l { grid-column:span 12; }
-.home-w-h2 { grid-row:span 2; } .home-w-h3 { grid-row:span 3; }
+/* A tall section spans 2 or 3 rows; the minimum keeps it visibly tall even where its neighbours are short or missing. */
+.home-w-h2 { grid-row:span 2; min-height:440px; } .home-w-h3 { grid-row:span 3; min-height:680px; }
 /* The main part of a section fills what is left of a tall one. */
 .home-grow { flex:1 1 auto; min-height:0; }
 .home-recent.home-grow { display:flex; flex-direction:column; }
@@ -259,7 +260,7 @@
   .home-grid { gap:16px; }
   .home-w-s, .home-w-m, .home-w-l { grid-column:span 12; }
   /* Heights are ignored on a phone: one column, each section as tall as it needs. */
-  .home-w-h2, .home-w-h3 { grid-row:auto; }
+  .home-w-h2, .home-w-h3 { grid-row:auto; min-height:0; }
   .home-w { padding:14px; }
   .home-w-bare { padding:0; }
   /* The tool buttons and Customize sit two by two instead of running off the screen. */
