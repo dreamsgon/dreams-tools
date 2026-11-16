@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RPG Tools Dice Link</title>
+<style>
+ body{font:13px/1.45 system-ui,sans-serif;margin:0;padding:12px 14px;width:280px;color:#1d2427;background:#f6f7f7}
+ h1{font-size:15px;margin:0 0 8px}
+ label{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+ select{margin-left:24px;font:inherit;padding:3px 4px}
+ small{display:block;color:#5b6569}
+ #status{border-top:1px solid #d6dbdd;margin-top:10px;padding-top:8px;color:#5b6569}
+ @media (prefers-color-scheme:dark){body{background:#1b1f21;color:#e6eaeb}small,#status{color:#a3adb1}#status{border-color:#3a4144}}
+</style>
+</head>
+<body>
+<h1>RPG Tools Dice Link</h1>
+<label><input type="checkbox" id="toRoll20"><span>Send RPG Tools rolls to Roll20 chat</span></label>
+<select id="mode" aria-label="How rolls appear in Roll20">
+ <option value="result">Show the RPG Tools result</option>
+ <option value="reroll">Roll again with Roll20's dice</option>
+</select>
+<label><input type="checkbox" id="fromRoll20"><span>Send Roll20 rolls to the RPG Tools roll log<small>Turn this on in one browser only, usually the GM's. Whispered rolls never go.</small></span></label>
+<p id="status">Checking tabs…</p>
+<script src="core.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

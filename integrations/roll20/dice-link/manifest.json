@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "RPG Tools Dice Link",
+  "version": "0.1.0",
+  "description": "Sends rolls made in RPG Tools to your Roll20 game's chat, and Roll20 rolls to the RPG Tools roll log.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://app.roll20.net/*", "__RPG_TOOLS_MATCH__"],
+  "background": { "service_worker": "background.js", "scripts": ["background.js"] },
+  "action": { "default_title": "RPG Tools Dice Link", "default_popup": "popup.html" },
+  "content_scripts": [
+    { "matches": ["https://app.roll20.net/editor*"], "js": ["core.js", "roll20.js"], "run_at": "document_idle" },
+    { "matches": ["__RPG_TOOLS_MATCH__"], "js": ["core.js", "rpgtools.js"], "run_at": "document_start" }
+  ],
+  "browser_specific_settings": { "gecko": { "id": "dice-link@rpg-tools.local", "strict_min_version": "121.0" } }
+}

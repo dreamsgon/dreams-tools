@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { diceTargetStore } from "@/lib/dice-target";
 import { onOpenDiceTray } from "@/lib/dice-open";
+import { listenForLinkedRolls } from "@/lib/roll-link";
 import { Dices, ScrollText } from "lucide-react";
 import type { DicePanel } from "./standard-dice-tray";
 import "./global-dice.css";
@@ -31,6 +32,8 @@ export default function GlobalDice() {
   const target = useSyncExternalStore(diceTargetStore.subscribe, diceTargetStore.get, diceTargetStore.getServer);
   // Other parts of a page (the Encyclopedia's phone bar) can ask for the tray without these buttons.
   useEffect(() => onOpenDiceTray(next => { setUsed(true); setOpen({ panel: next, path: pathname }); }), [pathname]);
+  // Rolls from Roll20 (through the RPG Tools dice link extension) go into the roll log on every page, Maptable included.
+  useEffect(() => listenForLinkedRolls(), []);
   if (hasOwnDice(pathname)) return null;
   const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(panel === next ? null : next); };
   return <>

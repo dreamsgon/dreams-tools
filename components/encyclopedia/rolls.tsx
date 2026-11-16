@@ -28,7 +28,7 @@ export type RollOptions={
 /** Rolls a formula and shows the result card. Rolls never change the encyclopedia. */
 export function rollInline(title:string,formula:string,options:RollOptions={}){
  const rolled=rollWithMode(formula,options.mode),{mode,total,detail}=rolled;
- const logged=options.log?recordLocalRoll({label:title,total,breakdown:rolled.breakdown}):undefined;
+ const logged=options.log?recordLocalRoll({label:title,total,breakdown:rolled.breakdown,formula:rolled.formula}):undefined;
  const outcome=options.outcome?.(total)??undefined;
  const result:RollResult={id:++sequence,title,formula:rolled.formula,total,detail,at:Date.now(),base:formula,...(outcome?{outcome}:{}),...(options.outcome?{judge:options.outcome}:{}),...(mode?{mode}:{}),...(logged?{logId:logged.id}:{})};
  window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;
