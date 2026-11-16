@@ -7,7 +7,8 @@
  */
 import {Fragment,useMemo,useState} from 'react';
 import {Dices,Flag,Lock,LockOpen,Pause,Play,Plus,RefreshCw,Rocket,Settings2,Trash2} from 'lucide-react';
-import {newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
+import {newId,visibleEntries,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
+import {systemCheckRequest,type SystemChange} from '@/lib/encyclopedia/system-check';
 import {mirrorPlanets,planetOf} from '@/lib/encyclopedia/planets';
 import {starInfo} from '@/lib/encyclopedia/sectors';
 import {addWorldOutside,editWorld,findWorld,formatAU,hookKinds,isGiant,newStarSystem,parentOf,removeWorld,rerollHook,rerollWorld,starPhysics,starSizeFrom,travelInSystem,word,worldKindNames,worldLine,worldSummary,yearLength,zoneNotes,zoneOf,zones,type InSystemDrive,type Moon,type StarSystem,type SystemBody,type World,type ZoneName} from '@/lib/encyclopedia/star-systems';
@@ -15,15 +16,16 @@ import {Horizon,SystemOrbit,WorldDot,worldPx} from './system-art';
 import {WorldFields} from './world-fields';
 import {SystemDialog} from './system-dialog';
 import {FtlDialog,galaxyOf} from './ftl-dialog';
+import {SystemAiCheck} from './system-ai-check';
 import {confirmDialog} from '../confirm-dialog';
 import './galaxy.css';
 
-type Props={entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void};
+type Props={entry:Entry;data:Workspace;campaign?:Campaign;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void};
 const hookNames={lure:'Lure',danger:'Danger',secret:'Secret'};
 const zoneClass=(z:ZoneName)=>`is-${z.toLowerCase()}`;
 export const starLine=(s:StarSystem)=>`Class ${s.star}, ${starInfo[s.star].colour.toLowerCase()} · ${starPhysics[s.star].heat.toLowerCase()} · lives ${starPhysics[s.star].life.toLowerCase()}${s.companions.length?` · with ${s.companions.map(c=>`a Class ${c.star} companion${c.separation==='close'?' close in':' far out'}`).join(' and ')}`:''}`;
 
-export function SystemSheet({entry,data,change,onOpen}:Props){
+export function SystemSheet({entry,data,campaign,change,onOpen}:Props){
  const system=entry.starSystem??newStarSystem(entry.title),z=zones(system);
  const galaxyPage=galaxyOf(entry,data),drives=galaxyPage?.galaxy?.drives??[];
  const orgs=useMemo(()=>data.entries.filter(e=>e.kind==='faction'&&e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)).sort((a,b)=>a.title.localeCompare(b.title)),[data.entries,entry.worldId,entry.campaignId]);
@@ -45,6 +47,16 @@ export function SystemSheet({entry,data,change,onOpen}:Props){
  const driveName=driveOptions.find(d=>d[0]===drive)?.[1]??'Light speed';
  const W=system.bodies,a=W.find(w=>w.id===from)??W[0],b=W.find(w=>w.id===to)??W[W.length-1];
  const holderNames=system.options.holders.map(nameOf).filter((x):x is string=>!!x);
+ /** Check with your AI: the pages it can read (the system, the sector and galaxy above it, and the holders first), and where a fix goes. */
+ const ai=(()=>{
+  const pages=visibleEntries(data,entry.worldId,entry.campaignId).filter(e=>e.id===entry.id||!['folder','session','tasks','map'].includes(e.kind));
+  const suggested:string[]=entry.body.trim()?[entry.id]:[];
+  for(let up=entry.parentId,n=0;up&&n<6&&suggested.length<4;n++){const e=data.entries.find(x=>x.id===up);if(!e)break;if(e.kind!=='folder'&&e.body.trim())suggested.push(e.id);up=e.parentId;}
+  for(const h of system.options.holders)if(suggested.length<6&&!suggested.includes(h)&&pages.some(e=>e.id===h&&e.body.trim()))suggested.push(h);
+  const c=campaign&&(entry.campaignId===null||entry.campaignId===campaign.id)?campaign:data.campaigns.find(x=>x.id===entry.campaignId),w=data.worlds.find(x=>x.id===entry.worldId);
+  return {campaignId:c?.id??null,campaign:{name:c?.name??w?.name??'My campaign',description:c?.description||w?.description||undefined},pages,suggested};
+ })();
+ const applyFix=(c:SystemChange)=>save(editWorld(system,c.world,{[c.field]:c.value} as Partial<Moon>));
  /** Survey settings applied: the page's name, and its hex on the sector map, follow. */
  const apply=(next:StarSystem,name:string)=>{
   const link=next.sector;
@@ -100,6 +112,7 @@ export function SystemSheet({entry,data,change,onOpen}:Props){
      <p className="aside-hint">Gaps on the chart use {driveName.toLowerCase()==='light speed'?'light speed':driveName}.</p>
     </div>:<p className="aside-hint">Two or more worlds give travel times.</p>}
     <button type="button" className="button small" onClick={()=>setFtl(true)}><Rocket size={14}/> FTL drives</button>
+    <SystemAiCheck key={entry.id} campaignId={ai.campaignId} campaign={ai.campaign} pages={ai.pages} suggested={ai.suggested} request={systemCheckRequest(system,entry.title,nameOf)} worldName={id=>findWorld(system,id)?.name} onApply={applyFix}/>
    </aside>
   </div>
   {settings&&<SystemDialog name={entry.title} system={system} orgs={orgs} onClose={()=>setSettings(false)} onApply={apply}/>}

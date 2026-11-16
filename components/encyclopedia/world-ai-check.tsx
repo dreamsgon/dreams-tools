@@ -22,7 +22,7 @@ export function changeLabel(c: WorldChange) {
 }
 
 /** The campaign's connections made with the GM's own API key. */
-function useKeys(campaignId: string | null) {
+export function useKeys(campaignId: string | null) {
   const [keys, setKeys] = useState<Key[] | null>(null);
   useEffect(() => {
     if (!campaignId) return;
