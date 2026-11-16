@@ -1,0 +1,62 @@
+/* The quick campaign switcher, shared by Maptable and the Encyclopedia. Everything is namespaced csw-. */
+.csw { position:relative; min-width:0; }
+.csw-btn { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; box-sizing:border-box; padding:10px 16px; margin:0; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+.csw-btn:hover { background:var(--hover, var(--accent-soft)); }
+.csw-btn:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.csw-art { width:30px; height:30px; flex:none; box-sizing:border-box; border-radius:var(--radius, 4px); border:1px solid var(--accent); background:repeating-linear-gradient(135deg, var(--accent-soft) 0 6px, transparent 6px 12px); }
+.csw-name { flex:1; min-width:0; }
+.csw-name b { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; line-height:1.2; letter-spacing:0; }
+.csw-name small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--muted); font-size:12px; line-height:1.3; }
+.csw-chev { flex:none; color:var(--muted); transition:transform .15s; }
+.csw-btn[aria-expanded="true"] .csw-chev { transform:rotate(180deg); }
+/* In the Encyclopedia sidebar the button runs edge to edge, past the sidebar's side padding. */
+.csw-enc { margin:0 -12px 12px; }
+/* In a page header (the Maptable campaign list) it is a compact button. */
+.csw--bar { flex:none; }
+.csw--bar .csw-btn { width:auto; max-width:260px; min-height:36px; padding:4px 10px; border:1px solid var(--line); border-radius:var(--radius, 4px); }
+.csw--bar .csw-art { width:20px; height:20px; }
+.csw--bar .csw-name small { display:none; }
+.csw--bar .csw-name b { font-size:14px; }
+
+.csw-pop { position:absolute; z-index:var(--z-popover, 60); left:6px; right:6px; top:calc(100% + 2px); display:flex; flex-direction:column; box-sizing:border-box; max-height:min(560px, calc(100vh / var(--ui-zoom, 1) - 140px)); background:var(--panel, #fff); color:var(--ink); border:1px solid var(--line-strong, var(--line)); border-radius:var(--radius-lg, 6px); box-shadow:0 16px 48px rgb(0 0 0 / .28); text-align:left; font-size:13px; font-weight:400; white-space:normal; }
+.csw--bar .csw-pop { left:0; right:auto; width:340px; max-width:calc(100vw / var(--ui-zoom, 1) - 24px); }
+.csw-search { display:flex; align-items:center; gap:8px; margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:var(--muted); }
+.csw-search input { flex:1; min-width:0; height:auto; padding:0; border:0; border-radius:0; outline:0; background:none; box-shadow:none; color:var(--ink); font:inherit; font-size:14px; }
+.csw-search input:focus-visible { outline:0; box-shadow:none; }
+.csw-search kbd { flex:none; padding:0 4px; border:1px solid var(--line); border-radius:3px; background:none; color:var(--muted); font:inherit; font-size:11px; }
+.csw-body { overflow:auto; overscroll-behavior:contain; padding:6px; }
+.csw-head { display:flex; align-items:center; gap:6px; margin:8px 8px 4px; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+.csw-head:first-child { margin-top:4px; }
+.csw-head svg { width:13px; height:13px; }
+.csw-row, .csw-fold { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; box-sizing:border-box; padding:6px 8px; margin:0; border:0; border-radius:var(--radius, 4px); background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.csw-row:hover, .csw-fold:hover, .csw-row.kb, .csw-fold.kb { background:var(--hover, var(--accent-soft)); }
+.csw-row.cur { background:var(--accent-soft); }
+.csw-row.nohalf { opacity:.62; }
+.csw-mini { width:22px; height:22px; flex:none; box-sizing:border-box; border-radius:3px; border:1px solid var(--line-strong, var(--line)); background:repeating-linear-gradient(135deg, var(--accent-soft) 0 4px, transparent 4px 8px); }
+.csw-text { flex:1; min-width:0; }
+.csw-text strong { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:500; }
+.csw-text small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--muted); font-size:11px; }
+.csw-star { flex:none; display:inline-flex; color:var(--warning, var(--accent)); }
+.csw-star svg { width:12px; height:12px; fill:currentColor; }
+.csw-check { flex:none; display:inline-flex; color:var(--accent); }
+.csw-fold { min-height:34px; font-weight:500; }
+.csw-fold svg { flex:none; color:var(--muted); }
+.csw-fold .csw-fold-chev { transition:transform .15s; }
+.csw-fold[aria-expanded="true"] .csw-fold-chev { transform:rotate(90deg); }
+.csw-fold .csw-fold-name { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.csw-fold .csw-count { color:var(--muted); font-size:12px; font-weight:400; }
+.csw-note { margin:0; padding:10px 8px; color:var(--muted); }
+.csw-note button { padding:0; border:0; background:none; color:var(--accent); font:inherit; text-decoration:underline; cursor:pointer; }
+.csw-foot { display:flex; flex-wrap:wrap; gap:6px; padding:8px; border-top:1px solid var(--line); }
+.csw-foot a, .csw-foot button { flex:1 1 auto; display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; box-sizing:border-box; padding:4px 10px; border:1px solid var(--line); border-radius:var(--radius, 4px); background:none; color:var(--ink); font:inherit; font-size:12px; text-decoration:none; white-space:nowrap; cursor:pointer; }
+.csw-foot a:hover, .csw-foot button:hover { background:var(--hover, var(--accent-soft)); }
+.csw-foot svg { flex:none; }
+.csw-row:focus-visible, .csw-fold:focus-visible, .csw-foot a:focus-visible, .csw-foot button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+
+/* Phones: the popover spans the whole drawer (or sheet), and the shortcut hint goes. */
+@media (max-width:800px) {
+  .csw-pop, .csw--bar .csw-pop { left:6px; right:6px; width:auto; max-width:none; max-height:calc(100dvh / var(--ui-zoom, 1) - 160px); }
+  .csw--bar .csw-pop { position:fixed; left:8px; right:8px; top:56px; }
+  .csw-search kbd { display:none; }
+  .csw-row, .csw-fold { min-height:44px; }
+}

@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
 import { Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
+import type { CampaignRow } from "@/lib/campaign-links";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
 import {newMap} from "@/lib/encyclopedia/map-model";
@@ -25,6 +26,7 @@ import {ThemeToggle} from "./theme";
 import {BottomBar,MoreSheet,type MoreGroup} from "./bottom-bar";
 import {openDiceTray} from "@/lib/dice-open";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
+import CampaignSwitcher,{useCampaignSwitcherShortcut} from "@/components/campaign-switcher";
 import {TagsManager} from "@/components/tags";
 import type {Tag} from "@/lib/tags";
 import {RollResults} from "./rolls";
@@ -110,7 +112,7 @@ export default function WorkspaceApp() {
     const lastPlace = useRef<Place | null>(null);
     // A remembered tab belongs to the page it was chosen on; opening another page forgets it.
     if (tabAt && tabAt.entry !== selected) setTabAt(null);
-    const [backups, setBackups] = useState(false);
+    const [backups, setBackups] = useState(false), [switcher, setSwitcher] = useState(false);
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
@@ -292,6 +294,32 @@ export default function WorkspaceApp() {
     const openSearch = () => { setPaletteTags([]); setPalette(true); };
     useEffect(() => { const open = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") { e.preventDefault(); openSearch(); } }; window.addEventListener("keydown", open); return () => window.removeEventListener("keydown", open); }, []);
     function showView(next: "dashboard" | "characters" | "maps" | "calendar" | "quests" | "codex" | "look") { if (next === "dashboard") { openDashboard(); return; } setView(next); setSelected(null); setQuery(""); setTool(null); setMobile(false); }
+    /**
+     * Picking a campaign in the switcher: the campaign's world comes along and the view stays where it makes sense
+     * (Quests stays Quests). An open page falls back to the campaign's own page, and the world dashboard to the campaign.
+     * Nothing is saved or discarded here; the workspace stays as it is and autosave carries on.
+     */
+    function switchCampaign(row: CampaignRow) {
+        const next = data.campaigns.find(c => c.id === row.encyclopedia?.id);
+        if (!next) { void leaveSaved().then(ok => { if (ok && row.encyclopedia) window.location.assign(`/encyclopedia?campaign=${encodeURIComponent(row.encyclopedia.id)}`); }); return; }
+        setWorldId(next.worldId); setCampaignId(next.id);
+        setView(v => v === "dashboard" ? "overview" : v); setSelected(null); setEditing(false); setTool(null); setQuery(""); setMobile(false);
+    }
+    /** Before leaving this page (a hub, the Campaigns page): save what is waiting, and stay if it cannot be saved. */
+    async function leaveSaved() {
+        if (memberReadOnly() || version.current === savedVersion.current) return true;
+        for (let i = 0; i < 20 && busy.current; i++) await new Promise(r => setTimeout(r, 250));
+        if (timer.current) clearTimeout(timer.current);
+        await save();
+        if (version.current === savedVersion.current) return true;
+        setToast("Your changes could not be saved yet, so this page was not left. Fix the save problem or export a draft first.");
+        return false;
+    }
+    useCampaignSwitcherShortcut(() => {
+        if (!loaded || signedOut || member || memberRef() || modal || palette) return;
+        if (sidebar.narrow) setMobile(true); else if (sidebar.collapsed) sidebar.setCollapsed(false);
+        setSwitcher(true);
+    });
     function openDashboard(){setView("dashboard");setSelected(null);setQuery("");setTool(null);setMobile(false);}
     function selectWorld(id: string) { setView("dashboard");setTool(null); setWorldId(id); setCampaignId(null); setSelected(null); setQuery(""); setMobile(false); }
     function selectCampaign(id: string | null) { setView("overview");setTool(null); setCampaignId(id); setSelected(null); setQuery(""); setMobile(false); }
@@ -397,7 +425,10 @@ export default function WorkspaceApp() {
   <aside id="workspace-sidebar" aria-label="Workspace navigation" role={sidebar.narrow&&mobile?"dialog":undefined} aria-modal={sidebar.narrow&&mobile?true:undefined} inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>
    <button className="sidebar-mobile-close icon-button" aria-label="Close navigation" onClick={()=>setMobile(false)}><X size={17}/></button>
    <div className="sidebar-tools"><ToolSwitch active="encyclopedia" maptableHref={maptableHref}/><AccountLink/></div>
-   <button className="world-picker" onClick={openDashboard}><Globe size={18}/><span><small>YOUR WORLD</small><strong>{world?.name ?? "Choose a world"}</strong></span><ChevronDown size={15}/></button>
+   {member||memberRef() ? <button className="world-picker" onClick={openDashboard}><Globe size={18}/><span><small>YOUR WORLD</small><strong>{world?.name ?? "Choose a world"}</strong></span><ChevronDown size={15}/></button>
+   : <CampaignSwitcher className="csw-enc" tool="encyclopedia" title={campaign?.name ?? world?.name ?? "Choose a world"} subtitle={campaign ? world?.name : undefined}
+      isCurrent={row => !!campaign && row.encyclopedia?.id === campaign.id} onPick={switchCampaign} onWorlds={() => setModal({ type: "library" })}
+      open={switcher} onOpenChange={setSwitcher} beforeLeave={leaveSaved}/>}
    <div className="side-section dashboard-nav"><button className={`campaign-link ${view==='dashboard'?'active':''}`} onClick={openDashboard}><LayoutDashboard size={16}/><span>Dashboard</span></button>{campaign&&<button className={`campaign-link ${view==='overview'&&!selected?'active':''}`} aria-label={`Open current campaign ${campaign.name}`} onClick={()=>selectCampaign(campaign.id)}><Flag size={15}/><span>{campaign.name}</span></button>}</div>
    {world&&<div className="character-nav">{campaign&&<button className={`campaign-link ${view==='quests'?'active':''}`} onClick={()=>{setView('quests');setSelected(null);setQuery('');setMobile(false);}}><Goal size={16}/> Quests</button>}{campaign&&<button className={`campaign-link ${view==='codex'?'active':''}`} onClick={()=>{setView('codex');setSelected(null);setQuery('');setMobile(false);}}><Library size={16}/> Codex</button>}<button className={`campaign-link ${view==='relationships'?'active':''}`} onClick={()=>{setView('relationships');setSelected(null);setQuery('');setMobile(false);}}><Network size={16}/> Relationships</button><button className={`campaign-link ${view==='characters'?'active':''}`} onClick={()=>{setView('characters');setSelected(null);setQuery('');setMobile(false);}}><Users size={16}/> Characters</button><button className={`campaign-link ${view==='maps'?'active':''}`} onClick={()=>{setView('maps');setSelected(null);setQuery('');setMobile(false);}}><MapIcon size={16}/> Maps</button>{campaign&&<button className={`campaign-link ${view==='calendar'?'active':''}`} onClick={()=>{setView('calendar');setSelected(null);setQuery('');setMobile(false);}}><CalendarDays size={16}/> Calendar</button>}<button className={`campaign-link ${view==='tables'?'active':''}`} onClick={()=>{setView('tables');setTablesHome(n=>n+1);setSelected(null);setQuery('');setMobile(false);}}><Dices size={16}/> Random tables</button><button className={`campaign-link ${view==='templates'?'active':''}`} onClick={()=>{setView('templates');setSelected(null);setQuery('');setMobile(false);}}><LayoutTemplate size={16}/> Templates</button>{campaign&&<div className="button-row"><button className="text-button" onClick={()=>{setTool('form');setMobile(false);}}>Stat form</button><button className="text-button" onClick={()=>{setTool('share');setMobile(false);}}>Player view</button><button className="text-button" onClick={()=>{setView('look');setSelected(null);setQuery('');setMobile(false);}}>Look</button></div>}</div>}
    <div className="navigation-trees">{world&&<section className="navigation-section"><div className="side-heading"><button className="section-toggle" aria-expanded={navigation.sections.lore} aria-controls="world-lore-tree" onClick={()=>navigation.toggle('lore')}>{navigation.sections.lore?<ChevronDown size={14}/>:<ChevronRight size={14}/>} World Lore</button><span className="shared-tag">shared</span></div>{navigation.sections.lore&&<div id="world-lore-tree"><button className="text-button section-overview" onClick={()=>selectCampaign(null)}>World overview <ArrowUpRight size={12}/></button>{tree(shown.filter(e=>e.campaignId===null))}{!shown.some(e=>e.campaignId===null)&&<p className="side-empty">Places, people, and possibilities.</p>}</div>}</section>}{campaign&&<section className="navigation-section"><div className="side-heading campaign-heading"><button className="section-toggle" aria-expanded={navigation.sections.notes} aria-controls="campaign-notes-tree" onClick={()=>navigation.toggle('notes')}>{navigation.sections.notes?<ChevronDown size={14}/>:<ChevronRight size={14}/>} Campaign Notes</button><button className="add-note" aria-label="New campaign note" onClick={()=>setModal({type:'entry'})}><Plus size={15}/></button></div>{navigation.sections.notes&&<div id="campaign-notes-tree">{tree(scope)}{!scope.length&&<p className="side-empty">Add the first page of this story.</p>}</div>}</section>}{world&&<section className="navigation-section"><div className="side-heading"><button className="section-toggle" aria-expanded={navigation.sections.orgs} aria-controls="organizations-list" onClick={()=>navigation.toggle('orgs')}>{navigation.sections.orgs?<ChevronDown size={14}/>:<ChevronRight size={14}/>} Organizations</button></div>{navigation.sections.orgs&&<div id="organizations-list">{orgListItems(shown).map(o=><div key={o.id} className={`tree-row org-side-row ${selected===o.id?'selected':''}`} style={{paddingLeft:12}}><span className="disclosure"/><button className="tree-item" onClick={()=>openEntry(o.id)}><span className="org-dot" style={{background:o.colour}} aria-hidden="true"/><span>{o.title}</span>{o.lore&&<small className="tree-count">lore</small>}</button></div>)}{!shown.some(e=>e.kind==='faction')&&<p className="side-empty">Guilds, houses and orders appear here.</p>}</div>}</section>}</div>
