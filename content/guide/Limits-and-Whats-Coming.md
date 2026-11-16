@@ -16,7 +16,7 @@
 - **Hex maps**: painting hexes, regenerating while keeping painted hexes, and revealing hexes around tokens.
 - **Stores**: a store as a Maptable token, calendar hours, restocking from a random table, live trading between players.
 - **Vehicles**: a New vehicle generator, a Log tab, and Add to Maptable as a large token; vehicle pages from the AI's `create_page`.
-- **Bridges**: more kinds in the Bridge API and Foundry module (journals, quests, scenes, tokens, tables, calendar, combat); D&D Beyond link import (unofficial); Roll20 and Fantasy Grounds.
+- **Bridges**: more kinds in the Bridge API and Foundry module (scenes, tokens, tables, calendar, combat; quest changes made in Foundry); D&D Beyond link import (unofficial); Roll20 and Fantasy Grounds.
 - **Imported sheets**: HP − / + on the page and from tokens.
 - **Sheet formulas**: field references (so a skill can follow its ability).
 - **Members**: the campaign forum.

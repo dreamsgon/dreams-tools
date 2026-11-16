@@ -26,9 +26,10 @@ In the module's settings enter your RPG Tools address and the key. Only the acti
 - **HP** changed in Foundry goes back to RPG Tools.
 - Linked actors have an **RPG Tools rolls** window whose buttons roll in Foundry (dice are translated: `!` becomes `x`, `>=N` becomes `cs>=N`).
 - **Public chat rolls** go to the campaign's Discord. Whispered, blind and unreadable ones don't.
+- **Encyclopedia pages, quests and session recaps** come in as **journals** in an *RPG Tools* journal folder. Players see the parts RPG Tools shares with them, and nothing else. They are one way, from RPG Tools.
 
-The module is tested against a stand-in Foundry; it has not yet been tried in a real Foundry world. Journals, quests, scenes, tokens, tables, calendar and the combat tracker are planned.
+The module is tested against a stand-in Foundry; it has not yet been tried in a real Foundry world. Scenes, tokens, tables, calendar and the combat tracker are planned.
 
 ## The bridge API (for other apps)
 
-Documented in `docs/encyclopedia/bridge-api.md` in the repository. It serves campaign info, characters as `rpgtools-sheet` files (list, read, create, update with a conflict check, HP), pages as Markdown with their visibility, and rolls. Writes never change the stat form or shared world pages. 240 requests a minute per key.
+Documented in `docs/encyclopedia/bridge-api.md` in the repository. It serves campaign info, characters as `rpgtools-sheet` files (list, read, create, update with a conflict check, HP), pages, quests and session recaps as Markdown with their visibility, and rolls. Writes never change the stat form or shared world pages. 240 requests a minute per key.

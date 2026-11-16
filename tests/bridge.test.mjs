@@ -124,3 +124,33 @@ test('HP from the table: updates an imported sheet, makes one when there is none
  assert.throws(()=>A.setHp(made,C,id,{value:'lots'}),e=>e.status===400);
  assert.throws(()=>A.setHp(made,C,'demo-mara',{value:3}),e=>e.status===403);
 });
+
+test('quests and recaps: their state, goals and log, and a draft recap never for players',()=>{
+ const w=world(),first=w.entries.find(e=>e.id==='demo-first');
+ const quest={id:'q-light',worldId:first.worldId,campaignId:C,parentId:null,kind:'quest',title:'The green light',body:'We saw it.',overviewVisibility:'players',updatedAt:AT,
+  quest:{state:'active',type:'main',giverId:'demo-mara',reward:'A ship',rewardHidden:true,prep:'A lich.',
+   objectives:[{id:'g1',text:'x',verb:'Find',targetId:'demo-mara',target:'Old name',done:true},{id:'g2',text:'Hide me',done:false,hidden:true,status:'failed'}],
+   log:[{id:'l1',at:AT,text:'We climbed.',players:true},{id:'l2',at:AT,text:'Lies.',players:false,label:'Session 3'}]}};
+ const other={...quest,id:'q-other',campaignId:C2};
+ const recap={status:'draft',timeline:[{id:'b1',title:'Arrival',big:true,steps:['Docked']}],quotes:[{id:'q1',text:'Hello',who:'Mara'}],gmNotes:'Secret plan',shareTimeline:true,shareQuotes:false,review:[]};
+ const data=workspaceSchema.parse({...w,entries:[...w.entries.map(e=>e.id==='demo-first'?{...e,overviewVisibility:'players',tabs:[{id:'t1',title:'Loot',visibility:'players',body:'Gold'}],recap}:e),quest,other]});
+
+ const {ids,quests}=A.listQuests(data,C);
+ assert.deepEqual(ids,['q-light'],'another campaign’s quest never comes');
+ const q=quests[0].quest;
+ assert.equal(quests[0].overview.visibility,'players');
+ assert.deepEqual([q.state,q.stateName,q.category,q.giver,q.reward,q.rewardHidden,q.prep],['active','Active','Main',{id:'demo-mara',title:'Mara Venn'},'A ship',true,'A lich.']);
+ assert.deepEqual(q.goals.map(g=>[g.text,g.status,g.hidden]),[['Find Mara Venn','done',false],['Hide me','failed',true]],'a goal reads with the page’s current name');
+ assert.deepEqual(q.log.map(l=>[l.label,l.players]),[['',true],['Session 3',false]]);
+
+ const draft=A.listRecaps(data,C).recaps.find(r=>r.id==='demo-first');
+ assert.equal(draft.recap.status,'draft');
+ assert.ok([draft.overview,...draft.tabs].every(p=>p.visibility==='gm'),'a draft is GM only, whatever its tabs say');
+ assert.deepEqual(draft.tabs.map(t=>t.id),['t1','recap-timeline','recap-quotes','recap-gm-notes']);
+ const live=A.listRecaps(workspaceSchema.parse({...data,entries:data.entries.map(e=>e.id==='demo-first'?{...e,recap:{...recap,status:'published'}}:e)}),C).recaps.find(r=>r.id==='demo-first');
+ assert.deepEqual([live.overview,...live.tabs].map(p=>p.visibility),['players','players','players','gm','gm'],'shared timeline yes, unshared quotes and GM notes no');
+ assert.match(live.tabs[1].text,/### Arrival\n- Docked/);
+ assert.ok(!A.listRecaps(data,C).ids.includes('demo-winter'));
+ assert.throws(()=>A.need(grant({...K.defaultSync,recaps:'off'}),'recaps','to'),e=>e.status===403);
+ assert.equal(A.listQuests(data,C,LATER).quests.length,0);
+});

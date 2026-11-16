@@ -13,8 +13,8 @@ export const clientNames: Record<BridgeClient, string> = { foundry: "Foundry VTT
 export const syncInfo: Record<SyncKind, { name: string; there: string; ready: boolean }> = {
   characters: { name: "Characters", there: "Actors, as RPG Tools sheets", ready: true },
   pages: { name: "Places, lore, organizations, notes", there: "Journal pages in matching folders", ready: true },
-  quests: { name: "Quests and the quest log", there: "A journal per quest", ready: false },
-  recaps: { name: "Session recaps", there: "Journals in a Sessions folder", ready: false },
+  quests: { name: "Quests and the quest log", there: "A journal per quest", ready: true },
+  recaps: { name: "Session recaps", there: "Journals in a Sessions folder", ready: true },
   scenes: { name: "Maptable scenes", there: "Scenes with grid, walls, doors and fog", ready: false },
   tokens: { name: "Tokens, HP and conditions", there: "Tokens linked to actors", ready: false },
   markers: { name: "Map markers and world map places", there: "Map notes", ready: false },

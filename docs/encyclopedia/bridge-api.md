@@ -35,8 +35,8 @@ A call whose direction is not allowed gets `403`. These are the kinds and their 
 | --- | --- | --- |
 | `characters` | `both` | Ready |
 | `pages` | `to` | Ready |
-| `quests` | `both` | Come with the Foundry module |
-| `recaps` | `to` | Come with the Foundry module |
+| `quests` | `both` | Ready (read) |
+| `recaps` | `to` | Ready |
 | `scenes` | `both` | Come with the Foundry module |
 | `tokens` | `both` | Come with the Foundry module |
 | `markers` | `to` | Come with the Foundry module |
@@ -102,11 +102,36 @@ Returns:
   - `{id, kind, title, parentId, shared, updatedAt, order}`
   - `overview: {visibility, text}`
   - `tabs: [{id, title, visibility, text}]`
+  - `visibility` is `players` or `gm`.
 - `since` sends only pages changed after that time.
 - `ids` always lists every page, so the table can remove the ones that are gone.
-- Text is Markdown:
+- Text is Markdown, as the GM wrote it. The table decides how to hide the GM's parts from players:
   - `[[page-id|Label]]` links to another page.
   - `[[2d6+3|Label]]` is an inline roll.
+  - `[[table:Name|Label]]` rolls on a random table, and `[[maptable:scene-id|Label]]` opens a Maptable scene.
+  - Lines between `:::secret` and `:::` are GM secrets.
+  - `{{word|note}}` is a word with a GM margin note.
+
+### Quests
+
+`GET /api/bridge/quests?since={ISO time}`
+
+- Returns `{ids, quests}`. Each quest has the same fields as a page, plus `quest`:
+  - `state` (`rumour`, `active`, `done` or `failed`), `stateName` and `category` (the category's name)
+  - `giver` and `place`: `{id, title}` or `null`
+  - `reward`, `rewardHidden`, and `prep` (the GM's preparation, never for players)
+  - `goals: [{id, text, status, hidden, note}]`, where `status` is `todo`, `done`, `failed` or `dropped`
+  - `log: [{id, at, label, text, players, author}]`
+- Players see a quest when its Overview is shared. Then they see only goals that aren't `hidden`, log entries with `players: true`, and the reward unless `rewardHidden`.
+
+### Recaps
+
+`GET /api/bridge/recaps?since={ISO time}`
+
+- Returns `{ids, recaps}`: the campaign's session pages, with the same fields as a page plus `recap: {status, playedOn}` (or `null` when the session has no recap).
+- The Overview is the recap text. The timeline, quotes and GM notes come as extra tabs: `recap-timeline`, `recap-quotes` and `recap-gm-notes`.
+- The timeline and quotes are `players` only when the recap is published and the GM shared them. GM notes are always `gm`.
+- A draft recap is `gm` everywhere, whatever its tabs say.
 
 ### Rolls
 
