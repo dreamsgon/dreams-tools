@@ -7,6 +7,7 @@ import { revealAroundTokens } from "./hex-fog.ts";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 import { cutOpenings, wallSegments } from "./map-creator.ts";
+import { mapLights } from "./map-light.ts";
 
 /**
  * Taking a drawn map to the table: lining up the scene, room numbers as markers,
@@ -137,8 +138,9 @@ export function buildUvtt(d: MapDrawing, width: number, height: number, gridSize
     line_of_sight: walls.map(w => [at(w.a), at(w.b)]),
     objects_line_of_sight: [],
     portals,
-    environment: { baked_lighting: false, ambient_light: "ffffffff" },
-    lights: [],
+    environment: { baked_lighting: false, ambient_light: { day: "ffffffff", dim: "ff7f7f7f", dark: "ff000000" }[d.ambient ?? "day"] },
+    // Lit lights: range is the dim reach in squares, colour is ARGB hex, and shadows means walls stop it.
+    lights: mapLights(d).filter(l => l.on && l.dim > 0).map(l => ({ position: at(l), range: l.dim, intensity: 1, color: `ff${l.colour.slice(1).toLowerCase()}`, shadows: l.walls })),
     image: imageBase64,
   };
 }

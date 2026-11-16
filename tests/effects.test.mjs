@@ -13,6 +13,7 @@ const renderSource = stripTypeScriptTypes(await readFile(new URL("../lib/render.
   .replaceAll('"./token-display-layout"', JSON.stringify(new URL("../lib/token-display-layout.ts", import.meta.url).href))
   .replaceAll('"./map-drawing"', JSON.stringify(new URL("../lib/map-drawing.ts", import.meta.url).href))
   .replaceAll('"./map-style"', JSON.stringify(new URL("../lib/map-style.ts", import.meta.url).href))
+  .replaceAll('"./map-light"', JSON.stringify(new URL("../lib/map-light.ts", import.meta.url).href))
   .replaceAll('"./effects"', JSON.stringify(new URL("../lib/effects.ts", import.meta.url).href));
 const { renderScene } = await import(`data:text/javascript;base64,${Buffer.from(renderSource).toString("base64")}`);
 const grid = newScene().grid;

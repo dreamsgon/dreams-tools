@@ -7,7 +7,7 @@ import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing,
 import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import MapLighting, { lightingModes, type LightingMode } from "./map-lighting";
-import { lightKinds, lightKind, lightColours, shapeLight, LIGHT_MAX_BRIGHT, LIGHT_MAX_DIM, type LightKind } from "@/lib/map-light";
+import { lightKinds, lightKind, lightColours, shapeLight, ambients, LIGHT_MAX_BRIGHT, LIGHT_MAX_DIM, type LightKind } from "@/lib/map-light";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
 import { HexLookFields, HexPaintPanel, HexRegenerateDialog } from "./hexmap-panel";
@@ -564,6 +564,9 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <div className="creator-actions"><button onClick={()=>setRegenerating(true)}><Dices size={15}/> Regenerate…</button><button onClick={()=>pickTool("hex")}><Hexagon size={15}/> Paint hexes</button></div>
       <p className="muted">Regenerate opens the generator with this map’s settings. Hexes you painted stay.</p>
       <HexLookFields look={draft.drawing.hexes} change={part=>change(d=>{if(d.drawing.hexes)d.drawing.hexes={...d.drawing.hexes,...part};})}/></>}
+    <h3>Lighting</h3>
+    <div className="creator-field"><span>What players see where no light reaches</span><span className="creator-wall-switch" role="group" aria-label="Light where no lamp reaches">{ambients.map(a=><button key={a.id} type="button" aria-pressed={(draft.drawing.ambient??"day")===a.id} onClick={()=>change(d=>{d.drawing.ambient=a.id;})}>{a.name}</button>)}</span></div>
+    <p className="muted">{ambients.find(a=>a.id===(draft.drawing.ambient??"day"))!.hint} Maptable shows it, and you can change it there during play.</p>
     <h3>This map</h3>
     <div className="creator-pair">{squares("width")}{squares("height")}</div>
     <p className="creator-measure">{distance(draft.width,grid)} × {distance(draft.height,grid)}, in {grid.units} {grid.unit} squares of {grid.size} px, the same as its Maptable grid.</p>

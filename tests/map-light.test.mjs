@@ -91,3 +91,36 @@ test("lightArea is a plain circle when nothing stops the light", () => {
   const ignoring = lightArea({ id: "a", x: 70, y: 70, bright: 2, dim: 4, colour: "#ffffff", on: true, flicker: false, walls: false, stamp: null }, 70, lightWalls(drawing([room("r", 0, 0, 140, 140)])));
   assert.equal(ignoring, null);
 });
+
+test("a map's ambient light saves, and old maps are in daylight", async () => {
+  const { ambientShade, ambients } = await import("../lib/map-light.ts");
+  assert.equal(mapDrawingSchema.parse(drawing([])).ambient, undefined);
+  assert.equal(mapDrawingSchema.parse({ ...drawing([]), ambient: "dark" }).ambient, "dark");
+  assert.throws(() => mapDrawingSchema.parse({ ...drawing([]), ambient: "night" }));
+  assert.deepEqual(ambients.map(a => a.id), ["day", "dim", "dark"]);
+  assert.equal(ambientShade(undefined, true), 0);
+  assert.equal(ambientShade("day", true), 0);
+  assert.ok(ambientShade("dark", true) > ambientShade("dark", false), "the GM sees the dark a little lighter");
+  assert.ok(ambientShade("dark", true) > ambientShade("dim", true));
+});
+
+test("Maptable lights only lit lights, and a light piece shines from where it was moved", async () => {
+  const { sceneLights } = await import("../lib/map-light.ts");
+  const d = mapDrawingSchema.parse(drawing([room("r", 0, 0, 700, 700), stamp("t", "wall-torch", 105, 105), light("off", 300, 300, { on: false }), light("l", 500, 500)]));
+  const lit = sceneLights(d, 70);
+  assert.deepEqual(lit.map(l => l.id), ["t", "l"]);
+  assert.ok(lit.every(l => typeof l.area === "string"), "the room's walls bound each light");
+  const moved = sceneLights(d, 70, new Map([["t", { x: 350, y: 140 }]]));
+  assert.deepEqual([moved[0].x, moved[0].y], [350, 140]);
+});
+
+test("Universal VTT export carries lit lights and the ambient light", async () => {
+  const { buildUvtt } = await import("../lib/map-export.ts");
+  const d = mapDrawingSchema.parse({ ...drawing([room("r", 0, 0, 700, 700), stamp("t", "wall-torch", 105, 105), light("off", 300, 300, { on: false }), light("m", 350, 420, { kind: "magic", walls: false })]), ambient: "dim" });
+  const uvtt = buildUvtt(d, 700, 700, 70, "");
+  assert.equal(uvtt.environment.ambient_light, "ff7f7f7f");
+  assert.deepEqual(uvtt.lights, [
+    { position: { x: 1.5, y: 1.5 }, range: 8, intensity: 1, color: "ffffb35c", shadows: true },
+    { position: { x: 5, y: 6 }, range: 6, intensity: 1, color: "ff8fd0ff", shadows: false },
+  ]);
+});

@@ -1,3 +1,4 @@
+import { drawLightDarkness, drawLightGlow } from "./map-light";
 import {
   address,
   sceneRenderBounds,
@@ -328,8 +329,14 @@ export function renderScene(
     const img = images.get(s.mapId);
     if (img) ctx.drawImage(img, 0, 0, s.width, s.height);
   }
-  if (s.drawing) drawMapDrawing(ctx, s.drawing, s.width, s.height, new Set(s.tokens.flatMap(t => t.pieceOf ? [t.pieceOf] : [])), images);
+  // A stamp that is a piece on the table gives its light from where the piece is now.
+  const pieces = s.drawing ? new Map(s.tokens.flatMap(t => t.pieceOf ? [[t.pieceOf, { x: t.x, y: t.y }] as const] : [])) : null;
+  if (s.drawing) {
+    drawMapDrawing(ctx, s.drawing, s.width, s.height, new Set(pieces!.keys()), images);
+    drawLightGlow(ctx, s.drawing, s.grid.size, pieces!);
+  }
   drawGrid(ctx, s);
+  if (s.drawing) drawLightDarkness(ctx, s.drawing, s.width, s.height, s.grid.size, !!options.player, pieces!);
   for (const storedEffect of s.effects) {
     if (options.player && !effectVisibleToPlayers(storedEffect, s.tokens)) continue;
     const e = resolveEffect(storedEffect, s.tokens);

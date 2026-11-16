@@ -235,6 +235,8 @@ export const hexLayerSchema = z.object({
 export type HexLayerData = z.infer<typeof hexLayerSchema>;
 export const mapDrawingSchema = z.object({
   background: color,
+  // What players see where no light reaches: daylight (lights only glow), dim or dark (lib/map-light.ts). Old maps are in daylight.
+  ambient: z.enum(["day", "dim", "dark"]).optional(),
   hexes: hexLayerSchema.optional(),
   style: mapStyleSchema.nullable().default(null),
   shapes: z.array(mapShapeSchema).max(1000),

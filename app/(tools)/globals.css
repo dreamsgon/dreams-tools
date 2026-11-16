@@ -2170,6 +2170,16 @@ button.primary, .rpg-open { font-weight:500; }
 .scene-settings-tabs { display:flex; gap:16px; margin:10px 0 14px; border-bottom:1px solid var(--line); }
 .scene-settings-tabs button { border:0; border-radius:0; background:transparent; padding:8px 0; min-height:0; font-size:13px; color:var(--muted); box-shadow:none; }
 .scene-settings-tabs button[aria-selected="true"] { color:var(--ink); box-shadow:inset 0 -2px var(--accent); }
+/* Scene settings > Lights: daylight, dim or dark, and each light on a drawn map. */
+.scene-lights { display:flex; flex-direction:column; gap:10px; }
+.scene-lights h3 { margin:6px 0 0; font-size:14px; } .scene-lights h3 small { color:var(--muted); font-weight:500; }
+.scene-lights-seg { display:flex; gap:2px; padding:3px; border-radius:var(--radius); background:var(--control, var(--raised)); }
+.scene-lights-seg button { flex:1; min-height:30px; padding:4px 10px; border:0; background:none; box-shadow:none; color:var(--muted); font-size:13px; }
+.scene-lights-seg button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
+.scene-lights-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+.scene-lights-list li { display:flex; align-items:center; gap:8px; }
+.scene-lights-list li > i { flex:none; width:12px; height:12px; border-radius:50%; border:1.5px solid #16191c; }
+.scene-lights-list li > :last-child { flex:1; }
 .scene-settings-note { margin-top:16px; }
 /* The scene name in the header opens a quick switcher. */
 .scene-switcher { position:relative; display:inline-flex; align-items:center; gap:2px; min-width:0; }

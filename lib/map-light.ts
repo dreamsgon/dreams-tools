@@ -110,3 +110,92 @@ export function lightArea(l: MapLight, gridSize: number, walls: Pick<WallSegment
   const pts = visibility(l, r, walls);
   return `M ${pts.map(p => `${Math.round(p.x * 10) / 10} ${Math.round(p.y * 10) / 10}`).join(" L ")} Z`;
 }
+
+/** What players see where no light reaches. */
+export type Ambient = NonNullable<MapDrawing["ambient"]>;
+export const ambients: { id: Ambient; name: string; hint: string }[] = [
+  { id: "day", name: "Daylight", hint: "Everything can be seen. Lights only add their glow." },
+  { id: "dim", name: "Dim", hint: "Places no light reaches are shaded for players. You see them a little lighter." },
+  { id: "dark", name: "Dark", hint: "Places no light reaches are dark for players. You see them shaded, so you can still run the map." },
+];
+/** How dark unlit places are: for players, and lighter for the GM so the map can still be run. */
+export const ambientShade = (ambient: Ambient | undefined, player: boolean) =>
+  ambient === "dark" ? (player ? .9 : .55) : ambient === "dim" ? (player ? .55 : .3) : 0;
+
+/** The lit lights on a scene's drawing, with the area each reaches. A stamp that is a piece on the table shines from where the piece is. */
+export type LitLight = MapLight & { area: string | null };
+export function sceneLights(d: Pick<MapDrawing, "shapes" | "folders" | "layerOrder">, gridSize: number, pieces?: ReadonlyMap<string, Point>): LitLight[] {
+  const lights = mapLights(d).filter(l => l.on && l.dim > 0);
+  if (!lights.length) return [];
+  const walls = lightWalls(d);
+  return lights.map(l => { const at = pieces?.get(l.id), moved = at ? { ...l, x: at.x, y: at.y } : l; return { ...moved, area: lightArea(moved, gridSize, walls) }; });
+}
+
+// Maptable draws on a canvas, many times a second: each drawing's lights, their areas and its darkness are kept until it changes.
+type Prepared = { key: string; lights: (LitLight & { path: Path2D | null })[]; dark: { key: string; canvas: HTMLCanvasElement } | null };
+const prepared = new WeakMap<object, Prepared>();
+function prepare(d: MapDrawing, gridSize: number, pieces?: ReadonlyMap<string, Point>): Prepared {
+  const key = `${gridSize}|${pieces ? [...pieces].map(([id, p]) => `${id}:${Math.round(p.x)},${Math.round(p.y)}`).join(";") : ""}`;
+  const hit = prepared.get(d);
+  if (hit && hit.key === key) return hit;
+  const lights = sceneLights(d, gridSize, pieces).map(l => ({ ...l, path: l.area ? new Path2D(l.area) : null }));
+  const made = { key, lights, dark: null };
+  prepared.set(d, made);
+  return made;
+}
+
+/**
+ * Draws the lights' glow over a drawn map on a canvas, as the Map Creator shows it: a tint in
+ * daylight, a brighter glow in the dim or dark. Call it after the map and before the grid.
+ */
+export function drawLightGlow(ctx: CanvasRenderingContext2D, d: MapDrawing, gridSize: number, pieces?: ReadonlyMap<string, Point>) {
+  const { lights } = prepare(d, gridSize, pieces);
+  if (!lights.length) return;
+  const day = !d.ambient || d.ambient === "day";
+  ctx.save();
+  ctx.globalCompositeOperation = day ? "multiply" : "screen";
+  for (const l of lights) {
+    const r = l.dim * gridSize, b = Math.max(.02, Math.min(1, l.bright / l.dim));
+    const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+    g.addColorStop(0, withAlpha(l.colour, .5)); g.addColorStop(b, withAlpha(l.colour, day ? .24 : .28)); g.addColorStop(1, withAlpha(l.colour, 0));
+    ctx.save();
+    if (l.path) ctx.clip(l.path);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(l.x, l.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/**
+ * Shades the places no light reaches, for a map that is dim or dark: darker for players than for the GM.
+ * Each light takes darkness away (all of it in its bright light, about half in its dim light), so lights add up the same in any order.
+ */
+export function drawLightDarkness(ctx: CanvasRenderingContext2D, d: MapDrawing, width: number, height: number, gridSize: number, player: boolean, pieces?: ReadonlyMap<string, Point>) {
+  const shade = ambientShade(d.ambient, player);
+  if (!shade) return;
+  const p = prepare(d, gridSize, pieces), key = `${d.ambient}|${player}|${width}x${height}`;
+  if (!p.dark || p.dark.key !== key) {
+    // Darkness is soft, so a smaller canvas stretched over the map is plenty.
+    const scale = Math.min(1, 2048 / Math.max(width, height, 1)), canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
+    const x = canvas.getContext("2d")!;
+    x.scale(scale, scale);
+    x.fillStyle = `rgba(6,7,12,${shade})`; x.fillRect(0, 0, width, height);
+    x.globalCompositeOperation = "destination-out";
+    for (const l of p.lights) {
+      const r = l.dim * gridSize, b = Math.max(.02, Math.min(1, l.bright / l.dim));
+      const g = x.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+      g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(b, "rgba(0,0,0,1)"); g.addColorStop(Math.min(.98, b + (1 - b) * .08), "rgba(0,0,0,.62)"); g.addColorStop(.9, "rgba(0,0,0,.48)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      x.save();
+      if (l.path) x.clip(l.path);
+      x.fillStyle = g; x.beginPath(); x.arc(l.x, l.y, r, 0, Math.PI * 2); x.fill();
+      x.restore();
+    }
+    p.dark = { key, canvas };
+  }
+  ctx.drawImage(p.dark.canvas, 0, 0, width, height);
+}
+function withAlpha(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
