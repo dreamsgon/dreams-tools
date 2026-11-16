@@ -88,7 +88,7 @@ import SceneSwitcher from "./scene-switcher";
 import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
 import ConditionEntry from "./condition-entry";
-import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, type EncyclopediaCharacter, type EncyclopediaRaw } from "./encyclopedia-tokens";
+import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, encyclopediaVehicles, type EncyclopediaCharacter, type EncyclopediaRaw } from "./encyclopedia-tokens";
 import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import "./maptable-token-layout.css";
@@ -940,20 +940,21 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     const side = roleSide[c.role];
     const preset: Workspace["tokenLibrary"][number] = { ...newToken(c.name), encyclopediaEntryId: c.id, color: SIDE_COLOURS[side].fill, useDispositionColor: false, sideColours: true,
       rosterRole: c.role === "npc" || c.role === "creature" ? "npc" : "party", disposition: side,
-      ...(assetId ? pictureLook(c, assetId) : {}) };
+      ...(c.squares ? { size: c.squares } : {}), ...(assetId ? pictureLook(c, assetId) : {}) };
     commit(w => { w.tokenLibrary.push(preset); w.libraryCampaigns[preset.id] = campaignId; });
     placeLibraryToken(preset, point);
   };
   // "Add to Maptable" on an Encyclopedia page opens Maptable with ?addCharacter=<page id>: add it once the scene is open.
-  const pendingCharacter = useRef<string | null>(null);
-  useEffect(() => { try { pendingCharacter.current = new URLSearchParams(window.location.search).get("addCharacter"); } catch { /* No address to read. */ } }, []);
+  // A vehicle page sends ?addVehicle=<page id> instead, and becomes a large token.
+  const pendingCharacter = useRef<{ id: string; vehicle: boolean } | null>(null);
+  useEffect(() => { try { const q = new URLSearchParams(window.location.search), c = q.get("addCharacter"), v = q.get("addVehicle"); pendingCharacter.current = c ? { id: c, vehicle: false } : v ? { id: v, vehicle: true } : null; } catch { /* No address to read. */ } }, []);
   useEffect(() => {
-    const id = pendingCharacter.current;
+    const pending = pendingCharacter.current, id = pending?.id;
     // Wait until a scene is open on the board, not just remembered behind the dashboard.
     if (!id || !scene || player || dashboard) return;
     pendingCharacter.current = null;
-    try { const url = new URL(window.location.href); url.searchParams.delete("addCharacter"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
-    loadEncyclopedia(true).then(raw => { const c = encyclopediaCharacters(raw).find(c => c.id === id); if (!c) throw new Error("That character is no longer in your Encyclopedia."); return addEncyclopediaToken(c).then(() => setNotice(`${c.name} is on ${scene.name}.`)); })
+    try { const url = new URL(window.location.href); url.searchParams.delete("addCharacter"); url.searchParams.delete("addVehicle"); window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash); } catch { /* The address is cosmetic. */ }
+    loadEncyclopedia(true).then(raw => { const c = (pending?.vehicle ? encyclopediaVehicles(raw) : encyclopediaCharacters(raw)).find(c => c.id === id); if (!c) throw new Error(pending?.vehicle ? "That vehicle is no longer in your Encyclopedia." : "That character is no longer in your Encyclopedia."); return addEncyclopediaToken(c).then(() => setNotice(`${c.name} is on ${scene.name}.`)); })
       .catch(e => setNotice(e instanceof Error ? e.message : "Could not add the character."));
   });
   // On a phone the gallery covers the map, so arming a token puts it away to leave the map free to tap.

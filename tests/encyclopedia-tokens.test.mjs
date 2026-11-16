@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {campaignCharacters,encyclopediaCharacters,pairedCampaign} from '../lib/encyclopedia-characters.ts';
+import {campaignCharacters,encyclopediaCharacters,encyclopediaVehicles,pairedCampaign} from '../lib/encyclopedia-characters.ts';
 const ch=(id,worldId,campaignId,extra={})=>({id,title:id.toUpperCase(),kind:'character',worldId,campaignId,character:{role:'npc',...extra}});
 const raw={
  worlds:[{id:'w1',name:'Aster'},{id:'w2',name:'Brine'},{id:'wt',name:'Template',isTemplate:true}],
@@ -35,4 +35,16 @@ test('a co-GM workspace with one campaign stays one campaign',()=>{
 });
 test('encyclopediaCharacters still leaves out templates and non-characters',()=>{
  assert.deepEqual(ids(encyclopediaCharacters(raw)),['other','own','shared','sibling']);
+});
+
+test('vehicles become large tokens: ships 3×3, the rest 2×2, or bigger when the picture says so',()=>{
+ const pic={imageId:'a'.repeat(32),width:400,height:400,x:0.5,y:0.5,size:0.5};
+ const v=(id,typeId,extra={})=>({id,title:id.toUpperCase(),kind:'vehicle',worldId:'w1',campaignId:'c1',vehicle:{typeId},...extra});
+ const list=encyclopediaVehicles({...raw,entries:[...raw.entries,v('ship','starship'),v('coach','carriage'),v('mine','my-type'),v('big','car',{picture:{...pic,squares:4}}),v('framed','airship',{picture:pic}),{...v('tmpl','car'),worldId:'wt'}]});
+ const by=Object.fromEntries(list.map(c=>[c.id,c]));
+ assert.deepEqual(Object.keys(by).sort(),['big','coach','framed','mine','ship'],'only vehicles, never from a template world');
+ assert.deepEqual([by.ship.squares,by.coach.squares,by.mine.squares,by.big.squares,by.framed.squares],[3,2,2,4,3]);
+ assert.equal(by.framed.picture.squares,3,'a picture framed at one square still makes a large token');
+ assert.equal(by.ship.picture,undefined);assert.equal(by.ship.detail,'Vehicle · Dawn');
+ assert.ok(!encyclopediaCharacters({...raw,entries:[v('ship','starship')]}).length,'vehicles are not characters');
 });
