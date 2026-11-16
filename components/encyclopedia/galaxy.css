@@ -170,3 +170,17 @@
  .system-moons{padding-left:16px}
  .system-companion{grid-template-columns:minmax(0,1fr) auto}
 }
+/* A charted world's World tab (planet-sheet.tsx). */
+.planet-sheet{display:flex;flex-direction:column;gap:16px;margin-top:4px;min-width:0}
+.planet-hero{position:relative;height:clamp(180px,calc(30vh / var(--ui-zoom, 1)),280px);border-radius:var(--radius);overflow:hidden;background:#000}
+.planet-hero-over{position:absolute;left:14px;bottom:30px;display:flex;align-items:center;gap:12px;color:#f3f6fa;text-shadow:0 1px 4px #000}
+.planet-hero-over span{display:flex;flex-direction:column;gap:2px}.planet-hero-over strong{font-size:22px}.planet-hero-over small{font-size:12.5px;opacity:.9}
+.planet-hero-cap{position:absolute;left:14px;right:14px;bottom:8px;font-size:11.5px;color:#e8eef5;text-shadow:0 1px 3px #000}
+.planet-cols{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,1fr);gap:22px;align-items:start}
+.planet-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.planet-main>.button{align-self:flex-start}
+.planet-kids{display:flex;flex-direction:column;gap:4px}
+.planet-kid{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px}
+.planet-kid>span{display:flex;flex-direction:column;flex:1;min-width:0}.planet-kid small{font-size:11.5px;color:var(--muted)}
+@media (max-width:900px){.planet-cols{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){.planet-hero-over{bottom:46px;gap:10px}.planet-hero-over strong{font-size:18px}.planet-hero-cap{font-size:11px}}
