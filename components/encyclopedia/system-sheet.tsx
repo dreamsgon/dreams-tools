@@ -115,7 +115,7 @@ export function SystemSheet({entry,data,campaign,change,onOpen}:Props){
     <SystemAiCheck key={entry.id} campaignId={ai.campaignId} campaign={ai.campaign} pages={ai.pages} suggested={ai.suggested} request={systemCheckRequest(system,entry.title,nameOf)} worldName={id=>findWorld(system,id)?.name} onApply={applyFix}/>
    </aside>
   </div>
-  {settings&&<SystemDialog name={entry.title} system={system} orgs={orgs} onClose={()=>setSettings(false)} onApply={apply}/>}
+  {settings&&<SystemDialog name={entry.title} system={system} orgs={orgs} ai={ai} onClose={()=>setSettings(false)} onApply={apply}/>}
   {ftl&&<FtlDialog galaxy={galaxyPage} change={change} onClose={()=>setFtl(false)}/>}
  </div>;
 }
