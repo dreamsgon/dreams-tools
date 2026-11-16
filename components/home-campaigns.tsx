@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, BookOpen, Bell, CalendarDays, Check, ChevronRight, Dices, FileText, Flag, Folder, GripVertical, LayoutGrid, Link2, ListChecks, Map as MapIcon, PenLine, Pin, Plus, Settings, SlidersHorizontal, Star, X, Goal } from "lucide-react";
 import { folderChoices, homeCampaigns, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
 import {
-  applyHomeAction, campaignShowNames, campaignShows, hasWidget, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, toggleWidget,
-  type HomeAction, type HomeLayout, type HomePreset, type HomeSize, type HomeWidget,
+  applyHomeAction, campaignShowNames, campaignShows, hasWidget, homeHeights, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, setWidgetHeight, toggleWidget,
+  type HomeAction, type HomeHeight, type HomeLayout, type HomePreset, type HomeSize, type HomeWidget,
 } from "@/lib/home-layout";
 import type { HomeData } from "@/lib/home-server";
 import { Attention, Folders, Head, Links, Notes, Pinned, Quests, Roll, Sessions, Todo, type Act } from "./home-widgets";
@@ -93,17 +93,17 @@ export default function HomeDashboard({ first, tools }: { first: string; tools: 
 
 function Grid({ layout, data, act, onCustomize }: { layout: HomeLayout; data: HomeData; act: Act; onCustomize: () => void }) {
   if (!layout.widgets.length) return <div className="home-empty">Your home page is empty. <button type="button" className="home-text-button" onClick={onCustomize}>Customize</button> to add sections.</div>;
-  return <div className="home-grid">{layout.widgets.map(w => <Panel key={w.type} type={w.type} size={w.size}><Section type={w.type} size={w.size} layout={layout} data={data} act={act} /></Panel>)}</div>;
+  return <div className="home-grid">{layout.widgets.map(w => <Panel key={w.type} type={w.type} size={w.size} h={w.h}><Section type={w.type} size={w.size} h={w.h ?? 1} layout={layout} data={data} act={act} /></Panel>)}</div>;
 }
 
 /** The full-width Continue, Your campaigns and Recently edited sections have no box, as the page was before it could be customized. */
 const bareOf = (type: HomeWidget, size: HomeSize) => type === "continue" || (size === "l" && (type === "campaigns" || type === "recent"));
-function Panel({ type, size, children, ...rest }: { type: HomeWidget; size: HomeSize; children: ReactNode } & React.HTMLAttributes<HTMLElement>) {
-  return <section className={`home-w home-w-${size}${bareOf(type, size) ? " home-w-bare" : ""}`} aria-label={homeInfo[type].name} {...rest}>{children}</section>;
+function Panel({ type, size, h, children, className, ...rest }: { type: HomeWidget; size: HomeSize; h?: HomeHeight; children: ReactNode } & React.HTMLAttributes<HTMLElement>) {
+  return <section className={`home-w home-w-${size}${h && h > 1 ? ` home-w-h${h}` : ""}${bareOf(type, size) ? " home-w-bare" : ""}${className ? ` ${className}` : ""}`} aria-label={homeInfo[type].name} {...rest}>{children}</section>;
 }
 
-function Section({ type, size, layout, data, act }: { type: HomeWidget; size: HomeSize; layout: HomeLayout; data: HomeData; act: Act }) {
-  const part = { layout, data, act };
+function Section({ type, size, h, layout, data, act }: { type: HomeWidget; size: HomeSize; h: number; layout: HomeLayout; data: HomeData; act: Act }) {
+  const part = { layout, data, act, h };
   switch (type) {
     case "continue": return <Continue summary={data.summary} />;
     case "campaigns": return <Campaigns {...part} />;
@@ -154,7 +154,7 @@ function Campaigns({ layout, data, act }: { layout: HomeLayout; data: HomeData; 
 function Recent({ layout, data }: { layout: HomeLayout; data: HomeData }) {
   const recent: RecentPage[] = (data.summary?.recent ?? []).slice(0, layout.options?.recent?.count ?? 6);
   if (!recent.length) return data.summary ? <><Head title="Recently edited" id="home-recent-title" /><p className="home-muted">Pages you edit in the Encyclopedia show up here.</p></> : null;
-  return <div className="home-recent">
+  return <div className="home-recent home-grow">
     <Head title="Recently edited" id="home-recent-title" />
     <ul>{recent.map(p => <RecentRow key={p.id} page={p} />)}</ul>
   </div>;
@@ -232,7 +232,7 @@ function Customize({ layout, data, draft, setDraft, open, setOpen, dragging, set
     <div className="home-grid home-grid-edit" onDragOver={e => e.preventDefault()}>
       {draft.widgets.map((w, i) => {
         const info = homeInfo[w.type];
-        return <Panel key={w.type} type={w.type} size={w.size} className={`home-w home-w-${w.size} home-w-editing${dragging === w.type ? " home-dragging" : ""}`}
+        return <Panel key={w.type} type={w.type} size={w.size} h={w.h} className={`home-w-editing${dragging === w.type ? " home-dragging" : ""}`}
           draggable onDragStart={e => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", w.type); setDragging(w.type); }} onDragEnd={() => setDragging(null)}
           onDragEnter={() => { if (dragging && dragging !== w.type) change(d => moveWidget(d, at(d, dragging), at(d, w.type))); }}>
           <div className="home-edit-bar">
@@ -244,18 +244,19 @@ function Customize({ layout, data, draft, setDraft, open, setOpen, dragging, set
             <button type="button" className="home-icon" aria-label={`Move ${info.name} up`} disabled={i === 0} onClick={() => step(w.type, -1)}><ArrowUp size={15} aria-hidden="true" /></button>
             <button type="button" className="home-icon" aria-label={`Move ${info.name} down`} disabled={i === last} onClick={() => step(w.type, 1)}><ArrowDown size={15} aria-hidden="true" /></button>
             <div className="home-sizes" role="radiogroup" aria-label={`Width of ${info.name}`}>{homeSizes.map(sz => <button key={sz} type="button" role="radio" aria-checked={w.size === sz} onClick={() => change(d => resizeWidget(d, w.type, sz))}>{sz.toUpperCase()}</button>)}</div>
+            <div className="home-sizes home-heights" role="radiogroup" aria-label="Height">{homeHeights.map(n => <button key={n} type="button" role="radio" aria-checked={(w.h ?? 1) === n} aria-label={`${n} ${n === 1 ? "row" : "rows"}`} title={`${n} ${n === 1 ? "row" : "rows"} tall`} onClick={() => change(d => setWidgetHeight(d, w.type, n))}>{"▮".repeat(n)}</button>)}</div>
             {hasSettings(w.type) && <button type="button" className="home-icon" aria-expanded={open === w.type} aria-label={`Settings for ${info.name}`} onClick={() => setOpen(open === w.type ? null : w.type)}><Settings size={15} aria-hidden="true" /></button>}
             <button type="button" className="home-icon" aria-label={`Remove ${info.name}`} onClick={() => change(d => toggleWidget(d, w.type, false))}><X size={15} aria-hidden="true" /></button>
           </div>
           {open === w.type && <Settings_ type={w.type} draft={draft} data={data} change={change} />}
-          <div className="home-edit-preview" inert><Section type={w.type} size={w.size} layout={layout} data={data} act={noop} /></div>
+          <div className="home-edit-preview" inert><Section type={w.type} size={w.size} h={w.h ?? 1} layout={layout} data={data} act={noop} /></div>
         </Panel>;
       })}
       {!draft.widgets.length && <p className="home-empty">Turn sections on in the panel to add them.</p>}
     </div>
     <aside className="home-drawer" aria-label="Home sections">
       <h2>Home sections</h2>
-      <p className="home-muted">Only you see this page. Drag sections to arrange them, or use the arrows. S, M and L set the width.</p>
+      <p className="home-muted">Only you see this page. Drag sections to arrange them, or use the arrows. S, M and L set the width; ▮ ▮▮ ▮▮▮ make a section 1, 2 or 3 rows tall, so it runs down the side.</p>
       <ul>{homeWidgets.map(t => { const on = hasWidget(draft, t), Icon = icons[t]; return <li key={t}>
         <label><Icon size={16} aria-hidden="true" /><span><strong>{homeInfo[t].name}</strong><small>{homeInfo[t].hint}</small></span>
           <input type="checkbox" role="switch" checked={on} onChange={e => { const v = e.target.checked; change(d => toggleWidget(d, t, v)); }} /></label>

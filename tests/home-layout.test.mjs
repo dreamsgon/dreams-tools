@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {homeLayoutSchema,defaultHomeLayout,presetLayout,toggleWidget,moveWidget,resizeWidget,setOption,isPinnedCampaign,isLinkUrl,applyHomeAction,homeWidgets,needsWorkspaces} from '../lib/home-layout.ts';
+import {homeLayoutSchema,defaultHomeLayout,presetLayout,toggleWidget,moveWidget,resizeWidget,setWidgetHeight,setOption,isPinnedCampaign,isLinkUrl,applyHomeAction,homeWidgets,needsWorkspaces,MAX_CAMPAIGN_DASHBOARDS} from '../lib/home-layout.ts';
 
 const row=(key,m,e)=>({key,name:'x',maptable:m?{id:m,name:'x',scenes:0}:null,encyclopedia:e?{id:e}:null,folderId:null});
 
@@ -98,4 +98,62 @@ test('quick actions change one part and are validated', () => {
 test('only sections that need the workspaces ask for them', () => {
   assert.equal(needsWorkspaces({widgets:[{type:'links',size:'l'},{type:'notes',size:'s'},{type:'roll',size:'s'},{type:'attention',size:'s'}]}),false);
   assert.equal(needsWorkspaces(defaultHomeLayout()),true);
+});
+
+test('section heights: 1 to 3, optional, old saves stay valid', () => {
+  const ok=h=>homeLayoutSchema.safeParse({widgets:[{type:'links',size:'s',...(h===undefined?{}:{h})}]}).success;
+  assert.equal(ok(undefined),true,'a save from before heights');
+  for(const h of [1,2,3]) assert.equal(ok(h),true,String(h));
+  for(const h of [0,4,2.5,'2',null]) assert.equal(ok(h),false,String(h));
+  let l={widgets:[{type:'links',size:'s'},{type:'todo',size:'s'}]};
+  l=setWidgetHeight(l,'links',2);
+  assert.deepEqual(l.widgets[0],{type:'links',size:'s',h:2});
+  assert.equal(resizeWidget(l,'links','l').widgets[0].h,2,'the width change keeps the height');
+  assert.deepEqual(setWidgetHeight(l,'links',1).widgets[0],{type:'links',size:'s'},'1 row is left out');
+  assert.deepEqual(homeLayoutSchema.parse(l),l);
+  // A saved file with no heights at all (written before they existed) reads back unchanged.
+  const old={widgets:[{type:'continue',size:'l'},{type:'campaigns',size:'l'}],notes:'n'};
+  assert.deepEqual(homeLayoutSchema.parse(old),old);
+});
+
+test('GM prep has the new order with tall Quick links and To-do; the other presets are unchanged', () => {
+  assert.deepEqual(presetLayout('gm').widgets,[
+    {type:'continue',size:'l'},{type:'campaigns',size:'l'},{type:'links',size:'s',h:2},{type:'folders',size:'m'},{type:'quests',size:'m'},{type:'todo',size:'s',h:2},
+    {type:'sessions',size:'s'},{type:'attention',size:'s'},{type:'recent',size:'m'},{type:'roll',size:'s'},{type:'pinned',size:'s'},{type:'notes',size:'s'}]);
+  assert.equal(homeLayoutSchema.safeParse(presetLayout('gm')).success,true);
+  assert.deepEqual(presetLayout('standard').widgets,[{type:'continue',size:'l'},{type:'campaigns',size:'l'},{type:'recent',size:'l'}]);
+  assert.deepEqual(presetLayout('minimal').widgets,[{type:'links',size:'l'},{type:'campaigns',size:'l'}]);
+  assert.deepEqual(presetLayout('gm').options,{campaigns:{show:'recent',count:8},recent:{count:6},roll:{tables:true}});
+});
+
+test('Maptable-only campaign dashboards are stored in the layout, checked and kept by presets', () => {
+  const dash={widgets:[{type:'initiative',size:'s',h:2},{type:'roll',size:'s'}],notes:'hi'};
+  const base=defaultHomeLayout();
+  let l=applyHomeAction(base,{action:'campaignDashboard',key:'m:abc',dashboard:dash});
+  assert.deepEqual(l.campaignDashboards,{'m:abc':dash});
+  l=applyHomeAction(l,{action:'campaignDashboard',key:'m:def',dashboard:{widgets:[]}});
+  assert.deepEqual(Object.keys(l.campaignDashboards),['m:abc','m:def']);
+  assert.deepEqual(presetLayout('gm',l).campaignDashboards,l.campaignDashboards,'presets keep them');
+  // A layout saved from the page never changes them, even if the page sends none or a stale copy.
+  assert.deepEqual(applyHomeAction(l,{action:'layout',layout:{widgets:[]}}).campaignDashboards,l.campaignDashboards);
+  assert.deepEqual(applyHomeAction(l,{action:'layout',layout:{widgets:[],campaignDashboards:{'m:zzz':{widgets:[]}}}}).campaignDashboards,l.campaignDashboards);
+  assert.equal(applyHomeAction(l,{action:'campaignDashboard',key:'m:abc',dashboard:null}).campaignDashboards['m:abc'],undefined);
+  assert.equal('campaignDashboards' in applyHomeAction(applyHomeAction(base,{action:'campaignDashboard',key:'m:abc',dashboard:dash}),{action:'campaignDashboard',key:'m:abc',dashboard:null}),false,'the last one removed leaves no empty object');
+  assert.throws(()=>applyHomeAction(base,{action:'campaignDashboard',key:'e:abc',dashboard:dash}),'only Maptable keys');
+  assert.throws(()=>applyHomeAction(base,{action:'campaignDashboard',key:'m:abc',dashboard:{widgets:[{type:'nope',size:'s'}]}}));
+  assert.throws(()=>applyHomeAction(base,{action:'campaignDashboard',key:'m:abc',dashboard:{widgets:[{type:'links',size:'s',h:9}]}}));
+  assert.throws(()=>applyHomeAction(base,{action:'campaignDashboard',key:7,dashboard:dash}));
+  const many=n=>Object.fromEntries(Array.from({length:n},(_,i)=>[`m:${i}`,{widgets:[]}]));
+  assert.equal(homeLayoutSchema.safeParse({widgets:[],campaignDashboards:many(MAX_CAMPAIGN_DASHBOARDS)}).success,true);
+  assert.equal(homeLayoutSchema.safeParse({widgets:[],campaignDashboards:many(MAX_CAMPAIGN_DASHBOARDS+1)}).success,false);
+  assert.equal(homeLayoutSchema.safeParse({widgets:[],campaignDashboards:{'e:1':{widgets:[]}}}).success,false);
+});
+
+test('a folder always gets the same colour from a small palette', async () => {
+  const {folderColor,folderColors}=await import('../lib/folder-color.ts');
+  assert.equal(folderColor('abc'),folderColor('abc'));
+  const seen=new Set(Array.from({length:60},(_,i)=>folderColor(`folder-${i}`)));
+  assert.ok(seen.size>=4,'ids spread over the palette');
+  for(const c of seen) assert.ok(folderColors.includes(c));
+  assert.ok(folderColors.every(c=>/^#[0-9a-f]{6}$/.test(c)));
 });

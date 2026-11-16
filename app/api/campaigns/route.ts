@@ -1,7 +1,7 @@
 import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { failure, privateHeaders } from "@/lib/server";
-import { backupFile, campaignAction, campaignSession, hubOf, readBoth, saveDashboard, saveFrontPage, summaryOf, type CampaignAction } from "@/lib/campaigns-server";
+import { backupFile, campaignAction, campaignSession, loadHub, readBoth, saveDashboard, saveFrontPage, summaryOf, type CampaignAction } from "@/lib/campaigns-server";
 export const dynamic = "force-dynamic";
 
 // One campaign list across Maptable and the Encyclopedia. See lib/campaigns-server.ts.
@@ -14,9 +14,10 @@ async function session(request?: Request) {
 
 export async function GET(request: Request) {
   try {
-    const both = await readBoth(await session()), params = new URL(request.url).searchParams;
+    const s = await session(), params = new URL(request.url).searchParams;
     const hub = params.get("hub");
-    if (hub) return Response.json(hubOf(both, hub), { headers: privateHeaders });
+    if (hub) return Response.json(await loadHub(s, hub), { headers: privateHeaders });
+    const both = await readBoth(s);
     if (params.get("download") === "backup")
       return new Response(backupFile(both), { headers: { ...privateHeaders, "Content-Type": "application/json", "Content-Disposition": `attachment; filename="rpg-tools-backup-${new Date().toISOString().slice(0, 10)}.json"` } });
     return Response.json(summaryOf(both), { headers: privateHeaders });

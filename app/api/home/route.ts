@@ -2,7 +2,8 @@ import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { failure, privateHeaders } from "@/lib/server";
 import { campaignSession } from "@/lib/campaigns-server";
-import { homeAction, homeData, readHome } from "@/lib/home-server";
+import { homeData } from "@/lib/home-server";
+import { forHomePage, homeAction, readHome } from "@/lib/home-store";
 import type { HomeAction } from "@/lib/home-layout";
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,9 @@ export async function GET(request: Request) {
   try {
     const u = await user(), params = new URL(request.url).searchParams, bucket = getBucket();
     const { layout } = await readHome(bucket, u.userId);
-    if (params.get("layout")) return Response.json({ layout }, { headers: privateHeaders });
+    if (params.get("layout")) return Response.json({ layout: forHomePage(layout) }, { headers: privateHeaders });
     const data = await homeData(campaignSession(bucket, u.userId), layout, params.get("all") === "1");
-    return Response.json({ layout, data }, { headers: privateHeaders });
+    return Response.json({ layout: forHomePage(layout), data }, { headers: privateHeaders });
   } catch (e) { return failure(e); }
 }
 
@@ -31,6 +32,6 @@ export async function POST(request: Request) {
     const text = await request.text();
     if (text.length > 150_000) throw new Error("Request is too large.");
     const layout = await homeAction(getBucket(), u.userId, JSON.parse(text) as HomeAction);
-    return Response.json({ layout }, { headers: privateHeaders });
+    return Response.json({ layout: forHomePage(layout) }, { headers: privateHeaders });
   } catch (e) { return failure(e); }
 }

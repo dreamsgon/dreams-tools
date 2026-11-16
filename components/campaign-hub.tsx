@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, MessagesSquare, Users, BookMarked, CalendarDays, Check, Copy, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, MessagesSquare, Users, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
-import { dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, moveWidget, resizeWidget, toggleWidget, type Dashboard, type DashWidget } from "@/lib/encyclopedia/dashboard";
+import { dashHeights, dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, missingHalf, moveWidget, resizeWidget, setHeight, toggleWidget, type Dashboard, type DashWidget, type Halves } from "@/lib/encyclopedia/dashboard";
 import { stateNames, questStates } from "@/lib/encyclopedia/quests";
 import { isNewFind } from "@/lib/encyclopedia/codex";
 import { lookAttributes } from "@/lib/encyclopedia/look";
@@ -12,6 +12,7 @@ import { FrontPageView, sessionTime } from "./front-page-view";
 import { useWriters } from "./encyclopedia/recap-panel";
 import { allStyles, isBuiltIn, styleFor, styleSummary } from "@/lib/encyclopedia/ai-styles";
 import { when } from "./home-campaigns";
+import { RollPanel } from "./roll-widget";
 import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
@@ -90,7 +91,8 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const { row } = hub, e = row.encyclopedia, m = row.maptable, look = hub.look ?? undefined;
   // The campaign's accent and heading font carry over from its look. Its page surface stays in the Encyclopedia.
   const attrs = lookAttributes(look);
-  const layout = hub.dashboard ?? defaultDashboard();
+  const halves: Halves = { maps: !!m, notes: !!e };
+  const layout = hub.dashboard ?? defaultDashboard({}, halves);
   return <div className={`hub${draft ? " hub-customizing" : ""}`} data-look-accent={attrs["data-look-accent"]} style={attrs.style as CSSProperties}>
     <LookFont look={look} />
     <nav className="hub-crumbs" aria-label="Breadcrumb"><Link href="/campaigns">Campaigns</Link><span aria-hidden="true">/</span><span aria-current="page">{row.name}</span></nav>
@@ -99,14 +101,17 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       <div className="hub-title">
         <p>Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>
+        <div className="hub-chips"><span className={`hub-chip${m ? " on" : ""}`}>{m ? "✓ Maps" : "No maps yet"}</span><span className={`hub-chip${e ? " on" : ""}`}>{e ? "✓ Notes" : "No notes yet"}</span></div>
         <TagRow className="hub-tags" targets={campaignTargets(row)} />
       </div>
       <div className="hub-actions">
         {draft ? <button className="hub-button hub-button-primary" onClick={() => { void save(draft); setDraft(null); }}><Check size={15} aria-hidden="true" />Done</button> : <>
-          {tab === "dashboard" && e && <button className="hub-button" onClick={() => setDraft(layout)}><Pencil size={14} aria-hidden="true" />Customize</button>}
+          {tab === "dashboard" && <button className="hub-button" onClick={() => setDraft(layout)}><Pencil size={14} aria-hidden="true" />Customize</button>}
           {tab === "front" && hub.frontConfig && !editing && <button className="hub-button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Customize</button>}
-          {e && <a className="hub-button" href={notesHref(e.id)}><BookOpen size={15} aria-hidden="true" />Open notes</a>}
-          {m && <a className="hub-button hub-button-primary" href={mapsHref(m.id)}><MapIcon size={15} aria-hidden="true" />Open in Maptable</a>}
+          {e ? <a className="hub-button" href={notesHref(e.id)}><BookOpen size={15} aria-hidden="true" />Open notes</a>
+            : <Link className="hub-button" href="/campaigns"><Plus size={15} aria-hidden="true" />Start notes</Link>}
+          {m ? <a className="hub-button hub-button-primary" href={mapsHref(m.id)}><MapIcon size={15} aria-hidden="true" />Open in Maptable</a>
+            : <Link className="hub-button" href="/campaigns"><Plus size={15} aria-hidden="true" />Add maps</Link>}
           {e && <BackupsButton campaignId={e.id} campaignName={row.name} />}
         </>}
       </div>
@@ -126,8 +131,8 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       {tab === "members" ? !e ? <NoNotes /> : members ? <CampaignMembers campaignId={e.id} view={members} setView={setMembers} />
         : <p className={membersError ? "hub-error" : "hub-muted"}>{membersError || "Loading members…"}</p>
         : tab === "dashboard" ? draft
-        ? <Customize hub={hub} draft={draft} setDraft={setDraft} />
-        : <DashboardView hub={hub} layout={layout} save={save} saveFront={saveFront} customize={e ? () => setDraft(layout) : undefined} />
+        ? <Customize hub={hub} draft={draft} setDraft={setDraft} halves={halves} />
+        : <DashboardView hub={hub} layout={layout} save={save} saveFront={saveFront} customize={() => setDraft(layout)} />
         : !hub.front || !hub.frontConfig ? <NoNotes /> : editing
         ? <FrontEditor hub={hub} campaignKey={campaignKey} done={next => { if (next) setHub(next); setEditing(false); }} />
         : <><p className="hub-note"><Eye size={15} aria-hidden="true" />This is what players see first with their player link.</p><FrontPageView page={hub.front} href={entryHref} /></>}
@@ -142,16 +147,16 @@ function NoNotes() {
 type Saver = (d: Dashboard) => Promise<void>;
 
 function DashboardView({ hub, layout, save, saveFront, customize }: { hub: CampaignHub; layout: Dashboard; save: Saver; saveFront: (p: FrontPage) => Promise<void>; customize?: () => void }) {
-  if (!layout.widgets.length) return <div className="hub-card hub-empty"><h2>Nothing on the dashboard</h2><p>{customize ? <>Choose what to show with <button className="hub-text-button" onClick={customize}>Customize</button>.</> : "Start notes for this campaign to customize its dashboard."}</p></div>;
+  if (!layout.widgets.length) return <div className="hub-card hub-empty"><h2>Nothing on the dashboard</h2><p>{customize ? <>Choose what to show with <button className="hub-text-button" onClick={customize}>Customize</button>.</> : "Choose what to show with Customize."}</p></div>;
   return <div className="hub-grid">
-    {layout.widgets.map(w => <section key={w.type} className={`hub-card hub-w-${w.type}`} style={{ gridColumn: `span ${dashSpan[w.size]}` }} aria-label={dashInfo[w.type].name}>
-      <WidgetBody type={w.type} size={w.size} hub={hub} layout={layout} save={save} saveFront={saveFront} />
+    {layout.widgets.map(w => <section key={w.type} className={`hub-card hub-w-${w.type}${w.h ? ` hub-h${w.h}` : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}>
+      <WidgetBody type={w.type} size={w.size} h={w.h ?? 1} hub={hub} layout={layout} save={save} saveFront={saveFront} />
     </section>)}
   </div>;
 }
 
 /** Customize: drag widgets (or use the arrow keys on the handle), pick a width, and choose widgets in the side panel. */
-function Customize({ hub, draft, setDraft: replace }: { hub: CampaignHub; draft: Dashboard; setDraft: (d: (current: Dashboard | null) => Dashboard | null) => void }) {
+function Customize({ hub, draft, setDraft: replace, halves }: { hub: CampaignHub; draft: Dashboard; setDraft: (d: (current: Dashboard | null) => Dashboard | null) => void; halves: Halves }) {
   const [dragging, setDragging] = useState<DashWidget | null>(null);
   // Always change the newest layout: drag events can come faster than React renders.
   const setDraft = (next: Dashboard | ((d: Dashboard) => Dashboard)) => replace(d => d && (typeof next === "function" ? next(d) : next));
@@ -159,7 +164,7 @@ function Customize({ hub, draft, setDraft: replace }: { hub: CampaignHub; draft:
   const noop: Saver = async () => {};
   return <div className="hub-custom">
     <div className="hub-grid hub-grid-edit" onDragOver={ev => ev.preventDefault()}>
-      {draft.widgets.map(w => <section key={w.type} className={`hub-card hub-w-${w.type}${dragging === w.type ? " dragging" : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}` }} aria-label={dashInfo[w.type].name}
+      {draft.widgets.map((w, i) => <section key={w.type} className={`hub-card hub-w-${w.type}${w.h ? ` hub-h${w.h}` : ""}${dragging === w.type ? " dragging" : ""}`} style={{ gridColumn: `span ${dashSpan[w.size]}`, ...(w.h ? { gridRow: `span ${w.h}` } : {}) }} aria-label={dashInfo[w.type].name}
         draggable onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", w.type); setDragging(w.type); }} onDragEnd={() => setDragging(null)}
         onDragEnter={() => dragOver(w.type)}>
         <div className="hub-edit-bar">
@@ -168,28 +173,32 @@ function Customize({ hub, draft, setDraft: replace }: { hub: CampaignHub; draft:
             if (by) { ev.preventDefault(); setDraft(d => moveWidget(d, d.widgets.findIndex(x => x.type === w.type), d.widgets.findIndex(x => x.type === w.type) + by)); }
           }}><GripVertical size={15} aria-hidden="true" /></button>
           <h2>{dashInfo[w.type].name}</h2>
+          <button className="hub-icon" aria-label={`Move ${dashInfo[w.type].name} up`} disabled={i === 0} onClick={() => setDraft(d => moveWidget(d, i, i - 1))}><ArrowUp size={15} aria-hidden="true" /></button>
+          <button className="hub-icon" aria-label={`Move ${dashInfo[w.type].name} down`} disabled={i === draft.widgets.length - 1} onClick={() => setDraft(d => moveWidget(d, i, i + 1))}><ArrowDown size={15} aria-hidden="true" /></button>
           <div className="hub-sizes" role="radiogroup" aria-label={`Width of ${dashInfo[w.type].name}`}>{dashSizes.map(sz => <button key={sz} role="radio" aria-checked={w.size === sz} onClick={() => setDraft(d => resizeWidget(d, w.type, sz))}>{sz.toUpperCase()}</button>)}</div>
+          <div className="hub-sizes hub-heights" role="radiogroup" aria-label="Height">{dashHeights.map(n => <button key={n} role="radio" aria-checked={(w.h ?? 1) === n} aria-label={`${n} ${n === 1 ? "row" : "rows"}`} title={`${n} ${n === 1 ? "row" : "rows"} tall`} onClick={() => setDraft(d => setHeight(d, w.type, n))}>{"▮".repeat(n)}</button>)}</div>
           <button className="hub-icon" aria-label={`Remove ${dashInfo[w.type].name}`} onClick={() => setDraft(d => toggleWidget(d, w.type, false))}><X size={15} /></button>
         </div>
-        <div className="hub-edit-preview" inert><WidgetBody type={w.type} size={w.size} hub={hub} layout={draft} save={noop} saveFront={async () => {}} bare /></div>
+        <div className="hub-edit-preview" inert><WidgetBody type={w.type} size={w.size} h={w.h ?? 1} hub={hub} layout={draft} save={noop} saveFront={async () => {}} bare /></div>
       </section>)}
       {!draft.widgets.length && <p className="hub-muted hub-grid-empty">Turn widgets on in the panel to add them.</p>}
     </div>
     <aside className="hub-drawer" aria-label="Dashboard widgets">
       <h2>Dashboard widgets</h2>
-      <p className="hub-muted">Only you see the dashboard. Drag widgets to arrange them, and pick S, M or L for their width.</p>
-      <ul>{dashWidgets.map(t => { const on = draft.widgets.some(w => w.type === t); const Icon = icons[t]; return <li key={t}>
-        <label><Icon size={16} aria-hidden="true" /><span><strong>{dashInfo[t].name}</strong><small>{dashInfo[t].hint}</small></span>
+      <p className="hub-muted">Only you see the dashboard. Drag widgets to arrange them, or use the arrows. S, M and L set the width; ▮ ▮▮ ▮▮▮ make a widget 1, 2 or 3 rows tall, so it runs down the side.</p>
+      <ul>{dashWidgets.map(t => { const on = draft.widgets.some(w => w.type === t); const Icon = icons[t], lacks = missingHalf(t, halves); return <li key={t}>
+        <label><Icon size={16} aria-hidden="true" /><span><strong>{dashInfo[t].name}</strong><small>{lacks ? `Needs ${lacks === "maps" ? "maps" : "notes"} (none yet)` : dashInfo[t].hint}</small></span>
           <input type="checkbox" role="switch" checked={on} onChange={ev => { const on = ev.target.checked; setDraft(d => toggleWidget(d, t, on)); }} /></label>
       </li>; })}</ul>
-      <button className="hub-text-button" onClick={() => setDraft(defaultDashboard({ threads: draft.threads, notes: draft.notes, links: draft.links }))}>Reset to the starting layout</button>
+      <button className="hub-text-button" onClick={() => setDraft(defaultDashboard({ threads: draft.threads, notes: draft.notes, links: draft.links }, halves))}>Reset to the starting layout</button>
+      <p className="hub-muted hub-drawer-note">Your links, threads and notes are kept.</p>
     </aside>
   </div>;
 }
 
 const icons: Record<DashWidget, typeof Flag> = {
-  next: CalendarDays, quests: Flag, board: LayoutDashboard, scenes: MapIcon, party: User, recent: FileText,
-  codex: BookMarked, threads: Check, date: CalendarDays, recap: ScrollText, notes: Pencil, links: Link2,
+  next: CalendarDays, quests: Flag, board: LayoutDashboard, scenes: MapIcon, initiative: Swords, party: User, recent: FileText,
+  codex: BookMarked, threads: Check, date: CalendarDays, recap: ScrollText, roll: Dices, notes: Pencil, links: Link2,
 };
 
 function Head({ title, children }: { title: string; children?: ReactNode }) {
@@ -197,10 +206,13 @@ function Head({ title, children }: { title: string; children?: ReactNode }) {
 }
 const typeClass = (t: string) => `hub-flag type-${t}`;
 
-function WidgetBody({ type, size, hub, layout, save, saveFront, bare }: { type: DashWidget; size: "s" | "m" | "l"; hub: CampaignHub; layout: Dashboard; save: Saver; saveFront: (p: FrontPage) => Promise<void>; bare?: boolean }) {
+function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: { type: DashWidget; size: "s" | "m" | "l"; h?: number; hub: CampaignHub; layout: Dashboard; save: Saver; saveFront: (p: FrontPage) => Promise<void>; bare?: boolean }) {
   const { row } = hub, e = row.encyclopedia, m = row.maptable, name = dashInfo[type].name;
   const head = (link?: ReactNode) => bare ? null : <Head title={name}>{link}</Head>;
   const noNotes = <p className="hub-muted">Start Encyclopedia notes for this campaign on the <Link href="/campaigns">Campaigns page</Link>.</p>;
+  // A widget that needs the half this campaign lacks says so, with the way to add it.
+  const lacks = missingHalf(type, { maps: !!m, notes: !!e });
+  if (lacks) return <>{head()}<p className="hub-muted">{lacks === "maps" ? <>No maps yet. <Link href="/campaigns">Add maps</Link></> : <>No notes yet. <Link href="/campaigns">Start notes</Link></>}</p></>;
   switch (type) {
     case "next": return <>{head()}<NextSession hub={hub} saveFront={saveFront} showDate={!layout.widgets.some(w => w.type === "date")} bare={bare} /></>;
     case "date": return <>{head()}{hub.gameDate ? <><strong className="hub-big">{hub.gameDate.date}</strong><p className="hub-muted">{hub.gameDate.name}</p></>
@@ -208,7 +220,7 @@ function WidgetBody({ type, size, hub, layout, save, saveFront, bare }: { type: 
     case "quests": {
       const active = hub.quests.filter(q => q.state === "active");
       return <>{head(e && <a href={notesHref(e.id, "quests")}>Quest board</a>)}
-        {!e ? noNotes : active.length ? <ul className="hub-quests">{active.slice(0, size === "s" ? 3 : 5).map(q => <li key={q.id}><a href={entryHref(q.id)}>
+        {!e ? noNotes : active.length ? <ul className="hub-quests">{active.slice(0, (size === "s" ? 3 : 5) + (h - 1) * 4).map(q => <li key={q.id}><a href={entryHref(q.id)}>
           <Flag size={14} className={typeClass(q.type)} aria-hidden="true" />
           <span className="hub-quest-text"><strong>{q.title}</strong>{q.next && <small>Next: {q.next}</small>}
             {q.total > 0 && <span className="hub-progress" role="progressbar" aria-label={`${q.done} of ${q.total} steps`} aria-valuemin={0} aria-valuemax={q.total} aria-valuenow={q.done}><span className={`type-${q.type}`} style={{ width: `${(q.done / q.total) * 100}%` }} /></span>}</span>
@@ -224,18 +236,29 @@ function WidgetBody({ type, size, hub, layout, save, saveFront, bare }: { type: 
       </div>; })}</div>}</>;
     case "scenes": return <>{head(m && <a href={mapsHref(m.id)}>{hub.scenes.length > 8 ? `All ${hub.scenes.length} scenes` : "Open Maptable"}</a>)}
       {!m ? <p className="hub-muted">No Maptable campaign yet. Add one on the <Link href="/campaigns">Campaigns page</Link>.</p>
-        : hub.scenes.length ? <ul className="hub-scene-grid">{hub.scenes.slice(0, { s: 2, m: 4, l: 8 }[size]).map(s => <li key={s.id}><a href={`/maptable?scene=${encodeURIComponent(s.id)}`}>
+        : hub.scenes.length ? <ul className="hub-scene-grid">{hub.scenes.slice(0, { s: 2, m: 4, l: 8 }[size] * h).map(s => <li key={s.id}><a href={`/maptable?scene=${encodeURIComponent(s.id)}`}>
           <span className="hub-scene-art" style={s.src ? { backgroundImage: `url("${s.src}")` } : undefined} aria-hidden="true">{!s.src && <MapIcon size={18} />}</span>
           <strong>{s.name}</strong><small>{s.mapType === "encounter" ? `Encounter · ${s.tokens} token${s.tokens === 1 ? "" : "s"}` : s.mapType === "world" ? "World map" : "Area map"}</small></a></li>)}</ul>
         : <p className="hub-muted">No scenes yet. <a href={mapsHref(m.id)}>Add the first map in Maptable</a>.</p>}</>;
+    case "initiative": {
+      const ini = hub.initiative, cap = [6, 12, 20][h - 1] ?? 6;
+      return <>{head(m && ini && <a href={`/maptable?scene=${encodeURIComponent(ini.sceneId)}`}>Resume</a>)}
+        {ini ? <>
+          <ul className="hub-init">{ini.rows.slice(0, cap).map(r => <li key={r.id} className={`${r.active ? "on" : ""}${r.skipped ? " skipped" : ""}`}>
+            <span className="hub-init-n">{r.initiative}</span><span className="hub-init-name">{r.name}{r.active ? " ◀" : ""}</span>{r.stats && <small>{r.stats}</small>}</li>)}</ul>
+          {ini.rows.length > cap && <small className="hub-muted">{ini.rows.length - cap} more</small>}
+          <p className="hub-muted hub-init-foot">{ini.sceneName}{ini.round ? ` · round ${ini.round}` : ""}</p>
+        </> : <p className="hub-muted">No encounter with initiative yet. {m && <a href={mapsHref(m.id)}>Open Maptable</a>}</p>}</>;
+    }
+    case "roll": return <>{head()}<RollPanel tables={hub.tables} library={hub.library} emptyText={e ? "Star a random table in the Encyclopedia and use it in this campaign to add it here." : "Star a random table in the Encyclopedia to add it here."} /></>;
     case "party": return <>{head(e && <a href={notesHref(e.id, "characters")}>Characters</a>)}
       {hub.party.length ? <ul className="hub-party">{hub.party.map(p => <PartyMember key={p.id} member={p} />)}</ul>
         : <p className="hub-muted">Mark characters as player characters or companions in the Encyclopedia and they show up here.</p>}</>;
     case "recent": return <>{head(e && <a href={notesHref(e.id)}>Notes</a>)}
-      {hub.recent.length ? <ul className="hub-list">{hub.recent.map(p => <li key={p.id}><a href={entryHref(p.id)}>{p.kind === "character" ? <User size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />}<span><strong>{p.title}</strong>{p.parent && <small>{p.parent}</small>}</span><time dateTime={p.updatedAt}>{when(p.updatedAt)}</time></a></li>)}</ul>
+      {hub.recent.length ? <ul className="hub-list">{hub.recent.slice(0, [5, 8, 12][h - 1] ?? 5).map(p => <li key={p.id}><a href={entryHref(p.id)}>{p.kind === "character" ? <User size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />}<span><strong>{p.title}</strong>{p.parent && <small>{p.parent}</small>}</span><time dateTime={p.updatedAt}>{when(p.updatedAt)}</time></a></li>)}</ul>
         : <p className="hub-muted">{e ? "No pages yet." : "No Encyclopedia notes yet."}</p>}</>;
     case "codex": return <>{head(e && <a href={notesHref(e.id, "codex")}>Open codex</a>)}
-      {!e ? noNotes : hub.codex.length ? <ul className="hub-list">{hub.codex.slice(0, size === "s" ? 4 : 8).map(c => <li key={c.id}><a href={entryHref(c.id)}><BookMarked size={15} aria-hidden="true" /><span><strong>{c.title}</strong><small>{c.category}{c.foundAt ? isNewFind({ at: c.foundAt }) ? " · new" : "" : " · not found yet"}</small></span><time dateTime={c.at}>{when(c.at)}</time></a></li>)}</ul>
+      {!e ? noNotes : hub.codex.length ? <ul className="hub-list">{hub.codex.slice(0, (size === "s" ? 4 : 8) * h).map(c => <li key={c.id}><a href={entryHref(c.id)}><BookMarked size={15} aria-hidden="true" /><span><strong>{c.title}</strong><small>{c.category}{c.foundAt ? isNewFind({ at: c.foundAt }) ? " · new" : "" : " · not found yet"}</small></span><time dateTime={c.at}>{when(c.at)}</time></a></li>)}</ul>
         : <p className="hub-muted">No codex entries yet. <a href={notesHref(e.id, "codex")}>Start the codex</a></p>}</>;
     case "threads": return <Threads layout={layout} save={save} head={head} />;
     case "recap": return <>{head(hub.lastSession && <a href={entryHref(hub.lastSession.id)}>Open</a>)}
