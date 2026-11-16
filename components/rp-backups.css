@@ -102,3 +102,13 @@ a.rpb-primary { color:var(--on-accent); }
   .rpb-open { width:100%; justify-content:center; min-height:44px; }
   .rpb-last { text-align:center; }
 }
+.rpb-h { margin:4px 0 0; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; }
+.rpb-map { list-style:none; margin:0; padding:2px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); font-size:13px; }
+.rpb-map li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid var(--line); }
+.rpb-map li:last-child { border-bottom:0; }
+.rpb-from { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+.rpb-to { font-size:13.5px; font-weight:600; overflow-wrap:anywhere; }
+.rpb-to em { font-style:normal; color:var(--accent); }
+.rpb-to small { font-size:12px; font-weight:400; color:var(--muted); }
+.rpb-source { flex-wrap:wrap; }
+.rpb-nw { white-space:nowrap; }

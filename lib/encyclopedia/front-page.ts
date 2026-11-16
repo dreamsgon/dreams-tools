@@ -95,7 +95,7 @@ export function resolveFrontPage(page: FrontPage | undefined, input: {
       case "recap": {
         const latest = input.sessionsNewestFirst.map(id => readable.get(id)).find(Boolean);
         const text = latest?.tabs.map(t => t.body).find(b => b.trim()) ?? "";
-        return [{ ...base, type: "recap", entryId: latest?.id ?? null, heading: latest?.title ?? "", excerpt: excerpt(text) }];
+        return [{ ...base, type: "recap", entryId: latest?.id ?? null, heading: latest?.title ?? "", excerpt: excerpt(text, id => readable.get(id)?.title ?? "") }];
       }
       case "text": return [{ ...base, type: "text", body: input.clean(w.body) }];
       case "story": return [{ ...base, type: "story", body: input.clean(w.body), sessions: input.sessionsNewestFirst.flatMap(id => { const e = readable.get(id); return e ? [{ id: e.id, title: e.title }] : []; }).slice(0, 3) }];
@@ -105,7 +105,9 @@ export function resolveFrontPage(page: FrontPage | undefined, input: {
   return { widgets, customised: !!page };
 }
 
-function excerpt(text: string, max = 320) {
-  const plain = text.replace(/^#+\s*/gm, "").replace(/^\s*[-*]\s+(\[[ xX]\]\s*)?/gm, "").replace(/\s+/g, " ").trim();
+/** Plain text for the Last session card: page links show their label (or the page's title), not their markup. */
+function excerpt(text: string, titleOf: (id: string) => string, max = 320) {
+  const plain = text.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g, (_, id: string, label?: string) => label?.trim() || titleOf(id.trim()))
+    .replace(/^#+\s*/gm, "").replace(/^\s*[-*]\s+(\[[ xX]\]\s*)?/gm, "").replace(/\s+/g, " ").trim();
   return plain.length > max ? plain.slice(0, max).replace(/\s+\S*$/, "") + "…" : plain;
 }

@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownUp, Check, Download, FileArchive, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
+import { ArrowDownUp, Check, Download, FileArchive, FolderOpen, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
 import { importCopy, workspaceSchema, type Workspace } from "@/lib/encyclopedia/world-model";
 import { librarySchema, emptyLibrary, type TableLibrary } from "@/lib/encyclopedia/tables";
 import { rpExportFiles } from "@/lib/encyclopedia/rp-export";
 import { rpExportZip, readRestoreCopy } from "@/lib/encyclopedia/rp-zip";
+import { addImported, buildCampaign, previewRepo, readSources, type ImportPreview, type Source } from "@/lib/encyclopedia/rp-import";
 import { readZip, ZipError, ZIP_MAX_BYTES } from "@/lib/zip-read";
 import { classifyZip, defaultCommitMessage, exportedAt, folderRows, lastExportKey, lastPushKey, parseLastPush, restoreNotice, shortDate, zipName, type LastPush } from "@/lib/encyclopedia/rp-sheet";
-import { readRepoRestore, type PushResult } from "@/lib/github-push";
+import { readRepoFiles, readRepoRestore, type PushResult } from "@/lib/github-push";
 import { forgetKey, readKey } from "@/lib/github-key";
 import { ConnectView, PushView, githubFetch } from "./rp-github";
 import { memberRef } from "./encyclopedia/member-view";
@@ -50,7 +51,8 @@ type Imported =
   | { step: "note"; title: string; message: string }
   | { step: "found"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
   | { step: "restoring"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
-  | { step: "done"; name: string; href: string };
+  | { step: "preview" | "importing"; preview: ImportPreview; name: string; show: boolean }
+  | { step: "done"; name: string; href: string; verb: "Restored" | "Imported" };
 
 /** The "found" card for a restore copy, from a ZIP or a repository. */
 function foundFrom(workspace: Workspace, date: string | null, files: number): Imported {
@@ -79,13 +81,13 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 }) {
   const [tab, setTab] = useState<"export" | "import">("export"), [includeGm, setIncludeGm] = useState(true);
   const [view, setView] = useState<"main" | "connect" | "push">("main"), [then, setThen] = useState<"export" | "push" | "import">("export");
-  const [source, setSource] = useState<"zip" | "github">("zip"), [savedGh, setSavedGh] = useState<Github | null>(null), [keyTick, setKeyTick] = useState(0);
+  const [source, setSource] = useState<"zip" | "github" | "folder">("zip"), [savedGh, setSavedGh] = useState<Github | null>(null), [keyTick, setKeyTick] = useState(0);
   const [lastPush, setLastPush] = useState<LastPush | null>(() => readLastPush(campaignId));
   const [memKey, setMemKey] = useState<{ repo: string; token: string } | null>(null), busy = useRef(false);
   const [loaded, setLoaded] = useState<Loaded | null>(null), [loadError, setLoadError] = useState("");
   const [saved, setSaved] = useState(""), [exportError, setExportError] = useState("");
-  const [imp, setImp] = useState<Imported>({ step: "idle" });
-  const sheet = useRef<HTMLDivElement>(null), picker = useRef<HTMLInputElement>(null), closeRef = useRef(close);
+  const [imp, setImp] = useState<Imported>({ step: "idle" }), [canFolder] = useState(() => typeof document !== "undefined" && "webkitdirectory" in document.createElement("input"));
+  const sheet = useRef<HTMLDivElement>(null), picker = useRef<HTMLInputElement>(null), folderPicker = useRef<HTMLInputElement>(null), closeRef = useRef(close);
   const [opener] = useState(() => typeof document === "undefined" ? null : document.activeElement as HTMLElement | null);
   const [openedAt] = useState(() => new Date().toISOString());
   const latest = useRef(workspace);
@@ -164,6 +166,28 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     } catch (e) { setExportError(errorText(e, "Could not build the ZIP.")); }
   }
 
+  /** What a set of files is: a restore copy, an RP repository to import as a new campaign, or neither. */
+  async function analyse(sources: Source[], where: "ZIP" | "folder", label: string) {
+    const names = sources.map(f => f.name), kind = classifyZip(names);
+    if (kind === "restore") {
+      const wanted = sources.filter(f => f.name === ".rpg-tools/campaign.json" || f.name === ".rpg-tools/files.json" || /^world-manager\/[^/]+\/campaign\.json$/.test(f.name));
+      const restore = readRestoreCopy(await Promise.all(wanted.map(async f => ({ name: f.name, data: await f.bytes() }))));
+      if (!restore.ok) { setImp(restoreNotice(kind, where, restore.error)); return; }
+      const log = sources.find(f => f.name === "8-Archive/Export-Log.md");
+      setImp(foundFrom(restore.workspace, exportedAt(log ? new TextDecoder().decode(await log.bytes()) : undefined), names.length));
+      return;
+    }
+    if (kind === "numbered" || kind === "player-safe") {
+      const read = await readSources(sources);
+      if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
+      const result = previewRepo(read.files, { name: label });
+      if (!result.ok) { setImp(kind === "player-safe" ? restoreNotice(kind, where, "") : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
+      setImp({ step: "preview", preview: result, name: result.campaignName, show: false });
+      return;
+    }
+    setImp(restoreNotice(kind, where, ""));
+  }
+
   async function pick(file: File | undefined) {
     if (!file) return;
     if (picker.current) picker.current.value = "";
@@ -177,13 +201,21 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
         setImp({ step: "error", title: /unsafe file name/.test(message) ? "Unsafe file names" : /not a ZIP/.test(message) ? "Not a ZIP file" : /larger than 50 MB|more than/.test(message) ? "That ZIP is too big" : "Could not read the ZIP", message });
         return;
       }
-      const kind = classifyZip(entries.map(f => f.name));
-      if (kind !== "restore") { const restore = readRestoreCopy(entries); setImp(restoreNotice(kind, "ZIP", restore.ok ? "" : restore.error)); return; }
-      const restore = readRestoreCopy(entries);
-      if (!restore.ok) { setImp(restoreNotice(kind, "ZIP", restore.error)); return; }
-      const log = entries.find(f => f.name === "8-Archive/Export-Log.md");
-      setImp(foundFrom(restore.workspace, exportedAt(log ? new TextDecoder().decode(log.data) : undefined), entries.length));
+      await analyse(entries.map(e => ({ name: e.name, size: e.data.length, bytes: async () => e.data })), "ZIP", file.name.replace(/\.zip$/i, ""));
     } catch (e) { setImp({ step: "error", title: "Could not read the ZIP", message: errorText(e, "This file could not be read.") }); }
+  }
+
+  /** A folder picked on this device: the same reading as a ZIP, with the picked folder as the top of the repository. */
+  async function pickFolder(list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (folderPicker.current) folderPicker.current.value = "";
+    if (!files.length) return;
+    setImp({ step: "reading" });
+    try {
+      const rel = (f: File) => f.webkitRelativePath || f.name;
+      const sources = files.map(f => ({ name: rel(f).split("/").slice(1).join("/") || f.name, size: f.size, bytes: async () => new Uint8Array(await f.arrayBuffer()) }));
+      await analyse(sources, "folder", rel(files[0]).split("/")[0]);
+    } catch (e) { setImp({ step: "error", title: "Could not read the folder", message: errorText(e, "This folder could not be read.") }); }
   }
 
   /** Reads .rpg-tools/campaign.json (or the old world-manager copy) from the saved repository and branch with the key kept on this device. */
@@ -193,14 +225,20 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     setImp({ step: "reading" });
     try {
       const got = await readRepoRestore(token, repo, github.branch, githubFetch);
-      if (!got.ok) { setImp(restoreNotice(got.kind, "repository", got.error)); return; }
-      setImp(foundFrom(got.workspace, got.date, got.files));
+      if (got.ok) { setImp(foundFrom(got.workspace, got.date, got.files)); return; }
+      if (got.kind !== "numbered" && got.kind !== "player-safe") { setImp(restoreNotice(got.kind, "repository", got.error)); return; }
+      const read = await readRepoFiles(token, repo, github.branch, githubFetch);
+      if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
+      const result = previewRepo(read.files, { name: repo.split("/")[1] ?? repo });
+      if (!result.ok) { setImp(got.kind === "player-safe" ? restoreNotice(got.kind, "repository", got.error) : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
+      if (read.truncated) result.notices.push("GitHub cut the list of files short because the repository is very large, so some files may be missing from this import.");
+      setImp({ step: "preview", preview: result, name: result.campaignName, show: false });
     } catch (e) { setImp({ step: "error", title: "Could not read the repository", message: errorText(e, "Could not read the repository.") }); }
   }
 
   /** Saves the campaign's repository and branch. Returns a message when it could not. */
   async function saveGithub(next: Github): Promise<string | null> {
-    if (onSaveGithub) { if (!onSaveGithub(next)) return "Could not save the repository settings."; setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" ? i : { step: "idle" }); return null; }
+    if (onSaveGithub) { if (!onSaveGithub(next)) return "Could not save the repository settings."; setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" || i.step === "importing" ? i : { step: "idle" }); return null; }
     try {
       const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
       if (res.status === 401) return "Sign in again to save the repository.";
@@ -212,7 +250,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return "Your notes changed somewhere else, so the repository was not saved. Try again.";
       if (!put.ok) return out.error || "Could not save the repository.";
-      setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" ? i : { step: "idle" });
+      setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" || i.step === "importing" ? i : { step: "idle" });
       setLoaded(l => l && { ...l, workspace: updated });
       return null;
     } catch (e) { return errorText(e, "Could not save the repository."); }
@@ -244,11 +282,39 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return fail("Your notes changed somewhere else while this was restoring. Nothing was overwritten. Choose the file and try again.");
       if (!put.ok) return fail(out.error || "Could not save the restored campaign. Nothing was changed.");
-      setImp({ step: "done", name: added.name, href: `/campaigns/${encodeURIComponent(`e:${added.id}`)}` });
+      setImp({ step: "done", name: added.name, href: `/campaigns/${encodeURIComponent(`e:${added.id}`)}`, verb: "Restored" });
       onRestored?.();
     } catch (e) { fail(errorText(e, "Could not restore this campaign.")); }
   }
 
+  /** Adds the new campaign to the newest saved notes, with the revision just read, so a newer workspace is never overwritten. Existing campaigns are not touched. */
+  async function importNew() {
+    if (imp.step !== "preview" || busy.current) return;
+    busy.current = true;
+    const found = imp;
+    setImp({ ...found, step: "importing" });
+    const fail = (message: string) => setImp({ step: "error", title: "Not imported", message });
+    try {
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
+      if (res.status === 401) return fail("Sign in again to import this repository.");
+      if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
+      const current = workspaceSchema.parse(body.data);
+      const built = buildCampaign(found.preview, { name: found.name, showPlayers: found.show });
+      if (current.entries.length + built.workspace.entries.length > 5000 || current.campaigns.length >= 500 || current.worlds.length >= 100) return fail("Your notes have no room for another campaign of this size (the limit is 5,000 pages, 500 campaigns and 100 worlds). Nothing was changed.");
+      const next = addImported(current, built);
+      if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this campaign are over the 2 MB workspace limit. Nothing was changed.");
+      const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: body.revision }) });
+      const out = await put.json().catch(() => ({})) as { error?: string };
+      if (put.status === 409) return fail("Your notes changed somewhere else while this was importing. Nothing was overwritten. Choose the repository and try again.");
+      if (!put.ok) return fail(out.error || "Could not save the imported campaign. Nothing was changed.");
+      setImp({ step: "done", name: built.name, href: `/campaigns/${encodeURIComponent(`e:${built.campaignId}`)}`, verb: "Imported" });
+      onRestored?.();
+    } catch (e) { fail(errorText(e, "Could not import this repository.")); }
+    finally { busy.current = false; }
+  }
+
+  const chips: ["zip" | "github" | "folder", string][] = [["zip", "ZIP file"], ["github", "GitHub"], ...(canFolder ? [["folder", "Folder"] as ["folder", string]] : [])];
+  const working = imp.step === "reading" || imp.step === "restoring" || imp.step === "importing";
   const tabs: ["export" | "import", string][] = [["export", "Export"], ["import", "Import"]];
   const showTab = canRestore ? tabs : tabs.slice(0, 1);
   return <div className="rpb-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy.current) close(); }}>
@@ -295,13 +361,14 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
             </>}
         </div> : <div role="tabpanel" id="rpb-panel-import" aria-labelledby="rpb-tab-import" className="rpb-panel">
           <div className="rpb-source" role="group" aria-label="Import source">
-            <button type="button" aria-pressed={source === "zip"} disabled={imp.step === "reading" || imp.step === "restoring"} onClick={() => { if (source !== "zip") { setSource("zip"); setImp({ step: "idle" }); } }}>ZIP file</button>
-            <button type="button" aria-pressed={source === "github"} disabled={imp.step === "reading" || imp.step === "restoring"} onClick={() => { if (source !== "github") { setSource("github"); setImp({ step: "idle" }); } }}>GitHub</button>
+            {chips.map(([id, text]) =>
+              <button key={id} type="button" aria-pressed={source === id} disabled={working} onClick={() => { if (source !== id) { setSource(id); setImp({ step: "idle" }); } }}>{text}</button>)}
           </div>
           {source === "github" && <div className="rpb-row"><div><b>{repo || "No repository connected"}</b><small>{repo ? `Branch ${github.branch}` : "Connect one to read it back"}</small></div><button type="button" className="rpb-link" onClick={() => connect("import")}>{repo ? "Change" : "Connect"}</button></div>}
           <input ref={picker} type="file" accept=".zip,application/zip" className="rpb-file" tabIndex={-1} aria-hidden="true" onChange={e => void pick(e.target.files?.[0])} />
-          {imp.step !== "done" && <button type="button" className={imp.step === "idle" || imp.step === "reading" ? "rpb-primary" : "rpb-secondary"} disabled={imp.step === "reading" || imp.step === "restoring"} onClick={() => source === "zip" ? picker.current?.click() : void readGithub()}>{source === "zip" ? <FileArchive size={16} aria-hidden="true" /> : <Github size={16} aria-hidden="true" />}{imp.step === "reading" ? "Reading…" : source === "zip" ? (imp.step === "idle" ? "Choose a ZIP file" : "Choose another ZIP") : !repo ? "Connect a GitHub repository" : imp.step === "idle" ? `Read ${repo}` : "Read it again"}</button>}
-          {imp.step === "idle" && <p className="rpb-muted">{source === "zip" ? "Pick a ZIP you downloaded from here, or the ZIP of an RP repository. The app checks what it holds and offers only what fits. Nothing is changed until you restore." : "Reads the branch from GitHub with the key saved on this device and checks what it holds. Nothing is changed until you restore."}</p>}
+          <input ref={folderPicker} type="file" multiple className="rpb-file" tabIndex={-1} aria-hidden="true" {...({ webkitdirectory: "" } as Record<string, string>)} onChange={e => void pickFolder(e.target.files)} />
+          {imp.step !== "done" && <button type="button" className={imp.step === "idle" || imp.step === "reading" ? "rpb-primary" : "rpb-secondary"} disabled={working} onClick={() => source === "zip" ? picker.current?.click() : source === "folder" ? folderPicker.current?.click() : void readGithub()}>{source === "zip" ? <FileArchive size={16} aria-hidden="true" /> : source === "folder" ? <FolderOpen size={16} aria-hidden="true" /> : <Github size={16} aria-hidden="true" />}{imp.step === "reading" ? "Reading…" : source === "zip" ? (imp.step === "idle" ? "Choose a ZIP file" : "Choose another ZIP") : source === "folder" ? (imp.step === "idle" ? "Choose a folder" : "Choose another folder") : !repo ? "Connect a GitHub repository" : imp.step === "idle" ? `Read ${repo}` : "Read it again"}</button>}
+          {imp.step === "idle" && <p className="rpb-muted">{source === "zip" ? "Pick a ZIP you downloaded from here, or the ZIP of an RP repository (GitHub's Download ZIP works). The app checks what it holds and offers only what fits. Nothing is changed until you import." : source === "folder" ? "Pick the folder of an RP repository on this device. It is read here in your browser. Nothing is changed until you import." : "Reads the branch from GitHub with the key saved on this device and checks what it holds. Nothing is changed until you import."}</p>}
           {imp.step === "error" && <div className="rpb-card rpb-card-error" role="alert"><b><TriangleAlert size={16} aria-hidden="true" />{imp.title}</b><span>{imp.message}</span></div>}
           {imp.step === "note" && <div className="rpb-card" role="status"><b><Info size={16} aria-hidden="true" />{imp.title}</b><span>{imp.message}</span></div>}
           {(imp.step === "found" || imp.step === "restoring") && <>
@@ -309,9 +376,36 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
             <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>
             <button type="button" className="rpb-primary" onClick={() => void restore()} disabled={imp.step === "restoring"}>{imp.step === "restoring" ? "Restoring…" : `Restore as “${imp.name.slice(0, 40)} (copy)”`}</button>
           </>}
-          {imp.step === "done" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />Restored as {imp.name}</b><span>Your other campaigns were not changed.</span><a className="rpb-primary" href={imp.href}>Open campaign</a></div>}
+          {(imp.step === "preview" || imp.step === "importing") && <ImportPreviewView preview={imp.preview} name={imp.name} show={imp.show} busy={imp.step === "importing"} onName={name => setImp({ ...imp, name })} onShow={show => setImp({ ...imp, show })} onImport={() => void importNew()} />}
+          {imp.step === "done" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />{imp.verb} as {imp.name}</b><span>Your other campaigns were not changed.</span><a className="rpb-primary" href={imp.href}>Open campaign</a></div>}
         </div>}
       </div>
     </div>
   </div>;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** The mapping preview: what each part of the repository becomes. Nothing is created until the button is pressed. */
+function ImportPreviewView({ preview, name, show, busy, onName, onShow, onImport }: { preview: ImportPreview; name: string; show: boolean; busy: boolean; onName: (name: string) => void; onShow: (show: boolean) => void; onImport: () => void }) {
+  const gone = preview.notImported.reduce((n, x) => n + x.count, 0);
+  return <>
+    <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />RP repository in the numbered layout</b><span>{preview.repoName} · {preview.files} files</span></div>
+    <h3 className="rpb-h">What becomes what</h3>
+    <ul className="rpb-map" aria-label="What becomes what">
+      {preview.rows.map(r => <li key={r.from + r.to}><span className="rpb-from">{r.from}</span><span className="rpb-to">→ {r.to}{r.to.startsWith("Front page") ? null : <em> ({r.count})</em>}{r.note ? <small> · {r.note}</small> : null}</span></li>)}
+      {preview.stays > 0 && <li><span className="rpb-from">7-Library/</span><span className="rpb-to">→ Stays in the repo <small>· never copied ({plural(preview.stays, "file", "files")})</small></span></li>}
+      {gone > 0 && <li><span className="rpb-from">{preview.notImported.map(x => x.label).join(", ")}</span><span className="rpb-to">→ Not imported <em>({gone})</em></span></li>}
+    </ul>
+    {preview.unmatched > 0 && <p className="rpb-note">{preview.unmatched === 1 ? "1 file didn't match a folder and goes" : `${preview.unmatched} files didn't match a folder and go`} into an “Imported notes” folder.</p>}
+    {preview.skipped > 0 && <p className="rpb-muted">{plural(preview.skipped, "image or other file is", "images and other files are")} skipped. Only Markdown is imported.</p>}
+    {preview.notices.map(n => <p key={n} className="rpb-note">{n}</p>)}
+    <p className="rpb-muted">Every page starts as GM-only unless you turn on “Show to players” below. <span className="rpb-nw">6-GM-Only</span> pages and Imported notes always stay GM-only. You can change any page afterwards.</p>
+    <div className="rpb-row">
+      <div><b id="rpb-show-label">Show to players</b><small>Pages outside 6-GM-Only appear on the player link. GM-only pages stay hidden.</small></div>
+      <button type="button" role="switch" aria-checked={show} aria-labelledby="rpb-show-label" className="rpb-switch" disabled={busy} onClick={() => onShow(!show)}><span /></button>
+    </div>
+    <label className="rpb-field">Campaign name<input value={name} maxLength={160} disabled={busy} onChange={e => onName(e.target.value)} /></label>
+    <button type="button" className="rpb-primary" onClick={onImport} disabled={busy || !name.trim()}>{busy ? "Importing…" : "Import as a new campaign"}</button>
+    <p className="rpb-muted">Nothing is created until you press the button. Your other campaigns are never touched.</p>
+  </>;
 }
