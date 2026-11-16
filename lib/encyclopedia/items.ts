@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseDice } from "../rolls.ts";
+import { statRollDice, statRolls, type StatRoll } from "./stat-rolls.ts";
 
 /*
  * Inventories and spell lists on characters, for any game. The campaign's item settings (`campaign.items`) name the
@@ -318,21 +319,21 @@ export function applyInventoryAction<T extends Tracker>(parts: CharacterParts<T>
 // ---- Rolling from a character ------------------------------------------------------------------
 
 type RollSource = { sheet?: { items: { name: string; kind: string; formula?: string; label?: string }[] }; statsByCampaign?: Record<string, Record<string, unknown>> };
-type FormField = { id: string; label: string; type: string; roll?: string; rollFormula?: string };
+type FormField = { id: string; label: string; type: string; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
 /**
  * The dice for a roll a store or lock asks for, by name: a roll on the character's sheet, then a stat form field that
- * rolls, then the text itself when it is dice (so a GM can write 1d20+2 or 3d6). Null when none of those fit.
+ * rolls (its first roll, or "Strength Save" for the field's roll named Save), then the text itself when it is dice (so
+ * a GM can write 1d20+2 or 3d6). Null when none of those fit.
  */
 export function characterRoll(character: RollSource | undefined, form: FormField[], campaignId: string, name: string): string | null {
   const want = name.trim().toLowerCase();
   if (!want) return null;
   for (const it of character?.sheet?.items ?? []) if (it.formula && (it.name.toLowerCase() === want || it.label?.toLowerCase() === want) && validRoll(it.formula)) return it.formula.replace(/\s+/g, "");
-  const field = form.find(f => f.label.toLowerCase() === want && f.roll && f.roll !== "none");
-  if (field) {
+  for (const field of form) {
+    const rolls = statRolls(field), label = field.label.toLowerCase();
+    const picked = label === want ? rolls : rolls.filter(r => `${label} ${r.name.toLowerCase()}` === want);
     const v = character?.statsByCampaign?.[campaignId]?.[field.id];
-    const n = typeof v === "number" ? v : typeof v === "string" && /^[+-]?\d+$/.test(v.trim()) ? Number(v) : null;
-    const f = field.roll === "d20" && n !== null ? `1d20${n < 0 ? "" : "+"}${n}` : field.roll === "formula" && typeof v === "string" ? v : field.roll === "custom" && field.rollFormula && !field.rollFormula.includes("{value}") ? field.rollFormula : field.roll === "custom" && field.rollFormula && n !== null ? field.rollFormula.replaceAll("{value}", String(n)) : null;
-    if (f && validRoll(f)) return f.replace(/\s+/g, "").replace(/\+-/g, "-");
+    for (const r of picked) { const f = statRollDice(r.formula, v); if (f && validRoll(f)) return f; }
   }
   return validRoll(name) ? name.replace(/\s+/g, "") : null;
 }

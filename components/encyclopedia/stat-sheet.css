@@ -1,0 +1,44 @@
+/* The rollable sheet on a character's Stats tab (stat-sheet.tsx). Rows reuse the Spells tab's inv-* look (inventory.css). */
+.stat-sheet{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.stat-sheet .section-heading{margin-bottom:0}
+.stat-sheet-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stat-sheet-mode{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;gap:2px;background:var(--panel);margin-left:auto}
+.stat-sheet-mode button{border:0;background:transparent;color:var(--ink);font:inherit;font-size:12px;padding:4px 12px;border-radius:999px;cursor:pointer}
+.stat-sheet-mode button.on{background:var(--accent);color:var(--on-accent,#fff)}
+.stat-group{display:flex;flex-direction:column;gap:6px}
+.stat-line{gap:10px;padding:6px 10px}
+.stat-main{display:flex;flex-direction:column;min-width:0;flex:1 1 160px}
+.stat-sub{font-size:12px;color:var(--muted);padding-left:20px}
+.stat-value{display:inline-flex;align-items:center}
+.stat-number{display:inline-flex;align-items:center;gap:4px}
+.stat-number .inv-input{width:64px;flex:none;text-align:center;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;padding:4px 4px;-moz-appearance:textfield;appearance:textfield}
+.stat-number .inv-input::-webkit-inner-spin-button,.stat-number .inv-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.stat-number .icon-button{width:26px;height:26px;font-size:15px;line-height:1}
+.stat-text{width:180px;flex:none}
+.stat-select{width:auto;flex:none;max-width:220px}
+.stat-check{width:18px;height:18px;accent-color:var(--accent)}
+.stat-actions{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-left:auto}
+.stat-roll-chip{padding:2px 8px;line-height:22px;font-weight:600}
+.stat-dice{font-family:var(--font-mono,ui-monospace,monospace);font-size:11px;font-weight:500;opacity:.8}
+.stat-long{padding:0 10px 10px 30px}
+.stat-long textarea{width:100%;resize:vertical}
+.stat-sheet .stat-roll-hint{margin:-2px 0 0;padding:0 10px 8px 30px;color:var(--muted);font-size:12px}
+.stat-formulas{display:flex;gap:6px;flex-wrap:wrap;margin:0}
+.stat-formulas code{font-size:12px;background:var(--raised,var(--panel));border:1px solid var(--line);border-radius:3px;padding:1px 6px}
+.stat-sheet-add{gap:8px}
+.stat-roll-rows{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.stat-roll-edit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:6px;align-items:center}
+.stat-roll-edit .inv-input{width:100%}
+.stat-formula{font-family:var(--font-mono,ui-monospace,monospace);font-size:12.5px}
+.stat-preview,.stat-form .field-label small.stat-preview{grid-column:1/-1;font-weight:400;color:var(--muted);font-size:12px}
+.stat-preview.bad,.stat-form .field-label small.stat-preview.bad{color:var(--danger,#c0392b)}
+.stat-add-roll{align-self:flex-start;margin-top:6px}
+.stat-form code{font-size:11.5px}
+@media(max-width:620px){
+ .stat-line{padding:6px 8px}
+ .stat-text{width:140px}
+ .stat-actions{flex-basis:100%}
+ .stat-sheet-mode{margin-left:0}
+ .stat-roll-edit{grid-template-columns:minmax(0,1fr) auto}
+ .stat-roll-edit .stat-formula{grid-column:1/2;grid-row:2}
+}

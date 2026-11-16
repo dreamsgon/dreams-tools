@@ -21,7 +21,7 @@ test('sheet fields roll by their setting',()=>{
  assert.equal(fieldRoll({type:'number',roll:'d20'},-1),'1d20-1');
  assert.equal(fieldRoll({type:'text',roll:'formula'},'2d8 + 3'),'2d8+3');
  assert.equal(fieldRoll({type:'text',roll:'formula'},'Longsword'),null);
- assert.equal(fieldRoll({type:'number',roll:'custom',rollFormula:'1d20+{value}+2'},-3),'1d20-3+2');
+ assert.equal(fieldRoll({type:'number',roll:'custom',rollFormula:'1d20+{value}+2'},-3),'1d20-1');
  assert.equal(fieldRoll({type:'number',roll:'d20'},''),null);
  // A custom formula without {value} rolls as written, even with the field empty (owner's "Test" field, 2026-11-16).
  assert.equal(fieldRoll({type:'text',roll:'custom',rollFormula:'1d20+3'},''),'1d20+3');
@@ -34,8 +34,8 @@ test('a field set to roll says why it cannot roll yet',()=>{
  assert.equal(fieldRollHint({type:'number',roll:'d20'},3),null);
  assert.equal(fieldRollHint({type:'number',roll:'d20'},''),'Type a number to roll.');
  assert.equal(fieldRollHint({type:'text',roll:'formula'},''),'Type dice like 2d8+3 to roll them.');
- assert.match(fieldRollHint({type:'text',roll:'custom',rollFormula:'Sword'},''),/Edit stat form/);
- assert.match(fieldRollHint({type:'number',roll:'custom',rollFormula:'1d20+{value}+x'},2),/Edit stat form/);
+ assert.match(fieldRollHint({type:'text',roll:'custom',rollFormula:'Sword'},''),/needs dice/);
+ assert.match(fieldRollHint({type:'number',roll:'custom',rollFormula:'1d20+{value}+x'},2),/needs dice/);
  assert.equal(fieldRollHint({type:'number',roll:'custom',rollFormula:'1d20+{value}'},''),'Type a number to roll.');
 });
 test('statblocks and roll settings are saved, kept in backups, and never sent to players',()=>{
