@@ -10,6 +10,8 @@ import { defaultOrg, orgProfileText } from "../encyclopedia/org-profile.ts";
 import { characterProfileText, defaultProfile, organizationsOf } from "../encyclopedia/character-profile.ts";
 import { maxTies, tieFits, tieTypesOf } from "../encyclopedia/ties.ts";
 import { tiesText } from "../encyclopedia/tie-connections.ts";
+import { newVehicle, vehicleText, vehicleTypeOf, vehicleTypesOf } from "../encyclopedia/vehicles.ts";
+import { generateVehicle, vehicleTemplates } from "../encyclopedia/vehicle-generator.ts";
 import { rollDice, partText, termLabel } from "../rolls.ts";
 import { playerSheet } from "../encyclopedia/sheet-link.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
@@ -231,7 +233,7 @@ const tools: Tool[] = [
   },
   {
     name: "read_page", title: "Read a page", level: "read", readOnly: true,
-    description: "Read one Encyclopedia page by title or id: its text, its tabs, character details and stats, quest details, codex entry or an organization's profile (type, motto, people, facts, beliefs, holdings and its Right now bar) or a character's (traits, beliefs, the organizations they are in with role and standing, ties and Right now). Text inside ':::secret' … ':::' blocks, tabs marked playersSee: false, and pages marked playersSee: false are for the GM only.",
+    description: "Read one Encyclopedia page by title or id: its text, its tabs, character details and stats, quest details, codex entry or an organization's profile (type, motto, people, facts, beliefs, holdings and its Right now bar) or a vehicle's sheet (type, owner, commander, stats, gauges, stations and crew, hold, systems and the latest log entries), or a character's (traits, beliefs, the organizations they are in with role and standing, ties and Right now). Text inside ':::secret' … ':::' blocks, tabs marked playersSee: false, and pages marked playersSee: false are for the GM only.",
     inputSchema: obj({ page: str("The page's title or id.") }, ["page"]),
     run: (c, a) => {
       const e = pick(pages(c), text(a, "page")!, x => x.id, x => x.title, "page"), fields = c.campaign.statFields ?? [];
@@ -251,6 +253,7 @@ const tools: Tool[] = [
         quest: e.quest ? questDetails(c, e) : undefined,
         profile: e.org ? orgProfileText(e.org, id => c.book.entries.find(x => x.id === id)?.title ?? "") : e.kind === "character" ? characterProfileText(e.profile, id => c.book.entries.find(x => x.id === id)?.title ?? "", organizationsOf(c.book.entries, e.id)) : undefined,
         codex: e.codex ? { category: e.codex.category, playerSummary: e.codex.summary, found: !!e.codex.found[c.campaign.id] } : undefined,
+        vehicle: e.vehicle ? vehicleText(e.vehicle, vehicleTypeOf(e.vehicle, c.book.worlds.find(w => w.id === e.worldId)), id => c.book.entries.find(x => x.id === id)?.title ?? "") : undefined,
         ties: (t => t.length ? t : undefined)(tiesText(c.book, e, c.campaign.id, id => c.book.entries.find(x => x.id === id)?.title ?? "")),
         children: children.length ? children : undefined,
         recap: e.recap ? {
@@ -456,16 +459,20 @@ const tools: Tool[] = [
   },
   {
     name: "create_page", title: "Create a page", level: "assist", readOnly: false,
-    description: "Create a new Encyclopedia page in this campaign: a note, character, place, faction, lore, session or quest. GM-only unless playersSee is true.",
+    description: "Create a new Encyclopedia page in this campaign: a note, character, place, faction, lore, session, quest or vehicle (a ship, airship, carriage, car… of one of the world's vehicle types). GM-only unless playersSee is true; a vehicle's sheet always starts GM only.",
     inputSchema: obj({
-      title: str("The page title.", 120), kind: { type: "string", enum: ["note", "character", "place", "faction", "lore", "session", "quest"], description: "What kind of page." },
+      title: str("The page title.", 120), kind: { type: "string", enum: ["note", "character", "place", "faction", "lore", "session", "quest", "vehicle"], description: "What kind of page." },
       text: { type: "string", maxLength: 20000, description: "The page text, in Markdown. Put GM-only parts in a ':::secret' … ':::' block." },
       folder: str("An existing folder's name or id to put it in.", 120), playersSee: { type: "boolean", description: "Players can read the page (default false)." },
       role: { type: "string", enum: ["pc", "companion", "npc", "creature"], description: "For a character: who they are (default npc)." },
+      vehicleType: str("For a vehicle: the world's vehicle type by name or id, such as Starship, Sailing ship, Airship, Carriage or Car (default the first type).", 60),
+      rollUp: { type: "boolean", description: "For a vehicle: fill in a model line, stats, wear, Right now, cargo and systems from the built-in generator (default false: an empty sheet)." },
+      template: str("For a vehicle with rollUp: a template of its outline by name, such as Freighter, Frigate, Galleon, Mail coach or Muscle car (default any).", 40),
     }, ["title", "kind"]),
     write: a => {
       const title = text(a, "title", true, 120)!, kind = text(a, "kind") as Entry["kind"], body = optionalText(a, "text", 20000);
-      if (!["note", "character", "place", "faction", "lore", "session", "quest"].includes(kind)) fail("kind must be note, character, place, faction, lore, session or quest.");
+      if (!["note", "character", "place", "faction", "lore", "session", "quest", "vehicle"].includes(kind)) fail("kind must be note, character, place, faction, lore, session, quest or vehicle.");
+      const vehicleTypeName = text(a, "vehicleType", false, 60), rollUp = bool(a, "rollUp"), templateName = text(a, "template", false, 40);
       const role = text(a, "role", false) as "pc" | "companion" | "npc" | "creature" | undefined;
       if (role && !["pc", "companion", "npc", "creature"].includes(role)) fail("role must be pc, companion, npc or creature.");
       const players = bool(a, "playersSee"), folderName = text(a, "folder", false, 120), id = crypto.randomUUID();
@@ -477,6 +484,13 @@ const tools: Tool[] = [
           ...(kind === "character" ? { character: { ...defaultCharacter(), role: role ?? "npc" }, profile: defaultProfile(full.worlds.find(w => w.id === c.campaign.worldId)) } : {}),
           ...(kind === "quest" ? { quest: newQuest("active", defaultCategory(questCategories(c.campaign))) } : {}),
           ...(kind === "faction" ? { org: defaultOrg(full.worlds.find(w => w.id === c.campaign.worldId)) } : {}),
+          ...(kind === "vehicle" ? { vehicle: (() => {
+            const types = vehicleTypesOf(full.worlds.find(w => w.id === c.campaign.worldId));
+            const type = vehicleTypeName ? pick(types, vehicleTypeName, t => t.id, t => t.name, "vehicle type in this world") : types[0];
+            if (!rollUp) return newVehicle(type);
+            const template = templateName ? pick(vehicleTemplates(type), templateName, t => t.id, t => t.name, `template for a ${type.name.toLowerCase()}`).id : "any";
+            return generateVehicle(type, id, template).vehicle;
+          })() } : {}),
         };
         return { next: { ...full, entries: [...full.entries, entry] }, summary: `Created the ${kind} page “${title}”`, detail: players ? "Players can see it" : "GM only", reply: { created: { id, title, kind, folder: folder?.title, playersSee: players } } };
       };

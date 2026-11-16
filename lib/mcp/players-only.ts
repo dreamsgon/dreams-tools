@@ -8,6 +8,7 @@ import { playerText, type Workspace as Book } from "../encyclopedia/world-model.
 import type { Tie } from "../encyclopedia/ties.ts";
 import { playerRecapTabs } from "../encyclopedia/recap-schema.ts";
 import { withoutLinkDetails } from "../encyclopedia/sheet-link.ts";
+import { playerSafeVehicle } from "../encyclopedia/vehicles.ts";
 import type { Scene, Workspace as Maps } from "../model.ts";
 import { fogged, permsFor, type McpContext } from "./tools.ts";
 
@@ -20,12 +21,15 @@ export function playersBook(book: Book, campaignId: string): Book {
       ...(overview ? playerRecapTabs(e.recap, playerText).map(t => ({ ...t, visibility: "players" as const })) : [])];
     const found = e.codex?.found[campaignId];
     const map = e.mapData?.visibility === "players";
-    if (!overview && !tabs.length && !found && !map) return [];
+    const vehicle = e.vehicle ? playerSafeVehicle(e.vehicle, playerText) ?? undefined : undefined;
+    if (!overview && !tabs.length && !found && !map && !vehicle) return [];
     const quest = e.quest && overview ? { ...e.quest, prep: undefined, linkIds: undefined, ...(e.quest.rewardHidden ? { reward: undefined, rewardIds: undefined } : {}), objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
     const character = e.character ? { ...e.character, statblock: undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
       // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
-      org: undefined, profile: undefined }];
+      org: undefined, profile: undefined,
+      // A vehicle keeps only what its shared tabs show (playerSafeVehicle).
+      vehicle }];
   });
   const campaigns = book.campaigns.map(c => ({ ...c, calendars: c.calendars?.filter(x => x.visibility === "players") }));
   return { ...book, campaigns, entries: playersTies(entries) };
