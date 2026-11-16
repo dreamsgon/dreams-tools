@@ -16,13 +16,13 @@ import {confirmDialog} from '../confirm-dialog';
 import {LinkPageDialog,OnThisMap,PlaceCardView} from './map-places';
 import {linkThing,mapThings,type MapThing} from '@/lib/encyclopedia/map-places';
 import {holdersByPlace,pinTints} from '@/lib/encyclopedia/org-holdings';
-/** The next map page to open straight into the map editor, set when the editor moves to a closer or bigger map. */
-let editorNext:string|null=null;
-export const openMapEditorNext=(id:string)=>{editorNext=id;};
+/** The next map page to open straight into the map editor, set when the editor moves to a closer or bigger map, or straight into Generate for a new world map. */
+let editorNext:string|null=null,editorStart:'open'|'generate'='open';
+export const openMapEditorNext=(id:string,start:'open'|'generate'='open')=>{editorNext=id;editorStart=start;};
 export function MapEditor({entry,data,campaign,onCalendarChange,update,onOpen,onDuplicate,onNewAreaMap,onNewMap,onRevealInParents}:{entry:Entry;data:Workspace;campaign?:Campaign;onCalendarChange:(c:Calendar)=>boolean;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void;onDuplicate:()=>void;onNewAreaMap?:(pinId:string)=>void;onNewMap?:(map:MapData,title:string)=>void;onRevealInParents?:()=>void}){
  const map=entry.mapData!,latest=useRef(map);latest.current=map;
  const [tool,setTool]=useState<'view'|'pin'|'reveal'|'conceal'>('view'),[selected,setSelected]=useState(''),[editingPin,setEditingPin]=useState<MapPin|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [studio,setStudio]=useState<false|'open'|'generate'>(()=>editorNext===entry.id?'open':false),[brushSize,setBrushSize]=useState(0),[history,setHistory]=useState<NonNullable<MapData['fog']>[]>([]);
+ const [studio,setStudio]=useState<false|'open'|'generate'>(()=>editorNext===entry.id?editorStart:false),[brushSize,setBrushSize]=useState(0),[history,setHistory]=useState<NonNullable<MapData['fog']>[]>([]);
  useEffect(()=>{setHistory([]);},[entry.id,map.imageId,map.grid,map.seed]);
  useEffect(()=>{if(editorNext===entry.id)editorNext=null;},[entry.id]);
  const [item,setItem]=useState(''),[linking,setLinking]=useState<MapThing|null>(null);
