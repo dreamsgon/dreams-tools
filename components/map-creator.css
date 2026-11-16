@@ -211,3 +211,27 @@
 .creator-new-map { width:min(1040px, 100%); }
 .creator-new-map .creator-seed + .creator-seed { margin-top:6px; }
 @media(max-width:700px) { .creator-layouts { display:flex; overflow-x:auto; scrollbar-width:thin; padding:12px 14px 2px; } .creator-layouts button { flex:none; width:168px; } }
+
+/* A secret door looks like wall, so the creator marks it with an S. */
+.creator-secret-markers text { fill:#fff; stroke:#16191c; stroke-width:3px; paint-order:stroke; font-weight:700; font-family:Inter, system-ui, sans-serif; }
+/* Generator sections, room mix, presets and the room key in Start a new map. */
+.creator-gen-section { border-top:1px solid var(--line); padding:8px 0 2px; }
+.creator-gen-section:first-child { border-top:0; padding-top:0; }
+.creator-gen-section > summary { cursor:pointer; font-weight:600; font-size:14px; padding:4px 0 8px; }
+.creator-gen-section > div { display:grid; gap:12px; padding-bottom:10px; }
+.creator-mix { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px 10px; }
+.creator-panel .creator-mix label { display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:8px; font-size:13px; }
+.creator-panel .creator-mix input { width:60px; flex:none; min-height:32px; padding:4px 8px; }
+.creator-new-map .creator-preview { position:sticky; top:0; align-self:start; }
+@media(max-width:700px) { .creator-new-map .creator-preview { position:static; } }
+.creator-kinds-row { display:flex; flex-wrap:wrap; gap:4px 14px; }
+.creator-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.creator-presets > button { display:inline-flex; align-items:center; gap:6px; }
+.creator-preset { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+.creator-preset button { border:0; border-radius:0; box-shadow:none; min-height:30px; padding:4px 10px; background:var(--panel); }
+.creator-preset button + button { padding:4px 8px; border-left:1px solid var(--line); color:var(--muted); }
+.creator-room-key { margin-top:10px; border:1px solid var(--line); border-radius:var(--radius); padding:8px 12px; background:var(--panel); }
+.creator-room-key summary { cursor:pointer; font-weight:600; }
+.creator-room-key summary small { color:var(--muted); font-weight:400; margin-left:6px; }
+.creator-room-key ol { margin:8px 0 2px; padding-left:22px; display:grid; gap:4px; font-size:13px; color:var(--muted); }
+.creator-room-key b { color:var(--ink); margin-right:4px; }

@@ -3,6 +3,7 @@ import { mergeRooms, simplifyPoints } from "../map-drawing.ts";
 import { stampById, stampBox } from "../map-stamps.ts";
 import { generatorStyle, seededRandom, type GeneratedMap } from "../map-generator.ts";
 import { makeLayout, type Layout, type LayoutId, type LayoutOptions, type Side } from "./layout.ts";
+import { dressLayout, type DressOptions, type KeyEntry } from "./dressing.ts";
 
 /**
  * The dungeon generator: a layout (lib/dungeon/layout.ts) turned into ordinary Map Creator shapes,
@@ -19,7 +20,17 @@ export const dungeonLayouts: { id: LayoutId; name: string; hint: string; style: 
 export const dungeonSizes = { s: { cols: 24, rows: 18, name: "Small" }, m: { cols: 32, rows: 24, name: "Medium" }, l: { cols: 44, rows: 32, name: "Large" } } as const;
 export type DungeonSize = keyof typeof dungeonSizes;
 /** Everything the generator is asked for: the layout's options, plus size, seeds, style and the grid. */
-export type DungeonOptions = Omit<LayoutOptions, "cols" | "rows"> & { size: DungeonSize; seed: string; dressing: number; style: string; grid: number; numbers: boolean };
+export type FloorPattern = "plain" | NonNullable<MapShape["pattern"]>;
+/** How the map looks: the floor pattern, wall thickness, the outside, the doors and the grid. */
+export type LookOptions = { floor: FloorPattern; walls: "thin" | "medium" | "thick"; outside: "hatched" | "solid"; doors: "wood" | "iron" | "arch" | "mixed"; gridLines: boolean };
+export const defaultLookOptions: LookOptions = { floor: "flag", walls: "medium", outside: "hatched", doors: "wood", gridLines: true };
+/** The floor each layout starts with. */
+export const layoutFloor: Record<LayoutId, FloorPattern> = { branching: "flag", halls: "tiles", caves: "earth", building: "boards", village: "boards" };
+export const floorPatterns: { id: FloorPattern; name: string }[] = [{ id: "plain", name: "Plain" }, { id: "flag", name: "Flagstones" }, { id: "boards", name: "Boards" }, { id: "tiles", name: "Tiles" }, { id: "cobbles", name: "Cobbles" }, { id: "earth", name: "Earth" }];
+/** Everything the generator is asked for: the layout's options, plus size, seeds, style, look, dressing and the grid. */
+export type DungeonOptions = Omit<LayoutOptions, "cols" | "rows"> & LookOptions & DressOptions & { size: DungeonSize; seed: string; dressing: number; style: string; grid: number; numbers: boolean };
+/** A generated map with its room key (GM only). */
+export type DungeonMap = GeneratedMap & { key: KeyEntry[] };
 
 /** Which options change each layout, so other settings don't reshuffle its rooms. */
 const layoutFields: Record<LayoutId, (keyof LayoutOptions)[]> = {
@@ -31,18 +42,22 @@ const layoutFields: Record<LayoutId, (keyof LayoutOptions)[]> = {
 };
 export const layoutKey = (o: DungeonOptions) => [o.layout, o.size, o.seed.trim() || "map", ...layoutFields[o.layout].map(k => JSON.stringify((o as Partial<LayoutOptions>)[k]))].join("|");
 
-export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
+export function buildDungeonMap(o: DungeonOptions): DungeonMap {
   const { cols, rows } = dungeonSizes[o.size];
   const key = layoutKey(o);
   const layout = makeLayout({ ...o, cols, rows }, seededRandom(key));
   const random = seededRandom(`${key}|dress|${o.dressing}`);
-  const g = o.grid, look = generatorStyle(o.style, g), style = look.style;
+  const lightRandom = seededRandom(`${key}|light|${o.dressing}`);
+  const g = o.grid, look = generatorStyle(o.style, g);
+  const indoor = layout.kind === "dungeon" || layout.kind === "cave";
+  const style = { ...look.style, outside: indoor ? o.outside : look.style.outside, grid: !o.gridLines ? "off" as const : look.style.grid === "off" ? "faint" as const : look.style.grid };
+  const pattern = o.floor === "plain" ? null : o.floor;
   let count = 0;
   const id = (kind: string) => `${kind}-${++count}`;
   const int = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)];
   const cell = (x: number, y: number): Point => ({ x: Math.round(x * g * 100) / 100, y: Math.round(y * g * 100) / 100 });
-  const wall = layout.kind === "cave" ? 10 : 8;
+  const wall = ({ thin: 5, medium: 8, thick: 12 } as const)[o.walls] + (layout.kind === "cave" ? 2 : 0);
   const base = (type: MapShape["type"], name: string, points: Point[], extra: Partial<MapShape> = {}): MapShape => ({
     id: id(type), name, folderId: null, smooth: false, hidden: false, locked: false, type, roomParts: [], points,
     fill: style.floor, stroke: style.wall, thickness: wall, closed: false, stamp: null, rotation: 0, flip: false, ...extra,
@@ -59,6 +74,8 @@ export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
     const [a, b] = d.o === "h" ? [{ x: d.x - half, y: d.y }, { x: d.x + half, y: d.y }] : [{ x: d.x, y: d.y - half }, { x: d.x, y: d.y + half }];
     return base(type, type === "door" ? "Door" : "Window", [cell(a.x, a.y), cell(b.x, b.y)], { thickness, stroke: style.ink, ...extra });
   };
+  const doorShapes: MapShape[] = [];
+  const doorKind = (d: { x: number; y: number }, i: number): MapShape["door"] => o.doors === "mixed" ? (["wood", "iron", "arch"] as const)[Math.abs(Math.floor(d.x * 7 + d.y * 13)) % 3] : o.doors === "wood" ? null : o.doors;
   const ground: MapShape[] = [], floors: MapShape[] = [], over: MapShape[] = [], doors: MapShape[] = [], stamps: MapShape[] = [], labels: MapShape[] = [];
   const centreOf = (r: Layout["rooms"][number]) => r.cave && r.cx !== undefined && r.cy !== undefined ? { x: r.cx, y: r.cy } : { x: r.x + r.w / 2, y: r.y + r.h / 2 };
   // Where nothing else should be put: rooms' centres keep their numbers clear.
@@ -66,15 +83,16 @@ export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
   const free = (x: number, y: number, w: number, h: number) => !taken.some(t => x < t.x + t.w && t.x < x + w && y < t.y + t.h && t.y < y + h);
   const put = (stampId: string, x: number, y: number, rotation = 0) => { const s = stampById(stampId); if (!s) return false; const w = rotation % 180 ? s.h : s.w, h = rotation % 180 ? s.w : s.h; if (!free(x - w / 2, y - h / 2, w, h)) return false; taken.push({ x: x - w / 2, y: y - h / 2, w, h }); stamps.push(stamp(stampId, x, y, rotation)); return true; };
 
+  let scatter: (() => void) | null = null;
   if (layout.kind === "dungeon") {
     const pieces = layout.floors.map(f => f.t === "rect" ? rect(f.x, f.y, f.w, f.h, "Room") : ellipse(f.cx, f.cy, f.rx, f.ry, "Round room"));
     const merged = mergeRooms(pieces, id("merged"));
-    floors.push(merged ? { ...merged, name: "Dungeon floor" } : pieces[0]);
-    for (const d of layout.doors) doors.push(opening("door", d, wall * 2, { fill: style.floor, name: d.big ? "Great door" : "Door" }));
+    floors.push({ ...(merged ? { ...merged, name: "Dungeon floor" } : pieces[0]), pattern });
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall * 2, { fill: style.floor, name: d.big ? "Great door" : "Door", door: doorKind(d, i) })));
   } else if (layout.kind === "cave" && layout.rock) {
     const rock = layout.rock;
     const loops = traceCells((x, y) => rock[y]?.[x] === 0, layout.cols, layout.rows);
-    loops.filter(l => l.area > 0).forEach((l, i) => floors.push(outline(l.points, i ? "Cave" : "Cave floor")));
+    loops.filter(l => l.area > 0).forEach((l, i) => floors.push(outline(l.points, i ? "Cave" : "Cave floor", { pattern })));
     // Rock inside the cave: pillars of stone standing in the floor.
     loops.filter(l => l.area < 0).forEach(l => over.push(outline(l.points, "Rock", { fill: look.background })));
     const wet = new Set(layout.water.map(p => `${Math.floor(p.x)},${Math.floor(p.y)}`));
@@ -85,8 +103,8 @@ export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
     const outer = layout.floors.map(f => f.t === "rect" ? rect(f.x, f.y, f.w, f.h, "Building", { thickness: wall * 2 }) : ellipse(f.cx, f.cy, f.rx, f.ry, "Building", { thickness: wall * 2 }));
     const merged = outer.length > 1 ? mergeRooms(outer, id("merged")) : null;
     floors.push(merged ? { ...merged, name: "Building" } : outer[0]);
-    layout.rooms.forEach((r, i) => floors.push(rect(r.x, r.y, r.w, r.h, `Room ${i + 1}`, { thickness: Math.round(wall * .75) })));
-    for (const d of layout.doors) doors.push(opening("door", d, d.outer ? wall * 2 + 2 : wall + 2, { fill: style.floor, name: d.outer ? "Front door" : "Door" }));
+    layout.rooms.forEach((r, i) => floors.push(rect(r.x, r.y, r.w, r.h, `Room ${i + 1}`, { thickness: Math.round(wall * .75), pattern })));
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, d.outer ? wall * 2 + 2 : wall + 2, { fill: style.floor, name: d.outer ? "Front door" : "Door", door: doorKind(d, i) })));
     for (const w of layout.windows) doors.push(opening("window", w, wall * 2 + 2, { fill: style.floor }));
   } else if (layout.kind === "village") {
     for (const f of layout.fields) ground.push(rect(f.x, f.y, f.w, f.h, "Field", { fill: f.rot ? "#b9b46a" : "#a6b464", stroke: "#7d8a4a", thickness: 3, seeThrough: true }));
@@ -95,10 +113,9 @@ export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
       const s = layout.square;
       ground.push(ellipse(s.cx, s.cy, s.rx, s.ry, "Square", { fill: "#cfc1a0", stroke: "#a48d66", thickness: 4, seeThrough: true }));
       taken.push({ x: s.cx - s.rx, y: s.cy - s.ry, w: s.rx * 2, h: s.ry * 2 });
-      stamps.push(stamp("well", s.cx, s.cy));
     }
-    layout.rooms.forEach((r, i) => { floors.push(rect(r.x, r.y, r.w, r.h, `House ${i + 1}`)); taken.push({ x: r.x - .5, y: r.y - .5, w: r.w + 1, h: r.h + 1 }); });
-    for (const d of layout.doors) doors.push(opening("door", d, wall + 2, { fill: style.floor }));
+    layout.rooms.forEach((r, i) => { floors.push(rect(r.x, r.y, r.w, r.h, `House ${i + 1}`, { pattern })); taken.push({ x: r.x - .5, y: r.y - .5, w: r.w + 1, h: r.h + 1 }); });
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall + 2, { fill: style.floor, door: doorKind(d, i) })));
     if (layout.palisade) {
       const p = layout.palisade, fence = rect(p.x, p.y, p.w, p.h, "Palisade", { fill: null, stroke: "#6b4f2e", thickness: 10 });
       ground.push(fence);
@@ -107,54 +124,50 @@ export function buildDungeonMap(o: DungeonOptions): GeneratedMap {
     }
     for (const f of layout.fields) taken.push(f);
     const roadNear = (x: number, y: number) => layout.roads.some(r => r.pts.some((p, i) => i > 0 && segmentDistance({ x, y }, r.pts[i - 1], p) < r.w / 2 + .8));
-    const trees = Math.round(cols * rows / 26);
+    scatter = () => { const trees = Math.round(cols * rows / 26);
     for (let i = 0, n = 0; i < trees * 5 && n < trees; i++) {
       const kind = pick(["tree", "tree", "pine-tree", "bush", "rock"]), x = random() * (cols - 1) + .5, y = random() * (rows - 1) + .5;
       if (roadNear(x, y) || (layout.palisade && x > layout.palisade.x - .6 && x < layout.palisade.x + layout.palisade.w + .6 && y > layout.palisade.y - .6 && y < layout.palisade.y + layout.palisade.h + .6 && kind !== "bush")) continue;
       if (put(kind, x, y, int(0, 3) * 90)) n++;
-    }
+    } };
   }
 
-  // Numbers on the rooms (they become GM markers in Maptable) keep the middle of each room clear.
-  layout.rooms.forEach((r, i) => {
-    const c = centreOf(r);
-    taken.push({ x: c.x - .6, y: c.y - .6, w: 1.2, h: 1.2 });
-    if (o.numbers) labels.push(base("label", String(i + 1), [cell(c.x, c.y), cell(c.x, c.y)], { fill: "#ffffff", stroke: style.ink, thickness: 22 }));
-  });
   // The way in: stairs just inside the map edge, where the entrance reaches it.
-  const e = layout.entrance;
+  const e = layout.entrance, keep: Point[] = [];
   if (e && layout.kind !== "building" && layout.kind !== "village") {
     const inward: Record<Side, Point> = { N: { x: 0, y: .5 }, S: { x: 0, y: -.5 }, W: { x: .5, y: 0 }, E: { x: -.5, y: 0 } };
     const turn: Record<Side, number> = { S: 0, N: 180, E: 270, W: 90 };
     const x = Math.min(cols - .5, Math.max(.5, e.x + inward[e.dir].x)), y = Math.min(rows - .5, Math.max(.5, e.y + inward[e.dir].y));
     put("stairs", x, y, turn[e.dir]);
+    keep.push({ x, y });
   }
-  dress(layout, { random, int, pick, put });
+  // Themes, furniture, columns, lights and secret doors (lib/dungeon/dressing.ts).
+  const dressed = dressLayout(layout, o, random, lightRandom, keep);
+  for (const p of dressed.placements) {
+    const s = stampById(p.stamp); if (!s) continue;
+    const w = p.rotation % 180 ? s.h : s.w, h = p.rotation % 180 ? s.w : s.h;
+    taken.push({ x: p.x - w / 2, y: p.y - h / 2, w, h });
+    const light = p.light ? { kind: "fire" as const, bright: 4, dim: 8, colour: "#ff9a3c", flicker: true, on: !p.unlit } : p.unlit ? { on: false } : undefined;
+    stamps.push({ ...stamp(p.stamp, p.x, p.y, p.rotation), ...(light ? { light } : {}) });
+  }
+  for (const i of dressed.secretDoors) { const d = doorShapes[i]; if (d) { d.door = "secret"; d.name = "Secret door"; } }
+  scatter?.();
+  // Numbers on the rooms become GM markers in Maptable, named and noted from the room key.
+  layout.rooms.forEach((r, i) => {
+    const c = centreOf(r), k = dressed.key[i];
+    if (o.numbers) labels.push(base("label", String(i + 1), [cell(c.x, c.y), cell(c.x, c.y)], { fill: "#ffffff", stroke: style.ink, thickness: 22, key: { name: k.name, note: keyNote(k) } }));
+  });
   const all = [...ground, ...floors, ...over, ...doors, ...stamps, ...labels];
   const name = `${dungeonLayouts.find(l => l.id === o.layout)!.name} (${o.seed.trim() || "map"})`;
-  return { name, width: cols * g, height: rows * g, drawing: { background: look.background, style, shapes: all, folders: [], layerOrder: all.map(s => s.id) } };
+  return { name, width: cols * g, height: rows * g, drawing: { background: look.background, style, shapes: all, folders: [], layerOrder: all.map(s => s.id) }, key: dressed.key };
 }
 
-type Dresser = { random: () => number; int: (a: number, b: number) => number; pick: <T>(l: readonly T[]) => T; put: (id: string, x: number, y: number, rotation?: number) => boolean };
-/** A light first dressing: a few things in each room, pillars in big halls, rocks in caves. Part 5 brings themes. */
-function dress(layout: Layout, { random, int, pick, put }: Dresser) {
-  const things = layout.kind === "building" ? ["table", "chair", "barrel", "crate", "bookshelf", "bed", "chest"]
-    : layout.kind === "village" ? ["barrel", "crate", "sacks", "cart"]
-    : layout.kind === "cave" ? ["rock", "rock", "rock", "mushrooms", "bones", "chest"]
-    : ["chest", "barrel", "crate", "statue", "altar", "bookshelf", "table", "bones", "rubble"];
-  layout.rooms.forEach(r => {
-    if (layout.kind === "village") { if (random() < .5) put(pick(things), r.x + r.w + .5, r.y + .5); return; }
-    if (!r.cave && !r.round && layout.kind === "dungeon" && r.w >= 6 && r.h >= 6 && random() < .5)
-      for (const [x, y] of [[r.x + 1.5, r.y + 1.5], [r.x + r.w - 1.5, r.y + 1.5], [r.x + 1.5, r.y + r.h - 1.5], [r.x + r.w - 1.5, r.y + r.h - 1.5]]) put("pillar", x, y);
-    for (let k = int(layout.kind === "cave" ? 1 : 0, layout.kind === "cave" ? 3 : 2), tries = 0; k > 0 && tries < 12; tries++) {
-      const id = pick(things), s = stampById(id);
-      if (!s) continue;
-      let x: number, y: number;
-      if (r.cave && r.cx !== undefined && r.cy !== undefined) { const a = random() * Math.PI * 2, d = (r.rad ?? 2) * (.3 + random() * .4); x = r.cx + Math.cos(a) * d; y = r.cy + Math.sin(a) * d; }
-      else { if (r.w < s.w + 1 || r.h < s.h + 1) continue; x = r.x + .5 + s.w / 2 + Math.floor(random() * (r.w - s.w)); y = r.y + .5 + s.h / 2 + Math.floor(random() * (r.h - s.h)); x = Math.min(x, r.x + r.w - s.w / 2); y = Math.min(y, r.y + r.h - s.h / 2); }
-      if (put(id, x, y, layout.kind === "cave" ? int(0, 3) * 90 : 0)) k--;
-    }
-  });
+/** A room key line as a GM note: what is in the room, whether it is lit, and any secret door. */
+export function keyNote(k: KeyEntry): string {
+  const parts = [k.things.length ? `${k.things.join(", ")}.` : "Nothing in it."];
+  if (k.lit === false) parts.push("Dark.");
+  if (k.secret) parts.push("A secret door.");
+  return parts.join(" ").slice(0, 1000);
 }
 
 /**

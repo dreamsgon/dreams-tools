@@ -49,6 +49,8 @@ type Tool=CreatorTool;
 type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
 const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,hex:<Hexagon size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,light:<Lightbulb size={19}/>,label:<Type size={19}/>};
+const floorPatterns:[NonNullable<MapShape["pattern"]>,string][]=[["flag","Flagstone"],["boards","Boards"],["tiles","Tiles"],["cobbles","Cobbles"],["earth","Earth"]];
+const doorKinds:[NonNullable<MapShape["door"]>,string][]=[["wood","Wood"],["iron","Iron"],["arch","Open arch"],["secret","Secret"]];
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -502,6 +504,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label className="creator-check"><input type="checkbox" checked={!!single.fill} onChange={e=>patchShape({fill:e.target.checked?"#ffffff":null})}/>In a circle (for room numbers)</label>
     <label title="Shift + scroll to resize">Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
     <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
+    {single.fill&&<>
+      <label>Room name (GM only)<input key={`${single.id}-kn`} maxLength={80} defaultValue={single.key?.name??""} placeholder="Tomb" onBlur={e=>{const name=e.target.value.trim();if(name!==(single.key?.name??""))patchShape({key:name||single.key?.note?{name,note:single.key?.note??""}:null});}}/></label>
+      <label>GM note<textarea key={`${single.id}-kt`} rows={3} maxLength={1000} defaultValue={single.key?.note??""} placeholder="What is in the room" onBlur={e=>{const note=e.target.value.trim();if(note!==(single.key?.note??""))patchShape({key:note||single.key?.name?{name:single.key?.name??"",note}:null});}}/></label>
+      <small className="muted">In Maptable the number becomes a GM marker with this name and note.</small>
+    </>}
   </>;
   const hexLayer=draft.drawing.hexes;
   const setHexes=(fn:(h:NonNullable<MapDrawing["hexes"]>)=>NonNullable<MapDrawing["hexes"]>)=>change(d=>{if(d.drawing.hexes)d.drawing.hexes=fn(d.drawing.hexes);});
@@ -522,6 +529,13 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         <label>Length ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.h,grid)} onChange={e=>resize(toUnits(bounds.w,grid),+e.target.value)}/></label>
       </div>:<p className="creator-measure">{isArea(single)?"Size":"Length"}: <strong>{sizeLabel(single,grid)}</strong></p>}
       {single.type!=="stamp"&&single.type!=="label"&&single.type!=="light"&&<>{colours}{thicknessField}</>}
+      {["rect","ellipse","merged"].includes(single.type)||(single.type==="path"&&single.closed)?single.fill&&<div className="creator-field"><span>Floor</span><div className="creator-tints" role="group" aria-label="Floor pattern">
+        <button type="button" aria-pressed={!single.pattern} onClick={()=>patchShape({pattern:null})}>Plain</button>
+        {floorPatterns.map(([id,name])=><button key={id} type="button" aria-pressed={single.pattern===id} onClick={()=>patchShape({pattern:id})}>{name}</button>)}
+      </div></div>:null}
+      {single.type==="door"&&<div className="creator-field"><span>Door</span><div className="creator-tints" role="group" aria-label="Door kind">
+        {doorKinds.map(([id,name])=><button key={id} type="button" aria-pressed={(single.door??"wood")===id} onClick={()=>patchShape({door:id==="wood"?null:id})}>{name}</button>)}
+      </div></div>}
       {single.type==="path"&&<div className="creator-checks"><label className="creator-check"><input type="checkbox" checked={single.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close the outline</label><label className="creator-check"><input type="checkbox" checked={single.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label></div>}
       {!["stamp","label","light","door","window","opening"].includes(single.type)&&<label className="creator-check" title="For roads, rivers, pools and fields: they don't stop light, or line of sight in exports"><input type="checkbox" checked={!!single.seeThrough} onChange={e=>patchShape({seeThrough:e.target.checked||undefined})}/>Light passes through (a road, river or pool, not a wall)</label>}
       {(single.type==="path"||single.type==="line"||single.type==="rect")&&<div className="creator-points"><span>Corners ({single.type==="rect"?4:single.points.length})</span><div className="creator-seg" role="group" aria-label="Corner editing">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode==="move"?"Move":mode==="add"?"Add":"Remove"}</button>)}</div>
@@ -585,6 +599,10 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <circle cx={l.x} cy={l.y} r={r} fill={l.on?l.colour:"#6b6f73"} stroke="#16191c" strokeWidth={Math.max(1.5,r*.16)}/>
       <path d={`M ${l.x-r*.45} ${l.y} H ${l.x+r*.45} M ${l.x} ${l.y-r*.45} V ${l.y+r*.45}`} stroke="#16191c" strokeWidth={Math.max(1,r*.12)} strokeLinecap="round"/>
     </g>;})}</g>;
+  // A secret door looks like wall to players, so the creator marks it with an S (not drawn in the shared ops).
+  const secretMarkers=<g className="creator-secret-markers" pointerEvents="none">{draft.drawing.shapes.filter(s=>s.type==="door"&&s.door==="secret"&&!layerState(draft.drawing,s.id).hidden).map(s=>{
+    const [a,b]=s.points,size=Math.max(10,s.thickness*1.1);
+    return <text key={s.id} x={(a.x+b.x)/2} y={(a.y+b.y)/2} fontSize={size} textAnchor="middle" dominantBaseline="central">S</text>;})}</g>;
   const hasLights=tool==="light"||draft.drawing.shapes.some(s=>s.type==="light"||(s.type==="stamp"&&!!stampById(s.stamp)?.light));
   const lightingToggle=hasLights&&<div className="creator-overlay creator-lighting" role="group" aria-label="Lighting preview"><Lightbulb size={15}/><span className="creator-wall-switch">{lightingModes.map(m=><button key={m.id} type="button" aria-pressed={lighting===m.id} onClick={()=>setLighting(m.id)}>{m.name}</button>)}</span></div>;
   const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
@@ -642,6 +660,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
             <MapLighting drawing={draft.drawing} width={draft.width} height={draft.height} gridSize={grid.size} mode={lighting} id="creator-lighting"/>
             {lightMarkers}
+            {secretMarkers}
             {tool==="hex"&&hexLayer&&<g pointerEvents="none">
               {hexLayer.painted.length>0&&<path d={paintedOutlines(hexLayer).map(h=>hexOutline(h.x,h.y,hexLayer.size,hexLayer.orient,.86)).join("")} fill="none" stroke="#ffffff" strokeOpacity=".9" strokeWidth={Math.max(1.5,hexLayer.size/14)} strokeDasharray={`${hexLayer.size/5} ${hexLayer.size/7}`}/>}
               {hoverHex!==null&&(()=>{const c=hexCentre(hexLayer,hoverHex);return <path d={hexOutline(c.x,c.y,hexLayer.size,hexLayer.orient)} fill={hexRestore?"#e5534b":"#2684ff"} fillOpacity=".18" stroke={hexRestore?"#e5534b":"#2684ff"} strokeWidth={Math.max(2,hexLayer.size/10)}/>;})()}

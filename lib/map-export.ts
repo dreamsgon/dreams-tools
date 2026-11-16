@@ -23,15 +23,16 @@ export type UseOptions = {
 
 /** Labels drawn in a circle are room numbers. */
 export function roomNumbers(d: MapDrawing) {
-  return orderedShapes(d).filter(s => s.type === "label" && s.fill && s.name.trim()).map(s => ({ id: s.id, text: s.name.trim(), x: s.points[0].x, y: s.points[0].y }));
+  return orderedShapes(d).filter(s => s.type === "label" && s.fill && s.name.trim()).map(s => ({ id: s.id, text: s.name.trim(), x: s.points[0].x, y: s.points[0].y, key: s.key ?? null }));
 }
 
 /** Markers made from room numbers carry this prefix, so using the map again replaces them. */
 export const roomMarkerPrefix = "room-";
 export function roomMarkers(d: MapDrawing): PointOfInterest[] {
   return roomNumbers(d).map(n => ({
-    id: `${roomMarkerPrefix}${n.id}`.slice(0, 120), name: (/^\d+$/.test(n.text) ? `Room ${n.text}` : n.text).slice(0, 120),
-    x: n.x, y: n.y, color: "#e3b341", hidden: true, folderId: null, targetSceneId: null, activation: "double",
+    id: `${roomMarkerPrefix}${n.id}`.slice(0, 120), name: ((/^\d+$/.test(n.text) ? `Room ${n.text}` : n.text) + (n.key?.name.trim() ? `: ${n.key.name.trim()}` : "")).slice(0, 120),
+    x: n.x, y: n.y, color: "#e3b341", hidden: true, folderId: null, targetSceneId: null, activation: "double" as const,
+    ...(n.key?.note.trim() ? { notes: n.key.note.trim().slice(0, 2000) } : {}),
   }));
 }
 
@@ -127,10 +128,11 @@ export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
 export function buildUvtt(d: MapDrawing, width: number, height: number, gridSize: number, imageBase64: string) {
   const at = (p: { x: number; y: number }) => ({ x: round(p.x / gridSize), y: round(p.y / gridSize) });
   const shapes = orderedShapes(d);
-  const walls = cutOpenings(wallSegments(shapes.filter(s => !s.seeThrough)), shapes);
-  const portals = shapes.filter(s => s.type === "door" || s.type === "window").map(s => {
+  // An arch is an open doorway: it cuts the wall and is an open portal. A secret door is plain wall, with no portal.
+  const walls = cutOpenings(wallSegments(shapes.filter(s => !s.seeThrough)), shapes.map(s => s.type === "door" && s.door === "arch" ? { ...s, type: "opening" as const } : s));
+  const portals = shapes.filter(s => (s.type === "door" && s.door !== "secret") || s.type === "window").map(s => {
     const [a, b] = s.points;
-    return { position: at({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }), bounds: [at(a), at(b)], rotation: round(Math.atan2(b.y - a.y, b.x - a.x)), closed: s.type === "door", freestanding: false };
+    return { position: at({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }), bounds: [at(a), at(b)], rotation: round(Math.atan2(b.y - a.y, b.x - a.x)), closed: s.type === "door" && s.door !== "arch", freestanding: false };
   });
   return {
     format: 0.3,

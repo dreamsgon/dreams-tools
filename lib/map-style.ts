@@ -62,6 +62,71 @@ function gridLines(s: MapShape, size: number): string {
   for (let y = Math.ceil(b.y0 / size) * size; y <= b.y1; y += size) out.push(`M ${b.x0} ${y} H ${b.x1}`);
   return out.join(" ");
 }
+/** Pattern paths stay under this many characters; a huge room gets coarser detail instead. */
+export const patternLimit = 36000;
+/** A floor pattern as one path over a shape's bounds. One square is `size` units. Steady: the same shape gives the same path. */
+export function patternPath(s: MapShape, kind: NonNullable<MapShape["pattern"]>, size: number): string {
+  const b = bounds(s), seed = hash(s.id);
+  const r = (i: number) => noise(seed, i);
+  let out = "";
+  for (let m = 1; m < 40; m *= 1.4) {
+    out = patternAt(b, kind, size * m, r, m === 1);
+    if (out.length <= patternLimit) return out;
+  }
+  return "";
+}
+function patternAt(b: { x0: number; y0: number; x1: number; y1: number }, kind: NonNullable<MapShape["pattern"]>, g: number, r: (i: number) => number, fine: boolean): string {
+  const o: string[] = [], n = (v: number) => round(v);
+  const line = (x0: number, y0: number, x1: number, y1: number) => o.push(`M ${n(x0)} ${n(y0)} L ${n(x1)} ${n(y1)}`);
+  let k = 0;
+  if (kind === "flag") {
+    const h = g / 2, w = g;
+    for (let y = Math.floor(b.y0 / h) * h, row = 0; y <= b.y1; y += h, row++) {
+      line(b.x0, y, b.x1, y);
+      const off = row % 2 ? w / 2 : 0;
+      for (let x = Math.floor(b.x0 / w) * w + off; x <= b.x1 + w; x += w) {
+        const j = r(k++) * w * .12;
+        if (x + j >= b.x0 && x + j <= b.x1) line(x + j, y, x + j, y + h);
+      }
+    }
+    // A few short cracks, placed by the shape's own numbers.
+    const cracks = fine ? Math.min(12, Math.floor((b.x1 - b.x0) * (b.y1 - b.y0) / (g * g) / 10)) : 0;
+    for (let c = 0; c < cracks; c++) {
+      const x = b.x0 + (r(k++) + 1) / 2 * (b.x1 - b.x0), y = b.y0 + (r(k++) + 1) / 2 * (b.y1 - b.y0), a = r(k++) * Math.PI, l = g * .18;
+      const x1 = x + Math.cos(a) * l, y1 = y + Math.sin(a) * l, a2 = a + r(k++) * .9;
+      o.push(`M ${n(x)} ${n(y)} L ${n(x1)} ${n(y1)} L ${n(x1 + Math.cos(a2) * l)} ${n(y1 + Math.sin(a2) * l)}`);
+    }
+  } else if (kind === "boards") {
+    const h = g / 4, plank = g * 2;
+    for (let y = Math.floor(b.y0 / h) * h, row = 0; y <= b.y1; y += h, row++) {
+      line(b.x0, y, b.x1, y);
+      const off = (r(row * 7 + 3) + 1) / 2 * plank;
+      for (let x = b.x0 + off; x <= b.x1; x += plank * (.8 + (r(k++) + 1) * .25)) line(x, y, x, y + h);
+    }
+  } else if (kind === "tiles") {
+    const step = g / 2;
+    for (let c = Math.floor((b.x0 + b.y0) / step) * step; c <= b.x1 + b.y1; c += step) line(c - b.y0, b.y0, c - b.y1, b.y1);
+    for (let c = Math.floor((b.x0 - b.y1) / step) * step; c <= b.x1 - b.y0; c += step) line(c + b.y0, b.y0, c + b.y1, b.y1);
+  } else if (kind === "cobbles") {
+    const step = g / 3;
+    for (let y = Math.floor(b.y0 / step) * step, row = 0; y <= b.y1 + step; y += step, row++) {
+      for (let x = Math.floor(b.x0 / step) * step + (row % 2 ? step / 2 : 0); x <= b.x1 + step; x += step) {
+        const cx = x + r(k++) * step * .18, cy = y + r(k++) * step * .18, rx = step * (.32 + r(k++) * .06), ry = rx * (.8 + r(k++) * .15);
+        o.push(`M ${n(cx - rx)} ${n(cy)} a ${n(rx)} ${n(ry)} 0 1 0 ${n(rx * 2)} 0 a ${n(rx)} ${n(ry)} 0 1 0 ${n(-rx * 2)} 0`);
+      }
+    }
+  } else {
+    const step = g / 2;
+    for (let y = Math.floor(b.y0 / step) * step; y <= b.y1; y += step) {
+      for (let x = Math.floor(b.x0 / step) * step; x <= b.x1; x += step) {
+        const v = r(k++), px = x + r(k++) * step * .45, py = y + r(k++) * step * .45;
+        if (v > .45) { const a = r(k++) * Math.PI, l = g * .08; line(px - Math.cos(a) * l, py - Math.sin(a) * l, px + Math.cos(a) * l, py + Math.sin(a) * l); }
+        else if (v > .1) o.push(`M ${n(px)} ${n(py)} l 0.1 0`);
+      }
+    }
+  }
+  return o.join(" ");
+}
 /** Diagonal hatching over the whole map. */
 export function hatchLines(width: number, height: number, gap = 14): string {
   const out: string[] = [];
@@ -125,11 +190,23 @@ const isRoomShape = (s: MapShape) => !!s.fill && (s.type === "merged" || s.type 
 const cache = new WeakMap<MapShape, { key: string; ops: DrawOp[] }>();
 /** What to draw for one shape, in order, in the drawing's style. */
 export function shapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
-  const key = `${d.background}|${JSON.stringify(d.style)}|${s.tint ?? ""}`, hit = cache.get(s);
+  const key = `${d.background}|${JSON.stringify(d.style)}|${s.tint ?? ""}|${s.pattern ?? ""}|${s.door ?? ""}`, hit = cache.get(s);
   if (hit && hit.key === key) return hit.ops;
   const ops = buildShapeOps(s, d);
   cache.set(s, { key, ops });
   return ops;
+}
+/** An iron, arched or secret door. A wooden door is drawn in buildShapeOps. */
+function doorOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
+  const gap: DrawOp = { d: shapePath(s), stroke: s.fill ?? d.background, width: s.thickness + 1, cap: "butt" };
+  if (s.door === "secret") return [gap, { d: shapePath(s), stroke: d.style?.wall ?? s.stroke, width: s.thickness * .55, cap: "butt" }];
+  const [a, b] = s.points, dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, w = Math.max(5, s.thickness / 2);
+  const bar = (p: Point, k: number) => `M ${round(p.x - nx * k)} ${round(p.y - ny * k)} L ${round(p.x + nx * k)} ${round(p.y + ny * k)}`;
+  if (s.door === "arch") return [gap, { d: `${bar(a, w)} ${bar(b, w)}`, stroke: s.stroke, width: Math.max(4, s.thickness * .4), cap: "butt" }];
+  // Iron: the wooden door's frame and swing, with a heavier leaf banded across.
+  const end = { x: a.x + nx * len, y: a.y + ny * len };
+  const bands = [.25, .5, .75].map(t => bar({ x: a.x + (end.x - a.x) * t, y: a.y + (end.y - a.y) * t }, w * .7)).join(" ");
+  return [gap, { d: openingPath(s), stroke: s.stroke, width: 2 }, { d: `M ${round(a.x)} ${round(a.y)} L ${round(end.x)} ${round(end.y)}`, stroke: s.stroke, width: 4.5, cap: "butt" }, { d: bands, stroke: s.stroke, width: 2, cap: "butt" }];
 }
 function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
   const style = d.style, background = d.background;
@@ -156,6 +233,7 @@ function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">)
     return stamp.parts.map(part => ({ d: part.d, fill: tint(part.fill), stroke: part.stroke === "ink" ? ink : tint(part.stroke), width: part.width, matrix }));
   }
   if (s.type === "opening") return [{ d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" }];
+  if (s.type === "door" && s.door && s.door !== "wood") return doorOps(s, d);
   if (s.type === "door" || s.type === "window") return [
     { d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" },
     { d: openingPath(s), stroke: s.stroke, width: 2 },
@@ -174,6 +252,10 @@ function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">)
   if (s.fill) outline.forEach(p => ops.push({ d: p, fill: s.fill! }));
   if (room && style) {
     const clip = merged ? floorOutline(s) : outline[0];
+    if (s.pattern) {
+      const d = patternPath(s, s.pattern, style.gridSize);
+      if (d) ops.push({ d, stroke: style.ink, width: 1.5, opacity: .22, clip });
+    }
     if (style.grid !== "off") ops.push({ d: gridLines(s, style.gridSize), stroke: style.ink, width: 1, opacity: style.grid === "on" ? .35 : .16, clip });
     if (style.shadow) {
       const edge = merged ? visibleWalls(s) : outline[0], base = merged ? 0 : t;
