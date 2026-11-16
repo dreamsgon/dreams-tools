@@ -358,14 +358,31 @@ export const PLANET_COLUMNS = 40, PLANET_ROWS = 20;
 /** The paint size of a planet map, in squares. */
 export const planetMapSize = () => { const k = paintScale(PLANET_COLUMNS, PLANET_ROWS); return { w: PLANET_COLUMNS * k, h: PLANET_ROWS * k }; };
 
+/** The climate settings a planet map keeps, so shaping its land by hand later gives matching biomes. */
+export const planetSettings = (o: PlanetOptions): NonNullable<MapData["planet"]> => ({
+  temp: Math.max(-3, Math.min(3, Math.round(o.temp))), rain: Math.round(o.rain), tilt: Math.round(o.tilt), rotation: o.rotation, life: o.life, size: o.size,
+  volcanism: Math.round(o.volcanism), biomesOff: [...o.biomesOff],
+});
+/** Options for a planet map from the settings it was made with (or Earth-like ones), using the map's seed. */
+export const planetOptionsOf = (map: Pick<MapData, "seed" | "planet">, patch: Partial<PlanetOptions> = {}): PlanetOptions =>
+  ({ ...defaultPlanetOptions(map.seed || "world"), ...map.planet, ...patch });
+
 /**
- * The parts of a map that a generated planet replaces, from a planet already built at the map's size (or built here).
- * Places already on the map that anyone has worked on stay.
+ * Heights for land shaped by hand: sea level is 0, hills start at 0.15, mountains at 0.3 and snowy peaks at 0.42.
+ * Deep sea is below -0.22. Volcanic squares stay volcanic.
  */
-export function generatePlanet(o: PlanetOptions, map: MapData, built?: Planet): Pick<MapData, "columns" | "rows" | "fog" | "hexes" | "party" | "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
-  const { w, h } = planetMapSize(), world = built && built.w === w && built.h === h ? built : buildPlanet(o, w, h);
-  const found = planetFeatures(o, world), seed = o.seed.slice(0, 100);
-  const paint = { columns: w, rows: h, cells: encodePaint(world.cells) };
+export const SHAPED = { sea: 0, deep: -0.22, hill: 0.15, mtn: 0.3, peak: 0.42 };
+export function landFromHeights(e: Float32Array, cells: ArrayLike<number>, w: number, h: number): PlanetLand {
+  const volcanic = terrainIndex.volcanic, up = new Float32Array(w * h);
+  let maxE = 0.5;
+  for (let i = 0; i < w * h; i++) { if (cells[i] === volcanic) up[i] = 1; if (e[i] > maxE) maxE = e[i]; }
+  // classify() calls a square deep below sea - (sea - minE) * 0.12, so minE is set to put that at SHAPED.deep.
+  return { w, h, e, up, sea: SHAPED.sea, minE: SHAPED.deep / 0.12, maxE, peak: SHAPED.peak, mtn: SHAPED.mtn, hill: SHAPED.hill };
+}
+
+/** The places, rivers and roads for a planet map; places already on the map that anyone has worked on stay. */
+export function planetPlaces(o: PlanetOptions, map: MapData, world: Planet): Pick<MapData, "pins" | "paths"> {
+  const { w, h } = world, found = planetFeatures(o, world), seed = o.seed.slice(0, 100);
   const at = (i: number) => ({ x: ((i % w) + 0.5) / w, y: (Math.floor(i / w) + 0.5) / h });
   const id = (kind: string, salt: string) => `${kind}-${hash(`${seed}:${salt}`).toString(36)}`;
   const kept = map.pins.filter(p => !isGeneratedPlace(p, map)), taken = new Set(kept.map(p => p.title.toLowerCase()));
@@ -392,12 +409,37 @@ export function generatePlanet(o: PlanetOptions, map: MapData, built?: Planet): 
     points.push(B);
     paths.push({ id: id("gen-road", `${a}:${b}`), kind: "road", name: "", points, visibility: "gm" });
   }
+  return { pins, paths: [...(map.paths ?? []).filter(p => !p.id.startsWith("gen-")), ...paths].slice(0, 300) };
+}
+
+type PlanetPatch = Pick<MapData, "columns" | "rows" | "fog" | "hexes" | "party" | "paint" | "tiles" | "seed" | "scale" | "pins" | "paths" | "planet">;
+/** The map size, terrain, width and climate settings for a planet map made from these terrain squares. */
+function planetMap(o: PlanetOptions, map: MapData, cells: Uint8Array) {
+  const { w, h } = planetMapSize(), paint = { columns: w, rows: h, cells: encodePaint(cells) };
   const cellsNow = resizeCells(map, PLANET_COLUMNS, PLANET_ROWS), miles = planetSizes[o.size].miles;
   return {
-    ...cellsNow, paint, tiles: tilesFromPaint({ ...map, ...cellsNow }, paint), seed,
-    scale: { width: map.scale?.unit === "km" ? Math.round(miles * 1.609) : miles, unit: map.scale?.unit ?? "mi" },
-    pins, paths: [...(map.paths ?? []).filter(p => !p.id.startsWith("gen-")), ...paths].slice(0, 300),
+    ...cellsNow, paint, tiles: tilesFromPaint({ ...map, ...cellsNow }, paint), seed: o.seed.slice(0, 100), planet: planetSettings(o),
+    scale: { width: map.scale?.unit === "km" ? Math.round(miles * 1.609) : miles, unit: map.scale?.unit ?? "mi" as const },
   };
+}
+
+/**
+ * The parts of a map that a generated planet replaces, from a planet already built at the map's size (or built here).
+ * Places already on the map that anyone has worked on stay.
+ */
+export function generatePlanet(o: PlanetOptions, map: MapData, built?: Planet): PlanetPatch {
+  const { w, h } = planetMapSize(), world = built && built.w === w && built.h === h ? built : buildPlanet(o, w, h);
+  return { ...planetMap(o, map, world.cells), ...planetPlaces(o, map, world) };
+}
+
+/**
+ * An empty sea the size of a planet to draw land on, with sea ice where this world is cold enough.
+ * Places anyone has worked on stay; generated towns, rivers and roads go.
+ */
+export function handPlanet(o: PlanetOptions, map: MapData): PlanetPatch {
+  const { w, h } = planetMapSize(), cells = new Uint8Array(w * h).fill(terrainIndex.sea);
+  const climate = planetClimate(o, landFromHeights(new Float32Array(w * h).fill(-0.1), cells, w, h));
+  return { ...planetMap(o, map, climate.cells), pins: map.pins.filter(p => !isGeneratedPlace(p, map)), paths: (map.paths ?? []).filter(p => !p.id.startsWith("gen-")) };
 }
 
 export type PlanetStats = {
