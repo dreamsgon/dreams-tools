@@ -48,8 +48,8 @@ async function saveBook(s: Session, revision: number, next: BookWorkspace) {
   if ((await s.book.save(s.owner, next, revision)) === null) throw busy();
 }
 
-export function summaryOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }) {
-  return campaignSummary(both.map?.workspace ?? null, both.book.data);
+export function summaryOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }, recentLimit = 6) {
+  return campaignSummary(both.map?.workspace ?? null, both.book.data, recentLimit);
 }
 
 

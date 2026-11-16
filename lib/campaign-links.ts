@@ -75,7 +75,7 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace): CampaignSummary {
+export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace, recentLimit = 6): CampaignSummary {
   const maps = mapCampaigns(map), books = bookCampaigns(book);
   const mapById = new Map(maps.map(m => [m.id, m])), used = new Set<string>();
   // Folders list by name until someone re-orders them by hand; after that the saved order is kept.
@@ -94,7 +94,7 @@ export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"
     rows: rows.sort(byName), folders,
     worlds: book.worlds.filter(w => !w.isTemplate).map(w => ({ id: w.id, name: w.name, archived: w.archived })),
     loose: (map?.scenes ?? []).filter(s => !inCampaign.has(s.id)).length,
-    recent: recentPages(book),
+    recent: recentPages(book, recentLimit),
   };
 }
 
@@ -153,7 +153,7 @@ export function moveOptions(folders: CampaignFolder[], currentFolderId: string |
 type BookEntry = BookWorkspace["entries"][number];
 const newestFirst = (entries: BookEntry[]) => [...entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-function recentPage(s: BookWorkspace, e: BookEntry): RecentPage {
+export function recentPage(s: BookWorkspace, e: BookEntry): RecentPage {
   const names: string[] = [], seen = new Set<string>();
   for (let parent = e.parentId; parent && !seen.has(parent);) {
     seen.add(parent);
