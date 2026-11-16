@@ -3,6 +3,7 @@ import { parseDice } from "../rolls.ts";
 import { maxTrackerPips, maxTrackerValue, maxTrackers, trackerColours, type Tracker } from "./trackers.ts";
 import { MAX_SHEET_ITEMS, newItemId, type Sheet, type SheetItem } from "./sheet-link.ts";
 import { defaultProfile } from "./character-profile.ts";
+import { emptyInventory, itemSettingsOf, parseMoney, validRoll, MAX_ITEMS, MAX_SPELLS, MAX_ROLLS, type Item, type Spell, type ItemRoll } from "./items.ts";
 import { defaultCharacter, type ArticleTab, type CharacterData, type Entry, type StatField, type Workspace } from "./world-model.ts";
 
 /*
@@ -56,6 +57,8 @@ const listItemSchema = z.object({
   quantity: int.optional(),
   uses: z.object({ value: int, max: int, per: optStr(40) }).optional().catch(undefined),
   equipped: z.boolean().optional().catch(undefined),
+  // Optional (added later): on an inventory list, the weight of one and what one is worth ("15 gp").
+  weight: num.optional().catch(undefined), value: optStr(40),
 });
 export const importFileSchema = z.object({
   format: z.literal(SHEET_FORMAT),
@@ -79,6 +82,8 @@ export const importFileSchema = z.object({
   rolls: list(rollSchema, maxRolls),
   lists: list(z.object({ title: str(60).refine(s => s.length > 0, "A list needs a title"), visibility, items: list(listItemSchema, maxListItems) }), maxLists),
   conditions: list(str(40), 30),
+  // Optional (added later): the money carried, in the game's coins ("48 gp 5 sp", "1,240 cr").
+  money: optStr(60),
   notes: optStr(20000),
   unmapped: list(str(300), 50),
   source: z.object({ from: optStr(120), filledBy: optStr(60), date: optStr(40) }).optional().catch(undefined),
@@ -199,7 +204,12 @@ Reply with ONE JSON object and nothing else, in this shape:
     { "name": "", "group": "skills", "formula": "1d20+0" },
     { "name": "", "group": "attacks", "attack": "1d20+0", "damage": "1d8+0", "damageType": "", "notes": "" }
   ],
-  "lists": [ { "title": "Features", "items": [ { "name": "", "text": "", "uses": { "value": 1, "max": 1, "per": "long rest" } } ] } ],
+  "lists": [
+    { "title": "Features", "items": [ { "name": "", "text": "", "uses": { "value": 1, "max": 1, "per": "long rest" } } ] },
+    { "title": "Inventory", "items": [ { "name": "", "quantity": 1, "weight": 0, "value": "", "equipped": false, "text": "" } ] },
+    { "title": "Spells", "items": [ { "name": "", "text": "" } ] }
+  ],
+  "money": "",
   "conditions": [], "notes": "", "unmapped": [],
   "source": { "from": "", "filledBy": "" }
 }
@@ -211,7 +221,7 @@ Rules:
 4. "core" holds only what a map token needs: current and maximum HP, AC (or the game's defense), initiative and speed. Rename the labels to the game's words (Stress, Wounds, Guard). Leave out what the game doesn't have.
 5. "gauges" are pools that go up and down: spell slots per level, hit dice, ki, stress, luck, ammo. "pips" for 20 or fewer, "bar" for more. Colours: red, blue, amber, green, purple. At most 8.
 6. "rolls": group is skills, saves, attacks, spells or other. An attack has "attack" and "damage"; a check has "formula"; a healing spell has "damage" and notes saying healing.
-7. "lists" hold longer things (Features, Spells, Inventory, Contacts). Summarise each item in one or two sentences in your own words; never copy rulebook text. Inline rolls look like [[2d6+3|Fire damage]].
+7. "lists" hold longer things (Features, Spells, Inventory, Contacts). Summarise each item in one or two sentences in your own words; never copy rulebook text. Inline rolls look like [[2d6+3|Fire damage]]. Carried things go in a list titled "Inventory" (with quantity, and weight and value when the sheet has them); spells, powers or prayers in a list titled "Spells". "money" is the money carried, written as on the sheet ("48 gp 5 sp").
 8. Leave "visibility" out unless I say something is secret.
 9. Put anything you couldn't place in "unmapped", so nothing is lost. Don't invent numbers: if a value is unreadable, leave it out and say so in "unmapped".`;
 }
@@ -229,6 +239,46 @@ const listTabBody = (l: ImportFile["lists"][number]) => l.items.map(it => {
   if (it.equipped) bits.push("· equipped");
   return `- ${bits.join(" ")}${it.text ? `: ${it.text.replace(/\n+/g, " ")}` : ""}`;
 }).join("\n");
+
+const INVENTORY_LIST = /^(inventory|equipment|gear|items|possessions|belongings|loadout|carried|cargo)$/i;
+const SPELL_LIST = /^(spells?|spellbook|spell list|powers?|psionics?|prayers?|miracles?|cantrips|rituals|magic|techniques)$/i;
+type ListItem = ImportFile["lists"][number]["items"][number];
+/** Inventory lines from a list: a line with the same name is updated (its GM bits kept), new ones are added. */
+function mergeInventory(inv: ReturnType<typeof emptyInventory>, list: ListItem[], coins: Parameters<typeof parseMoney>[1], newId: () => string, warnings: string[]) {
+  const out: Item[] = [...inv.items];
+  for (const it of list) {
+    const price = it.value ? parseMoney(it.value, coins) : null;
+    const max = it.uses ? Math.max(1, Math.min(1000, it.uses.max)) : 0;
+    const fields: Partial<Item> = {
+      qty: Math.max(0, Math.min(1_000_000, it.quantity ?? 1)),
+      ...(it.text ? { note: it.text.slice(0, 2000) } : {}),
+      ...(it.weight !== undefined && it.weight >= 0 ? { weight: Math.min(100_000, it.weight) } : {}),
+      ...(price !== null ? { price } : {}),
+      ...(it.uses ? { uses: { max, value: Math.max(0, Math.min(max, it.uses.value)) } } : {}),
+      ...(it.equipped ? { equipped: true } : {}),
+    };
+    const at = out.findIndex(x => key(x.name) === key(it.name));
+    if (at >= 0) out[at] = { ...out[at], ...fields };
+    else if (out.length < MAX_ITEMS) out.push({ id: newId(), name: it.name.slice(0, 80), ...fields } as Item);
+    else { warnings.push(`A character carries up to ${MAX_ITEMS} different items, so the rest were left out.`); break; }
+  }
+  return { ...inv, items: out };
+}
+/** Spells from a list, with the file's spell rolls of the same name. */
+function mergeSpells(spells: Spell[], list: ListItem[], rolls: ImportFile["rolls"], newId: () => string, warnings: string[]) {
+  const out = [...spells];
+  for (const it of list) {
+    const r = rolls.find(x => key(x.name) === key(it.name)), more: ItemRoll[] = [];
+    const push = (name: string, f?: string) => { const c = f ? cleanFormula(f) : null; if (c && validRoll(c) && more.length < MAX_ROLLS) more.push({ name, formula: c }); };
+    if (r) { push("Attack", r.attack); push(r.damageType ? r.damageType.slice(0, 40) : "Damage", r.damage); push("Roll", r.formula); }
+    const fields: Partial<Spell> = { ...(it.text ? { text: it.text.slice(0, 4000) } : {}), ...(more.length ? { rolls: more } : {}) };
+    const at = out.findIndex(x => key(x.name) === key(it.name));
+    if (at >= 0) out[at] = { ...out[at], ...fields };
+    else if (out.length < MAX_SPELLS) out.push({ id: newId(), name: it.name.slice(0, 80), ...fields });
+    else { warnings.push(`A character can have up to ${MAX_SPELLS} spells, so the rest were left out.`); break; }
+  }
+  return out;
+}
 
 /** The trackers from the file's gauges. Pips stop at 20 (a larger one becomes a bar) and every value fits its maximum. */
 export function gaugeTrackers(file: ImportFile, newId: () => string, defaultGm: boolean): Tracker[] {
@@ -325,7 +375,17 @@ export function applyImport(s: Workspace, file: ImportFile, target: ImportTarget
     else if (tabs.length < 30) tabs.push({ id: newId(), title, body, visibility: vis });
     else warnings.push(`The page has 30 tabs already, so “${title}” was left out.`);
   };
-  for (const l of file.lists) if (l.items.length) setTab(l.title, listTabBody(l), l.visibility ?? (playerDefault ? "players" : "gm"));
+  // An Inventory list fills the Inventory tab and a Spells list the Spells tab (matched by name, so a second import updates them); other lists are tabs.
+  const items = itemSettingsOf(campaign), isInventory = (t: string) => INVENTORY_LIST.test(t.trim()), isSpells = (t: string) => items.spells.on && (SPELL_LIST.test(t.trim()) || key(t) === key(items.spells.tab));
+  let inventory = existing?.character?.inventory, spells = existing?.character?.spells, spellsVisibility = existing?.character?.spellsVisibility;
+  const shownAs = (l: ImportFile["lists"][number]) => l.visibility ?? (playerDefault ? "players" as const : "gm" as const);
+  for (const l of file.lists) {
+    if (!l.items.length) continue;
+    if (isInventory(l.title)) { const was = inventory ?? emptyInventory(); inventory = { ...mergeInventory(was, l.items, items.coins, newId, warnings), visibility: was.visibility ?? shownAs(l) }; }
+    else if (isSpells(l.title)) { spells = mergeSpells(spells ?? [], l.items, file.rolls.filter(r => r.group === "spells"), newId, warnings); spellsVisibility ??= shownAs(l); }
+    else setTab(l.title, listTabBody(l), l.visibility ?? (playerDefault ? "players" : "gm"));
+  }
+  if (file.money) { const m = parseMoney(file.money, items.coins); if (m === null) warnings.push(`Money: “${file.money}” isn’t in this campaign’s coins (${items.coins.map(c => c.abbr).join(", ")}), so it was left out.`); else inventory = { ...(inventory ?? emptyInventory()), coins: m }; }
   const notImported = [...file.unmapped, ...(file.conditions.length ? [`Conditions: ${file.conditions.join(", ")}`] : [])];
   if (notImported.length) setTab(NOT_IMPORTED_TAB, `Things the AI couldn't place when this sheet was imported${file.source?.from ? ` from ${file.source.from}` : ""}:\n\n${notImported.map(u => `- ${u}`).join("\n")}`, "gm");
 
@@ -339,6 +399,8 @@ export function applyImport(s: Workspace, file: ImportFile, target: ImportTarget
     statsByCampaign: { ...base.statsByCampaign, [campaign.id]: values },
     ...(trackers.length ? { trackers: trackers.slice(0, maxTrackers) } : {}),
     ...(hasSheet && !keepSheet ? { sheet } : {}),
+    ...(inventory ? { inventory } : {}),
+    ...(spells?.length ? { spells, ...(spellsVisibility ? { spellsVisibility } : {}) } : {}),
   };
   // Traits: added to the Profile tab's chips, after any it has.
   let profile = existing?.profile;

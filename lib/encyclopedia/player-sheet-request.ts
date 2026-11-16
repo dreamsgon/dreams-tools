@@ -15,6 +15,8 @@ import { createThrottle } from './throttle.ts';
 import { addPlayerLog, editPlayerLog, removePlayerLog } from './quest-log.ts';
 import { changePlayerTrackers } from './player-trackers.ts';
 import { TrackerError, trackerColours } from './trackers.ts';
+import { ItemError, inventoryActionSchema } from './items.ts';
+import { changeOwnInventory, createPlayerStore, give, giveSchema, storeAction, storeActionSchema, type Actor, type Done } from './store-actions.ts';
 import type { Rights } from './player-edit.ts';
 import type { Workspace } from './world-model.ts';
 
@@ -30,9 +32,9 @@ export type Deps = {
   now?: number;
 };
 
-export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000, LOG_BODY = 12_000, TRACKER_BODY = 1000;
-const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000), logThrottle = createThrottle(10, 10_000), trackerThrottle = createThrottle(30, 10_000);
-export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); logThrottle.reset(); trackerThrottle.reset(); };
+export const SHEET_BODY = 1_000_000, ROLL_BODY = 2000, DICE_BODY = 4000, LOG_BODY = 12_000, TRACKER_BODY = 1000, ITEMS_BODY = 16_000;
+const readThrottle = createThrottle(5, 10_000), writeThrottle = createThrottle(20, 10_000), rollThrottle = createThrottle(10, 10_000), sendThrottle = createThrottle(10, 10_000), logThrottle = createThrottle(10, 10_000), trackerThrottle = createThrottle(30, 10_000), itemsThrottle = createThrottle(30, 10_000);
+export const resetThrottles = () => { readThrottle.reset(); writeThrottle.reset(); rollThrottle.reset(); sendThrottle.reset(); logThrottle.reset(); trackerThrottle.reset(); itemsThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const ref = z.string().regex(/^[a-f0-9]{64}$/), id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -58,7 +60,7 @@ async function memberOf(deps: Deps, r: string, signIn = 'Sign in to use your cha
   return m ? { m } : { fail: json({ error: noLongerMember }, 404) };
 }
 const failure = (e: unknown, fallback: string) =>
-  e instanceof PlayerSheetError || e instanceof TrackerError ? json({ error: e.message }, e.status)
+  e instanceof PlayerSheetError || e instanceof TrackerError || e instanceof ItemError ? json({ error: e.message }, e.status)
   : e instanceof SheetReadError ? json({ error: e.message }, 400)
   : e instanceof z.ZodError || e instanceof SyntaxError ? json({ error: 'That request isn’t valid.' }, 400)
   : json({ error: fallback }, 500);
@@ -233,3 +235,39 @@ export async function handlePlayerTracker(request: Request, deps: Deps) {
     return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
   } catch (e) { return failure(e, 'Could not save the tracker. Try again.'); }
 }
+
+const itemsAction = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inventory'), ref, as: id, change: inventoryActionSchema }),
+  z.object({ kind: z.literal('give'), ref, give: giveSchema }),
+  z.object({ kind: z.literal('store'), ref, change: storeActionSchema }),
+  z.object({ kind: z.literal('create'), ref, as: id, type: z.enum(['shop', 'container', 'stash']), title: z.string().trim().min(1).max(160), shared: z.boolean() }),
+]);
+/**
+ * POST /api/encyclopedia/player-tracker?items (the trackers route, so no new function is deployed): a signed-in member's character changes its inventory or spells, gives to another
+ * character, uses a store (buy, sell, take, put in, open, haggle…), runs its own stall, or sets up a store. Everything
+ * is checked in store-actions.ts against the member's rights, read again here; prices and rolls are worked out here.
+ */
+export async function handlePlayerItems(request: Request, deps: Deps) {
+  try {
+    const got = await start(request, deps, ITEMS_BODY);
+    if (got.fail) return got.fail;
+    const body = itemsAction.parse(JSON.parse(got.text)), found = await memberOf(deps, body.ref, 'Sign in to change your character’s things.');
+    if (found.fail) return found.fail;
+    const m = found.m, who = { name: m.name, as: 'player' as const };
+    if (itemsThrottle.hit(m.userId, deps.now)) return json({ error: 'Too many changes too quickly. Wait a few seconds and try again.' }, 429);
+    const actor: Actor = { gm: false, name: m.name, mine: m.rights.edit }, ctx = { newId: () => crypto.randomUUID(), now: deps.now, random: deps.random };
+    // On the newest copy each time, so a save that crossed someone else's tries again (a roll is made again too).
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, revision } = await deps.store.read(m.owner);
+      const r: Done & { id?: string } = body.kind === 'inventory' ? changeOwnInventory(data, m.campaignId, actor, body.as, body.change, ctx)
+        : body.kind === 'give' ? give(data, m.campaignId, actor, body.give, ctx)
+        : body.kind === 'store' ? storeAction(data, m.campaignId, actor, body.change, ctx)
+        : createPlayerStore(data, m.campaignId, actor, { as: body.as, type: body.type, title: body.title, shared: body.shared }, ctx);
+      if (await deps.store.save(m.owner, r.data, revision, who)) return json({ ok: true, said: r.said, ...(r.roll ? { roll: r.roll } : {}), ...(r.id ? { id: r.id } : {}) });
+    }
+    return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
+  } catch (e) { return failure(e, 'Could not save that. Try again.'); }
+}
+
+/** The player-tracker route: `?items` is inventory, spells, giving and stores; anything else is a tracker change. */
+export const handlePlayerCharacter = (request: Request, deps: Deps) => new URL(request.url).searchParams.has('items') ? handlePlayerItems(request, deps) : handlePlayerTracker(request, deps);

@@ -87,10 +87,13 @@ test('a new character gets fields, trackers, a rollable sheet, tabs, traits and 
  assert.ok(groups.Attacks.includes('Longbow:Attack=1d20+8|Damage=1d8+3'));
  assert.ok(groups.Saves.some(x=>x.startsWith('Dexterity save:')));
  assert.ok(groups.Skills.some(x=>x.startsWith('Stealth:')));
- assert.deepEqual(e.tabs.map(t=>[t.title,t.visibility]),[['Features','players'],['Inventory','players'],['Not imported','gm']]);
+ assert.deepEqual(e.tabs.map(t=>[t.title,t.visibility]),[['Features','players'],['Not imported','gm']]);
  assert.match(e.tabs[0].body,/\*\*Favored foe\*\* \(2\/2 per long rest\): .*\[\[1d4\|Favored foe\]\]/);
- assert.match(e.tabs[1].body,/\*\*Arrows\*\* × 34/);
- assert.match(e.tabs[2].body,/Languages/);
+ assert.match(e.tabs[1].body,/Languages/);
+ // The Inventory list fills the Inventory tab.
+ assert.equal(e.character.inventory.visibility,'players');
+ assert.deepEqual(e.character.inventory.items.map(i=>[i.name,i.qty,!!i.equipped]),[['Longbow',1,true],['Arrows',34,false],['Potion of healing',2,false]]);
+ assert.equal(e.character.inventory.items[2].note,'Drink to regain [[2d4+2|Healing]] HP.');
  assert.deepEqual(e.profile.traits.map(t=>t.label),['Stubborn','Loyal','Quiet']);
  assert.match(e.body,/Level 5 half-elf ranger/);
  assert.deepEqual(r.warnings,[]);
@@ -112,7 +115,8 @@ test('an update changes only what the file has, keeps other tabs and trackers, a
  assert.equal(sheetLayout(e.character.sheet.items).tiles[0].value,'20');
  const t=e.character.trackers;assert.equal(t.length,4);assert.equal(t[0].value,0);assert.equal(t[0].id,first.workspace.entries.find(x=>x.id===id).character.trackers[0].id,'trackers keep their ids');
  assert.ok(t.some(x=>x.label==='Inspiration'));
- assert.deepEqual(e.tabs.map(x=>x.title),['Features','Inventory','Not imported','Backstory'],'tabs the file leaves out stay');
+ assert.deepEqual(e.tabs.map(x=>x.title),['Features','Not imported','Backstory'],'tabs the file leaves out stay');
+ assert.equal(e.character.inventory.items.length,3,'the inventory the file leaves out stays');
 });
 
 test('values that don’t fit and dice the roller can’t read are left out with a warning',()=>{

@@ -35,7 +35,7 @@ test('an exported character reads back with the sheet import and makes the same 
  assert.deepEqual(back.fields.find(f=>f.label==='Strength'),{section:'Abilities',label:'Strength',type:'number',value:1,options:[],roll:'d20',visibility:'players'});
  assert.deepEqual(back.unmapped,['Languages: Common, Elvish, Sylvan (no field for this yet)']);
  const inv=back.lists.find(l=>l.title==='Inventory').items;
- assert.deepEqual(inv,[{name:'Longbow',equipped:true},{name:'Arrows',quantity:34},{name:'Potion of healing',quantity:2,text:'Drink to regain [[2d4+2|Healing]] HP.'}]);
+ assert.deepEqual(inv,[{name:'Longbow',quantity:1,equipped:true},{name:'Arrows',quantity:34},{name:'Potion of healing',quantity:2,text:'Drink to regain [[2d4+2|Healing]] HP.'}]);
  assert.deepEqual(back.lists.find(l=>l.title==='Features').items[0].uses,{value:2,max:2,per:'long rest'});
  // Into an empty campaign again: the same page, field for field.
  const w2=world(),r=I.applyImport(w2,back,{kind:'new',worldId:a.worldId,campaignId:C},{}, {now:AT,newId:ids});
