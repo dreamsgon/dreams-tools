@@ -2357,3 +2357,63 @@ button.primary, .rpg-open { font-weight:500; }
  /* With the banner showing, Crops moves to the bottom-left so a taller banner can never sit on top of it. */
  .board:has(.board-hint) .crop-controls { top:auto; bottom:34px; left:12px; right:auto; align-items:flex-start; }
 }
+
+/* Account settings: profile, email, password and signed-in devices. */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.account-avatar { display:inline-grid; place-items:center; flex:none; overflow:hidden; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700; line-height:1; }
+.account-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.account-avatar-s { width:28px; height:28px; font-size:12px; }
+.account-avatar-l { width:104px; height:104px; font-size:38px; box-shadow:0 0 0 3px var(--panel), 0 0 0 4px var(--line-strong); }
+.site-header .site-me { display:inline-flex; align-items:center; gap:8px; padding:4px 0; }
+.site-header .site-me-name { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-settings { max-width:760px; margin:0 auto; padding:36px 0 64px; }
+.account-settings h1 { font-size:32px; letter-spacing:-.6px; margin:8px 0 6px; }
+.account-settings .rpg-eyebrow { margin:0; }
+.account-lead { color:var(--muted); margin:0 0 28px; }
+.account-layout { display:grid; grid-template-columns:180px minmax(0,1fr); gap:28px; align-items:start; }
+.account-side { position:sticky; top:20px; display:grid; gap:2px; }
+.account-side a { padding:8px 10px; border-radius:var(--radius); color:var(--muted); font-weight:500; font-size:14px; }
+.account-side a:hover { background:var(--accent-soft); color:var(--accent); }
+.account-sections { display:grid; gap:20px; min-width:0; }
+.account-section { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg); padding:24px; scroll-margin-top:16px; }
+.account-section h2 { font-size:19px; margin:0 0 4px; }
+.rpg-hub .account-section .account-hint { margin:0 0 20px; color:var(--muted); font-size:13px; line-height:1.5; }
+.account-fields-tight { margin-top:0; gap:16px; }
+.account-fields input[readonly] { color:var(--muted); background:var(--raised); }
+.account-fields input[aria-invalid="true"] { border-color:var(--danger); }
+.account-profile { display:grid; grid-template-columns:auto minmax(0,1fr); gap:24px; align-items:start; }
+.account-avatar-box { display:grid; gap:10px; justify-items:center; width:160px; }
+.account-avatar-box small { color:var(--muted); font-size:12px; text-align:center; line-height:1.5; }
+.rpg-hub .account-preview { display:flex; gap:10px; align-items:center; margin:0; padding:10px 12px; border:1px dashed var(--line-strong); border-radius:var(--radius); color:var(--muted); font-size:12px; line-height:1.4; }
+.account-preview strong { color:var(--ink); }
+.account-two { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+.account-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.account-row-end { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end; margin-top:4px; padding-top:16px; border-top:1px solid var(--line); }
+.account-row-split > :first-child { margin-right:auto; }
+.account-settings .account-primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.account-settings .account-primary:hover:not(:disabled) { background:var(--accent-hover); }
+.account-settings .account-ghost { background:transparent; border-color:transparent; color:var(--muted); }
+.account-settings .account-link { background:transparent; border:0; padding:0; min-height:0; color:var(--accent); font-size:12px; font-weight:500; }
+.account-settings .account-danger { background:transparent; color:var(--danger); border-color:var(--danger-soft); }
+.account-settings .account-danger:hover:not(:disabled) { background:var(--danger-soft); }
+.account-current { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; background:var(--raised); border-radius:var(--radius); margin-bottom:16px; }
+.account-current strong { display:block; overflow-wrap:anywhere; }
+.account-current span { color:var(--muted); font-size:12px; }
+.account-current .account-pill { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
+.account-meter { display:block; height:4px; border-radius:2px; background:var(--line); overflow:hidden; }
+.account-meter i { display:block; height:100%; background:var(--warning); transition:width .15s; }
+.account-meter i[data-ok] { background:var(--green); }
+.account-settings .account-status { margin:14px 0 0; padding:10px 12px; background:var(--raised); border-left:3px solid var(--green); color:var(--ink); font-size:13px; line-height:1.5; }
+.account-settings .account-status-wait { margin-top:0; border-left-color:var(--warning); overflow-wrap:anywhere; }
+.account-settings .account-status-error { border-left-color:var(--danger); }
+@media(max-width:720px) {
+ .account-settings { padding-top:24px; }
+ .account-settings h1 { font-size:26px; }
+ .account-layout { grid-template-columns:minmax(0,1fr); gap:16px; }
+ .account-side { position:static; display:flex; overflow-x:auto; border-bottom:1px solid var(--line); gap:4px; }
+ .account-side a { white-space:nowrap; }
+ .account-profile, .account-two { grid-template-columns:minmax(0,1fr); }
+ .account-avatar-box { width:auto; }
+ .account-section { padding:18px; }
+ .site-header .site-me-name { display:none; }
+}

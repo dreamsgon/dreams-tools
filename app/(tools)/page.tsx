@@ -14,7 +14,7 @@ const doors=[
 export default async function Home(){
   const user=await getAppUser();
   const first=user?.displayName.split(/[\s@]/)[0]||'';
-  return <main className="rpg-hub home-page"><SiteHeader signedIn={!!user}/>
+  return <main className="rpg-hub home-page"><SiteHeader signedIn={!!user} me={user?{name:user.displayName,avatar:user.avatar}:undefined}/>
     {user?<>
       <section className="home-hello home-hello-signed-in">
         <div><h1>Welcome back{first?`, ${first}`:''}.</h1><p>Pick up where you left off, or open a tool.</p></div>

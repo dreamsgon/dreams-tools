@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Join a campaign | RPG Tools", referrer: "no-referrer" as const, robots: { index: false, follow: false } };
 export default async function JoinPage({ params }: { params: Promise<{ token: string }> }) {
   const [{ token }, user] = await Promise.all([params, getAppUser()]);
-  return <main className="rpg-hub"><SiteHeader signedIn={!!user} /><JoinCampaign token={token} /></main>;
+  return <main className="rpg-hub"><SiteHeader signedIn={!!user} me={user?{name:user.displayName,avatar:user.avatar}:undefined} /><JoinCampaign token={token} /></main>;
 }

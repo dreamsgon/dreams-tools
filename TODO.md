@@ -38,6 +38,14 @@ Updated 2026-11-16. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
 
+## Account settings
+
+- [x] Account page for signed-in users: display name (1–40 characters, separate from the registration username), profile picture, email change, password change, Sign out and Sign out everywhere.
+- [x] Email and password changes check the current password on a throwaway Supabase client first; the email changes only once Supabase's confirmation link is opened (`/auth/finish?changed=email`).
+- [x] Profile pictures are shrunk to a 256 px square in the browser, checked by their bytes on the server (PNG, JPEG, WebP, under 200 KB), and kept at `profile/avatar` in the user's own storage. The site header shows the picture and display name.
+- [ ] Live check after deploy: change display name, upload and remove a picture, change password, and change email end to end with real Supabase email delivery. Whether both old and new addresses get a link depends on the Supabase "Secure email change" setting.
+- [ ] Show members' pictures to other members of a shared campaign (needs a campaign-scoped avatar route).
+
 ## Star systems and space
 
 - [x] Part 1 (2026-11-16), galaxy pages (mockup approved by the owner): a new page kind, **Galaxy** (optional `galaxy` on a galaxy entry: preset, shape, arms, size, seed, facts and summary; `lib/encyclopedia/galaxies.ts`). Its Galaxy tab draws the galaxy from its seed, shape and arms (`components/encyclopedia/galaxy-art.tsx`), with an Invented or Real chip, a summary and five facts (type, across, stars, age, distance) typed in place. **Real galaxy or generate** picks the Milky Way, Andromeda, Triangulum, the Large Magellanic Cloud or Messier 87 (rounded published figures, optionally renaming the page), or generates one from shape, arms, size and seed with a live preview and Reroll for a new name. The Galaxy tab is GM only for now; players get only tabs the GM shares.
