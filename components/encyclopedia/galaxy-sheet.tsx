@@ -5,23 +5,31 @@
  * arms, size and seed. Sectors, star systems and worlds hang off this page in later parts.
  */
 import {useMemo,useState} from 'react';
-import {Dices,Telescope} from 'lucide-react';
-import type {Entry} from '@/lib/encyclopedia/world-model';
+import {Dices,Hexagon,Plus,Telescope,X} from 'lucide-react';
+import {compareEntries,newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {factLabels,galaxyPresetIds,galaxyPresets,galaxyRandom,galaxyShapes,galaxySizes,generateGalaxy,hasArms,newGalaxy,presetGalaxy,randomGalaxySettings,shapeNames,sizeNames,type Galaxy,type GalaxyFacts,type GalaxyPresetId,type GalaxyShape,type GalaxySize} from '@/lib/encyclopedia/galaxies';
 import {ToolDialog} from './tool-dialog';
 import {GalaxyArt} from './galaxy-art';
+import {SectorDialog} from './sector-dialog';
 import './galaxy.css';
 
 const factKeys=Object.keys(factLabels) as (keyof GalaxyFacts)[];
 
 /** The Galaxy tab. */
-export function GalaxySheet({entry,update}:{entry:Entry;update:(p:Partial<Entry>)=>void}){
- const galaxy=entry.galaxy??newGalaxy(entry.title),[choosing,setChoosing]=useState(false);
+export function GalaxySheet({entry,data,update,change,onOpen}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void}){
+ const galaxy=entry.galaxy??newGalaxy(entry.title),[choosing,setChoosing]=useState(false),[placing,setPlacing]=useState(false),[at,setAt]=useState<{x:number;y:number}|null>(null);
+ const sectors=data.entries.filter(e=>e.parentId===entry.id&&e.kind==='sector'&&e.sector).sort(compareEntries);
+ const place=(e:React.MouseEvent<HTMLDivElement>)=>{if(!placing)return;const box=e.currentTarget.getBoundingClientRect();setAt({x:Math.min(1,Math.max(0,(e.clientX-box.left)/box.width)),y:Math.min(1,Math.max(0,(e.clientY-box.top)/box.height))});setPlacing(false);};
+ const addSector=(sector:NonNullable<Entry['sector']>,title:string)=>{const id=newId(),page:Entry={id,worldId:entry.worldId,campaignId:entry.campaignId,parentId:entry.id,title:title.slice(0,160),kind:'sector',body:'',sector,updatedAt:new Date().toISOString()};
+  if(change(w=>({...w,entries:[...w.entries,page]}))!==false){setAt(null);onOpen(id);}};
  const real=galaxy.preset?galaxyPresets[galaxy.preset]:undefined;
  const save=(patch:Partial<Galaxy>)=>update({galaxy:{...galaxy,...patch}});
  return <div className="galaxy-sheet">
-  <div className="galaxy-view">
+  <div className={`galaxy-view${placing?' is-placing':''}`} onClick={place}>
    <GalaxyArt className="galaxy-canvas" spec={galaxy} label={`${shapeNames[galaxy.shape]} galaxy${galaxy.arms?` with ${galaxy.arms} arms`:''}`}/>
+   {sectors.map(s=><button key={s.id} type="button" className="galaxy-sector" style={{left:`${s.sector!.x*100}%`,top:`${s.sector!.y*100}%`,['--sector' as string]:s.sector!.color}} disabled={placing} onClick={()=>onOpen(s.id)} title={`Open ${s.title}`}><i/><span>{s.title}</span></button>)}
+   <div className="galaxy-layers"><button type="button" aria-pressed={placing} onClick={e=>{e.stopPropagation();setPlacing(v=>!v);}}>{placing?<><X size={14}/> Cancel</>:<><Plus size={14}/> New sector</>}</button></div>
+   {placing&&<span className="galaxy-placing">Tap the galaxy where the sector is</span>}
    <span className="galaxy-scale">{real?'Schematic, not a star chart':`${shapeNames[galaxy.shape]}${hasArms(galaxy.shape)?`, ${galaxy.arms} arms`:''}`}</span>
   </div>
   <div className="galaxy-side">
@@ -31,7 +39,13 @@ export function GalaxySheet({entry,update}:{entry:Entry;update:(p:Partial<Entry>
     <input key={`${k}${galaxy.facts[k]}`} defaultValue={galaxy.facts[k]} maxLength={120} placeholder="—" onBlur={e=>{const v=e.target.value.trim();if(v!==galaxy.facts[k])save({facts:{...galaxy.facts,[k]:v}});}} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();}}/></label>)}</div>
    <button type="button" className="button" onClick={()=>setChoosing(true)}><Telescope size={15}/> Real galaxy or generate</button>
    {real&&<p className="aside-hint">Facts are rounded published estimates. Change any of them for your setting.</p>}
+   <div className="galaxy-sectors"><span className="eyebrow">SECTORS</span>
+    {sectors.map(s=><button key={s.id} type="button" className="galaxy-sector-row" onClick={()=>onOpen(s.id)}><span className="sector-swatch" style={{background:s.sector!.color}}/><span><strong>{s.title}</strong><small>{s.sector!.cols} × {s.sector!.rows} hexes · {s.sector!.systems.length} systems</small></span></button>)}
+    {!sectors.length&&<p className="aside-hint">Sectors are hex maps of parts of this galaxy, one hex to 5 light years. Use New sector on the picture to place one.</p>}
+    <button type="button" className="button small" onClick={()=>setPlacing(true)}><Hexagon size={14}/> New sector</button>
+   </div>
   </div>
+  {at&&<SectorDialog title="New sector" name="" realAllowed={galaxy.preset==='milky'} at={at} onClose={()=>setAt(null)} onApply={addSector}/>}
   {choosing&&<GalaxyDialog entry={entry} galaxy={galaxy} onClose={()=>setChoosing(false)} onPick={(next,title)=>{update({galaxy:next,...(title?{title}:{})});setChoosing(false);}}/>}
  </div>;
 }
