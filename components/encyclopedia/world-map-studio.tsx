@@ -20,6 +20,7 @@ import { MapViewport } from './map-viewport';
 import { PinDialog, openMapEditorNext } from './map-editor';
 // The generators run only in the browser, so they stay out of the server bundle.
 const WorldGenerateDialog = dynamic(() => import('./world-generate-dialog').then(m => m.WorldGenerateDialog), { ssr: false });
+import type { WorldAiContext } from './world-generate-dialog';
 import { confirmDialog } from '../confirm-dialog';
 import type { ShapeMode, ShapeStroke } from '@/lib/encyclopedia/land-shaping';
 import type { ZoomFrame, ZoomSize } from '@/lib/encyclopedia/zoom-maps';
@@ -105,6 +106,15 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const planet = !!map.planet && !!map.paint && map.paint.columns === map.paint.rows * 2;
   const keptHeights = (paint: MapPaint) => heights.current?.cells === paint.cells ? heights.current.e : null;
   const areaMaps = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.kind === 'map' && e.id !== entry.id);
+  /** For Check with your AI: pages it can check against, with this map's page and the pages it sits under ticked. */
+  const aiContext = useMemo((): WorldAiContext | undefined => {
+    if (!generating) return undefined;
+    const pages = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id === entry.id || !['folder', 'session', 'tasks', 'map'].includes(e.kind));
+    const suggested: string[] = entry.body.trim() ? [entry.id] : [];
+    for (let up = entry.parentId, n = 0; up && n < 6 && suggested.length < 4; n++) { const e = data.entries.find(x => x.id === up); if (!e) break; if (e.kind !== 'folder' && e.body.trim()) suggested.push(e.id); up = e.parentId; }
+    const c = campaign ?? data.campaigns.find(x => x.id === entry.campaignId), w = data.worlds.find(x => x.id === entry.worldId);
+    return { title: entry.title, campaignId: c?.id ?? null, campaign: { name: c?.name ?? w?.name ?? 'My campaign', description: c?.description || w?.description || undefined }, pages, suggested };
+  }, [generating, data, entry, campaign]);
   // Closer maps made from this one, and the maps this one was zoomed in from, nearest last.
   const closer = data.entries.filter(e => e.kind === 'map' && e.id !== entry.id && e.mapData?.zoomOf?.mapId === entry.id);
   const parents: Entry[] = [];
@@ -437,7 +447,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
     </div>
     {(tool === 'shape' || tool === 'zoom') && !mapTools && <MapToolsLoader onReady={setMapTools}/>}
     {using && <WorldUseDialog entry={entry} map={map} data={data} imageUrl={url} setMap={setMap} onClose={() => setUsing(false)}/>}
-    {generating && <WorldGenerateDialog map={map} onClose={() => setGenerating(false)} onUse={(patch, hand) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool(hand ? 'shape' : 'terrain'); if (hand) { setShapeMode('land'); setRadius(6); } }}/>}
+    {generating && <WorldGenerateDialog map={map} ai={aiContext} onClose={() => setGenerating(false)} onUse={(patch, hand) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool(hand ? 'shape' : 'terrain'); if (hand) { setShapeMode('land'); setRadius(6); } }}/>}
     {editingPin && <PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id !== entry.id)}
       onClose={() => setEditingPin(null)}
       onSave={p => { if (!map.pins.some(v => v.id === p.id) && map.pins.length >= 100) return; edit({ pins: map.pins.some(v => v.id === p.id) ? map.pins.map(v => v.id === p.id ? p : v) : [...map.pins, p] }); select(p.id); setEditingPin(null); setTool('select'); }}/>}

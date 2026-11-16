@@ -1,13 +1,16 @@
 'use client';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Dices, ImageUp } from 'lucide-react';
-import { terrainIndex, terrains, type MapData } from '@/lib/encyclopedia/map-model';
+import { decodePaint, isWater, terrainIndex, terrains, type MapData } from '@/lib/encyclopedia/map-model';
+import type { Entry } from '@/lib/encyclopedia/world-model';
+import type { WorldChange, WorldCheckRequest } from '@/lib/encyclopedia/world-check';
 import { defaultWorldOptions, generateWorld, worldAcross, worldClimates, worldKinds, type WorldAcross, type WorldOptions } from '@/lib/encyclopedia/world-generator';
 import { defaultPictureOptions, landIsNames, pictureArea, picturePlanet, pictureReadSize, readPicture, sampleSketch, type LandIs, type PictureOptions } from '@/lib/encyclopedia/picture-map';
 import { buildPlanet, defaultPlanetOptions, generatePlanet, handPlanet, planetBiomes, planetChecks, planetMapSize, planetPixels, planetPresets, planetSizes, planetStats, rainWord, temperatureWords, withPreset, type PlanetLife, type PlanetOptions, type PlanetSize } from '@/lib/encyclopedia/planet-generator';
 import {ToolDialog} from './tool-dialog';
 import { MapCanvas } from './map-canvas';
 import { PlanetGlobe } from './planet-globe';
+import { WorldAiCheck } from './world-ai-check';
 
 const words = ['amber', 'ash', 'briar', 'cinder', 'dusk', 'ember', 'frost', 'gale', 'harrow', 'iron', 'lantern', 'moss', 'raven', 'salt', 'thorn', 'willow'];
 export const randomWorldSeed = () => `${words[Math.floor(Math.random() * words.length)]}-${Math.floor(Math.random() * 900 + 100)}`;
@@ -59,8 +62,20 @@ function PictureThumb({ pic, land }: { pic: PictureFile; land: Uint8Array | null
   return <canvas ref={ref} role="img" aria-label="The picture, with the land found in it tinted green"/>;
 }
 
+/** What Check with your AI needs: the map page's name, its campaign, and the pages it can check against. */
+export type WorldAiContext = { title: string; campaignId: string | null; campaign: { name: string; description?: string }; pages: Entry[]; suggested: string[] };
+
+/** The map's land by terrain, biggest first, as "Forest 31%", from its paint squares. */
+function landShares(paint: MapData['paint']) {
+  if (!paint) return { land: 0, kinds: [] as string[] };
+  const cells = decodePaint(paint.columns, paint.rows, paint.cells) ?? new Uint8Array(0), count = new Array(terrains.length).fill(0);
+  let land = 0;
+  for (const t of cells) if (!isWater(t)) { land++; count[t]++; }
+  return { land: land / cells.length, kinds: count.map((n, t) => [n, t]).filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]).slice(0, 7).map(([n, t]) => `${terrains[t].name} ${pct(n / land)}`) };
+}
+
 /** Generate a world: a whole planet, or a continent, coast, islands or inland region, and see it before using it. */
-export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onClose: () => void; onUse: (patch: Partial<MapData>, hand: boolean) => void }) {
+export function WorldGenerateDialog({ map, ai, onClose, onUse }: { map: MapData; ai?: WorldAiContext; onClose: () => void; onUse: (patch: Partial<MapData>, hand: boolean) => void }) {
   const [mode, setMode] = useState<'area' | 'planet' | 'hand' | 'picture'>('area'), hand = mode === 'hand';
   const [pic, setPic] = useState<PictureFile | null>(null), [picError, setPicError] = useState(''), [po, setPo] = useState<PictureOptions>(defaultPictureOptions);
   const [picScale, setPicScale] = useState<PictureScale>('continent'), fromPicture = mode === 'picture';
@@ -94,6 +109,38 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
   const preview: MapData | null = result && { ...map, ...result, source: 'generated', imageId: null, fog: undefined, routes: [], compass: true, scaleBar: true };
   const added = result?.pins.filter(p => !map.pins.some(q => q.id === p.id)).length ?? 0;
   const checks = mode === 'planet' ? planetChecks(options, stats ?? undefined) : [], notes = checks.filter(c => c.kind === 'note').length;
+  // What Check with your AI is told: the settings the GM can change here, in numbers and words, and the map as made.
+  const aiRequest = useMemo((): Omit<WorldCheckRequest, 'pages' | 'note'> | null => {
+    if (!ai || !result) return null;
+    const s = (id: WorldCheckRequest['settings'][number]['id'], value: number | string, words: string) => ({ id, value, words });
+    const towns = result.pins.filter(x => x.kind !== 'landmark').length, rivers = result.paths?.filter(x => x.kind === 'river').length ?? 0;
+    const made = fromPicture ? ', made from a picture' : hand ? ', drawn by hand' : '';
+    if (planet) {
+      const settings = [
+        s('temp', p.temp, temperatureWords[String(p.temp)]), s('rain', p.rain, rainWord(p.rain)), s('rotation', p.rotation, p.rotation === 'spin' ? 'Spins' : 'Tidally locked'),
+        ...(p.rotation === 'spin' ? [s('tilt', p.tilt, `${p.tilt}°`)] : []), s('life', p.life, lifeNames[p.life]), s('size', p.size, planetSizes[p.size].name),
+        ...(mode === 'planet' ? [s('water', p.water, `${p.water}% sea`), s('volcanism', p.volcanism, amount(p.volcanism))] : []),
+        ...(mode === 'planet' || fromPicture ? [s('mountains', p.mountains, amount(p.mountains))] : []),
+      ];
+      const summary = stats ? [`Land ${pct(stats.land)} of the surface, ice ${pct(stats.ice)}, mild enough to live on ${pct(stats.livable)} of the land.`,
+        `Land by biome: ${planetBiomes.concat(['hills', 'mountains', 'snow', 'barren'] as typeof planetBiomes).map(id => [stats.shares[terrainIndex[id]] ?? 0, id] as const).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]).slice(0, 7).map(([v, id]) => `${terrains[terrainIndex[id]].name} ${pct(v / Math.max(1e-6, stats.land))}`).join(', ')}.`]
+        : hand ? ['An empty sea for now: the GM draws the land by hand afterwards, and biomes follow these settings.'] : [];
+      return { name: ai.title, what: `a whole planet${made}, ${planetSizes[p.size].miles.toLocaleString('en-US')} miles around`, settings, summary: [...summary, ...(hand ? [] : [`${towns} towns and ${rivers} rivers.`])] };
+    }
+    const across = fromPicture ? picScale as WorldAcross : o.across, shares = landShares(result.paint);
+    const settings = [s('climate', o.climate, worldClimates.find(c => c.id === o.climate)!.name), s('mountains', Math.round(o.mountains * 100), o.mountains < 0.25 ? 'Few' : o.mountains < 0.6 ? 'Some' : 'Many'),
+      ...(!fromPicture && o.kind !== 'inland' ? [s('seaLevel', Math.round(o.seaLevel * 100), `${Math.round(o.seaLevel * 100)}% sea`)] : [])];
+    return { name: ai.title, what: `${fromPicture ? 'an area made from a picture' : `a ${worldKinds.find(k => k.id === o.kind)!.name.toLowerCase()} map (${worldKinds.find(k => k.id === o.kind)!.hint.toLowerCase()})`}, ${worldAcross[across].miles.toLocaleString('en-US')} miles across, not a whole planet`, settings,
+      summary: [`Land ${pct(shares.land)} of the map.`, ...(shares.kinds.length ? [`Land by terrain: ${shares.kinds.join(', ')}.`] : []), `${towns} towns and ${rivers} rivers.`] };
+  }, [ai, result, planet, p, mode, fromPicture, hand, stats, o, picScale]);
+  /** A change the AI suggested, applied to these settings. */
+  const applyChange = (c: WorldChange) => {
+    const v = c.value;
+    if (c.setting === 'climate') set({ climate: v as WorldOptions['climate'] });
+    else if (c.setting === 'seaLevel') set({ seaLevel: Number(v) / 100 });
+    else if (c.setting === 'mountains') { set({ mountains: Number(v) / 100 }); setPlanetOption({ mountains: Number(v) }); }
+    else setPlanetOption({ [c.setting]: v } as Partial<PlanetOptions>);
+  };
   const towns = result?.pins.filter(p => p.id.startsWith('place-') && p.kind !== 'landmark').length ?? 0, rivers = result?.paths?.filter(p => p.kind === 'river').length ?? 0;
   const openPicture = async (file: File | undefined) => {
     if (!file) return;
@@ -204,6 +251,7 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
           <h3>Built-in checks <span className={notes ? 'is-note' : 'is-ok'}>{notes ? `${notes} to look at` : 'Looks plausible'}</span></h3>
           <ul>{checks.map((c, i) => <li key={i} className={`check-${c.kind}`}>{c.text}</li>)}</ul>
         </section>}
+        {ai && aiRequest && <WorldAiCheck campaignId={ai.campaignId} campaign={ai.campaign} pages={ai.pages} suggested={ai.suggested} request={aiRequest} onApply={applyChange}/>}
         {result && <p className="aside-hint">{fromPicture
           ? `${picScale === 'planet' ? 'The picture is fitted over the whole planet, which wraps east to west like a globe.' : `The picture is fitted to the map, ${result.scale!.width.toLocaleString()} ${result.scale!.unit} across.`} Anything outside the picture is sea. Climate, biomes, rivers and towns are worked out as for a generated map, and you can keep shaping it afterwards. This replaces the terrain and the rivers and roads it made before.`
           : hand
