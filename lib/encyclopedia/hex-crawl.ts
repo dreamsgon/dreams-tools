@@ -11,8 +11,8 @@ export const paces = {
 } as const;
 export type Pace = keyof typeof paces;
 export const HOURS_PER_DAY = 8;
-/** How much longer each terrain takes to cross than open ground. Sea can't be walked. */
-export const terrainCost = [Infinity, 1, 1.5, 1.5, 2, 1, 2, 1.5];
+/** How much longer each terrain takes to cross than open ground, by terrain number. Sea and deep sea can't be walked; sea ice can. */
+export const terrainCost = [Infinity, 1, 1.5, 1.5, 2, 1, 2, 1.5, Infinity, 2, 2, 1.5, 1.5, 2, 1, 1, 2, 1.5];
 
 /** The label printed on a cell, like 13.07 for column 13, row 7. */
 export function cellLabel(m: MapData, i: number) {

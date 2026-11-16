@@ -1,5 +1,6 @@
 import { rollTarget } from './inline.ts';
 import type { StatField } from './world-model.ts';
+import { statRollDice, statRollHint, statRolls, type StatRoll } from './stat-rolls.ts';
 
 /** A piece of a statblock line: plain text, or a roll with the text it came from. */
 export type Segment = { text: string; formula?: string; context?: string };
@@ -49,13 +50,14 @@ export function statblockRolls(text: string, detect = true) {
   return text.split('\n').flatMap(line => statblockSegments(line, detect)).filter(s => s.formula);
 }
 
-/** What a sheet field rolls when clicked, or null. */
-export function fieldRoll(field: Pick<StatField, 'type' | 'roll' | 'rollFormula'>, value: unknown): string | null {
-  const roll = field.roll ?? 'none';
-  if (roll === 'none' || value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
-  if (roll === 'd20') { const n = Number(value); return Number.isFinite(n) && Number.isInteger(n) && Math.abs(n) <= 1000 ? `1d20${n < 0 ? '' : '+'}${n}` : null; }
-  if (roll === 'formula') return rollTarget(String(value))?.formula ?? null;
-  const template = field.rollFormula ?? '';
-  if (!template.includes('{value}')) return null;
-  return rollTarget(template.replaceAll('{value}', String(value)).replace(/\+\s*-/g, '-'))?.formula ?? null;
+/** What a sheet field rolls when clicked (its first roll), or null. */
+export function fieldRoll(field: Pick<StatField, 'type' | 'roll' | 'rollFormula'> & { rolls?: StatRoll[] }, value: unknown): string | null {
+  const r = statRolls(field)[0];
+  return r ? statRollDice(r.formula, value) : null;
+}
+
+/** Why a field set to roll has nothing to roll yet, for a hint under it; null when it rolls or isn't set to roll. */
+export function fieldRollHint(field: Pick<StatField, 'type' | 'roll' | 'rollFormula'> & { rolls?: StatRoll[] }, value: unknown): string | null {
+  const r = statRolls(field)[0];
+  return r ? statRollHint(r.formula, value, field.type) : null;
 }

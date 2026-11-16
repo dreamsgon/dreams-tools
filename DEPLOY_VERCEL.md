@@ -107,6 +107,8 @@ Vercel keeps the Function bundles of every retained deployment, previews include
 - Project Settings > Build and Deployment > Deployment Retention Policy: keep Pre-Production (previews) for a short period, such as 7 days, and Canceled and Errored for 1 day. Production can stay longer for rollbacks.
 - Delete merged branches on GitHub (or turn on "Automatically delete head branches"), so their last previews stop being kept.
 - Usage changes the day after deleting deployments; amounts already recorded for earlier days stay.
+- Pushes to `claude/**` branches do not deploy (`git.deploymentEnabled` in `vercel.json`); main still deploys to production. To preview such a branch, deploy it by hand from the Vercel dashboard or remove that rule.
+- Roll-card avatars are fetched by Discord from `/api/discord/avatar` on the production domain (`VERCEL_PROJECT_PRODUCTION_URL`, or `APP_ORIGIN` if set), so only that function carries the image library.
 - Keep server code from pulling large native packages into many functions. `next.config.ts` drops sharp's musl build, which Vercel never uses. [Deployment Storage](https://vercel.com/docs/deployment-storage), [Optimize Deployment Storage](https://vercel.com/docs/deployment-storage/optimize)
 
 ## RPG Encyclopedia

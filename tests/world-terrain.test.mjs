@@ -15,7 +15,7 @@ test("paint runs round trip", () => {
 test("decoding rejects paint that doesn't cover the map exactly", () => {
   assert.equal(decodePaint(2, 2, "13"), null);
   assert.equal(decodePaint(2, 2, "15"), null);
-  assert.equal(decodePaint(2, 2, "84"), null);
+  assert.equal(decodePaint(2, 2, "I4"), null); // terrains stop at H (17)
   assert.equal(decodePaint(2, 2, "1-4"), null);
   assert.ok(decodePaint(2, 2, "14"));
 });

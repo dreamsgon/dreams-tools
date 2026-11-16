@@ -1,4 +1,5 @@
 import {scopeMapWeather} from './map-weather.ts';
+import { statRows } from './stat-rolls.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
@@ -16,6 +17,12 @@ import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
 import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
+import {inventorySchema,spellsSchema,itemSettingsSchema,itemSettingsOf,playerInventory,playerSpells,playerItemSettings,type PlayerInventory,type PlayerSpell} from './items.ts';
+import {storeSchema,storeRefs,remapStore,storeSearchText,playerStore,type PlayerStore} from './stores.ts';
+import {galaxySchema} from './galaxies.ts';
+import {sectorSchema} from './sectors.ts';
+import {starSystemSchema,systemSearchText,systemRefs,remapSystem} from './star-systems.ts';
+import {planetSchema} from './planets.ts';
 import {tiesSchema,tieTypesSchema,tieTypesOf,remapTies,tieSearchText} from './ties.ts';
 import {playerTies,type PlayerTie} from './tie-connections.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -27,10 +34,21 @@ export const githubSchema = z.object({
 export const visibilitySchema = z.enum(["gm", "players"]);
 export const tabSchema = z.object({id, title:name, body:z.string().max(100000), visibility:visibilitySchema});
 export const statFieldSchema = z.object({
-  id, label:name, section:z.string().trim().max(100), type:z.enum(["text","number","textarea","checkbox","select"]),
+  id, label:name, section:z.string().trim().max(100), type:z.enum(["text","number","textarea","checkbox","select","none"]),
   options:z.array(z.string().trim().min(1).max(100)).max(40), visibility:visibilitySchema, archived:z.boolean(),
   // Optional (added later): what clicking the value rolls. d20 = 1d20 + the number; formula = the text itself; custom = rollFormula with {value}.
   roll:z.enum(["none","d20","formula","custom"]).optional(), rollFormula:z.string().trim().max(200).optional(),
+  // Optional (added later, the rollable sheet): named rolls, like a spell's Attack and Damage. Formulas may use {value}.
+  // When present they replace roll / rollFormula (see stat-rolls.ts). note is a short line under the stat's name.
+  rolls:z.array(z.object({name:z.string().trim().min(1).max(40),formula:z.string().trim().min(1).max(200),
+    // Optional: a target, so the roll card says Success or Fail (at least 15, at most {value}).
+    success:z.object({op:z.enum(["atLeast","atMost"]),against:z.string().trim().min(1).max(100)}).optional()})).max(6).optional(),
+  note:z.string().trim().max(120).optional(),
+  // Optional (added later): a longer description, like what a feature does; shown as its tooltip and in its details.
+  description:z.string().trim().max(2000).optional(),
+  // Optional (rollable sheet part 2): a worked-out value shown beside the value and read as {Name mod}, like floor(({value}-10)/2);
+  // and a tracker (by name, since each character has its own) that rolling this stat spends from.
+  derived:z.string().trim().max(200).optional(), spend:z.object({tracker:z.string().trim().min(1).max(40),n:z.number().int().min(1).max(1000)}).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
 export const characterSchema = z.object({
@@ -44,6 +62,8 @@ export const characterSchema = z.object({
   sheet:sheetSchema.optional(),
   // Optional (added later): small gauges such as Shields or Stress (trackers.ts). Players get the shown ones when stats are shared or the page is theirs to edit.
   trackers:trackersSchema.optional(),
+  // Optional (added later): money and items, and spells or powers (items.ts). The character's own player always sees both; others when shared.
+  inventory:inventorySchema.optional(), spells:spellsSchema.optional(), spellsVisibility:visibilitySchema.optional(),
 });
 export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
@@ -91,7 +111,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the quest categories in their order. Without it a campaign has Main, Side and Personal.
   questCategories:questCategoriesSchema.optional(),
   // Optional (added later): how the AI writes recaps, The story so far and generator text (ai-styles.ts). Never sent to players.
-  aiWriting:aiWritingSchema.optional() });
+  aiWriting:aiWritingSchema.optional(),
+  // Optional (added later): coins, weight, item categories, what spells are called and what players may change (items.ts).
+  items:itemSettingsSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -105,7 +127,7 @@ export const pictureSchema = z.object({
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
-    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest", "vehicle"]),
+    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest", "vehicle", "store", "galaxy", "sector", "system"]),
     order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
     // Optional (added later): on an organization (faction) page, its Profile tab.
     org:orgSchema.optional(),
@@ -113,6 +135,16 @@ export const entrySchema = z.object({
     profile:profileSchema.optional(),
     // Optional (added later): on a vehicle page (ship, airship, carriage, car…), its type, stats, gauges, owner, commander and location.
     vehicle:vehicleSchema.optional(),
+    // Optional (added later): on a store page, the shop, container, loot or party stash (stores.ts).
+    store:storeSchema.optional(),
+    // Optional (added later): on a galaxy page, the galaxy (a real one or a generated one) and its art (galaxies.ts).
+    galaxy:galaxySchema.optional(),
+    // Optional (added later): on a sector page, its hex map of star systems (sectors.ts). A sector usually sits inside a galaxy page.
+    sector:sectorSchema.optional(),
+    // Optional (added later): on a star system page, its star, worlds, moons, belts and hooks (star-systems.ts). It usually sits inside a sector page.
+    starSystem:starSystemSchema.optional(),
+    // Optional (added later): on a place page charted from a star system's survey chart, which world it is and a copy of its fields (planets.ts).
+    planet:planetSchema.optional(),
     // Optional (added later): typed ties from this page to others (Parent of, Rival of, Sails from…). Shown on both pages (tie-connections.ts).
     ties:tiesSchema.optional(),
     // Optional (added later): the template this page was made from, and its info box values by field id.
@@ -147,6 +179,16 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
           for(const ref of refs.characters){const t=entries.get(ref);if(t&&t.kind!=='character')bad('People and members in a profile must be character pages');}}
         if(e.profile&&e.kind!=='character')bad('A character profile requires a character entry');
         if(e.vehicle&&e.kind!=='vehicle')bad('Vehicle details require a vehicle entry');
+        if(e.store&&e.kind!=='store')bad('Store details require a store page');
+        if(e.galaxy&&e.kind!=='galaxy')bad('Galaxy details require a galaxy page');
+        if(e.sector&&e.kind!=='sector')bad('A sector hex map requires a sector page');
+        if(e.starSystem&&e.kind!=='system')bad('A survey chart requires a star system page');
+        if(e.planet){if(e.kind!=='place')bad('A charted world requires a place page');
+          const sys=entries.get(e.planet.systemPageId);if(sys&&(sys.kind!=='system'||sys.worldId!==e.worldId))bad('A charted world must point at a star system page in its world');
+          const map=e.planet.worldMapId?entries.get(e.planet.worldMapId):undefined;if(map&&(map.kind!=='map'||map.worldId!==e.worldId))bad('A charted world’s world map must be a map page in its world');}
+        if(e.starSystem)for(const ref of systemRefs(e.starSystem)){const t=entries.get(ref);if(!t)continue;if(t.kind!=='faction')bad('A star system can only point at organization pages');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A star system cannot point outside its world or campaign');}
+        if(e.store)for(const ref of storeRefs(e.store)){const t=entries.get(ref);if(!t)continue;if(t.kind!=='character')bad('A store can only point at character pages');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A store cannot point outside its world or campaign');}
+        if(e.character?.spells){const trackers=new Set((e.character.trackers??[]).map(t=>t.id));if(e.character.spells.some(x=>x.cost&&!trackers.has(x.cost.trackerId)))bad('A spell can only spend from one of the character’s own trackers');}
         if(e.vehicle){for(const ref of vehicleRefs(e.vehicle)){const t=entries.get(ref);if(!t)continue;if(ref===e.id)bad('A vehicle cannot point at itself');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A vehicle cannot point outside its world or campaign');}
           const kindOf=(id?:string)=>id?entries.get(id)?.kind:undefined,owner=kindOf(e.vehicle.ownerId),commander=kindOf(e.vehicle.commanderId);
           if(commander&&commander!=='character')bad('A vehicle’s commander must be a character page');
@@ -230,7 +272,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
         campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; return copy; })],
-        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
+        entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,...(e.mapData.zoomOf?{zoomOf:ids.has(e.mapData.zoomOf.mapId)?{...e.mapData.zoomOf,mapId:ref(e.mapData.zoomOf.mapId)}:undefined}:{}),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, store:e.store?remapStore(e.store,id=>ids.get(id)):undefined, sector:e.sector?{...e.sector,systems:e.sector.systems.map(x=>({...x,pageId:x.pageId?ids.get(x.pageId):undefined}))}:undefined, starSystem:e.starSystem?remapSystem(e.starSystem,id=>ids.get(id)):undefined, planet:e.planet?{...e.planet,systemPageId:ids.get(e.planet.systemPageId)??e.planet.systemPageId,worldMapId:e.planet.worldMapId?ids.get(e.planet.worldMapId):undefined}:undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
@@ -310,7 +352,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
-   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
+   const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"||e.kind==="store"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
@@ -319,10 +361,17 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const sheet=(showStats||ownSheet)&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
    // Trackers: on a character whose stats are shared, or one this member may edit (they change them there).
    const trackers:PlayerTracker[]=e.kind==='character'&&(showStats||!!mine?.has(e.id))?playerTrackers(e.character?.trackers):[];
-   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length)return [];
+   // Inventory and spells: on a page this member may edit, or when the GM shares them.
+   const own=!!mine?.has(e.id),items=itemSettingsOf(c);
+   const inventory=e.kind==='character'&&e.character&&(own||e.character.inventory?.visibility==='players')&&(e.character.inventory||own)?playerInventory(e.character.inventory,items):undefined;
+   const spells=e.kind==='character'&&e.character&&items.spells.on&&(own||e.character.spellsVisibility==='players')&&(e.character.spells?.length||own)?playerSpells(e.character.spells):undefined;
+   // A store: when the GM shares it (and it is for one of this member's characters), or one of their characters runs it.
+   const ownStore=!!e.store?.ownerId&&!!mine?.has(e.store.ownerId),forMe=!e.store?.who||e.store.who.some(id=>mine?.has(id));
+   const store=e.kind==='store'&&e.store&&(ownStore||(e.store.visibility==='players'&&!e.store.awaiting&&forMe))?playerStore(e.store,mine??new Set(),Date.now()):undefined;
+   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(fields,values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -343,7 +392,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  for(const e of entries){if(e.info)e.info=e.info.filter(r=>!r.pageId||readable.has(r.pageId));if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null,rewardIds:e.quest.rewardIds.filter(id=>readable.has(id)),objectives:e.quest.objectives.map(o=>({...o,...('targetId' in o?{targetId:o.targetId&&readable.has(o.targetId)?o.targetId:null}:{}),...('whereId' in o?{whereId:o.whereId&&readable.has(o.whereId)?o.whereId:null}:{})}))};if(e.mapData)e.mapData={...e.mapData,paths:e.mapData.paths?.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null})),labels:e.mapData.labels?.map(l=>({...l,entryId:l.entryId&&readable.has(l.entryId)?l.entryId:null})),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
  const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
- return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look)},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
+ return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look),items:playerItemSettings(itemSettingsOf(c))},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
 }
 export type PlayerCampaign=ReturnType<typeof playerCampaign>;
 // Pages players can read that link to this one, from the text players can read (shared tabs, GM secrets removed).
@@ -351,4 +400,4 @@ function playerLinkedPages(s:Workspace,target:Entry,pages:Entry[]){
  const link=/\[\[([^\]|\n]+)(?:\|[^\]\n]*)?\]\]/g;
  return pages.filter(e=>e.id!==target.id).filter(e=>[...(e.overviewVisibility==='players'?[e.body]:[]),...(e.tabs??[]).filter(t=>t.visibility==='players').map(t=>t.body)].some(t=>[...stripSecrets(t).matchAll(link)].some(m=>resolveLink(s,e,m[1])?.id===target.id))).map(e=>({id:e.id,title:e.title}));
 }
-export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),profileSearchText(e.profile),vehicleSearchText(e.vehicle),tieSearchText(e.ties),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
+export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),profileSearchText(e.profile),vehicleSearchText(e.vehicle),storeSearchText(e.store),e.galaxy?.facts.type,e.galaxy?.summary,...(e.sector?.systems??[]).map(x=>x.name+' '+x.note),systemSearchText(e.starSystem),e.planet?`${e.planet.profile.type} ${e.planet.profile.kind}`:'',tieSearchText(e.ties),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}

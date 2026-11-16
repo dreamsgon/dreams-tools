@@ -12,9 +12,9 @@ export type NotePage = { id: string; title: string; kind: string; excerpt: strin
 export type PageGroup = "Places" | "Characters" | "Factions and lore" | "Quests" | "Notes";
 
 const roleName = { pc: "Player character", companion: "Companion", npc: "NPC", creature: "Creature" } as const;
-const kindName: Record<string, string> = { place: "Place", faction: "Organization", lore: "Lore", note: "Note", session: "Session", map: "Map", quest: "Quest", vehicle: "Vehicle" };
+const kindName: Record<string, string> = { place: "Place", faction: "Organization", lore: "Lore", note: "Note", session: "Session", map: "Map", quest: "Quest", vehicle: "Vehicle", store: "Store", galaxy: "Galaxy", sector: "Sector", system: "Star system" };
 const groupOf = (kind: string): PageGroup | null =>
-  kind === "place" || kind === "map" ? "Places" : kind === "character" ? "Characters" : kind === "faction" || kind === "lore" || kind === "vehicle" ? "Factions and lore"
+  kind === "place" || kind === "map" || kind === "galaxy" || kind === "sector" || kind === "system" ? "Places" : kind === "character" ? "Characters" : kind === "faction" || kind === "lore" || kind === "vehicle" || kind === "store" ? "Factions and lore"
     : kind === "quest" ? "Quests" : kind === "note" || kind === "session" ? "Notes" : null;
 export const PAGE_GROUPS: PageGroup[] = ["Places", "Characters", "Factions and lore", "Quests", "Notes"];
 

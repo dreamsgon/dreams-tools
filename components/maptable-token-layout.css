@@ -41,6 +41,12 @@
 .token-statblock-bar a:hover{text-decoration:underline}
 .token-statblock-bar .icon-only{display:inline-grid;place-items:center;width:24px;height:24px;margin-left:auto;padding:0;border:0;border-radius:var(--radius-sm);background:none;color:var(--muted);cursor:pointer}
 .token-statblock-bar .icon-only:hover{background:var(--hover);color:var(--ink)}
+.token-sheet-rolls{display:flex;flex-direction:column;gap:6px}
+.token-sheet-rolls h4{margin:0;font-size:12px;font-weight:600;color:var(--ink)}
+.token-sheet-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px;font-size:12px}
+.token-sheet-row small{color:var(--muted);font-variant-numeric:tabular-nums}
+.token-sheet-chips{display:flex;flex-wrap:wrap;gap:4px}
+.token-sheet-chips .roll-chip span{color:var(--muted);font-variant-numeric:tabular-nums}
 .token-statblock .statblock{font-size:13px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .token-statblock .statblock p{margin:0 0 4px}
 .token-statblock .statblock b{font-weight:600}

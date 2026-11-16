@@ -1,6 +1,7 @@
 import { NOT_IMPORTED_TAB, SHEET_FORMAT, type ImportFile } from "./sheet-import.ts";
 import { sheetRollGroups } from "./sheet-rolls.ts";
 import type { SheetItem } from "./sheet-link.ts";
+import { formatMoney, itemSettingsOf } from "./items.ts";
 import type { Entry, StatField, Workspace } from "./world-model.ts";
 
 /*
@@ -19,7 +20,7 @@ export type ExportResult = { file: SheetFile; warnings: string[] };
 
 const maxListText = 2000, maxNotes = 20000;
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-const typeWords: Record<StatField["type"], ImportFile["fields"][number]["type"]> = { number: "number", text: "text", textarea: "longtext", checkbox: "checkbox", select: "choice" };
+const typeWords: Record<StatField["type"], ImportFile["fields"][number]["type"]> = { number: "number", text: "text", textarea: "longtext", checkbox: "checkbox", select: "choice", none: "text" };
 const int = (v: string | undefined) => { const n = Number(String(v ?? "").replace(/,/g, "").trim()); return Number.isFinite(n) && String(v ?? "").trim() !== "" ? Math.round(n) : undefined; };
 const cut = (s: string, n: number, what: string, warnings: string[]) => {
   if (s.length <= n) return s;
@@ -28,7 +29,8 @@ const cut = (s: string, n: number, what: string, warnings: string[]) => {
 };
 
 /** What a stat form field's roll looks like in the file ("d20", "self" or a formula with {value}). */
-export function fileRollOf(f: Pick<StatField, "roll" | "rollFormula">): string | undefined {
+export function fileRollOf(f: Pick<StatField, "roll" | "rollFormula" | "rolls">): string | undefined {
+  if (f.rolls) { const r = f.rolls[0]?.formula; return r === "1d20+{value}" ? "d20" : r === "{value}" ? "self" : r || undefined; }
   if (f.roll === "d20") return "d20";
   if (f.roll === "formula") return "self";
   if (f.roll === "custom" && f.rollFormula) return f.rollFormula;
@@ -147,6 +149,13 @@ export function exportSheet(s: Workspace, entryId: string, opts: { campaignId: s
     if (listItems.length) lists.push({ title: t.title.slice(0, 60), visibility: t.visibility, items: listItems });
   }
 
+  // The Inventory and Spells tabs as lists, and the money.
+  const setup = itemSettingsOf(campaign), inv = ch?.inventory, invShown = !!inv && (!players || inv.visibility === "players");
+  if (invShown && inv!.items.length && lists.length < 12) lists.push({ title: "Inventory", visibility: inv!.visibility ?? "gm", items: inv!.items.filter(i => !players || !i.gm).slice(0, 200).map(i => ({ name: i.name.slice(0, 120), ...(i.note ? { text: cut(i.note, maxListText, `“${i.name}” in the inventory`, warnings) } : {}), quantity: i.qty, ...(i.uses ? { uses: i.uses } : {}), ...(i.equipped ? { equipped: true } : {}), ...(i.weight !== undefined ? { weight: i.weight } : {}), ...(i.price !== undefined ? { value: formatMoney(i.price, setup.coins).slice(0, 40) } : {}) })) });
+  const spellsShown = !!ch?.spells?.length && (!players || ch.spellsVisibility === "players");
+  if (spellsShown && lists.length < 12) lists.push({ title: setup.spells.tab.slice(0, 60), visibility: ch!.spellsVisibility ?? "gm", items: ch!.spells!.filter(x => !players || !x.gm).slice(0, 200).map(x => { const details = setup.spells.columns.map(c => x.details?.[c]).filter(Boolean).join(" · "), rolls = (x.rolls ?? []).map(r => `[[${r.formula}|${r.name}]]`).join(" "), text = [details, x.text, rolls].filter(Boolean).join("\n"); return { name: x.name.slice(0, 120), ...(text ? { text: cut(text, maxListText, `“${x.name}”`, warnings) } : {}) }; }) });
+  const money = invShown && inv!.coins ? formatMoney(inv!.coins, setup.coins).slice(0, 60) : undefined;
+
   const profileShown = !!e.profile && (!players || e.profile.visibility === "players");
   const traits = profileShown ? e.profile!.traits.filter(t => !players || !t.gm).map(t => t.label.slice(0, 30)).slice(0, 12) : [];
   const bodyShown = !players || e.overviewVisibility === "players";
@@ -168,6 +177,7 @@ export function exportSheet(s: Workspace, entryId: string, opts: { campaignId: s
     rolls: rolls.slice(0, 150),
     lists,
     conditions: players ? [] : conditions.slice(0, 30),
+    ...(money ? { money } : {}),
     ...(notes ? { notes } : {}),
     unmapped: players ? [] : unmapped.slice(0, 50),
     source: { from: `RPG Tools (${campaign.name})`.slice(0, 120), filledBy: "RPG Tools", date: now.slice(0, 10) },
