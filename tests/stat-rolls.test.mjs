@@ -53,7 +53,7 @@ test('new stats join the end of their group',()=>{
  assert.deepEqual(placeStat([f('a','A')],f('n','C')).map(x=>x.id),['a','n']);
 });
 
-test('named rolls and no-value stats save, export, roll from stores and stay off player pages',()=>{
+test('named rolls and no-value stats save, export, roll from stores and reach player pages with their dice',()=>{
  const field={id:'push',label:'Push yourself',section:'Moves',type:'none',options:[],visibility:'players',archived:false,note:'Spends 1 Stress',rolls:[{name:'Roll',formula:'1d20+5'}]};
  assert.equal(statFieldSchema.safeParse(field).success,true);
  assert.equal(statFieldSchema.safeParse({...field,rolls:Array.from({length:7},(_,i)=>({name:'R'+i,formula:'1d6'}))}).success,false,'six rolls at most');
@@ -71,7 +71,9 @@ test('named rolls and no-value stats save, export, roll from stores and stay off
  assert.equal(fileRollOf({rolls:[]}),undefined);
  const pc=playerCampaign(s,c.id),mara=pc.entries.find(x=>x.id==='demo-mara');
  assert.ok(mara.stats.some(x=>x.id==='str'));
- assert.ok(!mara.stats.some(x=>x.id==='push'),'a stat with no value is not a blank line for players');
+ const push=mara.stats.find(x=>x.id==='push');
+ assert.deepEqual(push.rolls,[{name:'Roll',dice:'1d20+5'}],'players get the worked-out dice');
+ assert.equal(push.note,'Spends 1 Stress');
 });
 
 test('formulas read other stats, worked-out values and simple sums',()=>{
@@ -132,4 +134,18 @@ test('worked-out values, targets and spending save, and store rolls read other s
  assert.equal(characterRoll(ch,[agi,push],'c','Agility'),'1d20+3');
  assert.equal(characterRoll(ch,[agi,push],'c','Push'),'1d20+16');
  assert.equal(characterRoll(ch,[{...agi,archived:true},push],'c','Agility'),null);
+});
+
+test('part 3: a Maptable token finds the sheet of its own campaign, else the paired one', async () => {
+  const { sheetCampaignOf } = await import('../lib/encyclopedia-characters.ts');
+  const { statRows: rows } = await import('../lib/encyclopedia/stat-rolls.ts');
+  const fields = [{ id: 'agi', label: 'Agility', section: 'Attributes', type: 'number', rolls: [{ name: 'Check', formula: '1d20+{value}', success: { op: 'atLeast', against: '15' } }] }];
+  const raw = { campaigns: [{ id: 'c1', name: 'One', maptableCampaignId: 'm1', statFields: fields }, { id: 'c2', name: 'Two' }] };
+  const lore = { campaignId: null, character: { statsByCampaign: { c1: { agi: 4 } } } };
+  const s = sheetCampaignOf(raw, lore, 'm1');
+  assert.equal(s.campaign.id, 'c1');
+  assert.deepEqual(rows(s.campaign.statFields, s.values)[0].rolls, [{ name: 'Check', dice: '1d20+4', need: { op: 'atLeast', n: 15 } }]);
+  assert.equal(sheetCampaignOf(raw, lore, 'other'), undefined, 'no paired campaign: no sheet');
+  assert.equal(sheetCampaignOf(raw, { campaignId: 'c2' }, 'm1'), undefined, 'its own campaign has no sheet');
+  assert.equal(sheetCampaignOf(raw, { campaignId: 'c1' }, null).values.agi, undefined);
 });

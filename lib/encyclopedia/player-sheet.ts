@@ -14,6 +14,8 @@ import { clipRows, playerSheet, refreshSheet, sheetOpenUrl, sheetSchema, type Sh
 import { sheetRollGroups } from './sheet-rolls.ts';
 import { defaultCharacter, visibleEntries, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
 import type { Rights } from './player-edit.ts';
+import { statRows } from './stat-rolls.ts';
+import { setTrackerValue } from './trackers.ts';
 
 export class PlayerSheetError extends Error {
   status: number;
@@ -121,3 +123,28 @@ export function rollOf(s: Workspace, campaignId: string, rights: Rights, linker:
   for (const g of sheetRollGroups(shown)) for (const r of g.rows) for (const b of r.buttons) if (b.itemId === itemId) return { entryId: e.id, character: e.title, name: b.rollName, formula: b.formula };
   return no('That roll is not on the sheet.', 404);
 }
+
+/**
+ * A roll from the campaign's stat sheet on a member's own character (one they may edit, with its stats shared): the
+ * dice worked out from the stats players can see, its target, and the tracker it spends from. `spend` returns the
+ * workspace with that tracker lowered, or refuses when there is too little.
+ */
+export function statRollOf(s: Workspace, campaignId: string, rights: Rights, entryId: string, statId: string, rollName: string) {
+  const e = character(s, campaignId, rights, entryId), c = s.campaigns.find(x => x.id === campaignId)!;
+  if (e.character?.statsVisibility !== 'players') no('Your GM hasn’t shared this character’s stats yet.');
+  const shown = (c.statFields ?? []).filter(f => !f.archived && f.visibility === 'players');
+  const row = statRows(shown, e.character?.statsByCampaign[c.id] ?? {}).find(r => r.id === statId) ?? no('That stat is not on the sheet.', 404);
+  const roll = row.rolls.find(r => r.name === rollName) ?? no('That roll is not on the sheet.', 404);
+  if (!roll.dice) no(roll.hint ?? 'That roll can’t be rolled yet.', 400);
+  const tracker = row.spend ? (e.character?.trackers ?? []).find(t => !t.gm && t.label.trim().toLowerCase() === row.spend!.tracker.trim().toLowerCase()) : undefined;
+  if (row.spend && !tracker) no(`${row.label} spends ${row.spend.tracker}, and ${e.title} has no tracker called that. Ask your GM.`, 400);
+  if (row.spend && tracker && tracker.value < row.spend.n) no(`Not enough ${tracker.label}: ${tracker.value} left, ${row.label} needs ${row.spend.n}.`, 409);
+  const spend = (data: Workspace): Workspace => {
+    if (!row.spend || !tracker) return data;
+    const page = data.entries.find(x => x.id === e.id)!, ch = page.character ?? defaultCharacter(), now = (ch.trackers ?? []).find(t => t.id === tracker.id);
+    if (!now || now.value < row.spend.n) no(`Not enough ${tracker.label} left.`, 409);
+    return put(data, { ...page, character: { ...ch, trackers: setTrackerValue(ch.trackers ?? [], tracker.id, now!.value - row.spend.n) } });
+  };
+  return { entryId: e.id, character: e.title, name: rows(row.label, roll.name, row.rolls.length), dice: roll.dice!, need: roll.need, spent: row.spend && tracker ? { label: tracker.label, n: row.spend.n } : undefined, spend };
+}
+const rows = (label: string, name: string, count: number) => count > 1 || name !== 'Roll' ? `${label} · ${name}` : label;

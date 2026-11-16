@@ -178,3 +178,29 @@ export function placeStat<F extends { section: string }>(fields: F[], field: F):
   let at = -1; fields.forEach((f, i) => { if (f.section === field.section) at = i; });
   return at < 0 ? [...fields, field] : [...fields.slice(0, at + 1), field, ...fields.slice(at + 1)];
 }
+
+export type StatRowRoll = { name: string; dice: string | null; hint?: string; need?: { op: StatSuccess['op']; n: number } };
+export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; worked?: number; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
+export type RowField = { id: string; label: string; section: string; type: StatField['type']; note?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
+
+/**
+ * The sheet as rows, with every roll worked out for this character: what a player page and a Maptable token show.
+ * Only `fields` are on the sheet, so a player's rows never read a GM-only stat (a roll naming one simply can't roll).
+ */
+/** Rows are read by players, who can't fix a formula, so a broken one says who can. */
+const rowHint = (h: string | null) => h === null ? undefined : h.startsWith('Its roll needs dice') ? 'Your GM hasn’t finished this roll yet.' : h;
+
+export function statRows(fields: RowField[], values: Record<string, unknown>): StatRow[] {
+  const live = fields.filter(f => !f.archived), sheet = sheetOf(live, values);
+  return live.map(f => {
+    const v = values[f.id] ?? null, worked = f.derived ? derivedValue({ derived: f.derived, value: v }, sheet) : null;
+    const rolls = statRolls(f).map(r => {
+      const dice = statRollDice(r.formula, v, sheet), n = r.success ? targetNumber(r.success, v, sheet) : null;
+      return { name: r.name, dice, ...(dice ? {} : { hint: rowHint(statRollHint(r.formula, v, f.type, sheet)) }), ...(r.success && n !== null ? { need: { op: r.success.op, n: Number(n) } } : {}) };
+    });
+    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(worked !== null ? { worked } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
+  });
+}
+
+/** Success or fail from a worked-out target (a row's `need`), for rolls made where the sheet isn't at hand. */
+export const outcomeOf = (total: number, need: StatRowRoll['need']): Outcome | null => need ? { ok: need.op === 'atLeast' ? total >= need.n : total <= need.n, text: `${(need.op === 'atLeast' ? total >= need.n : total <= need.n) ? 'Success' : 'Fail'} · needed ${need.n} ${need.op === 'atLeast' ? 'or more' : 'or under'}` } : null;
