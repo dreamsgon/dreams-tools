@@ -1,7 +1,8 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Route, Shield, Type, Undo2, Waves } from 'lucide-react';
-import { decodePaint, encodePaint, fogBrush, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
+import { decodePaint, encodePaint, fogBrush, isWater, terrainIndex, type TerrainId, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
 import { newId, playerCampaign, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
 import { holdersByPlace, pinTints, playerHoldersByPlace } from '@/lib/encyclopedia/org-holdings';
 import { paintStroke, thinLine } from '@/lib/encyclopedia/terrain-art';
@@ -14,11 +15,14 @@ import { mapLooks, nameFonts, type MapLookId } from '@/lib/encyclopedia/map-look
 import { MapCanvas, useMapImage } from './map-canvas';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
-import { WorldGenerateDialog } from './world-generate-dialog';
+// The generators run only in the browser, so they stay out of the server bundle.
+const WorldGenerateDialog = dynamic(() => import('./world-generate-dialog').then(m => m.WorldGenerateDialog), { ssr: false });
 import { confirmDialog } from '../confirm-dialog';
 
 type Tool = 'select' | 'terrain' | 'river' | 'road' | 'border' | 'place' | 'label' | 'fog';
-type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels'>;
+type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels' | 'columns' | 'rows' | 'fog' | 'hexes' | 'party'>;
+/** Brush colours grouped as water, open land, wet and wooded land, then high and cold ground. */
+const brushOrder = ['sea', 'deep', 'seaice', 'grassland', 'steppe', 'savanna', 'desert', 'barren', 'marsh', 'forest', 'boreal', 'jungle', 'hills', 'mountains', 'volcanic', 'snow', 'tundra', 'glacier'].map(id => terrainIndex[id as TerrainId]);
 const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] = [
   { id: 'select', name: 'Select', key: 'V', icon: MousePointer2 },
   { id: 'terrain', name: 'Terrain', key: 'B', icon: Paintbrush },
@@ -72,7 +76,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const current = live ?? (painted ? mapPaint(map) : null);
   const areaMaps = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.kind === 'map' && e.id !== entry.id);
 
-  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels });
+  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels, columns: map.columns, rows: map.rows, fog: map.fog, hexes: map.hexes, party: map.party });
   /** A change that Undo can take back. */
   const edit = (patch: Partial<MapData>) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); };
   const setStyle = (patch: NonNullable<MapData['mapStyle']>) => setMap({ mapStyle: { ...map.mapStyle, ...patch } });
@@ -199,11 +203,11 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
         {tool === 'terrain' && painted && <>
           <h3><Paintbrush size={17}/> Terrain brush</h3>
           <div className="world-swatches" role="group" aria-label="Terrain">
-            {terrains.map((t, i) => <button key={t.name} aria-pressed={terrain === i} onClick={() => setTerrain(i)}><span style={{ background: t.color }}/>{t.name}</button>)}
+            {brushOrder.map(i => { const t = terrains[i]; return <button key={t.id} aria-pressed={terrain === i} onClick={() => setTerrain(i)}><span style={{ background: t.color }}/>{t.name}</button>; })}
           </div>
           <label className="world-field">Brush size <output>{brushMiles ? `${brushMiles} ${map.scale!.unit} across` : `${radius * 2} squares`}</output>
             <input type="range" min={1} max={20} value={radius} onChange={e => setRadius(+e.target.value)}/></label>
-          <label className="world-check"><input type="checkbox" checked={landOnly} disabled={terrain === 0} onChange={e => setLandOnly(e.target.checked)}/><span>Only paint on land<small>The sea and coastline stay put while you paint forests or hills.</small></span></label>
+          <label className="world-check"><input type="checkbox" checked={landOnly} disabled={isWater(terrain)} onChange={e => setLandOnly(e.target.checked)}/><span>Only paint on land<small>The sea and coastline stay put while you paint forests or hills.</small></span></label>
           <p className="aside-hint">Each map cell holds {k} × {k} paint squares, so coasts, forests and mountains can take any shape. Fog and coordinates still use the map cells.</p>
         </>}
         {tool === 'fog' && <>
