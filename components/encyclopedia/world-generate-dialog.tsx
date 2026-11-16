@@ -11,6 +11,7 @@ import {ToolDialog} from './tool-dialog';
 import { MapCanvas } from './map-canvas';
 import { PlanetGlobe } from './planet-globe';
 import { WorldAiCheck } from './world-ai-check';
+import { surveyStart, type SurveyWorld } from '@/lib/encyclopedia/planet-from-system';
 
 const words = ['amber', 'ash', 'briar', 'cinder', 'dusk', 'ember', 'frost', 'gale', 'harrow', 'iron', 'lantern', 'moss', 'raven', 'salt', 'thorn', 'willow'];
 export const randomWorldSeed = () => `${words[Math.floor(Math.random() * words.length)]}-${Math.floor(Math.random() * 900 + 100)}`;
@@ -75,15 +76,21 @@ function landShares(paint: MapData['paint']) {
 }
 
 /** Generate a world: a whole planet, or a continent, coast, islands or inland region, and see it before using it. */
-export function WorldGenerateDialog({ map, ai, onClose, onUse }: { map: MapData; ai?: WorldAiContext; onClose: () => void; onUse: (patch: Partial<MapData>, hand: boolean) => void }) {
-  const [mode, setMode] = useState<'area' | 'planet' | 'hand' | 'picture'>('area'), hand = mode === 'hand';
+export function WorldGenerateDialog({ map, ai, survey, onClose, onUse }: {
+  map: MapData; ai?: WorldAiContext;
+  /** The planet page this map was developed from: a whole planet starts from its survey. */
+  survey?: SurveyWorld;
+  onClose: () => void; onUse: (patch: Partial<MapData>, hand: boolean) => void;
+}) {
+  const fromSurvey = useMemo(() => survey ? surveyStart(survey) : null, [survey]);
+  const [mode, setMode] = useState<'area' | 'planet' | 'hand' | 'picture'>(survey ? 'planet' : 'area'), hand = mode === 'hand';
   const [pic, setPic] = useState<PictureFile | null>(null), [picError, setPicError] = useState(''), [po, setPo] = useState<PictureOptions>(defaultPictureOptions);
   const [picScale, setPicScale] = useState<PictureScale>('continent'), fromPicture = mode === 'picture';
   /** Whether the result is a whole planet; generated ones also get the Land tab, presets and checks. */
   const planet = mode === 'planet' || hand || (fromPicture && picScale === 'planet'), own = hand || fromPicture;
-  const [preset, setPreset] = useState('earthlike'), [tab, setTab] = useState<PlanetTab>('planet'), [globe, setGlobe] = useState(false);
+  const [preset, setPreset] = useState(fromSurvey ? 'survey' : 'earthlike'), [tab, setTab] = useState<PlanetTab>('planet'), [globe, setGlobe] = useState(false);
   const [o, setO] = useState<WorldOptions>(() => ({ ...defaultWorldOptions(map.columns, map.rows, randomWorldSeed()), places: map.pins.length === 0 }));
-  const [p, setP] = useState<PlanetOptions>(() => ({ ...defaultPlanetOptions(o.seed), places: map.pins.length === 0 ? 12 : 0, roads: map.pins.length === 0, landmarks: map.pins.length === 0 }));
+  const [p, setP] = useState<PlanetOptions>(() => fromSurvey ? { ...fromSurvey.options, ...(map.pins.length ? { places: 0, roads: false, landmarks: false } : {}) } : { ...defaultPlanetOptions(o.seed), places: map.pins.length === 0 ? 12 : 0, roads: map.pins.length === 0, landmarks: map.pins.length === 0 });
   const set = (patch: Partial<WorldOptions>) => setO(v => ({ ...v, ...patch }));
   const setPlanetOption = (patch: Partial<PlanetOptions>, keepPreset = false) => { setP(v => ({ ...v, ...patch })); if (!keepPreset) setPreset(''); };
   const setSeed = (seed: string) => { set({ seed }); setPlanetOption({ seed }, true); };
@@ -125,14 +132,15 @@ export function WorldGenerateDialog({ map, ai, onClose, onUse }: { map: MapData;
       const summary = stats ? [`Land ${pct(stats.land)} of the surface, ice ${pct(stats.ice)}, mild enough to live on ${pct(stats.livable)} of the land.`,
         `Land by biome: ${planetBiomes.concat(['hills', 'mountains', 'snow', 'barren'] as typeof planetBiomes).map(id => [stats.shares[terrainIndex[id]] ?? 0, id] as const).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]).slice(0, 7).map(([v, id]) => `${terrains[terrainIndex[id]].name} ${pct(v / Math.max(1e-6, stats.land))}`).join(', ')}.`]
         : hand ? ['An empty sea for now: the GM draws the land by hand afterwards, and biomes follow these settings.'] : [];
-      return { name: ai.title, what: `a whole planet${made}, ${planetSizes[p.size].miles.toLocaleString('en-US')} miles around`, settings, summary: [...summary, ...(hand ? [] : [`${towns} towns and ${rivers} rivers.`])] };
+      const surveyed = survey ? [`On the star system's survey chart: a ${survey.star}-class star, the ${survey.band} zone, ${survey.temperature} °C, ${survey.gravity} g, ${survey.atmosphere} air, ${survey.water} water, ${survey.life} life${survey.hazard && survey.hazard !== 'None' ? `, hazard: ${survey.hazard}` : ''}${survey.moonOf ? `, a moon of ${survey.moonOf}` : ''}.`] : [];
+      return { name: ai.title, what: `a whole planet${made}, ${planetSizes[p.size].miles.toLocaleString('en-US')} miles around`, settings, summary: [...surveyed, ...summary, ...(hand ? [] : [`${towns} towns and ${rivers} rivers.`])] };
     }
     const across = fromPicture ? picScale as WorldAcross : o.across, shares = landShares(result.paint);
     const settings = [s('climate', o.climate, worldClimates.find(c => c.id === o.climate)!.name), s('mountains', Math.round(o.mountains * 100), o.mountains < 0.25 ? 'Few' : o.mountains < 0.6 ? 'Some' : 'Many'),
       ...(!fromPicture && o.kind !== 'inland' ? [s('seaLevel', Math.round(o.seaLevel * 100), `${Math.round(o.seaLevel * 100)}% sea`)] : [])];
     return { name: ai.title, what: `${fromPicture ? 'an area made from a picture' : `a ${worldKinds.find(k => k.id === o.kind)!.name.toLowerCase()} map (${worldKinds.find(k => k.id === o.kind)!.hint.toLowerCase()})`}, ${worldAcross[across].miles.toLocaleString('en-US')} miles across, not a whole planet`, settings,
       summary: [`Land ${pct(shares.land)} of the map.`, ...(shares.kinds.length ? [`Land by terrain: ${shares.kinds.join(', ')}.`] : []), `${towns} towns and ${rivers} rivers.`] };
-  }, [ai, result, planet, p, mode, fromPicture, hand, stats, o, picScale]);
+  }, [ai, result, planet, p, mode, fromPicture, hand, stats, o, picScale, survey]);
   /** A change the AI suggested, applied to these settings. */
   const applyChange = (c: WorldChange) => {
     const v = c.value;
@@ -187,6 +195,10 @@ export function WorldGenerateDialog({ map, ai, onClose, onUse }: { map: MapData;
           </div>
           <div className="planet-panel" id="planet-panel" role="tabpanel" aria-labelledby={`planet-tab-${tab}`}>
             {tab === 'planet' && <>
+              {survey && fromSurvey && <div className="world-survey">
+                <span><strong>From the survey of {survey.name}</strong><small>{fromSurvey.notes.join(' · ')}</small></span>
+                <button type="button" className="button small" aria-pressed={preset === 'survey'} disabled={preset === 'survey'} onClick={() => { setP(v => ({ ...fromSurvey.options, places: v.places, roads: v.roads, landmarks: v.landmarks })); setPreset('survey'); }}>{preset === 'survey' ? 'Survey settings' : 'Back to the survey'}</button>
+              </div>}
               {!own && <div className="world-field">Start from
                 <div className="planet-presets" role="group" aria-label="Kind of planet">{planetPresets.map(x => <button key={x.id} type="button" aria-pressed={preset === x.id} onClick={() => { setP(v => withPreset(v, x.id)); setPreset(x.id); }}><PresetThumb id={x.id}/>{x.name}</button>)}</div>
               </div>}
