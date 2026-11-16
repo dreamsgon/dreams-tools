@@ -43,6 +43,8 @@ import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
 import {defaultOrg} from "@/lib/encyclopedia/org-profile";
 import {defaultProfile} from "@/lib/encyclopedia/character-profile";
 import {newVehicle,vehicleTypesOf} from "@/lib/encyclopedia/vehicles";
+import {newGalaxy} from "@/lib/encyclopedia/galaxies";
+import {GalaxyIcon} from "./galaxy-art";
 import {newStore} from "@/lib/encyclopedia/stores";
 import {ItemSettingsDialog} from "./item-settings";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
@@ -79,8 +81,8 @@ const StatFormBuilder = dynamic(lazyParts.StatFormBuilder);
 const PlayerSharing = dynamic(lazyParts.PlayerSharing);
 const preloadParts = Object.values(lazyParts);
 const PLACE_KEY = "encyclopedia:place";
-const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store };
-const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest", vehicle: "Vehicle", store: "Store" };
+const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store, galaxy: GalaxyIcon };
+const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest", vehicle: "Vehicle", store: "Store", galaxy: "Galaxy" };
 type Modal = {
     type: "world" | "campaign" | "entry" | "settings" | "library" | "rename" | "connections";
     id?: string;
@@ -453,7 +455,7 @@ export default function WorkspaceApp() {
                             navigation.open(shared?"lore":"notes");
                             const parentEntry = data.entries.find(e => e.id === parent && e.campaignId === scopeId);
                             if (template) change({ ...data, entries: [...data.entries, pageFromTemplate(template.template, { id, title: name, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, values: template.values, newId, org: defaultOrg(world), profile: defaultProfile(world) })] });
-                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, org:kind==="faction"?defaultOrg(world):undefined, profile:kind==="character"?defaultProfile(world):undefined, vehicle:kind==="vehicle"?newVehicle(vehicleTypesOf(world)[0]):undefined, store:kind==="store"?newStore("shop"):undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
+                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, org:kind==="faction"?defaultOrg(world):undefined, profile:kind==="character"?defaultProfile(world):undefined, vehicle:kind==="vehicle"?newVehicle(vehicleTypesOf(world)[0]):undefined, store:kind==="store"?newStore("shop"):undefined, galaxy:kind==="galaxy"?newGalaxy(name):undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
                             setView("overview");
                             setSelected(id);
                             setEditing(true);

@@ -19,6 +19,7 @@ import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchTex
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 import {inventorySchema,spellsSchema,itemSettingsSchema,itemSettingsOf,playerInventory,playerSpells,playerItemSettings,type PlayerInventory,type PlayerSpell} from './items.ts';
 import {storeSchema,storeRefs,remapStore,storeSearchText,playerStore,type PlayerStore} from './stores.ts';
+import {galaxySchema} from './galaxies.ts';
 import {tiesSchema,tieTypesSchema,tieTypesOf,remapTies,tieSearchText} from './ties.ts';
 import {playerTies,type PlayerTie} from './tie-connections.ts';
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -123,7 +124,7 @@ export const pictureSchema = z.object({
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
-    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest", "vehicle", "store"]),
+    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest", "vehicle", "store", "galaxy"]),
     order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
     // Optional (added later): on an organization (faction) page, its Profile tab.
     org:orgSchema.optional(),
@@ -133,6 +134,8 @@ export const entrySchema = z.object({
     vehicle:vehicleSchema.optional(),
     // Optional (added later): on a store page, the shop, container, loot or party stash (stores.ts).
     store:storeSchema.optional(),
+    // Optional (added later): on a galaxy page, the galaxy (a real one or a generated one) and its art (galaxies.ts).
+    galaxy:galaxySchema.optional(),
     // Optional (added later): typed ties from this page to others (Parent of, Rival of, Sails from…). Shown on both pages (tie-connections.ts).
     ties:tiesSchema.optional(),
     // Optional (added later): the template this page was made from, and its info box values by field id.
@@ -168,6 +171,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
         if(e.profile&&e.kind!=='character')bad('A character profile requires a character entry');
         if(e.vehicle&&e.kind!=='vehicle')bad('Vehicle details require a vehicle entry');
         if(e.store&&e.kind!=='store')bad('Store details require a store page');
+        if(e.galaxy&&e.kind!=='galaxy')bad('Galaxy details require a galaxy page');
         if(e.store)for(const ref of storeRefs(e.store)){const t=entries.get(ref);if(!t)continue;if(t.kind!=='character')bad('A store can only point at character pages');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A store cannot point outside its world or campaign');}
         if(e.character?.spells){const trackers=new Set((e.character.trackers??[]).map(t=>t.id));if(e.character.spells.some(x=>x.cost&&!trackers.has(x.cost.trackerId)))bad('A spell can only spend from one of the character’s own trackers');}
         if(e.vehicle){for(const ref of vehicleRefs(e.vehicle)){const t=entries.get(ref);if(!t)continue;if(ref===e.id)bad('A vehicle cannot point at itself');if(t.worldId!==e.worldId||(t.campaignId!==null&&t.campaignId!==e.campaignId))bad('A vehicle cannot point outside its world or campaign');}
@@ -381,4 +385,4 @@ function playerLinkedPages(s:Workspace,target:Entry,pages:Entry[]){
  const link=/\[\[([^\]|\n]+)(?:\|[^\]\n]*)?\]\]/g;
  return pages.filter(e=>e.id!==target.id).filter(e=>[...(e.overviewVisibility==='players'?[e.body]:[]),...(e.tabs??[]).filter(t=>t.visibility==='players').map(t=>t.body)].some(t=>[...stripSecrets(t).matchAll(link)].some(m=>resolveLink(s,e,m[1])?.id===target.id))).map(e=>({id:e.id,title:e.title}));
 }
-export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),profileSearchText(e.profile),vehicleSearchText(e.vehicle),storeSearchText(e.store),tieSearchText(e.ties),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
+export function searchableText(e:Entry){return [e.title,e.body,orgSearchText(e.org),profileSearchText(e.profile),vehicleSearchText(e.vehicle),storeSearchText(e.store),e.galaxy?.facts.type,e.galaxy?.summary,tieSearchText(e.ties),...(e.tabs??[]).map(t=>t.title+" "+t.body),e.character?.group,e.character?.location,e.character?.faction,...(e.character?.tags??[]),e.mapData?.category,...(e.mapData?.pins??[]).map(p=>p.title+' '+p.notes)].join(" ");}
