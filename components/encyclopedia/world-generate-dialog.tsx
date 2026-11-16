@@ -3,7 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Dices } from 'lucide-react';
 import { terrainIndex, terrains, type MapData } from '@/lib/encyclopedia/map-model';
 import { defaultWorldOptions, generateWorld, worldAcross, worldClimates, worldKinds, type WorldAcross, type WorldOptions } from '@/lib/encyclopedia/world-generator';
-import { buildPlanet, defaultPlanetOptions, generatePlanet, planetBiomes, planetChecks, planetMapSize, planetPixels, planetPresets, planetSizes, planetStats, rainWord, temperatureWords, withPreset, type PlanetLife, type PlanetOptions, type PlanetSize } from '@/lib/encyclopedia/planet-generator';
+import { buildPlanet, defaultPlanetOptions, generatePlanet, handPlanet, planetBiomes, planetChecks, planetMapSize, planetPixels, planetPresets, planetSizes, planetStats, rainWord, temperatureWords, withPreset, type PlanetLife, type PlanetOptions, type PlanetSize } from '@/lib/encyclopedia/planet-generator';
 import {ToolDialog} from './tool-dialog';
 import { MapCanvas } from './map-canvas';
 import { PlanetGlobe } from './planet-globe';
@@ -33,8 +33,9 @@ function PresetThumb({ id }: { id: string }) {
 }
 
 /** Generate a world: a whole planet, or a continent, coast, islands or inland region, and see it before using it. */
-export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onClose: () => void; onUse: (patch: Partial<MapData>) => void }) {
-  const [planet, setPlanet] = useState(false), [preset, setPreset] = useState('earthlike'), [tab, setTab] = useState<PlanetTab>('planet'), [globe, setGlobe] = useState(false);
+export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onClose: () => void; onUse: (patch: Partial<MapData>, hand: boolean) => void }) {
+  const [mode, setMode] = useState<'area' | 'planet' | 'hand'>('area'), planet = mode !== 'area', hand = mode === 'hand';
+  const [preset, setPreset] = useState('earthlike'), [tab, setTab] = useState<PlanetTab>('planet'), [globe, setGlobe] = useState(false);
   const [o, setO] = useState<WorldOptions>(() => ({ ...defaultWorldOptions(map.columns, map.rows, randomWorldSeed()), places: map.pins.length === 0 }));
   const [p, setP] = useState<PlanetOptions>(() => ({ ...defaultPlanetOptions(o.seed), places: map.pins.length === 0 ? 12 : 0, roads: map.pins.length === 0, landmarks: map.pins.length === 0 }));
   const set = (patch: Partial<WorldOptions>) => setO(v => ({ ...v, ...patch }));
@@ -43,13 +44,13 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
   // Whole planets take a moment to build, so the sliders stay responsive while the preview catches up.
   const planetOptions = useDeferredValue(p);
   const options = useMemo(() => ({ ...planetOptions, seed: planetOptions.seed.trim() || 'world' }), [planetOptions]);
-  const world = useMemo(() => { if (!planet) return null; const { w, h } = planetMapSize(); return buildPlanet(options, w, h); }, [planet, options]);
+  const world = useMemo(() => { if (mode !== 'planet') return null; const { w, h } = planetMapSize(); return buildPlanet(options, w, h); }, [mode, options]);
   const stats = useMemo(() => world && planetStats(world), [world]);
   const pixels = useMemo(() => world && globe ? planetPixels(world) : null, [world, globe]);
-  const result = useMemo(() => world ? generatePlanet(options, map, world) : generateWorld({ ...o, seed: o.seed.trim() || 'world' }, map), [world, options, o, map]);
+  const result = useMemo(() => hand ? handPlanet(options, map) : world ? generatePlanet(options, map, world) : { ...generateWorld({ ...o, seed: o.seed.trim() || 'world' }, map), planet: undefined }, [hand, world, options, o, map]);
   const preview: MapData = { ...map, ...result, source: 'generated', imageId: null, fog: undefined, routes: [], compass: true, scaleBar: true };
   const added = result.pins.filter(p => !map.pins.some(q => q.id === p.id)).length;
-  const checks = planet ? planetChecks(options, stats ?? undefined) : [], notes = checks.filter(c => c.kind === 'note').length;
+  const checks = mode === 'planet' ? planetChecks(options, stats ?? undefined) : [], notes = checks.filter(c => c.kind === 'note').length;
   const towns = result.pins.filter(p => p.id.startsWith('place-') && p.kind !== 'landmark').length, rivers = result.paths?.filter(p => p.kind === 'river').length ?? 0;
   const range = (label: string, key: NumberKey, min: number, max: number, show: (v: number) => string, keepPreset = false) =>
     <label className="world-field">{label} <output>{show(p[key])}</output><input type="range" min={min} max={max} value={p[key]} onChange={e => setPlanetOption({ [key]: +e.target.value }, keepPreset)}/></label>;
@@ -58,19 +59,20 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
     <div className="world-generate">
       <div className="world-generate-options">
         <div className="world-kinds" role="group" aria-label="Kind of map">
-          <button type="button" className="world-kind-planet" aria-pressed={planet} onClick={() => setPlanet(true)}><strong>Whole planet</strong><span>Every continent and ocean, with climate from the poles to the equator</span></button>
-          {worldKinds.map(k => <button key={k.id} type="button" aria-pressed={!planet && o.kind === k.id} onClick={() => { setPlanet(false); set({ kind: k.id }); }}><strong>{k.name}</strong><span>{k.hint}</span></button>)}
+          <button type="button" className="world-kind-planet" aria-pressed={mode === 'planet'} onClick={() => setMode('planet')}><strong>Whole planet</strong><span>Every continent and ocean, with climate from the poles to the equator</span></button>
+          <button type="button" className="world-kind-planet" aria-pressed={hand} onClick={() => { setMode('hand'); if (tab === 'land' || tab === 'places') setTab('planet'); }}><strong>Draw by hand</strong><span>A planet of empty sea to draw your own continents on</span></button>
+          {worldKinds.map(k => <button key={k.id} type="button" aria-pressed={!planet && o.kind === k.id} onClick={() => { setMode('area'); set({ kind: k.id }); }}><strong>{k.name}</strong><span>{k.hint}</span></button>)}
         </div>
         {planet ? <>
           <div className="planet-tabs" role="tablist" aria-label="Planet settings">
-            {planetTabs.map(t => <button key={t.id} type="button" role="tab" id={`planet-tab-${t.id}`} aria-controls="planet-panel" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.name}</button>)}
+            {planetTabs.filter(t => !hand || t.id === 'planet' || t.id === 'biomes').map(t => <button key={t.id} type="button" role="tab" id={`planet-tab-${t.id}`} aria-controls="planet-panel" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.name}</button>)}
           </div>
           <div className="planet-panel" id="planet-panel" role="tabpanel" aria-labelledby={`planet-tab-${tab}`}>
             {tab === 'planet' && <>
-              <div className="world-field">Start from
+              {!hand && <div className="world-field">Start from
                 <div className="planet-presets" role="group" aria-label="Kind of planet">{planetPresets.map(x => <button key={x.id} type="button" aria-pressed={preset === x.id} onClick={() => { setP(v => withPreset(v, x.id)); setPreset(x.id); }}><PresetThumb id={x.id}/>{x.name}</button>)}</div>
-              </div>
-              {range('Water', 'water', 0, 100, v => `${v}% sea`)}
+              </div>}
+              {!hand && range('Water', 'water', 0, 100, v => `${v}% sea`)}
               {range('Temperature', 'temp', -3, 3, v => temperatureWords[String(v)])}
               {range('Rain', 'rain', 0, 100, rainWord)}
               <div className="world-field">Day and night
@@ -122,19 +124,21 @@ export function WorldGenerateDialog({ map, onClose, onUse }: { map: MapData; onC
         </div>
       </div>
       <div className="world-generate-preview">
-        {planet && <div className="world-seg planet-view" role="group" aria-label="View"><button type="button" aria-pressed={!globe} onClick={() => setGlobe(false)}>Flat map</button><button type="button" aria-pressed={globe} onClick={() => setGlobe(true)}>Globe</button></div>}
-        <div className={`world-generate-map${globe && planet ? ' is-globe' : ''}`} aria-busy={planet && planetOptions !== p}>
+        {mode === 'planet' && <div className="world-seg planet-view" role="group" aria-label="View"><button type="button" aria-pressed={!globe} onClick={() => setGlobe(false)}>Flat map</button><button type="button" aria-pressed={globe} onClick={() => setGlobe(true)}>Globe</button></div>}
+        <div className={`world-generate-map${globe && mode === 'planet' ? ' is-globe' : ''}`} aria-busy={planet && planetOptions !== p}>
           {globe && pixels && world ? <PlanetGlobe pixels={pixels} width={world.w} height={world.h} locked={options.rotation === 'locked'} label="The planet as a globe"/> : <MapCanvas map={preview}/>}
         </div>
         {stats && <p className="planet-stats"><span>Land <b>{pct(stats.land)}</b></span><span>Ice <b>{pct(stats.ice)}</b></span><span>Livable land <b>{pct(stats.livable)}</b></span><span>Towns <b>{towns}</b></span><span>Rivers <b>{rivers}</b></span></p>}
-        {planet && <section className="planet-checks" aria-label="Built-in checks">
+        {mode === 'planet' && <section className="planet-checks" aria-label="Built-in checks">
           <h3>Built-in checks <span className={notes ? 'is-note' : 'is-ok'}>{notes ? `${notes} to look at` : 'Looks plausible'}</span></h3>
           <ul>{checks.map((c, i) => <li key={i} className={`check-${c.kind}`}>{c.text}</li>)}</ul>
         </section>}
-        <p className="aside-hint">{planet
+        <p className="aside-hint">{hand
+          ? `You start with a planet of empty sea, with sea ice where it is cold enough. Draw land with Shape land, then raise hills and mountains; ice, deserts and forests follow these settings. This replaces the terrain and the rivers and roads it made before, and sets the map width to ${result.scale!.width.toLocaleString()} ${result.scale!.unit} around the equator.`
+          : planet
           ? `The map wraps east to west like a globe. ${added ? `${added} new place${added === 1 ? '' : 's'}, GM only until you share them. ` : ''}This replaces the terrain and the rivers and roads it made before, and sets the map width to ${result.scale!.width.toLocaleString()} ${result.scale!.unit} around the equator.`
           : `The terrain is painted, not tiled, so you can keep shaping coasts and forests with the brush afterwards. Rivers run downhill from the mountains to the sea. This replaces the terrain and the rivers and roads it made before, and sets the map width to ${result.scale!.width.toLocaleString()} ${result.scale!.unit}.`}</p>
-        <div className="button-row world-generate-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="button" className="button primary" onClick={() => onUse({ ...result, compass: map.compass ?? true, scaleBar: map.scaleBar ?? true })}>Use this world</button></div>
+        <div className="button-row world-generate-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="button" className="button primary" onClick={() => onUse({ ...result, compass: map.compass ?? true, scaleBar: map.scaleBar ?? true }, hand)}>{hand ? 'Start drawing' : 'Use this world'}</button></div>
       </div>
     </div>
   </ToolDialog>;
