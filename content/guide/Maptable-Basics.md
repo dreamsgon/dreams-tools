@@ -63,10 +63,25 @@ These apply to every selected token. **Shift + scroll** over a selected or hover
 
 ## Fog, areas and notes
 
-- **Fog** can be edited manually and revealed by area. Player previews and exports use opaque fog and hide hidden tokens.
+- **Fog** can be edited manually and revealed by area. On a hex scene the Fog panel also has **Reveal around party tokens**, which clears the hexes around party tokens as they move (see [Hex map generator](Hex-Map-Generator)). Player previews and exports use opaque fog and hide hidden tokens.
 - **Areas** on area and combat maps can open a section of an Encyclopedia page. In the Exploration panel use *Draw an area* with a box or a click inside a drawn room.
 - **Markers** hold read-aloud text and up to 20 linked Encyclopedia pages. Selecting one opens a note card with a *Players see this note* switch. Drag a page from the Exploration list onto the map to pin it.
 - **Links from the Encyclopedia**: write `[[maptable:<scene>|Label]]` in a page for an *Open in Maptable* card; the Write mode has a scene picker.
+
+## Lights and darkness
+
+A map drawn in the Map Creator can have lights (see [Map Creator](Map-Creator)). In Maptable, lights glow on the map, and places no light reaches can be shaded.
+
+Open the scene's settings and choose the **Lights** tab (it appears for drawn maps):
+
+- **Where no light reaches**: **Daylight** (everything can be seen, lights only add glow), **Dim** (unlit places are shaded for players) or **Dark** (unlit places are dark for players). You see them lighter than players do, so you can still run the map.
+- **Lights on this map** lists every light with a switch to light or put it out during play, plus **Light all** and **Put all out**. The shading follows straight away.
+
+![Player view of a dark map with two lit rooms](images/maptable-player-dark.jpg)
+
+A light stamp that is a movable piece shines from where the piece is. Flicker shows only in the Map Creator. The same *Where no light reaches* setting is in the Map Creator's Map tab.
+
+Universal VTT exports carry the lit lights and the ambient light.
 
 ## Initiative and combat
 

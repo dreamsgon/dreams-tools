@@ -8,6 +8,7 @@
 - [Maptable basics](Maptable-Basics)
 - [Dice, rolls and Discord](Dice-Rolls-and-Discord)
 - [Map Creator](Map-Creator)
+- [Dungeon generator](Dungeon-Generator)
 - [Hex map generator](Hex-Map-Generator)
 - [World maps](World-Maps)
 - [Star systems and space](Star-Systems-and-Space)
