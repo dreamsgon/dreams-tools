@@ -85,13 +85,14 @@ export function placeName(random: () => number) {
 export function worldTerrain(o: WorldOptions): MapPaint { return buildWorld(o).paint; }
 
 type BuiltWorld = { paint: MapPaint; cells: Uint8Array; height: Float32Array; w: number; h: number; sea: number };
-function buildWorld(o: WorldOptions): BuiltWorld {
+/** A world from the options, or from heights already worked out (sea level at 0), such as from a picture. */
+function buildWorld(o: WorldOptions, heights?: Float32Array): BuiltWorld {
   const k = paintScale(o.columns, o.rows), w = o.columns * k, h = o.rows * k, n = hash(o.seed || "world");
   const aspect = w / h, base = fbm(n, 5), detail = fbm(n + 7, 3), wet = fbm(n + 31, 4), warp = fbm(n + 53, 2);
   const freq = o.kind === "archipelago" ? 5.5 : 3.2;
   const side = n % 4;
-  const height = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+  const given = heights && heights.length === w * h, height = given ? heights : new Float32Array(w * h);
+  if (!given) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const u = x / (w - 1), v = y / (h - 1);
     const wx = u + (warp(u * 2, v * 2) - 0.5) * 0.25, wy = v + (warp(u * 2 + 9, v * 2 + 9) - 0.5) * 0.25;
     let e = base(wx * freq * aspect, wy * freq) * 0.75 + detail(u * 12 * aspect, v * 12) * 0.25;
@@ -103,7 +104,7 @@ function buildWorld(o: WorldOptions): BuiltWorld {
     height[y * w + x] = e;
   }
   const seaShare = o.kind === "inland" ? Math.min(0.15, o.seaLevel * 0.2) : Math.min(0.9, Math.max(0.1, o.seaLevel));
-  const sea = quantile(height, seaShare);
+  const sea = given ? 0 : quantile(height, seaShare);
   const land = Array.from(height).filter(e => e >= sea);
   const mountainShare = 0.02 + 0.13 * o.mountains;
   const mountain = quantile(land, 1 - mountainShare), hill = quantile(land, 1 - mountainShare * 2.4), peak = quantile(land, 1 - mountainShare * 0.3);
@@ -246,9 +247,12 @@ export function worldRoads(world: BuiltWorld, towns: MapPin[], seed: string): Ma
 /** Pins a generated world added earlier and nobody has changed since, which a new world replaces. */
 export const isGeneratedPlace = (p: MapPin, map: MapData) => p.id.startsWith("place-") && !p.notes && !p.entryId && !p.areaMapId && !(map.routes ?? []).some(r => r.stops.includes(p.id));
 
-/** The parts of a map that a generated world replaces. Places already on the map stay; new towns are added after them. */
-export function generateWorld(o: WorldOptions, map: MapData): Pick<MapData, "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
-  const world = buildWorld(o), paint = world.paint;
+/**
+ * The parts of a map that a generated world replaces. Places already on the map stay; new towns are added after them.
+ * Heights for every paint square (sea level at 0) can be given instead of making them from the seed.
+ */
+export function generateWorld(o: WorldOptions, map: MapData, heights?: Float32Array): Pick<MapData, "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
+  const world = buildWorld(o, heights), paint = world.paint;
   const kept = map.pins.filter(p => !isGeneratedPlace(p, map));
   const taken = new Set(kept.map(p => p.title.toLowerCase()));
   const added = o.places ? worldPlaces(paint, world.cells, worldAcross[o.across].places, o.seed).filter(p => !taken.has(p.title.toLowerCase()) && !kept.some(q => q.id === p.id)) : [];
