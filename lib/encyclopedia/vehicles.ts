@@ -55,7 +55,12 @@ const crewSchema = z.object({ id: oid, ...whoFields, role: text(80).optional(), 
   .refine(c => !!c.characterId || !!c.name, { message: "A crew member needs a page or a name" });
 /** A system’s roll must be dice the roller can read (lib/rolls.ts), like 2d6+1 or 1d20+5. */
 export const validRoll = (f: string) => { try { parseDice(f); return true; } catch { return false; } };
-export const maxCargo = 60, maxSystems = 30;
+export const maxCargo = 60, maxSystems = 30, maxLog = 300;
+export const logKinds = ["note", "voyage", "battle", "repair", "trade"] as const;
+export type LogKind = typeof logKinds[number];
+export const logKindNames: Record<LogKind, string> = { note: "Note", voyage: "Voyage", battle: "Battle", repair: "Repairs", trade: "Trade" };
+const logSchema = z.object({ id: oid, at: z.string().datetime(), day: text(40).optional(), kind: z.enum(logKinds), text: z.string().trim().min(1).max(2000), gm: z.boolean().optional() });
+export type LogEntry = z.infer<typeof logSchema>;
 export const systemStates = ["ok", "damaged", "offline"] as const;
 export type SystemState = typeof systemStates[number];
 export const systemStateNames: Record<SystemState, string> = { ok: "Working", damaged: "Damaged", offline: "Offline" };
@@ -92,8 +97,11 @@ export const vehicleSchema = z.object({
   /** The Systems tab: guns, engines, sails, spells… each with a state and an optional roll. */
   systems: z.array(systemSchema).max(maxSystems).optional(),
   systemsVisibility: visibility.optional(),
+  /** The Log tab: what happened to the vehicle, newest first. */
+  log: z.array(logSchema).max(maxLog).optional(),
+  logVisibility: visibility.optional(),
 }).superRefine((v, ctx) => {
-  if (!unique(v.specs.map(x => x.id)) || !unique(v.gauges.map(x => x.id)) || !unique(v.now.map(x => x.id)) || !unique((v.stations ?? []).map(x => x.id)) || !unique((v.crew ?? []).map(x => x.id)) || !unique((v.hands ?? []).map(x => x.id)) || !unique((v.cargo ?? []).map(x => x.id)) || !unique((v.systems ?? []).map(x => x.id))) ctx.addIssue({ code: "custom", message: "Vehicle value ids must be unique" });
+  if (!unique(v.specs.map(x => x.id)) || !unique(v.gauges.map(x => x.id)) || !unique(v.now.map(x => x.id)) || !unique((v.stations ?? []).map(x => x.id)) || !unique((v.crew ?? []).map(x => x.id)) || !unique((v.hands ?? []).map(x => x.id)) || !unique((v.cargo ?? []).map(x => x.id)) || !unique((v.systems ?? []).map(x => x.id)) || !unique((v.log ?? []).map(x => x.id))) ctx.addIssue({ code: "custom", message: "Vehicle value ids must be unique" });
 });
 export type Vehicle = z.infer<typeof vehicleSchema>;
 
@@ -261,7 +269,7 @@ export const holdTitle = (t: VehicleType) => t.hold ?? "Hold";
 export const systemsTitle = (t: VehicleType) => t.systems ?? "Systems";
 /** The cargo carried, all of it (GM) or only the shown lines (players get theirs from playerVehicle). */
 export const cargoUsed = (v: Vehicle) => (v.cargo ?? []).reduce((n, c) => n + c.qty, 0);
-const listOps = <K extends "cargo" | "systems">(key: K, max: number) => ({
+const listOps = <K extends "cargo" | "systems" | "log">(key: K, max: number) => ({
   add: (v: Vehicle, row: Omit<NonNullable<Vehicle[K]>[number], "id">): Vehicle => ({ ...v, [key]: [...(v[key] ?? []), { ...row, id: freshId() }].slice(0, max) }),
   edit: (v: Vehicle, id: string, patch: Partial<NonNullable<Vehicle[K]>[number]>): Vehicle => ({ ...v, [key]: (v[key] ?? []).map(x => {
     if (x.id !== id) return x;
@@ -272,6 +280,13 @@ const listOps = <K extends "cargo" | "systems">(key: K, max: number) => ({
   remove: (v: Vehicle, id: string): Vehicle => { const rest = (v[key] ?? []).filter(x => x.id !== id), out: Vehicle = { ...v, [key]: rest }; if (!rest.length) delete out[key]; return out; },
 });
 export const cargoOps = listOps("cargo", maxCargo), systemOps = listOps("systems", maxSystems);
+/** Log entries, newest first: a new one goes on top, and the oldest drop off past the limit. */
+export const addLog = (v: Vehicle, row: { kind: LogKind; text: string; day?: string; gm?: boolean }, now = new Date()): Vehicle => {
+  const text = row.text.trim().slice(0, 2000), day = row.day?.trim().slice(0, 40);
+  if (!text) return v;
+  return { ...v, log: [{ id: freshId(), at: now.toISOString(), kind: row.kind, text, ...(day ? { day } : {}), ...(row.gm ? { gm: true } : {}) }, ...(v.log ?? [])].slice(0, maxLog) };
+};
+export const logOps = listOps("log", maxLog);
 
 /** How a character page is tied to a vehicle, for the links back from that page. */
 export function vehicleRolesOf(v: Vehicle, t: VehicleType, pageId: string): string[] {
@@ -326,7 +341,7 @@ export function remapVehicle(v: Vehicle, map: (id: string) => string | undefined
   if (v.crew) { const crew = v.crew.map(who).filter(c => c.characterId || c.name); if (crew.length) out.crew = crew; else delete out.crew; }
   return out;
 }
-export const vehicleSearchText = (v?: Vehicle) => v ? [v.subtitle, v.locationText, ...v.specs.map(s => s.value), ...v.now.map(s => s.value), ...(v.stations ?? []).map(s => s.name), ...(v.crew ?? []).flatMap(c => [c.name, c.role]), ...(v.cargo ?? []).flatMap(c => [c.name, c.note]), ...(v.systems ?? []).flatMap(x => [x.name, x.note])].filter(Boolean).join(" ") : "";
+export const vehicleSearchText = (v?: Vehicle) => v ? [v.subtitle, v.locationText, ...v.specs.map(s => s.value), ...v.now.map(s => s.value), ...(v.stations ?? []).map(s => s.name), ...(v.crew ?? []).flatMap(c => [c.name, c.role]), ...(v.cargo ?? []).flatMap(c => [c.name, c.note]), ...(v.systems ?? []).flatMap(x => [x.name, x.note]), ...(v.log ?? []).map(l => l.text)].filter(Boolean).join(" ") : "";
 
 export type PlayerVehicle = {
   type: { name: string; one: string; art: VehicleArt; commander: string };
@@ -339,6 +354,7 @@ export type PlayerVehicle = {
   stations: { id: string; label: string; pic: boolean; characterId?: string; name?: string; unknown?: true }[];
   /** The Crew tab, when it is shared. */
   holdTab?: { title: string; unit: string; capacity?: number; used: number; cargo: { id: string; name: string; note?: string; qty: number }[] };
+  logTab?: { entries: { id: string; at: string; day?: string; kind: LogKind; text: string }[] };
   systemsTab?: { title: string; systems: { id: string; name: string; state: SystemState; note?: string; roll?: string }[] };
   crewTab?: { title: string; crew: { id: string; characterId?: string; name?: string; role?: string }[]; hands: { id: string; label: string; value: number }[] };
 };
@@ -363,6 +379,7 @@ export function playerVehicle(v: Vehicle, t: VehicleType, readable: (id: string)
       return { title: holdTitle(t), unit: t.holdUnit ?? "", ...(v.capacity !== undefined ? { capacity: v.capacity } : {}), used: cargo.reduce((n, c) => n + c.qty, 0), cargo };
     })() } : {}),
     ...(v.systemsVisibility === "players" ? { systemsTab: { title: systemsTitle(t), systems: (v.systems ?? []).filter(x => !x.gm).map(x => ({ id: x.id, name: clean(x.name) || "System", state: x.state, ...(x.note && clean(x.note) ? { note: clean(x.note) } : {}), ...(x.roll ? { roll: x.roll } : {}) })) } } : {}),
+    ...(v.logVisibility === "players" ? { logTab: { entries: (v.log ?? []).filter(l => !l.gm).flatMap(l => { const t = clean(l.text); return t ? [{ id: l.id, at: l.at, ...(l.day && clean(l.day) ? { day: clean(l.day) } : {}), kind: l.kind, text: t }] : []; }) } } : {}),
     ...(crewShared ? { crewTab: {
       title: t.crew,
       crew: (v.crew ?? []).filter(c => !c.gm).flatMap(c => { const w = who(c); return w.characterId || w.name ? [{ id: c.id, ...w, ...(c.role && clean(c.role) ? { role: clean(c.role) } : {}) }] : []; }),

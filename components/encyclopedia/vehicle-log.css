@@ -1,0 +1,26 @@
+/* A vehicle's Log tab (components/encyclopedia/vehicle-log.tsx). */
+.vehicle-log{display:flex;flex-direction:column;gap:14px;margin-top:4px}
+.vlog-form{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.vlog-form-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between}
+.vlog-kinds{display:flex;flex-wrap:wrap;gap:5px}
+.vlog-kind{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--panel);color:var(--muted);white-space:nowrap}
+button.vlog-kind{cursor:pointer}
+.vlog-kind.on,.vlog-meta .vlog-kind{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+.vlog-kind.k-battle.on,.vlog-meta .vlog-kind.k-battle{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 10%,var(--panel))}
+.vlog-kind.k-repair.on,.vlog-meta .vlog-kind.k-repair{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 45%,transparent);background:color-mix(in srgb,var(--warning) 10%,var(--panel))}
+.vlog-day,.vlog-form textarea{border:1px solid var(--line);border-radius:var(--radius);background:var(--raised,var(--panel));padding:5px 8px;font:inherit;font-size:13px;color:var(--ink)}
+.vlog-day{width:200px;max-width:100%}
+.vlog-form textarea{resize:vertical;min-height:52px}
+.vlog-form-actions{display:flex;justify-content:flex-end;gap:8px}
+.vlog-list{list-style:none;margin:0;padding:0 0 0 14px;display:flex;flex-direction:column;gap:8px;border-left:2px solid var(--line)}
+.vlog-entry{position:relative;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel)}
+.vlog-entry::before{content:"";position:absolute;left:-21px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg,var(--panel))}
+.vlog-entry.is-hidden{border-style:dashed;border-color:var(--warning)}
+.vlog-entry.editing{padding:0;border:0;background:none}
+.vlog-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px}
+.vlog-date{font-size:13px}
+.vlog-tools{display:inline-flex;gap:2px;margin-left:auto}
+.vehicle-log .icon-button{padding:5px}
+.vlog-text{margin:6px 0 0;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.vlog-empty{margin:0;font-size:13px}
+@media (max-width:760px){.vlog-day{width:100%}}
