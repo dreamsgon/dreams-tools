@@ -201,3 +201,13 @@ test('saveFrontPage validates, refuses Maptable-only campaigns and saves valid p
   assert.deepEqual((await s.book.read('owner-1')).data.campaigns[0].frontPage,page);
   assert.deepEqual(hubOf(await readBoth(s),'e:e1').frontConfig,page);
 });
+
+test('the Last session card shows link labels, not link markup', () => {
+  const entries = [
+    { id: 's1', title: 'Session 2: The Salt Road', kind: 'session', tabs: [{ body: 'The road was long. [[c-ayla|Ayla]] kept watch while [[c-bram]] slept near [[hidden-place]].' }] },
+    { id: 'c-bram', title: 'Bram', kind: 'character', tabs: [] },
+  ];
+  const page = { widgets: [{ id: 'recap', type: 'recap' }] };
+  const [w] = resolveFrontPage(page, { entries, calendars: [], clean: s => s, sessionsNewestFirst: ['s1'] }).widgets;
+  assert.equal(w.excerpt, 'The road was long. Ayla kept watch while Bram slept near .');
+});
