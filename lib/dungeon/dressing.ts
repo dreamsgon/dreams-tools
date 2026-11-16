@@ -125,12 +125,13 @@ export function dressLayout(layout: Layout, o: DressOptions, random: Random, lig
   };
   const inRoom = (r: LayoutRoom, id: string, inset = 1): Placement | null => {
     const s = size(id); if (!s) return null;
-    const rotation = s.w !== s.h && random() < .5 ? 90 : 0, w = rotation ? s.h : s.w, h = rotation ? s.w : s.h;
+    const first = s.w !== s.h && random() < .5 ? 90 : 0;
     const cells = roomCells(r, inset), set = new Set(cells.map(c => key(c[0], c[1])));
-    for (let k = 0; k < 30 && cells.length; k++) {
-      const [x, y] = pick(cells);
-      if (!set.has(key(x + w - 1, y + h - 1))) continue;
-      if (free(x, y, w, h)) return put(id, x, y, rotation);
+    shuffle(cells, random);
+    // Every square of the room is tried, both ways round, so a thing that fits anywhere is placed.
+    for (const rotation of s.w !== s.h ? [first, 90 - first] : [0]) {
+      const w = rotation ? s.h : s.w, h = rotation ? s.w : s.h;
+      for (const [x, y] of cells) if (set.has(key(x + w - 1, y + h - 1)) && free(x, y, w, h)) return put(id, x, y, rotation);
     }
     return null;
   };
@@ -172,7 +173,7 @@ export function dressLayout(layout: Layout, o: DressOptions, random: Random, lig
     bossIndex = rooms.findIndex(r => r.great);
     if (bossIndex < 0 && rooms.length > 2) bossIndex = rooms.length - 1;
     shuffle(bag, random);
-    const entranceRoom = layout.entrance && layout.entrance.room >= 0 ? layout.entrance.room : 0;
+    const entranceRoom = layout.entrance && layout.entrance.room >= 0 ? layout.entrance.room : -1;
     rooms.forEach((_, i) => purposes[i] = i === bossIndex && theme.boss ? theme.boss : i === entranceRoom && theme.entrance ? theme.entrance : bag.length ? theme.rooms[bag.shift()!] : P("Empty room"));
   } else if (building) {
     // The biggest rooms get the most important purposes.
@@ -186,6 +187,24 @@ export function dressLayout(layout: Layout, o: DressOptions, random: Random, lig
 
   const roomOf = new Map<Placement, number>();
   const mark = (i: number, from: number) => placements.slice(from).forEach(p => roomOf.set(p, i));
+
+  // First the one thing each room's name promises (a forge in a Forge, a bed in a Bedroom), before anything can crowd it out.
+  const signature = (p: Purpose) => p.centre ?? p.stamps[0] ?? p.wall[0] ?? null;
+  if (o.populate) rooms.forEach((r, i) => {
+    const p = purposes[i], id = signature(p), from = placements.length;
+    if (!id) return;
+    const place = (p: Purpose, id: string) => (id === p.centre ? inCentre(r, id) : id === p.wall[0] && !p.stamps.length ? onWall(r, id) : inRoom(r, id, (size(id)?.w ?? 1) > 1 ? 1 : 0)) ?? inRoom(r, id, 0);
+    if (!place(p, id)) {
+      // Too small for it: the room takes another of the theme's purposes whose thing does fit, so its name never promises what isn't there.
+      const entrance = p === theme.entrance;
+      const others = entrance ? [] : Object.values(theme.rooms).filter(q => q !== p);
+      shuffle(others, random);
+      const swap = others.find(q => { const sid = signature(q); return sid ? !!place(q, sid) : false; });
+      if (swap) purposes[i] = swap;
+      else if (!entrance) purposes[i] = P(village ? "House" : building ? "Room" : "Empty room");
+    }
+    mark(i, from);
+  });
 
   // Columns along the long walls of big rooms, or in a ring in round ones.
   if (o.columns && !village && !cave) rooms.forEach((r, i) => {
@@ -203,12 +222,14 @@ export function dressLayout(layout: Layout, o: DressOptions, random: Random, lig
 
   // Furnishing: what each purpose holds, then a little clutter.
   if (o.populate) rooms.forEach((r, i) => {
-    const p = purposes[i], from = placements.length;
-    if (village) { if (p.centre && r.w >= 3 && r.h >= 3) inCentre(r, p.centre); }
+    const p = purposes[i], from = placements.length, sig = signature(p);
+    // The signature is already in; the rest of the purpose's things follow.
+    const wall = sig === p.wall[0] && !p.centre && !p.stamps.length ? p.wall.slice(1) : p.wall;
+    const things = sig === p.stamps[0] && !p.centre ? p.stamps.slice(1) : p.stamps;
+    if (village) things.forEach(id => { if (random() < .7) inRoom(r, id, 0); });
     else {
-      if (p.centre) inCentre(r, p.centre);
-      p.wall.forEach(id => onWall(r, id));
-      p.stamps.forEach(id => { if (random() < .9) inRoom(r, id, (size(id)?.w ?? 1) > 1 ? 1 : 0); });
+      wall.forEach(id => onWall(r, id));
+      things.forEach(id => { if (random() < .9) inRoom(r, id, (size(id)?.w ?? 1) > 1 ? 1 : 0); });
       const extra = Math.round(o.clutter * r.w * r.h / 14);
       const misc = cave ? ["rubble", "mushrooms", "bones", "rock"] : building ? ["crate", "barrel", "stool", "sacks"] : ["rubble", "bones", "barrel", "crate", "spider-web"];
       for (let k = 0; k < extra; k++) inRoom(r, pick(misc), 0);
@@ -317,7 +338,8 @@ function centre(r: LayoutRoom) { return r.cave && r.cx !== undefined && r.cy !==
 function roomCells(r: LayoutRoom, inset: number): Cell[] {
   const out: Cell[] = [];
   if (r.cave && r.cx !== undefined && r.cy !== undefined) {
-    const rr = Math.max(1, (r.rad ?? 3) - 1.2 - inset * .3);
+    // Out to the chamber's edge: squares that turn out to be rock are left out when things are placed.
+    const rr = Math.max(1, (r.rad ?? 3) + .5 - inset * .6);
     for (let y = Math.floor(r.cy - rr); y <= r.cy + rr; y++) for (let x = Math.floor(r.cx - rr); x <= r.cx + rr; x++) if (Math.hypot(x + .5 - r.cx, y + .5 - r.cy) <= rr) out.push([x, y]);
     return out;
   }
