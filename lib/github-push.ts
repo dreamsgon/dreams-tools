@@ -11,6 +11,7 @@
 import { assertSafePath, isLayoutPath, planWrite, sha256Hex, FOLDERS_LIST, type RpFile } from "./encyclopedia/rp-export.ts";
 import { readRestoreCopy, RESTORE_PATH } from "./encyclopedia/rp-zip.ts";
 import { classifyZip, exportedAt, type ZipKind } from "./encyclopedia/rp-sheet.ts";
+import { planRead, type RepoFile } from "./encyclopedia/rp-import.ts";
 import { ZIP_MAX_BYTES } from "./zip-read.ts";
 import type { Workspace } from "./encyclopedia/world-model.ts";
 
@@ -335,4 +336,30 @@ export async function readRepoRestore(token: string, repo: string, branch: strin
   let date: string | null = null;
   if (logItem) { try { date = exportedAt(decode(await readBlob(c, logItem, 1_000_000))); } catch { date = null; } }
   return { ok: true, workspace: result.workspace, files: names.length, date, truncated };
+}
+
+/* ---- reading an RP repository to import it as a new campaign ---- */
+export type GithubFiles = { ok: true; files: RepoFile[]; truncated: boolean } | { ok: false; error: string };
+
+/**
+ * Reads a branch of an RP repository for "Import as a new campaign": every path from the tree, and the text of only the Markdown
+ * files that would be imported (never 7-Library or 8-Archive, never pictures). A repository over the import limits is refused
+ * before anything is downloaded.
+ */
+export async function readRepoFiles(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined): Promise<GithubFiles> {
+  const c = conn(token, repo, fetch);
+  const head = await readHead(c, branch);
+  if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}.`);
+  if (head.state === "empty") return { ok: false, error: `${repo} is empty. There is nothing to import.` };
+  const { files: tree, truncated } = await readTree(c, head.tree);
+  const items = [...tree.values()];
+  const plan = planRead(items.map(i => ({ path: i.path, size: i.size })));
+  if (!plan.ok) return plan;
+  const wanted = new Set(plan.wanted), texts = new Map<string, string>();
+  let done = 0;
+  await pool(plan.wanted, 4, async path => {
+    texts.set(path, decode(await readBlob(c, tree.get(path)!, 500_000)));
+    onProgress(`Reading files… ${++done} of ${wanted.size}`);
+  });
+  return { ok: true, truncated, files: items.map(i => ({ path: i.path, size: i.size, ...(texts.has(i.path) ? { text: texts.get(i.path) } : {}) })) };
 }

@@ -29,7 +29,7 @@ export type ZipKind =
   | "restore"
   /** Has .rpg-tools/files.json but no restore copy: a player-safe export. */
   | "player-safe"
-  /** An RP repository in the numbered layout (1-Now/ or 3-People/) without a restore copy. */
+  /** An RP repository in the numbered layout (1-Now/ to 8-Archive/) without a restore copy. */
   | "numbered"
   /** Anything else. */
   | "unknown";
@@ -38,7 +38,7 @@ export type ZipKind =
 export function classifyZip(names: string[]): ZipKind {
   if (names.includes(".rpg-tools/campaign.json") || names.some(n => /^world-manager\/[^/]+\/campaign\.json$/.test(n))) return "restore";
   if (names.includes(".rpg-tools/files.json")) return "player-safe";
-  if (names.some(n => n.startsWith("1-Now/") || n.startsWith("3-People/"))) return "numbered";
+  if (names.some(n => FOLDERS_LIST.some(dir => n.startsWith(dir + "/")))) return "numbered";
   return "unknown";
 }
 
@@ -81,9 +81,9 @@ export function defaultCommitMessage(workspace: Workspace, campaignId: string): 
 }
 
 /** What the Import tab says about a repository or ZIP that has no restore copy. `where` is "ZIP" or "repository". */
-export function restoreNotice(kind: ZipKind, where: "ZIP" | "repository", fallback: string): { step: "note" | "error"; title: string; message: string } {
-  if (kind === "player-safe") return { step: "note", title: "Player-safe export", message: `A player-safe export cannot be restored. It leaves out the GM-only folder and the restore copy, so a campaign made from it would be missing the GM's content. Use ${where === "ZIP" ? "the ZIP" : "the repository"} you made with the GM-only switch on.` };
-  if (kind === "numbered") return { step: "note", title: "RP repository found", message: `This looks like an RP repository in the numbered layout (it has 1-Now/ or 3-People/ folders), but it was not made by RPG Tools and has no .rpg-tools/campaign.json. Importing RP repositories is coming. Nothing was changed.` };
-  if (kind === "unknown") return { step: "error", title: "Nothing to restore", message: `This ${where} is not an RPG Tools export or an RP repository. It has no .rpg-tools/campaign.json and no 1-Now/ or 3-People/ folders.` };
+export function restoreNotice(kind: ZipKind, where: "ZIP" | "repository" | "folder", fallback: string): { step: "note" | "error"; title: string; message: string } {
+  if (kind === "player-safe") return { step: "note", title: "Player-safe export", message: `A player-safe export cannot be restored. It leaves out the GM-only folder and the restore copy, so a campaign made from it would be missing the GM's content. Use ${where === "ZIP" ? "the ZIP" : where === "folder" ? "the folder" : "the repository"} you made with the GM-only switch on.` };
+  if (kind === "numbered") return { step: "note", title: "RP repository found", message: `This looks like an RP repository in the numbered layout (it has numbered folders such as 1-Now/ or 3-People/), but it was not made by RPG Tools and has no .rpg-tools/campaign.json, so it cannot be restored. Nothing was changed.` };
+  if (kind === "unknown") return { step: "error", title: "Nothing to import", message: `This ${where} is not an RPG Tools export or an RP repository. It has no .rpg-tools/campaign.json and none of the numbered folders (1-Now/ to 8-Archive/).` };
   return { step: "error", title: "No restore copy", message: fallback };
 }
