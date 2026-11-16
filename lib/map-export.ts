@@ -62,8 +62,8 @@ export function stampPieces(d: MapDrawing, gridSize: number): StampPiece[] {
     const turned = ((((s.rotation ?? 0) % 360) + 540) % 360) - 180;
     return [{
       shapeId: s.id, name: (s.name.trim() || stamp.name).slice(0, 120),
-      look: `${stamp.id}|${round(w)}|${round(h)}|${s.flip ? 1 : 0}|${ink}`,
-      lookName: `Map piece: ${stamp.name} ${across}${s.flip ? " flipped" : ""} ${ink}`.slice(0, 120),
+      look: `${stamp.id}|${round(w)}|${round(h)}|${s.flip ? 1 : 0}|${ink}${s.tint ? `|${s.tint}` : ""}`,
+      lookName: `Map piece: ${stamp.name} ${across}${s.flip ? " flipped" : ""}${s.tint ? ` ${s.tint}` : ""} ${ink}`.slice(0, 120),
       x: (p.x + q.x) / 2, y: (p.y + q.y) / 2,
       size: Math.min(20, Math.max(0.25, Math.max(w, h) / gridSize)), rotation: turned === -180 ? 180 : turned,
     }];

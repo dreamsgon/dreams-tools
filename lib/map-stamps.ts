@@ -1,5 +1,6 @@
 import type { MapShape, Point } from "./model.ts";
 import { spaceStamps } from "./space-stamps.ts";
+import { moreStamps } from "./more-stamps.ts";
 
 /**
  * The stamp library: furniture and features drawn as paths, so the Map Creator (SVG)
@@ -7,8 +8,10 @@ import { spaceStamps } from "./space-stamps.ts";
  * "ink" outlines take the map style's ink colour.
  */
 export type StampPart = { d: string; fill?: string; stroke?: "ink" | string; width?: number };
-export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[]; image?: string };
-export const stampCategories = ["Yours", "Dungeon", "Furniture", "Outdoors", "Stars", "Worlds", "Space", "Stations and ships"] as const;
+/** Light a stamp gives when placed: bright and dim reach in squares, and its colour. */
+export type StampLight = { bright: number; dim: number; colour: string };
+export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[]; image?: string; light?: StampLight };
+export const stampCategories = ["Yours", "Dungeon", "Furniture", "Lights", "Town", "Outdoors", "Stars", "Worlds", "Space", "Stations and ships"] as const;
 export type StampCategory = typeof stampCategories[number];
 
 const R = (x: number, y: number, w: number, h: number) => `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
@@ -36,9 +39,43 @@ export const stamps: Stamp[] = [
   { id: "tent", name: "Tent", category: "Outdoors", w: 2, h: 2, parts: [ink("M 10 70 L 40 10 L 70 70 Z", "#c9a36a"), line("M 40 10 V 70"), paint("M 34 70 L 40 52 L 46 70 Z", "#4a3a2a")] },
   { id: "campfire", name: "Campfire", category: "Outdoors", w: 1, h: 1, parts: [...[0, 1, 2, 3, 4, 5, 6, 7].map(i => ink(C(20 + Math.cos(i * Math.PI / 4) * 12, 20 + Math.sin(i * Math.PI / 4) * 12, 3), "#8a8a84", 1)), paint("M 20 11 Q 27 19 20 27 Q 13 19 20 11 Z", "#e8742c"), paint("M 20 16 Q 24 21 20 25 Q 16 21 20 16 Z", "#f6c34a")] },
   { id: "well", name: "Well", category: "Outdoors", w: 1, h: 1, parts: [ink(C(20, 20, 13), "#a8a39a"), ink(C(20, 20, 7), "#3f6f8f", 1.5)] },
+  ...moreStamps,
   ...spaceStamps,
 ];
 export const stampById = (id: string | null | undefined, custom: Stamp[] = []) => stamps.find(s => s.id === id) ?? custom.find(s => s.id === id) ?? null;
+
+/**
+ * Tints recolour a placed stamp's paint (not its ink outlines): each colour keeps its lightness and
+ * takes the tint's hue and strength, so wood can become stone, iron or gold. See-through colours stay see-through.
+ */
+export const stampTints = [
+  { id: "oak", name: "Dark oak", swatch: "#6b4423", hue: 28, sat: .45, light: -.12 },
+  { id: "stone", name: "Stone", swatch: "#9a9a94", hue: 45, sat: .05, light: 0 },
+  { id: "iron", name: "Iron", swatch: "#5d6f80", hue: 210, sat: .14, light: -.06 },
+  { id: "gold", name: "Gilded", swatch: "#d9a514", hue: 44, sat: .78, light: .04 },
+  { id: "moss", name: "Mossy", swatch: "#5e8a3a", hue: 95, sat: .35, light: -.04 },
+  { id: "crimson", name: "Crimson", swatch: "#9a2b2b", hue: 0, sat: .55, light: -.08 },
+  { id: "frost", name: "Frost", swatch: "#8fc1d8", hue: 200, sat: .45, light: .08 },
+] as const;
+export type StampTint = typeof stampTints[number]["id"];
+const hex2 = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
+function toRgba(colour: string): [number, number, number, number] | null {
+  const h = colour.trim().match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
+  if (h) return [parseInt(h[1].slice(0, 2), 16), parseInt(h[1].slice(2, 4), 16), parseInt(h[1].slice(4, 6), 16), h[2] ? parseInt(h[2], 16) / 255 : 1];
+  const r = colour.trim().match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+  return r ? [+r[1], +r[2], +r[3], r[4] === undefined ? 1 : +r[4]] : null;
+}
+/** A colour in a tint, or the colour unchanged when there is no tint or it can't be read. */
+export function tintColour(colour: string, tint: string | null | undefined): string {
+  const t = stampTints.find(x => x.id === tint), c = toRgba(colour);
+  if (!t || !c) return colour;
+  const [r, g, b] = c.map((v, i) => i < 3 ? v / 255 : v), max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = Math.max(0, Math.min(1, (max + min) / 2 + t.light)), s = t.sat, h = t.hue / 360;
+  const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const part = (x: number) => { x = (x + 1) % 1; return x < 1 / 6 ? p + (q - p) * 6 * x : x < .5 ? q : x < 2 / 3 ? p + (q - p) * (2 / 3 - x) * 6 : p; };
+  const out = `#${hex2(part(h + 1 / 3) * 255)}${hex2(part(h) * 255)}${hex2(part(h - 1 / 3) * 255)}`;
+  return c[3] < 1 ? `${out}${hex2(c[3] * 255)}` : out;
+}
 
 /** Stamps you upload are pictures kept as assets; a placed one names its asset with this prefix. */
 export const customStampPrefix = "asset:";
