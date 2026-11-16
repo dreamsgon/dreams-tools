@@ -38,6 +38,7 @@ This guide covers features that are finished and live. Each page explains what t
 16. [AI connections](AI-Connections): connect an AI app over MCP or use your own API key.
 17. [Session recaps and AI writing](Session-Recaps-and-AI-Writing)
 18. [VTT bridges (Foundry VTT)](VTT-Bridges)
+19. [Set up Foundry VTT](Foundry-VTT-Setup): step by step, from bridge key to your party in Foundry.
 
 ## Reference
 
