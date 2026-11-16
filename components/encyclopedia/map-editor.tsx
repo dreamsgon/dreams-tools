@@ -16,11 +16,15 @@ import {confirmDialog} from '../confirm-dialog';
 import {LinkPageDialog,OnThisMap,PlaceCardView} from './map-places';
 import {linkThing,mapThings,type MapThing} from '@/lib/encyclopedia/map-places';
 import {holdersByPlace,pinTints} from '@/lib/encyclopedia/org-holdings';
-export function MapEditor({entry,data,campaign,onCalendarChange,update,onOpen,onDuplicate,onNewAreaMap,onRevealInParents}:{entry:Entry;data:Workspace;campaign?:Campaign;onCalendarChange:(c:Calendar)=>boolean;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void;onDuplicate:()=>void;onNewAreaMap?:(pinId:string)=>void;onRevealInParents?:()=>void}){
+/** The next map page to open straight into the map editor, set when the editor moves to a closer or bigger map. */
+let editorNext:string|null=null;
+export const openMapEditorNext=(id:string)=>{editorNext=id;};
+export function MapEditor({entry,data,campaign,onCalendarChange,update,onOpen,onDuplicate,onNewAreaMap,onNewMap,onRevealInParents}:{entry:Entry;data:Workspace;campaign?:Campaign;onCalendarChange:(c:Calendar)=>boolean;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void;onDuplicate:()=>void;onNewAreaMap?:(pinId:string)=>void;onNewMap?:(map:MapData,title:string)=>void;onRevealInParents?:()=>void}){
  const map=entry.mapData!,latest=useRef(map);latest.current=map;
  const [tool,setTool]=useState<'view'|'pin'|'reveal'|'conceal'>('view'),[selected,setSelected]=useState(''),[editingPin,setEditingPin]=useState<MapPin|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [studio,setStudio]=useState<false|'open'|'generate'>(false),[brushSize,setBrushSize]=useState(0),[history,setHistory]=useState<NonNullable<MapData['fog']>[]>([]);
+ const [studio,setStudio]=useState<false|'open'|'generate'>(()=>editorNext===entry.id?'open':false),[brushSize,setBrushSize]=useState(0),[history,setHistory]=useState<NonNullable<MapData['fog']>[]>([]);
  useEffect(()=>{setHistory([]);},[entry.id,map.imageId,map.grid,map.seed]);
+ useEffect(()=>{if(editorNext===entry.id)editorNext=null;},[entry.id]);
  const [item,setItem]=useState(''),[linking,setLinking]=useState<MapThing|null>(null);
  const file=useRef<HTMLInputElement>(null),{url,error:imageError}=useMapImage(map),pin=map.pins.find(p=>p.id===selected);
  const holders=holdersByPlace(data.entries,{worldId:entry.worldId,campaignId:campaign?.id??entry.campaignId});
@@ -46,7 +50,7 @@ export function MapEditor({entry,data,campaign,onCalendarChange,update,onOpen,on
  <MapRoutes map={map} campaign={campaign} onMap={setMap} onCalendarChange={onCalendarChange}/>
  <div className="map-below"><OnThisMap data={data} map={entry} things={things} selected={current?.id??''} onSelect={select} onLink={setLinking}/>
  <aside className="map-file-tools"><h3>Map tools</h3><p className="aside-hint">A map package bundles this map’s terrain, pins, notes, and image. Weather links need to be reconnected after a standalone map import; full campaign/workspace backups preserve them. Use it to move uploaded maps between local and hosted workspaces.</p><button className="button" disabled={busy} onClick={()=>file.current?.click()}><Upload size={14}/> {map.source==='image'?'Replace image':'Use uploaded image'}</button><input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Replace map image" onChange={async e=>{const f=e.target.files?.[0];if(!f)return;if(map.source==='generated'&&!await confirmDialog({title:'Replace the terrain with this image?',message:'Export a map package first to keep a copy.',confirm:'Replace terrain'})){e.target.value='';return;}setBusy(true);setError('');try{const image=await uploadMapImage(f);setMap({...image,source:'image',tiles:[],paint:undefined,fog:map.fog?{enabled:map.fog.enabled,revealed:[]}:undefined});setTool('view');}catch(err){setError(err instanceof Error?err.message:'Upload failed');}finally{setBusy(false);if(file.current)file.current.value='';}}}/>{map.source==='generated'&&<button className="text-button" disabled={busy} onClick={()=>setStudio('generate')}>Generate a new landscape</button>}</aside></div>
- {studio&&<WorldMapStudio entry={entry} data={data} campaign={campaign} setMap={setMap} start={studio==='generate'?'generate':undefined} onOpen={onOpen} onCalendarChange={onCalendarChange} onNewAreaMap={onNewAreaMap} onRevealInParents={onRevealInParents} close={()=>setStudio(false)}/>}
+ {studio&&<WorldMapStudio entry={entry} data={data} campaign={campaign} setMap={setMap} start={studio==='generate'?'generate':undefined} onOpen={onOpen} onCalendarChange={onCalendarChange} onNewAreaMap={onNewAreaMap} onNewMap={onNewMap} onRevealInParents={onRevealInParents} close={()=>setStudio(false)}/>}
  {linking&&<LinkPageDialog data={data} map={entry} thing={linking} onClose={()=>setLinking(null)} onPick={id=>{setMap(linkThing(latest.current,linking,id));select(linking);setLinking(null);}}/>}
  {editingPin&&<PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data,entry.worldId,entry.campaignId).filter(e=>e.id!==entry.id)} onClose={()=>setEditingPin(null)} onSave={p=>{setMap({pins:map.pins.some(v=>v.id===p.id)?map.pins.map(v=>v.id===p.id?p:v):[...map.pins,p]});setSelected(p.id);setEditingPin(null);setTool('view');}}/>}
  </div>;
