@@ -1,4 +1,5 @@
 import {scopeMapWeather} from './map-weather.ts';
+import { statRows } from './stat-rolls.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
@@ -328,7 +329,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  // A draft recap never reaches players, whatever its tabs say.
  const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
- const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players"&&f.type!=="none");
+ const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
  const entries=candidates.flatMap(e=>{
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"||e.kind==="store"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
@@ -349,7 +350,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?fields.map(f=>({id:f.id,label:f.label,section:f.section,type:f.type,value:values[f.id]??null})):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(fields,values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));

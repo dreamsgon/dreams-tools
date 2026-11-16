@@ -401,3 +401,53 @@ test('player dice proofs are signed over a JSON payload and compared in constant
  assert.notEqual(a.sig,b.sig);
  assert.ok(!checkProof(who,{...p,sig:'0'.repeat(64)},2000,env));assert.ok(!checkProof(who,{...p,sig:'ab'},2000,env));
 });
+
+// ---- Rolling from the campaign's stat sheet ------------------------------------------------------
+
+function statWorld(statsVisibility='players'){
+ const w=world(),c=w.campaigns.find(x=>x.id===C);c.discord={maptableCampaignId:'map-1'};
+ const f=(x)=>({options:[],visibility:'players',archived:false,section:'',...x});
+ c.statFields=[
+  f({id:'agi',label:'Agility',type:'number',derived:'floor(({value}-10)/2)',rolls:[{name:'Check',formula:'1d20+{Agility mod}',success:{op:'atLeast',against:'15'}}]}),
+  f({id:'sec',label:'Secret',type:'number',visibility:'gm'}),
+  f({id:'peek',label:'Peek',type:'none',rolls:[{name:'Roll',formula:'1d20+{Secret}'}]}),
+  f({id:'push',label:'Push',type:'none',spend:{tracker:'Stress',n:1},rolls:[{name:'Roll',formula:'2d6'}]}),
+  f({id:'hide',label:'Hidden',type:'number',visibility:'gm',rolls:[{name:'Roll',formula:'1d20'}]}),
+ ];
+ const a=ent(w,'ayla');a.character={...a.character,statsVisibility,statsByCampaign:{[C]:{agi:16,sec:9}},trackers:[{id:'st',label:'Stress',shape:'pips',colour:'purple',max:3,value:1}]};
+ return workspaceSchema.parse(w);
+}
+
+test('stat sheet rolls: rolled on the server from stats players can see, with the target and spending',async()=>{
+ R.resetThrottles();
+ const s=setup();s.state.data=statWorld();
+ let r=await rollCall(s,{entryId:'ayla',statId:'agi',rollName:'Check'});
+ assert.equal(r.status,200);let v=await r.json();
+ assert.equal(v.formula,'1d20+3');assert.equal(v.title,'Ayla · Agility · Check');assert.equal(v.total,14,'0.5 rolls an 11');
+ assert.deepEqual(v.outcome,{ok:false,text:'Fail · needed 15 or more'});
+ assert.match(s.state.posts.at(-1).post.detail,/Fail · needed 15 or more/,'Discord sees the outcome');
+ // Spending: Stress goes 1 → 0, saved as the player; the next roll is refused.
+ r=await rollCall(s,{entryId:'ayla',statId:'push',rollName:'Roll'});v=await r.json();
+ assert.equal(r.status,200);assert.deepEqual(v.spent,{label:'Stress',n:1});
+ assert.equal(ent(s.state.data,'ayla').character.trackers[0].value,0);assert.deepEqual(s.state.saves.at(-1),{name:'Mara',as:'player'});
+ r=await rollCall(s,{entryId:'ayla',statId:'push',rollName:'Roll'});
+ assert.equal(r.status,409);assert.match((await r.json()).error,/Not enough Stress/);
+ // A GM-only stat can't be rolled, and a roll naming one can't roll (its value never shapes a player's dice).
+ assert.equal((await rollCall(s,{entryId:'ayla',statId:'hide',rollName:'Roll'})).status,404);
+ assert.equal((await rollCall(s,{entryId:'ayla',statId:'peek',rollName:'Roll'})).status,400);
+ assert.equal((await rollCall(s,{entryId:'ayla',statId:'agi',rollName:'Nope'})).status,404);
+ const pc=playerCampaign(s.state.data,C,new Set(['ayla']),MARA),stats=pc.entries.find(e=>e.id==='ayla').stats;
+ assert.ok(!stats.some(x=>x.id==='sec'||x.id==='hide'));
+ assert.equal(stats.find(x=>x.id==='peek').rolls[0].dice,null);assert.equal(stats.find(x=>x.id==='peek').rolls[0].hint,'Your GM hasn’t finished this roll yet.');
+ assert.ok(!JSON.stringify(stats).includes('Secret')&&!JSON.stringify(stats).includes('{value'),'no GM stat names or formulas reach players');
+ assert.equal(stats.find(x=>x.id==='agi').worked,3);
+});
+
+test('stat sheet rolls: only on your own character, and only when its stats are shared',async()=>{
+ R.resetThrottles();
+ const s=setup();s.state.data=statWorld('gm');
+ assert.equal((await rollCall(s,{entryId:'ayla',statId:'agi',rollName:'Check'})).status,403);
+ s.state.data=statWorld();s.as('tobin');
+ assert.equal((await rollCall(s,{entryId:'ayla',statId:'agi',rollName:'Check'})).status,403);
+ assert.equal(s.state.saves.length,0);
+});

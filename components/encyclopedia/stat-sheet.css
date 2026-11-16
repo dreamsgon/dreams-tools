@@ -57,3 +57,9 @@
 .stat-form .spell-cost .inv-input:first-child{flex:1}
 .stat-form .spell-cost input[type=number]{width:80px;flex:none}
 .stat-form .inv-input::placeholder{font-weight:400;color:var(--muted);opacity:.75}
+/* Players' read-only sheet */
+.player-stat-sheet{margin-top:18px}
+.player-stat-sheet .stat-sheet-tools{justify-content:space-between;flex-wrap:wrap}
+.stat-read-name{font-weight:500;padding:4px 0}
+.stat-read-value{gap:8px;font-variant-numeric:tabular-nums;font-size:14px;min-width:3ch}
+.player-stat-sheet .stat-long{margin-top:0;font-size:13px}

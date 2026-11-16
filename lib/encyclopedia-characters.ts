@@ -1,7 +1,8 @@
 import type {Picture} from "./encyclopedia/world-model.ts";
+import type {RowField} from "./encyclopedia/stat-rolls.ts";
 
 export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc"|"creature";detail:string;world:string;worldId:string;campaignId:string|null;/** Set only when a campaign is paired: where a character in that campaign's world comes from. */origin?:string;hasStatblock:boolean;picture?:Picture};
-export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean;sheet?:{items?:{id:string;name:string;kind:string;label?:string;value?:string;formula?:string}[]}};picture?:Picture}[]};
+export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string;statFields?:RowField[]}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;statsByCampaign?:Record<string,Record<string,unknown>>;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean;sheet?:{items?:{id:string;name:string;kind:string;label?:string;value?:string;formula?:string}[]}};picture?:Picture}[]};
 
 const roleName={pc:"Player character",companion:"Companion",npc:"NPC",creature:"Creature"} as const;
 
@@ -34,4 +35,10 @@ export function campaignCharacters(raw:EncyclopediaRaw,maptableCampaignId:string
  const here=list.filter(c=>c.worldId===paired.worldId);
  if(!all)return here.filter(c=>c.campaignId===null||c.campaignId===paired.id).map(mark);
  return list.map(c=>c.worldId===paired.worldId?mark(c):c);
+}
+
+/** A character's stats in the campaign's sheet, worked out for rolling: its own campaign, else the one paired with this Maptable campaign. */
+export function sheetCampaignOf(raw:EncyclopediaRaw,entry:{campaignId:string|null;character?:{statsByCampaign?:Record<string,Record<string,unknown>>}},maptableCampaignId:string|null|undefined){
+ const c=entry.campaignId?(raw.campaigns??[]).find(x=>x.id===entry.campaignId):pairedCampaign(raw,maptableCampaignId);
+ return c?.statFields?.length?{campaign:c,values:entry.character?.statsByCampaign?.[c.id]??{}}:undefined;
 }

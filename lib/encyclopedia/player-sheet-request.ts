@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { discordTarget } from './discord-roll.ts';
 import { sheetSchema } from './sheet-link.ts';
 import { readPublishedSheet, SheetReadError } from './sheet-published.ts';
-import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
+import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, statRollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
+import { outcomeOf } from './stat-rolls.ts';
 import { rollWithMode } from './roll-mode.ts';
 import { PROOF_MINUTES, checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
@@ -44,7 +45,12 @@ const sheetAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('refresh'), ref, entryId: id, tabs: tabsSchema.optional() }),
   z.object({ action: z.literal('unlink'), ref, entryId: id }),
 ]);
-const rollAction = z.object({ ref, entryId: id, itemId: id, mode: z.enum(['normal', 'high', 'low']) });
+const mode = z.enum(['normal', 'high', 'low']);
+const rollAction = z.union([
+  z.object({ ref, entryId: id, itemId: id, mode }),
+  // A roll from the campaign's stat sheet: the stat and the roll's name; the dice are worked out here.
+  z.object({ ref, entryId: id, statId: id, rollName: z.string().trim().min(1).max(40), mode }),
+]);
 const noLongerMember = 'You can no longer open this campaign. You may have left it, or the GM changed what your group can see.';
 
 async function start(request: Request, deps: Deps, cap: number) {
@@ -111,19 +117,31 @@ export async function handlePlayerRoll(request: Request, deps: Deps) {
     if (found.fail) return found.fail;
     const m = found.m;
     if (rollThrottle.hit(m.userId, deps.now)) return json({ error: 'Rolling too quickly. Wait a few seconds and try again.' }, 429);
-    const { data } = await deps.store.read(m.owner);
-    const target = rollOf(data, m.campaignId, m.rights, linkerKey(m.owner, m.campaignId, m.userId), body.entryId, body.itemId);
-    const rolled = rollWithMode(target.formula, body.mode, deps.random);
-    const title = `${target.character} · ${target.name}`;
+    let data: Workspace, target: { entryId: string; character: string; name: string; formula: string }, need: Parameters<typeof outcomeOf>[1], spent: { label: string; n: number } | undefined;
+    if ('statId' in body) {
+      // A stat that spends from a tracker lowers it first, on the newest copy, so a save that crossed another tries again.
+      let done = false;
+      for (let attempt = 0; attempt < 4 && !done; attempt++) {
+        const read = await deps.store.read(m.owner), got = statRollOf(read.data, m.campaignId, m.rights, body.entryId, body.statId, body.rollName);
+        data = read.data; target = { entryId: got.entryId, character: got.character, name: got.name, formula: got.dice }; need = got.need; spent = got.spent;
+        done = !got.spent || !!await deps.store.save(m.owner, got.spend(read.data), read.revision, { name: m.name, as: 'player' });
+      }
+      if (!done) return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
+    } else {
+      data = (await deps.store.read(m.owner)).data;
+      target = rollOf(data, m.campaignId, m.rights, linkerKey(m.owner, m.campaignId, m.userId), body.entryId, body.itemId);
+    }
+    const rolled = rollWithMode(target!.formula, body.mode, deps.random), outcome = outcomeOf(rolled.total, need);
+    const title = `${target!.character} · ${target!.name}`, detail = [rolled.detail, outcome?.text, spent ? `spent ${spent.n} ${spent.label}` : ''].filter(Boolean).join(' · ');
     // The server's roll is the one that counts. With no Discord channel set up it is still rolled and returned.
     let discord: 'sent' | 'skipped' | 'none' | 'failed' = 'none';
     let channel = true;
-    try { discordTarget(data, m.campaignId); } catch { channel = false; }
+    try { discordTarget(data!, m.campaignId); } catch { channel = false; }
     if (channel && deps.post) {
-      try { discord = (await deps.post(m, { kind: 'roll', title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, who: target.character, avatarOf: target.entryId })).skipped ? 'skipped' : 'sent'; }
+      try { discord = (await deps.post(m, { kind: 'roll', title, formula: rolled.formula, total: rolled.total, detail, who: target!.character, avatarOf: target!.entryId })).skipped ? 'skipped' : 'sent'; }
       catch { discord = 'failed'; }
     }
-    return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, discord });
+    return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, discord, ...(outcome ? { outcome } : {}), ...(spent ? { spent } : {}) });
   } catch (e) { return failure(e, 'Could not roll. Try again.'); }
 }
 
