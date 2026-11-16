@@ -162,6 +162,8 @@ const lead = (text: string, max = 300) => {
   return para.length > max ? para.slice(0, max - 3).replace(/\s+\S*$/, "").replace(/\[\[[^\]]*$/, "") + "..." : para;
 };
 const label = (t: string) => one(t).replace(/[[\]|]/g, " ");
+/** The heading text a tab title gets in a page file. Bring-back uses it to find the tab again. */
+export const headingLabel = label;
 const dash = (p: string) => p.replace(/–/g, "-");
 const fmt = (v: unknown) => (v === null || v === undefined || v === "" ? "" : typeof v === "boolean" ? (v ? "yes" : "no") : String(v));
 const bullet = (head: string, value: string) => `- ${head}: ${value.replace(/\n/g, "\n  ")}`;
@@ -286,6 +288,15 @@ const PURPOSES: Record<string, string> = {
   "8-Archive": "Superseded builds, raw exports and the export log. Never deleted.",
 };
 
+/** The front page text widget "Where we are". Its text is the "Next session starting point" in 1-Now/Current-State.md, so a change made in the repository can come back into it. */
+export const WHERE_WIDGET = "where";
+const NO_START = "None recorded yet. The GM writes the exact opening situation and the next decision here at the end of each session.";
+function nextStart(c: Campaign): string {
+  const w = c.frontPage?.widgets.find(x => x.id === WHERE_WIDGET && x.type === "text");
+  const text = w && w.type === "text" ? playerText(w.body).trim() : "";
+  return text || NO_START;
+}
+
 export function rpExportFiles(workspace: Workspace, campaignId: string, opts: RpExportOptions): RpFile[] {
   const ws = campaignExport(workspace, campaignId), c = ws.campaigns[0], world = ws.worlds[0], includeGm = opts.includeGm;
   const byId = new Map(ws.entries.map(e => [e.id, e]));
@@ -387,7 +398,7 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
     ...sec("## Date", calendars.map(cal => L(cal.visibility !== "players", `- ${label(cal.name)}: ${formatDate(cal, cal.current)}`))),
     ...sec("## Party", pcs.map(p => pubPcs.has(p.id) ? L(false, `- ${link(p.id, false)}`) : L(true, `- ${link(p.id, true)}`))),
     ...sec("## Most recent session", [...(latestPub ? [{ gm: false, text: `${link(latestPub.id, false)}\n\n${built.get(latestPub.id)!.leadPub}` }] : []), ...(latestGm ? [{ gm: true, text: `${link(latestGm.id, true)}\n\n${built.get(latestGm.id)!.leadGm}` }] : [])]),
-    { gm: false, text: "## Next session starting point\n\nNone recorded yet. The GM writes the exact opening situation and the next decision here at the end of each session." },
+    { gm: false, text: `## Next session starting point\n\n${nextStart(c)}` },
   ], "Where the story stands: date, party, most recent session, next starting point", { always: true });
   for (const pc of pcs) {
     const pub = pubPcs.has(pc.id), s = statChunks(c, pc, pub && pc.character!.statsVisibility === "players");
@@ -579,6 +590,10 @@ Do not edit these; your changes would be lost:
 
 An export does not replace a file you changed since the last export; it keeps it and says so.
 
+## What happens to your files
+
+RPG Tools compares this repository with its last push and lists each change against the page it belongs to. A new file becomes a new page. A changed page file updates its page, and the page keeps its earlier version in Page history. The index and overview files (Locations-and-Lore.md, Factions.md, Timeline.md, Quests-and-Threads.md) and the sections RPG Tools writes from data (Details, Directory entry, Stats, Trackers, Statblock, Profile, Map, recap lists) are rebuilt from the app, so put page text and play records in the page files and session files instead.
+
 ## Page files keep their front matter
 
 Each page file starts with a small block between two lines of three dashes:
@@ -597,6 +612,40 @@ Do not remove or change it. It ties the file to its page in RPG Tools, so edits 
 - Never reword recorded play. Keep session records, handoffs and rulings word for word.
 - Follow 5-Rules-and-Setup/Save-Procedure.md at the end of every session.
 `;
+}
+
+/** A page file's text without its front matter block, with line endings and the final newline made plain. */
+export const withoutFrontMatter = (text: string) => text.replace(/^\uFEFF/, "").replace(/^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/, "").replace(/\r\n/g, "\n").trimEnd();
+/** True when two versions of a page file differ only in the front matter (for example its "updated" line) or in line endings. */
+export const sameApartFromFrontMatter = (a: string, b: string) => withoutFrontMatter(a) === withoutFrontMatter(b);
+
+/** The "## " sections of a page file the app writes from its data. Text under these headings is rebuilt on every export. */
+export const DERIVED_SECTIONS = ["Details", "Directory entry", "Stats", "Trackers", "Statblock", "Profile", "Map", "Recap timeline", "Recap quotes", "GM notes", "Recap items to check", "Secret lines in the overview"];
+/** The sections of one file that are written from data, by path. */
+export function derivedSectionsOf(path: string): string[] {
+  if (path === "1-Now/Current-State.md") return ["Date", "Party", "Most recent session"];
+  if (/^1-Now\/.+-Sheet-Tracker\.md$/.test(path) || /^6-GM-Only\/1-Now\/.+-Sheet-Tracker\.md$/.test(path)) return ["Stats", "Trackers"];
+  if (/^(6-GM-Only\/)?(3-People|4-World|2-Story\/Sessions)\//.test(path)) return DERIVED_SECTIONS;
+  return [];
+}
+/**
+ * True when two versions of a file are the same apart from the front matter, line endings and the sections the app writes from its data
+ * (a heading that appears once in `b`, so a tab with the same name is never mistaken for one). The push uses it: a file that reads the same
+ * as the new export in everything the AI GM may write is the app's own, and the data sections are simply rebuilt.
+ */
+export function sameApartFromOwned(path: string, a: string, b: string): boolean {
+  const drop = derivedSectionsOf(path).filter(h => withoutFrontMatter(b).split("\n").filter(l => l.trimEnd() === `## ${h}`).length === 1);
+  const clean = (text: string) => {
+    const out: string[] = []; let skip = false, fence: string | null = null;
+    for (const line of withoutFrontMatter(text).split("\n")) {
+      const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (f) { if (!fence) fence = f[1]; else if (f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null; }
+      if (!fence && !f) { const h = /^## (.+?)\s*$/.exec(line); if (h) skip = drop.includes(h[1]); }
+      if (!skip) out.push(line.replace(/last changed \S+/, "last changed X"));
+    }
+    return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  };
+  return clean(a) === clean(b);
 }
 
 /* ---- what to write, skip or delete when the files go into a repository ---- */

@@ -8,10 +8,11 @@
  *
  * Pure apart from the injected `fetch` (and crypto.subtle for SHA-1), so it runs in Node tests with a fake GitHub.
  */
-import { assertSafePath, isLayoutPath, planWrite, sha256Hex, FOLDERS_LIST, type RpFile } from "./encyclopedia/rp-export.ts";
+import { assertSafePath, isLayoutPath, isRewrittenPath, planWrite, sameApartFromOwned, sha256Hex, FOLDERS_LIST, type RpFile } from "./encyclopedia/rp-export.ts";
 import { readRestoreCopy, RESTORE_PATH } from "./encyclopedia/rp-zip.ts";
 import { classifyZip, exportedAt, type ZipKind } from "./encyclopedia/rp-sheet.ts";
 import { decodeText, planRead, type RepoFile } from "./encyclopedia/rp-import.ts";
+import { isCandidate, parseFilesMap, type FilesMap } from "./encyclopedia/rp-bring-back.ts";
 import { ZIP_MAX_BYTES } from "./zip-read.ts";
 import type { Workspace } from "./encyclopedia/world-model.ts";
 
@@ -215,11 +216,17 @@ export async function preparePush(token: string, repo: string, branch: string, i
     const mine = byPath.get(path);
     if (mine && newSha.get(path) === item.sha) existing.set(path, sha256Hex(enc.encode(mine.text)));
     else if (prevHash(path) !== undefined && prevBlob(path) === item.sha) existing.set(path, prevHash(path)!);
-    else if (prevHash(path) !== undefined && !isHousekeeping(path) && !path.startsWith(".rpg-tools/")) { existing.set(path, null); download.push(item); }
+    else if (!isHousekeeping(path) && !path.startsWith(".rpg-tools/") && (prevHash(path) !== undefined || (mine && path.endsWith(".md") && !isRewrittenPath(path)))) { existing.set(path, null); download.push(item); }
     else existing.set(path, "unknown");
   }
   // A file too big to read cannot be compared, so it counts as not ours: it is left alone rather than blocking the push.
-  await pool(download, 6, async item => { try { existing.set(item.path, sha256Hex(await readBlob(c, item))); } catch (e) { if (e instanceof GithubError && e.code === "too-big") existing.set(item.path, "unknown"); else throw e; } });
+  // A file whose text equals the new export apart from its front matter and the sections the app writes from data (a change brought back into the app, or a new page whose file the AI GM wrote) is ours: it counts as unchanged.
+  await pool(download, 6, async item => {
+    try {
+      const bytes = await readBlob(c, item), mine = byPath.get(item.path);
+      existing.set(item.path, mine && sameApartFromOwned(item.path, decode(bytes), mine.text) ? sha256Hex(enc.encode(mine.text)) : sha256Hex(bytes));
+    } catch (e) { if (e instanceof GithubError && e.code === "too-big") existing.set(item.path, "unknown"); else throw e; }
+  });
 
   const plan = planWrite(existing, previous, files, includeGm);
 
@@ -362,4 +369,34 @@ export async function readRepoFiles(token: string, repo: string, branch: string,
     onProgress(`Reading files… ${++done} of ${wanted.size}`);
   });
   return { ok: true, truncated, files: items.map(i => ({ path: i.path, size: i.size, ...(texts.has(i.path) ? { text: texts.get(i.path) } : {}) })) };
+}
+
+/* ---- reading a repository to bring its changes back ---- */
+export type GithubChanges = { ok: true; files: RepoFile[]; map: FilesMap; log: string | undefined; truncated: boolean; downloaded: number } | { ok: false; error: string };
+
+/**
+ * Reads a branch for "Bring back changes": the tree, .rpg-tools/files.json, the export log, and the text of only the Markdown files whose
+ * git blob id differs from the one the last push recorded (all of them when the map has no blob ids). Everything else counts as unchanged.
+ */
+export async function readRepoChanges(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined): Promise<GithubChanges> {
+  const c = conn(token, repo, fetch);
+  const head = await readHead(c, branch);
+  if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}.`);
+  if (head.state === "empty") return { ok: false, error: `${repo} is empty. There is nothing to bring back.` };
+  const { files: tree, truncated } = await readTree(c, head.tree);
+  const mapItem = tree.get(".rpg-tools/files.json");
+  if (!mapItem) return { ok: false, error: `${repo} has no .rpg-tools/files.json, so RPG Tools cannot tell what changed since the last push.` };
+  const map = parseFilesMap(decode(await readBlob(c, mapItem, 2_000_000)));
+  if (!map) return { ok: false, error: ".rpg-tools/files.json could not be read." };
+  const wanted = [...tree.values()].filter(i => isCandidate(i.path) && (i.size ?? 0) <= 400_000 && !(map.gitBlobs[i.path] !== undefined && map.gitBlobs[i.path] === i.sha));
+  const texts = new Map<string, string>();
+  let done = 0;
+  await pool(wanted, 4, async item => {
+    try { texts.set(item.path, decodeText(await readBlob(c, item, 500_000), item.path)); } catch (e) { if (e instanceof GithubError) throw e; /* not UTF-8: left unread */ }
+    onProgress(`Reading files… ${++done} of ${wanted.length}`);
+  });
+  const logItem = tree.get("8-Archive/Export-Log.md");
+  let log: string | undefined;
+  if (logItem) { try { log = decode(await readBlob(c, logItem, 1_000_000)); } catch { log = undefined; } }
+  return { ok: true, truncated, map, log, downloaded: texts.size, files: [...tree.values()].map(i => ({ path: i.path, size: i.size, ...(texts.has(i.path) ? { text: texts.get(i.path) } : {}) })) };
 }
