@@ -186,6 +186,8 @@ export const mapShapeSchema = z.object({
   tint: z.enum(["oak", "stone", "iron", "gold", "moss", "crimson", "frost"]).nullable().optional(),
   // A light's settings, or changes to the light a stamp gives (lib/map-light.ts). Reach is in squares.
   light: mapLightSchema.nullable().optional(),
+  // Light and sight pass through this shape's outline: a road, a river, a pool or a field, not a wall.
+  seeThrough: z.boolean().optional(),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
 /** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */
