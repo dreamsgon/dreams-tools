@@ -1,7 +1,7 @@
 import type { MapDrawing, MapShape, MapStyle, Point } from "./model.ts";
 import { orderedShapes, roomPaths, shapePath, openingPath, labelBox } from "./map-drawing.ts";
 import { roomPolygons, wallSegments } from "./map-creator.ts";
-import { customStampAsset, stampById, stampMatrix } from "./map-stamps.ts";
+import { customStampAsset, stampById, stampMatrix, tintColour } from "./map-stamps.ts";
 import { hexLayerOps } from "./hexmap/art.ts";
 
 /**
@@ -125,7 +125,7 @@ const isRoomShape = (s: MapShape) => !!s.fill && (s.type === "merged" || s.type 
 const cache = new WeakMap<MapShape, { key: string; ops: DrawOp[] }>();
 /** What to draw for one shape, in order, in the drawing's style. */
 export function shapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
-  const key = `${d.background}|${JSON.stringify(d.style)}`, hit = cache.get(s);
+  const key = `${d.background}|${JSON.stringify(d.style)}|${s.tint ?? ""}`, hit = cache.get(s);
   if (hit && hit.key === key) return hit.ops;
   const ops = buildShapeOps(s, d);
   cache.set(s, { key, ops });
@@ -150,7 +150,8 @@ function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">)
     const stamp = stampById(s.stamp);
     if (!stamp) return [];
     const matrix = stampMatrix(s, stamp), ink = style?.ink ?? "#2b2b2b";
-    return stamp.parts.map(part => ({ d: part.d, fill: part.fill, stroke: part.stroke === "ink" ? ink : part.stroke, width: part.width, matrix }));
+    const tint = (c: string | undefined) => c && s.tint ? tintColour(c, s.tint) : c;
+    return stamp.parts.map(part => ({ d: part.d, fill: tint(part.fill), stroke: part.stroke === "ink" ? ink : tint(part.stroke), width: part.width, matrix }));
   }
   if (s.type === "opening") return [{ d: shapePath(s), stroke: s.fill ?? background, width: s.thickness + 1, cap: "butt" }];
   if (s.type === "door" || s.type === "window") return [

@@ -45,9 +45,9 @@ test("findStamps matches names", () => {
   assert.deepEqual(findStamps("bar").map(s => s.name), ["Barrel"]);
 });
 
-test("findStamps matches the Outdoors category with six stamps", () => {
+test("findStamps matches the Outdoors category", () => {
   const found = findStamps("outdoors");
-  assert.equal(found.length, 6);
+  assert.equal(found.length, 18);
   assert.ok(found.every(s => s.category === "Outdoors"));
 });
 

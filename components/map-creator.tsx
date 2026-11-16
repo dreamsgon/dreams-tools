@@ -15,7 +15,7 @@ import { isWaterTerrain, readHex } from "@/lib/hexmap/biomes";
 import UseMapDialog, { pieceArt, type UseChoice } from "./use-map-dialog";
 import { setUpDrawnMapScene } from "@/lib/map-export";
 import type { GeneratedMap } from "@/lib/map-generator";
-import { stampById as libraryStamp, stampBox, rotateStamp, customStamps, customStampAsset } from "@/lib/map-stamps";
+import { stampById as libraryStamp, stampBox, rotateStamp, customStamps, customStampAsset, stampTints } from "@/lib/map-stamps";
 import { applyMapStyle, mapStylePresets, unstyledColours } from "@/lib/map-style";
 import DrawingLayers from "./drawing-layers";
 import AppearanceMenu from "./appearance-menu";
@@ -436,6 +436,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button aria-pressed={single.flip} onClick={()=>patchShape({flip:!single.flip})} title="Flip"><FlipHorizontal2 size={15}/> Flip</button>
     </div>
     <label>Angle <output>{Math.round(single.rotation)}°</output><input type="range" min={0} max={345} step={15} value={((single.rotation%360)+360)%360} onChange={e=>turnStamp(+e.target.value-single.rotation,true)}/></label>
+    {libraryStamp(single.stamp)&&<div className="creator-field"><span>Tint</span><div className="creator-tints" role="group" aria-label="Tint">
+      <button type="button" aria-pressed={!single.tint} onClick={()=>patchShape({tint:null})}><i className="none"/>As drawn</button>
+      {stampTints.map(t=><button key={t.id} type="button" aria-pressed={single.tint===t.id} onClick={()=>patchShape({tint:t.id})}><i style={{background:t.swatch}}/>{t.name}</button>)}
+    </div></div>}
+    {stampById(single.stamp)?.light&&<p className="creator-measure">Gives light: {stampById(single.stamp)!.light!.bright} squares bright, {stampById(single.stamp)!.light!.dim} dim.</p>}
     <div className="creator-pair">
       <label title="Shift + scroll to resize">Width (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].x-single.points[0].x)/grid.size*2)/2} onChange={e=>stampSize("w",+e.target.value)}/></label>
       <label title="Shift + scroll to resize">Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>

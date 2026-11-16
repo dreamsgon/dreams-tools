@@ -171,6 +171,8 @@ export const mapShapeSchema = z.object({
   stamp: short.nullable().default(null),
   rotation: finite.min(-360).max(360).default(0),
   flip: z.boolean().default(false),
+  // A built-in stamp can be recoloured with a tint (stampTints in lib/map-stamps.ts).
+  tint: z.enum(["oak", "stone", "iron", "gold", "moss", "crimson", "frost"]).nullable().optional(),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
 /** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */
