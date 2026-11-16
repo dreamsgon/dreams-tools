@@ -1,4 +1,4 @@
-import { encodePaint, isWater, paintScale, resizeCells, terrainIndex, tilesFromPaint, type MapData, type MapPath, type MapPin, type TerrainId } from "./map-model.ts";
+import { encodePaint, isWater, paintScale, resizeCells, terrainIndex, terrains, tilesFromPaint, type MapData, type MapPath, type MapPin, type TerrainId } from "./map-model.ts";
 import { isGeneratedPlace, placeName, riverName, seeded } from "./world-generator.ts";
 
 /**
@@ -96,6 +96,15 @@ function quantile(values: ArrayLike<number>, q: number) {
   const s = Float32Array.from(values).sort();
   return s[Math.min(s.length - 1, Math.max(0, Math.floor(s.length * q)))];
 }
+/** The height below which this share of the globe's surface lies, counting each row by its true area. */
+function areaQuantile(e: Float32Array, w: number, h: number, q: number) {
+  const order = Array.from(e.keys()).sort((a, b) => e[a] - e[b]), weight = (i: number) => Math.cos((0.5 - (Math.floor(i / w) + 0.5) / h) * Math.PI);
+  let total = 0;
+  for (let y = 0; y < h; y++) total += Math.cos((0.5 - (y + 0.5) / h) * Math.PI) * w;
+  let sum = 0;
+  for (const i of order) { sum += weight(i); if (sum >= total * q) return e[i]; }
+  return e[order[order.length - 1]];
+}
 function randomUnit(r: () => number): V3 {
   const z = r() * 2 - 1, th = r() * Math.PI * 2, rr = Math.sqrt(1 - z * z);
   return [rr * Math.cos(th), rr * Math.sin(th), z];
@@ -148,7 +157,8 @@ export function planetLand(o: PlanetOptions, w: number, h: number): PlanetLand {
       up[i] += boundary * Math.max(0, conv) * volc;
     }
   }
-  const sea = o.water <= 0 ? -99 : o.water >= 100 ? 99 : quantile(e, o.water / 100);
+  // Sea level is set by true area, so "70% sea" means 70% of the globe rather than 70% of the flat map's squares.
+  const sea = o.water <= 0 ? -99 : o.water >= 100 ? 99 : areaQuantile(e, w, h, o.water / 100);
   const land = e.filter(v => v >= sea), share = 0.02 + 0.1 * o.mountains / 100;
   let minE = Infinity, maxE = -Infinity;
   for (const v of e) { if (v < minE) minE = v; if (v > maxE) maxE = v; }
@@ -339,10 +349,16 @@ export function planetFeatures(o: PlanetOptions, world: Planet) {
 /** The map size a planet uses: twice as wide as it is tall, with the finest paint the map allows. */
 export const PLANET_COLUMNS = 40, PLANET_ROWS = 20;
 
-/** The parts of a map that a generated planet replaces. Places already on the map that anyone has worked on stay. */
-export function generatePlanet(o: PlanetOptions, map: MapData): Pick<MapData, "columns" | "rows" | "fog" | "hexes" | "party" | "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
-  const k = paintScale(PLANET_COLUMNS, PLANET_ROWS), w = PLANET_COLUMNS * k, h = PLANET_ROWS * k;
-  const world = buildPlanet(o, w, h), found = planetFeatures(o, world), seed = o.seed.slice(0, 100);
+/** The paint size of a planet map, in squares. */
+export const planetMapSize = () => { const k = paintScale(PLANET_COLUMNS, PLANET_ROWS); return { w: PLANET_COLUMNS * k, h: PLANET_ROWS * k }; };
+
+/**
+ * The parts of a map that a generated planet replaces, from a planet already built at the map's size (or built here).
+ * Places already on the map that anyone has worked on stay.
+ */
+export function generatePlanet(o: PlanetOptions, map: MapData, built?: Planet): Pick<MapData, "columns" | "rows" | "fog" | "hexes" | "party" | "paint" | "tiles" | "seed" | "scale" | "pins" | "paths"> {
+  const { w, h } = planetMapSize(), world = built && built.w === w && built.h === h ? built : buildPlanet(o, w, h);
+  const found = planetFeatures(o, world), seed = o.seed.slice(0, 100);
   const paint = { columns: w, rows: h, cells: encodePaint(world.cells) };
   const at = (i: number) => ({ x: ((i % w) + 0.5) / w, y: (Math.floor(i / w) + 0.5) / h });
   const id = (kind: string, salt: string) => `${kind}-${hash(`${seed}:${salt}`).toString(36)}`;
@@ -378,11 +394,63 @@ export function generatePlanet(o: PlanetOptions, map: MapData): Pick<MapData, "c
   };
 }
 
-/** How much of the surface is each terrain, as shares of the whole, for checks and legends. */
-export function terrainShares(cells: Uint8Array) {
-  const counts = new Map<number, number>();
-  for (const c of cells) counts.set(c, (counts.get(c) ?? 0) + 1);
-  let land = 0;
-  for (const [t, c] of counts) if (!isWater(t)) land += c;
-  return { counts, land: land / Math.max(1, cells.length) };
+export type PlanetStats = {
+  /** Share of the whole surface for each terrain number, weighted by true area (squares near the poles are smaller). */
+  shares: number[];
+  land: number; ice: number;
+  /** Share of the land that is mild and open enough to live on. */
+  livable: number;
+};
+/** How much of the surface is land, ice and each terrain, and how much of the land people could live on. */
+export function planetStats(world: Pick<Planet, "w" | "h" | "cells" | "temperature">): PlanetStats {
+  const { w, h, cells, temperature: T } = world, shares = new Array(terrains.length).fill(0);
+  const harsh = new Set(["glacier", "snow", "desert", "barren", "volcanic", "mountains"].map(id => terrainIndex[id as TerrainId]));
+  const frozen = new Set(["seaice", "glacier", "snow"].map(id => terrainIndex[id as TerrainId]));
+  let total = 0, land = 0, ice = 0, livable = 0;
+  for (let y = 0; y < h; y++) {
+    const weight = Math.cos((0.5 - (y + 0.5) / h) * Math.PI);
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x, t = cells[i];
+      shares[t] += weight; total += weight;
+      if (frozen.has(t)) ice += weight;
+      if (isWater(t)) continue;
+      land += weight;
+      if (!harsh.has(t) && T[i] > -2 && T[i] < 34) livable += weight;
+    }
+  }
+  return { shares: shares.map(v => v / total), land: land / total, ice: ice / total, livable: land ? livable / land : 0 };
+}
+
+export type PlanetCheck = { kind: "ok" | "note"; text: string };
+/** Quick checks of whether the settings hang together, written for a GM rather than a physicist. */
+export function planetChecks(o: PlanetOptions, stats?: PlanetStats): PlanetCheck[] {
+  const out: PlanetCheck[] = [], note = (text: string) => out.push({ kind: "note", text });
+  if (o.rotation === "locked") {
+    out.push({ kind: "ok", text: "Tidally locked: the day side bakes, the night side freezes, and the livable land is a ring along the twilight edge." });
+    if (o.tilt > 5) note("Tidally locked worlds end up with almost no tilt, so tilt is ignored here.");
+  } else {
+    out.push({ kind: "ok", text: "Deserts sit near 25 to 30 degrees north and south where dry air sinks; the wettest land is near the equator and on coasts the wind blows onto." });
+    if (o.tilt > 54) note(`At ${o.tilt}° the poles get more sun over a year than the equator, so the ice gathers near the equator.`);
+  }
+  if (o.water < 15 && o.rain > 55) note("Very little sea to rain from. Rain this heavy needs water from somewhere, like great lakes or melting ice.");
+  if (o.temp >= 3 && o.water > 40) note("Scorching with open seas: the heat would boil them into a thick, steamy sky.");
+  if (o.temp <= -3 && o.life === "complex") note("Life can last under the ice of a frozen world, but forests and grassland on top are a stretch.");
+  if (o.size === "tiny" && o.water > 20) note("A world this small has weak gravity and slowly loses its air and seas to space.");
+  if (o.life !== "complex" && o.places > 0) note("No plants or animals, so towns read as colonies or outposts.");
+  if (stats && o.places > 0 && stats.land > 0 && stats.livable < 0.08) note("Hardly any of the land is mild enough to live on, so towns will be few and far between.");
+  if (o.pangaea && o.water > 85) note("A supercontinent needs land to gather: with this much sea it is only a large island.");
+  return out;
+}
+
+const rgb = (hex: string) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+const terrainRgb = terrains.map(t => rgb(t.color));
+/** The planet's colours as RGBA pixels, lit from the north-west so mountains stand out; used for the globe and small previews. */
+export function planetPixels(world: Pick<Planet, "w" | "h" | "cells" | "e" | "sea" | "maxE">): Uint8ClampedArray {
+  const { w, h, cells, e, sea, maxE } = world, out = new Uint8ClampedArray(w * h * 4), relief = 6 / Math.max(1e-6, maxE - sea);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, c = terrainRgb[cells[i]] ?? terrainRgb[0];
+    const k = isWater(cells[i]) ? 1 : Math.max(0.75, Math.min(1.2, 1 + (e[i] - e[y * w + (x + 1) % w] + e[i] - e[Math.min(h - 1, y + 1) * w + x]) * relief));
+    out[i * 4] = c[0] * k; out[i * 4 + 1] = c[1] * k; out[i * 4 + 2] = c[2] * k; out[i * 4 + 3] = 255;
+  }
+  return out;
 }
