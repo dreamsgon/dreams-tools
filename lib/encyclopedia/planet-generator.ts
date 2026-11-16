@@ -330,20 +330,26 @@ export function planetFeatures(o: PlanetOptions, world: Planet) {
     }
   }
   // Landmarks this world suggests, which the GM can move, rename or remove.
-  const marks: { i: number; name: string }[] = [];
+  const marks: { i: number; name: string; icon: string }[] = [];
   if (o.landmarks) {
     // Each landmark keeps clear of the towns and the other landmarks, so their names don't overlap.
     const clear = (i: number) => [...places, ...marks].every(p => dist(p.i, i) > 6 * w / 320);
     const bestOf = (ok: (i: number) => boolean, key: (i: number) => number) => { let bi = -1, bv = -Infinity; for (let i = 0; i < n; i++) if (ok(i) && clear(i)) { const v = key(i); if (v > bv) { bv = v; bi = i; } } return bi; };
     const is = (...ids: TerrainId[]) => { const set = new Set(ids.map(id => terrainIndex[id])); return (i: number) => set.has(cells[i]); };
-    const add = (i: number, name: string) => { if (i >= 0) marks.push({ i, name }); };
-    add(bestOf(is("volcanic"), i => up[i]), `Mount ${placeName(pr).replace(/(ford|mere|wick|holm|stead|haven|gate|moor|dale|watch|brook|fell|port|crest|by|ton)$/i, "")}`);
-    add(bestOf(is("desert"), i => toSea[i]), `Ruins of ${placeName(pr)}`);
-    add(bestOf(is("jungle", "forest"), i => toSea[i] + pr() * 3), "The Elder Tree");
-    add(bestOf(is("tundra", "glacier"), i => toSea[i] + pr() * 2), "Starfall Crater");
-    add(bestOf(is("grassland", "steppe", "barren"), () => pr()), "The Old Stones");
+    const add = (i: number, name: string, icon: string) => { if (i >= 0) marks.push({ i, name, icon }); };
+    add(bestOf(is("volcanic"), i => up[i]), `Mount ${placeName(pr).replace(/(ford|mere|wick|holm|stead|haven|gate|moor|dale|watch|brook|fell|port|crest|by|ton)$/i, "")}`, "volcano");
+    add(bestOf(is("desert"), i => toSea[i]), `Ruins of ${placeName(pr)}`, "ruins");
+    add(bestOf(is("jungle", "forest"), i => toSea[i] + pr() * 3), "The Elder Tree", "tree");
+    add(bestOf(is("tundra", "glacier"), i => toSea[i] + pr() * 2), "Starfall Crater", "crater");
+    add(bestOf(is("grassland", "steppe", "barren"), () => pr()), "The Old Stones", "stones");
   }
   return { rivers, places, roads, marks };
+}
+
+/** The icon for a generated town: the first city is the capital; a world without complex life gets colonies and outposts. */
+function settlementIcon(kind: "city" | "town" | "village", first: boolean, settled: boolean) {
+  if (!settled) return first ? "spaceport" : { city: "dome", town: "rig", village: "station" }[kind];
+  return first ? "capital" : kind;
 }
 
 /** The map size a planet uses: twice as wide as it is tall, with the finest paint the map allows. */
@@ -364,8 +370,8 @@ export function generatePlanet(o: PlanetOptions, map: MapData, built?: Planet): 
   const id = (kind: string, salt: string) => `${kind}-${hash(`${seed}:${salt}`).toString(36)}`;
   const kept = map.pins.filter(p => !isGeneratedPlace(p, map)), taken = new Set(kept.map(p => p.title.toLowerCase()));
   const added: MapPin[] = [
-    ...found.places.map(p => ({ id: id("place", `${p.i}`), title: p.name, kind: p.kind, ...at(p.i), notes: "", entryId: null, visibility: "gm" as const })),
-    ...found.marks.map(m => ({ id: id("place-mark", `${m.i}`), title: m.name, kind: "landmark" as const, ...at(m.i), notes: "", entryId: null, visibility: "gm" as const })),
+    ...found.places.map((p, n) => ({ id: id("place", `${p.i}`), title: p.name, kind: p.kind, icon: settlementIcon(p.kind, n === 0, o.life === "complex"), ...at(p.i), notes: "", entryId: null, visibility: "gm" as const })),
+    ...found.marks.map(m => ({ id: id("place-mark", `${m.i}`), title: m.name, kind: "landmark" as const, icon: m.icon, ...at(m.i), notes: "", entryId: null, visibility: "gm" as const })),
   ].filter(p => !taken.has(p.title.toLowerCase()) && !kept.some(q => q.id === p.id));
   const pins = [...kept, ...added].slice(0, 100);
   const paths: MapPath[] = [];
