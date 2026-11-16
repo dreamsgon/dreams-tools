@@ -241,7 +241,11 @@
   .home-grid { gap:16px; }
   .home-w-s, .home-w-m, .home-w-l { grid-column:span 12; }
   .home-w { padding:14px; }
-  .home-hello-right { width:100%; }
+  .home-w-bare { padding:0; }
+  /* The tool buttons and Customize sit two by two instead of running off the screen. */
+  .home-hello-right { width:100%; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .home-tools { display:contents; }
+  .home-tools a, .home-tool-button { min-height:38px; padding:5px 10px; gap:6px; font-size:12px; justify-content:center; }
   .home-sizes { display:none; }
   /* Campaign cards become a strip you swipe sideways. */
   .home-campaign-grid { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:10px; padding-bottom:6px; margin-inline:-16px; padding-inline:16px; }

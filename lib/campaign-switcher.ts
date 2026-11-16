@@ -34,7 +34,7 @@ export const isPinned = (row: CampaignRow, pins: readonly string[] | null | unde
 
 /** Whether the campaign has something to open in this tool. Without it, picking goes to the campaign hub. */
 export function hasHalf(tool: SwitcherTool, row: CampaignRow): boolean {
-  return tool === "maptable" ? !!row.maptable && row.maptable.scenes > 0 : !!row.encyclopedia;
+  return tool === "maptable" ? !!row.maptable : !!row.encyclopedia;
 }
 
 /** The campaign's hub on the Campaigns page. */
@@ -42,7 +42,7 @@ export const hubHref = (row: CampaignRow) => `/campaigns/${encodeURIComponent(ro
 
 /** The small line under a campaign name. */
 export function rowDetail(tool: SwitcherTool, row: CampaignRow): string {
-  if (tool === "maptable") return hasHalf(tool, row) ? plural(row.maptable!.scenes, "scene") : "No maps yet · Add maps";
+  if (tool === "maptable") return !row.maptable ? "No maps yet · Add maps" : row.maptable.scenes ? plural(row.maptable.scenes, "scene") : "No scenes yet";
   const world = row.encyclopedia?.worldName ?? "";
   return row.encyclopedia ? [world, plural(row.encyclopedia.pages, "page")].filter(Boolean).join(" · ") : "Maps only · Add notes";
 }

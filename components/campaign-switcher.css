@@ -55,7 +55,7 @@
 
 /* Phones: the popover spans the whole drawer (or sheet), and the shortcut hint goes. */
 @media (max-width:800px) {
-  .csw-pop, .csw--bar .csw-pop { left:6px; right:6px; width:auto; max-width:none; max-height:calc(100dvh / var(--ui-zoom, 1) - 160px); }
+  .csw-pop, .csw--bar .csw-pop { left:6px; right:6px; width:auto; max-width:none; max-height:calc(100dvh / var(--ui-zoom, 1) - 300px); }
   .csw--bar .csw-pop { position:fixed; left:8px; right:8px; top:56px; }
   .csw-search kbd { display:none; }
   .csw-row, .csw-fold { min-height:44px; }

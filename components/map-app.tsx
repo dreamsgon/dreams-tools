@@ -1205,8 +1205,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const switchCampaign = (row: CampaignRow) => {
     const id = row.maptable?.id, local = id && workspace.collections.some(c => c.id === id && c.kind === "campaign");
     const first = local ? scenesInOrder(workspace, id)[0] : undefined;
-    if (!id || !first) { void leaveSaved().then(ok => { if (ok) window.location.assign(id && !local ? `/maptable?campaign=${encodeURIComponent(id)}` : hubHref(row)); }); return; }
+    if (!id || !local) { void leaveSaved().then(ok => { if (ok) window.location.assign(id ? `/maptable?campaign=${encodeURIComponent(id)}` : hubHref(row)); }); return; }
     setGridAdjust(false); setSearch("");
+    if (!first) { setOverview(null); setDashboardLocation(id); setDashboard(true); return; } // no scenes yet: the Campaigns list with it selected, as ?campaign= does
     if (dashboard) { setOverview({ id }); return; }
     activate(first.scene.id); setLocation(id); setOverview(null);
   };

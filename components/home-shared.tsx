@@ -20,7 +20,7 @@ export const openHref = (r: { key: string }) => `/campaigns/${encodeURIComponent
 export const notesHref = (r: CampaignRow) => r.encyclopedia ? `/encyclopedia?campaign=${encodeURIComponent(r.encyclopedia.id)}` : null;
 export const mapsHref = (r: CampaignRow) => r.maptable ? `/maptable?campaign=${encodeURIComponent(r.maptable.id)}` : null;
 export const pageHref = (p: { id: string }) => `/encyclopedia?entry=${encodeURIComponent(p.id)}`;
-const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page", vehicle: "Vehicle", galaxy: "Galaxy", sector: "Sector", system: "Star system", store: "Store" };
+const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page", vehicle: "Vehicle", galaxy: "Galaxy", sector: "Sector", system: "Star system", store: "Store", quest: "Quest" };
 export const kindName = (kind: string) => kindNames[kind] ?? "Page";
 export function KindIcon({ kind }: { kind: string }) {
   return kind === "character" ? <User size={15} aria-hidden="true" /> : kind === "map" ? <MapIcon size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />;
