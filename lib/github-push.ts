@@ -217,7 +217,8 @@ export async function preparePush(token: string, repo: string, branch: string, i
     else if (prevHash(path) !== undefined && !isHousekeeping(path) && !path.startsWith(".rpg-tools/")) { existing.set(path, null); download.push(item); }
     else existing.set(path, "unknown");
   }
-  await pool(download, 6, async item => { existing.set(item.path, sha256Hex(await readBlob(c, item))); });
+  // A file too big to read cannot be compared, so it counts as not ours: it is left alone rather than blocking the push.
+  await pool(download, 6, async item => { try { existing.set(item.path, sha256Hex(await readBlob(c, item))); } catch (e) { if (e instanceof GithubError && e.code === "too-big") existing.set(item.path, "unknown"); else throw e; } });
 
   const plan = planWrite(existing, previous, files, includeGm);
 
@@ -265,6 +266,8 @@ export async function pushFiles(token: string, prepared: Prepared, message: stri
     const first = changes.find(ch => ch.path === "README.md") ?? changes[0];
     if (!first) throw new GithubError("bad-input", "There is nothing to push.");
     onProgress("Starting the repository…");
+    // Someone may have added commits since the plan was made; a push planned against an empty repository must not land on top of them.
+    if ((await readHead(c, branch)).state !== "empty") throw moved();
     const info = await checkRepo(token, repo, fetch);
     if (info.defaultBranch !== branch) throw new GithubError("bad-input", `${repo} is empty, so GitHub can only start it on its default branch (${info.defaultBranch}). Connect that branch, or add a first file on GitHub.`);
     const made = await call(c, "PUT", `/repos/${repo}/contents/${first.path.split("/").map(encodeURIComponent).join("/")}`, { message: note, content: toBase64(enc.encode(first.text)), branch }, undefined, [422]);

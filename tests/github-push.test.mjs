@@ -255,3 +255,18 @@ test('files.json stays readable by planWrite and the CLI: the extra gitBlobs fie
   const map=JSON.parse(g.files()['.rpg-tools/files.json']);assert.equal(map.format,'rpg-tools-files');assert.equal(map.campaignId,cid);assert.ok(map.pages&&map.hashes);
   for(const [p,h] of Object.entries(map.hashes))if(p in g.files())assert.equal(h,textHash(g.files()[p]),p);
 });
+
+test('a huge file edited in the repository is left alone instead of blocking the push',async()=>{
+  const g=fakeGithub();g.seed({'x.txt':'1'});await applyPush(g,wsP,{at:T1});
+  const path='3-People/NPCs/Mara-Venn.md';g.seed({[path]:'x'.repeat(5_100_000)});
+  const prep=await preparePush(TOKEN,REPO,'main',true,builder(wsP,true,T2),g.fetch);
+  assert.ok(prep.skipped.some(s=>s.path===path));assert.ok(!prep.changes.some(c=>c.path===path));assert.ok(!prep.removals.some(r=>r.path===path));
+});
+
+test('an empty repository that gained commits after the plan is not pushed onto',async()=>{
+  const g=fakeGithub({empty:true});
+  const prep=await preparePush(TOKEN,REPO,'main',true,builder(ws,true,T1),g.fetch);
+  g.seed({'AGENTS.md':'someone else'});g.log.length=0;
+  const e=await fail(pushFiles(TOKEN,prep,'Late',g.fetch));assert.equal(e.code,'moved');
+  assert.ok(!g.log.some(r=>r.method!=='GET'));assert.equal(g.files()['AGENTS.md'],'someone else');
+});

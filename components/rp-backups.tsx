@@ -200,7 +200,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 
   /** Saves the campaign's repository and branch. Returns a message when it could not. */
   async function saveGithub(next: Github): Promise<string | null> {
-    if (onSaveGithub) { if (!onSaveGithub(next)) return "Could not save the repository settings."; setSavedGh(next); return null; }
+    if (onSaveGithub) { if (!onSaveGithub(next)) return "Could not save the repository settings."; setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" ? i : { step: "idle" }); return null; }
     try {
       const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
       if (res.status === 401) return "Sign in again to save the repository.";
@@ -212,7 +212,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return "Your notes changed somewhere else, so the repository was not saved. Try again.";
       if (!put.ok) return out.error || "Could not save the repository.";
-      setSavedGh(next);
+      setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" ? i : { step: "idle" });
       setLoaded(l => l && { ...l, workspace: updated });
       return null;
     } catch (e) { return errorText(e, "Could not save the repository."); }
@@ -251,12 +251,12 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 
   const tabs: ["export" | "import", string][] = [["export", "Export"], ["import", "Import"]];
   const showTab = canRestore ? tabs : tabs.slice(0, 1);
-  return <div className="rpb-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
+  return <div className="rpb-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy.current) close(); }}>
     <div className="rpb-sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="GitHub and backups" tabIndex={-1}>
       <span className="rpb-grab" aria-hidden="true" />
       <div className="rpb-head">
         <div><h2>GitHub &amp; backups</h2><p>{campaignName}</p></div>
-        <button type="button" className="rpb-close" onClick={close} aria-label="Close"><X size={18} aria-hidden="true" /></button>
+        <button type="button" className="rpb-close" onClick={() => { if (!busy.current) close(); }} aria-label="Close"><X size={18} aria-hidden="true" /></button>
       </div>
       {view === "main" && <div className="rpb-tabs" role="tablist" aria-label="Export or import" onKeyDown={e => { if (showTab.length > 1 && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { setTab(t => t === "export" ? "import" : "export"); e.preventDefault(); } }}>
         {showTab.map(([id, label]) => <button key={id} type="button" role="tab" id={`rpb-tab-${id}`} aria-selected={tab === id} aria-controls={`rpb-panel-${id}`} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)}>{label}</button>)}
