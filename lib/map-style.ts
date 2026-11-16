@@ -133,6 +133,8 @@ export function shapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style"
 }
 function buildShapeOps(s: MapShape, d: Pick<MapDrawing, "background" | "style">): DrawOp[] {
   const style = d.style, background = d.background;
+  // A light draws nothing itself: the Map Creator marks it, and its glow is drawn over the map (lib/map-light.ts).
+  if (s.type === "light") return [];
   if (s.type === "label") {
     const b = labelBox(s), p = s.points[0], r = b.h / 2, ops: DrawOp[] = [];
     // A badge is a circle for a number, or a pill for longer text.

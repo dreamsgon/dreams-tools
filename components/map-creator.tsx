@@ -2,10 +2,12 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Eraser, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles, Hexagon, Dices } from "lucide-react";
+import { ArrowLeft, Eraser, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles, Hexagon, Dices, Lightbulb } from "lucide-react";
 import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
+import MapLighting, { lightingModes, type LightingMode } from "./map-lighting";
+import { lightKinds, lightKind, lightColours, shapeLight, LIGHT_MAX_BRIGHT, LIGHT_MAX_DIM, type LightKind } from "@/lib/map-light";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
 import { HexLookFields, HexPaintPanel, HexRegenerateDialog } from "./hexmap-panel";
@@ -46,7 +48,7 @@ const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,dra
 type Tool=CreatorTool;
 type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
-const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,hex:<Hexagon size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,label:<Type size={19}/>};
+const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,hex:<Hexagon size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,light:<Lightbulb size={19}/>,label:<Type size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -62,6 +64,10 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [snap,setSnap]=useState(true),[join,setJoinState]=useState(()=>{try{return localStorage.getItem("map-creator-join")!=="off";}catch{return true;}}),[zoom,setZoom]=useState(1),[tab,setTab]=useState<Tab>("selected");
   // Joining rooms that touch can be turned off; the choice is kept on this device.
   const setJoin=(on:boolean)=>{setJoinState(on);try{localStorage.setItem("map-creator-join",on?"on":"off");}catch{}};
+  // How lights show while drawing (off, glow or darkness), kept on this device; and the kind of light the Light tool places.
+  const [lighting,setLightingState]=useState<LightingMode>(()=>{try{const v=localStorage.getItem("map-creator-lighting");return v==="off"||v==="dark"?v:"glow";}catch{return "glow";}});
+  const setLighting=(mode:LightingMode)=>{setLightingState(mode);try{localStorage.setItem("map-creator-lighting",mode);}catch{}};
+  const [lightKindId,setLightKindId]=useState<LightKind>("torch");
   const custom=customStamps(workspace.assets),stampById=(id:string|null|undefined)=>libraryStamp(id,custom);
   const stampSources=new Map(custom.map(c=>[customStampAsset(c.id)!,c.image!]));
   const grid=gridOf(workspace.scenes.find(s=>s.id===source));
@@ -187,7 +193,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     return {x:p.x,y:p.y};
   };
   const walls=()=>wallSegments(orderedShapes(current.current.drawing).filter(s=>!layerState(current.current.drawing,s.id).locked));
-  const pickTool=(next:Tool)=>{setTool(next);if(next==="stamp"||next==="hex")setTab("selected");setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
+  const pickTool=(next:Tool)=>{setTool(next);if(next==="stamp"||next==="hex"||next==="light")setTab("selected");setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
   const finishPoly=(pts:Point[]|null=polyPoints)=>{
     setPolyPoints(null);setPolyHover(null);
     if(!pts||pts.length<3){if(pts?.length)setMessage("A shaped room needs at least three corners.");return;}
@@ -212,6 +218,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     // Rooms and walls land on the same squares as the Maptable grid; Alt draws freely.
     return snapPoint(p,snap&&tool!=="path"&&!e.altKey?grid.size:null,draft.width,draft.height);
   };
+  /** The middle of the square under the pointer, or the pointer itself with Alt or with snapping off. */
+  const squareCentre=(e:React.PointerEvent):Point=>{const raw=rawPoint(e),size=grid.size;return snap&&!e.altKey?{x:Math.floor(raw.x/size)*size+size/2,y:Math.floor(raw.y/size)*size+size/2}:raw;};
   /** Paints (or restores) one hex under a Paint hexes drag. */
   const paintAt=(i:number|null)=>{
     const g=gesture.current,cur=current.current,layer=cur.drawing.hexes;if(!g?.hex||!layer||i===null)return;
@@ -261,11 +269,23 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       return;
     }
     if(tool==="label"){
-      const raw=rawPoint(e),size=grid.size,id=uid();
-      const at=snap&&!e.altKey?{x:Math.floor(raw.x/size)*size+size/2,y:Math.floor(raw.y/size)*size+size/2}:raw;
+      const id=uid(),at=squareCentre(e);
       change(d=>{d.drawing.layerOrder=[...layerIds(d.drawing),id];d.drawing.shapes.push({id,type:"label",stamp:null,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:"Label",folderId:null,smooth:false,points:[at,{...at}],fill:null,stroke:d.drawing.style?.ink??"#1f2a24",thickness:22,closed:false});});
       if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
       pickTool("select");setSelected(id);setTab("selected");setFocusText(id);
+      return;
+    }
+    if(tool==="light"){
+      // Pressing on a light picks it up to move it; anywhere else places a new light in the middle of the square.
+      const hit=(e.target as Element).closest("[data-shape]")?.getAttribute("data-shape"),lamp=hit?before.drawing.shapes.find(s=>s.id===hit&&s.type==="light"):null;
+      if(lamp){
+        if(layerState(before.drawing,lamp.id).locked||layerState(before.drawing,lamp.id).hidden)return;
+        choose(lamp.id);gesture.current={before,id:lamp.id,start:p,index:null,newShape:false,ids:[lamp.id]};return;
+      }
+      const at=squareCentre(e),id=uid(),k=lightKind(lightKindId);
+      const shape:MapShape={id,type:"light",stamp:null,rotation:0,flip:false,roomParts:[],hidden:false,locked:false,name:`${k.name} ${before.drawing.shapes.length+1}`,folderId:null,smooth:false,points:[at,{...at}],fill:null,stroke:"#2b2b2b",thickness:Math.max(6,Math.min(100,Math.round(grid.size*.22))),closed:false,light:{kind:k.id}};
+      gesture.current={before,id,start:p,index:null,newShape:true};choose(id);
+      const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
       return;
     }
     if(tool==="stamp"){
@@ -302,6 +322,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if(g.newShape){
       next=structuredClone(current.current);const s=next.drawing.shapes.find(s=>s.id===g.id)!;
       if(s.type==="stamp"){const stamp=stampById(s.stamp);if(stamp)s.points=stampBox(stamp,rawPoint(e),snap&&!e.altKey?grid.size:null,grid.size,next.width,next.height);}
+      else if(s.type==="light"){const q=squareCentre(e);s.points=[q,{...q}];}
       else if(g.wall&&g.raw) s.points=openingOnWall(g.wall,g.raw,rawPoint(e),grid.size);
       else if(s.type==="path") {
         const last=s.points[s.points.length-1];
@@ -345,7 +366,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     }
     if(g.newShape && s.type==="path")s.points=simplifyPoints(s.points,3);
     const changed=JSON.stringify(g.before)!==JSON.stringify(current.current);
-    if(g.newShape && s.type!=="stamp" && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
+    if(g.newShape && s.type!=="stamp" && s.type!=="light" && s.points.every(p=>p.x===g.start.x&&p.y===g.start.y)){current.current=g.before;setDraft(g.before);setSelected(null);return;}
     if(!changed)return;
     const joined=g.newShape&&s.type!=="stamp"?joinRooms(current.current,g.id,e.altKey):{id:g.id,message:""};
     apply(current.current,g.before);
@@ -372,7 +393,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   // The size label follows the shape being drawn, or the one selected.
   const labelShape=(drawingId?draft.drawing.shapes.find(s=>s.id===drawingId):null)??(tool==="select"?single:null);
   const labelSize=Math.max(14,Math.min(draft.width,draft.height)/45);
-  const label=labelShape&&labelShape.type!=="label"&&labelShape.points.length>1?(()=>{const b=shapeBounds(labelShape),text=sizeLabel(labelShape,grid),w=text.length*labelSize*.62+labelSize,h=labelSize*1.8;
+  const label=labelShape&&labelShape.type!=="label"&&labelShape.type!=="light"&&labelShape.points.length>1?(()=>{const b=shapeBounds(labelShape),text=sizeLabel(labelShape,grid),w=text.length*labelSize*.62+labelSize,h=labelSize*1.8;
     const y=b.y-h-labelSize*.6<0?b.y+b.h+labelSize*.6:b.y-h-labelSize*.6,x=Math.max(0,Math.min(draft.width-w,b.x+b.w/2-w/2));
     return <g className="creator-size-label" pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx={labelSize*.3} fill="#16191c" fillOpacity=".88"/><text x={x+w/2} y={y+h*.66} textAnchor="middle" fontSize={labelSize} fontWeight={500} fill="#ffffff">{text}</text></g>;})():null;
   const zoomBy=(step:number)=>setZoom(z=>Math.max(.5,Math.min(4,Math.round((z+step)*4)/4)));
@@ -429,6 +450,37 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   // Stamps turn a quarter at a time (and stay on whole squares), or to any angle with the slider.
   const turnStamp=(by:number,free=false)=>{if(single?.type!=="stamp")return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)Object.assign(s,rotateStamp(s,by,free||!snap?null:grid.size));});};
   const stampSize=(key:"w"|"h",n:number)=>{if(single?.type!=="stamp"||!Number.isFinite(n)||n<.5||n>20)return;change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(!s)return;const [a,b]=s.points,x0=Math.min(a.x,b.x),y0=Math.min(a.y,b.y);s.points=key==="w"?[{x:x0,y:a.y},{x:Math.min(d.width,x0+n*grid.size),y:b.y}]:[{x:a.x,y:y0},{x:b.x,y:Math.min(d.height,y0+n*grid.size)}];});};
+  // A light's settings, or the light a stamp gives: reach, colour, lit, flicker and walls. Changes are kept on the shape.
+  const singleLight=single?shapeLight(single,single.type==="stamp"?stampById(single.stamp):null):null;
+  const patchLight=(patch:NonNullable<MapShape["light"]>)=>{if(selected)change(d=>{for(const s of d.drawing.shapes)if(selectedIds.includes(s.id))s.light={...(s.light??{}),...patch};});};
+  const reach=(n:number)=>`${n} ${n===1?"square":"squares"} · ${toUnits(n*grid.size,grid)} ${grid.unit}`;
+  const kindPicker=(pressed:LightKind,pick:(k:LightKind)=>void)=><div className="creator-light-kinds" role="group" aria-label="Kind of light">{lightKinds.map(k=><button key={k.id} type="button" aria-pressed={pressed===k.id} onClick={()=>pick(k.id)}><i style={{background:k.colour}}/>{k.name}</button>)}</div>;
+  const lightFields=singleLight&&<div className="creator-light">
+    {single?.type==="stamp"&&<h3><Lightbulb size={15}/> Light</h3>}
+    <label>Bright light <output>{reach(singleLight.bright)}</output><input type="range" min={0} max={LIGHT_MAX_BRIGHT} step={1} value={singleLight.bright} onChange={e=>{const n=+e.target.value;patchLight(n>singleLight.dim?{bright:n,dim:n}:{bright:n});}}/></label>
+    <label>Dim light <output>{reach(singleLight.dim)}</output><input type="range" min={1} max={LIGHT_MAX_DIM} step={1} value={singleLight.dim} onChange={e=>{const n=+e.target.value;patchLight(n<singleLight.bright?{dim:n,bright:n}:{dim:n});}}/></label>
+    <div className="creator-field"><span>Colour</span><div className="creator-light-colours" role="group" aria-label="Light colour">
+      {lightColours.map(c=><button key={c} type="button" aria-pressed={singleLight.colour===c} aria-label={`Colour ${c}`} title={c} style={{background:c}} onClick={()=>patchLight({colour:c})}/>)}
+      <input type="color" aria-label="Another colour" value={singleLight.colour} onChange={e=>patchLight({colour:e.target.value})}/>
+    </div></div>
+    <div className="creator-checks">
+      <label className="creator-check"><input type="checkbox" checked={singleLight.on} onChange={e=>patchLight({on:e.target.checked})}/>Lit</label>
+      <label className="creator-check"><input type="checkbox" checked={singleLight.flicker} onChange={e=>patchLight({flicker:e.target.checked})}/>Flicker like a flame</label>
+      <label className="creator-check"><input type="checkbox" checked={singleLight.walls} onChange={e=>patchLight({walls:e.target.checked})}/>Walls stop this light</label>
+    </div>
+    {single?.type==="stamp"&&single.light&&<button type="button" className="creator-link" onClick={()=>change(d=>{for(const s of d.drawing.shapes)if(selectedIds.includes(s.id))s.light=null;})}>Use this stamp’s own light</button>}
+    {lighting==="off"&&<p className="muted">Lighting is off. Turn on Glow or Darkness at the top of the map to see it.</p>}
+  </div>;
+  const lightPanel=single?.type==="light"&&<>
+    {kindPicker(lightKind(single.light?.kind).id,k=>{setLightKindId(k);patchLight({kind:k,bright:undefined,dim:undefined,colour:undefined,flicker:undefined});})}
+    {lightFields}
+  </>;
+  const lightToolPanel=<>
+    <h3><Lightbulb size={15}/> Light tool</h3>
+    <p className="creator-empty">Pick a kind of light, then click the map. Each light gives bright light near it and dim light further out, like a torch in your rules. Walls and closed doors stop it; openings and windows let it through.</p>
+    {kindPicker(lightKindId,setLightKindId)}
+    <p className="muted">Torches, braziers, candles, lanterns, chandeliers, orbs, crystals, campfires and fireplaces from the stamp library give light too. Select one to change its light or put it out.</p>
+  </>;
   const stampPanel=single?.type==="stamp"&&<>
     <div className="creator-actions">
       <button onClick={()=>turnStamp(-90)} title="Turn left (Shift+R)"><RotateCcw size={15}/> Left</button>
@@ -440,7 +492,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button type="button" aria-pressed={!single.tint} onClick={()=>patchShape({tint:null})}><i className="none"/>As drawn</button>
       {stampTints.map(t=><button key={t.id} type="button" aria-pressed={single.tint===t.id} onClick={()=>patchShape({tint:t.id})}><i style={{background:t.swatch}}/>{t.name}</button>)}
     </div></div>}
-    {stampById(single.stamp)?.light&&<p className="creator-measure">Gives light: {stampById(single.stamp)!.light!.bright} squares bright, {stampById(single.stamp)!.light!.dim} dim.</p>}
+    {lightFields}
     <div className="creator-pair">
       <label title="Shift + scroll to resize">Width (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].x-single.points[0].x)/grid.size*2)/2} onChange={e=>stampSize("w",+e.target.value)}/></label>
       <label title="Shift + scroll to resize">Length (squares)<input type="number" min={.5} max={20} step={.5} value={Math.round(Math.abs(single.points[1].y-single.points[0].y)/grid.size*2)/2} onChange={e=>stampSize("h",+e.target.value)}/></label>
@@ -455,7 +507,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const setHexes=(fn:(h:NonNullable<MapDrawing["hexes"]>)=>NonNullable<MapDrawing["hexes"]>)=>change(d=>{if(d.drawing.hexes)d.drawing.hexes=fn(d.drawing.hexes);});
   const restoreAll=()=>{const h=current.current.drawing.hexes;if(!h?.painted.length)return;setHexes(layer=>layer.painted.reduce((l,i)=>restoreHex(l,i)??l,layer));setMessage("Every painted hex is back as the generator made it. Ctrl+Z undoes this.");};
   const selectedPanel=tool==="hex"&&hexLayer?<HexPaintPanel paint={hexPaint} setPaint={p=>{setHexPaint(p);setHexRestore(false);}} restore={hexRestore} setRestore={setHexRestore} painted={hexLayer.painted.length} clear={restoreAll} regenerate={()=>setRegenerating(true)}/>:tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink} custom={custom} addStamp={asset=>commit(w=>{w.assets.push(asset);})} resizeStamp={(assetId,squares)=>commit(w=>{const a=w.assets.find(a=>a.id===assetId);if(a)a.squares=squares;})}/>:<div className="creator-panel">
-    {!selectedIds.length&&<>
+    {!selectedIds.length&&tool==="light"&&lightToolPanel}
+    {!selectedIds.length&&tool!=="light"&&<>
       <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
       <button onClick={()=>setNewMap(true)}><Sparkles size={15}/> Generate or trace a new map</button>
       <h3>New shapes</h3>{colours}{thicknessField}
@@ -464,11 +517,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     </>}
     {single&&<>
       <label>{single.type==="label"?"Text":"Name"}<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} id="creator-shape-name" onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
-      {single.type==="stamp"?stampPanel:single.type==="label"?labelPanel:bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
+      {single.type==="stamp"?stampPanel:single.type==="label"?labelPanel:single.type==="light"?lightPanel:bounds&&isArea(single)&&single.type!=="merged"?<div className="creator-pair">
         <label>Width ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.w,grid)} onChange={e=>resize(+e.target.value,toUnits(bounds.h,grid))}/></label>
         <label>Length ({grid.unit})<input type="number" min={grid.units/2} step={grid.units/2} value={toUnits(bounds.h,grid)} onChange={e=>resize(toUnits(bounds.w,grid),+e.target.value)}/></label>
       </div>:<p className="creator-measure">{isArea(single)?"Size":"Length"}: <strong>{sizeLabel(single,grid)}</strong></p>}
-      {single.type!=="stamp"&&single.type!=="label"&&<>{colours}{thicknessField}</>}
+      {single.type!=="stamp"&&single.type!=="label"&&single.type!=="light"&&<>{colours}{thicknessField}</>}
       {single.type==="path"&&<div className="creator-checks"><label className="creator-check"><input type="checkbox" checked={single.closed} onChange={e=>patchShape({closed:e.target.checked})}/>Close the outline</label><label className="creator-check"><input type="checkbox" checked={single.smooth} onChange={e=>patchShape({smooth:e.target.checked})}/>Smooth curve</label></div>}
       {(single.type==="path"||single.type==="line"||single.type==="rect")&&<div className="creator-points"><span>Corners ({single.type==="rect"?4:single.points.length})</span><div className="creator-seg" role="group" aria-label="Corner editing">{(["move","add","delete"] as const).map(mode=><button key={mode} aria-pressed={pointMode===mode} onClick={()=>{setTool("select");setPointMode(mode);}}>{mode==="move"?"Move":mode==="add"?"Add":"Remove"}</button>)}</div>
         <p className="muted">{pointMode==="add"?"Click a wall to add a corner there.":pointMode==="delete"?"Click a corner to remove it.":"Drag the white corners to reshape."}</p></div>}
@@ -521,6 +574,15 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label className="creator-check"><input type="checkbox" checked={join} onChange={e=>setJoin(e.target.checked)}/>Join rooms that touch into one room (hold Alt to keep one apart)</label>
     <p className="muted">Save keeps the drawing with its scene. Reopen it here any time to keep editing.</p>
   </div>;
+  // Light shapes are marked above the lighting so they can always be seen and picked up.
+  const lightMarkers=<g className="creator-light-markers">{orderedShapes(draft.drawing).filter(s=>s.type==="light"&&!layerState(draft.drawing,s.id).hidden).map(s=>{
+    const l=shapeLight(s)!,r=Math.max(4,s.thickness);
+    return <g key={s.id} data-shape={s.id} style={{cursor:tool==="light"||tool==="select"?"grab":undefined}}>
+      <circle cx={l.x} cy={l.y} r={r} fill={l.on?l.colour:"#6b6f73"} stroke="#16191c" strokeWidth={Math.max(1.5,r*.16)}/>
+      <path d={`M ${l.x-r*.45} ${l.y} H ${l.x+r*.45} M ${l.x} ${l.y-r*.45} V ${l.y+r*.45}`} stroke="#16191c" strokeWidth={Math.max(1,r*.12)} strokeLinecap="round"/>
+    </g>;})}</g>;
+  const hasLights=tool==="light"||draft.drawing.shapes.some(s=>s.type==="light"||(s.type==="stamp"&&!!stampById(s.stamp)?.light));
+  const lightingToggle=hasLights&&<div className="creator-overlay creator-lighting" role="group" aria-label="Lighting preview"><Lightbulb size={15}/><span className="creator-wall-switch">{lightingModes.map(m=><button key={m.id} type="button" aria-pressed={lighting===m.id} onClick={()=>setLighting(m.id)}>{m.name}</button>)}</span></div>;
   const tabs:[Tab,string][]=[["selected",selectedIds.length>1?`Selected (${selectedIds.length})`:"Selected"],["layers","Layers"],["style","Style"],["map","Map"]];
   return <StampSources.Provider value={stampSources}><main className="map-creator" data-sidebars-hidden={sidebars.hidden} onKeyDown={e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();if(!pending)void save();return;}
@@ -574,13 +636,16 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height} secrets/>
             {!draft.drawing.hexes&&<rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>}
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
+            <MapLighting drawing={draft.drawing} width={draft.width} height={draft.height} gridSize={grid.size} mode={lighting} id="creator-lighting"/>
+            {lightMarkers}
             {tool==="hex"&&hexLayer&&<g pointerEvents="none">
               {hexLayer.painted.length>0&&<path d={paintedOutlines(hexLayer).map(h=>hexOutline(h.x,h.y,hexLayer.size,hexLayer.orient,.86)).join("")} fill="none" stroke="#ffffff" strokeOpacity=".9" strokeWidth={Math.max(1.5,hexLayer.size/14)} strokeDasharray={`${hexLayer.size/5} ${hexLayer.size/7}`}/>}
               {hoverHex!==null&&(()=>{const c=hexCentre(hexLayer,hoverHex);return <path d={hexOutline(c.x,c.y,hexLayer.size,hexLayer.orient)} fill={hexRestore?"#e5534b":"#2684ff"} fillOpacity=".18" stroke={hexRestore?"#e5534b":"#2684ff"} strokeWidth={Math.max(2,hexLayer.size/10)}/>;})()}
             </g>}
             {trace&&<image href={trace.url} x={trace.x} y={trace.y} width={trace.w} height={trace.h} opacity={trace.opacity} preserveAspectRatio="none" pointerEvents="none"/>}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
-            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"||single.type==="label"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
+            {singleLight && (tool==="select"||tool==="light") && <g pointerEvents="none" className="creator-light-reach">{[singleLight.dim,singleLight.bright].filter(n=>n>0).map((n,i)=><g key={i}><circle cx={singleLight.x} cy={singleLight.y} r={n*grid.size} fill="none" stroke="#16191c" strokeOpacity=".55" strokeWidth={4}/><circle cx={singleLight.x} cy={singleLight.y} r={n*grid.size} fill="none" stroke="#ffffff" strokeWidth={2} strokeDasharray={i?"10 6":"3 7"}/></g>)}</g>}
+            {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"||single.type==="label"||single.type==="light"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
             {erase&&drawingId&&(()=>{const s=draft.drawing.shapes.find(x=>x.id===drawingId);return s?.type==="opening"?<path d={shapePath(s)} stroke="#e5534b" strokeOpacity=".8" strokeWidth={s.thickness+6} strokeLinecap="round" pointerEvents="none"/>:null;})()}
             {hoverWall&&(tool==="door"||tool==="window"||(erase&&WALL_TOOLS.includes(tool)))&&<path d={`M ${hoverWall.a.x} ${hoverWall.a.y} L ${hoverWall.b.x} ${hoverWall.b.y}`} stroke={erase&&WALL_TOOLS.includes(tool)?"#e5534b":"#2f80ed"} strokeOpacity=".5" strokeWidth={hoverWall.thickness+8} strokeLinecap="round" pointerEvents="none"/>}
             {tool==="poly"&&polyPoints&&<g pointerEvents="none">
@@ -610,7 +675,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       </section>
       {WALL_TOOLS.includes(tool)&&<div className="creator-overlay creator-wall-mode" role="group" aria-label="Wall tool mode"><span>{tools.find(t=>t.id===tool)?.label}</span><span className="creator-wall-switch"><button type="button" aria-pressed={!erase} onClick={()=>setErase(false)}><PenLine size={14}/> Draw</button><button type="button" aria-pressed={erase} className="erase" onClick={()=>setErase(true)}><Eraser size={14}/> Erase</button></span><small>Press E to switch</small></div>}
       {hexLayer&&(tool==="hex"||(tool==="select"&&hoverHex!==null))&&<div className="creator-overlay creator-tool-hint" role="status">{hoverHex!==null?describeHex(hexLayer,hoverHex):hexRestore?"Click or drag across painted hexes to put them back as they were made.":"Click or drag across hexes to paint them. Alt-click a hex to pick up its biome and terrain."}</div>}
-      {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
+      {lightingToggle}
+      {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp"||tool==="light")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="light"?`Click the map to place a light (${lightKind(lightKindId).name}). Drag a light to move it. Walls stop light, so it stays in its room.`:tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
       <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {draft.drawing.hexes?`${draft.drawing.hexes.miles}-mile hexes, the same grid in Maptable`:`${grid.units} ${grid.unit} squares, same as Maptable`}<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button><button className="creator-link" aria-pressed={join} title="Rooms that touch become one room with no wall between" onClick={()=>setJoin(!join)}><Combine size={15}/> Join rooms {join?"on":"off"}</button>{(snap||join)&&<span className="muted">Hold Alt to {snap&&join?"draw freely and keep rooms apart":snap?"draw freely":"keep rooms apart"}</span>}</div>
       <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>
       </div>

@@ -184,3 +184,19 @@
 .creator-wall-switch button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
 .creator-wall-switch button.erase[aria-pressed="true"] { background:color-mix(in srgb, #e5534b 18%, transparent); color:#e5534b; }
 @media(max-width:700px) { .creator-wall-mode { top:auto; bottom:58px; } .creator-wall-mode small { display:none; } }
+/* Lights: the lighting preview switch, the Light tool's kinds and colours, and flickering flames. */
+.creator-lighting { top:14px; bottom:auto; right:14px; color:var(--ink); padding:4px 6px 4px 10px; }
+@media(max-width:700px) { .creator-lighting { top:8px; right:8px; } .creator-lighting > svg { display:none; } }
+.creator-light-kinds { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+.creator-light-kinds button { display:flex; align-items:center; gap:8px; justify-content:flex-start; min-height:34px; padding:5px 9px; font-size:13px; }
+.creator-light-kinds button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+.creator-light-kinds i { flex:none; width:14px; height:14px; border-radius:50%; border:1.5px solid #16191c; }
+.creator-light { display:flex; flex-direction:column; gap:10px; }
+.creator-light h3 { display:flex; align-items:center; gap:6px; margin:6px 0 0; }
+.creator-light-colours { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.creator-light-colours button { width:28px; height:28px; min-height:0; padding:0; border-radius:50%; border:2px solid var(--line); }
+.creator-light-colours button[aria-pressed="true"] { border-color:var(--ink); box-shadow:0 0 0 2px var(--accent); }
+.creator-light-colours input[type="color"] { width:34px; height:30px; padding:2px; }
+.map-light-flicker { animation:map-light-flicker 2.8s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
+@keyframes map-light-flicker { 0%, 100% { opacity:1; transform:scale(1); } 20% { opacity:.86; transform:scale(.985); } 45% { opacity:.96; transform:scale(1.01); } 70% { opacity:.84; transform:scale(.99); } }
+@media (prefers-reduced-motion: reduce) { .map-light-flicker { animation:none; } }

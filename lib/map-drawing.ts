@@ -46,6 +46,8 @@ export function shapePath(s: MapShape): string {
   const [a,b] = s.points;
   if(s.type==="merged")return roomPaths(s).join(" ");
   if(s.type==="label"){const b=labelBox(s);return `M ${b.x} ${b.y} H ${b.x+b.w} V ${b.y+b.h} H ${b.x} Z`;}
+  // A light is picked up by a small circle around its centre, as big as its thickness.
+  if(s.type==="light"){const r=Math.max(4,s.thickness);return `M ${a.x-r} ${a.y} A ${r} ${r} 0 1 0 ${a.x+r} ${a.y} A ${r} ${r} 0 1 0 ${a.x-r} ${a.y} Z`;}
   if(s.type==="stamp"){const c=stampCorners(s);return `M ${c.map(p=>`${p.x} ${p.y}`).join(" L ")} Z`;}
   if(s.type === "rect") return `M ${a.x} ${a.y} H ${b.x} V ${b.y} H ${a.x} Z`;
   if(s.type === "ellipse") {

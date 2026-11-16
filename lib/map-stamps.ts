@@ -8,8 +8,8 @@ import { moreStamps } from "./more-stamps.ts";
  * "ink" outlines take the map style's ink colour.
  */
 export type StampPart = { d: string; fill?: string; stroke?: "ink" | string; width?: number };
-/** Light a stamp gives when placed: bright and dim reach in squares, and its colour. */
-export type StampLight = { bright: number; dim: number; colour: string };
+/** Light a stamp gives when placed: bright and dim reach in squares, its colour, and whether it flickers like a flame. */
+export type StampLight = { bright: number; dim: number; colour: string; flicker?: boolean };
 export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[]; image?: string; light?: StampLight };
 export const stampCategories = ["Yours", "Dungeon", "Furniture", "Lights", "Town", "Outdoors", "Stars", "Worlds", "Space", "Stations and ships"] as const;
 export type StampCategory = typeof stampCategories[number];
@@ -37,7 +37,7 @@ export const stamps: Stamp[] = [
   { id: "rock", name: "Rock", category: "Outdoors", w: 1, h: 1, parts: [ink("M 7 26 L 11 12 L 22 7 L 33 15 L 31 28 L 17 32 Z", "#8f8f8a"), line("M 22 7 L 20 19 L 31 28 M 20 19 L 11 12", 1)] },
   { id: "bush", name: "Bush", category: "Outdoors", w: 1, h: 1, parts: [ink(C(14, 22, 8), "#6f9a52", 1.5), ink(C(26, 19, 8), "#6f9a52", 1.5), paint(C(21, 26, 6), "#6f9a52")] },
   { id: "tent", name: "Tent", category: "Outdoors", w: 2, h: 2, parts: [ink("M 10 70 L 40 10 L 70 70 Z", "#c9a36a"), line("M 40 10 V 70"), paint("M 34 70 L 40 52 L 46 70 Z", "#4a3a2a")] },
-  { id: "campfire", name: "Campfire", category: "Outdoors", w: 1, h: 1, parts: [...[0, 1, 2, 3, 4, 5, 6, 7].map(i => ink(C(20 + Math.cos(i * Math.PI / 4) * 12, 20 + Math.sin(i * Math.PI / 4) * 12, 3), "#8a8a84", 1)), paint("M 20 11 Q 27 19 20 27 Q 13 19 20 11 Z", "#e8742c"), paint("M 20 16 Q 24 21 20 25 Q 16 21 20 16 Z", "#f6c34a")] },
+  { id: "campfire", name: "Campfire", category: "Outdoors", w: 1, h: 1, parts: [...[0, 1, 2, 3, 4, 5, 6, 7].map(i => ink(C(20 + Math.cos(i * Math.PI / 4) * 12, 20 + Math.sin(i * Math.PI / 4) * 12, 3), "#8a8a84", 1)), paint("M 20 11 Q 27 19 20 27 Q 13 19 20 11 Z", "#e8742c"), paint("M 20 16 Q 24 21 20 25 Q 16 21 20 16 Z", "#f6c34a")], light: { bright: 4, dim: 8, colour: "#ff9a3c", flicker: true } },
   { id: "well", name: "Well", category: "Outdoors", w: 1, h: 1, parts: [ink(C(20, 20, 13), "#a8a39a"), ink(C(20, 20, 7), "#3f6f8f", 1.5)] },
   ...moreStamps,
   ...spaceStamps,
