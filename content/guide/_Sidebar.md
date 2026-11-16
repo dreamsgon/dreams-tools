@@ -25,6 +25,7 @@
 - [AI connections](AI-Connections)
 - [Session recaps and AI writing](Session-Recaps-and-AI-Writing)
 - [VTT bridges (Foundry)](VTT-Bridges)
+- [Set up Foundry VTT](Foundry-VTT-Setup)
 
 **Reference**
 - [Limits and what's coming](Limits-and-Whats-Coming)

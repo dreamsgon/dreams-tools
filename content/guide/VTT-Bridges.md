@@ -1,6 +1,8 @@
 # VTT bridges (Foundry VTT)
 
-Keep another virtual tabletop in step with one RPG Tools campaign. Today that means **Foundry VTT** (v12 and v13, any game system). The **bridge API** is general, so other tables can use it later.
+Keep another virtual tabletop in step with one RPG Tools campaign. **Setting up Foundry? Follow [Set up Foundry VTT](Foundry-VTT-Setup) step by step.**
+
+Today that means **Foundry VTT** (v12 and v13, any game system). The **bridge API** is general, so other tables can use it later.
 
 ## Make a bridge key
 
