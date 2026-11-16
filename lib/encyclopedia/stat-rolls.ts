@@ -180,8 +180,8 @@ export function placeStat<F extends { section: string }>(fields: F[], field: F):
 }
 
 export type StatRowRoll = { name: string; dice: string | null; hint?: string; need?: { op: StatSuccess['op']; n: number } };
-export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; worked?: number; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
-export type RowField = { id: string; label: string; section: string; type: StatField['type']; note?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
+export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; description?: string; worked?: number; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
+export type RowField = { id: string; label: string; section: string; type: StatField['type']; note?: string; description?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
 
 /**
  * The sheet as rows, with every roll worked out for this character: what a player page and a Maptable token show.
@@ -198,9 +198,27 @@ export function statRows(fields: RowField[], values: Record<string, unknown>): S
       const dice = statRollDice(r.formula, v, sheet), n = r.success ? targetNumber(r.success, v, sheet) : null;
       return { name: r.name, dice, ...(dice ? {} : { hint: rowHint(statRollHint(r.formula, v, f.type, sheet)) }), ...(r.success && n !== null ? { need: { op: r.success.op, n: Number(n) } } : {}) };
     });
-    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(worked !== null ? { worked } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
+    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(f.description ? { description: f.description } : {}), ...(worked !== null ? { worked } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
   });
 }
 
 /** Success or fail from a worked-out target (a row's `need`), for rolls made where the sheet isn't at hand. */
 export const outcomeOf = (total: number, need: StatRowRoll['need']): Outcome | null => need ? { ok: need.op === 'atLeast' ? total >= need.n : total <= need.n, text: `${(need.op === 'atLeast' ? total >= need.n : total <= need.n) ? 'Success' : 'Fail'} · needed ${need.n} ${need.op === 'atLeast' ? 'or more' : 'or under'}` } : null;
+
+/**
+ * A stat renamed from `from` to `to`: other stats' rolls, targets and worked-out values that name it inside { } (as
+ * `{From}` or `{From mod}`, in any case) name it the new way. Text outside braces is left alone.
+ */
+export function renameStatRefs<F extends { label: string; rolls?: StatRoll[]; derived?: string }>(fields: F[], from: string, to: string): F[] {
+  const old = from.trim(), now = to.trim();
+  if (!old || !now || old === now) return fields;
+  // Every name, longest first, so renaming Body leaves {Body armour} alone.
+  const names = [...new Set([old, ...fields.map(f => f.label.trim()).filter(Boolean)])].sort((a, b) => b.length - a.length);
+  const re = new RegExp(`(?<![\\p{L}\\p{N}_])(${names.map(escape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+  const swap = (text: string) => text.replace(/\{([^{}]*)\}/g, (_, inner: string) => `{${inner.replace(re, (m: string) => m.toLowerCase() === old.toLowerCase() ? now : m)}}`);
+  return fields.map(f => {
+    const rolls = f.rolls?.map(r => ({ ...r, formula: swap(r.formula), ...(r.success ? { success: { ...r.success, against: swap(r.success.against) } } : {}) }));
+    const changed = JSON.stringify(rolls) !== JSON.stringify(f.rolls) || (f.derived !== undefined && swap(f.derived) !== f.derived);
+    return changed ? { ...f, ...(rolls ? { rolls } : {}), ...(f.derived !== undefined ? { derived: swap(f.derived) } : {}) } : f;
+  });
+}

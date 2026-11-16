@@ -5,7 +5,7 @@
  * The rows come from statRows on the server, worked out from the stats players can see, so no formula reaches here.
  */
 import {useState} from 'react';
-import {Dices} from 'lucide-react';
+import {ChevronDown,ChevronRight,Dices,Info} from 'lucide-react';
 import {outcomeOf,type StatRow} from '@/lib/encyclopedia/stat-rolls';
 import type {PlayerTracker} from '@/lib/encyclopedia/trackers';
 import {isSingleD20,type RollMode} from '@/lib/rolls';
@@ -19,7 +19,7 @@ const signed=(n:number)=>n<0?`−${-n}`:`+${n}`;
 const shown=(v:StatRow['value'])=>v===null||v===''?'—':typeof v==='boolean'?(v?'Yes':'No'):String(v);
 
 export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,onChanged}:{title:string;entryId:string;stats:StatRow[];trackers:PlayerTracker[];memberRef?:string;canRoll:boolean;onChanged:()=>void}){
- const [mode,setMode]=useState<RollMode>('normal'),[error,setError]=useState('');
+ const [mode,setMode]=useState<RollMode>('normal'),[error,setError]=useState(''),[open,setOpen]=useState<Set<string>>(new Set);
  const server=!!memberRef&&canRoll,anyRoll=stats.some(s=>s.rolls.some(r=>r.dice)),anyD20=stats.some(s=>s.rolls.some(r=>r.dice&&isSingleD20(r.dice)));
  const groups:{name:string;rows:StatRow[]}[]=[];
  for(const s of stats){const g=groups.find(x=>x.name===s.section);if(g)g.rows.push(s);else groups.push({name:s.section,rows:[s]});}
@@ -42,7 +42,7 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
     const short=!!s.spend&&server&&(!tracker||tracker.value<s.spend.n),hint=s.rolls.find(r=>!r.dice&&r.hint);
     return <div role="listitem" key={s.id} className="inv-row stat-row">
      <div className="inv-line stat-line">
-      <span className="stat-main"><span className="store-name"><strong className="inv-name stat-read-name">{s.label}</strong></span>{s.note&&<span className="stat-sub">{s.note}</span>}</span>
+      <span className="stat-main"><span className="store-name">{s.description?<button type="button" className="inv-name" aria-expanded={open.has(s.id)} title={s.description} onClick={()=>setOpen(o=>{const n=new Set(o);if(n.has(s.id))n.delete(s.id);else n.add(s.id);return n;})}>{open.has(s.id)?<ChevronDown size={14}/>:<ChevronRight size={14}/>}<span>{s.label}</span><Info size={12} className="stat-info" aria-label="Has a description"/></button>:<strong className="inv-name stat-read-name">{s.label}</strong>}</span>{s.note&&<span className="stat-sub">{s.note}</span>}</span>
       {s.type!=='textarea'&&s.type!=='none'&&<span className="stat-value stat-read-value">{shown(s.value)}{s.worked!==undefined&&<span className="stat-worked">{signed(s.worked)}</span>}</span>}
       <span className="stat-actions">
        {s.rolls.map(r=>r.dice&&<button type="button" key={r.name} className="roll-chip stat-roll-chip" disabled={short}
@@ -52,6 +52,7 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
       </span>
      </div>
      {s.type==='textarea'&&<div className="stat-long player-prose">{shown(s.value)}</div>}
+     {s.description&&open.has(s.id)&&<p className="stat-description stat-read-description">{s.description}</p>}
      {hint&&<p className="stat-roll-hint">{s.rolls.length>1?`${hint.name}: `:''}{hint.hint}</p>}
     </div>;})}</div>
   </section>)}
