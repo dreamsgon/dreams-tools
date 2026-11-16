@@ -7,8 +7,8 @@
  * off (that heading became the page title). Relative links between imported files become [[page id|label]] links, the
  * Encyclopedia's own link syntax; links to anything else are left as written.
  *
- * Visibility. Pages from the public folders are shared with players (as in an export). 6-GM-Only pages and the unmatched files
- * (Imported notes) are GM-only.
+ * Visibility. Every imported page is GM-only unless the caller asks for `showPlayers`: then pages from the public folders are
+ * shared with players (as in an export), while 6-GM-Only pages, GM-marked files and the unmatched files (Imported notes) stay GM-only.
  */
 import { defaultCharacter, newId as randomId, workspaceSchema, type Entry, type Workspace } from "./world-model.ts";
 import { defaultFrontPage } from "./front-page.ts";
@@ -429,10 +429,10 @@ export function rewriteLinks(text: string, from: string, ids: Map<string, string
 const plainHeadings = (text: string) => { let open: string | null = null; return text.split("\n").map(l => { const was = open; open = fenceAfter(open, l); return was || open ? l : l.replace(/^#{1,6}[ \t]+/, ""); }).join("\n"); };
 
 /* ---- the new campaign ---- */
-export type BuildOptions = { name?: string; now?: string; newId?: () => string };
+export type BuildOptions = { name?: string; now?: string; newId?: () => string; /** Share the pages the preview marks "players" (the public folders). Default false: everything is GM-only. */ showPlayers?: boolean };
 /** A workspace holding only the new world, campaign and pages. Add it to the person's notes with `addImported`. */
 export function buildCampaign(preview: ImportPreview, opts: BuildOptions = {}): { workspace: Workspace; campaignId: string; name: string } {
-  const now = opts.now ?? new Date().toISOString(), mint = opts.newId ?? randomId;
+  const now = opts.now ?? new Date().toISOString(), mint = opts.newId ?? randomId, show = opts.showPlayers === true;
   const name = clip(opts.name ?? "") || clip(preview.campaignName) || "Imported campaign";
   const worldId = mint(), campaignId = mint();
   const base = { worldId, campaignId, updatedAt: now };
@@ -450,11 +450,11 @@ export function buildCampaign(preview: ImportPreview, opts: BuildOptions = {}): 
   const entries: Entry[] = preview.pages.map((p, i) => {
     let body = p.path ? rewriteLinks(p.body, p.path, linkable) : p.body;
     if (body.length > 100_000) body = p.body; // [[id|label]] can be longer than the link it replaces; a page body holds 100,000 characters
-    const e: Entry = { id: ids[i], ...base, parentId: p.parent ? folder(p.parent).id : null, title: p.title, kind: p.kind, body, overviewVisibility: p.visibility };
+    const e: Entry = { id: ids[i], ...base, parentId: p.parent ? folder(p.parent).id : null, title: p.title, kind: p.kind, body, overviewVisibility: show ? p.visibility : "gm" };
     if (p.kind === "character") e.character = { ...defaultCharacter(), role: p.role ?? "npc" };
     if (p.kind === "quest") e.quest = newQuest(p.state ?? "active");
     if (p.kind === "session") {
-      if (p.date) { e.recap = { status: "published", mine: true, playedOn: p.date, timeline: [], quotes: [], gmNotes: "", review: [] }; e.updatedAt = `${p.date}T12:00:00.000Z`; }
+      if (p.date) { e.recap = { status: show ? "published" : "draft", mine: true, playedOn: p.date, timeline: [], quotes: [], gmNotes: "", review: [] }; e.updatedAt = `${p.date}T12:00:00.000Z`; }
       e.order = order.get(i);
     }
     return e;
@@ -462,7 +462,9 @@ export function buildCampaign(preview: ImportPreview, opts: BuildOptions = {}): 
 
   const standard = defaultFrontPage().widgets.filter(w => w.id !== "welcome");
   const longAt = preview.pages.findIndex(p => p.frontLink);
-  const where = !preview.front ? [] : preview.front.long && longAt >= 0
+  // The front page is what players see first, so with nothing shared "Where we are" is kept as a GM note instead.
+  if (preview.front && !show && !(preview.front.long && longAt >= 0)) entries.push({ id: mint(), ...base, parentId: folder("notes").id, title: "Where we are", kind: "note", body: preview.front.body, overviewVisibility: "gm" });
+  const where = !preview.front || !show ? [] : preview.front.long && longAt >= 0
     ? [{ id: "where", type: "links" as const, title: "Where we are", links: [{ label: "Current state", entryId: ids[longAt] }] }]
     : [{ id: "where", type: "text" as const, title: "Where we are", body: plainHeadings(preview.front.body), wide: true }];
   const frontPage = { widgets: [...where, ...standard] };

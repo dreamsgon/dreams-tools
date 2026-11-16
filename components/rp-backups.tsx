@@ -51,7 +51,7 @@ type Imported =
   | { step: "note"; title: string; message: string }
   | { step: "found"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
   | { step: "restoring"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
-  | { step: "preview" | "importing"; preview: ImportPreview; name: string }
+  | { step: "preview" | "importing"; preview: ImportPreview; name: string; show: boolean }
   | { step: "done"; name: string; href: string; verb: "Restored" | "Imported" };
 
 /** The "found" card for a restore copy, from a ZIP or a repository. */
@@ -182,7 +182,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
       const result = previewRepo(read.files, { name: label });
       if (!result.ok) { setImp(kind === "player-safe" ? restoreNotice(kind, where, "") : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
-      setImp({ step: "preview", preview: result, name: result.campaignName });
+      setImp({ step: "preview", preview: result, name: result.campaignName, show: false });
       return;
     }
     setImp(restoreNotice(kind, where, ""));
@@ -232,7 +232,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const result = previewRepo(read.files, { name: repo.split("/")[1] ?? repo });
       if (!result.ok) { setImp(got.kind === "player-safe" ? restoreNotice(got.kind, "repository", got.error) : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
       if (read.truncated) result.notices.push("GitHub cut the list of files short because the repository is very large, so some files may be missing from this import.");
-      setImp({ step: "preview", preview: result, name: result.campaignName });
+      setImp({ step: "preview", preview: result, name: result.campaignName, show: false });
     } catch (e) { setImp({ step: "error", title: "Could not read the repository", message: errorText(e, "Could not read the repository.") }); }
   }
 
@@ -299,7 +299,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       if (res.status === 401) return fail("Sign in again to import this repository.");
       if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
       const current = workspaceSchema.parse(body.data);
-      const built = buildCampaign(found.preview, { name: found.name });
+      const built = buildCampaign(found.preview, { name: found.name, showPlayers: found.show });
       if (current.entries.length + built.workspace.entries.length > 5000 || current.campaigns.length >= 500 || current.worlds.length >= 100) return fail("Your notes have no room for another campaign of this size (the limit is 5,000 pages, 500 campaigns and 100 worlds). Nothing was changed.");
       const next = addImported(current, built);
       if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this campaign are over the 2 MB workspace limit. Nothing was changed.");
@@ -376,7 +376,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
             <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>
             <button type="button" className="rpb-primary" onClick={() => void restore()} disabled={imp.step === "restoring"}>{imp.step === "restoring" ? "Restoring…" : `Restore as “${imp.name.slice(0, 40)} (copy)”`}</button>
           </>}
-          {(imp.step === "preview" || imp.step === "importing") && <ImportPreviewView preview={imp.preview} name={imp.name} busy={imp.step === "importing"} onName={name => setImp({ ...imp, name })} onImport={() => void importNew()} />}
+          {(imp.step === "preview" || imp.step === "importing") && <ImportPreviewView preview={imp.preview} name={imp.name} show={imp.show} busy={imp.step === "importing"} onName={name => setImp({ ...imp, name })} onShow={show => setImp({ ...imp, show })} onImport={() => void importNew()} />}
           {imp.step === "done" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />{imp.verb} as {imp.name}</b><span>Your other campaigns were not changed.</span><a className="rpb-primary" href={imp.href}>Open campaign</a></div>}
         </div>}
       </div>
@@ -386,7 +386,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** The mapping preview: what each part of the repository becomes. Nothing is created until the button is pressed. */
-function ImportPreviewView({ preview, name, busy, onName, onImport }: { preview: ImportPreview; name: string; busy: boolean; onName: (name: string) => void; onImport: () => void }) {
+function ImportPreviewView({ preview, name, show, busy, onName, onShow, onImport }: { preview: ImportPreview; name: string; show: boolean; busy: boolean; onName: (name: string) => void; onShow: (show: boolean) => void; onImport: () => void }) {
   const gone = preview.notImported.reduce((n, x) => n + x.count, 0);
   return <>
     <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />RP repository in the numbered layout</b><span>{preview.repoName} · {preview.files} files</span></div>
@@ -399,7 +399,11 @@ function ImportPreviewView({ preview, name, busy, onName, onImport }: { preview:
     {preview.unmatched > 0 && <p className="rpb-note">{preview.unmatched === 1 ? "1 file didn't match a folder and goes" : `${preview.unmatched} files didn't match a folder and go`} into an “Imported notes” folder.</p>}
     {preview.skipped > 0 && <p className="rpb-muted">{plural(preview.skipped, "image or other file is", "images and other files are")} skipped. Only Markdown is imported.</p>}
     {preview.notices.map(n => <p key={n} className="rpb-note">{n}</p>)}
-    <p className="rpb-muted">Pages in the public folders are shared with players. <span className="rpb-nw">6-GM-Only</span> pages and Imported notes are GM-only. You can change any page afterwards.</p>
+    <p className="rpb-muted">Every page starts as GM-only unless you turn on “Show to players” below. <span className="rpb-nw">6-GM-Only</span> pages and Imported notes always stay GM-only. You can change any page afterwards.</p>
+    <div className="rpb-row">
+      <div><b id="rpb-show-label">Show to players</b><small>Pages outside 6-GM-Only appear on the player link. GM-only pages stay hidden.</small></div>
+      <button type="button" role="switch" aria-checked={show} aria-labelledby="rpb-show-label" className="rpb-switch" disabled={busy} onClick={() => onShow(!show)}><span /></button>
+    </div>
     <label className="rpb-field">Campaign name<input value={name} maxLength={160} disabled={busy} onChange={e => onName(e.target.value)} /></label>
     <button type="button" className="rpb-primary" onClick={onImport} disabled={busy || !name.trim()}>{busy ? "Importing…" : "Import as a new campaign"}</button>
     <p className="rpb-muted">Nothing is created until you press the button. Your other campaigns are never touched.</p>

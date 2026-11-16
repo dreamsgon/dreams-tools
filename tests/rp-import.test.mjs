@@ -145,7 +145,7 @@ test('6-GM-Only pages are GM-only, the public folders are shared with players',(
  const r=ok(previewRepo(repo()));
  const gm=r.pages.filter(p=>p.group==='gm');
  assert.deepEqual(gm.map(p=>[p.title,p.visibility,p.kind]),[['Director Notes','gm','note'],['Mara','gm','note']]);
- const built=buildCampaign(r,{now:NOW,newId:mint}).workspace;
+ const built=buildCampaign(r,{now:NOW,newId:mint,showPlayers:true}).workspace;
  const mara=built.entries.filter(e=>e.title==='Mara');
  assert.equal(mara.length,2);
  assert.deepEqual(mara.map(e=>[e.kind,e.overviewVisibility]).sort(),[['character','players'],['note','gm']]);
@@ -169,7 +169,7 @@ test('files that match no folder go into Imported notes; the library, archive an
  assert.deepEqual(r.notImported,[{label:'8-Archive/',count:1},{label:'README.md files',count:6},{label:'AGENTS.md, .gitignore',count:2},{label:'Empty files',count:0}].filter(x=>x.count));
  assert.equal(r.skipped,2);// the cover picture and the map picture
  assert.ok(r.notices.some(n=>/roster/.test(n)));
- const built=buildCampaign(r,{now:NOW,newId:mint}).workspace;
+ const built=buildCampaign(r,{now:NOW,newId:mint,showPlayers:true}).workspace;
  const folder=built.entries.find(e=>e.kind==='folder'&&e.title==='Imported notes');
  assert.equal(folder.overviewVisibility,'gm');
  assert.ok(built.entries.filter(e=>e.parentId===folder.id).every(e=>e.kind==='note'&&e.overviewVisibility==='gm'));
@@ -260,7 +260,7 @@ test('relative links between imported files become page links; other links stay'
 });
 
 test('the front page gets Where we are, from Current-State.md; a long one becomes a note with a link',()=>{
- const built=buildCampaign(ok(previewRepo(repo())),{now:NOW,newId:mint});
+ const built=buildCampaign(ok(previewRepo(repo())),{now:NOW,newId:mint,showPlayers:true});
  const c=built.workspace.campaigns[0];
  assert.equal(c.frontPage.widgets[0].title,'Where we are');assert.equal(c.frontPage.widgets[0].type,'text');
  assert.match(c.frontPage.widgets[0].body,/\nNext session starting point\n/);// the # of a heading is dropped: the widget is plain text
@@ -269,7 +269,7 @@ test('the front page gets Where we are, from Current-State.md; a long one become
  const long='L'.repeat(4001);
  const r=ok(previewRepo([f('3-People/Ayla.md','x'),f('1-Now/Current-State.md',`# Current State\n\n${long}`)]));
  assert.equal(r.front.long,true);assert.ok(r.notices.some(n=>/longer than the front page/.test(n)));
- const b=buildCampaign(r,{now:NOW,newId:mint}).workspace,w=b.campaigns[0].frontPage.widgets[0];
+ const b=buildCampaign(r,{now:NOW,newId:mint,showPlayers:true}).workspace,w=b.campaigns[0].frontPage.widgets[0];
  assert.equal(w.type,'links');const note=b.entries.find(e=>e.id===w.links[0].entryId);
  assert.equal(note.body,long);assert.equal(note.kind,'note');
  // none: no Where we are
@@ -325,7 +325,7 @@ test('round trip: an export without its restore copy imports with the same pages
  const files=rpExportFiles(ws,'c1',{includeGm:true,exportedAt:NOW}).filter(x=>x.path!=='.rpg-tools/campaign.json');
  assert.ok(!files.some(x=>x.path==='.rpg-tools/campaign.json'));
  const r=ok(previewRepo(files.map(x=>({path:x.path,text:x.text}))));
- const built=buildCampaign(r,{now:NOW,newId:mint}).workspace;
+ const built=buildCampaign(r,{now:NOW,newId:mint,showPlayers:true}).workspace;
  assert.equal(built.campaigns[0].name,'The Salt Road');
  const pub=ws.entries.filter(x=>x.overviewVisibility==='players');
  for(const x of pub){
@@ -424,4 +424,23 @@ test('review fixes: closing hashes, CRLF front matter, fences, GM-marked files, 
  assert.throws(()=>decodeText(new Uint8Array([0x63,0x61,0x66,0xe9]),'3-People/A.md'),/not UTF-8/);
  const bad=await readSources([{name:'3-People/A.md',size:4,bytes:async()=>new Uint8Array([0x63,0xe9])}]);
  assert.equal(bad.ok,false);
+});
+
+test('by default nothing imported is shown to players; "show to players" shares only the public folders',()=>{
+ const r=ok(previewRepo([...repo(),f('3-People/NPCs/Villain.md','---\npart: gm-only\n---\n# Villain\n\nx\n')]));
+ const off=buildCampaign(r,{now:NOW,newId:mint}).workspace;
+ assert.ok(off.entries.length>10);
+ assert.ok(off.entries.every(e=>e.overviewVisibility!=='players'),'default import has no player-visible page');
+ assert.ok(off.entries.filter(e=>e.recap).every(e=>e.recap.status==='draft'));
+ // the front page widget would show current state to players, so it is a GM note instead
+ assert.ok(!off.campaigns[0].frontPage.widgets.some(w=>w.id==='where'));
+ assert.ok(off.entries.some(e=>e.title==='Where we are'&&e.overviewVisibility==='gm'&&/Greyfen docks/.test(e.body)));
+ assert.equal(workspaceSchema.safeParse(off).success,true);
+ const on=buildCampaign(r,{now:NOW,newId:mint,showPlayers:true}).workspace;
+ const vis=t=>on.entries.filter(e=>e.title===t).map(e=>e.overviewVisibility);
+ assert.deepEqual(vis('Ayla'),['players']);
+ assert.deepEqual(vis('Villain'),['gm']);
+ assert.deepEqual(vis('Director Notes'),['gm']);
+ assert.ok(on.entries.filter(e=>e.parentId&&on.entries.find(x=>x.id===e.parentId&&/^(GM only|Imported notes)$/.test(x.title))).every(e=>e.overviewVisibility==='gm'));
+ assert.ok(on.campaigns[0].frontPage.widgets.some(w=>w.id==='where'));
 });
