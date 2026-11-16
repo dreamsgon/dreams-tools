@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSchema,demoWorkspace,playerCampaign,importCopy,searchableText,defaultCharacter} from '../lib/encyclopedia/world-model.ts';
-import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf,vehicleTypesOf,saveVehicleTypes,copyVehicleType,blankVehicleType,typeUse,typeFieldId,cargoOps,systemOps,cargoUsed,holdTitle,systemsTitle,validRoll} from '../lib/encyclopedia/vehicles.ts';
+import {starterVehicleTypes,vehicleTypeSchema,vehicleTypeOf,newVehicle,specRows,gaugeRows,nowRows,setValue,setGm,setGauge,gaugeStep,changeType,playerVehicle,remapVehicle,vehicleSchema,stationList,addStation,removeStation,editStation,seat,addCrew,editCrew,removeCrew,handRows,setHands,vehicleRolesOf,vehicleTypesOf,saveVehicleTypes,copyVehicleType,blankVehicleType,typeUse,typeFieldId,cargoOps,systemOps,cargoUsed,holdTitle,systemsTitle,validRoll,addLog,logOps,maxLog} from '../lib/encyclopedia/vehicles.ts';
 
 const C='demo-campaign',T='2026-11-14T10:00:00.000Z';
 const page=(id,title,kind,extra={})=>({id,worldId:'demo-world',campaignId:C,parentId:null,title,kind,body:'',updatedAt:T,...extra});
@@ -257,4 +257,25 @@ test('players see the Hold and Systems only when shared, without GM-only lines',
  assert.ok(searchableText(world(v).entries.find(e=>e.id==='gdn')).includes('Cloaking field'),'the GM’s search finds systems');
  const moved=changeType(v,ship,sail);
  assert.deepEqual([moved.cargo.length,moved.systems.length,moved.capacity],[2,2,40],'changing the type keeps the hold and systems');
+});
+
+test('the log keeps entries newest first, and players read only shown ones when the tab is shared',()=>{
+ let v={...newVehicle(ship),visibility:'players'};
+ v=addLog(v,{kind:'voyage',text:'  Left Vesh at dawn ',day:'3rd of Frost'},new Date('2026-11-01T10:00:00Z'));
+ v=addLog(v,{kind:'battle',text:'Pirates off the moon. Shields down.',gm:true},new Date('2026-11-02T10:00:00Z'));
+ v=addLog(v,{kind:'note',text:'   '});
+ assert.deepEqual(v.log.map(l=>l.kind),['battle','voyage'],'newest first, and a blank entry is not added');
+ assert.equal(v.log[1].text,'Left Vesh at dawn');assert.equal(v.log[1].day,'3rd of Frost');
+ assert.ok(vehicleSchema.safeParse(v).success);
+ assert.equal(vehicleSchema.safeParse({...v,log:[{...v.log[0],kind:'party'}]}).success,false);
+ v=logOps.edit(v,v.log[1].id,{kind:'trade',day:undefined});
+ assert.equal(v.log[1].kind,'trade');assert.ok(!('day' in v.log[1]));
+ const pv=s=>playerCampaign(world(s),C).entries.find(e=>e.id==='gdn').vehicle;
+ assert.equal(pv(v).logTab,undefined,'the Log starts GM only');
+ const shared=pv({...v,logVisibility:'players'});
+ assert.deepEqual(shared.logTab.entries.map(l=>l.text),['Left Vesh at dawn']);
+ assert.ok(!JSON.stringify(playerCampaign(world({...v,logVisibility:'players'}),C)).includes('Pirates'));
+ let full=v;for(let i=0;i<maxLog+3;i++)full=addLog(full,{kind:'note',text:`Day ${i}`});
+ assert.equal(full.log.length,maxLog,'the oldest drop off');assert.equal(full.log[0].text,`Day ${maxLog+2}`);
+ assert.equal(logOps.remove(logOps.remove(v,v.log[0].id),v.log[1].id).log,undefined);
 });
