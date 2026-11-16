@@ -169,7 +169,7 @@ const decode = (b: Uint8Array) => new TextDecoder().decode(b);
 
 /* ---- planning a push ---- */
 export type Change = { path: string; kind: "new" | "edit"; text: string; sha: string };
-export type Removal = { path: string; reason: "gm" | "stale" };
+export type Removal = { path: string; reason: "gm" | "stale" | "moved" };
 export type Skipped = { path: string; reason: "edited" | "unowned" | "template" };
 /** Files RPG Tools rewrites on every export. They go along with a push but are not counted as changes you made. */
 export const isHousekeeping = (path: string) => path === "8-Archive/Export-Log.md" || path === ".rpg-tools/files.json";
@@ -200,7 +200,8 @@ export async function preparePush(token: string, repo: string, branch: string, i
   const mapItem = tree.get(".rpg-tools/files.json"), logItem = tree.get("8-Archive/Export-Log.md");
   if (mapItem) { try { previous = JSON.parse(decode(await readBlob(c, mapItem)).replace(/^﻿/, "")); } catch (e) { if (e instanceof GithubError) throw e; previous = null; } }
   if (logItem) log = decode(await readBlob(c, logItem));
-  const prevObj = previous && typeof previous === "object" ? previous as { hashes?: Record<string, unknown>; gitBlobs?: Record<string, unknown> } : {};
+  const prevObj = previous && typeof previous === "object" ? previous as { hashes?: Record<string, unknown>; gitBlobs?: Record<string, unknown>; crlf?: unknown } : {};
+  const prevCrlf = new Set(Array.isArray(prevObj.crlf) ? prevObj.crlf.filter((x): x is string => typeof x === "string") : []);
   const prevHash = (p: string) => typeof prevObj.hashes?.[p] === "string" ? prevObj.hashes[p] as string : undefined;
   const prevBlob = (p: string) => typeof prevObj.gitBlobs?.[p] === "string" ? prevObj.gitBlobs[p] as string : undefined;
 
@@ -209,23 +210,44 @@ export async function preparePush(token: string, repo: string, branch: string, i
   const byPath = new Map(files.map(f => [f.path, f]));
   const newSha = new Map(await Promise.all(files.map(async f => [f.path, await textBlobSha(f.text)] as const)));
 
+  // A file that uses Windows line endings throughout keeps them: its new text is written the same way, and files.json.crlf remembers it for the next push.
+  const crlf = new Set<string>();
+  const toCrlf = async (path: string) => { const f = byPath.get(path)!; f.text = f.text.replace(/\r?\n/g, "\r\n"); newSha.set(path, await textBlobSha(f.text)); crlf.add(path); };
+
   // What each layout file in the repository counts as, in SHA-256 terms, for planWrite.
   const existing = new Map<string, string | null>(), download: TreeItem[] = [];
   for (const [path, item] of tree) {
     if (!isLayoutPath(path)) continue;
     const mine = byPath.get(path);
     if (mine && newSha.get(path) === item.sha) existing.set(path, sha256Hex(enc.encode(mine.text)));
-    else if (prevHash(path) !== undefined && prevBlob(path) === item.sha) existing.set(path, prevHash(path)!);
+    else if (prevHash(path) !== undefined && prevBlob(path) === item.sha) { if (mine && prevCrlf.has(path)) await toCrlf(path); existing.set(path, prevHash(path)!); }
     else if (!isHousekeeping(path) && !path.startsWith(".rpg-tools/") && (prevHash(path) !== undefined || (mine && path.endsWith(".md") && !isRewrittenPath(path)))) { existing.set(path, null); download.push(item); }
     else existing.set(path, "unknown");
   }
   // A file too big to read cannot be compared, so it counts as not ours: it is left alone rather than blocking the push.
   // A file whose text equals the new export apart from its front matter and the sections the app writes from data (a change brought back into the app, or a new page whose file the AI GM wrote) is ours: it counts as unchanged.
+  // The file as the last push wrote it is read too, so an edit a person made to the front matter or a data section is told from the app moving on.
   await pool(download, 6, async item => {
     try {
-      const bytes = await readBlob(c, item), mine = byPath.get(item.path);
-      existing.set(item.path, mine && sameApartFromOwned(item.path, decode(bytes), mine.text) ? sha256Hex(enc.encode(mine.text)) : sha256Hex(bytes));
+      const bytes = await readBlob(c, item), mine = byPath.get(item.path), pb = prevBlob(item.path), text = decode(bytes);
+      let prev: string | undefined;
+      if (mine && pb) { try { prev = decode(await readBlob(c, { path: item.path, sha: pb, size: 0 })); } catch (e) { if (!(e instanceof GithubError)) throw e; } }
+      if (mine && sameApartFromOwned(item.path, text, mine.text, prev)) {
+        if (/\r\n/.test(text) && !/(?<!\r)\n/.test(text)) await toCrlf(item.path);
+        existing.set(item.path, sha256Hex(enc.encode(mine.text)));
+      } else existing.set(item.path, sha256Hex(bytes));
     } catch (e) { if (e instanceof GithubError && e.code === "too-big") existing.set(item.path, "unknown"); else throw e; }
+  });
+
+  // A page made from a new repository file is exported under its title. When the file's name differs from its title, the repository would hold the text twice: the file is moved.
+  const moved: Removal[] = [], dirOf = (p: string) => { const q = p.replace(/^6-GM-Only\//, ""); return q.slice(0, q.lastIndexOf("/")); };
+  const orphans = [...tree.values()].filter(i => isLayoutPath(i.path) && i.path.endsWith(".md") && !byPath.has(i.path) && prevHash(i.path) === undefined && !isHousekeeping(i.path) && !i.path.startsWith(".rpg-tools/") && !isRewrittenPath(i.path) && (i.size ?? 0) <= 400_000);
+  const homes = files.filter(f => f.path.endsWith(".md") && !tree.has(f.path) && !isRewrittenPath(f.path));
+  if (orphans.length && homes.length) await pool(orphans, 6, async item => {
+    const dir = dirOf(item.path), near = homes.filter(f => dirOf(f.path) === dir);
+    if (!near.length) return;
+    let text: string; try { text = decode(await readBlob(c, item)); } catch (e) { if (e instanceof GithubError) return; throw e; }
+    if (near.some(f => sameApartFromOwned(f.path, text, f.text))) moved.push({ path: item.path, reason: "moved" });
   });
 
   const plan = planWrite(existing, previous, files, includeGm);
@@ -239,6 +261,9 @@ export async function preparePush(token: string, repo: string, branch: string, i
     const map = JSON.parse(mapFile.text) as { hashes: Record<string, string>; gitBlobs?: Record<string, string> };
     for (const s of plan.skip) { const old = prevHash(s.path); if (old !== undefined) map.hashes[s.path] = old; else delete map.hashes[s.path]; }
     const blobs: Record<string, string> = {};
+    const crlfNow = [...crlf].filter(p => written.has(p) && map.hashes[p] !== undefined).sort();
+    for (const p of crlfNow) map.hashes[p] = sha256Hex(enc.encode(byPath.get(p)!.text));
+    if (crlfNow.length) (map as { crlf?: string[] }).crlf = crlfNow;
     for (const p of Object.keys(map.hashes).sort()) if (written.has(p) && newSha.has(p)) blobs[p] = newSha.get(p)!;
     map.gitBlobs = blobs;
     const text = JSON.stringify(map, null, 2);
@@ -255,7 +280,7 @@ export async function preparePush(token: string, repo: string, branch: string, i
   // New pages first, then edits; the machine files (the restore copy, file map, log) come last.
   const rank = (c: Change) => (c.path.startsWith(".rpg-tools/") || isHousekeeping(c.path) ? 2 : 0) + (c.kind === "edit" ? 1 : 0);
   changes.sort((a, b) => rank(a) - rank(b) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  const removals = plan.remove.filter(r => tree.has(r.path));
+  const removals = [...plan.remove.filter(r => tree.has(r.path)), ...moved.sort((a, b) => (a.path < b.path ? -1 : 1))];
   return { repo, branch, includeGm, head: empty ? null : { commit: head.commit, tree: head.tree }, changes, removals, skipped: plan.skip.filter(s => tree.has(s.path)), unchanged, nothingToPush: !changes.some(ch => !isHousekeeping(ch.path)) && removals.length === 0, truncated };
 }
 

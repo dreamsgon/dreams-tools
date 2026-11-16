@@ -628,24 +628,32 @@ export function derivedSectionsOf(path: string): string[] {
   if (/^(6-GM-Only\/)?(3-People|4-World|2-Story\/Sessions)\//.test(path)) return DERIVED_SECTIONS;
   return [];
 }
+/** A page file's front matter lines other than "updated", which changes with every edit. */
+const frontLines = (text: string) => /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text.replace(/^\uFEFF/, ""))?.[1].split(/\r?\n/).filter(l => l.trim() && !/^updated:/.test(l)).join("\n") ?? "";
+/** A file split into what a person may write (kept) and what the app owns: the front matter and the sections it writes from data (owned). */
+function splitOwned(text: string, drop: string[]) {
+  const kept: string[] = [], owned: string[] = []; let skip = false, fence: string | null = null;
+  for (const line of withoutFrontMatter(text).split("\n")) {
+    const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (f) { if (!fence) fence = f[1]; else if (f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null; }
+    if (!fence && !f) { const h = /^## (.+?)\s*$/.exec(line); if (h) skip = drop.includes(h[1]); }
+    (skip ? owned : kept).push(skip ? line : line.replace(/last changed \S+/, "last changed X"));
+  }
+  const tidy = (l: string[]) => l.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { kept: tidy(kept), owned: `${frontLines(text)}\n--\n${tidy(owned)}` };
+}
 /**
- * True when two versions of a file are the same apart from the front matter, line endings and the sections the app writes from its data
- * (a heading that appears once in `b`, so a tab with the same name is never mistaken for one). The push uses it: a file that reads the same
- * as the new export in everything the AI GM may write is the app's own, and the data sections are simply rebuilt.
+ * True when a repository file `a` is the app's own: it equals the new export `b` apart from the front matter, line endings and the sections the app
+ * writes from its data (a heading that appears once in `b`, so a tab with the same name is never mistaken for one), and the app-owned parts of `a`
+ * were not edited. Those parts must read like the new export, or like `prev` (the file as the last push wrote it, so the app has only moved on since).
+ * Without `prev` (a new file) the file must hold none of them. A person's edit to the front matter or to a data section is never overwritten.
  */
-export function sameApartFromOwned(path: string, a: string, b: string): boolean {
+export function sameApartFromOwned(path: string, a: string, b: string, prev?: string): boolean {
   const drop = derivedSectionsOf(path).filter(h => withoutFrontMatter(b).split("\n").filter(l => l.trimEnd() === `## ${h}`).length === 1);
-  const clean = (text: string) => {
-    const out: string[] = []; let skip = false, fence: string | null = null;
-    for (const line of withoutFrontMatter(text).split("\n")) {
-      const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-      if (f) { if (!fence) fence = f[1]; else if (f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null; }
-      if (!fence && !f) { const h = /^## (.+?)\s*$/.exec(line); if (h) skip = drop.includes(h[1]); }
-      if (!skip) out.push(line.replace(/last changed \S+/, "last changed X"));
-    }
-    return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
-  };
-  return clean(a) === clean(b);
+  const A = splitOwned(a, drop), B = splitOwned(b, drop);
+  if (A.kept !== B.kept) return false;
+  if (A.owned === B.owned) return true;
+  return prev === undefined ? A.owned === "\n--\n" : A.owned === splitOwned(prev, drop).owned;
 }
 
 /* ---- what to write, skip or delete when the files go into a repository ---- */

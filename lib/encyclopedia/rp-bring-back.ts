@@ -14,7 +14,7 @@
  * and exporting again: a file whose text does not come out of the export the same cannot be inverted safely, so its text is added
  * as a new GM-only tab instead of guessing. A file in 6-GM-Only/ only ever reaches the GM part of its page.
  */
-import { rpExportFiles, isRewrittenPath, textHash, headingLabel, sameApartFromFrontMatter, DERIVED_SECTIONS, WHERE_WIDGET, FOLDERS_LIST } from "./rp-export.ts";
+import { rpExportFiles, isRewrittenPath, textHash, headingLabel, sameApartFromFrontMatter, withoutFrontMatter, DERIVED_SECTIONS, WHERE_WIDGET, FOLDERS_LIST } from "./rp-export.ts";
 import { defaultCharacter, newId as randomId, playerText, workspaceSchema, type Entry, type Workspace } from "./world-model.ts";
 import { defaultFrontPage } from "./front-page.ts";
 import { newQuest } from "./quests.ts";
@@ -207,7 +207,7 @@ function analysePage(cx: Ctx, path: string, e: Entry, repoRaw: string, appText: 
 const joinText = (xs: { text: string }[]) => xs.map(x => x.text).join("\n\n");
 
 /** 1-Now/Current-State.md: its "Next session starting point" is the front page's "Where we are" text. */
-function analyseCurrent(path: string, repoRaw: string, appText: string): Analysis {
+function analyseCurrent(path: string, repoRaw: string, appText: string, widgetOk: boolean): Analysis {
   const crlf = isCrlf(repoRaw), known = new Set(CURRENT), rest = readFront(repoRaw).rest.replace(/^﻿/, "");
   const R = parseSections(crlf ? lf(rest) : rest, known), A = parseSections(exported(appText), known), h = "Next session starting point";
   const r = R.sections.filter(s => s.heading === h), a = A.sections.filter(s => s.heading === h), edits: Edit[] = [], notes: string[] = [];
@@ -216,8 +216,10 @@ function analyseCurrent(path: string, repoRaw: string, appText: string): Analysi
   if (other.length) notes.push(`${other.join(", ")} stays as the app makes it`);
   if (r.length === 1 && !same(r[0].text, a[0]?.text ?? "")) {
     const t = r[0].text;
-    if (t.length > 4000 || !stable(t)) exact = false;
-    else edits.push({ op: "where", text: crlf ? t.replace(/\n/g, "\r\n") : t });
+    const stored = crlf ? t.replace(/\n/g, "\r\n") : t;
+    // The widget must hold plain text that the file shows whole (no secret lines, no other kind of "where" widget, no heading of the file inside it).
+    if (stored.length > 4000 || !stable(t) || !widgetOk || A.sections.some((x, i) => A.sections.findIndex(z => z.heading === x.heading) !== i)) exact = false;
+    else edits.push({ op: "where", text: stored });
   }
   const check = (exp: Map<string, string>) => {
     const out = exp.get(path); if (out === undefined) return false;
@@ -276,7 +278,7 @@ export function applyEdits(ws: Workspace, campaignId: string, edits: Edit[], o: 
   if (!c) return { ok: false, error: "This campaign is not in your notes any more." };
   const keep = new Map<string, Snapshot>(), olds = new Map<string, { body?: string; tabs: { title: string; text: string }[] }>();
   let frontPage = c.frontPage;
-  const touch = (id: string): Entry | null => { const e = entries.get(id); if (!e) return null; const copy: Entry = { ...e, updatedAt: o.now }; entries.set(id, copy); return copy; };
+  const touch = (id: string): Entry | null => { const e = entries.get(id); if (!e || e.kind === "folder" || e.worldId !== c.worldId || (e.campaignId !== null && e.campaignId !== campaignId)) return null; const copy: Entry = { ...e, updatedAt: o.now }; entries.set(id, copy); return copy; };
   const remember = (id: string) => { const e = ws.entries.find(x => x.id === id); if (e && !keep.has(id)) keep.set(id, snapshotOf(e)); if (!olds.has(id)) olds.set(id, { tabs: [] }); return olds.get(id)!; };
   const pageFolders: Partial<Record<"sessions" | "notes" | "gm", string>> = {};
   const folder = (k: "sessions" | "notes" | "gm") => pageFolders[k] ??= folderFor({ ...ws, entries: [...ws.entries, ...added] }, campaignId, k, o.now, o.mint, x => added.push(x));
@@ -341,7 +343,7 @@ type Cand = { path: string; raw: string; entry: Entry | null; kind: "page" | "cu
 
 export function planBringBack(ws: Workspace, campaignId: string, input: PlanInput, o: { now?: string; newId?: () => string } = {}): BringBackPlan {
   const now = o.now ?? new Date().toISOString(), mint = o.newId ?? randomId, { map } = input;
-  const byId = new Map(ws.entries.map(e => [e.id, e])), mine = (e: Entry | undefined) => !!e && e.kind !== "folder" && (e.campaignId === campaignId || e.campaignId === null);
+  const byId = new Map(ws.entries.map(e => [e.id, e])), world = ws.campaigns.find(c => c.id === campaignId)?.worldId, mine = (e: Entry | undefined) => !!e && e.kind !== "folder" && e.worldId === world && (e.campaignId === campaignId || e.campaignId === null);
   let current = new Map<string, string>();
   try { current = new Map(rpExportFiles(ws, campaignId, { includeGm: map.includeGm, exportedAt: now }).map(f => [f.path, f.text])); } catch { current = new Map(); }
   const linkable = new Map<string, string>();
@@ -366,16 +368,17 @@ export function planBringBack(ws: Workspace, campaignId: string, input: PlanInpu
 
   // Changed files: what does each belong to?
   const cands: Cand[] = [];
+  const widget = ws.campaigns.find(c => c.id === campaignId)?.frontPage?.widgets.find(w => w.id === WHERE_WIDGET), whereOk = !widget || (widget.type === "text" && stable(widget.body));
   const sheetOwner = (path: string): Entry | null => {
     const stem = sheetStem(path); if (!stem) return null;
-    for (const [p, id] of Object.entries(map.pages)) if (p.replace(/^6-GM-Only\//, "") === `3-People/${stem}.md` && byId.get(id)?.character) return byId.get(id)!;
+    for (const [p, id] of Object.entries(map.pages)) if (p.replace(/^6-GM-Only\//, "") === `3-People/${stem}.md` && mine(byId.get(id)) && byId.get(id)?.character) return byId.get(id)!;
     return null;
   };
   for (const { path, raw } of changed) {
     const front = readFront(raw), appText = current.get(path);
     if (appText !== undefined && sameApartFromFrontMatter(appText, raw)) { plan.already.push(path); continue; }
     const appChanged = appText === undefined || textHash(appText) !== map.hashes[path], A = appText ?? "";
-    if (path === "1-Now/Current-State.md") { cands.push({ path, raw, entry: null, kind: "current", appText: A, appChanged, an: analyseCurrent(path, raw, A) }); continue; }
+    if (path === "1-Now/Current-State.md") { cands.push({ path, raw, entry: null, kind: "current", appText: A, appChanged, an: analyseCurrent(path, raw, A, whereOk) }); continue; }
     if (sheetStem(path)) {
       const e = sheetOwner(path);
       if (!e) { plan.kept.push({ path, reason: "The character this tracker belongs to is not in the app" }); continue; }
@@ -429,7 +432,10 @@ export function planBringBack(ws: Workspace, campaignId: string, input: PlanInpu
 
   // New files: the GM part of a page that had none, or a new page.
   const pages: { path: string; raw: string }[] = [];
+  // A new file whose text is already a page file of the app (brought back before and not pushed yet) is not a second page.
+  const dirOf = (p: string) => p.replace(/^6-GM-Only\//, "").slice(0, p.replace(/^6-GM-Only\//, "").lastIndexOf("/")), have = new Set([...current].map(([p, t]) => `${dirOf(p)}\n${withoutFrontMatter(t)}`));
   for (const f of fresh) {
+    if (have.has(`${dirOf(f.path)}\n${withoutFrontMatter(f.raw)}`)) { plan.already.push(f.path); continue; }
     const front = readFront(f.raw), base = gmPath(f.path) ? f.path.slice("6-GM-Only/".length) : null;
     const twinId = base && map.pages[base] ? map.pages[base] : base && front.id ? front.id : null;
     const e = twinId ? byId.get(twinId) : undefined;
@@ -529,6 +535,9 @@ export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; pla
     if (stableKey(fresh) !== stableKey(o.plan)) return { status: "changed", plan: fresh };
     let done = applyBringBack(got.ws, fresh, o.sel, { now, newId: o.newId });
     if (!done.ok) return { status: "error", message: `${done.error} Nothing was changed.` };
+    // Too big to save: say so before anything is written to page history.
+    const tooBig = (w: Workspace) => (w.entries.length > 5000 ? "Your notes have no room for these pages (the limit is 5,000 pages). Nothing was changed." : new TextEncoder().encode(JSON.stringify(w)).length > WORKSPACE_LIMIT ? "Your notes plus these changes are over the 2 MB workspace limit. Nothing was changed." : null);
+    const big = tooBig(done.workspace); if (big) return { status: "error", message: big };
     // Page history keeps the old text first (the server keeps it only for pages that are in the saved notes, which they are).
     const failed = new Set<string>();
     for (const k of done.keep) {
@@ -536,9 +545,8 @@ export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; pla
       if (!kept) failed.add(k.id);
     }
     if (failed.size) { done = applyBringBack(got.ws, fresh, o.sel, { now, newId: o.newId, keepTab: failed }); if (!done.ok) return { status: "error", message: `${done.error} Nothing was changed.` }; }
-    const next = done.workspace, bytes = new TextEncoder().encode(JSON.stringify(next)).length;
-    if (next.entries.length > 5000) return { status: "error", message: "Your notes have no room for these pages (the limit is 5,000 pages). Nothing was changed." };
-    if (bytes > WORKSPACE_LIMIT) return { status: "error", message: "Your notes plus these changes are over the 2 MB workspace limit. Nothing was changed." };
+    const next = done.workspace, big2 = failed.size ? tooBig(next) : null;
+    if (big2) return { status: "error", message: big2 };
     const put = await o.fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: got.revision }) });
     const out = await put.json().catch(() => ({})) as { error?: string };
     if (put.status === 409) {

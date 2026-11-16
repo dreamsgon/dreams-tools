@@ -236,3 +236,99 @@ test('planWrite treats a repository file equal to the new text as unchanged',()=
   const nextMara=next.find(f=>f.path===MARA);edited.set(MARA,textHash(nextMara.text));
   assert.deepEqual(planWrite(edited,prev,next,true).skip,[]);
 });
+
+/* ---- review fixes ---- */
+const pushOnce=async(g,w,at,msg)=>{const b=(log)=>rpExportFiles(w,'c1',{includeGm:true,exportedAt:at,exportLog:log});const p=await preparePush(TOKEN,REPO,'main',true,b,g.fetch);if(!p.nothingToPush||p.changes.length)await pushFiles(TOKEN,p,msg,g.fetch);return p;};
+const fixture=async()=>{const ws=baseWs(),g=fakeGithub();g.seed({'notes.txt':'mine'});await pushOnce(g,ws,T0,'one');return {ws,g,files:g.files()};};
+const bringAll=async(ws,g,o={show:true})=>{const got=await readRepoChanges(TOKEN,REPO,'main',g.fetch);assert.ok(got.ok);const p=planBringBack(ws,'c1',{map:got.map,files:got.files,log:got.log},{now:NOW});return {p,...applyBringBack(ws,p,sel(p,o),{now:NOW})};};
+
+test('a file cannot claim a page of another world, and a tracker file cannot point at one',()=>{
+  const ws=baseWs();
+  ws.worlds.push({id:'w2',name:'Elsewhere',description:'',archived:false});
+  ws.entries.push(entry('foreign','Foreign','character',{worldId:'w2',campaignId:null,overviewVisibility:'players',body:'Not yours.',character:{...defaultCharacter(),role:'npc',trackers:[{id:'k9',label:'Hit points',value:5,max:5,shape:'bar',colour:'green'}]}}));
+  const parsed=workspaceSchema.parse(ws),repo=repoAfter(parsed);
+  repo.map.pages['3-People/Ayla.md']='foreign';
+  const claim=repo.raw[MARA].replace(/rpg-tools-id: mara/,'rpg-tools-id: foreign').replace('The keeper of maps.','Taken over.');
+  const sheet=repo.raw[SHEET].replace('12/14','1/14');
+  const r2=repoAfter(parsed,{[MARA]:claim,[SHEET]:sheet});r2.map.pages['3-People/Ayla.md']='foreign';
+  const p=plan(parsed,r2),r=apply(parsed,p);
+  assert.deepEqual(page(r.workspace,'foreign'),page(parsed,'foreign'),'the other world\'s page is untouched');
+  assert.equal(page(r.workspace,'mara').body.includes('Taken over.'),true,'the file still maps to its own page by path');
+  assert.deepEqual(p.kept.map(k=>k.path),[SHEET]);
+  // Even a hand-made edit list cannot touch it.
+  const forced=applyBringBack(parsed,{...p,rows:[{...p.rows[0],edits:[{op:'body',id:'foreign',text:'x'},{op:'trackers',id:'foreign',items:[{label:'Hit points',value:0,max:5}]}]}]},{checked:new Set([p.rows[0].key]),choices:{},show:false},{now:NOW});
+  assert.ok(forced.ok);assert.deepEqual(page(forced.workspace,'foreign'),page(parsed,'foreign'));
+});
+
+test('push after bring back keeps a CRLF file CRLF, and the file map matches what was written',async()=>{
+  const {ws,g,files}=await fixture();
+  g.seed({[DOCKS]:files[DOCKS].replace('Busy docks.','Busy docks at dusk.').replace(/\n/g,'\r\n')});
+  const {workspace}=await bringAll(ws,g);
+  const second=await pushOnce(g,workspace,T1,'two'),after=g.files();
+  assert.ok(second.changes.some(c=>c.path===DOCKS));
+  assert.ok(/\r\n/.test(after[DOCKS])&&!/(?<!\r)\n/.test(after[DOCKS]),'still CRLF throughout');
+  const map=JSON.parse(after['.rpg-tools/files.json']);assert.equal(map.hashes[DOCKS],textHash(after[DOCKS]));assert.equal(map.gitBlobs[DOCKS],await textBlobSha(after[DOCKS]));
+  const third=await preparePush(TOKEN,REPO,'main',true,(log)=>rpExportFiles(workspace,'c1',{includeGm:true,exportedAt:T1,exportLog:log}),g.fetch);
+  assert.equal(third.nothingToPush,true);assert.deepEqual(third.skipped,[]);
+});
+
+test('a new file whose title differs from its name is moved, not left beside the new page file',async()=>{
+  const {ws,g}=await fixture();
+  g.seed({'2-Story/Sessions/2026-11-15-Lamp-at-Greyfen.md':'# The Lamp\n\nThe party followed the lamp.\n'});
+  const {p,workspace}=await bringAll(ws,g);assert.equal(p.rows.length,1);
+  const second=await pushOnce(g,workspace,T1,'two');
+  assert.deepEqual(second.removals,[{path:'2-Story/Sessions/2026-11-15-Lamp-at-Greyfen.md',reason:'moved'}]);
+  const sessions=Object.keys(g.files()).filter(f=>f.startsWith('2-Story/Sessions/')&&/Lamp/.test(f));
+  assert.deepEqual(sessions,['2-Story/Sessions/2026-11-15-The-Lamp.md']);
+  // Bringing back again finds nothing new, and a third push has nothing to do.
+  const again=await bringAll(workspace,g);assert.equal(again.p.rows.length,0);
+  assert.equal((await preparePush(TOKEN,REPO,'main',true,(log)=>rpExportFiles(workspace,'c1',{includeGm:true,exportedAt:T1,exportLog:log}),g.fetch)).nothingToPush,true);
+});
+
+test('a new file already brought back (not pushed yet) is not offered as a second page',async()=>{
+  const {ws,g}=await fixture();
+  g.seed({'2-Story/Sessions/2026-11-15-The-Lamp.md':'# The Lamp\n\nThe party followed the lamp.\n'});
+  const first=await bringAll(ws,g);assert.equal(first.p.rows.length,1);
+  const again=await bringAll(first.workspace,g);assert.equal(again.p.rows.length,0);assert.deepEqual(again.p.already,['2-Story/Sessions/2026-11-15-The-Lamp.md']);
+});
+
+test('a person\'s edit to a data section or the front matter is never overwritten by a push',async()=>{
+  const {ws,g,files}=await fixture();
+  // The tracker numbers are edited in the repository, but the person keeps the app's numbers (nothing brought back).
+  g.seed({[SHEET]:files[SHEET].replace('12/14','9/14'),[MARA]:files[MARA].replace('kind: character','kind: character\ntags: [mine]')});
+  const p=await pushOnce(g,ws,T1,'two');
+  assert.deepEqual(p.skipped.map(s=>s.path).sort(),[MARA,SHEET].sort());
+  assert.match(g.files()[SHEET],/9\/14/);assert.match(g.files()[MARA],/tags: \[mine\]/);
+  // Once the change is brought back, the file is the app's own again.
+  const {workspace}=await bringAll(ws,g);
+  assert.equal((await preparePush(TOKEN,REPO,'main',true,(log)=>rpExportFiles(workspace,'c1',{includeGm:true,exportedAt:T1,exportLog:log}),g.fetch)).skipped.some(s=>s.path===SHEET),false);
+});
+
+test('a data section that moved on in the app does not stop the app\'s own file being updated',async()=>{
+  const {ws,g,files}=await fixture();
+  g.seed({[MARA]:files[MARA].replace('The keeper of maps.','The keeper of maps and secrets.')});
+  const {workspace}=await bringAll(ws,g);
+  const moved=structuredClone(workspace);moved.entries.find(e=>e.id==='mara').character.group='Harbour';
+  const p=await preparePush(TOKEN,REPO,'main',true,(log)=>rpExportFiles(moved,'c1',{includeGm:true,exportedAt:T1,exportLog:log}),g.fetch);
+  assert.deepEqual(p.skipped,[]);
+});
+
+test('Where we are: secret lines, another kind of widget or a repeated heading is not guessed',()=>{
+  const edit=(ws,text)=>{const repo=repoAfter(ws),p=plan(ws,repoAfter(ws,{[STATE]:repo.raw[STATE].replace(/(## Next session starting point\n\n)[\s\S]*$/,`$1${text}\n`)}));return p;};
+  const withWidget=(w)=>{const ws=baseWs();ws.campaigns[0].frontPage={widgets:[w]};return workspaceSchema.parse(ws);};
+  const secret=withWidget({id:'where',type:'text',title:'Where we are',body:'Dusk.\n::: secret\nThe duke is dead.\n:::'});
+  const p1=edit(secret,'Night.');assert.equal(p1.rows[0].matched,false);assert.deepEqual(p1.rows[0].edits.map(e=>e.op),['newnote']);
+  const links=withWidget({id:'where',type:'links',title:'Where we are',links:[]});
+  const p2=edit(links,'Night.');assert.equal(p2.rows[0].matched,false);
+  const dup=withWidget({id:'where',type:'text',title:'Where we are',body:'Dusk.\n## Party\nA list'});
+  const p3=edit(dup,'Night.\n## Party\nB list');assert.equal(p3.rows[0].matched,false);
+  const ok=withWidget({id:'where',type:'text',title:'Where we are',body:'Dusk.'});
+  assert.equal(edit(ok,'Night.').rows[0].matched,true);
+});
+
+test('too many bytes is reported before page history is written', async()=>{
+  const ws=baseWs();for(let i=0;i<22;i++)ws.entries.push(entry('big'+i,'Big '+i,'note',{body:'y'.repeat(95_000)}));const repo=repoAfter(ws,{[MARA]:repoAfter(ws).raw[MARA].replace('The keeper of maps.','The keeper of maps and secrets.')}),input={map:repo.map,files:repo.files,log:repo.log},p=plan(ws,repo);
+  const calls=[];
+  const out=await saveBringBack({fetch:async(url,init)=>{calls.push(`${init?.method??'GET'} ${url}`);return url.includes('workspace')&&!init?.method?new Response(JSON.stringify({data:ws,revision:3})):new Response('{}');},campaignId:'c1',plan:p,input,sel:sel(p),now:NOW});
+  assert.equal(out.status,'error');assert.match(out.message,/2 MB/);assert.deepEqual(calls,['GET /api/encyclopedia/workspace'],'nothing was written');
+});
