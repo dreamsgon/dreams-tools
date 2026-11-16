@@ -1,8 +1,10 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Route, Shield, Type, Undo2, Waves } from 'lucide-react';
-import { decodePaint, encodePaint, fogBrush, isWater, terrainIndex, type TerrainId, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
+import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, MousePointer2, Paintbrush, Redo2, Route, Shield, Stamp, Type, Undo2, Waves } from 'lucide-react';
+import { iconKind, mapIcon, settlementGroups, stampGroups } from '@/lib/encyclopedia/map-icons';
+import { IconPicker, IconPreview } from './icon-picker';
+import { MAX_ICON_BYTES, decodePaint, encodePaint, fogBrush, isWater, terrainIndex, type TerrainId, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
 import { newId, playerCampaign, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
 import { holdersByPlace, pinTints, playerHoldersByPlace } from '@/lib/encyclopedia/org-holdings';
 import { paintStroke, thinLine } from '@/lib/encyclopedia/terrain-art';
@@ -12,15 +14,16 @@ import type { TableLibrary } from '@/lib/encyclopedia/tables';
 import { HexInspector } from './hex-inspector';
 import { WorldUseDialog } from './world-use-dialog';
 import { mapLooks, nameFonts, type MapLookId } from '@/lib/encyclopedia/map-looks';
-import { MapCanvas, useMapImage } from './map-canvas';
+import { MapCanvas, useIconUrls, useMapImage } from './map-canvas';
+import { uploadMapImage } from './map-transfer';
 import { MapViewport } from './map-viewport';
 import { PinDialog } from './map-editor';
 // The generators run only in the browser, so they stay out of the server bundle.
 const WorldGenerateDialog = dynamic(() => import('./world-generate-dialog').then(m => m.WorldGenerateDialog), { ssr: false });
 import { confirmDialog } from '../confirm-dialog';
 
-type Tool = 'select' | 'terrain' | 'river' | 'road' | 'border' | 'place' | 'label' | 'fog';
-type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels' | 'columns' | 'rows' | 'fog' | 'hexes' | 'party'>;
+type Tool = 'select' | 'terrain' | 'river' | 'road' | 'border' | 'place' | 'stamp' | 'label' | 'fog';
+type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels' | 'columns' | 'rows' | 'fog' | 'hexes' | 'party' | 'icons'>;
 /** Brush colours grouped as water, open land, wet and wooded land, then high and cold ground. */
 const brushOrder = ['sea', 'deep', 'seaice', 'grassland', 'steppe', 'savanna', 'desert', 'barren', 'marsh', 'forest', 'boreal', 'jungle', 'hills', 'mountains', 'volcanic', 'snow', 'tundra', 'glacier'].map(id => terrainIndex[id as TerrainId]);
 const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] = [
@@ -30,6 +33,7 @@ const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] 
   { id: 'road', name: 'Road', key: 'O', icon: Route },
   { id: 'border', name: 'Border', key: 'K', icon: Shield },
   { id: 'place', name: 'Place', key: 'P', icon: PinIcon },
+  { id: 'stamp', name: 'Stamp', key: 'S', icon: Stamp },
   { id: 'label', name: 'Label', key: 'T', icon: Type },
   { id: 'fog', name: 'Fog', key: 'F', icon: CloudFog },
 ];
@@ -42,6 +46,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const map = entry.mapData!;
   const painted = map.source === 'generated';
   const [tool, setTool] = useState<Tool>(painted && map.category !== 'hex' ? 'terrain' : 'select');
+  const [placeIcon, setPlaceIcon] = useState('town'), [stampIcon, setStampIcon] = useState('volcano');
   const [terrain, setTerrain] = useState(2), [radius, setRadius] = useState(3), [landOnly, setLandOnly] = useState(true);
   const [live, setLive] = useState<MapPaint | null>(null);
   const [undo, setUndo] = useState<Snapshot[]>([]), [redo, setRedo] = useState<Snapshot[]>([]);
@@ -66,7 +71,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const stroke = useRef<{ cells: Uint8Array; last: { x: number; y: number }; base: MapPaint; changed: boolean } | null>(null);
   const [playerView, setPlayerView] = useState(false), [using, setUsing] = useState(false);
   const seen = playerView ? playerMap(map) : map;
-  const { url } = useMapImage(seen);
+  const { url } = useMapImage(seen), iconUrls = useIconUrls(map);
   // Pins of places an organization holds are tinted in its map colour; the player preview follows what players may see.
   const tints = useMemo(() => {
     if (!playerView) return pinTints(map.pins, holdersByPlace(data.entries, { worldId: entry.worldId, campaignId: campaign?.id ?? entry.campaignId }));
@@ -76,7 +81,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const current = live ?? (painted ? mapPaint(map) : null);
   const areaMaps = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.kind === 'map' && e.id !== entry.id);
 
-  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels, columns: map.columns, rows: map.rows, fog: map.fog, hexes: map.hexes, party: map.party });
+  const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels, columns: map.columns, rows: map.rows, fog: map.fog, hexes: map.hexes, party: map.party, icons: map.icons });
   /** A change that Undo can take back. */
   const edit = (patch: Partial<MapData>) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); };
   const setStyle = (patch: NonNullable<MapData['mapStyle']>) => setMap({ mapStyle: { ...map.mapStyle, ...patch } });
@@ -146,7 +151,28 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
     edit({ labels: [...(map.labels ?? []), { id, text: 'New name', x, y, size: 'medium', visibility: 'gm' }] });
     setSelected(id); setNewLabel(id); setTool('select');
   };
-  const place = (x: number, y: number) => setEditingPin({ id: newId(), title: '', x, y, notes: '', entryId: null, visibility: 'gm' });
+  const place = (x: number, y: number) => setEditingPin({ id: newId(), title: '', x, y, notes: '', entryId: null, visibility: 'gm', icon: placeIcon, kind: kindFor(placeIcon) });
+  /** A landmark stamp goes straight onto the map, named after its icon; select it to rename it or write notes. */
+  const stamp = (x: number, y: number) => {
+    if (map.pins.length >= 100) return;
+    edit({ pins: [...map.pins, { id: newId(), title: mapIcon(stampIcon)?.name ?? map.icons?.find(i => i.id === stampIcon)?.name ?? 'Landmark', x, y, notes: '', entryId: null, visibility: 'gm', icon: stampIcon, kind: kindFor(stampIcon) }] });
+  };
+  const kindFor = (icon: string) => icon.startsWith('u-') ? 'landmark' as const : iconKind(icon);
+  const setPinIcon = (id: string, icon: string | undefined) => setMap({ pins: map.pins.map(p => p.id === id ? { ...p, icon, kind: icon ? (icon.startsWith('u-') ? p.kind ?? 'landmark' : iconKind(icon)) : undefined } : p) });
+  /** An uploaded icon is stored like any map picture and kept with this map. */
+  const uploadIcon = async (file: File) => {
+    if (file.size > MAX_ICON_BYTES) throw new Error('Choose a picture up to 1 MB.');
+    if ((map.icons?.length ?? 0) >= 40) throw new Error('A map can keep up to 40 of your own icons.');
+    const image = await uploadMapImage(file), id = `u-${newId().replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 12).padEnd(4, '0')}`;
+    edit({ icons: [...(map.icons ?? []), { id, name: file.name.replace(/\.[a-z0-9]+$/i, '').trim().slice(0, 60) || 'Icon', imageId: image.imageId }] });
+    if (tool === 'stamp') setStampIcon(id); else setPlaceIcon(id);
+  };
+  /** Removing an uploaded icon puts the places that used it back to their usual symbol. */
+  const removeIcon = (id: string) => {
+    edit({ icons: map.icons?.filter(i => i.id !== id), pins: map.pins.map(p => p.icon === id ? { ...p, icon: undefined } : p) });
+    if (placeIcon === id) setPlaceIcon('town');
+    if (stampIcon === id) setStampIcon('volcano');
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -188,9 +214,9 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
           {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
             brush={brush} fogEditing={tool === 'fog'} onCell={tool === 'fog' ? explore : undefined}
             selectedItem={selected} onItem={tool === 'select' ? select : undefined}
-            onPlace={tool === 'place' ? place : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>}
+            onPlace={tool === 'place' ? place : tool === 'stamp' ? stamp : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>}
         </MapViewport>
-        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Click the map to add a place.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
+        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Pick an icon, then click the map to add a place.' : tool === 'stamp' ? 'Pick a landmark, then click the map to stamp it. Select a stamp afterwards to rename it.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
       </section>
       <aside className="world-studio-inspector" aria-label="Inspector">
         {playerView ? <>
@@ -223,15 +249,18 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <button className="button" onClick={() => setMap({ fog: { enabled: true, revealed: [] } })}>Hide all</button>
           </div>
         </>}
-        {(tool === 'select' || tool === 'place' || tool === 'label' || drawing) && <>
+        {tool === 'place' && !pin && <><h3><PinIcon size={17}/> Places</h3><IconPicker label="Place icon" groups={settlementGroups} value={placeIcon} onPick={setPlaceIcon} map={map} urls={iconUrls} onUpload={uploadIcon} onRemove={removeIcon}/></>}
+        {tool === 'stamp' && <><h3><Stamp size={17}/> Landmark stamps</h3><IconPicker label="Stamp" groups={stampGroups} value={stampIcon} onPick={setStampIcon} map={map} urls={iconUrls} onUpload={uploadIcon} onRemove={removeIcon}/></>}
+        {(tool === 'select' || (tool === 'place' && pin) || tool === 'label' || drawing) && <>
           {drawing && !path && <><h3>{tool === 'river' ? <Waves size={17}/> : tool === 'road' ? <Route size={17}/> : <Shield size={17}/>} {tool === 'river' ? 'Rivers' : tool === 'road' ? 'Roads' : 'Borders'}</h3><p className="aside-hint">{tool === 'river' ? 'Draw from the source down to the sea or a lake.' : tool === 'road' ? 'Draw roads between places. Travel routes still measure the distances.' : 'Draw the edge of a realm, a province or a wild region.'} Select a line afterwards to name it, change it, or delete it.</p></>}
           {pin ? <div className="world-pin">
             <span className="world-label">Place</span>
             <h3>{pin.title}</h3>
-            <div className="world-chips" role="group" aria-label="Kind of place">
-              <button aria-pressed={!pin.kind} onClick={() => setMap({ pins: map.pins.map(p => p.id === pin.id ? { ...p, kind: undefined } : p) })}>Numbered pin</button>
-              {placeKinds.map(k => <button key={k.id} aria-pressed={pin.kind === k.id} onClick={() => setMap({ pins: map.pins.map(p => p.id === pin.id ? { ...p, kind: k.id } : p) })}>{k.name}</button>)}
-            </div>
+            <details className="world-pin-icon">
+              <summary>{pin.icon ? <IconPreview id={pin.icon} map={map} urls={iconUrls}/> : null}<span>{pin.icon ? 'Change icon' : pin.kind ? `${placeKinds.find(k => k.id === pin.kind)?.name ?? 'Place'} symbol · choose an icon` : 'Numbered pin · choose an icon'}</span></summary>
+              <IconPicker label="Icon" groups={[...settlementGroups, ...stampGroups]} value={pin.icon} onPick={id => setPinIcon(pin.id, id)} map={map} urls={iconUrls} onUpload={uploadIcon} onRemove={removeIcon}/>
+              {(pin.icon || pin.kind) && <button type="button" className="text-button" onClick={() => setPinIcon(pin.id, undefined)}>Use a numbered pin instead</button>}
+            </details>
             <p>{pin.notes || 'No notes yet.'}</p>
             <label className="world-field">Area map<select value={pin.areaMapId ?? ''} onChange={e => setMap({ pins: map.pins.map(p => p.id === pin.id ? { ...p, areaMapId: e.target.value || null } : p) })}><option value="">None</option>{areaMaps.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}</select></label>
             <div className="button-row">

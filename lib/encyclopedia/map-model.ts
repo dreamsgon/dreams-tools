@@ -18,6 +18,14 @@ export const weatherLinkSchema=z.object({campaignId:id,calendarId:id,regionId:id
 /** What a place is, which sets its symbol on the map. Pins without a kind keep the numbered marker. */
 export const placeKinds=[{id:'city',name:'City'},{id:'town',name:'Town'},{id:'village',name:'Village'},{id:'castle',name:'Castle'},{id:'dungeon',name:'Dungeon'},{id:'ruin',name:'Ruin'},{id:'landmark',name:'Landmark'},{id:'camp',name:'Camp'}] as const;
 export type PlaceKind=typeof placeKinds[number]['id'];
+/** Built-in icons a place can be drawn with (their drawings are in map-icons). Uploaded icons have ids starting with u-. */
+export const mapIconIds=["capital","city","town","village","hamlet","farm","port","temple","inn","castle","fort","tower","camp","mine","spaceport","dome","station","rig","volcano","peak","tree","falls","crater","crystal","geyser","whirlpool","cave","stones","ruins","monolith","statue","lighthouse","portal","bones","wreck","crash","floating","skull"] as const;
+const builtInIcon=new Set<string>(mapIconIds);
+export const MAX_ICON_BYTES=1024*1024;
+const iconId=z.string().regex(/^u-[a-z0-9]{4,24}$/);
+/** An icon uploaded for this map: a small picture in the map's image storage. */
+export const mapIconSchema=z.object({id:iconId,name:z.string().trim().min(1).max(60),imageId:imageIdSchema});
+export type MapIcon=z.infer<typeof mapIconSchema>;
 const point=z.object({x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1)});
 /** Rivers, roads and borders drawn on the map, with points as fractions of the map size. */
 export const pathKinds=[{id:'river',name:'River'},{id:'road',name:'Road'},{id:'border',name:'Border'}] as const;
@@ -26,7 +34,7 @@ export type MapPath=z.infer<typeof mapPathSchema>;
 /** Names written on the map itself: seas, regions, mountain ranges. */
 export const mapLabelSchema=z.object({id,text:z.string().trim().min(1).max(80),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),size:z.enum(['small','medium','large']),visibility:z.enum(['gm','players']),entryId:id.nullable().optional()});
 export type MapLabel=z.infer<typeof mapLabelSchema>;
-export const pinSchema=z.object({kind:z.enum(placeKinds.map(k=>k.id) as [PlaceKind,...PlaceKind[]]).optional(),areaMapId:id.nullable().optional(),weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
+export const pinSchema=z.object({kind:z.enum(placeKinds.map(k=>k.id) as [PlaceKind,...PlaceKind[]]).optional(),icon:z.string().max(40).refine(v=>builtInIcon.has(v)||iconId.safeParse(v).success,'Unknown icon').optional(),areaMapId:id.nullable().optional(),weatherLinks:z.array(weatherLinkSchema).max(500).optional(),id,title:z.string().trim().min(1).max(160),x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),notes:z.string().max(3000),entryId:id.nullable(),visibility:z.enum(['gm','players'])});
 export const routeSchema=z.object({id,name:z.string().trim().min(1).max(100),unit:z.enum(['mi','km']),stops:z.array(id).min(2).max(20),distances:z.array(z.number().finite().positive().max(1000000)).min(1).max(19),speed:z.number().finite().min(.1).max(10000),hoursPerDay:z.number().finite().min(1).max(24),visibility:z.enum(['gm','players'])}).superRefine((r,ctx)=>{if(r.distances.length!==r.stops.length-1||r.stops.some((s,i)=>i>0&&s===r.stops[i-1]))ctx.addIssue({code:'custom',message:'Routes need a distance for each leg and different adjacent stops.'});});
 export type MapRoute=z.infer<typeof routeSchema>;
 const cellIndex=z.number().int().min(0).max(1199);
@@ -60,7 +68,7 @@ export const mapSchema=z.object({
  scale:z.object({width:z.number().finite().positive().max(10000000),unit:z.enum(['mi','km'])}).optional(),routes:z.array(routeSchema).max(50).optional(),
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
- paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),
+ paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),icons:z.array(mapIconSchema).max(40).optional(),
  hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),
  mapStyle:z.object({look:z.enum(['painted','atlas','ink']).optional(),font:z.enum(['serif','plain','hand']).optional(),nameSize:z.enum(['small','medium','large']).optional(),legend:z.boolean().optional(),title:z.string().trim().max(100).optional()}).optional(),
 }).superRefine((m,ctx)=>{
@@ -73,6 +81,8 @@ export const mapSchema=z.object({
  if(new Set((m.routes??[]).map(r=>r.id)).size!==(m.routes??[]).length)bad('Route IDs must be unique');
  for(const route of m.routes??[])if(route.stops.some(id=>!m.pins.some(p=>p.id===id)))bad('Every route stop must be a location on this map');
  if(new Set(m.pins.map(p=>p.id)).size!==m.pins.length)bad('Map pin IDs must be unique');
+ if(new Set((m.icons??[]).map(i=>i.id)).size!==(m.icons?.length??0))bad('Icon IDs must be unique');
+ for(const pin of m.pins)if(pin.icon?.startsWith('u-')&&!m.icons?.some(i=>i.id===pin.icon))bad('A place uses an icon this map no longer has');
  if(m.paint&&m.source!=='generated')bad('Only drawn terrain can be painted');
  const cells=m.columns*m.rows;
  if(m.hexes&&(new Set(m.hexes.map(h=>h.cell)).size!==m.hexes.length||m.hexes.some(h=>h.cell>=cells)))bad('Hex notes must be unique and inside the map');
@@ -167,6 +177,7 @@ export function playerMap(m:MapData):MapData{
   paint:fog&&m.paint?hiddenPaint(m,m.paint,visible):m.paint,
   fog:m.fog?{enabled:m.fog.enabled,revealed:[...m.fog.revealed]}:undefined,
   pins:m.pins.filter(p=>p.visibility==='players'&&pointRevealed(m,p.x,p.y)),
+  icons:m.icons?.filter(i=>m.pins.some(p=>p.icon===i.id&&p.visibility==='players'&&pointRevealed(m,p.x,p.y))),
   paths:m.paths?.filter(p=>p.visibility==='players').flatMap(p=>revealedRuns(m,p.points).map((points,i)=>({...p,id:i?`${p.id}-${i}`.slice(0,100):p.id,points}))),
   labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y)),
   hexes:m.hexes?.filter(h=>h.visibility==='players'&&(!fog||visible.has(h.cell))).map(h=>({...h,tableId:undefined})),

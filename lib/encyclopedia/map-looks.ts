@@ -1,5 +1,6 @@
 import { decodePaint, placeKinds, terrains, type MapData, type MapPaint } from './map-model.ts';
 import { terrainLayerOf } from './terrain-art.ts';
+import { iconName } from './map-icons.ts';
 
 /** Colours for one look of a world or area map. Painted is the original look. */
 export type MapLook = {
@@ -42,7 +43,7 @@ export function mapLookOf(m: Pick<MapData, 'mapStyle'>) {
   return { look: mapLooks[s.look ?? 'painted'], font: nameFonts[s.font ?? 'serif'].family, size: nameSizes[s.nameSize ?? 'medium'] };
 }
 
-export type LegendItem = { kind: 'terrain' | 'place' | 'path'; id: string; name: string; color?: string };
+export type LegendItem = { kind: 'terrain' | 'icon' | 'place' | 'path'; id: string; name: string; color?: string };
 /** A legend made from what the map uses: its terrains, kinds of place and kinds of line. */
 export function legendItems(m: MapData, paint: MapPaint | null): LegendItem[] {
   const used = new Set<number>();
@@ -52,7 +53,9 @@ export function legendItems(m: MapData, paint: MapPaint | null): LegendItem[] {
   const look = mapLookOf(m).look;
   const items: LegendItem[] = [];
   for (let t = 1; t < terrains.length; t++) if (used.has(t)) items.push({ kind: 'terrain', id: String(t), name: terrains[t].name, color: look.layers[terrainLayerOf(t)] ?? terrains[t].color });
-  for (const k of placeKinds) if (m.pins.some(p => p.kind === k.id)) items.push({ kind: 'place', id: k.id, name: k.name });
+  // Places drawn with an icon are listed by icon; the rest by their kind of place.
+  for (const id of new Set(m.pins.flatMap(p => p.icon ? [p.icon] : []))) items.push({ kind: 'icon', id, name: iconName(id, m) });
+  for (const k of placeKinds) if (m.pins.some(p => !p.icon && p.kind === k.id)) items.push({ kind: 'place', id: k.id, name: k.name });
   for (const k of ['river', 'road', 'border'] as const) if (m.paths?.some(p => p.kind === k)) items.push({ kind: 'path', id: k, name: k[0].toUpperCase() + k.slice(1) });
   return items;
 }

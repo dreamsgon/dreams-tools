@@ -12,10 +12,12 @@ export async function uploadMapImage(file:Blob){
  const response=await fetch(uploadUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transferId:await stageTransfer(file,'image')})});const result=await response.json() as {id:string;error?:string};if(!response.ok)throw new Error(result.error??'Upload failed');addUploaded(result.id);return {imageId:result.id,imageWidth:width,imageHeight:height};
 }
 export function downloadMapFile(value:unknown,title:string){const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=title.replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,80)+'.map.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+/** Uploaded icons live in this account's storage, so a map package leaves them out and those places keep their usual symbol. */
+function withoutUploadedIcons(map:MapData){return {icons:undefined,pins:map.pins.map(p=>p.icon?.startsWith('u-')?{...p,icon:undefined}:p)};}
 export async function exportMapPackage(entry:Entry){
  const map=entry.mapData;if(!map)throw new Error('No map to export');let image:undefined|{mime:string;data:string};
  if(map.source==='image'&&map.imageId){const r=await fetch(imageSrc(map.imageId));if(!r.ok)throw new Error('Image unavailable. Replace it before exporting this map.');const blob=await r.blob();const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Could not read map image'));reader.readAsDataURL(blob);});image={mime:blob.type,data};}
- downloadMapFile({format:'ttrpg-map',version:1,title:entry.title,body:entry.body,tabs:entry.tabs??[],map:{...unlinkMapWeather(map),fog:map.fog?{enabled:map.fog.enabled,revealed:map.fog.revealed}:undefined},image},entry.title);
+ downloadMapFile({format:'ttrpg-map',version:1,title:entry.title,body:entry.body,tabs:entry.tabs??[],map:{...unlinkMapWeather(map),fog:map.fog?{enabled:map.fog.enabled,revealed:map.fog.revealed}:undefined,...withoutUploadedIcons(map)},image},entry.title);
 }
 export async function importMapPackage(file:File):Promise<{title:string;body:string;tabs:Entry['tabs'];mapData:MapData}>{
  if(file.size>12*1024*1024)throw new Error('Choose a map package smaller than 12 MB.');
