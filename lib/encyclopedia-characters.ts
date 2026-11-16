@@ -1,8 +1,8 @@
 import type {Picture} from "./encyclopedia/world-model.ts";
 import type {RowField} from "./encyclopedia/stat-rolls.ts";
 
-export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc"|"creature";detail:string;world:string;worldId:string;campaignId:string|null;/** Set only when a campaign is paired: where a character in that campaign's world comes from. */origin?:string;hasStatblock:boolean;picture?:Picture};
-export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string;statFields?:RowField[]}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;character?:{role?:string;statsByCampaign?:Record<string,Record<string,unknown>>;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean;sheet?:{items?:{id:string;name:string;kind:string;label?:string;value?:string;formula?:string}[]}};picture?:Picture}[]};
+export type EncyclopediaCharacter={id:string;name:string;role:"pc"|"companion"|"npc"|"creature";detail:string;world:string;worldId:string;campaignId:string|null;/** Set only when a campaign is paired: where a character in that campaign's world comes from. */origin?:string;hasStatblock:boolean;picture?:Picture;/** A vehicle: its token size in squares when it has no picture framed bigger. */squares?:number};
+export type EncyclopediaRaw={worlds?:{id:string;name:string;isTemplate?:boolean}[];campaigns?:{id:string;name:string;worldId?:string;maptableCampaignId?:string;statFields?:RowField[]}[];entries?:{id:string;title:string;kind:string;worldId:string;campaignId:string|null;vehicle?:{typeId?:string};character?:{role?:string;statsByCampaign?:Record<string,Record<string,unknown>>;location?:string;faction?:string;status?:string;statblock?:string;statblockRolls?:boolean;sheet?:{items?:{id:string;name:string;kind:string;label?:string;value?:string;formula?:string}[]}};picture?:Picture}[]};
 
 const roleName={pc:"Player character",companion:"Companion",npc:"NPC",creature:"Creature"} as const;
 
@@ -15,6 +15,17 @@ export function encyclopediaCharacters(raw:EncyclopediaRaw):EncyclopediaCharacte
   const hasStatblock=!!e.character?.statblock?.trim();
   return {id:e.id,name:e.title.slice(0,120),role,detail:hasStatblock?`${detail} · Statblock`:detail,world:worlds.get(e.worldId)!,worldId:e.worldId,campaignId:e.campaignId,hasStatblock,picture:e.picture};
  }).sort((a,b)=>a.world.localeCompare(b.world)||a.name.localeCompare(b.name));
+}
+
+/** How many squares a vehicle token covers: ships and airships 3×3, everything else 2×2, unless its picture says bigger. */
+const vehicleSquares=(typeId?:string)=>typeId==="starship"||typeId==="sailing-ship"||typeId==="airship"?3:2;
+/** Vehicles from the signed-in user's Encyclopedia, as large tokens (read-only). Templates are left out. */
+export function encyclopediaVehicles(raw:EncyclopediaRaw):EncyclopediaCharacter[]{
+ const worlds=new Map((raw.worlds??[]).filter(w=>!w.isTemplate).map(w=>[w.id,w.name])),campaigns=new Map((raw.campaigns??[]).map(c=>[c.id,c.name]));
+ return (raw.entries??[]).filter(e=>e.kind==="vehicle"&&worlds.has(e.worldId)).map(e=>{
+  const squares=e.picture?.squares&&e.picture.squares>1?e.picture.squares:vehicleSquares(e.vehicle?.typeId);
+  return {id:e.id,name:e.title.slice(0,120),role:"npc" as const,detail:["Vehicle",e.campaignId?campaigns.get(e.campaignId):""].filter(Boolean).join(" · "),world:worlds.get(e.worldId)!,worldId:e.worldId,campaignId:e.campaignId,hasStatblock:false,squares,...(e.picture?{picture:{...e.picture,squares}}:{})};
+ });
 }
 
 /** The Encyclopedia campaign paired with a Maptable campaign, if any. */

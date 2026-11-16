@@ -11,10 +11,10 @@ import {roleSide} from "@/lib/token-gallery";
 import {encyclopediaPlacementId,toggleArmed,type ArmedToken} from "@/lib/token-arming";
 import {circleStyle} from "@/lib/encyclopedia/picture";
 import {bookImageUrl,bookWorkspaceUrl} from "@/lib/maptable-member";
-import {campaignCharacters,encyclopediaCharacters,pairedCampaign,type EncyclopediaCharacter,type EncyclopediaRaw} from "@/lib/encyclopedia-characters";
+import {campaignCharacters,encyclopediaCharacters,encyclopediaVehicles,pairedCampaign,type EncyclopediaCharacter,type EncyclopediaRaw} from "@/lib/encyclopedia-characters";
 
 export type {EncyclopediaCharacter,EncyclopediaRaw};
-export {encyclopediaCharacters,campaignCharacters,pairedCampaign};
+export {encyclopediaCharacters,encyclopediaVehicles,campaignCharacters,pairedCampaign};
 
 let cached:Promise<EncyclopediaRaw>|null=null;
 /** The signed-in user's Encyclopedia, read-only and fetched once per page unless refreshed. */
