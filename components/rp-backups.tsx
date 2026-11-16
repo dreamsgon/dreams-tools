@@ -7,9 +7,11 @@ import { rpExportFiles } from "@/lib/encyclopedia/rp-export";
 import { rpExportZip, readRestoreCopy } from "@/lib/encyclopedia/rp-zip";
 import { readZip, ZipError, ZIP_MAX_BYTES } from "@/lib/zip-read";
 import { classifyZip, exportedAt, folderRows, lastExportKey, shortDate, zipName } from "@/lib/encyclopedia/rp-sheet";
+import { memberRef } from "./encyclopedia/member-view";
 import "./rp-backups.css";
 
 const WORKSPACE_LIMIT = 2_000_000;
+const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 const WORKSPACE_URL = "/api/encyclopedia/workspace";
 
 /** The date of the last Download ZIP on this device, kept per campaign. Only a convenience: it can be missing. */
@@ -36,8 +38,8 @@ type Imported =
   | { step: "reading" }
   | { step: "error"; title: string; message: string }
   | { step: "note"; title: string; message: string }
-  | { step: "found"; incoming: Workspace; name: string; date: string | null; files: number }
-  | { step: "restoring"; incoming: Workspace; name: string; date: string | null; files: number }
+  | { step: "found"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
+  | { step: "restoring"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
   | { step: "done"; name: string; href: string };
 
 const errorText = (e: unknown, fallback: string) => e instanceof Error && e.message ? e.message : fallback;
@@ -66,7 +68,10 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   const sheet = useRef<HTMLDivElement>(null), picker = useRef<HTMLInputElement>(null), closeRef = useRef(close);
   const [opener] = useState(() => typeof document === "undefined" ? null : document.activeElement as HTMLElement | null);
   const [openedAt] = useState(() => new Date().toISOString());
-  useEffect(() => { closeRef.current = close; });
+  const latest = useRef(workspace);
+  useEffect(() => { closeRef.current = close; latest.current = workspace; });
+  // The page behind the sheet stays put while it is open.
+  useEffect(() => { const old = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = old; }; }, []);
 
   // Escape closes, Tab stays inside, and focus goes back to the opener.
   useEffect(() => {
@@ -93,36 +98,42 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     let live = true;
     (async () => {
       try {
-        let ws = workspace;
+        let ws = latest.current;
         if (!ws) {
           const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; error?: string };
           if (res.status === 401) throw new Error("Sign in again to export this campaign.");
           if (!res.ok) throw new Error(body.error || "Could not load this campaign's notes.");
           ws = workspaceSchema.parse(body.data);
         }
-        const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await res.json() as { data?: unknown; error?: string };
-        if (!res.ok) throw new Error(body.error || "Could not load your random tables.");
-        const parsed = librarySchema.safeParse(body.data);
-        if (live) setLoaded({ workspace: ws, tables: parsed.success ? parsed.data : emptyLibrary() });
+        // A co-GM's tables call would return their own library, not the GM's, so it is left out.
+        let tables = emptyLibrary();
+        if (!memberRef()) {
+          const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await res.json() as { data?: unknown; error?: string };
+          if (!res.ok) throw new Error(body.error || "Could not load your random tables.");
+          const parsed = librarySchema.safeParse(body.data);
+          if (parsed.success) tables = parsed.data;
+        }
+        if (live) setLoaded({ workspace: ws, tables });
       } catch (e) { if (live) setLoadError(errorText(e, "Could not load this campaign.")); }
     })();
     return () => { live = false; };
-  }, [workspace]);
+  }, []);
 
+  const source = workspace ?? loaded?.workspace;
   const plan = useMemo(() => {
-    if (!loaded) return null;
+    if (!loaded || !source) return null;
     try {
-      const files = rpExportFiles(loaded.workspace, campaignId, { includeGm, exportedAt: openedAt, tables: loaded.tables });
+      const files = rpExportFiles(source, campaignId, { includeGm, exportedAt: openedAt, tables: loaded.tables });
       return { rows: folderRows(files.map(f => f.path)), total: files.length, error: "" };
     } catch (e) { return { rows: [], total: 0, error: errorText(e, "This campaign could not be exported.") }; }
-  }, [loaded, campaignId, includeGm, openedAt]);
+  }, [loaded, source, campaignId, includeGm, openedAt]);
 
   function download() {
-    if (!loaded) return;
+    if (!loaded || !source) return;
     setExportError(""); setSaved("");
     try {
       const at = new Date().toISOString();
-      const bytes = rpExportZip(rpExportFiles(loaded.workspace, campaignId, { includeGm, exportedAt: at, tables: loaded.tables }));
+      const bytes = rpExportZip(rpExportFiles(source, campaignId, { includeGm, exportedAt: at, tables: loaded.tables }));
       const name = zipName(campaignName);
       saveFile(bytes, name); saveLastExport(campaignId, at); onExported?.(at); setSaved(`Saved ${name}`);
     } catch (e) { setExportError(errorText(e, "Could not build the ZIP.")); }
@@ -148,7 +159,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const restore = readRestoreCopy(entries);
       if (!restore.ok) { setImp({ step: "error", title: "No restore copy", message: restore.error }); return; }
       const log = entries.find(f => f.name === "8-Archive/Export-Log.md");
-      setImp({ step: "found", incoming: restore.workspace, name: restore.workspace.campaigns[0].name, date: exportedAt(log ? new TextDecoder().decode(log.data) : undefined), files: entries.length });
+      setImp({ step: "found", incoming: restore.workspace, name: restore.workspace.campaigns[0].name, world: `${restore.workspace.worlds[0]?.name ?? "World"} (imported)`.slice(0, 160), date: exportedAt(log ? new TextDecoder().decode(log.data) : undefined), files: entries.length });
     } catch (e) { setImp({ step: "error", title: "Could not read the ZIP", message: errorText(e, "This file could not be read.") }); }
   }
 
@@ -165,7 +176,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const current = workspaceSchema.parse(body.data);
       const copy = { ...found.incoming, campaigns: found.incoming.campaigns.map(c => ({ ...c, name: `${c.name.slice(0, 150)} (copy)` })) };
       const next = importCopy(current, copy);
-      if (JSON.stringify(next).length > WORKSPACE_LIMIT) return fail("Your notes plus this copy are over the 2 MB workspace limit. Nothing was changed.");
+      if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this copy are over the 2 MB workspace limit. Nothing was changed.");
       const added = next.campaigns[next.campaigns.length - 1];
       const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: body.revision }) });
       const out = await put.json().catch(() => ({})) as { error?: string };
@@ -215,7 +226,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
           {imp.step === "note" && <div className="rpb-card" role="status"><b><Info size={16} aria-hidden="true" />{imp.title}</b><span>{imp.message}</span></div>}
           {(imp.step === "found" || imp.step === "restoring") && <>
             <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />RPG Tools export found</b><span>{imp.name}{imp.date ? ` · exported ${shortDate(imp.date)}` : ""} · {imp.files} files</span></div>
-            <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>
+            <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>
             <button type="button" className="rpb-primary" onClick={() => void restore()} disabled={imp.step === "restoring"}>{imp.step === "restoring" ? "Restoring…" : `Restore as “${imp.name.slice(0, 40)} (copy)”`}</button>
           </>}
           {imp.step === "done" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />Restored as {imp.name}</b><span>Your other campaigns were not changed.</span><a className="rpb-primary" href={imp.href}>Open campaign</a></div>}
