@@ -81,7 +81,7 @@ export function wheelResizeEffect(effect: Effect, steps: number): boolean {
 }
 
 /** Map Creator shapes that wheel-resize: not doors, windows or gaps (they belong to a wall) and not merged rooms. */
-export const wheelScalable = (s: Pick<MapShape, "type">) => !["door", "window", "opening", "merged"].includes(s.type);
+export const wheelScalable = (s: Pick<MapShape, "type">) => !["door", "window", "opening", "merged", "light"].includes(s.type);
 /** One wheel step in the Map Creator changes a shape by this much. */
 export const CREATOR_SCALE = 1.1;
 /** Creator label text sizes match the Text size slider. */

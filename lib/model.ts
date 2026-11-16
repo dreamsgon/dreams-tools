@@ -152,6 +152,16 @@ export const fogStrokeSchema = z.object({
   .refine(s => s.shape !== "polygon" || s.points.length >= 3, "Fog polygons need at least three points")
   .refine(s => s.shape !== "rect" || s.points.length >= 2, "Fog rectangles need two points")
   .refine(s => s.shape !== "merged" || !!s.parts?.length && s.parts.every(p=>p.start+p.count<=s.points.length && (p.shape!=="polygon" || p.count>=3)), "Invalid merged fog region");
+/** How a light shines: its kind, bright and dim reach in squares, colour, and whether it is lit, flickers and stops at walls. Every field is optional, so a stamp can change just one. */
+export const mapLightSchema = z.object({
+  kind: z.enum(["torch", "brazier", "candles", "lantern", "magic", "crystal", "fire", "plain"]).optional(),
+  bright: finite.min(0).max(60).optional(),
+  dim: finite.min(0).max(120).optional(),
+  colour: color.optional(),
+  on: z.boolean().optional(),
+  flicker: z.boolean().optional(),
+  walls: z.boolean().optional(),
+});
 export const mapShapeSchema = z.object({
   id: short,
   name: short.default(""),
@@ -160,7 +170,8 @@ export const mapShapeSchema = z.object({
   hidden: z.boolean().default(false),
   locked: z.boolean().default(false),
   // An opening is a stretch of wall erased in the Map Creator: a gap drawn over the wall, with no door.
-  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "opening", "stamp", "label"]),
+  // A light is a point that lights the map around it (points: its centre, twice); see lib/map-light.ts.
+  type: z.enum(["rect", "ellipse", "line", "curve", "path", "merged", "door", "window", "opening", "stamp", "label", "light"]),
   roomParts: z.array(z.object({type:z.enum(["rect","ellipse","path"]),start:z.number().int().min(0),count:z.number().int().min(2),smooth:z.boolean(),closed:z.boolean()})).max(1000).default([]),
   points: z.array(point).min(2).max(2000),
   fill: color.nullable(),
@@ -173,6 +184,8 @@ export const mapShapeSchema = z.object({
   flip: z.boolean().default(false),
   // A built-in stamp can be recoloured with a tint (stampTints in lib/map-stamps.ts).
   tint: z.enum(["oak", "stone", "iron", "gold", "moss", "crimson", "frost"]).nullable().optional(),
+  // A light's settings, or changes to the light a stamp gives (lib/map-light.ts). Reach is in squares.
+  light: mapLightSchema.nullable().optional(),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
 /** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */

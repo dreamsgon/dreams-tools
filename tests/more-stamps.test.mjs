@@ -19,15 +19,16 @@ test("more stamps join the library in known groups, with unique ids and parts th
   }
 });
 
-test("every Lights stamp gives light, and only Lights stamps do", () => {
+test("every Lights stamp gives light, and only lights and fires do", () => {
+  const fires = new Set(["campfire", "fireplace"]);
   for (const s of stamps) {
-    if (s.category === "Lights") {
+    if (s.category === "Lights" || fires.has(s.id)) {
       assert.ok(s.light, `${s.id} gives light`);
       assert.ok(s.light.bright >= 0 && s.light.dim >= s.light.bright && s.light.dim <= 24, `${s.id} reach`);
       assert.match(s.light.colour, /^#[0-9a-f]{6}$/i);
     } else assert.equal(s.light, undefined, s.id);
   }
-  assert.deepEqual(stampById("wall-torch").light, { bright: 4, dim: 8, colour: "#ffb35c" });
+  assert.deepEqual(stampById("wall-torch").light, { bright: 4, dim: 8, colour: "#ffb35c", flicker: true });
 });
 
 test("new stamps can be found by name or group", () => {
