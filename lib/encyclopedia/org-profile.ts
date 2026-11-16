@@ -375,7 +375,7 @@ export function orgProfileText(org: Org | undefined | null, title: (entryId: str
 export type PlayerLink = { id: string; title: string };
 export type PlayerSubgroup = { id: string; title: string; members: PlayerLink[] };
 /** What the server knows about the page's neighbours, for the blocks that aren't stored in the profile. */
-export type PlayerOrgContext = { title?: (entryId: string) => string; subgroups?: PlayerSubgroup[]; linked?: PlayerLink[] };
+export type PlayerOrgContext = { title?: (entryId: string) => string; subgroups?: PlayerSubgroup[]; linked?: PlayerLink[]; /** Vehicles that name this organization as their owner, shown with the first Holdings block. */ vehicles?: PlayerLink[] };
 type PersonOut = { id: string; entryId: string; title: string; note: string; standing?: Standing };
 export type PlayerOrgBlock = { id: string; kind: BlockKind; title: string; column: "left" | "right"; full: boolean } & (
   { kind: "spots"; spots: { id: string; title: string; people: PersonOut[] }[] } | { kind: "members"; members: (PersonOut & { role: string })[] }
@@ -397,7 +397,7 @@ export type PlayerOrg = {
 export function playerOrg(org: Org, readable: (entryId: string) => boolean, clean: (text: string) => string, context: PlayerOrgContext = {}): PlayerOrg {
   const name = context.title ?? (() => "");
   const person = (p: { id: string; entryId: string; note?: string; standing?: Standing }): PersonOut => ({ id: p.id, entryId: p.entryId, title: name(p.entryId), note: clean(p.note ?? ""), ...(p.standing ? { standing: p.standing } : {}) });
-  const blocks: PlayerOrgBlock[] = [];
+  const blocks: PlayerOrgBlock[] = [], firstHoldings = org.blocks.find(b => b.kind === "holdings")?.id;
   for (const b of org.blocks) {
     if (b.gm) continue;
     const head = { id: b.id, title: clean(b.title), column: b.column, full: !!b.full };
@@ -405,7 +405,11 @@ export function playerOrg(org: Org, readable: (entryId: string) => boolean, clea
     else if (b.kind === "members") blocks.push({ ...head, kind: "members", members: b.members.filter(m => !m.gm && readable(m.entryId)).map(m => ({ ...person(m), role: clean(m.role ?? "") })) });
     else if (b.kind === "facts") blocks.push({ ...head, kind: "facts", facts: b.facts.filter(f => !f.gm).map(f => ({ id: f.id, label: clean(f.label), value: clean(f.value), ...(f.entryId && readable(f.entryId) ? { entryId: f.entryId } : {}) })).filter(f => f.label && (f.value || f.entryId)) });
     else if (b.kind === "beliefs") blocks.push({ ...head, kind: "beliefs", beliefs: b.beliefs.filter(x => !x.gm).map(x => ({ id: x.id, topic: clean(x.topic), stance: clean(x.stance), detail: clean(x.detail) })) });
-    else if (b.kind === "holdings") blocks.push({ ...head, kind: "holdings", holdings: b.holdings.filter(h => !h.gm && readable(h.entryId)).map(h => ({ id: h.id, entryId: h.entryId, title: name(h.entryId) })) });
+    else if (b.kind === "holdings") {
+      const listed = b.holdings.filter(h => !h.gm && readable(h.entryId)).map(h => ({ id: h.id, entryId: h.entryId, title: name(h.entryId) }));
+      const owned = b.id === firstHoldings ? (context.vehicles ?? []).filter(v => readable(v.id) && !b.holdings.some(h => h.entryId === v.id)).map(v => ({ id: `vehicle-${v.id}`, entryId: v.id, title: v.title })) : [];
+      blocks.push({ ...head, kind: "holdings", holdings: [...listed, ...owned] });
+    }
     else if (b.kind === "text") { const t = clean(b.text); if (t) blocks.push({ ...head, kind: "text", text: t }); }
     else if (b.kind === "subgroups") blocks.push({ ...head, kind: "subgroups", subgroups: (context.subgroups ?? []).filter(g => readable(g.id)).map(g => ({ id: g.id, title: g.title, members: g.members.filter(m => readable(m.id)) })) });
     else blocks.push({ ...head, kind: "linked", linked: (context.linked ?? []).filter(l => readable(l.id)) });

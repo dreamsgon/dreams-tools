@@ -279,3 +279,31 @@ test('the log keeps entries newest first, and players read only shown ones when 
  assert.equal(full.log.length,maxLog,'the oldest drop off');assert.equal(full.log[0].text,`Day ${maxLog+2}`);
  assert.equal(logOps.remove(logOps.remove(v,v.log[0].id),v.log[1].id).log,undefined);
 });
+
+test('a vehicle shows in its owner organization’s Holdings for players when the owner is shown',async()=>{
+ const {defaultOrg}=await import('../lib/encyclopedia/org-profile.ts');
+ const v={...newVehicle(ship),visibility:'players',ownerId:'port'};
+ const s=world(v),port=s.entries.find(e=>e.id==='port');
+ port.org={...defaultOrg(s.worlds[0]),visibility:'players'};port.overviewVisibility='players';
+ s.entries.find(e=>e.id==='gdn').overviewVisibility='players';
+ const holdings=w=>playerCampaign(w,C).entries.find(e=>e.id==='port').org.blocks.find(b=>b.kind==='holdings').holdings;
+ assert.deepEqual(holdings(s).map(h=>[h.entryId,h.title]),[['gdn','GDN-205']]);
+ const hidden=structuredClone(s);hidden.entries.find(e=>e.id==='gdn').vehicle.ownerGm=true;
+ assert.deepEqual(holdings(hidden),[],'a GM-only owner is not shown');
+ const gmShip=structuredClone(s);gmShip.entries.find(e=>e.id==='gdn').vehicle.visibility='gm';
+ assert.deepEqual(holdings(gmShip),[],'nor when the vehicle’s Overview is GM only');
+ const listed=structuredClone(s);listed.entries.find(e=>e.id==='port').org.blocks.find(b=>b.kind==='holdings').holdings.push({id:'h1',entryId:'gdn'});
+ assert.equal(holdings(listed).length,1,'listed by hand and owned: shown once');
+});
+
+test('a player’s character page lists the shared vehicles it is aboard, with only the roles players can see',()=>{
+ let v={...newVehicle(ship),visibility:'players',commanderId:'cap',crewVisibility:'players'};
+ v=seat(v,ship,'pilot',{characterId:'cap'});v=addCrew(v,{characterId:'cap'},'Owner’s eyes');v=addCrew(v,{characterId:'spy'},'Crown spy');v=editCrew(v,v.crew[1].id,{gm:true});
+ const s=world(v);
+ const rides=(w,id)=>playerCampaign(w,C).entries.find(e=>e.id===id)?.rides;
+ assert.deepEqual(rides(s,'cap'),[{id:'gdn',title:'GDN-205',roles:['Captain','Pilot','Crew · Owner’s eyes']}]);
+ assert.equal(rides(s,'spy'),undefined,'a GM-only crew place is not shown');
+ const quiet=world({...v,crewVisibility:'gm',commanderGm:true});
+ assert.deepEqual(rides(quiet,'cap')[0].roles,['Pilot'],'only the pinned seat is left');
+ assert.equal(rides(world({...v,visibility:'gm'}),'cap'),undefined,'a GM-only vehicle is never listed');
+});

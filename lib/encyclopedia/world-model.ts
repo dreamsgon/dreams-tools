@@ -15,7 +15,7 @@ import {recapSchema,playerRecapTabs} from './recap-schema.ts';
 import {orgSchema,orgLayoutSchema,orgTypesSchema,orgRefs,orgMembersOf,orgSearchText,playerOrg,remapOrg,type PlayerOrg} from './org-profile.ts';
 import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
-import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,remapVehicle,type PlayerVehicle} from './vehicles.ts';
+import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,playerVehicleRoles,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
 import {inventorySchema,spellsSchema,itemSettingsSchema,itemSettingsOf,playerInventory,playerSpells,playerItemSettings,type PlayerInventory,type PlayerSpell} from './items.ts';
 import {storeSchema,storeRefs,remapStore,storeSearchText,playerStore,type PlayerStore} from './stores.ts';
@@ -371,7 +371,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(fields,values):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(fields,values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -379,13 +379,15 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  const byId=new Map(candidates.map(e=>[e.id,e])),title=(id:string)=>byId.get(id)?.title??'';
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='faction'||src.org?.visibility!=='players')continue;
   const subgroups=candidates.filter(x=>x.parentId===src.id&&x.kind==='faction'&&readable.has(x.id)).map(x=>({id:x.id,title:x.title,members:x.org?.visibility!=='players'?[]:orgMembersOf(x.org,(id,gm)=>!gm&&readable.has(id)).map(id=>({id,title:title(id)}))}));
-  e.org=playerOrg(src.org,id=>readable.has(id),playerText,{title,subgroups,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});}
+  e.org=playerOrg(src.org,id=>readable.has(id),playerText,{title,subgroups,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id))),vehicles:candidates.filter(x=>x.kind==='vehicle'&&readable.has(x.id)&&x.vehicle?.ownerId===src.id&&!x.vehicle.ownerGm&&x.vehicle.visibility==='players').map(x=>({id:x.id,title:x.title})).sort((a,b)=>a.title.localeCompare(b.title))});}
  // A shared character Profile: organizations only where the page and its own Profile are shared and the character's place isn't GM only.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='character'||src.profile?.visibility!=='players')continue;
   e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});}
  // A shared vehicle: GM-only values left out, and its owner, commander and location only when players can read those pages.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='vehicle'||src.vehicle?.visibility!=='players')continue;
   e.vehicle=playerVehicle(src.vehicle,vehicleTypeOf(src.vehicle,s.worlds.find(w=>w.id===src.worldId)),id=>readable.has(id),playerText);}
+ // A character lists the shared vehicles it owns, commands or crews, taken from those vehicles' player copies.
+ for(const e of entries){if(e.kind!=='character')continue;const rides=entries.flatMap(x=>{const roles=x.vehicle?playerVehicleRoles(x.vehicle,e.id):[];return roles.length?[{id:x.id,title:x.title,roles}]:[];});if(rides.length)e.rides=rides;}
  // Ties: shared ones, and the cover story of a GM-only one, only where players can read both pages.
  for(const e of entries){const src=byId.get(e.id);if(!src)continue;const ties=playerTies(s,src,c.id,id=>readable.has(id),playerText);if(ties.length)e.ties=ties;}
  // An info box links only to pages players can read; a link to any other page is left out.
