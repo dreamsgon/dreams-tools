@@ -127,7 +127,7 @@ export function setUpDrawnMapScene(scene: Scene, options: UseOptions) {
 export function buildUvtt(d: MapDrawing, width: number, height: number, gridSize: number, imageBase64: string) {
   const at = (p: { x: number; y: number }) => ({ x: round(p.x / gridSize), y: round(p.y / gridSize) });
   const shapes = orderedShapes(d);
-  const walls = cutOpenings(wallSegments(shapes), shapes);
+  const walls = cutOpenings(wallSegments(shapes.filter(s => !s.seeThrough)), shapes);
   const portals = shapes.filter(s => s.type === "door" || s.type === "window").map(s => {
     const [a, b] = s.points;
     return { position: at({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }), bounds: [at(a), at(b)], rotation: round(Math.atan2(b.y - a.y, b.x - a.x)), closed: s.type === "door", freestanding: false };

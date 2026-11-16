@@ -200,3 +200,14 @@
 .map-light-flicker { animation:map-light-flicker 2.8s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
 @keyframes map-light-flicker { 0%, 100% { opacity:1; transform:scale(1); } 20% { opacity:.86; transform:scale(.985); } 45% { opacity:.96; transform:scale(1.01); } 70% { opacity:.84; transform:scale(.99); } }
 @media (prefers-reduced-motion: reduce) { .map-light-flicker { animation:none; } }
+/* New map: the row of things the generator can make, as cards with a small picture. */
+.creator-layouts { flex:none; display:grid; grid-template-columns:repeat(auto-fill, minmax(178px, 1fr)); gap:8px; padding:14px 22px 0; }
+.creator-layouts button { flex:none; display:flex; align-items:center; gap:10px; height:auto; min-height:0; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); text-align:left; box-shadow:none; white-space:normal; }
+.creator-layouts button svg { flex:none; width:38px; height:38px; border-radius:5px; }
+.creator-layouts button span { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.creator-layouts button b { font-size:13px; }
+.creator-layouts button small { color:var(--muted); font-size:11.5px; line-height:1.3; }
+.creator-layouts button[aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:var(--accent-soft); }
+.creator-new-map { width:min(1040px, 100%); }
+.creator-new-map .creator-seed + .creator-seed { margin-top:6px; }
+@media(max-width:700px) { .creator-layouts { display:flex; overflow-x:auto; scrollbar-width:thin; padding:12px 14px 2px; } .creator-layouts button { flex:none; width:168px; } }
