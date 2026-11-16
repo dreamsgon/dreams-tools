@@ -231,6 +231,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
       const result = previewRepo(read.files, { name: repo.split("/")[1] ?? repo });
       if (!result.ok) { setImp(got.kind === "player-safe" ? restoreNotice(got.kind, "repository", got.error) : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
+      if (read.truncated) result.notices.push("GitHub cut the list of files short because the repository is very large, so some files may be missing from this import.");
       setImp({ step: "preview", preview: result, name: result.campaignName });
     } catch (e) { setImp({ step: "error", title: "Could not read the repository", message: errorText(e, "Could not read the repository.") }); }
   }
@@ -288,7 +289,8 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 
   /** Adds the new campaign to the newest saved notes, with the revision just read, so a newer workspace is never overwritten. Existing campaigns are not touched. */
   async function importNew() {
-    if (imp.step !== "preview") return;
+    if (imp.step !== "preview" || busy.current) return;
+    busy.current = true;
     const found = imp;
     setImp({ ...found, step: "importing" });
     const fail = (message: string) => setImp({ step: "error", title: "Not imported", message });
@@ -298,6 +300,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
       const current = workspaceSchema.parse(body.data);
       const built = buildCampaign(found.preview, { name: found.name });
+      if (current.entries.length + built.workspace.entries.length > 5000 || current.campaigns.length >= 500 || current.worlds.length >= 100) return fail("Your notes have no room for another campaign of this size (the limit is 5,000 pages, 500 campaigns and 100 worlds). Nothing was changed.");
       const next = addImported(current, built);
       if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this campaign are over the 2 MB workspace limit. Nothing was changed.");
       const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: body.revision }) });
@@ -307,6 +310,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       setImp({ step: "done", name: built.name, href: `/campaigns/${encodeURIComponent(`e:${built.campaignId}`)}`, verb: "Imported" });
       onRestored?.();
     } catch (e) { fail(errorText(e, "Could not import this repository.")); }
+    finally { busy.current = false; }
   }
 
   const chips: ["zip" | "github" | "folder", string][] = [["zip", "ZIP file"], ["github", "GitHub"], ...(canFolder ? [["folder", "Folder"] as ["folder", string]] : [])];

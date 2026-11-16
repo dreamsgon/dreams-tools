@@ -79,11 +79,11 @@ test('a realistic repository maps to the expected pages',()=>{
 });
 
 test('front matter and the leading title are taken off, nothing else',()=>{
- assert.deepEqual(readMarkdown('---\nrpg-tools-id: x\n---\n# Ayla\n\nLine one.\r\nLine two  \n\n\n'),{title:'Ayla',body:'Line one.\r\nLine two'});
- assert.deepEqual(readMarkdown('\uFEFF---\r\ntitle: "Borin"\r\n---\r\nText\r\n'),{title:'Borin',body:'Text'});
- assert.deepEqual(readMarkdown('No heading\n\n# Not first\n'),{title:null,body:'No heading\n\n# Not first'});
- assert.deepEqual(readMarkdown('## Second level\n'),{title:null,body:'## Second level'});
- assert.deepEqual(readMarkdown('#hashtag\n'),{title:null,body:'#hashtag'});
+ assert.deepEqual(readMarkdown('---\nrpg-tools-id: x\n---\n# Ayla\n\nLine one.\r\nLine two  \n\n\n'),{title:'Ayla',body:'Line one.\r\nLine two',gmOnly:false});
+ assert.deepEqual(readMarkdown('\uFEFF---\r\ntitle: "Borin"\r\n---\r\nText\r\n'),{title:'Borin',body:'Text',gmOnly:false});
+ assert.deepEqual(readMarkdown('No heading\n\n# Not first\n'),{title:null,body:'No heading\n\n# Not first',gmOnly:false});
+ assert.deepEqual(readMarkdown('## Second level\n'),{title:null,body:'## Second level',gmOnly:false});
+ assert.deepEqual(readMarkdown('#hashtag\n'),{title:null,body:'#hashtag',gmOnly:false});
  // a rule in the middle of a page is not front matter
  assert.equal(readMarkdown('# T\n\nAbove\n\n---\nBelow\n').body,'Above\n\n---\nBelow');
  const r=ok(previewRepo([f('1-Now/x.md','x'),f('3-People/Ayla.md','---\nk: v\n---\n# Ayla\n\n> A quote\n\n```\n# not a heading\n```\n\n**Bold** text\r\n')]));
@@ -390,4 +390,38 @@ test('classifyZip sees any numbered folder as an RP repository',()=>{
  assert.equal(classifyZip(['2-Story/Sessions/a.md']),'numbered');
  assert.equal(classifyZip(['8-Archive/a.md']),'numbered');
  assert.equal(classifyZip(['notes/1-Now.md']),'unknown');
+});
+
+test('review fixes: closing hashes, CRLF front matter, fences, GM-marked files, UTF-8, long pages',async()=>{
+ const {decodeText,readSources}=await import('../lib/encyclopedia/rp-import.ts');
+ // "C#" keeps its #; CRLF front matter titles are read
+ assert.equal(readMarkdown('# Learning C#\n\nx').title,'Learning C#');
+ assert.equal(readMarkdown('# Title ##\n\nx').title,'Title');
+ assert.equal(readMarkdown('---\r\ntitle: Mara\r\n---\r\nBody\r\n').title,'Mara');
+ // a "---" rule with prose between is text, not front matter
+ const rule='---\nIntro words\n---\nAfter\n';
+ assert.equal(readMarkdown(rule).body,rule.trimEnd());
+ assert.equal(readMarkdown('---\n---\nText').body,'Text');
+ // a long run of blanks is fast
+ const t0=Date.now();readMarkdown('# A\n\n'+' '.repeat(90000)+'x'+' '.repeat(90000));assert.ok(Date.now()-t0<1000);
+ // headings inside a longer fence do not split Factions
+ const fac=ok(previewRepo([f('4-World/Factions.md','# Factions\n\n## One\n\n````\n```\n## Not a heading\n```\n## Still code\n````\n\n## Two\n\nx\n'),f('3-People/A.md','# A\n')]));
+ assert.deepEqual(titles(fac,'org'),['One','Two']);
+ // a file that says it is a GM part stays GM-only, even in a public folder
+ const gm=ok(previewRepo([f('3-People/NPCs/Villain.md','---\npart: gm-only\n---\n# Villain\n\nSecret.\n'),f('4-World/Places/Vault.md','# Vault (GM only)\n\nx\n'),f('1-Now/Current-State.md','---\nvisibility: gm\n---\n# State\n\nHidden.\n'),f('3-People/A.md','# A\n')]));
+ for(const t of ['Villain','Vault (GM only)','State'])assert.equal(pageBy(gm,t).visibility,'gm',t);
+ assert.equal(gm.front,null);
+ assert.equal(pageBy(gm,'A').visibility,'players');
+ // a README with CRLF still names the campaign
+ assert.equal(ok(previewRepo([f('README.md','# Salt\r\n'),f('3-People/A.md','# A\n')])).campaignName,'Salt');
+ // links that grow past 100,000 characters do not break the save
+ const link="[x](B.md) ";
+ const long='# A\n\n'+link.repeat(9000)+'z'.repeat(100000-5-link.length*9000);
+ const lp=ok(previewRepo([f('3-People/A.md',long),f('3-People/B.md','# B\n\nb\n')]));
+ const built=buildCampaign(lp,{newId:mint});
+ assert.ok(built.workspace.entries.every(e=>e.body.length<=100000));
+ // non-UTF-8 text is refused, not mangled
+ assert.throws(()=>decodeText(new Uint8Array([0x63,0x61,0x66,0xe9]),'3-People/A.md'),/not UTF-8/);
+ const bad=await readSources([{name:'3-People/A.md',size:4,bytes:async()=>new Uint8Array([0x63,0xe9])}]);
+ assert.equal(bad.ok,false);
 });

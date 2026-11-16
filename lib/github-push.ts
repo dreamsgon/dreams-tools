@@ -11,7 +11,7 @@
 import { assertSafePath, isLayoutPath, planWrite, sha256Hex, FOLDERS_LIST, type RpFile } from "./encyclopedia/rp-export.ts";
 import { readRestoreCopy, RESTORE_PATH } from "./encyclopedia/rp-zip.ts";
 import { classifyZip, exportedAt, type ZipKind } from "./encyclopedia/rp-sheet.ts";
-import { planRead, type RepoFile } from "./encyclopedia/rp-import.ts";
+import { decodeText, planRead, type RepoFile } from "./encyclopedia/rp-import.ts";
 import { ZIP_MAX_BYTES } from "./zip-read.ts";
 import type { Workspace } from "./encyclopedia/world-model.ts";
 
@@ -358,7 +358,7 @@ export async function readRepoFiles(token: string, repo: string, branch: string,
   const wanted = new Set(plan.wanted), texts = new Map<string, string>();
   let done = 0;
   await pool(plan.wanted, 4, async path => {
-    texts.set(path, decode(await readBlob(c, tree.get(path)!, 500_000)));
+    texts.set(path, decodeText(await readBlob(c, tree.get(path)!, 500_000), path));
     onProgress(`Reading files… ${++done} of ${wanted.size}`);
   });
   return { ok: true, truncated, files: items.map(i => ({ path: i.path, size: i.size, ...(texts.has(i.path) ? { text: texts.get(i.path) } : {}) })) };

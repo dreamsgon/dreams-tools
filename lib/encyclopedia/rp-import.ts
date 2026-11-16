@@ -147,34 +147,53 @@ function place(parts: string[]): Where {
 }
 
 /* ---- reading a Markdown file ---- */
-/** Front matter and the leading "# Title" taken off. Line endings and wording inside the body are left alone. */
-export function readMarkdown(raw: string): { title: string | null; body: string } {
-  let text = raw.replace(/^﻿/, ""), title: string | null = null;
-  const fm = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
-  if (fm) {
+/** Closing #s of an ATX heading count only after a space ("# C#" keeps its #). Written without a regex so a long run of blanks stays fast. */
+function closeHashes(t: string): string {
+  let i = t.length;
+  while (i > 0 && t[i - 1] === "#") i--;
+  if (i === t.length) return t;
+  if (i === 0) return "";
+  return t[i - 1] === " " || t[i - 1] === "\t" ? t.slice(0, i).trimEnd() : t;
+}
+/** Front matter and the leading "# Title" taken off. Line endings and wording inside the body are left alone. `gmOnly` is set when the file says it is a GM part. */
+export function readMarkdown(raw: string): { title: string | null; body: string; gmOnly: boolean } {
+  let text = raw.replace(/^\uFEFF/, ""), title: string | null = null, gmOnly = false;
+  const fm = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
+  // Only a block that starts like YAML ("key: value") is front matter; a "---" rule with another further down is text.
+  if (fm && (fm[1] === undefined || /^\s*(?:#.*\r?\n\s*)*[\w.-]+[ \t]*:/.test(fm[1]))) {
     text = text.slice(fm[0].length);
-    const t = /^title:[ \t]*(.+?)[ \t]*$/m.exec(fm[1]);
+    const block = fm[1] ?? "";
+    const t = /^title:[ \t]*(.+?)[ \t]*\r?$/m.exec(block);
     if (t) title = t[1].replace(/^(["'])(.*)\1$/, "$2").trim() || null;
+    gmOnly = /^part:[ \t]*["']?gm[-_ ]?only["']?[ \t]*\r?$/im.test(block) || /^(?:visibility|audience):[ \t]*["']?gm(?:[-_ ]?only)?["']?[ \t]*\r?$/im.test(block);
   }
   text = text.replace(/^(?:[ \t]*\r?\n)+/, "");
-  const h1 = /^#[ \t]+(\S.*?)[ \t]*#*[ \t]*(?:\r?\n|$)/.exec(text);
-  if (h1) { title = h1[1].trim(); text = text.slice(h1[0].length); }
-  return { title, body: text.replace(/^(?:[ \t]*\r?\n)+/, "").replace(/\s+$/, "") };
+  const h1 = /^#[ \t]+(\S[^\r\n]*)(?:\r?\n|$)/.exec(text);
+  if (h1) { title = closeHashes(h1[1].trimEnd()).trim(); text = text.slice(h1[0].length); }
+  if (title && /\(GM only\)$/i.test(title)) gmOnly = true;
+  return { title, body: text.replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd(), gmOnly };
 }
 
-const isFence = (line: string) => /^ {0,3}(```|~~~)/.test(line);
+/** Code fences: the state after a line is the opening marker while inside a fence, else null. A fence closes only with the same character and at least as many. */
+const fenceAfter = (open: string | null, line: string): string | null => {
+  const m = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)/.exec(line);
+  if (!m) return open;
+  if (!open) return m[1][0] === "`" && m[2].includes("`") ? null : m[1];
+  return m[1][0] === open[0] && m[1].length >= open.length && !m[2].trim() ? null : open;
+};
 /** Splits a body at headings of one level. Headings inside a code fence are text. */
 function splitHeadings(text: string, level: number): { intro: string; sections: { title: string; body: string }[] } {
-  const re = new RegExp(`^#{${level}}(?!#)[ \\t]+(\\S.*?)[ \\t]*#*[ \\t]*\\r?$`);
+  const re = new RegExp(`^#{${level}}(?!#)[ \\t]+(\\S[^\\r\\n]*)`);
   const intro: string[] = [], sections: { title: string; lines: string[] }[] = [];
-  let fenced = false;
+  let open: string | null = null;
   for (const line of text.split("\n")) {
-    if (isFence(line)) fenced = !fenced;
-    const m = fenced ? null : re.exec(line);
-    if (m) sections.push({ title: m[1].trim(), lines: [] });
+    const was = open;
+    open = fenceAfter(open, line);
+    const m = was || open ? null : re.exec(line.trimEnd());
+    if (m) sections.push({ title: closeHashes(m[1]).trim(), lines: [] });
     else (sections.length ? sections[sections.length - 1].lines : intro).push(line);
   }
-  const tidy = (lines: string[]) => lines.join("\n").replace(/^(?:[ \t]*\r?\n)+/, "").replace(/\s+$/, "");
+  const tidy = (lines: string[]) => lines.join("\n").replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd();
   return { intro: tidy(intro), sections: sections.map(s => ({ title: s.title, body: tidy(s.lines) })) };
 }
 
@@ -261,14 +280,15 @@ export function previewRepo(input: RepoFile[], opts: { name?: string } = {}): Im
   if (candidates.length > IMPORT_LIMITS.pages) return { ok: false, error: `This repository has ${candidates.length} Markdown files to import. The limit is ${IMPORT_LIMITS.pages}.` };
 
   let total = 0;
-  for (const { file, where } of candidates) {
+  for (const { file, where: first } of candidates) {
+    let where = first;
     const { path } = file, text = file.text;
     if (text === undefined || text.length > IMPORT_LIMITS.file) { tooBig.push(path); continue; }
     total += text.length;
     if (total > IMPORT_LIMITS.chars) return { ok: false, error: `The Markdown files in this repository are over ${Math.round(IMPORT_LIMITS.chars / 1_000_000 * 10) / 10} MB of text, which is too much to import at once.` };
     const md = readMarkdown(text), stem = stemOf(path);
     const fileTitle = clip(md.title ?? humanName(stem)) || humanName(stem) || "Page";
-    const add = (p: Omit<PlannedPage, "visibility"> & { visibility?: PlannedPage["visibility"] }) => pages.push({ visibility: p.group === "gm" || p.group === "notes" ? "gm" : "players", ...p });
+    const add = (p: Omit<PlannedPage, "visibility"> & { visibility?: PlannedPage["visibility"] }) => pages.push({ visibility: md.gmOnly || p.group === "gm" || p.group === "notes" ? "gm" : "players", ...p });
     if (!md.body && !md.title && !text.trim()) { count.empty++; continue; }
 
     if (where.to === "gm") {
@@ -276,6 +296,7 @@ export function previewRepo(input: RepoFile[], opts: { name?: string } = {}): Im
       add({ kind: "note", group: "gm", title: clip((md.title ?? humanName(stem)).replace(/\s*\(GM only\)\s*$/i, "")) || fileTitle, body: md.body, parent: "gm", path });
       continue;
     }
+    if (md.gmOnly) where = { to: "page", group: "notes", kind: "note" }; // a file that says it is a GM part (front matter, "(GM only)") stays GM-only wherever it sits
     if (where.to === "front") {
       if (noContent(md.body)) { count.empty++; continue; }
       frontPath = path;
@@ -287,7 +308,7 @@ export function previewRepo(input: RepoFile[], opts: { name?: string } = {}): Im
       if (noContent(md.body)) { count.empty++; continue; }
       const heading = md.title ?? "Quests and Threads", leftovers: PlannedPage[] = [];
       const leftover = (title: string, body: string) => { if (!noContent(body)) leftovers.push({ kind: "note", group: "notes", title: clip(title) || "Quests and Threads", body, visibility: "gm", parent: "notes" }); };
-      const quest = (title: string, body: string, state: QuestState, solo?: string) => pages.push({ kind: "quest", group: "quest", title: clip(title) || "Quest", body, visibility: "players", state, ...(solo ? { path: solo } : {}) });
+      const quest = (title: string, body: string, state: QuestState, solo?: string) => pages.push({ kind: "quest", group: "quest", title: clip(title) || "Quest", body, visibility: md.gmOnly ? "gm" : "players", state, ...(solo ? { path: solo } : {}) });
       const h2 = splitHeadings(md.body, 2);
       const groups = h2.sections.map(s => ({ ...s, kids: splitHeadings(s.body, 3) }));
       if (groups.some(g => g.kids.sections.length)) {
@@ -358,7 +379,7 @@ export function previewRepo(input: RepoFile[], opts: { name?: string } = {}): Im
   if (files.some(f => f.path === ".rpg-tools/files.json") && !pages.some(p => p.group === "gm")) notices.push("This was made by RPG Tools without the GM-only folder, so it has no GM-only pages.");
   if (!pages.length && !front) return { ok: false, error: "There is nothing to import. The numbered folders hold no Markdown pages." };
 
-  const heading = /^#[ \t]+(\S.*?)[ \t]*$/m.exec(rootReadme)?.[1].trim();
+  const heading = /^#[ \t]+(\S[^\r\n]*)/m.exec(rootReadme)?.[1].trim();
   const fromFolder = humanName((opts.name ?? top).replace(/(-main|-master)$/i, ""));
   const repoName = clip(opts.name ?? top) || "repository";
   const campaignName = clip(heading || fromFolder) || "Imported campaign";
@@ -381,16 +402,18 @@ function resolveHref(from: string, href: string): string | null {
 }
 /** Runs `fn` on the parts of a text that are not code. */
 function outsideCode(text: string, fn: (part: string) => string): string {
-  let fenced = false, plain: string[] = [];
+  let open: string | null = null, plain: string[] = [];
   const out: string[] = [], flush = () => { if (plain.length) out.push(fn(plain.join("\n"))); plain = []; };
   for (const line of text.split("\n")) {
-    if (isFence(line)) { if (!fenced) flush(); fenced = !fenced; out.push(line); continue; }
-    if (fenced) out.push(line); else plain.push(line);
+    const was = open;
+    open = fenceAfter(open, line);
+    if (was || open) { if (!was) flush(); out.push(line); continue; }
+    plain.push(line);
   }
   flush();
   return out.join("\n");
 }
-const LINK = /(!?)\[([^\]\n]*)\]\(<?([^)\s>]+)>?(?:[ \t]+"[^"\n]*")?\)/g;
+const LINK = /(!?)\[([^\]\n]{0,200})\]\(<?([^)\s>]+)>?(?:[ \t]+"[^"\n]*")?\)/g;
 export function rewriteLinks(text: string, from: string, ids: Map<string, string>): string {
   if (!/\]\(/.test(text)) return text;
   const lower = new Map([...ids].map(([p, id]) => [p.toLowerCase(), id]));
@@ -403,7 +426,7 @@ export function rewriteLinks(text: string, from: string, ids: Map<string, string
 }
 
 /** The front page's text widget shows plain text, so the # signs of headings are dropped (the words stay). */
-const plainHeadings = (text: string) => { let fenced = false; return text.split("\n").map(l => { if (isFence(l)) fenced = !fenced; return fenced ? l : l.replace(/^#{1,6}[ \t]+/, ""); }).join("\n"); };
+const plainHeadings = (text: string) => { let open: string | null = null; return text.split("\n").map(l => { const was = open; open = fenceAfter(open, l); return was || open ? l : l.replace(/^#{1,6}[ \t]+/, ""); }).join("\n"); };
 
 /* ---- the new campaign ---- */
 export type BuildOptions = { name?: string; now?: string; newId?: () => string };
@@ -425,7 +448,8 @@ export function buildCampaign(preview: ImportPreview, opts: BuildOptions = {}): 
   preview.pages.map((p, i) => ({ p, i })).filter(x => x.p.group === "session").sort((a, b) => (a.p.date ?? "").localeCompare(b.p.date ?? "") || a.i - b.i).forEach((x, k) => order.set(x.i, k + 1));
 
   const entries: Entry[] = preview.pages.map((p, i) => {
-    const body = p.path ? rewriteLinks(p.body, p.path, linkable) : p.body;
+    let body = p.path ? rewriteLinks(p.body, p.path, linkable) : p.body;
+    if (body.length > 100_000) body = p.body; // [[id|label]] can be longer than the link it replaces; a page body holds 100,000 characters
     const e: Entry = { id: ids[i], ...base, parentId: p.parent ? folder(p.parent).id : null, title: p.title, kind: p.kind, body, overviewVisibility: p.visibility };
     if (p.kind === "character") e.character = { ...defaultCharacter(), role: p.role ?? "npc" };
     if (p.kind === "quest") e.quest = newQuest(p.state ?? "active");
@@ -463,13 +487,19 @@ export function addImported(current: Workspace, built: { workspace: Workspace })
 }
 
 /* ---- reading files from a ZIP or a picked folder ---- */
+/** UTF-8 text, or an error naming the file: a lossy decode would quietly change the wording. */
+export function decodeText(bytes: Uint8Array, path: string): string {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { throw new Error(`${path.slice(0, 80)} is not UTF-8 text, so nothing was imported. Save it as UTF-8 and try again.`); }
+}
 export type Source = { name: string; size: number; bytes: () => Promise<Uint8Array> };
 /** The files for previewRepo from a source that reads one file at a time. Only the files that will be imported are read. */
 export async function readSources(sources: Source[]): Promise<{ ok: true; files: RepoFile[] } | { ok: false; error: string }> {
   const plan = planRead(sources.map(s => ({ path: s.name, size: s.size })));
   if (!plan.ok) return plan;
-  const wanted = new Set(plan.wanted), dec = new TextDecoder();
+  const wanted = new Set(plan.wanted);
   const files: RepoFile[] = [];
-  for (const s of sources) files.push({ path: s.name, size: s.size, ...(wanted.has(s.name) ? { text: dec.decode(await s.bytes()) } : {}) });
+  try { for (const s of sources) files.push({ path: s.name, size: s.size, ...(wanted.has(s.name) ? { text: decodeText(await s.bytes(), s.name) } : {}) }); }
+  catch (e) { return { ok: false, error: (e as Error).message }; }
   return { ok: true, files };
 }
