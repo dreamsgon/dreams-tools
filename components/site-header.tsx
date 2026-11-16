@@ -1,8 +1,9 @@
 import Link from "next/link";
 import AppearanceMenu from "./appearance-menu";
 import NotificationBell from "./notification-bell";
+import { avatarSrc } from "@/lib/avatar";
 
-export default function SiteHeader({ account = false, signedIn = false, active }: { account?: boolean; signedIn?: boolean; active?: "campaigns" | "guide" }) {
+export default function SiteHeader({ account = false, signedIn = false, active, me }: { account?: boolean; signedIn?: boolean; active?: "campaigns" | "guide"; me?: { name: string; avatar: string } }) {
   return <header className="site-header">
     <Link href="/" className="brand" aria-label="RPG Tools home"><span className="tool-switch-mark" aria-hidden="true" /><span className="brand-name">RPG Tools</span></Link>
     <nav aria-label="Main navigation">
@@ -15,8 +16,9 @@ export default function SiteHeader({ account = false, signedIn = false, active }
 
       </div>
       {signedIn && <NotificationBell />}
-      <a href="/account" className="site-nav-link">
-        {account || signedIn ? "Account" : <>Sign in<span className="site-account-long"> / Register</span></>}
+      <a href="/account" className={me ? "site-nav-link site-me" : "site-nav-link"} title={me ? "Account settings" : undefined}>
+        {me ? <><span className="account-avatar account-avatar-s" aria-hidden="true">{me.avatar ? <img alt="" src={avatarSrc(me.avatar)} /> : (Array.from(me.name.trim())[0] ?? "?").toUpperCase()}</span><span className="site-me-name">{me.name}</span><span className="sr-only"> account</span></>
+          : account || signedIn ? "Account" : <>Sign in<span className="site-account-long"> / Register</span></>}
       </a>
     </nav>
   </header>;

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDownUp, Check, Download, FileArchive, FolderOpen, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
 import { importCopy, workspaceSchema, type Workspace } from "@/lib/encyclopedia/world-model";
 import { librarySchema, emptyLibrary, type TableLibrary } from "@/lib/encyclopedia/tables";
@@ -8,9 +8,11 @@ import { rpExportZip, readRestoreCopy } from "@/lib/encyclopedia/rp-zip";
 import { addImported, buildCampaign, previewRepo, readSources, type ImportPreview, type Source } from "@/lib/encyclopedia/rp-import";
 import { readZip, ZipError, ZIP_MAX_BYTES } from "@/lib/zip-read";
 import { classifyZip, defaultCommitMessage, exportedAt, folderRows, lastExportKey, lastPushKey, parseLastPush, restoreNotice, shortDate, zipName, type LastPush } from "@/lib/encyclopedia/rp-sheet";
-import { readRepoFiles, readRepoRestore, type PushResult } from "@/lib/github-push";
+import { readRepoChanges, readRepoFiles, readRepoRestore, type PushResult } from "@/lib/github-push";
+import { isThisCampaign, planBringBack, readBringSources, saveBringBack, type BringBackPlan, type FilesMap, type PlanInput, type Selection } from "@/lib/encyclopedia/rp-bring-back";
 import { forgetKey, readKey } from "@/lib/github-key";
 import { ConnectView, PushView, githubFetch } from "./rp-github";
+import { BringBackView } from "./rp-bring-back";
 import { memberRef } from "./encyclopedia/member-view";
 import "./rp-backups.css";
 
@@ -44,20 +46,26 @@ export function BackupsButton({ campaignId, campaignName }: { campaignId: string
 }
 
 type Loaded = { workspace: Workspace; tables: TableLibrary };
+/** The changes in a repository that came from this campaign, read and compared, ready to review. */
+type Bring = { plan: BringBackPlan; input: PlanInput; label: string };
+type Found = { incoming: Workspace; name: string; world: string; date: string | null; files: number; bring: Bring | null; mode: "restore" | "bring" };
+type Notice = { tone: "warn" | "error"; text: string };
 type Imported =
   | { step: "idle" }
   | { step: "reading" }
   | { step: "error"; title: string; message: string }
   | { step: "note"; title: string; message: string }
-  | { step: "found"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
-  | { step: "restoring"; incoming: Workspace; name: string; world: string; date: string | null; files: number }
+  | ({ step: "found" | "restoring" } & Found)
+  | { step: "bring" | "bringing"; found: Found; bring: Bring; notice: Notice | null; rev: number }
+  | { step: "brought"; count: number }
   | { step: "preview" | "importing"; preview: ImportPreview; name: string; show: boolean }
   | { step: "done"; name: string; href: string; verb: "Restored" | "Imported" };
 
 /** The "found" card for a restore copy, from a ZIP or a repository. */
-function foundFrom(workspace: Workspace, date: string | null, files: number): Imported {
-  return { step: "found", incoming: workspace, name: workspace.campaigns[0].name, world: `${workspace.worlds[0]?.name ?? "World"} (imported)`.slice(0, 160), date, files };
+function foundFrom(workspace: Workspace, date: string | null, files: number, bring: Bring | null = null): Imported {
+  return { step: "found", incoming: workspace, name: workspace.campaigns[0].name, world: `${workspace.worlds[0]?.name ?? "World"} (imported)`.slice(0, 160), date, files, bring, mode: "restore" };
 }
+const changedFiles = (bring: Bring) => new Set(bring.plan.rows.map(r => r.path)).size;
 const errorText = (e: unknown, fallback: string) => e instanceof Error && e.message ? e.message : fallback;
 
 /** Saves bytes as a file through a temporary link. */
@@ -166,6 +174,21 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     } catch (e) { setExportError(errorText(e, "Could not build the ZIP.")); }
   }
 
+  /** The saved notes (not unsaved edits), so what is reviewed is what the save will be made from. */
+  async function loadSaved(): Promise<Workspace | null> {
+    try {
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown };
+      return res.ok ? workspaceSchema.parse(body.data) : null;
+    } catch { return null; }
+  }
+  async function makeBring(map: FilesMap, files: PlanInput["files"], log: string | undefined, label: string): Promise<Bring | null> {
+    if (!isThisCampaign(map, campaignId)) return null;
+    const saved = await loadSaved();
+    if (!saved || !saved.campaigns.some(c => c.id === campaignId)) return null;
+    const input = { map, files, log };
+    return { plan: planBringBack(saved, campaignId, input), input, label };
+  }
+
   /** What a set of files is: a restore copy, an RP repository to import as a new campaign, or neither. */
   async function analyse(sources: Source[], where: "ZIP" | "folder", label: string) {
     const names = sources.map(f => f.name), kind = classifyZip(names);
@@ -174,7 +197,10 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       const restore = readRestoreCopy(await Promise.all(wanted.map(async f => ({ name: f.name, data: await f.bytes() }))));
       if (!restore.ok) { setImp(restoreNotice(kind, where, restore.error)); return; }
       const log = sources.find(f => f.name === "8-Archive/Export-Log.md");
-      setImp(foundFrom(restore.workspace, exportedAt(log ? new TextDecoder().decode(await log.bytes()) : undefined), names.length));
+      let bring: Bring | null = null;
+      // An export of this very campaign can also be brought back; a copy made elsewhere (or restored before) has other ids and only offers Restore.
+      if (restore.workspace.campaigns[0].id === campaignId) { const read = await readBringSources(sources); if (read.ok) bring = await makeBring(read.map, read.files, read.log, label); }
+      setImp(foundFrom(restore.workspace, exportedAt(log ? new TextDecoder().decode(await log.bytes()) : undefined), names.length, bring));
       return;
     }
     if (kind === "numbered" || kind === "player-safe") {
@@ -225,7 +251,11 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     setImp({ step: "reading" });
     try {
       const got = await readRepoRestore(token, repo, github.branch, githubFetch);
-      if (got.ok) { setImp(foundFrom(got.workspace, got.date, got.files)); return; }
+      if (got.ok) {
+        let bring: Bring | null = null;
+        if (got.workspace.campaigns[0].id === campaignId) { const ch = await readRepoChanges(token, repo, github.branch, githubFetch); if (ch.ok) bring = await makeBring(ch.map, ch.files, ch.log, repo); }
+        setImp(foundFrom(got.workspace, got.date, got.files, bring)); return;
+      }
       if (got.kind !== "numbered" && got.kind !== "player-safe") { setImp(restoreNotice(got.kind, "repository", got.error)); return; }
       const read = await readRepoFiles(token, repo, github.branch, githubFetch);
       if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
@@ -287,6 +317,21 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     } catch (e) { fail(errorText(e, "Could not restore this campaign.")); }
   }
 
+  /** Brings the picked rows back (see saveBringBack): page history first, then one save with the revision just read. */
+  async function submitBring(sel: Selection) {
+    if (imp.step !== "bring" || busy.current) return;
+    const cur = imp;
+    busy.current = true;
+    setImp({ ...cur, step: "bringing", notice: null });
+    try {
+      const out = await saveBringBack({ fetch: (url, init) => fetch(url, init), campaignId, plan: cur.bring.plan, input: cur.bring.input, sel });
+      if (out.status === "done") { setImp({ step: "brought", count: out.count }); onRestored?.(); }
+      else if (out.status === "changed") setImp({ ...cur, step: "bring", bring: { ...cur.bring, plan: out.plan }, rev: cur.rev + 1, notice: { tone: "warn", text: "This campaign changed while you were reviewing. Review again." } });
+      else setImp({ ...cur, step: "bring", notice: { tone: "error", text: out.message } });
+    } catch (e) { setImp({ ...cur, step: "bring", notice: { tone: "error", text: errorText(e, "Could not bring back the changes. Nothing was changed.") } }); }
+    finally { busy.current = false; }
+  }
+
   /** Adds the new campaign to the newest saved notes, with the revision just read, so a newer workspace is never overwritten. Existing campaigns are not touched. */
   async function importNew() {
     if (imp.step !== "preview" || busy.current) return;
@@ -314,7 +359,8 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   }
 
   const chips: ["zip" | "github" | "folder", string][] = [["zip", "ZIP file"], ["github", "GitHub"], ...(canFolder ? [["folder", "Folder"] as ["folder", string]] : [])];
-  const working = imp.step === "reading" || imp.step === "restoring" || imp.step === "importing";
+  const working = imp.step === "reading" || imp.step === "restoring" || imp.step === "importing" || imp.step === "bringing";
+  const inBring = imp.step === "bring" || imp.step === "bringing" || imp.step === "brought";
   const tabs: ["export" | "import", string][] = [["export", "Export"], ["import", "Import"]];
   const showTab = canRestore ? tabs : tabs.slice(0, 1);
   return <div className="rpb-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy.current) close(); }}>
@@ -360,6 +406,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
               <p className="rpb-muted">The ZIP opens as a folder an AI GM can read. {includeGm ? "It includes GM-only content, so keep it to yourself." : "With the GM-only folder off, it is safe to share with players."}</p>
             </>}
         </div> : <div role="tabpanel" id="rpb-panel-import" aria-labelledby="rpb-tab-import" className="rpb-panel">
+          {!inBring && <>
           <div className="rpb-source" role="group" aria-label="Import source">
             {chips.map(([id, text]) =>
               <button key={id} type="button" aria-pressed={source === id} disabled={working} onClick={() => { if (source !== id) { setSource(id); setImp({ step: "idle" }); } }}>{text}</button>)}
@@ -369,13 +416,12 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
           <input ref={folderPicker} type="file" multiple className="rpb-file" tabIndex={-1} aria-hidden="true" {...({ webkitdirectory: "" } as Record<string, string>)} onChange={e => void pickFolder(e.target.files)} />
           {imp.step !== "done" && <button type="button" className={imp.step === "idle" || imp.step === "reading" ? "rpb-primary" : "rpb-secondary"} disabled={working} onClick={() => source === "zip" ? picker.current?.click() : source === "folder" ? folderPicker.current?.click() : void readGithub()}>{source === "zip" ? <FileArchive size={16} aria-hidden="true" /> : source === "folder" ? <FolderOpen size={16} aria-hidden="true" /> : <Github size={16} aria-hidden="true" />}{imp.step === "reading" ? "Reading…" : source === "zip" ? (imp.step === "idle" ? "Choose a ZIP file" : "Choose another ZIP") : source === "folder" ? (imp.step === "idle" ? "Choose a folder" : "Choose another folder") : !repo ? "Connect a GitHub repository" : imp.step === "idle" ? `Read ${repo}` : "Read it again"}</button>}
           {imp.step === "idle" && <p className="rpb-muted">{source === "zip" ? "Pick a ZIP you downloaded from here, or the ZIP of an RP repository (GitHub's Download ZIP works). The app checks what it holds and offers only what fits. Nothing is changed until you import." : source === "folder" ? "Pick the folder of an RP repository on this device. It is read here in your browser. Nothing is changed until you import." : "Reads the branch from GitHub with the key saved on this device and checks what it holds. Nothing is changed until you import."}</p>}
+          </>}
           {imp.step === "error" && <div className="rpb-card rpb-card-error" role="alert"><b><TriangleAlert size={16} aria-hidden="true" />{imp.title}</b><span>{imp.message}</span></div>}
           {imp.step === "note" && <div className="rpb-card" role="status"><b><Info size={16} aria-hidden="true" />{imp.title}</b><span>{imp.message}</span></div>}
-          {(imp.step === "found" || imp.step === "restoring") && <>
-            <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />RPG Tools export found</b><span>{imp.name}{imp.date ? ` · exported ${shortDate(imp.date)}` : ""} · {imp.files} files</span></div>
-            <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>
-            <button type="button" className="rpb-primary" onClick={() => void restore()} disabled={imp.step === "restoring"}>{imp.step === "restoring" ? "Restoring…" : `Restore as “${imp.name.slice(0, 40)} (copy)”`}</button>
-          </>}
+          {(imp.step === "found" || imp.step === "restoring") && <FoundCard imp={imp} onMode={mode => setImp({ ...imp, mode })} onRestore={() => void restore()} onReview={() => imp.bring && setImp({ step: "bring", found: imp, bring: imp.bring, notice: null, rev: 0 })} />}
+          {(imp.step === "bring" || imp.step === "bringing") && <BringBackView key={imp.rev} plan={imp.bring.plan} repoLabel={imp.bring.label} notice={imp.notice} busy={imp.step === "bringing"} onBack={() => setImp({ ...imp.found, step: "found", bring: imp.bring })} onSubmit={sel => void submitBring(sel)} />}
+          {imp.step === "brought" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />Brought back {plural(imp.count, "change", "changes")}</b><span>Each page that was changed kept its earlier version in Page history. Pushing again will make the repo match the campaign.</span><button type="button" className="rpb-primary" onClick={close}>Done</button></div>}
           {(imp.step === "preview" || imp.step === "importing") && <ImportPreviewView preview={imp.preview} name={imp.name} show={imp.show} busy={imp.step === "importing"} onName={name => setImp({ ...imp, name })} onShow={show => setImp({ ...imp, show })} onImport={() => void importNew()} />}
           {imp.step === "done" && <div className="rpb-card rpb-card-ok" role="status"><b><Check size={16} aria-hidden="true" />{imp.verb} as {imp.name}</b><span>Your other campaigns were not changed.</span><a className="rpb-primary" href={imp.href}>Open campaign</a></div>}
         </div>}
@@ -385,6 +431,22 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The found card for an export, with the choice between a separate copy and bringing the repo's changes back into this campaign. */
+function FoundCard({ imp, onMode, onRestore, onReview }: { imp: Extract<Imported, { step: "found" | "restoring" }>; onMode: (mode: "restore" | "bring") => void; onRestore: () => void; onReview: () => void }) {
+  const bring = imp.bring, n = bring ? changedFiles(bring) : 0, busy = imp.step === "restoring", group = useId();
+  const mode = bring && n > 0 ? imp.mode : "restore";
+  return <>
+    <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />RPG Tools export found</b><span>{imp.name}{imp.date ? ` · exported ${shortDate(imp.date)}` : ""} · {imp.files} files</span></div>
+    {bring ? <div className="rpb-panel" role="radiogroup" aria-label="What to do with this export">
+      <label className={`rpb-row rpb-radio${mode === "restore" ? " rpb-choice" : ""}`}><input type="radio" name={group} checked={mode === "restore"} disabled={busy} onChange={() => onMode("restore")} /><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></label>
+      <label className={`rpb-row rpb-radio${mode === "bring" ? " rpb-choice" : ""}`}><input type="radio" name={group} checked={mode === "bring"} disabled={busy || n === 0} onChange={() => onMode("bring")} /><div><b>Bring back changes</b><small>{n === 0 ? "Nothing changed in the repo since your last push." : `${plural(n, "file", "files")} changed in the repo since your last push.`}</small></div><span className="rpb-dot" aria-hidden="true" /></label>
+    </div>
+      : <div className="rpb-row rpb-choice"><div><b>Restore as a new campaign</b><small>A separate copy, with its own world named “{imp.world}”. This campaign isn&apos;t touched.</small></div><span className="rpb-dot" aria-hidden="true" /></div>}
+    {mode === "bring" ? <button type="button" className="rpb-primary" onClick={onReview}>Review {plural(n, "change", "changes")}</button>
+      : <button type="button" className="rpb-primary" onClick={onRestore} disabled={busy}>{busy ? "Restoring…" : `Restore as “${imp.name.slice(0, 40)} (copy)”`}</button>}
+  </>;
+}
 /** The mapping preview: what each part of the repository becomes. Nothing is created until the button is pressed. */
 function ImportPreviewView({ preview, name, show, busy, onName, onShow, onImport }: { preview: ImportPreview; name: string; show: boolean; busy: boolean; onName: (name: string) => void; onShow: (show: boolean) => void; onImport: () => void }) {
   const gone = preview.notImported.reduce((n, x) => n + x.count, 0);

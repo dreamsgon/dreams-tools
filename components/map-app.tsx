@@ -95,6 +95,7 @@ import ConditionEntry from "./condition-entry";
 import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, encyclopediaVehicles, type EncyclopediaCharacter, type EncyclopediaRaw } from "./encyclopedia-tokens";
 import { tokenImageFit } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
+import { InitiativeArrangeList } from "./initiative-arrange";
 import "./maptable-token-layout.css";
 import { applyWorkspaceHpStates } from "@/lib/token-hp-state";
 import CampaignTokenDefaults from "./campaign-token-defaults";
@@ -300,6 +301,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState("");
   const [tokenSearch, setTokenSearch] = useState("");
+  const [arrangeOrder, setArrangeOrder] = useState(false);
   const [conditionName, setConditionName] = useState(""),
     [conditionColor, setConditionColor] = useState("#ad7141"),
     [conditionIcon, setConditionIcon] = useState("!"),
@@ -1670,11 +1672,22 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       Click a token here or on the map to edit it.
                     </p>
                   ) : null}
-                  <h3 className="token-panel-heading">
-                    On this map{" "}
-                    <span className="count">{scene.tokens.length}</span>
-                  </h3>
+                  <div className="token-panel-heading-row">
+                    <h3 className="token-panel-heading">
+                      On this map{" "}
+                      <span className="count">{scene.tokens.length}</span>
+                    </h3>
+                    <label className="switch"><input type="checkbox" role="switch" checked={arrangeOrder} onChange={e => setArrangeOrder(e.target.checked)} /><span>Arrange order</span></label>
+                  </div>
                   {(scene.tokens.length > 5 || tokenSearch) && <input aria-label="Find tokens on this map" placeholder="Find a token on this map…" value={tokenSearch} onChange={e => setTokenSearch(e.target.value)} />}
+                  {arrangeOrder ? (
+                    <InitiativeArrangeList workspace={workspace} scene={scene} campaignId={campaignId} update={updateScene} filter={tokenSearch} onSelect={(id) => {
+                      setSelected(id);
+                      setTokenEditRequest(r=>({id,count:r.count+1}));
+                      setTool("select");
+                      setPlayer(false);
+                    }} />
+                  ) : (
                   <div className="token-list">
                     {scene.tokens.filter(t => t.name.toLowerCase().includes(tokenSearch.trim().toLowerCase())).map((t) => (
                       <div className="token-list-row" key={t.id}>
@@ -1700,6 +1713,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       </div>
                     ))}
                   </div>
+                  )}
                   {!scene.tokens.length && (
                     <p className="empty-small">No tokens on this map yet. Make one from an image, or add a quick token with just a name.</p>
                   )}

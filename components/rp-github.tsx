@@ -134,7 +134,7 @@ export function PushView({ repo, branch, token, includeGm, build, defaultMessage
   const count = prep ? prep.changes.length + prep.removals.length : 0;
   const rows = prep ? [
     ...prep.changes.map(c => ({ key: "c" + c.path, tag: c.kind as keyof typeof TAG, path: c.path })),
-    ...prep.removals.map(r => ({ key: "r" + r.path, tag: "removed" as const, path: r.path, note: r.reason === "gm" ? "GM file" : undefined })),
+    ...prep.removals.map(r => ({ key: "r" + r.path, tag: "removed" as const, path: r.path, note: r.reason === "gm" ? "GM file" : r.reason === "moved" ? "Moved to a file named after its page" : undefined })),
   ] : [];
   const gmRemoved = prep?.removals.some(r => r.reason === "gm");
   const keyProblem = (code?: string) => code === "bad-key" || code === "no-access" || code === "read-only";

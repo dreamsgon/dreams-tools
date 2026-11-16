@@ -14,7 +14,7 @@ const doors=[
 export default async function Home(){
   const user=await getAppUser();
   const first=user?.displayName.split(/[\s@]/)[0]||'';
-  return <main className="rpg-hub home-page"><SiteHeader signedIn={!!user}/>
+  return <main className="rpg-hub home-page"><SiteHeader signedIn={!!user} me={user?{name:user.displayName,avatar:user.avatar}:undefined}/>
     {user?<>
       <HomeCampaigns first={first} tools={<nav className="home-tools" aria-label="Tools">
         {doors.map(({label,short,href,Icon})=><a key={href} href={href} title={short}><Icon size={17} strokeWidth={1.7} aria-hidden="true"/>{label}</a>)}
