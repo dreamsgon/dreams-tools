@@ -128,3 +128,9 @@ test('fog exploration persists through workspace and map package round trips',()
 test('fit keeps wide and tall maps wholly inside desktop and mobile viewports',()=>{
  for(const [w,h] of [[1000,500],[330,380]])for(const [mw,mh] of [[1000,100],[100,1000],[800,500]]){const fit=fitMapSize(w,h,mw,mh);assert(fit.width<=w+.01&&fit.height<=h+.01);assert(Math.abs(fit.width/fit.height-mw/mh)<.001);const zoom=fitMapSize(w,h,mw,mh,2);assert.equal(zoom.width,fit.width*2);}
 });
+test('an imported copy is not linked to the original Maptable campaign, for maps or Discord rolls', () => {
+  const src = structuredClone(demo); src.campaigns[0].maptableCampaignId = 'map-1'; src.campaigns[0].discord = { maptableCampaignId: 'map-1', route: 'combat' };
+  const copy = importCopy(emptyWorkspace(), campaignExport(src, 'demo-campaign')), c = copy.campaigns[0];
+  assert.equal(c.maptableCampaignId, undefined); assert.equal(c.discord, undefined);
+  assert.equal(src.campaigns[0].discord!.maptableCampaignId, 'map-1');
+});

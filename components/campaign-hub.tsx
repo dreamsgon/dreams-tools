@@ -17,6 +17,7 @@ import { LookBanner, LookFont } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
 import { campaignTargets } from "@/lib/tags";
 import CampaignMembers, { type MembersView } from "./campaign-members";
+import { BackupsButton } from "./rp-backups";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
 import { useDiceTarget } from "./use-dice-target";
@@ -106,6 +107,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
           {tab === "front" && hub.frontConfig && !editing && <button className="hub-button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Customize</button>}
           {e && <a className="hub-button" href={notesHref(e.id)}><BookOpen size={15} aria-hidden="true" />Open notes</a>}
           {m && <a className="hub-button hub-button-primary" href={mapsHref(m.id)}><MapIcon size={15} aria-hidden="true" />Open in Maptable</a>}
+          {e && <BackupsButton campaignId={e.id} campaignName={row.name} />}
         </>}
       </div>
     </div>
