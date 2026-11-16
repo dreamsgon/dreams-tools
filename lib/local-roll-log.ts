@@ -1,7 +1,10 @@
-export type LocalRollInput = {label:string;total:number;breakdown:string;outcome?:string};
+/** `formula` is the dice as rolled, when known. `source` marks a roll that came from another table (see lib/roll-link.ts). */
+export type LocalRollInput = {label:string;total:number;breakdown:string;outcome?:string;formula?:string;source?:'roll20'};
 export type LocalRollEntry = LocalRollInput & {id:string;timestamp:number};
 const storageKey='maptable-local-roll-log-v1';
 export const localRollLogEvent='maptable-local-roll-log-change';
+/** Fired on window for every roll this browser records, with the roll as JSON in `detail`, so a browser extension (the RPG Tools dice link) can pass it on. */
+export const rollAnnounceEvent='rpgtools:roll';
 let memory:LocalRollEntry[]=[];
 let dirty=false;
 export function readLocalRollLog():LocalRollEntry[]{
@@ -15,6 +18,8 @@ export function recordLocalRoll(input:LocalRollInput){
  if(typeof window==='undefined'||!Number.isFinite(input.total))return;
  const entry:LocalRollEntry={...input,id:globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random()}`,timestamp:Date.now()};
  save([entry,...readLocalRollLog()].slice(0,100));
+ // A string, so an extension's content script (another JavaScript world) can read it.
+ try{window.dispatchEvent(new CustomEvent(rollAnnounceEvent,{detail:JSON.stringify({label:entry.label,total:entry.total,breakdown:entry.breakdown,...(entry.formula?{formula:entry.formula}:{}),...(entry.outcome?{outcome:entry.outcome}:{}),...(entry.source?{source:entry.source}:{})})}));}catch{}
  return entry;
 }
 /** Adds a note to a roll already in the log, such as that it was posted to Discord. */

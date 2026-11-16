@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState,type ReactNode} from 'react';
-import {BookOpen,Check,Copy,ExternalLink,MonitorPlay} from 'lucide-react';
+import {BookOpen,Check,Copy,Download,ExternalLink,MonitorPlay} from 'lucide-react';
 import {confirmDialog} from '../confirm-dialog';
 import {ToolDialog} from './tool-dialog';
 import {bridgeClients,clientNames,guideHref,syncInfo,syncKinds,tableGuides,type BridgeClient,type Direction,type Sync} from '@/lib/bridge/sync';
@@ -17,7 +17,7 @@ async function post(body:object){
 function GuideLink({table,children}:{table:BridgeClient|'roll20';children?:ReactNode}){
  return <a className="bridge-guide" href={guideHref(table)} target="_blank" rel="noopener noreferrer"><BookOpen size={14}/> {children??tableGuides[table].label}<ExternalLink size={12} aria-label="(opens in a new window)"/></a>;
 }
-const ROLL20_SCRIPT='/api/bridge/roll20/rpg-tools-roll20.js';
+const ROLL20_SCRIPT='/api/bridge/roll20/rpg-tools-roll20.js',DICE_LINK='/api/bridge/roll20/rpg-tools-dice-link.zip';
 function ago(iso?:string){
  if(!iso)return 'not used yet';
  const s=(Date.now()-Date.parse(iso))/1000;
@@ -103,9 +103,11 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
    <section className="bridge-roll20">
     <strong>Roll20</strong>
     <p className="import-note">Roll20 doesn’t need a bridge key. Its Mod script imports RPG Tools sheets and monster or character JSON (Open5e, the 5e SRD API, 5etools) into your game, and exports characters back as sheets that Import a sheet reads. Mod scripts need a Roll20 Pro subscription.</p>
+    <p className="import-note">The <b>dice link</b> browser extension sends rolls you make in RPG Tools to your Roll20 game’s chat, and Roll20 rolls to the RPG Tools roll log. It works with any Roll20 account, in Chrome, Edge and other Chromium browsers.</p>
     <div className="bridge-roll20-actions">
      <button type="button" className="button small" onClick={()=>void copyScript()}>{copied==='script'?<><Check size={13}/> Copied</>:<><Copy size={13}/> Copy the Roll20 script</>}</button>
      <a className="button small" href={ROLL20_SCRIPT} target="_blank" rel="noopener noreferrer">Open the script <ExternalLink size={12} aria-label="(opens in a new window)"/></a>
+     <a className="button small" href={DICE_LINK} download><Download size={13}/> Download the dice link</a>
      <GuideLink table="roll20"/>
     </div>
    </section>

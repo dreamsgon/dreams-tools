@@ -7,6 +7,8 @@ Move characters and monsters between Roll20 and RPG Tools as JSON files. A small
 
 Roll20 doesn't need a bridge key, and it never talks to RPG Tools directly. You carry the files across.
 
+To roll between the two while you play, add the **dice link** browser extension. See [Roll between RPG Tools and Roll20](#roll-between-rpg-tools-and-roll20) below.
+
 ## What you need
 
 - A Roll20 game where you are the **GM**.
@@ -70,6 +72,43 @@ See [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 - **Roll20 → RPG Tools:** run `!rpgtools export` and import the handout's text with **Import a sheet**.
 - **Monsters from the web:** paste a monster's JSON from Open5e, the 5e SRD API or a 5etools bestiary file straight into the import handout.
 
+## Roll between RPG Tools and Roll20
+
+The **RPG Tools Dice Link** is a small browser extension. With RPG Tools and your Roll20 game open in the same browser:
+
+- A roll you make in RPG Tools appears in Roll20's chat. This covers the dice tray, character sheet rolls, inline rolls and Maptable.
+- Rolls made in Roll20 can appear in the RPG Tools **roll log**, marked *From Roll20*.
+
+It works with any Roll20 account, so you don't need Pro. It runs in **Chrome**, **Edge**, **Brave** and other Chromium browsers. It only runs on your RPG Tools site and on Roll20 games, and it sends nothing to any server.
+
+### Install it
+
+1. In RPG Tools, open **Connect a table** and press **Download the dice link** under Roll20. Unzip the file. You get a folder named `rpg-tools-dice-link`.
+2. In your browser, open `chrome://extensions` (in Edge, `edge://extensions`).
+3. Turn on **Developer mode**, press **Load unpacked**, and choose the `rpg-tools-dice-link` folder.
+4. Pin **RPG Tools Dice Link** from the extensions menu, so its settings are one click away.
+
+The download is made for your RPG Tools site's address, so get it from the site you play on. To update it, download it again, replace the folder, and press the reload button on the extension's card.
+
+### Use it
+
+1. Open your Roll20 game and RPG Tools in the same browser window or in two windows.
+2. Roll anything in RPG Tools. It appears in Roll20's chat with the result, the dice and *via RPG Tools*. Whatever you had half-typed in Roll20's chat box stays there.
+3. If the character's name matches someone in Roll20's **As** menu, the roll is posted as that character.
+
+Open the extension's button to change how it works:
+
+| Setting | What it does |
+| --- | --- |
+| **Send RPG Tools rolls to Roll20 chat** | On at first. |
+| **Show the RPG Tools result** | Roll20 shows RPG Tools' own total and dice, so both tables agree. |
+| **Roll again with Roll20's dice** | Roll20 rolls the same dice itself, as its own roll. |
+| **Send Roll20 rolls to the RPG Tools roll log** | Off at first. Turn it on in **one** browser only, usually the GM's, or each roll is logged once per browser. Whispered rolls never go. |
+
+Rolls that came from Roll20 are never sent back to Roll20, and rolls the extension typed into Roll20 never come back to RPG Tools.
+
+> **Firefox** can load the extension only for one session (about:debugging › Load Temporary Add-on). The extension isn't in the browser stores yet.
+
 ## If something isn't right
 
 | What you see | What to do |
@@ -79,6 +118,8 @@ See [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 | "There is no JSON in the handout" | Paste the file into the handout's **GM Notes** (or its notes) and save the handout. |
 | "The JSON in the handout can't be read" | Paste it again as plain text. A missing bracket at the start or end is the usual cause. |
 | "Nothing in that JSON looks like a character or monster" | The file isn't one of the shapes the script knows. Import it into RPG Tools with an AI first (see [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)), then export it from there. |
+| A roll in RPG Tools doesn't reach Roll20 | Check both are open in the same browser, and that the extension's button says both are open. Reload the Roll20 tab after installing. Roll20's page changes now and then; if its chat box moved, tell us. |
+| A Roll20 roll doesn't reach RPG Tools | Turn on **Send Roll20 rolls to the RPG Tools roll log** in the extension. Rolls in the first few seconds after the game opens are skipped, because Roll20 is loading old chat then. |
 | A roll button says something odd in chat | Open the character's **Abilities** and edit the token action. Re-importing replaces only the abilities the script made, never your own. |
 
 Type `!rpgtools` on its own to see the commands in chat.
@@ -87,5 +128,5 @@ Type `!rpgtools` on its own to see the commands in chat.
 
 - **Up to 50 creatures** come in per import. Split bigger files.
 - **Your own abilities stay.** Importing again replaces only the token actions the script made.
-- **Nothing syncs on its own.** Roll20 can't reach RPG Tools, so each move is an import or an export.
-- **Status:** the script is tested against a stand-in Roll20. It hasn't been tried in many real games yet. Tell us what breaks.
+- **Nothing syncs on its own.** Roll20 can't reach RPG Tools, so each move is an import or an export. Only the dice link passes rolls while you play.
+- **Status:** the script and the dice link are tested against a stand-in Roll20 page. The dice link ran in Chromium against it. Neither has been tried in many real games yet. Tell us what breaks.

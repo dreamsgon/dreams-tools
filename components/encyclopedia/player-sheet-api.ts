@@ -30,14 +30,14 @@ const notes={sent:'Sent to the roll log and the campaign’s Discord channel',sk
 /** Rolls on the server from the formula stored on the sheet, then shows the result card. The browser sends no total. */
 export async function rollFromSheet(ref:string,entryId:string,itemId:string,mode:RollMode){
  const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes}>('/api/encyclopedia/player-roll',{ref,entryId,itemId,mode});
- const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
+ const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,formula:r.formula,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
  showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note:notes[r.discord]??notes.none,logId:logged?.id,again:()=>{void rollFromSheet(ref,entryId,itemId,mode).catch(()=>{});}});
 }
 
 /** Rolls one of a stat's rolls on the server from the campaign's sheet. Spending (like 1 Stress) happens there too. */
 export async function rollStatFromSheet(ref:string,entryId:string,statId:string,rollName:string,mode:RollMode){
  const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes;outcome?:{ok:boolean;text:string};spent?:{label:string;n:number}}>('/api/encyclopedia/player-roll',{ref,entryId,statId,rollName,mode});
- const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
+ const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,formula:r.formula,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
  const base=notes[r.discord]??notes.none,note=r.spent?`${base}${base.endsWith('.')?'':'.'} Spent ${r.spent.n} ${r.spent.label}.`:base;
  showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note,logId:logged?.id,...(r.outcome?{outcome:r.outcome}:{}),again:()=>{void rollStatFromSheet(ref,entryId,statId,rollName,mode).catch(()=>{});}});
  return r;
