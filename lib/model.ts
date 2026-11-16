@@ -188,6 +188,12 @@ export const mapShapeSchema = z.object({
   light: mapLightSchema.nullable().optional(),
   // Light and sight pass through this shape's outline: a road, a river, a pool or a field, not a wall.
   seeThrough: z.boolean().optional(),
+  // A room number's entry in the room key: the room's name and a GM note. It becomes the GM marker's name and notes in Maptable.
+  key: z.object({ name: z.string().max(80), note: z.string().max(1000) }).nullable().optional(),
+  // A room's floor pattern, drawn over the floor in the style's ink (lib/map-style.ts). Absent is plain.
+  pattern: z.enum(["flag", "boards", "tiles", "cobbles", "earth"]).nullable().optional(),
+  // A door's kind. Absent is wood. An arch is an open doorway, and a secret door looks like wall.
+  door: z.enum(["wood", "iron", "arch", "secret"]).nullable().optional(),
 }).refine((s) => s.type !== "curve" || s.points.length === 3, "Curves need three control points")
   .refine(s=>s.type!=="merged"||(s.roomParts.length>0&&s.roomParts.every(p=>p.start+p.count<=s.points.length)),"Invalid merged room outlines");
 /** How a drawn map looks as a whole: chosen from a preset, then fine-tuned. */

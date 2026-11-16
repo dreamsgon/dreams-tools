@@ -50,13 +50,13 @@ export function mapLights(d: Pick<MapDrawing, "shapes" | "folders" | "layerOrder
 }
 
 /**
- * The walls that stop light: every wall, less the openings erased into it and its windows, plus closed doors.
+ * The walls that stop light: every wall, less the openings erased into it and its windows, plus closed doors. An arch is an open doorway and stops nothing.
  * Shapes marked see-through (roads, rivers, pools) stop nothing.
  */
 export function lightWalls(d: Pick<MapDrawing, "shapes" | "folders" | "layerOrder">): WallSegment[] {
   const shapes = orderedShapes(d as MapDrawing).filter(s => !layerState(d as MapDrawing, s.id).hidden);
-  const walls = cutOpenings(wallSegments(shapes.filter(s => !s.seeThrough)), shapes.map(s => s.type === "window" ? { ...s, type: "opening" as const } : s));
-  const doors = shapes.filter(s => s.type === "door").map(s => ({ a: s.points[0], b: s.points[1], shapeId: s.id, thickness: s.thickness, floor: s.fill }));
+  const walls = cutOpenings(wallSegments(shapes.filter(s => !s.seeThrough)), shapes.map(s => s.type === "window" || (s.type === "door" && s.door === "arch") ? { ...s, type: "opening" as const } : s));
+  const doors = shapes.filter(s => s.type === "door" && s.door !== "arch").map(s => ({ a: s.points[0], b: s.points[1], shapeId: s.id, thickness: s.thickness, floor: s.fill }));
   return [...walls, ...doors];
 }
 

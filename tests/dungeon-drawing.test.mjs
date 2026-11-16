@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDungeonMap, dungeonLayouts, traceCells, layoutKey } from "../lib/dungeon/drawing.ts";
+import { buildDungeonMap, dungeonLayouts, traceCells, layoutKey, defaultLookOptions } from "../lib/dungeon/drawing.ts";
+import { defaultDressOptions, layoutTheme } from "../lib/dungeon/dressing.ts";
 import { defaultLayoutOptions } from "../lib/dungeon/layout.ts";
 import { mapDrawingSchema } from "../lib/model.ts";
 import { lightWalls } from "../lib/map-light.ts";
 
-const options = (layout, extra = {}) => ({ ...defaultLayoutOptions, layout, size: "m", seed: "ember-42", dressing: 0, style: dungeonLayouts.find(l => l.id === layout).style, grid: 70, numbers: true, ...extra });
+const options = (layout, extra = {}) => ({ ...defaultLayoutOptions, ...defaultLookOptions, ...defaultDressOptions, theme: layoutTheme[layout], layout, size: "m", seed: "ember-42", dressing: 0, style: dungeonLayouts.find(l => l.id === layout).style, grid: 70, numbers: true, ...extra });
 
 test("every layout makes a drawing that saves, stays on the map and is the same each time", () => {
   for (const { id } of dungeonLayouts) for (const seed of ["ember-42", "raven-17", "salt-90"]) for (const size of ["s", "m", "l"]) {
