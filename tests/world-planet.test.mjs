@@ -4,7 +4,7 @@ import { decodePaint, encodePaint, isWater, mapSchema, newMap, paintSchema, resi
 import { terrainLayerOf, terrainLayers } from "../lib/encyclopedia/terrain-art.ts";
 import { legendItems } from "../lib/encyclopedia/map-looks.ts";
 import { terrainCost } from "../lib/encyclopedia/hex-crawl.ts";
-import { buildPlanet, defaultPlanetOptions, generatePlanet, planetFeatures, withPreset, PLANET_COLUMNS, PLANET_ROWS } from "../lib/encyclopedia/planet-generator.ts";
+import { buildPlanet, defaultPlanetOptions, generatePlanet, planetChecks, planetFeatures, planetMapSize, planetPixels, planetStats, withPreset, PLANET_COLUMNS, PLANET_ROWS } from "../lib/encyclopedia/planet-generator.ts";
 
 const options = (patch = {}) => ({ ...defaultPlanetOptions("salt-731"), ...patch });
 const share = (cells, test) => cells.reduce((n, v) => n + (test(v) ? 1 : 0), 0) / cells.length;
@@ -56,10 +56,10 @@ test("the same seed always makes the same planet", () => {
   assert.notDeepEqual(a.cells, c.cells);
 });
 
-test("water sets how much of the planet is sea", () => {
+test("water sets how much of the globe's surface is sea", () => {
   for (const water of [30, 70, 90]) {
-    const sea = share([...buildPlanet(options({ water }), 120, 60).cells], isWater);
-    assert.ok(Math.abs(sea - water / 100) < 0.04, `asked for ${water}%, got ${(sea * 100).toFixed(1)}%`);
+    const sea = 1 - planetStats(buildPlanet(options({ water }), 120, 60)).land;
+    assert.ok(Math.abs(sea - water / 100) < 0.02, `asked for ${water}% of the globe, got ${(sea * 100).toFixed(1)}%`);
   }
 });
 
@@ -140,4 +140,38 @@ test("changing a map's size moves revealed fog, hex notes and the party to the s
   assert.equal(r.hexes[0].cell, 10 * 20 - 1);
   assert.equal(r.party.cell, 1, "the party stands where the middle of its old cell was");
   assert.equal(resizeCells(map, 10, 10).fog, map.fog);
+});
+
+test("stats weigh squares by their true area, so polar ice doesn't look bigger than it is", () => {
+  const p = buildPlanet(options({ water: 70 }), 120, 60), stats = planetStats(p);
+  assert.ok(Math.abs(stats.shares.reduce((a, b) => a + b) - 1) < 1e-9);
+  assert.ok(Math.abs(stats.land - 0.3) < 0.02, `land ${stats.land}`);
+  // Sea ice sits at the poles, so its share by area is smaller than its share of squares.
+  const squares = [...p.cells].filter(v => v === T.seaice).length / p.cells.length;
+  assert.ok(stats.shares[T.seaice] < squares);
+  assert.ok(stats.livable > 0.2 && stats.livable <= 1);
+  assert.ok(planetStats(buildPlanet(options({ temp: -3 }), 120, 60)).livable < stats.livable);
+});
+
+test("built-in checks flag settings that don't hang together", () => {
+  const notes = o => planetChecks(options(o)).filter(c => c.kind === "note").map(c => c.text).join(" ");
+  assert.equal(notes({}), "");
+  assert.match(notes({ rotation: "locked", tilt: 23 }), /tilt is ignored/);
+  assert.match(notes({ tilt: 70 }), /ice gathers near the equator/);
+  assert.match(notes({ water: 10, rain: 80 }), /Very little sea/);
+  assert.match(notes({ temp: 3, water: 70 }), /boil/);
+  assert.match(notes({ temp: -3 }), /under the ice/);
+  assert.match(notes({ size: "tiny" }), /loses its air/);
+  assert.match(notes({ life: "none" }), /colonies or outposts/);
+  assert.equal(planetChecks(options({ rotation: "locked", tilt: 0 }))[0].kind, "ok");
+});
+
+test("the planet's colours cover every square, and the map can reuse a planet already built", () => {
+  const { w, h } = planetMapSize();
+  assert.equal(w, h * 2);
+  const world = buildPlanet(options(), w, h), px = planetPixels(world);
+  assert.equal(px.length, w * h * 4);
+  assert.ok(px.every((v, i) => i % 4 !== 3 || v === 255));
+  const map = { ...newMap("world", "island", "old", 24, 18), pins: [] };
+  assert.deepEqual(generatePlanet(options(), map, world), generatePlanet(options(), map));
 });
