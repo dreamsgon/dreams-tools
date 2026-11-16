@@ -6,19 +6,22 @@
  * rumour. Sector settings opens the sector generator.
  */
 import {useState} from 'react';
-import {ArrowLeft,Plus,Route,Settings2,Trash2,Waypoints} from 'lucide-react';
-import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
-import {distanceBetween,hexDistance,hexLabel,laneSteps,lightTime,newSector,newSystem,starClasses,starInfo,toggleLane,withoutSystem,type Hex,type Sector,type SectorSystem,type StarClass} from '@/lib/encyclopedia/sectors';
+import {ArrowLeft,Orbit,Plus,Rocket,Route,Settings2,Trash2,Waypoints} from 'lucide-react';
+import {newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
+import {newStarSystem,solSystem,travelBetweenStars} from '@/lib/encyclopedia/star-systems';
+import {distanceBetween,hexDistance,hexLabel,laneHexes,laneSteps,lightTime,newSector,newSystem,starClasses,starInfo,toggleLane,withoutSystem,type Hex,type Sector,type SectorSystem,type StarClass} from '@/lib/encyclopedia/sectors';
 import {SectorMap} from './sector-map';
 import {SectorDialog} from './sector-dialog';
+import {FtlDialog,galaxyOf} from './ftl-dialog';
 import {confirmDialog} from '../confirm-dialog';
 import './galaxy.css';
 
 const starLine=(s:StarClass)=>`Class ${s}, ${starInfo[s].colour.toLowerCase()}`;
 
-export function SectorSheet({entry,data,update}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void}){
+export function SectorSheet({entry,data,update,change,onOpen}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;change:(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;onOpen:(id:string)=>void}){
  const sector=entry.sector??newSector(entry.title),parent=data.entries.find(e=>e.id===entry.parentId);
- const [hex,setHex]=useState<Hex|null>(null),[joining,setJoining]=useState<string|null>(null),[lanes,setLanes]=useState(true),[settings,setSettings]=useState(false),[fromId,setFromId]=useState('');
+ const [hex,setHex]=useState<Hex|null>(null),[joining,setJoining]=useState<string|null>(null),[lanes,setLanes]=useState(true),[settings,setSettings]=useState(false),[fromId,setFromId]=useState(''),[ftl,setFtl]=useState(false);
+ const galaxyPage=galaxyOf(entry,data),drives=galaxyPage?.galaxy?.drives??[];
  const save=(next:Sector)=>update({sector:next});
  const here=hex?sector.systems.find(s=>s.c===hex.c&&s.r===hex.r):undefined;
  const edit=(id:string,patch:Partial<SectorSystem>)=>save({...sector,systems:sector.systems.map(s=>s.id===id?{...s,...patch,edited:true}:s)});
@@ -27,6 +30,11 @@ export function SectorSheet({entry,data,update}:{entry:Entry;data:Workspace;upda
   if(joining){if(target&&target.id!==joining)save(toggleLane(sector,joining,target.id));setJoining(null);if(target)setHex(h);return;}
   setHex(hex&&hex.c===h.c&&hex.r===h.r?null:h);
  };
+ /** Makes the system's own page (inside this sector), with a survey seeded by its name, and opens it. Sol in the Local Bubble gets real data. */
+ const surveyIt=(sys:SectorSystem)=>{const id=newId(),now=new Date().toISOString(),base=sector.real&&sys.ly===0?solSystem():newStarSystem(sys.name,sys.star);
+  const page:Entry={id,worldId:entry.worldId,campaignId:entry.campaignId,parentId:entry.id,title:sys.name,kind:'system',body:sys.note?`${sys.note}\n`:'',starSystem:{...base,backdrop:sector.backdrop,sector:{pageId:entry.id,systemId:sys.id}},updatedAt:now};
+  if(change(w=>({...w,entries:[...w.entries.map(e=>e.id===entry.id&&e.sector?{...e,sector:{...e.sector,systems:e.sector.systems.map(x=>x.id===sys.id?{...x,pageId:id,status:'charted' as const,edited:true}:x)},updatedAt:now}:e),page]}))!==false)onOpen(id);};
+ const pageOf=(sys:SectorSystem)=>sys.pageId?data.entries.find(e=>e.id===sys.pageId&&e.kind==='system'):undefined;
  const others=sector.systems.filter(s=>s.id!==here?.id).sort((a,b)=>a.name.localeCompare(b.name));
  const from=others.find(s=>s.id===fromId)??(here?others.slice().sort((a,b)=>hexDistance(a,here)-hexDistance(b,here)).find(s=>s.status==='charted')??others[0]:undefined);
  const sorted=sector.systems.slice().sort((a,b)=>a.r-b.r||a.c-b.c);
@@ -60,8 +68,12 @@ export function SectorSheet({entry,data,update}:{entry:Entry;data:Workspace;upda
       {(()=>{const ly=distanceBetween(from,here),steps=laneSteps(sector,from.id,here.id),hexes=hexDistance(from,here);return <div className="galaxy-facts">
        <div className="galaxy-fact"><span>Distance</span><b>{ly} ly{ly!==hexes*5?'':` (${hexes} ${hexes===1?'hex':'hexes'})`}</b></div>
        <div className="galaxy-fact"><span>Light speed</span><b>{lightTime(ly)}</b></div>
-       <div className="galaxy-fact"><span>Lanes</span><b>{steps===null?'Not joined':steps===1?'Joined directly':`Joined in ${steps} jumps`}</b></div></div>;})()}
+       <div className="galaxy-fact"><span>Lanes</span><b>{steps===null?'Not joined':steps===1?'Joined directly':`Joined in ${steps} jumps`}</b></div>
+       {travelBetweenStars(ly,drives,steps===null?null:{hexes:laneHexes(sector,from.id,here.id)??hexes}).slice(1).map(r=><div key={r.name} className="galaxy-fact"><span>{r.name}</span><b>{r.time}</b></div>)}</div>;})()}
+      <button type="button" className="text-button" onClick={()=>setFtl(true)}><Rocket size={14}/> {drives.length?'FTL drives':'Add FTL drives'}</button>
      </div>}
+     {(()=>{const page=pageOf(here);return page?<button type="button" className="button primary" onClick={()=>onOpen(page.id)}><Orbit size={15}/> Open survey chart</button>
+      :<button type="button" className="button primary" onClick={()=>surveyIt(here)}><Orbit size={15}/> {sector.real&&here.ly===0?'Open the real Sol system':here.status==='rumour'?'Survey it now':'Survey this system'}</button>;})()}
      <div className="button-row">
       <button type="button" className={`button small${joining===here.id?' primary':''}`} onClick={()=>setJoining(joining===here.id?null:here.id)}><Route size={14}/> {joining===here.id?'Stop joining':'Join by a lane'}</button>
       <button type="button" className="button small" onClick={async()=>{if(await confirmDialog({title:`Remove ${here.name}?`,message:'It and its lanes leave the map.',confirm:'Remove'})){save(withoutSystem(sector,here.id));setJoining(null);}}}><Trash2 size={14}/> Remove</button>
@@ -76,6 +88,7 @@ export function SectorSheet({entry,data,update}:{entry:Entry;data:Workspace;upda
     </>}
    </>}
   </div>
+  {ftl&&<FtlDialog galaxy={galaxyPage} change={change} onClose={()=>setFtl(false)}/>}
   {settings&&<SectorDialog title="Sector settings" name={entry.title} sector={sector} realAllowed={parent?.galaxy?.preset==='milky'} at={sector} onClose={()=>setSettings(false)} onApply={(next,name)=>{update({sector:next,...(name&&name!==entry.title?{title:name}:{})});setSettings(false);setHex(null);}}/>}
  </div>;
 }
