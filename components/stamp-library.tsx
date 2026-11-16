@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { Search, Upload } from "lucide-react";
 import { customStampAsset, defaultSquares, findStamps, stampCategories, type Stamp } from "@/lib/map-stamps";
+import { spaceCategories } from "@/lib/space-stamps";
 import { uid, type Asset } from "@/lib/model";
 import { uploadAsset } from "@/lib/api";
 
@@ -53,7 +54,7 @@ export default function StampLibrary({ chosen, choose, ink, custom = [], addStam
     {stampCategories.map(category => {
       const list = found.filter(s => s.category === category);
       if (!list.length) return null;
-      return <section key={category} aria-label={category}>
+      return <section key={category} aria-label={category} className={spaceCategories.includes(category) ? "is-space" : undefined}>
         <h3>{category}</h3>
         <div className="creator-stamp-grid">{list.map(s => <button key={s.id} type="button" draggable aria-pressed={chosen === s.id} className={chosen === s.id ? "active" : ""}
           title={`${s.name}, ${s.w} × ${s.h} square${s.w * s.h > 1 ? "s" : ""}`}

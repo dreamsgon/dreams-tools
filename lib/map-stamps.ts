@@ -1,4 +1,5 @@
 import type { MapShape, Point } from "./model.ts";
+import { spaceStamps } from "./space-stamps.ts";
 
 /**
  * The stamp library: furniture and features drawn as paths, so the Map Creator (SVG)
@@ -7,7 +8,7 @@ import type { MapShape, Point } from "./model.ts";
  */
 export type StampPart = { d: string; fill?: string; stroke?: "ink" | string; width?: number };
 export type Stamp = { id: string; name: string; category: StampCategory; w: number; h: number; parts: StampPart[]; image?: string };
-export const stampCategories = ["Yours", "Dungeon", "Furniture", "Outdoors"] as const;
+export const stampCategories = ["Yours", "Dungeon", "Furniture", "Outdoors", "Stars", "Worlds", "Space", "Stations and ships"] as const;
 export type StampCategory = typeof stampCategories[number];
 
 const R = (x: number, y: number, w: number, h: number) => `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
@@ -35,6 +36,7 @@ export const stamps: Stamp[] = [
   { id: "tent", name: "Tent", category: "Outdoors", w: 2, h: 2, parts: [ink("M 10 70 L 40 10 L 70 70 Z", "#c9a36a"), line("M 40 10 V 70"), paint("M 34 70 L 40 52 L 46 70 Z", "#4a3a2a")] },
   { id: "campfire", name: "Campfire", category: "Outdoors", w: 1, h: 1, parts: [...[0, 1, 2, 3, 4, 5, 6, 7].map(i => ink(C(20 + Math.cos(i * Math.PI / 4) * 12, 20 + Math.sin(i * Math.PI / 4) * 12, 3), "#8a8a84", 1)), paint("M 20 11 Q 27 19 20 27 Q 13 19 20 11 Z", "#e8742c"), paint("M 20 16 Q 24 21 20 25 Q 16 21 20 16 Z", "#f6c34a")] },
   { id: "well", name: "Well", category: "Outdoors", w: 1, h: 1, parts: [ink(C(20, 20, 13), "#a8a39a"), ink(C(20, 20, 7), "#3f6f8f", 1.5)] },
+  ...spaceStamps,
 ];
 export const stampById = (id: string | null | undefined, custom: Stamp[] = []) => stamps.find(s => s.id === id) ?? custom.find(s => s.id === id) ?? null;
 
