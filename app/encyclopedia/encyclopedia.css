@@ -1217,3 +1217,5 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .picture-actions>.icon-button{align-self:flex-start}
 .picture-side .aside-hint{font-size:12px;line-height:1.45}
 }
+.world-kinds .world-kind-planet{grid-column:1/-1}
+.world-generate-map[aria-busy=true]{opacity:.7;transition:opacity .2s}

@@ -1,28 +1,42 @@
-import { decodePaint, terrains, type MapPaint } from "./map-model.ts";
+import { decodePaint, isWater, terrainIndex as T, terrains, type MapPaint } from "./map-model.ts";
 
 /**
  * Turning painted terrain into smooth shapes: each terrain becomes outlines traced around
  * its painted squares, rounded off, with small symbols for mountains, hills, forests and marsh.
- * Terrain numbers: 0 sea, 1 grassland, 2 forest, 3 hills, 4 mountains, 5 desert, 6 marsh, 7 snow.
+ * Terrain numbers: 0 sea, 1 grassland, 2 forest, 3 hills, 4 mountains, 5 desert, 6 marsh, 7 snow, and the
+ * whole-planet terrains after them (see terrains in map-model). Deep sea and sea ice are water.
  * Snow beside mountains is drawn as snowy peaks; other snow is a flat snowfield.
  */
 export type TerrainLayer = { id: string; color: string; d: string };
 export type TerrainGlyph = { kind: "mountain" | "snowpeak" | "hill" | "tree" | "marsh"; x: number; y: number; size: number };
 
 export const shallowsColor = "#a3c4cb";
+const tint = (id: keyof typeof T) => terrains[T[id]].color;
 export const terrainLayerOrder: { id: string; color: string; test: (t: number) => boolean; grow?: number }[] = [
-  { id: "shallows", color: shallowsColor, test: t => t !== 0, grow: 2 },
-  { id: "land", color: terrains[1].color, test: t => t !== 0 },
+  { id: "deep", color: tint("deep"), test: t => t === T.deep },
+  { id: "shallows", color: shallowsColor, test: t => !isWater(t), grow: 2 },
+  { id: "seaice", color: tint("seaice"), test: t => t === T.seaice },
+  { id: "land", color: terrains[1].color, test: t => !isWater(t) },
+  { id: "tundra", color: tint("tundra"), test: t => t === T.tundra },
+  { id: "steppe", color: tint("steppe"), test: t => t === T.steppe },
+  { id: "savanna", color: tint("savanna"), test: t => t === T.savanna },
   { id: "desert", color: terrains[5].color, test: t => t === 5 },
+  { id: "barren", color: tint("barren"), test: t => t === T.barren },
   { id: "marsh", color: terrains[6].color, test: t => t === 6 },
   { id: "forest", color: terrains[2].color, test: t => t === 2 },
+  { id: "boreal", color: tint("boreal"), test: t => t === T.boreal },
+  { id: "jungle", color: tint("jungle"), test: t => t === T.jungle },
   { id: "hills", color: terrains[3].color, test: t => t === 3 || t === 4 || t === ALPINE },
   { id: "mountains", color: "#a0947f", test: t => t === 4 || t === ALPINE },
+  { id: "volcanic", color: tint("volcanic"), test: t => t === T.volcanic },
   { id: "snow", color: terrains[7].color, test: t => t === 7 || t === ALPINE },
+  { id: "ice", color: tint("glacier"), test: t => t === T.glacier },
 ];
+/** The layer each terrain number is drawn in, for legends. */
+export const terrainLayerOf = (t: number) => [...terrainLayerOrder].reverse().find(l => l.id !== "shallows" && l.id !== "land" && l.test(t))?.id ?? (isWater(t) ? "" : "land");
 
 /** Snow next to mountains is a snowy peak; snow anywhere else is a flat snowfield. */
-const ALPINE = 8;
+const ALPINE = 255; // a working value only, never saved
 export function classifySnow(cells: Uint8Array, w: number, h: number): Uint8Array {
   const out = new Uint8Array(cells);
   const reach = Math.max(2, Math.round(Math.min(w, h) / 60));
@@ -173,7 +187,7 @@ export function terrainGlyphs(paint: MapPaint, width: number, height: number): T
     }
   };
   scatter(4, v => v === 3, () => "hill", 2.4, 1);
-  scatter(3, v => v === 2, () => "tree", 1.3, 1);
+  scatter(3, v => v === 2 || v === T.boreal || v === T.jungle, () => "tree", 1.3, 1);
   scatter(4, v => v === 6, () => "marsh", 1.6, 1);
   scatter(4, v => v === 4 || v === ALPINE, v => (v === ALPINE ? "snowpeak" : "mountain"), 3, 1);
   return out.sort((a, b) => a.y - b.y);
@@ -197,7 +211,7 @@ export function paintStroke(cells: Uint8Array, columns: number, rows: number, fr
       for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(columns - 1, Math.ceil(cx + radius)); x++) {
         if ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > radius * radius) continue;
         const i = y * columns + x;
-        if (cells[i] === terrain || (landOnly && terrain !== 0 && cells[i] === 0)) continue;
+        if (cells[i] === terrain || (landOnly && !isWater(terrain) && isWater(cells[i]))) continue;
         cells[i] = terrain; changed = true;
       }
   }
