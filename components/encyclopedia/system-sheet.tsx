@@ -6,11 +6,13 @@
  * marked), lock, reroll and remove, and the GM's notes. Survey settings runs the survey again; locked worlds stay.
  */
 import {Fragment,useMemo,useState} from 'react';
-import {Dices,Lock,LockOpen,Pause,Play,Plus,RefreshCw,Rocket,Settings2,Trash2} from 'lucide-react';
-import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
+import {Dices,Flag,Lock,LockOpen,Pause,Play,Plus,RefreshCw,Rocket,Settings2,Trash2} from 'lucide-react';
+import {newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
+import {mirrorPlanets,planetOf} from '@/lib/encyclopedia/planets';
 import {starInfo} from '@/lib/encyclopedia/sectors';
-import {addWorldOutside,airs,editWorld,findWorld,formatAU,hazards,hookKinds,isGiant,lifeLevels,newStarSystem,parentOf,pointsOfInterest,removeWorld,rerollHook,rerollWorld,resourceLevels,settlements,sizes,starPhysics,starSizeFrom,temperatureWord,travelInSystem,waters,word,worldKindNames,worldKinds,worldLine,worldSummary,worldTypes,yearLength,zoneNotes,zoneOf,zones,type InSystemDrive,type Moon,type StarSystem,type SystemBody,type World,type WorldKind,type ZoneName} from '@/lib/encyclopedia/star-systems';
+import {addWorldOutside,editWorld,findWorld,formatAU,hookKinds,isGiant,newStarSystem,parentOf,removeWorld,rerollHook,rerollWorld,starPhysics,starSizeFrom,travelInSystem,word,worldKindNames,worldLine,worldSummary,yearLength,zoneNotes,zoneOf,zones,type InSystemDrive,type Moon,type StarSystem,type SystemBody,type World,type ZoneName} from '@/lib/encyclopedia/star-systems';
 import {Horizon,SystemOrbit,WorldDot,worldPx} from './system-art';
+import {WorldFields} from './world-fields';
 import {SystemDialog} from './system-dialog';
 import {FtlDialog,galaxyOf} from './ftl-dialog';
 import {confirmDialog} from '../confirm-dialog';
@@ -21,7 +23,7 @@ const hookNames={lure:'Lure',danger:'Danger',secret:'Secret'};
 const zoneClass=(z:ZoneName)=>`is-${z.toLowerCase()}`;
 export const starLine=(s:StarSystem)=>`Class ${s.star}, ${starInfo[s.star].colour.toLowerCase()} · ${starPhysics[s.star].heat.toLowerCase()} · lives ${starPhysics[s.star].life.toLowerCase()}${s.companions.length?` · with ${s.companions.map(c=>`a Class ${c.star} companion${c.separation==='close'?' close in':' far out'}`).join(' and ')}`:''}`;
 
-export function SystemSheet({entry,data,update,change,onOpen}:Props){
+export function SystemSheet({entry,data,change,onOpen}:Props){
  const system=entry.starSystem??newStarSystem(entry.title),z=zones(system);
  const galaxyPage=galaxyOf(entry,data),drives=galaxyPage?.galaxy?.drives??[];
  const orgs=useMemo(()=>data.entries.filter(e=>e.kind==='faction'&&e.worldId===entry.worldId&&(e.campaignId===null||e.campaignId===entry.campaignId)).sort((a,b)=>a.title.localeCompare(b.title)),[data.entries,entry.worldId,entry.campaignId]);
@@ -29,7 +31,13 @@ export function SystemSheet({entry,data,update,change,onOpen}:Props){
  const firstPick=(system.bodies.find(b=>zoneOf(b.au,z)==='Green')??system.bodies[0])?.id??null;
  const [picked,setPicked]=useState<string|null>(firstPick),[playing,setPlaying]=useState(true),[showZones,setShowZones]=useState(true),[drive,setDrive]=useState<InSystemDrive>('light');
  const [settings,setSettings]=useState(false),[ftl,setFtl]=useState(false),[from,setFrom]=useState(''),[to,setTo]=useState('');
- const save=(next:StarSystem)=>update({starSystem:next});
+ /** Saves the chart, refreshing the pages of charted worlds with it. */
+ const save=(next:StarSystem)=>change(w=>({...w,entries:mirrorPlanets(w.entries.map(e=>e.id===entry.id?{...e,starSystem:next,updatedAt:new Date().toISOString()}:e),entry.id)}));
+ /** Gives a world its own place page inside this system page, with a copy of its fields, and opens it. */
+ const chart=(w:World)=>{const id=newId(),now=new Date().toISOString(),next=editWorld(system,w.id,{pageId:id});
+  const page:Entry={id,worldId:entry.worldId,campaignId:entry.campaignId,parentId:entry.id,title:w.name,kind:'place',body:w.note.trim()||worldSummary(system,w,entry.title),planet:planetOf(entry.id,next,findWorld(next,w.id)!),updatedAt:now};
+  if(change(d=>({...d,entries:[...d.entries.map(e=>e.id===entry.id?{...e,starSystem:next,updatedAt:now}:e),page]}))!==false)onOpen(id);};
+ const pageOf=(w:World)=>w.pageId?data.entries.find(e=>e.id===w.pageId&&e.planet?.bodyId===w.id):undefined;
  const sel=picked?findWorld(system,picked):undefined,openPlanet=sel?(parentOf(system,sel.id)?.id??sel.id):null;
  type Item={au:number;b?:SystemBody;belt?:StarSystem['belts'][number]};
  const items:Item[]=[...system.bodies.map(b=>({au:b.au,b})),...system.belts.map(belt=>({au:belt.au,belt}))].sort((a,b)=>a.au-b.au);
@@ -40,7 +48,7 @@ export function SystemSheet({entry,data,update,change,onOpen}:Props){
  /** Survey settings applied: the page's name, and its hex on the sector map, follow. */
  const apply=(next:StarSystem,name:string)=>{
   const link=next.sector;
-  change(w=>({...w,entries:w.entries.map(e=>e.id===entry.id?{...e,starSystem:next,title:name||e.title,updatedAt:new Date().toISOString()}:link&&e.id===link.pageId&&e.sector?{...e,sector:{...e.sector,systems:e.sector.systems.map(x=>x.id===link.systemId?{...x,star:next.star,name:(name||x.name).slice(0,80),status:'charted' as const,edited:true}:x)},updatedAt:new Date().toISOString()}:e)}));
+  change(w=>({...w,entries:mirrorPlanets(w.entries.map(e=>e.id===entry.id?{...e,starSystem:next,title:name||e.title,updatedAt:new Date().toISOString()}:link&&e.id===link.pageId&&e.sector?{...e,sector:{...e.sector,systems:e.sector.systems.map(x=>x.id===link.systemId?{...x,star:next.star,name:(name||x.name).slice(0,80),status:'charted' as const,edited:true}:x)},updatedAt:new Date().toISOString()}:e),entry.id)}));
   setSettings(false);setPicked((next.bodies.find(x=>zoneOf(x.au,zones(next))==='Green')??next.bodies[0])?.id??null);
  };
  return <div className="system-sheet">
@@ -68,7 +76,7 @@ export function SystemSheet({entry,data,update,change,onOpen}:Props){
       {gap!==null&&fromAu!==null&&<div className="system-gap"><span>+{formatAU(gap)} AU · {travelInSystem(fromAu,it.au,drive,system.star,drives).time}</span></div>}
       {it.belt?<div className="system-belt"><b>{it.belt.name}</b><span>{formatAU(it.belt.au)} AU</span></div>
        :<WorldCard world={it.b!} system={system} open={openPlanet===it.b!.id} picked={picked} holder={nameOf(it.b!.holderId)} onPick={id=>setPicked(picked===id?null:id)}>
-        {openPlanet===it.b!.id&&sel&&<WorldSheet key={sel.id} world={sel} system={system} entry={entry} orgs={orgs} holderNames={holderNames} save={save} onOpen={onOpen} onGone={()=>setPicked(null)}/>}
+        {openPlanet===it.b!.id&&sel&&<WorldSheet key={sel.id} world={sel} system={system} entry={entry} orgs={orgs} holderNames={holderNames} save={save} onOpen={onOpen} onGone={()=>setPicked(null)} page={pageOf(sel)} onChart={()=>chart(sel)}/>}
        </WorldCard>}
      </Fragment>;})}
     {!system.bodies.length&&<p className="aside-hint">No worlds yet. Run the survey, or add one.</p>}
@@ -114,11 +122,9 @@ function WorldCard({world:w,system,open,picked,holder,onPick,children}:{world:Sy
  </div>;
 }
 
-function WorldSheet({world:w,system,entry,orgs,holderNames,save,onOpen,onGone}:{world:World;system:StarSystem;entry:Entry;orgs:Entry[];holderNames:string[];save:(s:StarSystem)=>void;onOpen:(id:string)=>void;onGone:()=>void}){
- const z=zones(system),parent=parentOf(system,w.id),giant=isGiant(w.kind),edited=new Set(w.edited??[]);
+function WorldSheet({world:w,system,entry,orgs,holderNames,save,onOpen,onGone,page,onChart}:{world:World;system:StarSystem;entry:Entry;orgs:Entry[];holderNames:string[];save:(s:StarSystem)=>void;onOpen:(id:string)=>void;onGone:()=>void;page?:Entry;onChart:()=>void}){
+ const giant=isGiant(w.kind);
  const set=(patch:Partial<Moon>)=>save(editWorld(system,w.id,patch));
- const field=(k:string,label:string,control:React.ReactNode,extra?:React.ReactNode)=><label className={`system-field${edited.has(k)?' is-edited':''}`}><span>{label}{edited.has(k)&&<i title="Changed by you">edited</i>}</span>{control}{extra}</label>;
- const choose=<T extends string>(k:keyof Moon,values:readonly T[],value:T,names:(v:T)=>string=word)=><select value={value} onChange={e=>set({[k]:e.target.value} as Partial<Moon>)}>{values.map(v=><option key={v} value={v}>{names(v)}</option>)}</select>;
  const k=starSizeFrom(w.au,system.star);
  return <div className="system-world-sheet">
   <div className="system-horizon"><Horizon className="system-horizon-canvas" system={system} world={w} label={`The sky from ${w.name}`}/>
@@ -127,31 +133,13 @@ function WorldSheet({world:w,system,entry,orgs,holderNames,save,onOpen,onGone}:{
    <input key={`n${w.id}${w.name}`} className="system-world-title" aria-label="World name" defaultValue={w.name} maxLength={80} onBlur={e=>{const v=e.target.value.trim();if(v&&v!==w.name)set({name:v});else e.target.value=w.name;}} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();}}/>
    <button type="button" className="icon-button" aria-pressed={!!w.locked} title={w.locked?'Kept when the survey runs again':'Keep this world when the survey runs again'} aria-label={w.locked?'Unlock this world':'Lock this world'} onClick={()=>set({locked:!w.locked})}>{w.locked?<Lock size={15}/>:<LockOpen size={15}/>}</button>
    <button type="button" className="icon-button" title="Roll only this world again" aria-label="Reroll this world" disabled={w.real} onClick={()=>save(rerollWorld(system,w.id))}><Dices size={15}/></button>
-   <button type="button" className="icon-button" title="Remove" aria-label="Remove this world" onClick={async()=>{if(await confirmDialog({title:`Remove ${w.name}?`,message:'moons' in w&&w.moons.length?'Its moons go with it.':'It leaves the survey chart.',confirm:'Remove'})){save(removeWorld(system,w.id));onGone();}}}><Trash2 size={15}/></button>
+   <button type="button" className="icon-button" title="Remove" aria-label="Remove this world" onClick={async()=>{if(await confirmDialog({title:`Remove ${w.name}?`,message:`${'moons' in w&&w.moons.length?'Its moons go with it.':'It leaves the survey chart.'}${page?' Its page stays, with the survey as it was.':''}`,confirm:'Remove'})){save(removeWorld(system,w.id));onGone();}}}><Trash2 size={15}/></button>
   </div>
-  <div className="system-fields">
-   {parent&&<div className="system-field"><span>Orbits</span><b>{parent.name}</b></div>}
-   <div className="system-field"><span>Zone</span><b>{zoneOf(w.au,z)} <small>{formatAU(w.au)} AU</small></b></div>
-   <div className="system-field"><span>Year</span><b>{yearLength(w.au,system.star)}</b></div>
-   {field('day','Day',<input key={`d${w.day}`} defaultValue={w.day} maxLength={60} onBlur={e=>{const v=e.target.value.trim();if(v&&v!==w.day)set({day:v});}}/>)}
-   {field('kind','Kind',choose<WorldKind>('kind',worldKinds,w.kind,v=>worldKindNames[v]))}
-   {field('type','Type',choose('type',[...new Set([w.type,...worldTypes[w.kind]])],w.type,v=>v))}
-   {field('size','Size',choose('size',sizes,w.size))}
-   {field('gravity','Gravity',<input key={`g${w.gravity}`} type="number" min={0} max={50} step={0.01} defaultValue={w.gravity} onBlur={e=>{const v=Math.min(50,Math.max(0,+e.target.value));if(Number.isFinite(v)&&v!==w.gravity)set({gravity:v});}}/>,<small>g</small>)}
-   {field('temp','Temperature',<input key={`t${w.temp}`} type="number" min={-273} max={10000} step={1} defaultValue={w.temp} onBlur={e=>{const v=Math.round(Math.min(10000,Math.max(-273,+e.target.value)));if(Number.isFinite(v)&&v!==w.temp)set({temp:v});}}/>,<small>°C, {temperatureWord(w.temp).toLowerCase()}</small>)}
-   {field('air','Air',choose('air',airs,w.air))}
-   {field('water','Water',choose('water',waters,w.water))}
-   {field('resources','Resources',choose('resources',resourceLevels,w.resources))}
-   {field('hazard','Hazard',choose('hazard',[...new Set([w.hazard,...hazards])],w.hazard,v=>v))}
-   {field('life','Life',choose('life',lifeLevels,w.life))}
-   {field('settled','Settled',choose('settled',settlements,w.settled))}
-   {field('holderId','Held by',<select value={w.holderId??''} onChange={e=>set({holderId:e.target.value||undefined})}><option value="">Nobody</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.title}</option>)}</select>)}
-  </div>
-  <div className="system-poi" role="group" aria-label="Points of interest"><span>Points of interest</span>{[...new Set([...pointsOfInterest,...w.poi])].map(p=><button key={p} type="button" aria-pressed={w.poi.includes(p)} onClick={()=>set({poi:w.poi.includes(p)?w.poi.filter(x=>x!==p):[...w.poi,p].slice(0,6)})}>{p}</button>)}</div>
+  <WorldFields world={w} system={system} orgs={orgs} set={set}/>
   <label className="world-field">Notes<textarea key={`j${w.id}${w.note}`} className="sector-note" defaultValue={w.note} maxLength={4000} rows={4} placeholder="What the party knows, what the GM knows, what is down there." onBlur={e=>{const v=e.target.value;if(v!==w.note)set({note:v});}}/></label>
   {!w.note&&<button type="button" className="button small" onClick={()=>set({note:worldSummary(system,w,entry.title)})}>Start from the survey</button>}
   {w.real&&<p className="aside-hint">Real data, rounded. Fields you change are marked as edited.</p>}
-  {w.pageId&&<button type="button" className="button small" onClick={()=>onOpen(w.pageId!)}>Open its page</button>}
-  <p className="aside-hint">{holderNames.length?`${holderNames.join(' and ')} ${holderNames.length===1?'has':'have'} a foothold in this system. `:''}Charting worlds as their own pages comes next.</p>
+  <div className="button-row">{page?<button type="button" className="button primary" onClick={()=>onOpen(page.id)}><Flag size={15}/> Open its page</button>:<button type="button" className="button primary" onClick={onChart}><Flag size={15}/> Chart this world</button>}</div>
+  <p className="aside-hint">{holderNames.length?`${holderNames.join(' and ')} ${holderNames.length===1?'has':'have'} a foothold in this system. `:''}{page?'This world has its own place page. Changes here show there too.':'Chart this world to give it its own place page, for its story, people and maps. Until then it lives on this chart.'}</p>
  </div>;
 }
