@@ -92,9 +92,13 @@ function BeliefsBody({b,ctx}:{b:BlockOf<'beliefs'>;ctx:Ctx}){
 function HoldingsBody({b,ctx}:{b:BlockOf<'holdings'>;ctx:Ctx}){
  const set=(f:(m:BlockOf<'holdings'>['holdings'])=>BlockOf<'holdings'>['holdings'])=>ctx.patch(b.id,'holdings',x=>({...x,holdings:f(x.holdings)}));
  const key=b.id,kind=(id:string)=>ctx.data.entries.find(e=>e.id===id)?.kind;
+ // Vehicles that name this organization as owner show with the first Holdings block, without being stored in it.
+ const first=!ctx.entry.org||ctx.entry.org.blocks.find(x=>x.kind==='holdings')?.id===b.id;
+ const owned=first?ctx.data.entries.filter(e=>e.kind==='vehicle'&&e.worldId===ctx.entry.worldId&&e.vehicle?.ownerId===ctx.entry.id&&!b.holdings.some(h=>h.entryId===e.id)).sort((x,y)=>x.title.localeCompare(y.title)):[];
  return <PageDrop {...ctx.drop({kind:'holdings',orgId:ctx.entry.id,blockId:b.id},'Drop to add a holding')}>
   {b.holdings.map(h=><div className={`org-holding org-item${h.gm?' is-gm':''}`} key={h.id}><PageLink id={h.entryId} open={ctx.open}>{ctx.title(h.entryId)||'Missing page'}</PageLink><small>{kind(h.entryId)==='faction'?'organization':kind(h.entryId)}</small>{h.gm&&<GmChip/>}<ItemTools gm={h.gm} what={ctx.title(h.entryId)||'this holding'} onGm={()=>set(l=>l.map(x=>x.id===h.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>set(l=>l.filter(x=>x.id!==h.id))}/></div>)}
-  {!b.holdings.length&&<p className="org-empty">No pages yet. Pick the places, ships and notes they own.</p>}
+  {owned.map(v=><div className={`org-holding org-item${v.vehicle?.ownerGm?' is-gm':''}`} key={`vehicle-${v.id}`} title="Listed because the vehicle names them as its owner. Change the owner on the vehicle page."><PageLink id={v.id} open={ctx.open}>{v.title}</PageLink><small>vehicle · owner</small>{v.vehicle?.ownerGm&&<GmChip/>}</div>)}
+  {!b.holdings.length&&!owned.length&&<p className="org-empty">No pages yet. Pick the places, ships and notes they own.</p>}
   <div className="org-add-wrap"><button type="button" className="text-button org-add" disabled={b.holdings.length>=40} onClick={()=>ctx.setPicker(ctx.picker===key?null:key)}><Plus size={13}/> Add</button>
    {ctx.picker===key&&<PagePicker characters={false} label="Add a page they own" data={ctx.data} org={ctx.entry} exclude={b.holdings.map(h=>h.entryId)} onClose={()=>ctx.setPicker(null)} onChoose={entryId=>{set(l=>[...l,{id:newId(),entryId}]);ctx.setPicker(null);}}/>}</div>
  </PageDrop>;

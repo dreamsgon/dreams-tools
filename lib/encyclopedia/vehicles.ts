@@ -298,6 +298,16 @@ export function vehicleRolesOf(v: Vehicle, t: VehicleType, pageId: string): stri
   return roles;
 }
 
+/** The same roles from the player copy, so they name only what players can see of the vehicle. */
+export function playerVehicleRoles(v: PlayerVehicle, pageId: string): string[] {
+  const roles: string[] = [];
+  if (v.ownerId === pageId) roles.push("Owner");
+  if (v.commanderId === pageId) roles.push(v.type.commander);
+  for (const s of v.stations) if (s.characterId === pageId) roles.push(s.label);
+  for (const c of v.crewTab?.crew ?? []) if (c.characterId === pageId) roles.push(c.role ? `${v.crewTab!.title} · ${c.role}` : v.crewTab!.title);
+  return roles;
+}
+
 /**
  * Changes a vehicle's type. Values move across by field id, then by label (so Hull stays Hull from a starship to a
  * sailing ship); values the new type has no place for are dropped.
