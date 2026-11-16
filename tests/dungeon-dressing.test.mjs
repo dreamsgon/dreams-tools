@@ -68,3 +68,17 @@ test("a room mix of nothing but one purpose fills the rooms with it", () => {
   assert.ok(middle.every(n => n === "Tomb" || n === "Empty room"), middle.join());
   assert.ok(!buildDungeonMap(options("branching", { populate: false, columns: false, lights: false })).drawing.shapes.some(s => s.type === "stamp" && s.stamp !== "stairs"));
 });
+
+test("every room has the thing its name promises, even small cave chambers", () => {
+  const family = { branching: "dungeon", halls: "dungeon", caves: "cave", building: "building", village: "village" };
+  for (const { id } of dungeonLayouts) for (const t of themesFor(family[id])) for (const seed of ["seed-1", "seed-7", "seed-12", "seed-19"]) {
+    const m = buildDungeonMap(options(id, { theme: t.id, size: "s", seed }));
+    const purposes = [t.entrance, t.boss, ...Object.values(t.rooms)].filter(Boolean);
+    for (const k of m.key) {
+      const p = purposes.find(p => p.name === k.name), sig = p && (p.centre ?? p.stamps[0] ?? p.wall[0]);
+      if (!sig) continue;
+      const name = stampById(sig).name.toLowerCase();
+      assert.ok(k.things.some(x => x.endsWith(name)), `${id} ${t.id} ${seed}: room ${k.number} (${k.name}) has no ${name}: ${k.things.join(", ")}`);
+    }
+  }
+});
