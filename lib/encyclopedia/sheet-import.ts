@@ -160,11 +160,11 @@ export function fieldValue(type: StatField["type"], value: ImportField["value"],
 
 // ---- The prompt --------------------------------------------------------------------------------
 
-const typeWords: Record<StatField["type"], string> = { number: "number", text: "text", textarea: "longtext", checkbox: "checkbox", select: "choice" };
+const typeWords: Record<StatField["type"], string> = { number: "number", text: "text", textarea: "longtext", checkbox: "checkbox", select: "choice", none: "no value" };
 function formLines(form: StatField[]) {
   const live = form.filter(f => !f.archived), sections = new Map<string, string[]>();
   for (const f of live) {
-    const roll = f.roll === "d20" ? ", rolls d20" : f.roll === "formula" ? ", rolls self" : f.roll === "custom" && f.rollFormula ? `, rolls ${f.rollFormula}` : "";
+    const roll = f.rolls ? (f.rolls.length ? `, rolls ${f.rolls.map(r => `${r.name} ${r.formula}`).join(" / ")}` : "") : f.roll === "d20" ? ", rolls d20" : f.roll === "formula" ? ", rolls self" : f.roll === "custom" && f.rollFormula ? `, rolls ${f.rollFormula}` : "";
     const opts = f.type === "select" && f.options.length ? `: ${f.options.join(" / ")}` : "";
     const s = f.section || "Other";
     sections.set(s, [...(sections.get(s) ?? []), `${f.label} (${typeWords[f.type]}${opts}${roll})`]);

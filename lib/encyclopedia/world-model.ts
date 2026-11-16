@@ -29,10 +29,14 @@ export const githubSchema = z.object({
 export const visibilitySchema = z.enum(["gm", "players"]);
 export const tabSchema = z.object({id, title:name, body:z.string().max(100000), visibility:visibilitySchema});
 export const statFieldSchema = z.object({
-  id, label:name, section:z.string().trim().max(100), type:z.enum(["text","number","textarea","checkbox","select"]),
+  id, label:name, section:z.string().trim().max(100), type:z.enum(["text","number","textarea","checkbox","select","none"]),
   options:z.array(z.string().trim().min(1).max(100)).max(40), visibility:visibilitySchema, archived:z.boolean(),
   // Optional (added later): what clicking the value rolls. d20 = 1d20 + the number; formula = the text itself; custom = rollFormula with {value}.
   roll:z.enum(["none","d20","formula","custom"]).optional(), rollFormula:z.string().trim().max(200).optional(),
+  // Optional (added later, the rollable sheet): named rolls, like a spell's Attack and Damage. Formulas may use {value}.
+  // When present they replace roll / rollFormula (see stat-rolls.ts). note is a short line under the stat's name.
+  rolls:z.array(z.object({name:z.string().trim().min(1).max(40),formula:z.string().trim().min(1).max(200)})).max(6).optional(),
+  note:z.string().trim().max(120).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
 export const characterSchema = z.object({
@@ -319,7 +323,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  const c=s.campaigns.find(c=>c.id===campaignId);if(!c)throw new Error("Campaign not found");
  // A draft recap never reaches players, whatever its tabs say.
  const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
- const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
+ const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players"&&f.type!=="none");
  const entries=candidates.flatMap(e=>{
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"||e.kind==="store"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
