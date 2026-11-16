@@ -22,6 +22,7 @@ import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync
 import { navigationStorageKey, parseNavigationState, phoneWidth, readRemembered, remember, type NavigationPanel } from "@/lib/navigation-state";
 import SavedMeasurements from "./saved-measurements";
 import FogRegions from "./fog-regions";
+import SceneLights from "./scene-lights";
 import {sceneTargets} from "@/lib/exploration";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
@@ -314,7 +315,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const [gridAdjust, setGridAdjust] = useState(false);
   const [location, setLocation] = useState<string | null>(null);
   const [folderRequest, setFolderRequest] = useState(0);
-  const [sceneTab, setSceneTab] = useState<"general" | "map" | "size">("general");
+  const [sceneTab, setSceneTab] = useState<"general" | "map" | "size" | "lights">("general");
   const [dashboard, setDashboard] = useState(true);
   /** Dashboard: the campaign whose scenes are shown (null = maps not in a campaign). */
   const [overview, setOverview] = useState<{ id: string | null } | null>(null);
@@ -386,7 +387,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       .then(value=>{if(active)setSettings(value);}).catch(()=>{});
     return ()=>{active=false;};
   },[campaignId,dialog]);
-  const settingsTab = sceneTab === "size" && scene?.mapId ? "general" : sceneTab;
+  const settingsTab = (sceneTab === "size" && scene?.mapId) || (sceneTab === "lights" && !scene?.drawing) ? "general" : sceneTab;
   const destination = workspace?.collections.some((c) => c.id === location) && campaignFor(location) === campaignId ? location : campaignId;
   const token = scene?.tokens.find((t) => t.id === selected),
     effect = scene?.effects.find((e) => e.id === selected);
@@ -1411,7 +1412,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                 <>
                   <button className="scene-settings-back" onClick={()=>setPanel("scenes")}><ChevronLeft size={15} aria-hidden="true" />All scenes</button>
                   <div className="scene-settings-tabs" role="tablist" aria-label="Scene settings">
-                    {([["general","General"],["map","Map image"],...(!scene.mapId?[["size","Size"] as const]:[])] as const).map(([id,label])=><button key={id} role="tab" aria-selected={settingsTab===id} onClick={()=>setSceneTab(id)}>{label}</button>)}
+                    {([["general","General"],["map","Map image"],...(!scene.mapId?[["size","Size"] as const]:[]),...(scene.drawing?[["lights","Lights"] as const]:[])] as const).map(([id,label])=><button key={id} role="tab" aria-selected={settingsTab===id} onClick={()=>setSceneTab(id)}>{label}</button>)}
                   </div>
                   {settingsTab==="general" && <>
                   <Field label="Name">
@@ -1467,6 +1468,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     </button>
                   </div>
                   </>}
+                  {settingsTab==="lights" && <SceneLights scene={scene} update={updateScene}/>}
                   {settingsTab==="map" && <>
                     <p className="muted">{scene.mapId ? "This scene uses an uploaded map. Replacing it keeps tokens, fog and pins." : scene.drawing ? "This scene uses a drawn map." : "This scene is a blank grid. Upload a map image to put under it."}</p>
                   <button onClick={async()=>{
