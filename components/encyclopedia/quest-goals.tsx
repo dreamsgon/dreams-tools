@@ -69,7 +69,7 @@ function VerbPicker({current,onPick,onWrite,onClose}:{current?:string;onPick:(ve
  </Popover>;
 }
 
-export const kindName=(e:Entry)=>e.kind==='character'?(e.character?.role==='creature'?'Creature':'Character'):e.kind==='faction'?'Organization':e.kind==='map'?'Map':e.kind==='place'?'Place':e.kind==='quest'?'Quest':e.kind==='session'?'Session':e.kind==='vehicle'?'Vehicle':'Page';
+export const kindName=(e:Entry)=>e.kind==='character'?(e.character?.role==='creature'?'Creature':'Character'):e.kind==='faction'?'Organization':e.kind==='map'?'Map':e.kind==='place'?'Place':e.kind==='quest'?'Quest':e.kind==='session'?'Session':e.kind==='vehicle'?'Vehicle':e.kind==='store'?'Store':'Page';
 
 export function TargetPicker({label,pages,current,onPage,onName,nameWords,onClear,onClose}:{label:string;pages:Entry[];current?:string;onPage:(id:string)=>void;onName?:(name:string)=>void;
  /** How the choice to use typed words reads, when it doesn't just put a name in a goal. */

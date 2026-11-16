@@ -1,6 +1,6 @@
 # RPG Tools to-do list
 
-Updated 2026-11-15. Keep work scoped to Maptable and RPG Encyclopedia. Work on one feature at a time; deployment and live-service work happen only when requested.
+Updated 2026-11-16. Keep work scoped to Maptable and RPG Encyclopedia. Work on one feature at a time; deployment and live-service work happen only when requested.
 
 ## Completed source preparation
 
@@ -33,6 +33,11 @@ Updated 2026-11-15. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [x] Test encyclopedia account isolation, concurrent saves, player filtering and fog-image access.
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
+
+## Inventory, spells and stores
+
+- [x] Part 1 (2026-11-16): system-agnostic inventory, spells and stores. Campaign `items` settings (coins with rates, carry unit, categories, columns, spell naming, groups and details, ready word, player permissions, item list; `lib/encyclopedia/items.ts`). Character `inventory` (coins in the smallest coin, items with qty, weight, price, note, GM note, uses, rolls, worn, eye; capacity; own tab visibility) and `spells` with `spellsVisibility` (group, details, tags, text, rolls, tracker cost, ready, eye). New page kind `store` with `entry.store` (`lib/encyclopedia/stores.ts`): shop, container, loot, stash; stock with unlimited lines and services; shop status, hours, sell/buy %, category and character %, buy categories, bottomless purse, hide sold out, haggling, GM approval; locks with key or roll; take, put, take all, split; picked characters; owner (stall); log; waiting sales; haggles. Shared actions in `lib/encyclopedia/store-actions.ts` run in the GM's browser and in `POST /api/encyclopedia/player-tracker?items` (the existing trackers route, so no new Vercel Function; same origin, member only, 16 KB, 30 per 10 s, prices and rolls on the server). Player payloads are allowlists (`playerInventory`, `playerSpells`, `playerStore`). Sheet import and export carry Inventory, Spells and `money`. UI: `inventory.tsx`, `spells.tsx`, `character-items.tsx`, `store-page.tsx`, `player-items.tsx`, `item-settings.tsx`. Tests in `tests/items.test.mjs`. All new fields optional; old saves load unchanged. Not checked against a real signed-in account (screenshots used a local page with the demo workspace).
+- [ ] Next: put a store on a Maptable scene as a token that opens it; opening hours from the campaign calendar; restock a shop from a random table; the vehicle Hold as a container; live two-sided trading between players; a player removing a store they set up; carry limits that slow a character.
 
 ## Ships and vehicles
 

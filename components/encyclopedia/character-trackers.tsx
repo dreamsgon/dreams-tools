@@ -14,7 +14,7 @@ import './character-trackers.css';
 type Shown=PlayerTracker&{gm?:boolean};
 
 /** One tracker's bar or pips, with its tools beside the number. */
-function TrackerView({t,children}:{t:Shown;children?:React.ReactNode}){
+export function TrackerView({t,children}:{t:Shown;children?:React.ReactNode}){
  const low=t.value/t.max<=1/3;
  return <div className={`tracker${t.gm?' is-hidden':''}`}>
   <div className="tracker-top"><span className="tracker-name">{t.label}</span><span className="tracker-num"><strong>{t.value}</strong><small> / {t.max}</small></span>{children}</div>

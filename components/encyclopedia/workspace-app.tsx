@@ -14,7 +14,7 @@ import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
-import { Network, Ship, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
+import { Network, Ship, Store, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, githubSchema, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
 import {newMap} from "@/lib/encyclopedia/map-model";
@@ -43,6 +43,8 @@ import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
 import {defaultOrg} from "@/lib/encyclopedia/org-profile";
 import {defaultProfile} from "@/lib/encyclopedia/character-profile";
 import {newVehicle,vehicleTypesOf} from "@/lib/encyclopedia/vehicles";
+import {newStore} from "@/lib/encyclopedia/stores";
+import {ItemSettingsDialog} from "./item-settings";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
 import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,uploaded,workspaceUrl} from "./member-view";
 import Link from "next/link";
@@ -77,8 +79,8 @@ const StatFormBuilder = dynamic(lazyParts.StatFormBuilder);
 const PlayerSharing = dynamic(lazyParts.PlayerSharing);
 const preloadParts = Object.values(lazyParts);
 const PLACE_KEY = "encyclopedia:place";
-const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship };
-const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest", vehicle: "Vehicle" };
+const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store };
+const labels = { map:"Map", folder: "Folder", note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", tasks: "Checklist", quest: "Quest", vehicle: "Vehicle", store: "Store" };
 type Modal = {
     type: "world" | "campaign" | "entry" | "settings" | "library" | "rename" | "connections";
     id?: string;
@@ -99,7 +101,7 @@ export default function WorkspaceApp() {
     const pagesBtn = useRef<HTMLButtonElement>(null), moreBtn = useRef<HTMLButtonElement>(null), drawerWas = useRef(false);
     // Phone page sheet: focus moves into it when it opens and back to the Pages button when it closes.
     useEffect(() => { if (!sidebar.narrow) return; if (mobile) document.querySelector<HTMLElement>("#workspace-sidebar .sidebar-mobile-close")?.focus(); else if (drawerWas.current) pagesBtn.current?.focus(); drawerWas.current = mobile; }, [mobile, sidebar.narrow]);
-    const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"templates"|"quests"|"codex"|"relationships"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|null>(null),[tablesHome,setTablesHome]=useState(0),[tabAt,setTabAt]=useState<{entry:string;tab:string}|null>(null);
+    const [view,setView]=useState<"dashboard"|"overview"|"characters"|"maps"|"calendar"|"tables"|"templates"|"quests"|"codex"|"relationships"|"look">("dashboard"),[tool,setTool]=useState<"form"|"share"|"items"|null>(null),[tablesHome,setTablesHome]=useState(0),[tabAt,setTabAt]=useState<{entry:string;tab:string}|null>(null);
     const lastPlace = useRef<Place | null>(null);
     // A remembered tab belongs to the page it was chosen on; opening another page forgets it.
     if (tabAt && tabAt.entry !== selected) setTabAt(null);
@@ -373,6 +375,7 @@ export default function WorkspaceApp() {
         { id: "log", label: "Roll log", icon: <ScrollText size={18}/>, onSelect: later(() => openDiceTray("log")) },
         ...(campaign ? [
           { id: "form", label: "Stat form", icon: <ListChecks size={18}/>, onSelect: () => setTool("form") },
+          { id: "items", label: "Items and spells", icon: <Backpack size={18}/>, onSelect: () => setTool("items") },
           { id: "share", label: "Player view", icon: <Users size={18}/>, onSelect: () => setTool("share") },
           { id: "look", label: "Look", icon: <Palette size={18}/>, current: view === "look", onSelect: () => showSection("look") }] : [])] },
       { heading: "Settings", items: [
@@ -419,6 +422,7 @@ export default function WorkspaceApp() {
   {moreOpen && <MoreSheet groups={moreGroups} onClose={restore=>{setMoreOpen(false);if(restore)setTimeout(()=>moreBtn.current?.focus(),0);}}/>}
   {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
   {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)})}/>}
+  {tool==='items'&&campaign&&<ItemSettingsDialog key={campaign.id} campaign={campaign} onClose={()=>setTool(null)} onSave={items=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,items}:c)})}/>}
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
   <RollResults discord={campaign && (campaign.discord || campaign.maptableCampaignId) ? { campaignId: campaign.id, label: "Discord" } : null} onSetupDiscord={campaign ? () => setModal({ type: "connections" }) : undefined}/>
   {palette && <QuickSearch entries={shown} icons={icons} labels={labels} canCreate={!!world} scopeName={e => e.campaignId ? data.campaigns.find(c => c.id === e.campaignId)?.name ?? "Campaign" : "World lore"} onOpen={openEntry} onCreate={name => setModal({ type: "entry", name })} onView={showView} onClose={() => setPalette(false)} initialTags={paletteTags} onManageTags={() => setTagsOpen(true)}/>}
@@ -449,7 +453,7 @@ export default function WorkspaceApp() {
                             navigation.open(shared?"lore":"notes");
                             const parentEntry = data.entries.find(e => e.id === parent && e.campaignId === scopeId);
                             if (template) change({ ...data, entries: [...data.entries, pageFromTemplate(template.template, { id, title: name, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, values: template.values, newId, org: defaultOrg(world), profile: defaultProfile(world) })] });
-                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, org:kind==="faction"?defaultOrg(world):undefined, profile:kind==="character"?defaultProfile(world):undefined, vehicle:kind==="vehicle"?newVehicle(vehicleTypesOf(world)[0]):undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
+                            else change({ ...data, entries: [...data.entries, { id, worldId, campaignId: scopeId, parentId: parentEntry?.id ?? null, title: name.trim(), kind: kind ?? "note", character:kind==="character"?defaultCharacter():undefined, mapData:kind==="map"?newMap():undefined, org:kind==="faction"?defaultOrg(world):undefined, profile:kind==="character"?defaultProfile(world):undefined, vehicle:kind==="vehicle"?newVehicle(vehicleTypesOf(world)[0]):undefined, store:kind==="store"?newStore("shop"):undefined, body: kind === "tasks" ? "- [ ] First task\n  - [ ] A smaller step" : "", updatedAt: new Date().toISOString() }] });
                             setView("overview");
                             setSelected(id);
                             setEditing(true);
