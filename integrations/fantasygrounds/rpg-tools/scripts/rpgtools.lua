@@ -14,7 +14,9 @@
 -- Written for the Lua that Fantasy Grounds Unity runs: no goto, no integer division, no utf8 library.
 --
 
-VERSION = "0.1.0";
+VERSION = "0.2.0";
+-- The RPG Tools site this copy came from. RPG Tools fills it in when you download the extension.
+SITE = "__RPG_TOOLS_ORIGIN__";
 FORMAT = "rpgtools-sheet";
 MAX_IMPORT = 1000;
 
@@ -1291,8 +1293,83 @@ function exportClipboard(name)
 	say("Copied " .. sheet.name .. " as an RPG Tools sheet. In RPG Tools, open the Encyclopedia, use Import a sheet and paste it.");
 end
 
-local HELP = "RPG Tools " .. VERSION .. ". /rpgtools import picks a JSON file to import as NPCs, /rpgtools paste imports JSON from the clipboard, " ..
-	"/rpgtools export <name> saves an NPC or character as an RPG Tools sheet, and /rpgtools copy <name> copies one.";
+---------------------------------------------------------------------------------------------------------------------
+-- Reaching RPG Tools from Fantasy Grounds
+---------------------------------------------------------------------------------------------------------------------
+
+-- The site to reach: the one this copy was downloaded from, or one named in the command.
+function siteOf(given)
+	local site = trim(str(given));
+	if site == "" then site = SITE; end
+	if string.find(site, "__RPG_TOOLS", 1, true) then return nil; end
+	if not string.match(site, "^https?://") then site = "https://" .. site; end
+	site = string.gsub(site, "/+$", "");
+	return site;
+end
+
+local function urlEncode(s)
+	return (string.gsub(str(s), "[^%w%-%._~]", function (c) return string.format("%%%02X", string.byte(c)); end));
+end
+
+-- Fantasy Grounds Unity 5.1 and later answer Interface.openURL(url, callback) with the page's text. Older versions
+-- have no callback and open the page in a browser instead, so the test asks for 5.1 first when it can tell.
+local function fgVersion()
+	if not (Interface and Interface.getVersion) then return nil; end
+	local ok, major, minor = pcall(Interface.getVersion);
+	if not ok then return nil; end
+	return tonumber(major), tonumber(minor);
+end
+
+function fetchText(url, done)
+	Interface.openURL(url, function (a, b)
+		if type(a) == "boolean" then done(a, b); else done(a ~= nil, a); end
+	end);
+end
+
+-- Three requests that show what this Fantasy Grounds can do with RPG Tools: a small answer, a long address (how
+-- changes would be sent) and a big answer (how a party or a bestiary would arrive).
+function testConnection(given)
+	local site = siteOf(given);
+	if not site then say("Name your RPG Tools site, like /rpgtools test https://your-rpg-tools-site.com"); return; end
+	local major, minor = fgVersion();
+	if major and (major < 5 or (major == 5 and (minor or 0) < 1)) then
+		say("This is Fantasy Grounds " .. major .. "." .. (minor or 0) .. ". Reaching RPG Tools needs Fantasy Grounds Unity 5.1 or later.");
+		return;
+	end
+	local base = site .. "/api/bridge/fantasygrounds/ping";
+	local long = string.rep("abcdefghij", 150);
+	local results, pending = {}, 3;
+	local function finish()
+		pending = pending - 1;
+		if pending > 0 then return; end
+		local passed = results.small and results.long and results.big;
+		say("Test of " .. site .. ": " .. table.concat({ results.smallText or "", results.longText or "", results.bigText or "" }, " ") ..
+			(passed and " Fantasy Grounds can reach RPG Tools directly. Tell RPG Tools it worked!" or " Copy this message and send it to RPG Tools."));
+	end
+	say("Testing " .. site .. " ... the answer appears here in a few seconds.");
+	fetchText(base .. "?v=" .. urlEncode(VERSION), function (ok, text)
+		local json = ok and decode(text) or nil;
+		results.small = json and json.app == "RPG Tools";
+		results.smallText = results.small and "Ping: yes." or ("Ping: no (" .. clip(ok and text or "no answer", 60) .. ").");
+		finish();
+	end);
+	fetchText(base .. "?echo=" .. long, function (ok, text)
+		local json = ok and decode(text) or nil;
+		results.long = json and json.echo == string.len(long);
+		results.longText = results.long and "Long address: yes." or ("Long address: no (" .. clip(ok and text or "no answer", 60) .. ").");
+		finish();
+	end);
+	fetchText(base .. "?size=200000", function (ok, text)
+		local json = ok and decode(text) or nil;
+		results.big = json and type(json.pad) == "string" and string.len(json.pad) == 200000;
+		results.bigText = results.big and "Big answer: yes." or ("Big answer: no (" .. (ok and (string.len(str(text)) .. " bytes") or "no answer") .. ").");
+		finish();
+	end);
+end
+
+local HELP = "RPG Tools " .. VERSION .. ". /rpgtools import picks a JSON file to import as NPCs, and /rpgtools paste imports JSON from the clipboard. " ..
+	"/rpgtools export <name> saves an NPC or character as an RPG Tools sheet, and /rpgtools copy <name> copies one. " ..
+	"/rpgtools test checks whether this Fantasy Grounds can reach your RPG Tools site.";
 
 function onSlash(_command, params)
 	local verb, rest = string.match(str(params), "^%s*(%S*)%s*(.-)%s*$");
@@ -1301,9 +1378,10 @@ function onSlash(_command, params)
 	elseif verb == "paste" then importClipboard();
 	elseif verb == "export" or verb == "save" then exportFile(rest);
 	elseif verb == "copy" then exportClipboard(rest);
+	elseif verb == "test" then testConnection(rest);
 	else say(HELP); end
 end
 
 function onInit()
-	Comm.registerSlashHandler("rpgtools", onSlash, "[import | paste | export <name> | copy <name>]");
+	Comm.registerSlashHandler("rpgtools", onSlash, "[import | paste | export <name> | copy <name> | test]");
 end

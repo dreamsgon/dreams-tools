@@ -89,7 +89,7 @@ local function dump(node)
 end
 
 -- Everything else Fantasy Grounds gives a script.
-local chat, saved, slash, dialogs = {}, {}, {}, {}
+local chat, saved, slash, dialogs, urls = {}, {}, {}, {}, {}
 local clipboard = scenario.clipboard
 local files = scenario.files or {}
 local env = setmetatable({}, { __index = _G })
@@ -120,7 +120,21 @@ env.Interface = {
 	dialogFileSave = function (fn) answer("save", fn) end,
 	clipboardGetText = function () return clipboard end,
 	clipboardSetText = function (t) clipboard = t end,
+	-- The web, as Fantasy Grounds 5.1 gives it to extensions: scenario.web is "ok" (a stand-in for RPG Tools' ping
+	-- answer), "down" (no answer) or "browser" (an older Fantasy Grounds that opens a browser and never calls back).
+	openURL = function (url, callback)
+		urls[#urls + 1] = url
+		if scenario.web == "browser" or not callback then return end
+		if scenario.web ~= "ok" then callback(false, nil) return end
+		local echo = string.match(url, "[?&]echo=([^&]*)")
+		local size = tonumber(string.match(url, "[?&]size=(%d+)") or "")
+		local body = { ok = true, app = "RPG Tools" }
+		if echo then body.echo = string.len(echo) end
+		if size then body.pad = string.rep("x", size) end
+		callback(true, cjson.encode(body))
+	end,
 }
+if scenario.fgVersion then env.Interface.getVersion = function () return scenario.fgVersion[1], scenario.fgVersion[2], 0 end end
 
 local script = assert(loadstring(ARGV[1], "rpgtools.lua"))
 setfenv(script, env)
@@ -145,4 +159,4 @@ for _, step in ipairs(scenario.steps or {}) do
 		results[#results + 1] = value == nil and "nil" or value
 	end
 end
-return cjson.encode({ chat = chat, db = dump(root), saved = saved, clipboard = clipboard or "", results = results, dialogs = dialogs })
+return cjson.encode({ chat = chat, db = dump(root), saved = saved, clipboard = clipboard or "", results = results, dialogs = dialogs, urls = urls })

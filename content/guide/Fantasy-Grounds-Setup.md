@@ -25,7 +25,7 @@ The file is at `/api/bridge/fantasygrounds/rpg-tools.ext` on your RPG Tools site
 2. Put `rpg-tools.ext` in its `extensions` folder.
 3. On the launcher, choose your campaign and press **Load**. In the list of extensions on the right, tick **RPG Tools**, then start the campaign.
 
-When the campaign opens, chat says *RPG Tools 0.1.0: type /rpgtools to import or export JSON*. To update the extension later, replace the file and reload the campaign.
+When the campaign opens, chat says *RPG Tools 0.2.0: type /rpgtools to import or export JSON*. To update the extension later, replace the file and reload the campaign.
 
 ## 3. Import a file into Fantasy Grounds
 
@@ -73,6 +73,18 @@ See [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 - **Monsters from the web:** save a monster's JSON from Open5e, the 5e SRD API or a 5etools bestiary file, and import it straight into Fantasy Grounds.
 - **Roll20 and Fantasy Grounds:** export from one as an RPG Tools sheet and import it into the other. See [Set up Roll20](Roll20-Setup).
 
+## Test a live connection
+
+Fantasy Grounds Unity **5.1 and later** let extensions fetch web pages. If yours can reach RPG Tools, a future version can keep your party and NPCs in step with RPG Tools the way the Foundry bridge does, without carrying files.
+
+1. In chat, type `/rpgtools test`. The extension knows the RPG Tools site you downloaded it from. To test another one, add its address, like `/rpgtools test https://your-rpg-tools-site.com`.
+2. After a few seconds, chat shows three results: **Ping**, **Long address** and **Big answer**.
+3. Tell us what it says. If all three say *yes*, live sync can be built for your Fantasy Grounds.
+
+The test sends nothing from your campaign. It only asks RPG Tools for a small test answer.
+
+> On a Fantasy Grounds older than 5.1, the test stops and says so. If your Fantasy Grounds doesn't report its version, the test may open three browser tabs instead. You can close them.
+
 ## If something isn't right
 
 | What you see | What to do |
@@ -90,6 +102,6 @@ Type `/rpgtools` on its own to see the commands in chat.
 ## Good to know
 
 - **Up to 1,000 creatures** come in per import, so a whole bestiary file works.
-- **Nothing syncs on its own.** Each move is an import or an export, and rolls don't pass between Fantasy Grounds and RPG Tools while you play.
+- **Nothing syncs on its own yet.** Each move is an import or an export, and rolls don't pass between Fantasy Grounds and RPG Tools while you play. `/rpgtools test` checks whether live sync can work for you.
 - **5E only, for now.** Other rulesets may come later.
 - **Status:** the extension is tested against a stand-in Fantasy Grounds, not yet in many real campaigns. Tell us what breaks.

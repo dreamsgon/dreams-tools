@@ -2,7 +2,7 @@
 <root version="3.0">
 	<properties>
 		<name>RPG Tools</name>
-		<version>0.1.0</version>
+		<version>0.2.0</version>
 		<author>RPG Tools</author>
 		<description>Import RPG Tools sheets and monster JSON (Open5e, the 5e SRD API, 5etools) as NPCs, and export NPCs and characters as RPG Tools sheets. Type /rpgtools in chat.</description>
 		<loadorder>100</loadorder>
@@ -10,7 +10,7 @@
 			<name>5E</name>
 		</ruleset>
 	</properties>
-	<announcement text="RPG Tools 0.1.0: type /rpgtools to import or export JSON." font="emotefont" />
+	<announcement text="RPG Tools 0.2.0: type /rpgtools to import or export JSON." font="emotefont" />
 	<base>
 		<script name="RPGTools" file="scripts/rpgtools.lua" />
 	</base>
