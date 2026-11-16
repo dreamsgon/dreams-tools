@@ -52,10 +52,22 @@ export function statblockRolls(text: string, detect = true) {
 /** What a sheet field rolls when clicked, or null. */
 export function fieldRoll(field: Pick<StatField, 'type' | 'roll' | 'rollFormula'>, value: unknown): string | null {
   const roll = field.roll ?? 'none';
+  const template = field.rollFormula ?? '';
+  // A custom formula without {value} (like 1d20+3) rolls as written, whatever the field holds.
+  if (roll === 'custom' && !template.includes('{value}')) return template.trim() ? rollTarget(template)?.formula ?? null : null;
   if (roll === 'none' || value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   if (roll === 'd20') { const n = Number(value); return Number.isFinite(n) && Number.isInteger(n) && Math.abs(n) <= 1000 ? `1d20${n < 0 ? '' : '+'}${n}` : null; }
   if (roll === 'formula') return rollTarget(String(value))?.formula ?? null;
-  const template = field.rollFormula ?? '';
-  if (!template.includes('{value}')) return null;
   return rollTarget(template.replaceAll('{value}', String(value)).replace(/\+\s*-/g, '-'))?.formula ?? null;
+}
+
+/** Why a field set to roll has nothing to roll yet, for a hint under it; null when it rolls or isn't set to roll. */
+export function fieldRollHint(field: Pick<StatField, 'type' | 'roll' | 'rollFormula'>, value: unknown): string | null {
+  const roll = field.roll ?? 'none';
+  if (roll === 'none' || fieldRoll(field, value) !== null) return null;
+  if (roll === 'custom' && !(field.rollFormula ?? '').includes('{value}')) return 'Its formula isn’t dice notation. Fix it in Edit stat form.';
+  const empty = value === null || value === undefined || value === '';
+  if (roll === 'formula') return empty ? 'Type dice like 2d8+3 to roll them.' : 'Type dice like 2d8+3 to roll this.';
+  if (roll === 'custom' && !empty && fieldRoll(field, 0) === null) return 'Its formula isn’t dice notation. Fix it in Edit stat form.';
+  return empty ? 'Type a number to roll.' : 'Type a whole number to roll.';
 }

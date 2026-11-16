@@ -107,6 +107,7 @@ test('a roll by name: the sheet, then a stat that rolls, then plain dice',()=>{
  assert.equal(I.characterRoll({statsByCampaign:{c:{per:-1}}},form,'c','persuasion'),'1d20-1');
  assert.equal(I.characterRoll({sheet:{items:[{name:'Persuasion',kind:'roll',formula:'1d20 + 7'}]},statsByCampaign:{}},form,'c','Persuasion'),'1d20+7');
  assert.equal(I.characterRoll(undefined,[],'c','2d6+1'),'2d6+1');
+ assert.equal(I.characterRoll({statsByCampaign:{}},[{id:'t',label:'Test',type:'text',roll:'custom',rollFormula:'1d20 + 3'}],'c','Test'),'1d20+3','a fixed custom formula needs no value');
  assert.equal(I.characterRoll(undefined,[],'c','Charm'),null);
 });
 
