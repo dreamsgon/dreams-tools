@@ -42,30 +42,75 @@ export function actorType(role, types) {
 }
 
 const escape = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-/** Page text (RPG Tools Markdown) as simple HTML: paragraphs, bold, italics, bullets, inline rolls as Foundry inline rolls, and page links as their label. */
-export function markdownToHtml(text) {
+const SECRET_OPEN = /^[ \t]*:::[ \t]*secret[ \t]*$/i, SECRET_CLOSE = /^[ \t]*:::[ \t]*$/;
+/**
+ * Page text (RPG Tools Markdown) as HTML for Foundry: headings, paragraphs, bold, italics, bullet and numbered lists
+ * (one level of nesting), quotes, tables and web links. Inline rolls become Foundry inline rolls. A page link becomes a
+ * link to the journal or actor `link(id)` names, or just its label. GM secrets (`:::secret`) become Foundry secret
+ * sections, which only the journal's owners (the GM) see. Margin notes (`{{word|note}}`) keep the word in the text and
+ * go into a secret "GM notes" section at the end, so a page shared with players never shows them.
+ */
+export function markdownToHtml(text, { link = () => null } = {}) {
   const isDice = s => /d/i.test(s) && /^[\d\s+\-dDfFkKhHlL!<>=]+$/.test(s);
-  // Inline rolls and page links first, so escaping doesn't touch the dice (>= would become &gt;=).
+  const notes = [];
+  // Inline rolls, links and notes first, so escaping doesn't touch the dice (>= would become &gt;=).
   const inline = line => {
     const kept = [];
     const keep = html => `\u0000${kept.push(html) - 1}\u0000`;
-    const marked = String(line).replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) =>
-      isDice(target) ? keep(`[[/r ${toFoundryFormula(target)}]]${label ? `{${escape(label)}}` : ""}`) : keep(escape(label ?? target)));
+    const marked = String(line)
+      .replace(/\{\{([^|{}\n]{1,200})\|([^{}\n]{1,1000})\}\}/g, (_m, word, note) => { notes.push([word.trim(), note.trim()]); return word; })
+      .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) => {
+        const t = target.trim(), l = label?.trim();
+        if (isDice(t)) return keep(`[[/r ${toFoundryFormula(t)}]]${l ? `{${escape(l)}}` : ""}`);
+        if (/^table:/i.test(t)) return keep(escape(l || t.slice(6).trim()));
+        if (/^maptable:/i.test(t)) return keep(escape(l || "Battle map"));
+        const to = link(t);
+        return keep(to ? `@UUID[${to.uuid}]{${escape(l || to.name)}}` : escape(l || t));
+      })
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) => keep(`<a href="${escape(url)}" target="_blank" rel="noopener">${escape(label)}</a>`));
     return escape(marked).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+      .replace(/~~(.+?)~~/g, "<s>$1</s>").replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\u0000(\d+)\u0000/g, (_m, i) => kept[Number(i)]);
   };
-  const out = [];
-  let list = null;
+  const root = [];
+  let out = root, list = null, quote = null, table = null;
+  const flush = () => {
+    if (list) { out.push(`<${list.tag}>${list.items.map(i => `<li>${i.html}${i.sub.length ? `<ul>${i.sub.map(x => `<li>${x}</li>`).join("")}</ul>` : ""}</li>`).join("")}</${list.tag}>`); list = null; }
+    if (quote) { out.push(`<blockquote>${quote.map(q => `<p>${q}</p>`).join("")}</blockquote>`); quote = null; }
+    if (table) { const [head, ...rows] = table; out.push(`<table><thead><tr>${head.map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`); table = null; }
+  };
   for (const raw of String(text ?? "").split(/\r?\n/)) {
-    const bullet = /^\s*[-*+]\s+(.*)$/.exec(raw);
-    if (bullet) { (list ??= []).push(`<li>${inline(bullet[1])}</li>`); continue; }
-    if (list) { out.push(`<ul>${list.join("")}</ul>`); list = null; }
+    if (out === root && SECRET_OPEN.test(raw)) { flush(); out = []; continue; }
+    if (out !== root && SECRET_CLOSE.test(raw)) { flush(); root.push(`<section class="secret">${out.join("")}</section>`); out = root; continue; }
+    const item = /^(\s*)(?:([-*+])|(\d+)[.)])\s+(.*)$/.exec(raw);
+    if (item) {
+      const tag = item[2] ? "ul" : "ol", nested = item[1].replace(/\t/g, "    ").length >= 2 && list?.items.length;
+      if (nested) { list.items.at(-1).sub.push(inline(item[4])); continue; }
+      if (list && list.tag !== tag) flush();
+      if (quote || table) flush();
+      (list ??= { tag, items: [] }).items.push({ html: inline(item[4]), sub: [] });
+      continue;
+    }
+    const q = /^\s*>\s?(.*)$/.exec(raw);
+    if (q) { if (list || table) flush(); (quote ??= []).push(inline(q[1])); continue; }
+    if (/^\s*\|.*\|\s*$/.test(raw)) {
+      if (list || quote) flush();
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(raw) && raw.includes("-")) continue;
+      // Pipes inside links and notes aren't cell breaks.
+      const cells = raw.trim().slice(1, -1).replace(/\[\[[^\]]*\]\]|\{\{[^}]*\}\}/g, m => m.replace(/\|/g, "\u0001")).split("|");
+      (table ??= []).push(cells.map(c => inline(c.replace(/\u0001/g, "|").trim())));
+      continue;
+    }
+    flush();
     const heading = /^(#{1,6})\s+(.*)$/.exec(raw);
-    if (heading) out.push(`<h${Math.min(6, heading[1].length + 1)}>${inline(heading[2])}</h${Math.min(6, heading[1].length + 1)}>`);
+    if (heading) { const n = Math.min(6, heading[1].length + 1); out.push(`<h${n}>${inline(heading[2])}</h${n}>`); }
+    else if (/^\s*(?:-{3,}|\*{3,})\s*$/.test(raw)) out.push("<hr>");
     else if (raw.trim()) out.push(`<p>${inline(raw.trim())}</p>`);
   }
-  if (list) out.push(`<ul>${list.join("")}</ul>`);
-  return out.join("");
+  flush();
+  if (out !== root) root.push(`<section class="secret">${out.join("")}</section>`);
+  if (notes.length) root.push(`<section class="secret"><p><strong>GM notes</strong></p><ul>${notes.map(([w, n]) => `<li><strong>${escape(w)}</strong>: ${escape(n)}</li>`).join("")}</ul></section>`);
+  return root.join("");
 }
 
 /**
@@ -131,6 +176,86 @@ export function rollFromMessage(message) {
   return { title: (who ? `${who} · ${what}` : what).slice(0, 120), formula, total: Number(roll.total), detail: results.length ? `Rolled ${results.join(", ")} in Foundry` : "Rolled in Foundry", ...(who ? { who } : {}) };
 }
 
+// ---- Journals ------------------------------------------------------------------------------------
+
+/** Foundry's ownership levels: a page set to INHERIT follows its journal. */
+export const OWNERSHIP = { INHERIT: -1, NONE: 0, OBSERVER: 2 };
+/** The folder inside "RPG Tools" each kind of page goes in. */
+export const journalFolders = { folder: "Notes", note: "Notes", place: "Places", faction: "Organizations", lore: "Lore", vehicle: "Vehicles", quest: "Quests", session: "Sessions" };
+const overviewName = kind => ({ quest: "Journal", session: "Recap", vehicle: "Description" })[kind] ?? "Overview";
+const goalMark = { todo: "☐", done: "☑", failed: "☒", dropped: "–" };
+const secret = text => `:::secret\n${text}\n:::`;
+
+/** A quest's state, goals, reward and log as Markdown parts. Hidden goals, hidden rewards and GM log entries are secrets. */
+export function questParts(row) {
+  const q = row.quest, players = row.overview.visibility === "players";
+  if (!q) return [];
+  const linkTo = p => (p ? `[[${p.id}|${p.title ?? "a page"}]]` : "");
+  const head = [`**State:** ${q.stateName} · **Category:** ${q.category}`];
+  if (q.giver) head.push(`**Given by:** ${linkTo(q.giver)}`);
+  if (q.place) head.push(`**Where:** ${linkTo(q.place)}`);
+  const goals = q.goals.map(g => {
+    const line = `- ${goalMark[g.status] ?? "☐"} ${g.status === "dropped" || g.status === "failed" ? `~~${g.text}~~` : g.text}${g.note ? ` (*${g.note}*)` : ""}`;
+    return g.hidden ? secret(line) : line;
+  });
+  const reward = q.reward ? (q.rewardHidden ? secret(`**Reward:** ${q.reward}`) : `**Reward:** ${q.reward}`) : "";
+  const goalsText = [head.join("\n\n"), goals.length ? `## Goals\n\n${goals.join("\n")}` : "", reward].filter(Boolean).join("\n\n");
+  const log = q.log.map(l => {
+    const when = l.label || (Date.parse(l.at) ? new Date(l.at).toISOString().slice(0, 10) : "");
+    const entry = `## ${when || "Entry"}${l.author ? ` · ${l.author}` : ""}\n\n${l.text}`;
+    return l.players ? entry : secret(entry);
+  }).join("\n\n");
+  return [
+    { key: "quest-goals", name: "Goals", players, text: goalsText },
+    { key: "quest-log", name: "Log", players, text: log },
+    { key: "quest-prep", name: "GM prep", players: false, text: q.prep },
+  ];
+}
+
+/** Whether a page becomes a journal: everything with words in it, and folders only when they have some. */
+export const journalWanted = row => row.kind !== "folder" || !!row.overview?.text?.trim() || (row.tabs ?? []).some(t => t.text?.trim());
+
+/** A page's parts in order: its Overview, then quest parts, then its tabs. Empty parts are left out, but a journal keeps one. */
+export function journalParts(row) {
+  const all = [
+    { key: "overview", name: overviewName(row.kind), players: row.overview?.visibility === "players", text: row.overview?.text ?? "" },
+    ...questParts(row),
+    ...(row.tabs ?? []).map(t => ({ key: `tab-${t.id}`, name: t.title, players: t.visibility === "players", text: t.text ?? "" })),
+  ];
+  const full = all.filter(p => p.text.trim());
+  return full.length ? full : all.slice(0, 1);
+}
+
+/**
+ * The journal for a page: its name, who may see it, and its text pages. The journal is shared with players (as
+ * observers) when any part is, and each part that isn't stays GM only. `kind` is the bridge's kind (pages, quests or
+ * recaps), kept in the flags with the page's id and when it last changed.
+ */
+export function journalData(row, kind, link) {
+  const parts = journalParts(row), shared = parts.some(p => p.players);
+  return {
+    name: row.title,
+    ownership: { default: shared ? OWNERSHIP.OBSERVER : OWNERSHIP.NONE },
+    flags: { [MODULE_ID]: { id: row.id, kind, updatedAt: row.updatedAt ?? null } },
+    pages: parts.map((p, i) => ({
+      name: p.name, type: "text", sort: (i + 1) * 100_000,
+      text: { format: 1, content: markdownToHtml(p.text, { link }) },
+      ownership: { default: p.players ? OWNERSHIP.INHERIT : OWNERSHIP.NONE },
+      flags: { [MODULE_ID]: { key: p.key } },
+    })),
+  };
+}
+
+/** What to do with this kind's journals after a read: which rows to write, and which journals to remove. `have` maps page id to updatedAt. */
+export function journalPlan(body, rows, have) {
+  const keep = new Set(body.ids ?? []);
+  const unwanted = new Set(rows.filter(r => !journalWanted(r)).map(r => r.id));
+  return {
+    remove: [...have.keys()].filter(id => !keep.has(id) || unwanted.has(id)),
+    write: rows.filter(r => journalWanted(r) && !(have.has(r.id) && have.get(r.id) === (r.updatedAt ?? null))),
+  };
+}
+
 // ---- Sync ----------------------------------------------------------------------------------------
 
 /** Characters to fetch: new ones, and ones changed in RPG Tools since the actor was last synced. `known` maps RPG Tools id to updatedAt. */
@@ -159,4 +284,6 @@ export class BridgeClient {
   character(id) { return this.call(`/characters/${encodeURIComponent(id)}`); }
   hp(id, hp) { return this.call(`/characters/${encodeURIComponent(id)}/hp`, { method: "POST", body: JSON.stringify(hp) }); }
   roll(roll) { return this.call("/rolls", { method: "POST", body: JSON.stringify(roll) }); }
+  /** Pages, quests or recaps: every id, and the rows changed after `since`. */
+  journals(kind, since) { return this.call(`/${kind}${since ? `?since=${encodeURIComponent(since)}` : ""}`); }
 }

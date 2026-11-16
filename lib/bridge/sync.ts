@@ -8,13 +8,21 @@ export type Sync = Record<SyncKind, Direction>;
 export const bridgeClients = ["foundry", "unreal", "other"] as const;
 export type BridgeClient = (typeof bridgeClients)[number];
 export const clientNames: Record<BridgeClient, string> = { foundry: "Foundry VTT", unreal: "Unreal Engine VTT", other: "Another app" };
+/** The guide page (under /guide) that walks through setting up each table. Roll20 needs no bridge key, only its script. */
+export const tableGuides: Record<BridgeClient | "roll20", { slug: string; label: string }> = {
+  foundry: { slug: "foundry-vtt-setup", label: "Set up Foundry VTT" },
+  unreal: { slug: "vtt-bridges", label: "How the bridge API works" },
+  other: { slug: "vtt-bridges", label: "How the bridge API works" },
+  roll20: { slug: "roll20-setup", label: "Set up Roll20" },
+};
+export const guideHref = (table: BridgeClient | "roll20") => `/guide/${tableGuides[table].slug}`;
 
 /** What each kind is, for the dialog and for /api/bridge. `ready` kinds have endpoints now; the rest come with the Foundry module. */
 export const syncInfo: Record<SyncKind, { name: string; there: string; ready: boolean }> = {
   characters: { name: "Characters", there: "Actors, as RPG Tools sheets", ready: true },
   pages: { name: "Places, lore, organizations, notes", there: "Journal pages in matching folders", ready: true },
-  quests: { name: "Quests and the quest log", there: "A journal per quest", ready: false },
-  recaps: { name: "Session recaps", there: "Journals in a Sessions folder", ready: false },
+  quests: { name: "Quests and the quest log", there: "A journal per quest", ready: true },
+  recaps: { name: "Session recaps", there: "Journals in a Sessions folder", ready: true },
   scenes: { name: "Maptable scenes", there: "Scenes with grid, walls, doors and fog", ready: false },
   tokens: { name: "Tokens, HP and conditions", there: "Tokens linked to actors", ready: false },
   markers: { name: "Map markers and world map places", there: "Map notes", ready: false },

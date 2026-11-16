@@ -40,6 +40,7 @@ This guide covers features that are finished and live. Each page explains what t
 18. [Session recaps and AI writing](Session-Recaps-and-AI-Writing)
 19. [VTT bridges (Foundry VTT)](VTT-Bridges)
 20. [Set up Foundry VTT](Foundry-VTT-Setup): step by step, from bridge key to your party in Foundry.
+21. [Set up Roll20](Roll20-Setup): move characters and monsters between Roll20 and RPG Tools as JSON.
 
 ## Reference
 

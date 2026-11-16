@@ -1,8 +1,8 @@
 {
   "id": "rpg-tools-bridge",
   "title": "RPG Tools Bridge",
-  "description": "Keeps a Foundry world in step with one RPG Tools Encyclopedia campaign: characters as actors, HP both ways, the character's rolls, and rolls to the campaign's Discord.",
-  "version": "0.1.0",
+  "description": "Keeps a Foundry world in step with one RPG Tools Encyclopedia campaign: characters as actors, HP both ways, the character's rolls, rolls to the campaign's Discord, and Encyclopedia pages, quests and session recaps as journals.",
+  "version": "0.2.0",
   "authors": [{ "name": "RPG Tools" }],
   "compatibility": { "minimum": "12", "verified": "13" },
   "esmodules": ["scripts/main.mjs"],

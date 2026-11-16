@@ -110,6 +110,26 @@ test('page text becomes simple HTML with Foundry inline rolls, never raw HTML',(
  assert.equal(F.markdownToHtml('## Notes\n\n[[x|<img src=x onerror=alert(1)>]]'),'<h3>Notes</h3><p>&lt;img src=x onerror=alert(1)&gt;</p>');
 });
 
+test('page text for journals: secrets and margin notes only the GM sees, links to what came in, lists, quotes and tables',()=>{
+ const link=id=>id==='demo-mara'?{uuid:'Actor.a1',name:'Mara Venn'}:null;
+ assert.equal(F.markdownToHtml('Ask [[demo-mara]] about the {{lamp|it is cursed}}.\n\n:::secret\nShe lies.\n:::\n\n1. one\n2. two\n> “Hi”\n| Item | Cost |\n| --- | --- |\n| [[demo-mara|Mara]] | 5 |\n[Map](https://x.example/m) [bad](javascript:alert(1))',{link}),
+  '<p>Ask @UUID[Actor.a1]{Mara Venn} about the lamp.</p><section class="secret"><p>She lies.</p></section><ol><li>one</li><li>two</li></ol><blockquote><p>“Hi”</p></blockquote><table><thead><tr><th>Item</th><th>Cost</th></tr></thead><tbody><tr><td>@UUID[Actor.a1]{Mara}</td><td>5</td></tr></tbody></table><p><a href="https://x.example/m" target="_blank" rel="noopener">Map</a> [bad](javascript:alert(1))</p><section class="secret"><p><strong>GM notes</strong></p><ul><li><strong>lamp</strong>: it is cursed</li></ul></section>');
+ assert.equal(F.markdownToHtml(':::secret\nNever closed'),'<section class="secret"><p>Never closed</p></section>','an open secret stays secret to the end');
+ assert.equal(F.markdownToHtml('[[table:Weather|the sky]] and [[maptable:s1]]'),'<p>the sky and Battle map</p>');
+});
+
+test('a journal for a page: shared when any part is, GM parts stay GM only, and only changed rows are written',()=>{
+ const row={id:'p1',kind:'place',title:'Greyhaven',updatedAt:'T1',overview:{visibility:'gm',text:'Hidden.'},tabs:[{id:'t',title:'Rumours',visibility:'players',text:'Green light.'},{id:'e',title:'Empty',visibility:'players',text:' '}]};
+ const j=F.journalData(row,'pages',()=>null);
+ assert.equal(j.ownership.default,2);assert.deepEqual(j.flags['rpg-tools-bridge'],{id:'p1',kind:'pages',updatedAt:'T1'});
+ assert.deepEqual(j.pages.map(p=>[p.name,p.ownership.default,p.flags['rpg-tools-bridge'].key]),[['Overview',0,'overview'],['Rumours',-1,'tab-t']]);
+ assert.equal(F.journalData({...row,tabs:[]},'pages',()=>null).ownership.default,0);
+ assert.deepEqual(F.journalParts({id:'x',kind:'session',title:'S',overview:{visibility:'gm',text:''},tabs:[]}).map(p=>p.name),['Recap'],'an empty page keeps one part');
+ const plan=F.journalPlan({ids:['p1','p2','f1']},[row,{...row,id:'p2',updatedAt:'T2'},{id:'f1',kind:'folder',title:'F',overview:{visibility:'gm',text:''},tabs:[]}],new Map([['p1','T1'],['gone','T0'],['f1','T0']]));
+ assert.deepEqual(plan.write.map(r=>r.id),['p2'],'unchanged rows are skipped');
+ assert.deepEqual(plan.remove.sort(),['f1','gone'],'gone pages and emptied folders are removed');
+});
+
 test('the module zip opens with module.json at the top and the manifest pointing at this site',()=>{
  const raw=readFileSync(new URL('../integrations/foundry/rpg-tools-bridge/module.json',import.meta.url),'utf8');
  const m=manifestFor(raw,'https://rpg.example');

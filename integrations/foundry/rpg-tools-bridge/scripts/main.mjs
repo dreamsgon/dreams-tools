@@ -1,13 +1,14 @@
 /*
  * RPG Tools Bridge for Foundry VTT (v12 and v13). Brings an RPG Tools campaign's characters in as actors in an
  * "RPG Tools" folder and keeps them current, sends HP changes back, adds an "RPG Tools rolls" window to linked
- * actors, and posts public chat rolls to the campaign's Discord. Only the active GM's browser talks to RPG Tools,
+ * actors, and posts public chat rolls to the campaign's Discord. Encyclopedia pages, quests and session recaps come
+ * in as journals in an "RPG Tools" journal folder, shared with players where RPG Tools shares them. Only the active GM's browser talks to RPG Tools,
  * and the key is a client setting, so it stays in that browser and players never receive it.
  */
-import { BridgeClient, MODULE_ID, actorData, actorType, charactersToFetch, hpChange, rollFromMessage, sheetRolls } from "./core.mjs";
+import { BridgeClient, MODULE_ID, actorData, actorType, charactersToFetch, hpChange, journalData, journalFolders, journalPlan, rollFromMessage, sheetRolls } from "./core.mjs";
 
 const POLL_MS = 20_000;
-let client = null, timer = null, syncing = false, warned = new Set();
+let client = null, info = null, timer = null, syncing = false, warned = new Set();
 const t = key => game.i18n.localize(`RPGTB.${key}`);
 const isLeadGm = () => game.user.isGM && (game.users.activeGM ? game.users.activeGM.isSelf : true);
 const flag = actor => actor.getFlag(MODULE_ID, "id");
@@ -35,12 +36,12 @@ Hooks.once("ready", () => {
 });
 
 async function connect() {
-  clearInterval(timer); timer = null; client = null;
+  clearInterval(timer); timer = null; client = null; info = null;
   if (!isLeadGm()) return;
   const c = new BridgeClient(game.settings.get(MODULE_ID, "address"), game.settings.get(MODULE_ID, "key"), (...a) => fetch(...a));
   if (!c.ready) return;
   try {
-    const info = await c.info();
+    info = await c.info();
     client = c;
     ui.notifications.info(`RPG Tools: connected to ${info.campaign.name}.`);
     await sync();
@@ -53,23 +54,96 @@ async function rootFolder() {
   return found ?? Folder.create({ name: "RPG Tools", type: "Actor", flags: { [MODULE_ID]: { root: true } } });
 }
 
+/** Whether this key reads a kind: the server says it's ready and its direction includes RPG Tools → table. */
+const reads = kind => {
+  const s = info?.sync?.[kind];
+  return s ? s.ready && (s.direction === "both" || s.direction === "to") : kind === "characters";
+};
+
 /** Brings in new characters and ones changed in RPG Tools since the last sync. */
+async function syncCharacters() {
+  const { characters } = await client.characters();
+  const byId = new Map(linked().map(a => [flag(a), a]));
+  const known = new Map([...byId].map(([id, a]) => [id, a.getFlag(MODULE_ID, "updatedAt")]));
+  const ids = charactersToFetch(characters, known, game.settings.get(MODULE_ID, "who"));
+  for (const id of ids) {
+    const { character } = await client.character(id);
+    const data = foundry.utils.expandObject(actorData(character, game.system.id)), actor = byId.get(id);
+    if (actor) await actor.update(data, { rpgToolsSync: true });
+    else await Actor.create({ ...data, type: actorType(character.role, Actor.TYPES ?? Object.keys(game.system.documentTypes?.Actor ?? {})), folder: (await rootFolder()).id }, { rpgToolsSync: true });
+  }
+  return ids.length;
+}
+
+// ---- Journals: pages, quests and recaps -----------------------------------------------------------
+
+const JOURNAL_KINDS = ["pages", "quests", "recaps"];
+const journalsOf = kind => game.journal.filter(j => j.getFlag(MODULE_ID, "kind") === kind);
+const folderParent = f => f.folder?.id ?? f.folder ?? null;
+async function journalFolder(name) {
+  let root = game.folders.find(f => f.type === "JournalEntry" && f.getFlag(MODULE_ID, "root"));
+  root ??= await Folder.create({ name: "RPG Tools", type: "JournalEntry", flags: { [MODULE_ID]: { root: true } } });
+  const sub = game.folders.find(f => f.type === "JournalEntry" && f.getFlag(MODULE_ID, "sub") === name && folderParent(f) === root.id);
+  return sub ?? Folder.create({ name, type: "JournalEntry", folder: root.id, flags: { [MODULE_ID]: { sub: name } } });
+}
+/** A page link's target here: the journal or actor that came from that RPG Tools page. */
+function linkTarget(id) {
+  const doc = game.journal.find(j => j.getFlag(MODULE_ID, "id") === id) ?? game.actors.find(a => flag(a) === id);
+  return doc ? { uuid: doc.uuid, name: doc.name } : null;
+}
+
+/** Brings one kind's journals up to date: removes the gone ones, makes the new ones, then writes the changed ones. */
+async function syncJournals(kind) {
+  const mine = journalsOf(kind), have = new Map(mine.map(j => [j.getFlag(MODULE_ID, "id"), j.getFlag(MODULE_ID, "updatedAt") ?? null]));
+  const stamps = mine.map(j => j.getFlag(MODULE_ID, "updatedAt")).filter(Boolean).sort();
+  const body = await client.journals(kind, stamps.at(-1));
+  const { remove, write } = journalPlan(body, body[kind] ?? [], have);
+  const gone = mine.filter(j => remove.includes(j.getFlag(MODULE_ID, "id"))).map(j => j.id);
+  if (gone.length) await JournalEntry.deleteDocuments(gone);
+  // Make the new journals first, so links between pages synced together find each other.
+  const byId = new Map(mine.map(j => [j.getFlag(MODULE_ID, "id"), j]));
+  for (const row of write) if (!byId.has(row.id))
+    byId.set(row.id, await JournalEntry.create({ name: row.title, folder: (await journalFolder(journalFolders[row.kind] ?? "Notes")).id, ownership: { default: 0 }, flags: { [MODULE_ID]: { id: row.id, kind } } }));
+  for (const row of write) {
+    const journal = byId.get(row.id), { pages, ...data } = journalData(row, kind, linkTarget);
+    await journal.update(data);
+    const existing = new Map(journal.pages.map(p => [p.getFlag(MODULE_ID, "key"), p]));
+    const update = [], create = [];
+    for (const p of pages) {
+      const old = existing.get(p.flags[MODULE_ID].key);
+      if (old) { update.push({ _id: old.id, ...p }); existing.delete(p.flags[MODULE_ID].key); } else create.push(p);
+    }
+    if (update.length) await journal.updateEmbeddedDocuments("JournalEntryPage", update);
+    if (create.length) await journal.createEmbeddedDocuments("JournalEntryPage", create);
+    if (existing.size) await journal.deleteEmbeddedDocuments("JournalEntryPage", [...existing.values()].map(p => p.id));
+  }
+  return write.length + gone.length;
+}
+
+/** Characters, then pages, quests and recaps, each as far as this key reads them. One kind failing doesn't stop the rest. */
 async function sync({ loud = false } = {}) {
   if (!client || syncing) return;
   syncing = true;
+  const done = { characters: 0, journals: 0 }, problems = [];
   try {
-    const { characters } = await client.characters();
-    const byId = new Map(linked().map(a => [flag(a), a]));
-    const known = new Map([...byId].map(([id, a]) => [id, a.getFlag(MODULE_ID, "updatedAt")]));
-    const ids = charactersToFetch(characters, known, game.settings.get(MODULE_ID, "who"));
-    for (const id of ids) {
-      const { character } = await client.character(id);
-      const data = foundry.utils.expandObject(actorData(character, game.system.id)), actor = byId.get(id);
-      if (actor) await actor.update(data, { rpgToolsSync: true });
-      else await Actor.create({ ...data, type: actorType(character.role, Actor.TYPES ?? Object.keys(game.system.documentTypes?.Actor ?? {})), folder: (await rootFolder()).id }, { rpgToolsSync: true });
+    info = await client.info();
+    for (const kind of ["characters", ...JOURNAL_KINDS]) {
+      if (!reads(kind)) continue;
+      try {
+        if (kind === "characters") done.characters += await syncCharacters(); else done.journals += await syncJournals(kind);
+        warned.delete(kind);
+      } catch (e) {
+        if (e.status === 401) throw e;
+        problems.push(e.message);
+        if (!loud) warnOnce(kind, e.message);
+      }
     }
     warned.delete("sync");
-    if (loud) ui.notifications.info(ids.length ? `RPG Tools: brought in ${ids.length} ${ids.length === 1 ? "character" : "characters"}.` : "RPG Tools: everything is up to date.");
+    if (loud && problems.length) ui.notifications.error(`RPG Tools: ${problems.join(" ")}`);
+    else if (loud) {
+      const parts = [done.characters && `${done.characters} ${done.characters === 1 ? "character" : "characters"}`, done.journals && `${done.journals} ${done.journals === 1 ? "journal" : "journals"}`].filter(Boolean);
+      ui.notifications.info(parts.length ? `RPG Tools: updated ${parts.join(" and ")}.` : "RPG Tools: everything is up to date.");
+    }
   } catch (e) {
     if (loud) ui.notifications.error(`RPG Tools: ${e.message}`);
     else warnOnce("sync", e.message);

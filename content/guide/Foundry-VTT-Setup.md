@@ -1,6 +1,6 @@
 # Set up Foundry VTT
 
-This page walks you through connecting a Foundry VTT world to one RPG Tools campaign, step by step. When you're done, your player characters appear in Foundry as actors and stay up to date. HP changes go both ways, and public rolls reach your campaign's Discord.
+This page walks you through connecting a Foundry VTT world to one RPG Tools campaign, step by step. When you're done, your player characters appear in Foundry as actors and stay up to date. Your Encyclopedia pages, quests and session recaps appear as journals. HP changes go both ways, and public rolls reach your campaign's Discord.
 
 It takes about five minutes. For what the bridge does in general, see [VTT bridges](VTT-Bridges).
 
@@ -55,14 +55,28 @@ Within a few seconds you should see:
 
 - a note at the top saying **RPG Tools: connected to** your campaign's name
 - a new **RPG Tools** folder in the **Actors** tab, with your characters inside
+- a new **RPG Tools** folder in the **Journal** tab, with folders for Places, Organizations, Lore, Notes, Vehicles, Quests and Sessions
 
 In **D&D 5e**, each actor gets its HP, AC and biography. In **Pathfinder 2e** it gets its HP. Other systems get the actor and its rolls.
 
 Open an actor. The **RPG Tools rolls** button at the top of its sheet lists the character's skills, saves, attacks and other rolls, and each one rolls in Foundry's chat.
 
+## Journals and what players see
+
+Each Encyclopedia page becomes a journal. Its Overview and each tab become the journal's pages. A quest also gets **Goals**, **Log** and **GM prep** pages, and a session's recap gets its timeline, quotes and GM notes.
+
+Players see exactly what RPG Tools shows them:
+
+- A page or tab shared with players in RPG Tools is shared in Foundry. Everything else stays GM only, even inside a shared journal.
+- GM secrets in the text, hidden quest goals, a hidden reward and GM-only log entries show to you as Foundry **secret** blocks. Players don't see them.
+- Margin notes go in a secret **GM notes** block at the end of the page.
+- A draft recap stays with you until you publish it in RPG Tools.
+
+Links between pages become links to the journal or actor that came in, so you can click through in Foundry.
+
 ## Keeping in step
 
-- **From RPG Tools to Foundry:** after you change a character in RPG Tools, Foundry picks it up within about 20 seconds. To sync at once, press **Sync with RPG Tools** at the top of the Actors tab.
+- **From RPG Tools to Foundry:** after you change a character, page, quest or recap in RPG Tools, Foundry picks it up within about 20 seconds. Deleting a page removes its journal. To sync at once, press **Sync with RPG Tools** at the top of the Actors tab.
 - **HP from Foundry:** changing HP in Foundry, whether on a token's bar, the sheet or with a macro, sends it back to RPG Tools after a moment.
 - **Rolls:** public chat rolls post to your campaign's Discord rolls channel. Whispered and blind rolls never go. Rolls RPG Tools can't show, such as rerolls, are skipped.
 
@@ -76,10 +90,13 @@ Each bridge key has a direction for each kind of thing. To change them in RPG To
 | --- | --- | --- |
 | Characters | Both ways | Characters come in, and HP goes back |
 | Characters | RPG Tools → table | Characters come in, but HP changes stay in Foundry |
+| Places, lore, organizations, notes | RPG Tools → table | Journals come in |
+| Quests | Both ways, or RPG Tools → table | Quest journals come in |
+| Session recaps | RPG Tools → table | Session journals come in |
 | Roll log | Table → RPG Tools | Public rolls go to Discord |
-| Either one | Off | That part stops |
+| Any of these | Off | That part stops |
 
-Journals, quests, scenes, tokens, tables, the calendar and the combat tracker are planned but not synced yet.
+Scenes, tokens, tables, the calendar and the combat tracker are planned but not synced yet.
 
 ## If something isn't right
 
@@ -91,6 +108,7 @@ Journals, quests, scenes, tokens, tables, the calendar and the combat tracker ar
 | No **Sync with RPG Tools** button | Syncing still runs every 20 seconds. Report it with your Foundry version, since the Actors tab looks different between versions. |
 | "Characters: this bridge key is set to Off" | In RPG Tools, open **What syncs** on the key and set Characters to **Both ways**. |
 | An HP warning that names a Google Sheet | That character's HP comes from a linked Google Sheet. Change it in the sheet or in RPG Tools. |
+| A journal players shouldn't see is shared | In RPG Tools, set that page's Overview or tab to GM only. Foundry follows within about 20 seconds. |
 | A warning about choosing a Discord channel | Set a Discord channel for the campaign, or turn off **Send rolls to RPG Tools**. |
 | Two GMs online, and nothing syncs | Only the active GM's browser syncs. Paste the address and key in that browser too. |
 
@@ -99,6 +117,7 @@ To report a problem, press **F12** in Foundry and open the **Console** tab. Send
 ## Good to know
 
 - **Removing access:** revoking a key in RPG Tools stops that Foundry world at once. Actors already brought in stay in Foundry.
+- **Journals are one way:** change pages, quests and recaps in RPG Tools. Edits made to their journals in Foundry are replaced the next time the page changes in RPG Tools, and so are sharing changes made there.
 - **Edits made in Foundry:** HP is the only change sent back to RPG Tools for now. To change anything else, edit the character in RPG Tools, or export the sheet and import it there. See [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets).
 - **What the key can see:** the key reaches one campaign and can read GM-only things. Only give it to a Foundry world you run.
 - **Status:** this part of the module is new and hasn't been tried in many real worlds yet. See [Limits and what's coming](Limits-and-Whats-Coming).

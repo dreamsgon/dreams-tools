@@ -14,6 +14,8 @@ import { newItemId, type Sheet } from "../encyclopedia/sheet-link.ts";
 import { campaignExport, defaultCharacter, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
 import { z } from "zod";
 import { parseDice } from "../rolls.ts";
+import { categoryOf, goalStatus, goalText, newQuest, questCategories, stateNames } from "../encyclopedia/quests.ts";
+import { quotesMarkdown, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { allows, syncInfo, syncKinds, type BridgeGrant, type SyncKind } from "./keys.ts";
 
 export const BRIDGE_API_VERSION = 1;
@@ -50,6 +52,8 @@ export function bridgeInfo(data: Workspace, grant: BridgeGrant, revision: number
       character: "GET /api/bridge/characters/{id} · PUT /api/bridge/characters/{id} (sheet, optional baseUpdatedAt)",
       hp: "POST /api/bridge/characters/{id}/hp ({value, max?})",
       pages: "GET /api/bridge/pages?since={ISO time}",
+      quests: "GET /api/bridge/quests?since={ISO time}",
+      recaps: "GET /api/bridge/recaps?since={ISO time}",
       rolls: "POST /api/bridge/rolls ({title, formula, total, detail?, who?}) posts to the campaign's Discord rolls channel",
     },
   };
@@ -71,20 +75,75 @@ export function readCharacter(data: Workspace, campaignId: string, id: string) {
   return { ...characterRow(e), sheet: file, warnings };
 }
 
-/** Pages changed after `since` (all of them without it), and every page id so a table can remove the ones that are gone. */
-export function listPages(data: Workspace, campaignId: string, since?: string) {
-  const { book } = bookFor(data, campaignId);
-  const all = book.entries.filter(e => pageKinds.includes(e.kind));
+/** Rows changed after `since` (all of them without it), and every id so a table can remove the ones that are gone. */
+function changedRows(data: Workspace, campaignId: string, kinds: readonly Entry["kind"][], since: string | undefined) {
+  const { book, campaign } = bookFor(data, campaignId);
+  const all = book.entries.filter(e => kinds.includes(e.kind));
   const after = since ? Date.parse(since) : NaN;
   if (since && Number.isNaN(after)) throw new BridgeError(400, "since must be an ISO time, such as 2026-11-14T10:00:00Z.");
   const changed = Number.isNaN(after) ? all : all.filter(e => !e.updatedAt || Date.parse(e.updatedAt) > after);
+  const titles = new Map(book.entries.map(e => [e.id, e.title]));
+  return { ids: all.map(e => e.id), changed, campaign, title: (id: string) => titles.get(id) };
+}
+const visible = (v: string | undefined) => (v === "players" ? "players" : "gm") as "players" | "gm";
+/** A page's common fields: its Overview and tabs as Markdown, each with who may read it. */
+const pageRow = (e: Entry) => ({
+  id: e.id, kind: e.kind, title: e.title, parentId: e.parentId, shared: e.campaignId === null, updatedAt: e.updatedAt ?? null, order: e.order ?? null,
+  overview: { visibility: visible(e.overviewVisibility), text: e.body },
+  tabs: (e.tabs ?? []).map(t => ({ id: t.id, title: t.title, visibility: visible(t.visibility), text: t.body })),
+});
+
+/** Places, lore, organizations, notes, vehicles and folders. */
+export function listPages(data: Workspace, campaignId: string, since?: string) {
+  const { ids, changed } = changedRows(data, campaignId, pageKinds, since);
+  return { ids, pages: changed.map(pageRow) };
+}
+
+/**
+ * Quests, with their state, category, goals and log. Players see a quest when its Overview is shared, and then only
+ * the goals not marked hidden, the log entries marked for players, and the reward unless it is hidden. `prep` is the
+ * GM's own and never for players.
+ */
+export function listQuests(data: Workspace, campaignId: string, since?: string) {
+  const { ids, changed, campaign, title } = changedRows(data, campaignId, ["quest"], since);
+  const categories = questCategories(campaign);
   return {
-    ids: all.map(e => e.id),
-    pages: changed.map(e => ({
-      id: e.id, kind: e.kind, title: e.title, parentId: e.parentId, shared: e.campaignId === null, updatedAt: e.updatedAt ?? null, order: e.order ?? null,
-      overview: { visibility: e.overviewVisibility ?? "gm", text: e.body },
-      tabs: (e.tabs ?? []).map(t => ({ id: t.id, title: t.title, visibility: t.visibility, text: t.body })),
-    })),
+    ids,
+    quests: changed.map(e => {
+      const q = e.quest ?? newQuest();
+      return {
+        ...pageRow(e),
+        quest: {
+          state: q.state, stateName: stateNames[q.state], category: categoryOf(categories, q.type).name,
+          giver: q.giverId ? { id: q.giverId, title: title(q.giverId) ?? null } : null, place: q.placeId ? { id: q.placeId, title: title(q.placeId) ?? null } : null,
+          reward: q.reward ?? "", rewardHidden: !!q.rewardHidden, prep: q.prep ?? "",
+          goals: q.objectives.map(o => ({ id: o.id, text: goalText(o, title), status: goalStatus(o), hidden: !!o.hidden, note: o.note ?? "" })),
+          log: q.log.map(l => ({ id: l.id, at: l.at, label: l.label ?? "", text: l.text, players: l.players, author: l.author ?? null })),
+        },
+      };
+    }),
+  };
+}
+
+/**
+ * Session pages and their recaps. The timeline, quotes and GM notes come as extra tabs (`recap-timeline`,
+ * `recap-quotes`, `recap-gm-notes`), shared only when RPG Tools shares them. A draft recap is never for players.
+ */
+export function listRecaps(data: Workspace, campaignId: string, since?: string) {
+  const { ids, changed } = changedRows(data, campaignId, ["session"], since);
+  return {
+    ids,
+    recaps: changed.map(e => {
+      const row = pageRow(e), r = e.recap, published = !r || r.status === "published";
+      const share = (on: boolean | undefined) => (published && on && row.overview.visibility === "players" ? "players" : "gm") as "players" | "gm";
+      const extra = r ? [
+        ...(r.timeline.length ? [{ id: "recap-timeline", title: "Timeline", visibility: share(r.shareTimeline), text: timelineMarkdown(r.timeline) }] : []),
+        ...(r.quotes.length ? [{ id: "recap-quotes", title: "Quotes", visibility: share(r.shareQuotes), text: quotesMarkdown(r.quotes) }] : []),
+        ...(r.gmNotes.trim() ? [{ id: "recap-gm-notes", title: "GM notes", visibility: "gm" as const, text: r.gmNotes }] : []),
+      ] : [];
+      const hide = <T extends { visibility: "players" | "gm" }>(p: T): T => (published ? p : { ...p, visibility: "gm" });
+      return { ...row, overview: hide(row.overview), tabs: [...row.tabs.map(hide), ...extra], recap: r ? { status: r.status, playedOn: r.playedOn ?? null } : null };
+    }),
   };
 }
 

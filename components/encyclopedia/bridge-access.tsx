@@ -1,9 +1,9 @@
 'use client';
-import {useEffect,useState} from 'react';
-import {Check,Copy,MonitorPlay} from 'lucide-react';
+import {useEffect,useState,type ReactNode} from 'react';
+import {BookOpen,Check,Copy,ExternalLink,MonitorPlay} from 'lucide-react';
 import {confirmDialog} from '../confirm-dialog';
 import {ToolDialog} from './tool-dialog';
-import {bridgeClients,clientNames,syncInfo,syncKinds,type BridgeClient,type Direction,type Sync} from '@/lib/bridge/sync';
+import {bridgeClients,clientNames,guideHref,syncInfo,syncKinds,tableGuides,type BridgeClient,type Direction,type Sync} from '@/lib/bridge/sync';
 import './sheet-import.css';
 import './bridge-access.css';
 
@@ -13,6 +13,11 @@ async function post(body:object){
  const r=await fetch('/api/encyclopedia/bridge-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error??'Something went wrong. Try again.');return data;
 }
+/** A link to a table's setup guide, in a new window so the dialog stays open. */
+function GuideLink({table,children}:{table:BridgeClient|'roll20';children?:ReactNode}){
+ return <a className="bridge-guide" href={guideHref(table)} target="_blank" rel="noopener noreferrer"><BookOpen size={14}/> {children??tableGuides[table].label}<ExternalLink size={12} aria-label="(opens in a new window)"/></a>;
+}
+const ROLL20_SCRIPT='/api/bridge/roll20/rpg-tools-roll20.js';
 function ago(iso?:string){
  if(!iso)return 'not used yet';
  const s=(Date.now()-Date.parse(iso))/1000;
@@ -24,7 +29,8 @@ function ago(iso?:string){
 export default function BridgeAccess({campaignId,campaignName}:{campaignId:string|null;campaignName:string|null}){
  const [open,setOpen]=useState(false);
  return <div className="aside-section"><strong>Other tables (VTT bridge)</strong>
-  <p className="modal-intro">Keep this campaign in step with Foundry VTT, or later your own table. Each bridge key reaches this campaign only, and is separate from AI connections.</p>
+  <p className="modal-intro">Keep this campaign in step with Foundry VTT, or later your own table, and move characters and monsters to and from Roll20. Each bridge key reaches this campaign only, and is separate from AI connections.</p>
+  <p className="bridge-guides">Setup guides: <GuideLink table="foundry">Foundry VTT</GuideLink> <GuideLink table="roll20">Roll20</GuideLink> <GuideLink table="other">Other apps</GuideLink></p>
   {campaignId?<button className="button" onClick={()=>setOpen(true)}><MonitorPlay size={16}/> Connect a table</button>:<p>Choose and save a campaign first.</p>}
   {open&&campaignId&&<BridgeDialog campaignId={campaignId} campaignName={campaignName??'this campaign'} onClose={()=>setOpen(false)}/>}
  </div>;
@@ -51,6 +57,9 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
  }
  async function copy(what:string,text:string){try{await navigator.clipboard.writeText(text);setCopied(what);}catch{setCopied('failed');}}
  const base=typeof location==='undefined'?'/api/bridge':`${location.origin}/api/bridge`;
+ async function copyScript(){
+  try{const r=await fetch(ROLL20_SCRIPT);if(!r.ok)throw Error();await navigator.clipboard.writeText(await r.text());setCopied('script');}catch{setCopied('failed');}
+ }
 
  return <ToolDialog title="Connect a table" wide onClose={onClose}>
   <div className="bridge-body">
@@ -67,18 +76,20 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
      <div className="bridge-copy"><code>{`${base}/foundry/module.json`}</code><button type="button" className="button small" onClick={()=>void copy('manifest',`${base}/foundry/module.json`)}>{copied==='manifest'?<><Check size={13}/> Copied</>:<><Copy size={13}/> Copy</>}</button></div>
      <p className="import-note">Turn on RPG Tools Bridge in your world, then paste the address and key in its module settings. Only your GM browser keeps the key.</p>
     </>}
-    {copied==='failed'&&<p className="ai-error" role="alert">Copying didn’t work here. Select the text and copy it yourself.</p>}
+    <GuideLink table={made.bridge.client}>{made.bridge.client==='foundry'?'Step-by-step setup guide':undefined}</GuideLink>
    </section>}
+   {copied==='failed'&&<p className="ai-error" role="alert">Copying didn’t work here. Select the text and copy it yourself.</p>}
    <form className="bridge-new" onSubmit={e=>{e.preventDefault();void make();}}>
     <label><span className="import-label">Table</span><select value={client} onChange={e=>setClient(e.target.value as BridgeClient)}>{bridgeClients.map(c=><option key={c} value={c}>{clientNames[c]}</option>)}</select></label>
     <label><span className="import-label">Name</span><input value={name} maxLength={60} placeholder={clientNames[client]} onChange={e=>setName(e.target.value)}/></label>
     <button type="submit" className="button primary" disabled={busy||list===null||list.length>=5}>{busy?'Making…':'Make bridge key'}</button>
    </form>
+   <GuideLink table={client}/>
    {error&&<p className="ai-error" role="alert">{error}</p>}
    <span className="import-label">Bridge keys</span>
    {list===null?<p className="import-note">Loading…</p>:!list.length?<p className="import-note">No tables connected yet.</p>:
     <ul className="bridge-list">{list.map(k=><li key={k.id}>
-     <div className="bridge-row"><span><strong>{k.name}</strong><small>{clientNames[k.client]} · {ago(k.lastUsedAt)}</small></span>
+     <div className="bridge-row"><span><strong>{k.name}</strong><small>{clientNames[k.client]} · {ago(k.lastUsedAt)}</small><GuideLink table={k.client}>Setup guide</GuideLink></span>
       <button type="button" className="button small" aria-expanded={editing===k.id} onClick={()=>setEditing(editing===k.id?null:k.id)}>{editing===k.id?'Done':'What syncs'}</button>
       <button type="button" className="button small danger" onClick={()=>void revoke(k)}>Revoke</button></div>
      {editing===k.id&&<div className="bridge-sync">
@@ -89,6 +100,15 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
       </tbody></table>
      </div>}
     </li>)}</ul>}
+   <section className="bridge-roll20">
+    <strong>Roll20</strong>
+    <p className="import-note">Roll20 doesn’t need a bridge key. Its Mod script imports RPG Tools sheets and monster or character JSON (Open5e, the 5e SRD API, 5etools) into your game, and exports characters back as sheets that Import a sheet reads. Mod scripts need a Roll20 Pro subscription.</p>
+    <div className="bridge-roll20-actions">
+     <button type="button" className="button small" onClick={()=>void copyScript()}>{copied==='script'?<><Check size={13}/> Copied</>:<><Copy size={13}/> Copy the Roll20 script</>}</button>
+     <a className="button small" href={ROLL20_SCRIPT} target="_blank" rel="noopener noreferrer">Open the script <ExternalLink size={12} aria-label="(opens in a new window)"/></a>
+     <GuideLink table="roll20"/>
+    </div>
+   </section>
   </div>
  </ToolDialog>;
 }

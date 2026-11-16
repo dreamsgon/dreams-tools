@@ -24,11 +24,18 @@ This module keeps a Foundry world (v12 or v13) in step with one RPG Tools Encycl
   - Whispered and blind rolls never go.
   - Rolls that use dice RPG Tools can't show (rerolls, for example) are skipped.
 
+- **Journals:** Encyclopedia pages (places, organizations, lore, notes, vehicles), quests and session recaps come in as journals in an **RPG Tools** journal folder, sorted into Places, Organizations, Lore, Notes, Vehicles, Quests and Sessions.
+  - Each page's Overview and tabs become the journal's pages. A quest also gets Goals, Log and GM prep pages.
+  - A journal is shared with players (as observers) when RPG Tools shares any part of it, and each part RPG Tools keeps for the GM stays GM only. GM secrets in the text become Foundry secret sections, and margin notes go in a secret GM notes section.
+  - Hidden goals, a hidden reward and GM-only log entries are secrets on a shared quest. A draft recap stays with the GM.
+  - Links between pages become links to the journal or actor that came in. A journal is updated when its page changes in RPG Tools and removed when the page is deleted.
+
 What syncs, and which way, is set on the bridge key in RPG Tools.
 
 ## Coming next
 
 - Edits to an actor here (other than HP) aren't sent back yet. Change the character in RPG Tools, or export the sheet and import it there.
-- Journals, quests, recaps, scenes, tokens and conditions, map notes, rollable tables, the calendar and the combat tracker come in the next parts.
+- Journals are one way, from RPG Tools. Changes made to them in Foundry are replaced the next time the page changes in RPG Tools.
+- Scenes, tokens and conditions, map notes, rollable tables, the calendar and the combat tracker come in the next parts.
 
 The bridge API is described in `docs/encyclopedia/bridge-api.md` in the RPG Tools repository.
