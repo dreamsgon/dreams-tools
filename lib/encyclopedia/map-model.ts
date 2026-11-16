@@ -72,6 +72,8 @@ export const mapSchema=z.object({
  hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),
  /** The climate a whole-planet map was made with, so land shaped by hand gets matching ice, deserts and forests. The seed is the map's seed. */
  planet:z.object({temp:z.number().int().min(-3).max(3),rain:z.number().int().min(0).max(100),tilt:z.number().int().min(0).max(80),rotation:z.enum(['spin','locked']),life:z.enum(['none','simple','complex']),size:z.enum(['tiny','small','medium','large']),volcanism:z.number().int().min(0).max(100),biomesOff:z.array(z.enum(terrains.map(t=>t.id) as [TerrainId,...TerrainId[]])).max(18)}).optional(),
+ /** Where a closer map sits on the map it was zoomed in from, as a frame in fractions of that map. */
+ zoomOf:z.object({mapId:id,x:z.number().finite().min(0).max(1),y:z.number().finite().min(0).max(1),w:z.number().finite().positive().max(1),h:z.number().finite().positive().max(1)}).optional(),
  mapStyle:z.object({look:z.enum(['painted','atlas','ink']).optional(),font:z.enum(['serif','plain','hand']).optional(),nameSize:z.enum(['small','medium','large']).optional(),legend:z.boolean().optional(),title:z.string().trim().max(100).optional()}).optional(),
 }).superRefine((m,ctx)=>{
  const bad=(message:string)=>ctx.addIssue({code:'custom',message});
@@ -184,7 +186,7 @@ export function playerMap(m:MapData):MapData{
   labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y)),
   hexes:m.hexes?.filter(h=>h.visibility==='players'&&(!fog||visible.has(h.cell))).map(h=>({...h,tableId:undefined})),
   party:m.party?.visibility==='players'&&(!fog||visible.has(m.party.cell))?{...m.party,trail:fog?m.party.trail.filter(c=>visible.has(c)):m.party.trail}:undefined,
-  encounterTableId:undefined,maptableSceneId:undefined,planet:undefined};
+  encounterTableId:undefined,maptableSceneId:undefined,planet:undefined,zoomOf:undefined};
 }
 /** The parts of a line that lie outside the fog, so players only get what they have seen. */
 export function revealedRuns(m:MapData,points:{x:number;y:number}[]){

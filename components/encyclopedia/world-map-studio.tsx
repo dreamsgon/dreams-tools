@@ -1,7 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, Mountain, MousePointer2, Paintbrush, Redo2, Route, Shield, Stamp, Type, Undo2, Waves } from 'lucide-react';
+import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, Mountain, ChevronRight, ZoomIn, MousePointer2, Paintbrush, Redo2, Route, Shield, Stamp, Type, Undo2, Waves } from 'lucide-react';
 import { iconKind, mapIcon, settlementGroups, stampGroups } from '@/lib/encyclopedia/map-icons';
 import { IconPicker, IconPreview } from './icon-picker';
 import { MAX_ICON_BYTES, decodePaint, encodePaint, fogBrush, isWater, terrainIndex, type TerrainId, mapKinds, mapPaint, paintScale, playerMap, pointCell, pointRevealed, terrains, tilesFromPaint, pathKinds, placeKinds, type MapData, type MapLabel, type MapPaint, type MapPath, type MapPin } from '@/lib/encyclopedia/map-model';
@@ -17,16 +17,17 @@ import { mapLooks, nameFonts, type MapLookId } from '@/lib/encyclopedia/map-look
 import { MapCanvas, useIconUrls, useMapImage } from './map-canvas';
 import { uploadMapImage } from './map-transfer';
 import { MapViewport } from './map-viewport';
-import { PinDialog } from './map-editor';
+import { PinDialog, openMapEditorNext } from './map-editor';
 // The generators run only in the browser, so they stay out of the server bundle.
 const WorldGenerateDialog = dynamic(() => import('./world-generate-dialog').then(m => m.WorldGenerateDialog), { ssr: false });
 import { confirmDialog } from '../confirm-dialog';
 import type { ShapeMode, ShapeStroke } from '@/lib/encyclopedia/land-shaping';
-import type { Shaping } from './land-shaping-loader';
-// Land shaping uses the planet's climate, so it too loads in the browser only, when the tool is first picked.
-const ShapingLoader = dynamic(() => import('./land-shaping-loader').then(m => m.ShapingLoader), { ssr: false });
+import type { ZoomFrame, ZoomSize } from '@/lib/encyclopedia/zoom-maps';
+import type { MapTools } from './map-tools-loader';
+// Shaping land and zooming in load in the browser only, when one of those tools is first picked, so no server bundle carries them.
+const MapToolsLoader = dynamic(() => import('./map-tools-loader').then(m => m.MapToolsLoader), { ssr: false });
 
-type Tool = 'select' | 'terrain' | 'shape' | 'river' | 'road' | 'border' | 'place' | 'stamp' | 'label' | 'fog';
+type Tool = 'select' | 'terrain' | 'shape' | 'zoom' | 'river' | 'road' | 'border' | 'place' | 'stamp' | 'label' | 'fog';
 type Snapshot = Pick<MapData, 'paint' | 'tiles' | 'pins' | 'scale' | 'seed' | 'paths' | 'labels' | 'columns' | 'rows' | 'fog' | 'hexes' | 'party' | 'icons'>;
 /** Brush colours grouped as water, open land, wet and wooded land, then high and cold ground. */
 const brushOrder = ['sea', 'deep', 'seaice', 'grassland', 'steppe', 'savanna', 'desert', 'barren', 'marsh', 'forest', 'boreal', 'jungle', 'hills', 'mountains', 'volcanic', 'snow', 'tundra', 'glacier'].map(id => terrainIndex[id as TerrainId]);
@@ -41,15 +42,22 @@ const tools: { id: Tool; name: string; key: string; icon: typeof Paintbrush }[] 
   { id: 'stamp', name: 'Stamp', key: 'S', icon: Stamp },
   { id: 'label', name: 'Label', key: 'T', icon: Type },
   { id: 'fog', name: 'Fog', key: 'F', icon: CloudFog },
+  { id: 'zoom', name: 'Zoom in', key: 'Z', icon: ZoomIn },
 ];
 const shapeModes: { id: ShapeMode; name: string }[] = [{ id: 'land', name: 'Draw land' }, { id: 'sea', name: 'Draw sea' }, { id: 'raise', name: 'Raise' }, { id: 'lower', name: 'Lower' }, { id: 'flatten', name: 'Flatten' }];
-/** Terrain and Shape land work on painted maps only. */
-const paintTool = (t: Tool) => t === 'terrain' || t === 'shape';
+/** Terrain, Shape land and Zoom in work on painted maps only. */
+const paintTool = (t: Tool) => t === 'terrain' || t === 'shape' || t === 'zoom';
+
+const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
+/** Where a closer map's frame sits over the map. */
+const frameStyle = (f: ZoomFrame) => ({ left: pct(f.x), top: pct(f.y), width: pct(f.w), height: pct(f.h) });
 
 /** The full-screen world and area map editor: tools on a rail, the map in the middle, and an inspector. */
-export function WorldMapStudio({ entry, data, campaign, setMap, close, start, onOpen, onCalendarChange, onNewAreaMap, onRevealInParents }: {
+export function WorldMapStudio({ entry, data, campaign, setMap, close, start, onOpen, onCalendarChange, onNewAreaMap, onNewMap, onRevealInParents }: {
   entry: Entry; data: Workspace; campaign?: Campaign; setMap: (patch: Partial<MapData>) => void; close: () => void; start?: 'generate'; onOpen?: (id: string) => void;
   onCalendarChange?: (c: Calendar) => boolean; onNewAreaMap?: (pinId: string) => void; onRevealInParents?: () => void;
+  /** Saves a closer map made with Zoom in as a new map page and opens it in the map editor. */
+  onNewMap?: (map: MapData, title: string) => void;
 }) {
   const map = entry.mapData!;
   const painted = map.source === 'generated';
@@ -58,15 +66,15 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const [terrain, setTerrain] = useState(2), [radius, setRadius] = useState(3), [landOnly, setLandOnly] = useState(true);
   const [live, setLive] = useState<MapPaint | null>(null);
   const [shapeMode, setShapeMode] = useState<ShapeMode>('raise'), [strength, setStrength] = useState(50), [follow, setFollow] = useState(true);
-  const shaper = useRef<Shaping | null>(null), [shaperReady, setShaperReady] = useState(false);
-  const shapingLoaded = useCallback((m: Shaping) => { shaper.current = m; setShaperReady(true); }, []);
+  const [mapTools, setMapTools] = useState<MapTools | null>(null), shaperReady = !!mapTools;
+  const [zoomSize, setZoomSize] = useState<ZoomSize>('kingdom'), [zoomAt, setZoomAt] = useState<{ x: number; y: number } | null>(null), [zoomTitle, setZoomTitle] = useState('');
   const shapeStroke = useRef<ShapeStroke | null>(null);
   // Heights from the last stroke, kept while the terrain is unchanged, so gentle raising adds up between strokes.
   const heights = useRef<{ cells: string; e: Float32Array } | null>(null);
   const [undo, setUndo] = useState<Snapshot[]>([]), [redo, setRedo] = useState<Snapshot[]>([]);
   const [selected, setSelected] = useState(''), [editingPin, setEditingPin] = useState<MapPin | null>(null);
   const [fogMode, setFogMode] = useState<'reveal' | 'conceal'>('reveal'), [fogSize, setFogSize] = useState(1);
-  const [show, setShow] = useState({ art: true, pins: true, routes: true, paths: true, labels: true });
+  const [show, setShow] = useState({ art: true, pins: true, routes: true, paths: true, labels: true, frames: true });
   const [draft, setDraft] = useState<MapPath | null>(null), [newLabel, setNewLabel] = useState('');
   const [generating, setGenerating] = useState(start === 'generate' && map.source === 'generated');
   const [cell, setCell] = useState(-1), [pace, setPace] = useState<Pace>('normal');
@@ -97,6 +105,29 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   const planet = !!map.planet && !!map.paint && map.paint.columns === map.paint.rows * 2;
   const keptHeights = (paint: MapPaint) => heights.current?.cells === paint.cells ? heights.current.e : null;
   const areaMaps = visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.kind === 'map' && e.id !== entry.id);
+  // Closer maps made from this one, and the maps this one was zoomed in from, nearest last.
+  const closer = data.entries.filter(e => e.kind === 'map' && e.id !== entry.id && e.mapData?.zoomOf?.mapId === entry.id);
+  const parents: Entry[] = [];
+  for (let up = map.zoomOf; up && parents.length < 8;) { const p = data.entries.find(e => e.id === up!.mapId && e.mapData); if (!p || p.id === entry.id || parents.includes(p)) break; parents.unshift(p); up = p.mapData!.zoomOf; }
+  const parent = parents.at(-1);
+  /** Leave the editor for another map's page, opening that map in the editor too. */
+  const openMap = (id: string) => { if (!onOpen) return; close(); openMapEditorNext(id); onOpen(id); };
+  const zoomChoices = mapTools ? mapTools.zoom.zoomChoices(map) : [];
+  const size = zoomChoices.find(z => z.id === zoomSize) ?? zoomChoices[0];
+  const zoomFrame: ZoomFrame | null = mapTools && size && zoomAt ? mapTools.zoom.zoomFrame(map, size.id, zoomAt.x, zoomAt.y) : null;
+  const zoomPreview = useMemo(() => mapTools && size && zoomFrame ? mapTools.zoom.zoomMap(map, entry.id, zoomFrame, size.id, 'Preview') : null,
+    // The preview depends on the frame and the map's terrain and places, not on every edit to the map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mapTools, size?.id, zoomFrame?.x, zoomFrame?.y, zoomFrame?.w, zoomFrame?.h, map.paint, map.pins, map.paths, map.labels, entry.id]);
+  const frameAt = (x: number, y: number, id: ZoomSize | undefined = size?.id) => {
+    if (!mapTools || !id) return;
+    setZoomAt({ x, y }); setZoomTitle(mapTools.zoom.zoomName(map, mapTools.zoom.zoomFrame(map, id, x, y), id));
+  };
+  const makeCloser = () => {
+    if (!zoomPreview || !onNewMap || !zoomTitle.trim()) return;
+    const title = zoomTitle.trim().slice(0, 160);
+    close(); onNewMap(zoomPreview, title);
+  };
 
   const snapshot = (): Snapshot => ({ paint: map.paint, tiles: map.tiles, pins: map.pins, scale: map.scale, seed: map.seed, paths: map.paths, labels: map.labels, columns: map.columns, rows: map.rows, fog: map.fog, hexes: map.hexes, party: map.party, icons: map.icons });
   /** A change that Undo can take back. */
@@ -145,7 +176,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   } : painted && tool === 'shape' && current && shaperReady ? {
     radius: radius / current.columns,
     onStroke: (x: number, y: number, start: boolean) => {
-      const m = shaper.current!;
+      const m = mapTools!.shaping;
       if (start || !shapeStroke.current) {
         const base = mapPaint(map)!;
         shapeStroke.current = m.startShape(decodePaint(base.columns, base.rows, base.cells)!, base.columns, base.rows, { wrap: planet, heights: keptHeights(base), bare: !!map.planet && map.planet.life !== 'complex', at: { x, y } });
@@ -154,7 +185,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       if (m.shapeStep(s, { x, y }, radius, shapeMode, strength)) setLive({ columns: s.w, rows: s.h, cells: encodePaint(s.cells) });
     },
     onEnd: () => {
-      const s = shapeStroke.current, m = shaper.current; shapeStroke.current = null;
+      const s = shapeStroke.current, m = mapTools?.shaping; shapeStroke.current = null;
       if (s && m) {
         const out = m.finishShape(s, follow && planet ? m.planetOptionsOf(map) : undefined), cells = encodePaint(out);
         heights.current = { cells, e: s.heights };
@@ -196,7 +227,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   };
   /** New rivers, towns and roads for the land as it is now; places anyone has worked on stay. */
   const redoPlaces = () => {
-    const m = shaper.current, base = mapPaint(map), cells = base && decodePaint(base.columns, base.rows, base.cells);
+    const m = mapTools?.shaping, base = mapPaint(map), cells = base && decodePaint(base.columns, base.rows, base.cells);
     if (m && base && cells) edit(m.redoPlanetPlaces(map, cells, keptHeights(base)));
   };
   const kindFor = (icon: string) => icon.startsWith('u-') ? 'landmark' as const : iconKind(icon);
@@ -238,7 +269,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
 
   return <dialog ref={dialog} className="world-studio" aria-label={`Map editor: ${entry.title}`} onCancel={e => { e.preventDefault(); const active = document.activeElement as HTMLElement | null; if (active?.matches('input, textarea, select')) { active.blur(); return; } if (draft) { setDraft(null); return; } if (selected) { setSelected(''); return; } if (cell >= 0) { setCell(-1); return; } if (playerView) { setPlayerView(false); return; } if (!editingPin && !generating && !using) close(); }}>
     <header className="world-studio-head">
-      <div className="world-studio-title"><strong>{entry.title}</strong><span>{mapKinds[map.category]}</span></div>
+      <div className="world-studio-title">{parents.length > 0 && <nav className="zoom-path" aria-label="Maps this one is part of">{parents.map(p => <span key={p.id}><button type="button" className="text-button" onClick={() => openMap(p.id)}>{p.title}</button><ChevronRight size={13} aria-hidden="true"/></span>)}</nav>}<strong>{entry.title}</strong><span>{mapKinds[map.category]}</span></div>
       <span className="world-studio-saved"><Check size={13}/> Saved</span>
       {painted && <button className="button" onClick={() => setGenerating(true)}><Dices size={15}/> Generate</button>}
       <button className="icon-button" aria-label="Undo" disabled={!undo.length} onClick={doUndo}><Undo2 size={17}/></button>
@@ -253,12 +284,17 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       </nav>
       <section className="world-studio-map">
         <MapViewport map={map} editing={tool !== 'select' && !playerView}>
-          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
+          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <div className="zoom-host"><MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
             brush={brush} fogEditing={tool === 'fog'} onCell={tool === 'fog' ? explore : undefined}
             selectedItem={selected} onItem={tool === 'select' ? select : undefined}
-            onPlace={tool === 'place' ? place : tool === 'stamp' ? stamp : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>}
+            onPlace={tool === 'zoom' ? (x, y) => frameAt(x, y) : tool === 'place' ? place : tool === 'stamp' ? stamp : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>
+            {(show.frames || tool === 'zoom') && (closer.length > 0 || (tool === 'zoom' && zoomFrame)) && <div className="zoom-frames">
+              {closer.map(c => { const f = c.mapData!.zoomOf!; return <div key={c.id} className="zoom-frame" style={frameStyle(f)}><button type="button" onClick={() => openMap(c.id)} title={`Open ${c.title}`}>{c.title}</button></div>; })}
+              {tool === 'zoom' && zoomFrame && <div className="zoom-frame is-new" style={frameStyle(zoomFrame)}/>}
+            </div>}
+          </div>}
         </MapViewport>
-        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : tool === 'shape' ? (shaperReady ? 'Drag to shape the land. [ and ] change the brush size.' : 'Getting the land tools ready…') : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Pick an icon, then click the map to add a place.' : tool === 'stamp' ? 'Pick a landmark, then click the map to stamp it. Select a stamp afterwards to rename it.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
+        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : tool === 'shape' ? (shaperReady ? 'Drag to shape the land. [ and ] change the brush size.' : 'Getting the land tools ready…') : tool === 'zoom' ? 'Click a spot to frame it, then make a closer map of it. Click a frame’s name to open a map made before.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Pick an icon, then click the map to add a place.' : tool === 'stamp' ? 'Pick a landmark, then click the map to stamp it. Select a stamp afterwards to rename it.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
       </section>
       <aside className="world-studio-inspector" aria-label="Inspector">
         {playerView ? <>
@@ -290,6 +326,23 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <button className="button" disabled={!shaperReady} onClick={redoPlaces}>Redo rivers and towns</button>
             <p className="aside-hint">Rivers run down from the hills you raised, and towns settle on mild coasts and rivers. Places you have written notes for, linked or put on a route stay.</p>
           </> : <p className="aside-hint">Generate a whole planet, or draw one by hand, and its climate follows the land you shape.</p>}
+        </>}
+        {tool === 'zoom' && painted && <>
+          <h3><ZoomIn size={17}/> Zoom in</h3>
+          {!mapTools ? <p className="aside-hint">Getting ready…</p> : !size ? <p className="aside-hint">{map.scale ? 'This map is already as close as Zoom in goes. Hex areas are about 120 miles across.' : 'Set the map width in the map settings first, so closer maps know how big they are.'}</p> : <>
+            <div className="world-seg" role="group" aria-label="Size of the closer map">{zoomChoices.map(z => <button key={z.id} aria-pressed={size.id === z.id} onClick={() => { setZoomSize(z.id); if (zoomAt) frameAt(zoomAt.x, zoomAt.y, z.id); }}>{z.name}</button>)}</div>
+            <p className="aside-hint">{size.id === 'hex' ? 'A hex crawl of 20 by 14 six-mile hexes, ready for travel and encounters.' : `A ${size.name.toLowerCase()} map ${(map.scale?.unit === 'km' ? Math.round(size.miles * 1.609) : size.miles).toLocaleString()} ${map.scale?.unit ?? 'mi'} across.`}</p>
+            {zoomPreview ? <>
+              <div className="zoom-preview"><MapCanvas map={zoomPreview} thumbnail/></div>
+              <label className="world-field">Name<input value={zoomTitle} maxLength={160} onChange={e => setZoomTitle(e.target.value)}/></label>
+              <p className="aside-hint">The same seas and biomes, with finer coasts, hills and lakes. Places, rivers, roads and names inside come along; after that, each map keeps its own changes.</p>
+              <button className="button primary" disabled={!onNewMap || !zoomTitle.trim()} onClick={makeCloser}>Make {size.id === 'hex' ? 'hex area' : size.name.toLowerCase()} map</button>
+            </> : <p className="aside-hint">Click the map to frame a spot.</p>}
+          </>}
+          {closer.length > 0 && <>
+            <h3 className="world-sub">Closer maps</h3>
+            <ul className="world-places">{closer.map(c => <li key={c.id}><button onClick={() => openMap(c.id)}>{c.title}<ArrowUpRight size={13} aria-hidden="true"/></button></li>)}</ul>
+          </>}
         </>}
         {tool === 'fog' && <>
           <h3><CloudFog size={17}/> Fog of war</h3>
@@ -341,6 +394,13 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             <button className="text-button" onClick={removeSelected}>Delete label</button>
           </div> : cell >= 0 && tool === 'select' ? <HexInspector key={cell} map={map} cell={cell} plan={plan} pace={pace} setPace={setPace} campaign={campaign} library={library} setMap={setMap} onCalendarChange={onCalendarChange} onRevealInParents={onRevealInParents}/>
           : !drawing && <>
+            {parent && <div className="zoom-locator">
+              <span className="world-label">Part of</span>
+              <button type="button" onClick={() => openMap(parent.id)} aria-label={`Open ${parent.title}`}>
+                <span className="zoom-host"><MapCanvas map={parent.mapData!} thumbnail/>{map.zoomOf && <span className="zoom-frames"><span className="zoom-frame is-here" style={frameStyle(map.zoomOf)}/></span>}</span>
+                <span>{parent.title} <ArrowUpRight size={13} aria-hidden="true"/></span>
+              </button>
+            </div>}
             <h3>Map</h3>
             <label className="world-field">Map type<select value={map.category} onChange={e => setMap({ category: e.target.value as MapData['category'] })}>{Object.entries(mapKinds).map(([key, v]) => <option key={key} value={key}>{v}</option>)}</select></label>
             <div className="world-pair">
@@ -366,6 +426,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
           <label className="world-check"><input type="checkbox" checked={show.paths} onChange={e => setShow({ ...show, paths: e.target.checked })}/><span>Rivers, roads and borders</span></label>
           <label className="world-check"><input type="checkbox" checked={show.labels} onChange={e => setShow({ ...show, labels: e.target.checked })}/><span>Names on the map</span></label>
           <label className="world-check"><input type="checkbox" checked={show.routes} onChange={e => setShow({ ...show, routes: e.target.checked })}/><span>Travel routes</span></label>
+          {closer.length > 0 && <label className="world-check"><input type="checkbox" checked={show.frames} onChange={e => setShow({ ...show, frames: e.target.checked })}/><span>Closer maps <small>{closer.length} made from this map</small></span></label>}
           <h3 className="world-sub">Places</h3>
           {map.pins.length ? <ul className="world-places">{map.pins.map((p, i) => <li key={p.id}><button aria-pressed={selected === p.id} onClick={() => select(selected === p.id ? '' : p.id)}><span>{i + 1}</span>{p.title}{(p.visibility === 'gm' || !pointRevealed(map, p.x, p.y)) && <EyeOff size={13} aria-label="Hidden from players"/>}</button></li>)}</ul>
             : <p className="aside-hint">Choose Place, then click the map.</p>}
@@ -374,7 +435,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
         </>}
       </aside>
     </div>
-    {tool === 'shape' && !shaperReady && <ShapingLoader onReady={shapingLoaded}/>}
+    {(tool === 'shape' || tool === 'zoom') && !mapTools && <MapToolsLoader onReady={setMapTools}/>}
     {using && <WorldUseDialog entry={entry} map={map} data={data} imageUrl={url} setMap={setMap} onClose={() => setUsing(false)}/>}
     {generating && <WorldGenerateDialog map={map} onClose={() => setGenerating(false)} onUse={(patch, hand) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool(hand ? 'shape' : 'terrain'); if (hand) { setShapeMode('land'); setRadius(6); } }}/>}
     {editingPin && <PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id !== entry.id)}
