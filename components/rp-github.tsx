@@ -6,6 +6,9 @@ import type { RpFile } from "@/lib/encyclopedia/rp-export";
 import { checkBranch, checkRepo, GithubError, parseRepo, preparePush, pushFiles, validKey, type FetchLike, type Prepared, type PushResult } from "@/lib/github-push";
 import { forgetKey, saveKey } from "@/lib/github-key";
 
+/* On a phone the sheet scrolls, so bring a new error into view. */
+const showAlert = (el: HTMLElement | null) => { el?.scrollIntoView({ block: "center", behavior: "smooth" }); };
+
 /** The browser's fetch, wrapped so it is not called as a method of another object. The key only ever goes to api.github.com (see lib/github-push.ts). */
 export const githubFetch: FetchLike = (url, init) => fetch(url, init);
 const message = (e: unknown, fallback: string) => e instanceof GithubError || e instanceof Error ? e.message : fallback;
@@ -63,7 +66,7 @@ export function ConnectView({ initialRepo, initialBranch, tokenFor, saveConfig, 
         {!state.kept && <p className="rpb-muted">This browser would not keep the key, so you will paste it again next time.</p>}
         <button type="button" className="rpb-primary" onClick={onContinue}>{continueLabel}</button>
       </> : <button type="submit" className="rpb-primary" disabled={busy}>{busy ? "Checking…" : "Check and save"}</button>}
-      {state.step === "error" && <p className="rpb-alert" role="alert"><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>}
+      {state.step === "error" && <p className="rpb-alert" role="alert" ref={showAlert}><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>}
       {state.step === "forgot" && <p className="rpb-muted" role="status">The key was removed from this device.</p>}
       {(saved || state.step === "ok") && state.step !== "forgot" && <button type="button" className="rpb-link" onClick={forget} disabled={busy}>Forget key on this device</button>}
     </form>
@@ -140,7 +143,7 @@ export function PushView({ repo, branch, token, includeGm, build, defaultMessage
     <p className="rpb-muted">{repo} · Branch {branch}</p>
     {state.step === "loading" && <p className="rpb-muted" role="status">Comparing with {repo}…</p>}
     {state.step === "error" && <>
-      <p className="rpb-alert" role="alert"><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>
+      <p className="rpb-alert" role="alert" ref={showAlert}><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>
       {keyProblem(state.code) ? <button type="button" className="rpb-primary" onClick={onChangeKey}>Change the key</button> : <button type="button" className="rpb-secondary" onClick={again}>Try again</button>}
     </>}
     {prep && prep.nothingToPush && state.step === "review" && <div className="rpb-card" role="status"><b><Check size={16} aria-hidden="true" />Already up to date</b><span>{repo} already has everything from this campaign. Nothing to push.</span></div>}
@@ -155,7 +158,7 @@ export function PushView({ repo, branch, token, includeGm, build, defaultMessage
       {state.step !== "done" && <button type="button" className="rpb-primary" disabled={busy || !msg.trim()} onClick={() => void push(prep)}>{state.step === "pushing" ? state.progress : `Push ${prep.head ? "1 commit" : "2 commits"} to ${branch}`}</button>}
       {state.step === "pushing" && <p className="rpb-muted" role="status">Keep this open until it finishes.</p>}
       {state.step === "failed" && <>
-        <p className="rpb-alert" role="alert"><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>
+        <p className="rpb-alert" role="alert" ref={showAlert}><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>
         {state.code === "moved" ? <button type="button" className="rpb-secondary" onClick={again}>Review again</button> : keyProblem(state.code) && <button type="button" className="rpb-secondary" onClick={onChangeKey}>Change the key</button>}
       </>}
       {state.step === "done" && <p className="rpb-ok rpb-pushed" role="status"><Check size={15} aria-hidden="true" /><span>Pushed · {state.result.files} file{state.result.files === 1 ? "" : "s"} in {state.result.commits} commit{state.result.commits === 1 ? "" : "s"} · <a href={state.result.url} target="_blank" rel="noopener">View on GitHub<ExternalLink size={12} aria-hidden="true" /></a></span></p>}
