@@ -67,7 +67,7 @@ test('the numbered layout, with a README in every numbered folder and one line p
    const target=(sub?sub.slice(0,-'README.md'.length):file).slice(dir.length+1);
    assert(readme.includes(`](${sub?target+'README.md':target})`),`${dir} README lists ${file}`);}
  }
- assert.match(get(f,'README.md'),/^# The Salt Road\n\nA missing cartographer\./);
+ assert.match(get(f,'README.md'),/^# The Salt Road\n\nA campaign in the world "The Lantern Coast"/);
  assert.match(get(f,'README.md'),/## Where we are[\s\S]*In-game date: Calendar of Harptos: 1 Hammer, 1492 DR[\s\S]*Latest session: \[Second night\]\(2-Story\/Sessions\/2026-11-08-Second-night\.md\)[\s\S]*Open quests:\n {2}- \[Find the cartographer\][\s\S]*## Folders/);
  assert.match(get(f,'README.md'),/\| \[6-GM-Only\]\(6-GM-Only\/README\.md\) .* \| Yes, all of it \|/);
  const agents=get(f,'AGENTS.md');
@@ -75,7 +75,7 @@ test('the numbered layout, with a README in every numbered folder and one line p
  assert.match(get(f,'2-Story/Handoff-History.md'),/None yet\./);assert.match(get(f,'5-Rules-and-Setup/Player-Wishes.md'),/## Entry format[\s\S]*None yet\./);
  assert.match(get(f,'5-Rules-and-Setup/Overrides-and-Rulings.md'),/## Entry format[\s\S]*None yet\./);
  assert.match(get(f,'2-Story/Timeline.md'),/## Sessions, newest first\n\n- 2026-11-08 [\s\S]*- 2026-11-01 [\s\S]*## Calendar events\n\n- 1 Hammer, 1492 DR \(every year\) - Harvest fair/);
- assert.match(get(f,'1-Now/Current-State.md'),/## Date[\s\S]*1 Hammer, 1492 DR[\s\S]*## Most recent session[\s\S]*Fog rolled in over Greyfen docks\./);
+ assert.match(get(f,'1-Now/Current-State.md'),/## Date[\s\S]*1 Hammer, 1492 DR[\s\S]*## Most recent session[\s\S]*Fog rolled in over \[Greyfen docks\]\(\.\.\/4-World\/Places\/Greyfen-docks\.md\)\./);
  assert.match(get(f,'1-Now/Ayla-Sheet-Tracker.md'),/- Health: 12/);assert.match(get(f,'1-Now/Ayla-Sheet-Tracker.md'),/- Shields: 2\/3/);
  const quests=get(f,'1-Now/Quests-and-Threads.md');assert.match(quests,/## Active[\s\S]*### Find the cartographer[\s\S]*- \[ \] Ask at the docks/);assert.match(quests,/## Task lists[\s\S]*Loose threads/);
  assert.match(get(f,'4-World/Maps/Coast-chart.md'),/### Pins\n\n- Greyfen docks at 20%, 30%/);
@@ -105,7 +105,7 @@ test('[[id|Label]] links become relative file links; anything that cannot resolv
  // links by title work, and a link to a page players cannot read is only its words
  const ws=fixture([{id:'x1',worldId:'w',campaignId:'c1',parentId:null,title:'Link test',kind:'note',overviewVisibility:'players',body:'Go to [[greyfen docks]] then [[Borin]] or [[borin|the hidden one]]. Quiet [[borin]] end.',tabs:[{id:'g',title:'Notes',body:'Ask [[borin|the old man]] and [[Greyfen Docks]].',visibility:'gm'}],updatedAt:NOW}]);
  const t=get(run(ws,{includeGm:false}),'4-World/Lore/Link-test.md');
- assert(t.includes('[Greyfen docks](../Places/Greyfen-docks.md)'));assert(t.includes('then Borin or the hidden one. Quiet  end.'));
+ assert(t.includes('[Greyfen docks](../Places/Greyfen-docks.md)'));assert(t.includes('then (hidden page) or the hidden one. Quiet (hidden page) end.'));
  const g=get(run(ws),'6-GM-Only/4-World/Lore/Link-test.md');assert(g.includes('[the old man](../../3-People/NPCs/Borin.md)'));assert(g.includes('[Greyfen docks](../../../4-World/Places/Greyfen-docks.md)'));
  const gmTwin=get(run(ws),'6-GM-Only/2-Story/Timeline.md');assert(gmTwin.includes('(Sessions/2026-11-10-Draft-night.md)'));
 });
@@ -233,8 +233,8 @@ test('a single shared top-level folder is stripped (GitHub Download ZIP); mixed 
  assert.deepEqual(one.map(x=>x.name),['README.md','.rpg-tools/campaign.json','1-Now/x.md']);
  const mixed=await readZip(await buildZip([{name:'README.md',data:'a'},{name:'repo-main/x.md',data:'b'}]));assert.deepEqual(mixed.map(x=>x.name),['README.md','repo-main/x.md']);
  const two=await readZip(await buildZip([{name:'a/x.md',data:'a'},{name:'b/y.md',data:'b'}]));assert.deepEqual(two.map(x=>x.name),['a/x.md','b/y.md']);
- const mac=await readZip(await buildZip([{name:'repo-main/x.md',data:'a'},{name:'__MACOSX/repo-main/._x.md',data:'junk'}]));assert.deepEqual(mac.map(x=>x.name),['x.md']);
- const lone=await readZip(await buildZip([{name:'only/one.md',data:'a'}]));assert.deepEqual(lone.map(x=>x.name),['one.md']);
+ const mac=await readZip(await buildZip([{name:'repo-main/x.md',data:'a'},{name:'__MACOSX/repo-main/._x.md',data:'junk'}]));assert.deepEqual(mac.map(x=>x.name),['repo-main/x.md']);
+ const lone=await readZip(await buildZip([{name:'only/one.md',data:'a'}]));assert.deepEqual(lone.map(x=>x.name),['only/one.md']);const ci=await buildZip([{name:'a.txt',data:'1'},{name:'A.TXT',data:'2'}]);await assert.rejects(readZip(ci),/two files/);
 });
 
 test('the zip reader refuses encrypted entries, zip64, too many files, too much data, unsafe names and junk',async()=>{
@@ -270,4 +270,54 @@ test('readRestoreCopy gives a clear error for a missing, player-safe, broken or 
  r=readRestoreCopy([file('world-manager/c1/campaign.json','\uFEFF'+scoped)]);assert.equal(r.ok,true);assert.equal(r.from,'world-manager/c1/campaign.json');
  r=readRestoreCopy([file('world-manager/c1/campaign.json',scoped),file('world-manager/c2/campaign.json',scoped)]);assert.equal(r.ok,false);assert.match(r.error,/several old/);
  r=readRestoreCopy([file('world-manager/c1/campaign.json',scoped),file('.rpg-tools/campaign.json',scoped)]);assert.equal(r.from,'.rpg-tools/campaign.json');
+});
+
+/* ---- review fixes ---- */
+const {planWrite,isLayoutPath}=await import('../lib/encyclopedia/rp-export.ts');
+function leakFixture(){
+ const cal=structuredClone(CAL);cal.visibility='players';cal.almanacNotes='Fine.\n::: secret\nLEAK-almanac-secret\n:::';
+ cal.events=[{id:'e2',title:'Fair',notes:'a\n::: secret\nLEAK-event-secret\n:::',date:cal.current,visibility:'players',annual:false}];
+ const e=(id,title,kind,campaignId,more={})=>({id,worldId:'w',campaignId,parentId:null,title,kind,body:'',updatedAt:NOW,...more});
+ return workspaceSchema.parse({schemaVersion:1,worlds:[{id:'w',name:'The Lantern Coast',description:'',archived:false}],
+  campaigns:[{id:'c1',worldId:'w',name:'The Salt Road',description:'LEAK-campdesc',github:{repository:'',branch:'main'},calendars:[cal],
+   statFields:[{id:'hp',label:'Health',section:'',type:'number',options:[],visibility:'players',archived:false},{id:'t',label:'Notes',section:'',type:'text',options:[],visibility:'players',archived:false}]}],
+  entries:[
+   e('hidpc','Borin','character','c1',{body:'LEAK-hpc-body',character:{...defaultCharacter(),role:'pc',statsByCampaign:{c1:{hp:5}}}}),
+   e('pc','Ayla','character','c1',{overviewVisibility:'players',body:'hi',character:{...defaultCharacter(),role:'pc',statsVisibility:'players',statsByCampaign:{c1:{hp:5,t:'a\n::: secret\nLEAK-statsecret\n:::'}}}}),
+   e('pubdup','Mara','lore',null,{overviewVisibility:'players',body:'public'}),
+   e('a-gmdup','Mara','lore','c1',{body:'LEAK-dupbody'}),
+   e('gmpage','Greyfen docks','lore','c1',{body:'LEAK-gmbody'}),
+   e('pub','Cael','place',null,{overviewVisibility:'players',body:'See [[Greyfen docks]] and [[gmpage]].'}),
+  ]});
+}
+test('review: description, GM PC, secrets in notes, names and hidden links',()=>{
+ const ws=leakFixture(),safe=rpExportFiles(ws,'c1',{includeGm:false,exportedAt:AT}),all=safe.map(f=>f.path+'\n'+f.text).join('\n');
+ assert(!all.includes('LEAK'),all.match(/.*LEAK.*/)?.[0]);
+ assert(!safe.some(f=>/Borin/.test(f.path)||f.path==='1-Now/Borin-Sheet-Tracker.md'));assert(!get(safe,'1-Now/Current-State.md').includes('Borin'));
+ assert(safe.some(f=>f.path==='3-People/Ayla.md'));
+ // a GM-only page with the same title does not shift the public name
+ assert(safe.some(f=>f.path==='4-World/Lore/Mara.md'&&f.text.includes('rpg-tools-id: pubdup')));
+ const full=rpExportFiles(ws,'c1',{includeGm:true,exportedAt:AT});
+ assert(full.some(f=>f.path==='4-World/Lore/Mara.md'&&f.text.includes('rpg-tools-id: pubdup')));assert(full.some(f=>f.path==='6-GM-Only/4-World/Lore/Mara-2.md'&&f.text.includes('LEAK-dupbody')));
+ const pubOnly=full.filter(f=>!f.path.startsWith('6-GM-Only/')&&f.path!=='.rpg-tools/campaign.json').map(f=>f.text).join('\n');assert(!pubOnly.includes('LEAK'));
+ assert(get(full,'6-GM-Only/README.md').includes('LEAK-campdesc'));
+ assert(get(full,'1-Now/Current-State.md')&&get(full,'6-GM-Only/1-Now/Borin-Sheet-Tracker.md').includes('Played changes'));
+ assert(get(full,'6-GM-Only/1-Now/Current-State.md').includes('Borin'));
+ assert(get(safe,'4-World/Places/Cael.md').includes('See (hidden page) and (hidden page).'));
+ assert(get(safe,'5-Rules-and-Setup/Campaign-Configuration.md').includes('Fine.'));
+});
+
+test('planWrite: write, skip and remove decisions',()=>{
+ const f=(path,text)=>({path,text}),h=textHash;
+ const files=[f('README.md','new readme'),f('AGENTS.md','agents'),f('1-Now/Current-State.md','cs'),f('2-Story/Handoff-History.md','tmpl'),f('8-Archive/Export-Log.md','log'),f('.rpg-tools/files.json','{}'),f('3-People/Ayla.md','ayla')];
+ const prev={hashes:{'README.md':h('old readme'),'1-Now/Current-State.md':h('cs old'),'3-People/Gone.md':h('gone'),'3-People/Edited.md':h('orig'),'6-GM-Only/x.md':h('x')}};
+ const existing=new Map([['README.md',h('old readme')],['AGENTS.md',h('mine')],['1-Now/Current-State.md',h('cs edited')],['2-Story/Handoff-History.md',h('filled')],['8-Archive/Export-Log.md',h('l')],['3-People/Gone.md',h('gone')],['3-People/Edited.md',h('changed')],['3-People/Orphan.md',h('o')],['6-GM-Only/x.md',h('edited gm')],['.rpg-tools/campaign.json',h('full')],['.git/config',h('c')],['../evil.md',h('e')],['notes/mine.md',h('n')]]);
+ const p=planWrite(existing,prev,files,false);
+ assert.deepEqual(p.write.map(x=>x.path).sort(),['.rpg-tools/files.json','3-People/Ayla.md','8-Archive/Export-Log.md','README.md']);
+ assert.deepEqual(p.skip.map(x=>x.path+':'+x.reason).sort(),['1-Now/Current-State.md:edited','2-Story/Handoff-History.md:template','AGENTS.md:unowned']);
+ assert.deepEqual(p.remove.map(x=>x.path+':'+x.reason).sort(),['.rpg-tools/campaign.json:gm','3-People/Gone.md:stale','6-GM-Only/x.md:gm']);
+ const g=planWrite(existing,prev,files,true);assert(!g.remove.some(x=>x.reason==='gm'));assert(g.remove.some(x=>x.path==='3-People/Gone.md'));
+ assert(!planWrite(new Map([['6-GM-Only/keep.md',h('z')]]),{hashes:{}},files,true).remove.length);
+ assert.deepEqual(planWrite(new Map(),null,files,true).write.length,files.length);
+ for(const bad of ['.git/config','../x','/x','a.md','notes/x.md','6-GM-Only/../x','.rpg-tools/..','3-People\\x.md'])assert(!isLayoutPath(bad),bad);for(const good of ['README.md','3-People/Ayla.md','.rpg-tools/files.json','6-GM-Only/a/b.md'])assert(isLayoutPath(good),good);
 });

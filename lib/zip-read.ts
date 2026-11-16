@@ -78,11 +78,13 @@ export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
 
   // Skip macOS metadata, then drop one shared top-level folder (GitHub's "Download ZIP" adds repo-main/).
   const real = files.filter(f => !f.name.startsWith("__MACOSX/"));
+  // Only with two or more files: a lone repo-main/x stays where it is, since one file cannot show that the folder is a wrapper.
   const first = real[0]?.name.split("/")[0];
-  const strip = !!first && real.every(f => f.name.includes("/") && f.name.split("/")[0] === first);
+  const strip = real.length >= 2 && !!first && real.every(f => f.name.includes("/") && f.name.split("/")[0] === first);
   return real.map(f => ({ name: strip ? f.name.slice(first!.length + 1) : f.name, data: f.data })).filter(f => {
     if (!f.name) return false;
-    if (seen.has(f.name)) throw new ZipError(`The ZIP has two files named ${f.name}.`);
-    seen.add(f.name); return true;
+    const key = f.name.toLowerCase(); // a case-insensitive disk would merge these
+    if (seen.has(key)) throw new ZipError(`The ZIP has two files named ${f.name}.`);
+    seen.add(key); return true;
   });
 }

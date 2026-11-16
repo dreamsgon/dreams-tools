@@ -9,7 +9,7 @@
  * random tables, a draft recap) go to the same path under 6-GM-Only/, and only when includeGm is true. With includeGm false
  * there is no 6-GM-Only folder and no .rpg-tools/campaign.json (the full restore copy would hold every GM secret).
  */
-import { campaignExport, playerText, SECRET_OPEN, SECRET_CLOSE, type Workspace, type Entry, type Campaign } from "./world-model.ts";
+import { campaignExport, playerText, stripSecrets, SECRET_OPEN, SECRET_CLOSE, type Workspace, type Entry, type Campaign } from "./world-model.ts";
 import { formatDate, publicCalendar, moonPhase, seasonOn, dateOrdinal, type Calendar } from "./calendar-model.ts";
 import { playerMap, mapKinds, type MapData, type MapPin } from "./map-model.ts";
 import { routeTotals } from "./travel-model.ts";
@@ -33,13 +33,15 @@ export type RpExportOptions = {
 };
 
 /** Files RPG Tools rewrites on every export. Everything else is kept when it was changed after the last export. */
+export const FOLDERS_LIST: readonly string[] = ["1-Now", "2-Story", "3-People", "4-World", "5-Rules-and-Setup", "6-GM-Only", "7-Library", "8-Archive"];
 export const isRewrittenPath = (path: string) => path === "README.md" || path === "AGENTS.md" || path.startsWith(".rpg-tools/") || path.endsWith("/README.md") || path === "8-Archive/Export-Log.md";
 /** Templates the AI GM fills in. An export never replaces one that already exists. */
 export const keepIfExists = (path: string) => /^(6-GM-Only\/)?(2-Story\/Handoff-History|5-Rules-and-Setup\/(Player-Wishes|Overrides-and-Rulings))\.md$/.test(path) || path === "6-GM-Only/Director-Notes.md";
 
 type Chunk = { gm: boolean; text: string; t?: boolean };
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-const one = (s: string) => s.replace(/\s+/g, " ").trim();
+/** One flattened line. Secret blocks are cut first: flattening would hide their markers and leak them. */
+const one = (s: string) => stripSecrets(s).replace(/\s+/g, " ").trim();
 /** One side's text. Neighbouring list lines (t) stay together; everything else gets a blank line between. */
 function join(cs: Chunk[], gm: boolean) {
   let s = "", prev = false;
@@ -53,7 +55,7 @@ function sec(heading: string, cs: Chunk[], gmHeading = heading): Chunk[] {
 /** One line: players get it through the player text filter (notes and rolls simplified, secrets cut). */
 const ln = (gm: boolean, text: string): Chunk => ({ gm, text: gm ? text : playerText(text), t: true });
 /** One list line that is already safe for its side. */
-const L = (gm: boolean, text: string): Chunk => ({ gm, text, t: true });
+const L = (gm: boolean, text: string): Chunk => ({ gm, text: gm ? text : playerText(text), t: true });
 const fenced = (text: string) => { const ticks = "`".repeat(Math.max(3, ...[...text.matchAll(/`+/g)].map(m => m[0].length + 1))); return `${ticks}\n${text}\n${ticks}`; };
 
 /** The ::: secret blocks of a text, each kept whole (an unclosed block runs to the end, as in the player view). */
@@ -131,7 +133,7 @@ export function sha256Hex(bytes: Uint8Array): string {
 export const textHash = (text: string) => sha256Hex(new TextEncoder().encode(text));
 
 /* ---- what each entry contributes ---- */
-const FOLDERS = ["1-Now", "2-Story", "3-People", "4-World", "5-Rules-and-Setup", "6-GM-Only", "7-Library", "8-Archive"] as const;
+const FOLDERS = FOLDERS_LIST;
 type Where = { dir: string; fallback: string };
 function whereOf(e: Entry): Where | null {
   switch (e.kind) {
@@ -148,10 +150,16 @@ function whereOf(e: Entry): Where | null {
   }
 }
 const sessionDate = (e: Entry) => e.recap?.playedOn ?? /\b(\d{4}-\d{2}-\d{2})\b/.exec(e.title)?.[1] ?? e.updatedAt.slice(0, 10);
+/** The opening paragraph of a text. Page links stay as [[id|Label]] so they are rewritten (or hidden) like any other link. */
 const lead = (text: string, max = 300) => {
-  const plain = text.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g, (_, t: string, l?: string) => l?.trim() || t).replace(/\{\{([^|{}\n]+)\|[^{}\n]*\}\}/g, "$1").replace(/^[ \t]*:::.*$/gm, "");
+  const plain = text.replace(/\[\[([^\]\n]+)\]\]/g, (whole, inner: string) => {
+    const roll = rollTarget(inner); if (roll) return roll.label ?? roll.formula;
+    const table = tableTarget(inner); if (table) return table.label ?? table.name;
+    const at = inner.indexOf("|"), raw = (at < 0 ? inner : inner.slice(0, at)).trim();
+    return /^maptable:/i.test(raw) ? (at < 0 ? "" : inner.slice(at + 1).trim()) || "Battle map" : whole;
+  }).replace(/\{\{([^|{}\n]+)\|[^{}\n]*\}\}/g, "$1").replace(/^[ \t]*:::.*$/gm, "");
   const para = plain.split(/\n\s*\n/).map(p => p.split("\n").filter(l => !/^\s*#/.test(l)).join(" ").replace(/[*`>]|^\s*[-*] /g, "").replace(/\s+/g, " ").trim()).find(Boolean) ?? "";
-  return para.length > max ? para.slice(0, max - 3).replace(/\s+\S*$/, "") + "..." : para;
+  return para.length > max ? para.slice(0, max - 3).replace(/\s+\S*$/, "").replace(/\[\[[^\]]*$/, "") + "..." : para;
 };
 const label = (t: string) => one(t).replace(/[[\]|]/g, " ");
 const dash = (p: string) => p.replace(/–/g, "-");
@@ -170,7 +178,7 @@ function calendarChunks(c: Calendar): Chunk[] {
   const head = [`- Current date: ${formatDate(c, c.current)}`, ...(season ? [`- Season: ${season.name}`] : []), ...(c.weekdays.length ? [`- Weekdays: ${c.weekdays.join(", ")}`] : []), `- Months and festivals: ${months}`];
   out.push(L(gm, head.join("\n")));
   if (c.notes.trim()) out.push({ gm: true, text: `Calendar notes: ${c.notes}` });
-  if (pub.almanacNotes?.trim() || c.almanacNotes?.trim()) out.push({ gm, text: `Almanac: ${c.almanacNotes}` });
+  if (pub.almanacNotes?.trim() || c.almanacNotes?.trim()) out.push(ln(gm, `Almanac: ${c.almanacNotes}`));
   for (const m of c.moons ?? []) out.push(L(gm || m.visibility !== "players", `- Moon ${m.name}: ${moonPhase(c, m, c.current).name}${m.notes ? `. ${m.notes}` : ""}`));
   return sec(`### ${label(c.name)}`, out);
 }
@@ -291,14 +299,16 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
     if (!dirs.has(w.dir)) dirs.set(w.dir, []);
     dirs.get(w.dir)!.push({ id: e.id, base });
   }
-  const pubPath = new Map<string, string>();
-  for (const [dir, items] of dirs) for (const [id, name] of assignNames(items, new Set(["readme"]))) pubPath.set(id, `${dir}/${name}.md`);
+  const pubPath = new Map<string, string>(); // filled once we know which pages are public
   const QUESTS = "1-Now/Quests-and-Threads.md";
   const gmOf = (p: string) => `6-GM-Only/${p}`;
   const baseOf = (e: Entry) => (e.kind === "quest" || e.kind === "tasks" ? QUESTS : pubPath.get(e.id) ?? null);
 
   // Which entries have player text and which have GM text. Links depend on this and the text depends on links, so repeat until it settles.
   const pcIds = new Set(sorted.filter(e => e.kind === "character" && e.character?.role === "pc").map(e => e.id));
+  // A PC is in the public tree only when the player share would show it: a player-visible overview, or shared stats with a shared field.
+  const sharedFields = (c.statFields ?? []).some(f => !f.archived && f.visibility === "players" && f.type !== "none");
+  const pubPcs = new Set([...pcIds].filter(id => { const e = byId.get(id)!; return e.recap?.status !== "draft" && (e.overviewVisibility === "players" || (e.character?.statsVisibility === "players" && (sharedFields || (e.character.trackers ?? []).some(t => !t.gm)))); }));
   let hasPub = new Set<string>(), hasGm = new Set<string>();
   const ok = (id: string, gm: boolean) => hasPub.has(id) || (gm && hasGm.has(id));
   const cx: Ctx = { ws, c, byId, ok };
@@ -306,11 +316,18 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
   let built = pass();
   for (let i = 0; i < 6; i++) {
     const p = new Set<string>(), g = new Set<string>();
-    for (const [id, r] of built) { if (join(r.chunks, false) || pcIds.has(id)) p.add(id); if (includeGm && join(r.chunks, true)) g.add(id); }
+    for (const [id, r] of built) { if (join(r.chunks, false) || pubPcs.has(id)) p.add(id); if (includeGm && join(r.chunks, true)) g.add(id); }
     const same = p.size === hasPub.size && g.size === hasGm.size && [...p].every(x => hasPub.has(x)) && [...g].every(x => hasGm.has(x));
     hasPub = p; hasGm = g;
     if (same) break;
     built = pass();
+  }
+  // Names. Public files are numbered among public pages only, so a GM-only page never shifts a public name. GM-only pages are
+  // numbered after them, inside 6-GM-Only (a page with both parts keeps one name for both files).
+  for (const [dir, items] of dirs) {
+    const taken = new Set(["readme"]);
+    for (const [id, name] of assignNames(items.filter(i => hasPub.has(i.id)), taken)) pubPath.set(id, `${dir}/${name}.md`);
+    for (const [id, name] of assignNames(items.filter(i => !hasPub.has(i.id) && hasGm.has(i.id)), taken)) pubPath.set(id, `${dir}/${name}.md`);
   }
   const pathOf = (id: string, gm: boolean): string | null => {
     const e = byId.get(id), base = e ? baseOf(e) : null; if (!base) return null;
@@ -332,7 +349,7 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
     const e = byId.get(target) ?? byTitle.get(target.toLowerCase());
     const base = e ? baseOf(e) : null;
     const file = !e ? null : twinOnly ? (gm && hasGm.has(e.id) && base ? gmOf(base) : null) : pathOf(e.id, gm);
-    if (!e || !file) return lab || (e && e.id === target ? "" : target);
+    if (!e || !file) return lab || (e ? "(hidden page)" : target);
     return `[${label(lab || e.title)}](${relPath(from, file)})`;
   });
 
@@ -359,7 +376,7 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
     if (hasGm.has(e.id)) pageIds.set(gmOf(base), e.id);
   }
   const people = sorted.filter(e => e.kind === "character"), pcs = people.filter(e => pcIds.has(e.id));
-  const stemOf = (id: string) => pubPath.get(id)!.split("/").pop()!.replace(/\.md$/, "");
+  const stemOf = (id: string) => (pubPath.get(id) ?? `${fileStem(byId.get(id)!.title, "Character")}.md`).split("/").pop()!.replace(/\.md$/, "");
   const calendars = c.calendars ?? [];
   const link = (id: string, gm: boolean) => `[[${gm ? "gm:" : ""}${id}|${label(byId.get(id)?.title ?? "")}]]`;
 
@@ -368,16 +385,16 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
   const latestPub = sessions.find(s => hasPub.has(s.id) && built.get(s.id)!.leadPub), latestGm = sessions.find(s => hasGm.has(s.id) && built.get(s.id)!.leadGm);
   twin("1-Now/Current-State.md", "Current State", [
     ...sec("## Date", calendars.map(cal => L(cal.visibility !== "players", `- ${label(cal.name)}: ${formatDate(cal, cal.current)}`))),
-    ...sec("## Party", pcs.map(p => L(false, `- ${link(p.id, false)}`))),
+    ...sec("## Party", pcs.map(p => pubPcs.has(p.id) ? L(false, `- ${link(p.id, false)}`) : L(true, `- ${link(p.id, true)}`))),
     ...sec("## Most recent session", [...(latestPub ? [{ gm: false, text: `${link(latestPub.id, false)}\n\n${built.get(latestPub.id)!.leadPub}` }] : []), ...(latestGm ? [{ gm: true, text: `${link(latestGm.id, true)}\n\n${built.get(latestGm.id)!.leadGm}` }] : [])]),
     { gm: false, text: "## Next session starting point\n\nNone recorded yet. The GM writes the exact opening situation and the next decision here at the end of each session." },
   ], "Where the story stands: date, party, most recent session, next starting point", { always: true });
   for (const pc of pcs) {
-    const pubStats = pc.character!.statsVisibility === "players", s = statChunks(c, pc, pubStats);
+    const pub = pubPcs.has(pc.id), s = statChunks(c, pc, pub && pc.character!.statsVisibility === "players");
     twin(`1-Now/${stemOf(pc.id)}-Sheet-Tracker.md`, `${one(pc.title)} - Sheet Tracker`, [
-      { gm: false, text: `Baseline from the character page, last changed ${pc.updatedAt}. Record played changes (damage, spending, advancement) under "Played changes". An export does not replace this file once you edited it.` },
-      ...sec("## Stats", s.stats), ...sec("## Trackers", s.trackers), { gm: false, text: "## Played changes\n\nNone yet." },
-    ], `${one(pc.title)}: stat values and trackers`, { always: true });
+      { gm: !pub, text: `Baseline from the character page, last changed ${pc.updatedAt}. Record played changes (damage, spending, advancement) under "Played changes". An export does not replace this file once you edited it.` },
+      ...sec("## Stats", s.stats), ...sec("## Trackers", s.trackers), { gm: !pub, text: "## Played changes\n\nNone yet." },
+    ], `${one(pc.title)}: stat values and trackers`, { always: pub });
   }
   const qs = sorted.filter(e => e.kind === "quest").sort((a, b) => (a.quest?.rank ?? 1e9) - (b.quest?.rank ?? 1e9) || cmp(a.title, b.title) || cmp(a.id, b.id));
   const questSecs: Chunk[] = [];
@@ -444,7 +461,7 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
     }
     if (dir === "3-People/NPCs" && !lines.length) lines.push("None yet.");
     const gmDir = dir === "6-GM-Only", extra = dir === "5-Rules-and-Setup" && includeGm ? " Random tables are GM-only: see 6-GM-Only/5-Rules-and-Setup/Random-Tables/." : "";
-    put(readme, `# ${dir.split("/").pop()}\n\n${PURPOSES[dir]}${extra}\n\nSpoilers: ${gmDir ? "yes, all of it. Keep this folder away from players." : "none. Everything here is player-visible."}\n\n## Files\n\n${lines.join("\n") || "None yet."}\n`, PURPOSES[dir], gmDir);
+    put(readme, `# ${dir.split("/").pop()}\n\n${PURPOSES[dir]}${extra}\n\nSpoilers: ${gmDir ? "yes, all of it. Keep this folder away from players." : "none. Everything here is player-visible."}\n${gmDir ? `\n## Campaign description (GM copy of the front page text)\n\n${c.description.trim() || "No description yet."}\n` : ""}\n## Files\n\n${lines.join("\n") || "None yet."}\n`, PURPOSES[dir], gmDir);
   }
   put("AGENTS.md", agentsText(c.name, includeGm), "Instructions for an AI GM", false);
 
@@ -452,7 +469,7 @@ export function rpExportFiles(workspace: Workspace, campaignId: string, opts: Rp
   const dates = calendars.filter(x => x.visibility === "players").map(x => `${label(x.name)}: ${formatDate(x, x.current)}`);
   const open = qs.filter(q => (q.quest?.state ?? "active") === "active" && hasPub.has(q.id)).map(q => { const next = (q.quest?.objectives ?? []).find(o => !o.hidden && goalStatus(o) === "todo"); return `  - ${link(q.id, false)}${next ? ` - next: ${one(next.text)}` : ""}`; });
   const rows = FOLDERS.map(f => `| [${f}](${f}/README.md) | ${PURPOSES[f].replace(/\|/g, "/")} | ${f === "6-GM-Only" ? (includeGm ? "Yes, all of it" : "Not in this export") : "None"} |`);
-  const front = `# ${one(c.name)}\n\n${c.description.trim() || "No description yet."}\n\nA campaign in the world "${one(world.name)}", exported from RPG Tools. AI GMs: read [AGENTS.md](AGENTS.md) first.\n\n## Where we are\n\n- In-game date: ${dates.length ? dates.join("; ") : "not set"}\n- Latest session: ${latestPub ? `${link(latestPub.id, false)} - ${built.get(latestPub.id)!.leadPub}` : "none shared yet"}\n- Open quests:${open.length ? "\n" + open.join("\n") : " none shared yet"}\n\n## Folders\n\n| Folder | What is in it | Spoilers |\n| --- | --- | --- |\n${rows.join("\n")}\n`;
+  const front = `# ${one(c.name)}\n\nA campaign in the world "${one(world.name)}", exported from RPG Tools. AI GMs: read [AGENTS.md](AGENTS.md) first.\n\n## Where we are\n\n- In-game date: ${dates.length ? dates.join("; ") : "not set"}\n- Latest session: ${latestPub ? `${link(latestPub.id, false)} - ${built.get(latestPub.id)!.leadPub}` : "none shared yet"}\n- Open quests:${open.length ? "\n" + open.join("\n") : " none shared yet"}\n\n## Folders\n\n| Folder | What is in it | Spoilers |\n| --- | --- | --- |\n${rows.join("\n")}\n`;
   put("README.md", rewrite(front, "README.md", false), "Front page", false);
 
   // Export log, then the id map and hashes. The log counts every file of this export, itself included.
@@ -580,4 +597,44 @@ Do not remove or change it. It ties the file to its page in RPG Tools, so edits 
 - Never reword recorded play. Keep session records, handoffs and rulings word for word.
 - Follow 5-Rules-and-Setup/Save-Procedure.md at the end of every session.
 `;
+}
+
+/* ---- what to write, skip or delete when the files go into a repository ---- */
+const ROOT_FILES = ["README.md", "AGENTS.md"];
+/** A path an export could have produced: safe, and inside a numbered folder, .rpg-tools/ or one of the two root files. Never .git. */
+export function isLayoutPath(path: string): boolean {
+  try { assertSafePath(path); } catch { return false; }
+  const top = path.split("/")[0];
+  return ROOT_FILES.includes(path) || (path.includes("/") && (FOLDERS_LIST.includes(top) || top === ".rpg-tools"));
+}
+export type WriteSkip = { path: string; reason: "edited" | "unowned" | "template" };
+export type WriteRemove = { path: string; reason: "gm" | "stale" };
+/**
+ * Decides what an export does to a repository. Pure, so the command line and the in-app push follow the same rules.
+ * `existing` maps each layout file already there to the SHA-256 of its text. `previous` is the old .rpg-tools/files.json (parsed).
+ *  - A file that is absent, unchanged, or still exactly as the last export wrote it is written.
+ *  - A file that exists but was edited, or that the last export never recorded (even README.md or AGENTS.md), belongs to the user: skipped.
+ *    Templates the AI GM fills in are skipped whenever they exist. Export-Log.md and the two .rpg-tools files are always written.
+ *  - Without GM content, everything under 6-GM-Only/ and .rpg-tools/campaign.json is removed even if edited, since it holds secrets.
+ *  - Files the last export wrote that this one no longer has are removed only when unedited, and only inside the layout.
+ */
+export function planWrite(existing: Map<string, string | null>, previous: unknown, newFiles: RpFile[], includeGm: boolean) {
+  const prevHashes: Record<string, string> = {};
+  const raw = previous && typeof previous === "object" ? (previous as { hashes?: unknown }).hashes : undefined;
+  if (raw && typeof raw === "object") for (const [k, v] of Object.entries(raw)) if (typeof v === "string") prevHashes[k] = v;
+  const write: RpFile[] = [], skip: WriteSkip[] = [], remove: WriteRemove[] = [], names = new Set(newFiles.map(f => f.path));
+  for (const f of newFiles) {
+    assertSafePath(f.path);
+    const have = existing.get(f.path) ?? null;
+    if (have === null || have === textHash(f.text) || f.path === "8-Archive/Export-Log.md" || f.path.startsWith(".rpg-tools/")) { write.push(f); continue; }
+    if (keepIfExists(f.path)) { skip.push({ path: f.path, reason: "template" }); continue; }
+    if (prevHashes[f.path] === have) write.push(f);
+    else skip.push({ path: f.path, reason: prevHashes[f.path] === undefined ? "unowned" : "edited" });
+  }
+  for (const [path, have] of [...existing].sort((a, b) => cmp(a[0], b[0]))) {
+    if (have === null || names.has(path) || !isLayoutPath(path)) continue;
+    if (!includeGm && (path.startsWith("6-GM-Only/") || path === ".rpg-tools/campaign.json")) remove.push({ path, reason: "gm" });
+    else if (prevHashes[path] === have && !path.startsWith(".rpg-tools/")) remove.push({ path, reason: "stale" });
+  }
+  return { write, skip, remove };
 }
