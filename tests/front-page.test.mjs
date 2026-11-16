@@ -131,7 +131,7 @@ test('hubOf for a paired campaign', () => {
   const hub=hubOf({map:{workspace:mapWs()},book:{data:hubBook()}},'e:e1');
   assert.deepEqual(hub.scenes.map(({id,name})=>({id,name})),[{id:'s-a',name:'First'},{id:'s-b',name:'Second'}]);
   assert.deepEqual(hub.party.map(({id,title,role})=>({id,title,role})),[{id:'gm-pc',title:'gm-pc',role:'pc'}],'GM-only pcs are included');
-  assert.deepEqual(hub.recent.map(r=>r.id),['npc','gm-pc','r6','r5','r4']);
+  assert.deepEqual(hub.recent.map(r=>r.id),['npc','gm-pc','r6','r5','r4','r3','r2','r1'],'all pages, newest first, for a tall Recently edited widget to show');
   assert.equal(hub.recent.some(r=>r.kind==='folder'),false);
   assert.deepEqual(hub.frontConfig,defaultFrontPage([]));
   assert.equal(hub.front.customised,false);

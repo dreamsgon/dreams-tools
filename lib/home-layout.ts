@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dashboardSchema, heightSchema, type Dashboard } from "./encyclopedia/dashboard.ts";
 
 /*
  * The signed-in home page layout: which sections show, in what order and how wide (S/M/L = 4/8/12 of 12 columns),
@@ -9,6 +10,9 @@ import { z } from "zod";
 export const homeWidgets = ["continue", "attention", "sessions", "campaigns", "folders", "links", "recent", "pinned", "quests", "todo", "notes", "roll"] as const;
 export type HomeWidget = typeof homeWidgets[number];
 export const homeSizes = ["s", "m", "l"] as const;
+/** Heights in rows (1 is the default and is left out of the saved layout). */
+export const homeHeights = [1, 2, 3] as const;
+export type HomeHeight = typeof homeHeights[number];
 export type HomeSize = typeof homeSizes[number];
 /** Columns out of 12 that each width takes. */
 export const homeSpan: Record<HomeSize, number> = { s: 4, m: 8, l: 12 };
@@ -54,8 +58,9 @@ const campaignKey = z.string().min(1).max(120);
 export const homeLinkSchema = z.object({ label, url });
 export const homeTodoSchema = z.object({ id, text: z.string().trim().min(1).max(200), done: z.boolean(), campaignKey: campaignKey.optional() });
 
+export const MAX_CAMPAIGN_DASHBOARDS = 200;
 export const homeLayoutSchema = z.object({
-  widgets: z.array(z.object({ type: z.enum(homeWidgets), size: z.enum(homeSizes) })).max(homeWidgets.length)
+  widgets: z.array(z.object({ type: z.enum(homeWidgets), size: z.enum(homeSizes), h: heightSchema.optional() })).max(homeWidgets.length)
     .refine(w => new Set(w.map(x => x.type)).size === w.length, "Each section can only be on the page once"),
   options: homeOptionsSchema.optional(),
   links: z.array(homeLinkSchema).max(24).optional(),
@@ -65,6 +70,9 @@ export const homeLayoutSchema = z.object({
   pinnedCampaigns: z.array(campaignKey).max(100).optional(),
   /** Encyclopedia entry ids. */
   pinnedPages: z.array(z.string().min(1).max(100)).max(50).optional(),
+  /** Dashboards of Maptable-only campaigns, which have no Encyclopedia campaign to keep one in. Keyed "m:<Maptable campaign id>". */
+  campaignDashboards: z.record(z.string().min(3).max(120).startsWith("m:"), dashboardSchema).optional()
+    .refine(r => !r || Object.keys(r).length <= MAX_CAMPAIGN_DASHBOARDS, "Too many campaign dashboards."),
 });
 export type HomeLayout = z.infer<typeof homeLayoutSchema>;
 export type HomeLink = z.infer<typeof homeLinkSchema>;
@@ -73,14 +81,15 @@ export type HomeTodo = z.infer<typeof homeTodoSchema>;
 export const homePresets = ["standard", "gm", "minimal"] as const;
 export type HomePreset = typeof homePresets[number];
 export const presetNames: Record<HomePreset, string> = { standard: "Today's page", gm: "GM prep", minimal: "Minimal" };
+/** type:size or type:size:height. */
 const presetWidgets: Record<HomePreset, string[]> = {
   standard: ["continue:l", "campaigns:l", "recent:l"],
-  gm: ["continue:l", "attention:s", "sessions:s", "links:s", "campaigns:m", "todo:s", "folders:m", "roll:s", "quests:m", "pinned:s", "recent:m", "notes:s"],
+  gm: ["continue:l", "links:s:2", "campaigns:m", "folders:m", "todo:s:2", "quests:m", "sessions:s", "attention:s", "roll:s", "recent:m", "pinned:s", "notes:s"],
   minimal: ["links:l", "campaigns:l"],
 };
 const presetOptions: Partial<Record<HomePreset, HomeOptions>> = { gm: { campaigns: { show: "recent", count: 8 }, recent: { count: 6 }, roll: { tables: true } } };
 
-type Kept = Pick<HomeLayout, "links" | "todo" | "notes" | "pinnedCampaigns" | "pinnedPages">;
+type Kept = Pick<HomeLayout, "links" | "todo" | "notes" | "pinnedCampaigns" | "pinnedPages" | "campaignDashboards">;
 /** What a preset never replaces: the account's own things. */
 export function kept(l: Partial<HomeLayout> = {}): Kept {
   const out: Kept = {};
@@ -89,12 +98,16 @@ export function kept(l: Partial<HomeLayout> = {}): Kept {
   if (l.notes !== undefined) out.notes = l.notes;
   if (l.pinnedCampaigns) out.pinnedCampaigns = l.pinnedCampaigns;
   if (l.pinnedPages) out.pinnedPages = l.pinnedPages;
+  if (l.campaignDashboards) out.campaignDashboards = l.campaignDashboards;
   return out;
 }
 
 /** A named layout. Links, to-dos, notes and pins from `keep` carry over. */
 export function presetLayout(preset: HomePreset, keep: Partial<HomeLayout> = {}): HomeLayout {
-  const widgets = presetWidgets[preset].map(x => { const [type, size] = x.split(":"); return { type: type as HomeWidget, size: size as HomeSize }; });
+  const widgets = presetWidgets[preset].map(x => {
+    const [type, size, h] = x.split(":");
+    return { type: type as HomeWidget, size: size as HomeSize, ...(h && h !== "1" ? { h: Number(h) as HomeHeight } : {}) };
+  });
   const options = presetOptions[preset];
   return { ...kept(keep), widgets, ...(options ? { options: structuredClone(options) } : {}) };
 }
@@ -118,6 +131,10 @@ export function moveWidget(l: HomeLayout, from: number, to: number): HomeLayout 
 
 export const resizeWidget = (l: HomeLayout, type: HomeWidget, size: HomeSize): HomeLayout =>
   ({ ...l, widgets: l.widgets.map(w => w.type === type ? { ...w, size } : w) });
+
+/** Sets a section's height; 1 (the default) is left out of the saved layout. */
+export const setWidgetHeight = (l: HomeLayout, type: HomeWidget, h: HomeHeight): HomeLayout =>
+  ({ ...l, widgets: l.widgets.map(w => { if (w.type !== type) return w; const { h: _old, ...rest } = w; return h > 1 ? { ...rest, h } : rest; }) });
 
 /** Changes one setting of one section (for example `setOption(l, "campaigns", { count: 12 })`). */
 export function setOption<K extends keyof HomeOptions>(l: HomeLayout, section: K, patch: NonNullable<HomeOptions[K]>): HomeLayout {
@@ -144,7 +161,9 @@ export type HomeAction =
   | { action: "pinPage"; id: string; on: boolean }
   | { action: "todo"; todo: HomeTodo[] }
   | { action: "notes"; notes: string }
-  | { action: "links"; links: HomeLink[] };
+  | { action: "links"; links: HomeLink[] }
+  /** Saves (or, with null, clears) the dashboard of a Maptable-only campaign, by its key "m:<id>". */
+  | { action: "campaignDashboard"; key: string; dashboard: Dashboard | null };
 
 /** Applies one action to a layout and returns the checked result. Throws a readable message when the input is not valid. */
 export function applyHomeAction(l: HomeLayout, body: HomeAction): HomeLayout {
@@ -154,7 +173,11 @@ export function applyHomeAction(l: HomeLayout, body: HomeAction): HomeLayout {
     return parsed.data;
   };
   switch (body?.action) {
-    case "layout": return check(body.layout);
+    // A layout from the page never changes the campaign dashboards, which are saved on their own.
+    case "layout": {
+      const { campaignDashboards: _ignored, ...next } = (body.layout ?? {}) as Partial<HomeLayout>;
+      return check(l.campaignDashboards ? { ...next, campaignDashboards: l.campaignDashboards } : next);
+    }
     case "pinCampaign": {
       if (typeof body.key !== "string") throw new Error("Choose a campaign.");
       const pins = withMember(l.pinnedCampaigns, body.key, !!body.on);
@@ -168,6 +191,13 @@ export function applyHomeAction(l: HomeLayout, body: HomeAction): HomeLayout {
     case "todo": return check({ ...l, todo: body.todo });
     case "notes": return check({ ...l, notes: body.notes });
     case "links": return check({ ...l, links: body.links });
+    case "campaignDashboard": {
+      if (typeof body.key !== "string" || !/^m:.{1,100}$/.test(body.key)) throw new Error("Choose a Maptable campaign.");
+      const { [body.key]: _old, ...others } = l.campaignDashboards ?? {};
+      const dashboards = body.dashboard === null ? others : { ...others, [body.key]: body.dashboard };
+      const { campaignDashboards: _all, ...rest } = l;
+      return check(Object.keys(dashboards).length ? { ...rest, campaignDashboards: dashboards } : rest);
+    }
     default: throw new Error("Unknown action.");
   }
 }

@@ -5,7 +5,12 @@ import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
 import { newId, playerCampaign, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
 import { scenesInOrder } from "./scene-order.ts";
-import { dashboardSchema, excerpt } from "./encyclopedia/dashboard.ts";
+import { dashboardSchema, excerpt, type Dashboard } from "./encyclopedia/dashboard.ts";
+import { getInitiativeEntries, getCurrentInitiativeEntry, getInitiativeRound } from "./initiative-tracker.ts";
+import { applyHomeAction } from "./home-layout.ts";
+import { changeHome, readHome } from "./home-store.ts";
+import { inCampaign } from "./encyclopedia/tables.ts";
+import { starredTables, type StarredTables } from "./home-tables.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
@@ -190,8 +195,38 @@ export async function campaignAction(s: Session, body: CampaignAction) {
   return summaryOf(await readBoth(s));
 }
 
+export type HubInitiativeRow = { id: string; name: string; initiative: number; active: boolean; skipped: boolean; stats: string };
+export type HubInitiative = { sceneId: string; sceneName: string; round: number | null; rows: HubInitiativeRow[] };
+
+/**
+ * The initiative order of the campaign's most recently used scene that has one: the scene open in Maptable when it
+ * qualifies (Maptable keeps no per-scene timestamp), otherwise the last such scene in the campaign's order.
+ */
+export function lastEncounter(map: MapWorkspace, rootId: string): HubInitiative | null {
+  const withInitiative = scenesInOrder(map, rootId).map(x => x.scene).filter(s => (s.tokens ?? []).some(t => typeof t.initiative === "number" && Number.isFinite(t.initiative)));
+  const scene = withInitiative.find(s => s.id === map.activeId) ?? withInitiative[withInitiative.length - 1];
+  if (!scene) return null;
+  const current = getCurrentInitiativeEntry(scene);
+  const rows = getInitiativeEntries(scene).filter(e => e.initiative !== null).slice(0, 40).map(e => {
+    const one = e.tokens.length === 1 ? e.tokens[0] : null;
+    return {
+      id: e.id, name: e.label, initiative: e.initiative!, active: e.id === current?.id, skipped: e.tokens.every(t => t.skipInitiative),
+      stats: one ? (one.maxHp > 0 ? `${one.hp}/${one.maxHp} HP` : "") : `×${e.tokens.length}`,
+    };
+  });
+  return { sceneId: scene.id, sceneName: scene.name, round: scene.initiativeState ? getInitiativeRound(scene) : null, rows };
+}
+
+/** Things a campaign's dashboard needs from outside the two workspaces. */
+export type HubExtras = {
+  /** Dashboards of Maptable-only campaigns, from the account's home file (keyed "m:<id>"). */
+  dashboards?: Record<string, Dashboard>;
+  /** The campaign's starred random tables, for Quick roll. */
+  tables?: StarredTables;
+};
+
 /** One campaign for the campaign hub: its dashboard and its front page. */
-export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }, key: string) {
+export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }, key: string, extras: HubExtras = {}) {
   const summary = summaryOf(both), row = summary.rows.find(r => r.key === key);
   if (!row) throw new Error("Campaign not found");
   const map = both.map?.workspace ?? null, book = both.book.data;
@@ -215,11 +250,15 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
     party: seen.filter(e => e.kind === "character" && (e.character?.role === "pc" || e.character?.role === "companion"))
       .sort((a, b) => (a.character?.role === "pc" ? 0 : 1) - (b.character?.role === "pc" ? 0 : 1) || a.title.localeCompare(b.title))
       .map(e => ({ id: e.id, title: e.title, role: e.character!.role, group: e.character!.group, picture: e.picture ?? null })),
-    recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt, parent: titleOf(e.parentId) })),
+    recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt, parent: titleOf(e.parentId) })),
+    initiative: map && row.maptable ? lastEncounter(map, row.maptable.id) : null,
+    tables: extras.tables?.tables ?? [],
+    library: extras.tables?.library ?? { schemaVersion: 1 as const, tables: [] },
     quests, codex,
     lastSession: session ? { id: session.id, title: session.title, updatedAt: session.updatedAt, excerpt: excerpt(session.body) } : null,
     gameDate: calendar ? { name: calendar.name, date: formatDate(calendar, calendar.current) } : null,
-    dashboard: campaign?.dashboard ?? null,
+    // Notes keep the dashboard in the Encyclopedia campaign; a Maptable-only campaign (or one whose notes have none saved yet) uses the one in the home file.
+    dashboard: campaign?.dashboard ?? (row.maptable ? extras.dashboards?.[`m:${row.maptable.id}`] ?? null : null),
     look: campaign?.look ?? null,
     front: player?.frontPage ?? null,
     frontConfig: campaign ? campaign.frontPage ?? defaultFrontPage(campaign.calendars ?? []) : null,
@@ -231,15 +270,32 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
 }
 export type CampaignHub = ReturnType<typeof hubOf>;
 
-/** Saves the GM's dashboard layout (and its threads, notes and links) and returns the updated hub. */
+/** The hub with everything its dashboard needs, including saved Maptable-only dashboards and the campaign's starred tables. */
+export async function loadHub(s: Session, key: string) {
+  const both = await readBoth(s), row = summaryOf(both).rows.find(r => r.key === key);
+  if (!row) throw new Error("Campaign not found");
+  const eid = row.encyclopedia?.id ?? null;
+  const [home, tables] = await Promise.all([
+    row.maptable ? readHome(s.bucket, s.owner).then(h => h.layout.campaignDashboards).catch(() => undefined) : undefined,
+    starredTables(s, t => inCampaign(t, eid)).catch(() => undefined),
+  ]);
+  return hubOf(both, key, { dashboards: home, tables });
+}
+
+/**
+ * Saves the GM's dashboard layout (and its threads, notes and links) and returns the updated hub.
+ * A campaign with Encyclopedia notes keeps it on that campaign; a Maptable-only campaign keeps it in the account's home file.
+ */
 export async function saveDashboard(s: Session, key: string, input: unknown) {
   const both = await readBoth(s);
   const row = summaryOf(both).rows.find(r => r.key === key);
-  if (!row?.encyclopedia) throw new Error("Start Encyclopedia notes for this campaign to customize its dashboard.");
+  if (!row) throw new Error("Campaign not found");
   const parsed = dashboardSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That dashboard could not be saved.");
-  await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, dashboard: parsed.data } : c) });
-  return hubOf(await readBoth(s), key);
+  if (row.encyclopedia) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, dashboard: parsed.data } : c) });
+  else if (row.maptable) await changeHome(s.bucket, s.owner, l => applyHomeAction(l, { action: "campaignDashboard", key: `m:${row.maptable!.id}`, dashboard: parsed.data }));
+  else throw new Error("Campaign not found");
+  return loadHub(s, key);
 }
 
 /** Saves the front page of an Encyclopedia campaign and returns the updated hub. */
@@ -252,5 +308,5 @@ export async function saveFrontPage(s: Session, key: string, input: unknown) {
   const frontPage = parsed.data;
   await backupOnce(s, both);
   await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, frontPage } : c) });
-  return hubOf(await readBoth(s), key);
+  return loadHub(s, key);
 }
