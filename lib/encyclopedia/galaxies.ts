@@ -32,6 +32,30 @@ export const galaxyPresets = {
 export type GalaxyPresetId = keyof typeof galaxyPresets;
 export const galaxyPresetIds = Object.keys(galaxyPresets) as GalaxyPresetId[];
 
+/** A faster-than-light drive for a setting. Stored on the galaxy, so every sector and system in it travels the same way. */
+export const ftlModes = ["speed", "jump", "lanes"] as const;
+export const ftlStarts = ["anywhere", "au1", "frost"] as const;
+export const driveSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,60}$/), name: z.string().trim().min(1).max(60),
+  mode: z.enum(ftlModes),
+  /** Speed mode: times the speed of light. */
+  speed: z.number().finite().min(1).max(1e9),
+  /** Jump mode: light years per jump, hours per jump, hours to recharge between jumps. */
+  range: z.number().finite().min(0.1).max(100000), jumpHours: z.number().finite().min(0).max(100000), recharge: z.number().finite().min(0).max(100000),
+  /** Lanes mode: days per hex along a lane. */
+  laneDays: z.number().finite().min(0.01).max(10000),
+  /** Where in a system the drive can start: anywhere, past 1 AU, or past the frost line. */
+  start: z.enum(ftlStarts),
+});
+export type Drive = z.infer<typeof driveSchema>;
+export const newDrive = (n = 1): Drive => ({ id: `drive${n}`, name: n === 1 ? "Jump drive" : `Drive ${n}`, mode: "jump", speed: 1000, range: 12, jumpHours: 6, recharge: 20, laneDays: 1, start: "frost" });
+export const ftlModeNames: Record<Drive["mode"], { name: string; hint: string }> = {
+  speed: { name: "Faster than light", hint: "Ships fly at a multiple of light speed, anywhere." },
+  jump: { name: "Jumps", hint: "Ships leap a set distance, then wait for the drive to recharge." },
+  lanes: { name: "Lanes only", hint: "Ships can only travel along lanes, a set time per hex." },
+};
+export const ftlStartNames: Record<Drive["start"], string> = { anywhere: "Anywhere", au1: "Past 1 AU from the star", frost: "Past the frost line" };
+
 export const galaxySchema = z.object({
   /** A real galaxy this one started from. Its facts can still be edited. */
   preset: z.enum(galaxyPresetIds as [GalaxyPresetId, ...GalaxyPresetId[]]).optional(),
@@ -42,7 +66,9 @@ export const galaxySchema = z.object({
   facts: galaxyFactsSchema,
   /** One or two lines under the facts. The page's own tabs hold the longer story. */
   summary: z.string().trim().max(600),
-});
+  /** How ships cross between stars here, besides light speed. None means light speed only. */
+  drives: z.array(driveSchema).max(6).optional(),
+}).superRefine((g, ctx) => { if (g.drives && new Set(g.drives.map(d => d.id)).size !== g.drives.length) ctx.addIssue({ code: "custom", message: "Drive ids must be unique" }); });
 export type Galaxy = z.infer<typeof galaxySchema>;
 
 /** A small seeded random number generator (mulberry32 over an FNV-1a hash of the seed). */

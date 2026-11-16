@@ -40,6 +40,8 @@ export const sectorSystemSchema = z.object({
   edited: z.boolean().optional(),
   /** A real star (Local Bubble): its distance from the Sun in light years. */
   ly: z.number().finite().min(0).max(100000).optional(),
+  /** Its star system page, once surveyed. */
+  pageId: z.string().min(1).max(120).optional(),
 });
 export type SectorSystem = z.infer<typeof sectorSystemSchema>;
 export const sectorLaneSchema = z.object({ a: sid, b: sid });
@@ -229,6 +231,23 @@ export function laneSteps(s: Sector, from: string, to: string): number | null {
   for (const l of s.lanes) { next.set(l.a, [...(next.get(l.a) ?? []), l.b]); next.set(l.b, [...(next.get(l.b) ?? []), l.a]); }
   const seen = new Map([[from, 0]]), queue = [from];
   while (queue.length) { const at = queue.shift()!; if (at === to) return seen.get(at)!; for (const n of next.get(at) ?? []) if (!seen.has(n)) { seen.set(n, seen.get(at)! + 1); queue.push(n); } }
+  return null;
+}
+/** The length in hexes of the shortest way along lanes, or null when lanes do not join them. */
+export function laneHexes(s: Sector, from: string, to: string): number | null {
+  const at = new Map(s.systems.map(x => [x.id, x])), dist = new Map([[from, 0]]), open = new Set([from]);
+  while (open.size) {
+    let cur = "", best = Infinity;
+    for (const id of open) if (dist.get(id)! < best) { best = dist.get(id)!; cur = id; }
+    open.delete(cur);
+    if (cur === to) return best;
+    for (const l of s.lanes) {
+      const n = l.a === cur ? l.b : l.b === cur ? l.a : null, A = at.get(cur), B = n ? at.get(n) : undefined;
+      if (!n || !A || !B) continue;
+      const d = best + hexDistance(A, B);
+      if (d < (dist.get(n) ?? Infinity)) { dist.set(n, d); open.add(n); }
+    }
+  }
   return null;
 }
 /** A new system in a free hex. */

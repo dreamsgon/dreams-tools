@@ -29,7 +29,7 @@ export function SectorDialog({title,name:startName,sector,realAllowed,at,onApply
  const [count,setCount]=useState(start?Math.max(1,start.systems.length):12),[rumours,setRumours]=useState(start?Math.round(start.systems.filter(s=>s.status==='rumour').length/Math.max(1,start.systems.length)*100):30);
  const [backdrop,setBackdrop]=useState<Backdrop>(start?.backdrop??'nebula'),[color,setColor]=useState(start?.color??sectorColour(galaxyRandom(`colour|${startName}`)));
  const [lanes,setLanes]=useState(start?start.lanes.length>0:true),[seed,setSeed]=useState(start?.seed??(startName||'sector')),[real,setReal]=useState(!!start?.real),[seedTouched,setSeedTouched]=useState(false);
- const size=sizeOf(cols,rows),max=maxSystems(cols,rows),kept=(start?.systems??[]).filter(s=>s.edited);
+ const size=sizeOf(cols,rows),max=maxSystems(cols,rows),kept=(start?.systems??[]).filter(s=>s.edited||s.pageId);
  const made=useMemo(()=>real?localBubble({x:start?.x??at.x,y:start?.y??at.y,color}):generateSector({cols,rows,count:Math.min(count,max),seed,lanes,rumours,x:start?.x??at.x,y:start?.y??at.y,color,backdrop},kept),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- kept only changes when the dialog opens
   [real,cols,rows,count,max,seed,lanes,rumours,color,backdrop,at.x,at.y]);
