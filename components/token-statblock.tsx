@@ -42,7 +42,7 @@ export default function TokenStatblock({token,sceneId,campaignId,onLink}:{token:
    :!rows.length&&<p className="token-statblock-hint">{entry.title} has no statblock yet. Open the character in the Encyclopedia and paste one in its Statblock tab.</p>}
   {rows.length>0&&<section className="token-sheet-rolls" aria-label={`${sheet!.campaign.name} sheet`}>
    <h4>{sheet!.campaign.name} sheet</h4>
-   {rows.map(r=><div key={r.id} className="token-sheet-row"><span>{r.label}{r.worked!==undefined?<small> {r.worked<0?`−${-r.worked}`:`+${r.worked}`}</small>:r.value!==null&&r.value!==""&&typeof r.value!=="boolean"&&r.type!=="textarea"?<small> {String(r.value)}</small>:null}</span>
+   {rows.map(r=><div key={r.id} className="token-sheet-row"><span title={r.description}>{r.label}{r.worked!==undefined?<small> {r.worked<0?`−${-r.worked}`:`+${r.worked}`}</small>:r.value!==null&&r.value!==""&&typeof r.value!=="boolean"&&r.type!=="textarea"?<small> {String(r.value)}</small>:null}</span>
     <span className="token-sheet-chips">{r.rolls.map(x=>x.dice&&<button key={x.name} type="button" className="roll-chip" title={`Roll ${x.dice}${x.need?`, needs ${x.need.n} ${x.need.op==="atLeast"?"or more":"or under"}`:""}${r.spend?`. Spending ${r.spend.n} ${r.spend.tracker} isn’t taken here; change it in the Encyclopedia.`:""}`}
      onClick={()=>roll(`${token.name} · ${r.label}${r.rolls.length>1||x.name!=="Roll"?` · ${x.name}`:""}${x.need?` (${x.need.op==="atLeast"?"≥":"≤"} ${x.need.n})`:""}`,x.dice!)}><Dices size={12} aria-hidden="true"/>{x.name} <span>{x.dice}{x.need?` ${x.need.op==="atLeast"?"≥":"≤"} ${x.need.n}`:""}</span></button>)}</span>
    </div>)}

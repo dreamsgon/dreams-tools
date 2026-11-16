@@ -149,3 +149,61 @@ test('part 3: a Maptable token finds the sheet of its own campaign, else the pai
   assert.equal(sheetCampaignOf(raw, { campaignId: 'c2' }, 'm1'), undefined, 'its own campaign has no sheet');
   assert.equal(sheetCampaignOf(raw, { campaignId: 'c1' }, null).values.agi, undefined);
 });
+
+test('part 4: every starter layout is a valid sheet whose rolls all roll once values are in', async () => {
+  const { STAT_LAYOUTS, addLayout } = await import('../lib/encyclopedia/stat-layouts.ts');
+  assert.deepEqual(STAT_LAYOUTS.map(l => l.id), ['d20', 'pool', 'd100', '2d6']);
+  for (const l of STAT_LAYOUTS) {
+    let n = 0;
+    const { fields, added, skipped } = addLayout([], l, () => `${l.id}-${n++}`);
+    assert.equal(added, l.stats.length); assert.deepEqual(skipped, []);
+    for (const f of fields) assert.ok(statFieldSchema.safeParse(f).success, `${l.name}: ${f.label}`);
+    const values = Object.fromEntries(fields.map(f => [f.id, f.type === 'checkbox' ? true : f.type === 'number' ? 12 : null]));
+    const sheet = sheetOf(fields, values);
+    for (const f of fields) for (const r of statRolls(f)) {
+      assert.equal(statRollPreview(r.formula, f.type, sheet).bad, false, `${l.name}: ${f.label} ${r.name}`);
+      assert.ok(statRollDice(r.formula, values[f.id], sheet), `${l.name}: ${f.label} ${r.name} rolls`);
+      if (r.success) assert.notEqual(rollOutcome(50, r.success, values[f.id], sheet), null);
+    }
+  }
+  const d20 = STAT_LAYOUTS[0], pool = STAT_LAYOUTS[1];
+  let n = 0; const first = addLayout([], d20, () => `a${n++}`).fields, sheet = sheetOf(first, { a0: 16, a4: 2, a5: true });
+  assert.equal(statRollDice(statRolls(first[5])[0].formula, true, sheet), '1d20+5', 'Climbing, trained: Might mod 3 + Training bonus 2');
+  assert.equal(statRollDice(statRolls(first[5])[0].formula, false, sheet), '1d20+3');
+  // Adding another layout keeps the sheet and skips names already on it.
+  const both = addLayout(first, pool, () => `b${n++}`);
+  assert.deepEqual(both.skipped, ['Sneaking']); assert.equal(both.fields.length, first.length + pool.stats.length - 1);
+  assert.equal(addLayout(both.fields, pool, () => 'x').added, 0);
+  assert.equal(JSON.stringify(STAT_LAYOUTS).match(/\b(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|Sanity)\b/), null, 'generic names, not a rulebook\'s');
+});
+
+test('part 4: renaming a stat renames it inside other stats\' braces only', async () => {
+  const { renameStatRefs } = await import('../lib/encyclopedia/stat-rolls.ts');
+  const fields = [
+    { label: 'Brawn', derived: 'floor(({value}-10)/2)', rolls: [{ name: 'Check', formula: '1d20+{Body mod}' }] },
+    { label: 'Climb', rolls: [{ name: 'Roll', formula: '1d20+{body mod+Body armour}', success: { op: 'atLeast', against: '{Body}' } }] },
+    { label: 'Body armour', derived: '{Body}+1' },
+    { label: 'Plain', roll: 'd20' },
+  ];
+  const out = renameStatRefs(fields, 'Body', 'Brawn');
+  assert.equal(out[0].rolls[0].formula, '1d20+{Brawn mod}');
+  assert.equal(out[1].rolls[0].formula, '1d20+{Brawn mod+Body armour}', 'a longer name that starts the same is left');
+  assert.equal(out[1].rolls[0].success.against, '{Brawn}');
+  assert.equal(out[2].derived, '{Brawn}+1');
+  assert.equal(out[3], fields[3], 'untouched stats stay the same object');
+  assert.equal(renameStatRefs(fields, 'Body', 'Body'), fields);
+});
+
+test('stat descriptions: optional, kept to 2000 characters, and only for stats players can see', () => {
+  const base = { id: 'f', label: 'Second wind', section: 'Features', type: 'none', options: [], visibility: 'players', archived: false };
+  assert.equal(statFieldSchema.parse({ ...base, description: '  Once per rest, heal.  ' }).description, 'Once per rest, heal.');
+  assert.equal(statFieldSchema.safeParse({ ...base, description: 'x'.repeat(2001) }).success, false);
+  assert.equal(statFieldSchema.parse(base).description, undefined);
+  const w = demoWorkspace(), c = w.campaigns[0], e = w.entries.find(x => x.id === 'demo-mara');
+  c.statFields = [{ ...base, description: 'Once per rest, heal.', rolls: [{ name: 'Heal', formula: '1d10' }] }, { ...base, id: 'g', label: 'Secret', visibility: 'gm', description: 'GM eyes only' }];
+  e.character = { role: 'npc', group: '', tags: [], location: '', faction: '', status: 'active', statsVisibility: 'players', statsByCampaign: {} };
+  const pc = playerCampaign(workspaceSchema.parse(w), c.id);
+  const stats = pc.entries.find(x => x.id === e.id).stats;
+  assert.equal(stats.find(s => s.id === 'f').description, 'Once per rest, heal.');
+  assert.equal(JSON.stringify(pc).includes('GM eyes only'), false);
+});

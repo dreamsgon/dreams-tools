@@ -40,6 +40,8 @@ export const statFieldSchema = z.object({
     // Optional: a target, so the roll card says Success or Fail (at least 15, at most {value}).
     success:z.object({op:z.enum(["atLeast","atMost"]),against:z.string().trim().min(1).max(100)}).optional()})).max(6).optional(),
   note:z.string().trim().max(120).optional(),
+  // Optional (added later): a longer description, like what a feature does; shown as its tooltip and in its details.
+  description:z.string().trim().max(2000).optional(),
   // Optional (rollable sheet part 2): a worked-out value shown beside the value and read as {Name mod}, like floor(({value}-10)/2);
   // and a tracker (by name, since each character has its own) that rolling this stat spends from.
   derived:z.string().trim().max(200).optional(), spend:z.object({tracker:z.string().trim().min(1).max(40),n:z.number().int().min(1).max(1000)}).optional(),
