@@ -28,6 +28,7 @@
 - [VTT bridges (Foundry)](VTT-Bridges)
 - [Set up Foundry VTT](Foundry-VTT-Setup)
 - [Set up Roll20](Roll20-Setup)
+- [Set up Fantasy Grounds](Fantasy-Grounds-Setup)
 
 **Reference**
 - [Limits and what's coming](Limits-and-Whats-Coming)

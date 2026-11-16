@@ -3,7 +3,7 @@ import {useEffect,useState,type ReactNode} from 'react';
 import {BookOpen,Check,Copy,Download,ExternalLink,MonitorPlay} from 'lucide-react';
 import {confirmDialog} from '../confirm-dialog';
 import {ToolDialog} from './tool-dialog';
-import {bridgeClients,clientNames,guideHref,syncInfo,syncKinds,tableGuides,type BridgeClient,type Direction,type Sync} from '@/lib/bridge/sync';
+import {bridgeClients,clientNames,guideHref,syncInfo,syncKinds,tableGuides,type BridgeClient,type Direction,type FileTable,type Sync} from '@/lib/bridge/sync';
 import './sheet-import.css';
 import './bridge-access.css';
 
@@ -14,10 +14,10 @@ async function post(body:object){
  const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error??'Something went wrong. Try again.');return data;
 }
 /** A link to a table's setup guide, in a new window so the dialog stays open. */
-function GuideLink({table,children}:{table:BridgeClient|'roll20';children?:ReactNode}){
+function GuideLink({table,children}:{table:BridgeClient|FileTable;children?:ReactNode}){
  return <a className="bridge-guide" href={guideHref(table)} target="_blank" rel="noopener noreferrer"><BookOpen size={14}/> {children??tableGuides[table].label}<ExternalLink size={12} aria-label="(opens in a new window)"/></a>;
 }
-const ROLL20_SCRIPT='/api/bridge/roll20/rpg-tools-roll20.js',DICE_LINK='/api/bridge/roll20/rpg-tools-dice-link.zip';
+const ROLL20_SCRIPT='/api/bridge/roll20/rpg-tools-roll20.js',DICE_LINK='/api/bridge/roll20/rpg-tools-dice-link.zip',FG_EXTENSION='/api/bridge/fantasygrounds/rpg-tools.ext';
 function ago(iso?:string){
  if(!iso)return 'not used yet';
  const s=(Date.now()-Date.parse(iso))/1000;
@@ -29,8 +29,8 @@ function ago(iso?:string){
 export default function BridgeAccess({campaignId,campaignName}:{campaignId:string|null;campaignName:string|null}){
  const [open,setOpen]=useState(false);
  return <div className="aside-section"><strong>Other tables (VTT bridge)</strong>
-  <p className="modal-intro">Keep this campaign in step with Foundry VTT, or later your own table, and move characters and monsters to and from Roll20. Each bridge key reaches this campaign only, and is separate from AI connections.</p>
-  <p className="bridge-guides">Setup guides: <GuideLink table="foundry">Foundry VTT</GuideLink> <GuideLink table="roll20">Roll20</GuideLink> <GuideLink table="other">Other apps</GuideLink></p>
+  <p className="modal-intro">Keep this campaign in step with Foundry VTT, or later your own table, and move characters and monsters to and from Roll20 and Fantasy Grounds. Each bridge key reaches this campaign only, and is separate from AI connections.</p>
+  <p className="bridge-guides">Setup guides: <GuideLink table="foundry">Foundry VTT</GuideLink> <GuideLink table="roll20">Roll20</GuideLink> <GuideLink table="fantasygrounds">Fantasy Grounds</GuideLink> <GuideLink table="other">Other apps</GuideLink></p>
   {campaignId?<button className="button" onClick={()=>setOpen(true)}><MonitorPlay size={16}/> Connect a table</button>:<p>Choose and save a campaign first.</p>}
   {open&&campaignId&&<BridgeDialog campaignId={campaignId} campaignName={campaignName??'this campaign'} onClose={()=>setOpen(false)}/>}
  </div>;
@@ -109,6 +109,14 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
      <a className="button small" href={ROLL20_SCRIPT} target="_blank" rel="noopener noreferrer">Open the script <ExternalLink size={12} aria-label="(opens in a new window)"/></a>
      <a className="button small" href={DICE_LINK} download><Download size={13}/> Download the dice link</a>
      <GuideLink table="roll20"/>
+    </div>
+   </section>
+   <section className="bridge-roll20">
+    <strong>Fantasy Grounds</strong>
+    <p className="import-note">Fantasy Grounds doesn’t need a bridge key either. The RPG Tools extension for Fantasy Grounds Unity (5E ruleset) imports RPG Tools sheets and monster JSON (Open5e, the 5e SRD API, 5etools) as NPCs, from a file or the clipboard, and exports NPCs and characters back as sheets that Import a sheet reads. Fantasy Grounds can’t reach the web, so rolls don’t pass between the two while you play.</p>
+    <div className="bridge-roll20-actions">
+     <a className="button small" href={FG_EXTENSION} download><Download size={13}/> Download the extension</a>
+     <GuideLink table="fantasygrounds"/>
     </div>
    </section>
   </div>

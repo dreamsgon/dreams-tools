@@ -16,7 +16,7 @@
 - **Hex maps**: clearing fog around the party when an AI or a player moves a token (today only the GM's own moves in Maptable do), and a player-view fog preview in the generator.
 - **Stores**: a store as a Maptable token, calendar hours, restocking from a random table, live trading between players.
 - **Vehicles**: the vehicle Hold as a container for store-style taking and putting.
-- **Bridges**: more kinds in the Bridge API and Foundry module (scenes, tokens, tables, calendar, combat; quest changes made in Foundry); D&D Beyond link import (unofficial); filling the D&D 5E by Roll20 sheet's NPC section from the Roll20 script; Fantasy Grounds.
+- **Bridges**: more kinds in the Bridge API and Foundry module (scenes, tokens, tables, calendar, combat; quest changes made in Foundry); D&D Beyond link import (unofficial); filling the D&D 5E by Roll20 sheet's NPC section from the Roll20 script; Fantasy Grounds rulesets other than 5E, and filling a Fantasy Grounds player's own character sheet.
 - **Imported sheets**: HP − / + on the page and from tokens.
 - **Sheet formulas**: field references (so a skill can follow its ability).
 - **Members**: the campaign forum.

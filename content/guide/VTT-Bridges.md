@@ -1,6 +1,6 @@
 # VTT bridges (Foundry VTT)
 
-Keep another virtual tabletop in step with one RPG Tools campaign. **Setting up Foundry? Follow [Set up Foundry VTT](Foundry-VTT-Setup) step by step. Using Roll20? See [Set up Roll20](Roll20-Setup).**
+Keep another virtual tabletop in step with one RPG Tools campaign. **Setting up Foundry? Follow [Set up Foundry VTT](Foundry-VTT-Setup) step by step. Using Roll20? See [Set up Roll20](Roll20-Setup). Using Fantasy Grounds? See [Set up Fantasy Grounds](Fantasy-Grounds-Setup).**
 
 Today that means **Foundry VTT** (v12 and v13, any game system). The **bridge API** is general, so other tables can use it later.
 
@@ -33,6 +33,10 @@ The module is tested against a stand-in Foundry; it has not yet been tried in a 
 ## Roll20
 
 Roll20 doesn't use a bridge key. A Mod script imports RPG Tools sheets and monster or character JSON into your game, and exports characters back as RPG Tools sheets. See [Set up Roll20](Roll20-Setup).
+
+## Fantasy Grounds
+
+Fantasy Grounds doesn't use a bridge key either. An extension for Fantasy Grounds Unity (5E ruleset) imports RPG Tools sheets and monster JSON as NPCs, and exports NPCs and characters back as RPG Tools sheets. See [Set up Fantasy Grounds](Fantasy-Grounds-Setup).
 
 ## The bridge API (for other apps)
 
