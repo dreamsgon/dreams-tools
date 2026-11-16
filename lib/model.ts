@@ -211,9 +211,12 @@ export const hexLayerSchema = z.object({
   // Settlements, ruins and lairs by hex (ruins and lairs are GM-only), and roads as lists of hexes.
   places: z.array(z.object({ i: z.number().int().min(0).max(7999), kind: z.enum(["city", "town", "village", "ruin", "tower", "cave", "shrine", "lair"]), name: z.string().trim().min(1).max(60) })).max(40).default([]),
   roads: z.array(z.array(z.number().int().min(0).max(7999)).min(2).max(400)).max(40).default([]),
+  // Hexes painted by hand in the Map Creator, which Regenerate keeps.
+  painted: z.array(z.number().int().min(0).max(7999)).max(8000).default([]),
 }).refine(h => h.cells.length === h.cols * h.rows * 2, "Hex cells must match the hex map's size")
   .refine(h => h.rivers.every(r => r.every(i => i < h.cols * h.rows)), "Rivers must stay on the hex map")
-  .refine(h => h.roads.every(r => r.every(i => i < h.cols * h.rows)) && h.places.every(p => p.i < h.cols * h.rows), "Roads and places must stay on the hex map");
+  .refine(h => h.roads.every(r => r.every(i => i < h.cols * h.rows)) && h.places.every(p => p.i < h.cols * h.rows), "Roads and places must stay on the hex map")
+  .refine(h => h.painted.every(i => i < h.cols * h.rows), "Painted hexes must be on the hex map");
 export type HexLayerData = z.infer<typeof hexLayerSchema>;
 export const mapDrawingSchema = z.object({
   background: color,
@@ -293,6 +296,8 @@ export const sceneSchema = z.object({
     enabled: z.boolean(),
     base: z.boolean(),
     strokes: z.array(fogStrokeSchema).max(2000),
+    /** On a hex grid: clear the hexes around party tokens as they move, this many hexes out (0 is their own hex). */
+    around: z.number().int().min(0).max(3).optional(),
   }),
 });
 export const collectionSchema = z.object({

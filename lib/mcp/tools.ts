@@ -15,7 +15,8 @@ import { playerSheet } from "../encyclopedia/sheet-link.ts";
 import type { EncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import { advanceDate, eventsOn, formatDate, moonPhase, seasonOn, weekdayIndex, type Calendar } from "../encyclopedia/calendar-model.ts";
 import { address, distance, hexCenter, type Grid, type Point, type Scene, type Token, type Workspace as Maps } from "../model.ts";
-import { fogRegionContains } from "../fog.ts";
+import { fogged } from "../fog.ts";
+export { fogged };
 import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isInitiativeEntryActive } from "../initiative-tracker.ts";
 import { editScene } from "./table.ts";
 import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts";
@@ -133,22 +134,6 @@ function squares(s: Scene) {
   return { across: Math.round(s.width / s.grid.size * 10) / 10, down: Math.round(s.height / s.grid.size * 10) / 10 };
 }
 /** True when the point is under fog for players. */
-export function fogged(s: Scene, p: Point) {
-  if (!s.fog.enabled) return false;
-  let covered = s.fog.base;
-  for (const stroke of s.fog.strokes) {
-    const inside = stroke.shape === "brush"
-      ? stroke.points.some((q, i) => segmentDistance(p, stroke.points[Math.max(0, i - 1)], q) <= stroke.size / 2)
-      : fogRegionContains(stroke, p);
-    if (inside) covered = stroke.mode === "cover";
-  }
-  return covered;
-}
-function segmentDistance(p: Point, a: Point, b: Point) {
-  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
-  const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0;
-  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-}
 /** "C4" on this scene's grid, as a point at the middle of that square or hex. */
 export function squareAt(s: Scene, label: string): Point | null {
   const m = /^([A-Z]{1,3})\s*(\d{1,4})$/i.exec(label.trim());

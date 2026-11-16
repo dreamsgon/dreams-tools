@@ -2,13 +2,16 @@
 import ResizableSidebar from "./resizable-sidebar";
 import DesktopSidebars,{useDesktopSidebars} from "./desktop-sidebars";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Eraser, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles } from "lucide-react";
+import { ArrowLeft, Eraser, Combine, MousePointer2, Square, Pentagon, Circle, Egg, Slash, Spline, PenLine, DoorOpen, AppWindow, Undo2, Redo2, Minus, Plus, Grid3x3, Magnet, Copy, Trash2, Merge, Stamp as StampIcon, RotateCcw, RotateCw, FlipHorizontal2, Type, FilePlus2, Sparkles, Hexagon, Dices } from "lucide-react";
 import { newScene, uid, type Asset, type Scene, type Workspace, type MapDrawing, type MapShape, type MapStyle, type Point } from "@/lib/model";
 import DrawingShape, { DrawingBackground, StampSources } from "./drawing-shape";
 import MapStylePanel from "./map-style-panel";
 import StampLibrary from "./stamp-library";
 import NewMapDialog from "./new-map-dialog";
-import { HexLookFields } from "./hexmap-panel";
+import { HexLookFields, HexPaintPanel, HexRegenerateDialog } from "./hexmap-panel";
+import { describeHex, hexAt, hexCentre, paintedOutlines, paintHex, restoreHex, type HexPaint, type PaintTerrain } from "@/lib/hexmap/paint";
+import { hexOutline } from "@/lib/hexmap/layout";
+import { isWaterTerrain, readHex } from "@/lib/hexmap/biomes";
 import UseMapDialog, { pieceArt, type UseChoice } from "./use-map-dialog";
 import { setUpDrawnMapScene } from "@/lib/map-export";
 import type { GeneratedMap } from "@/lib/map-generator";
@@ -19,7 +22,7 @@ import AppearanceMenu from "./appearance-menu";
 import "./map-creator.css";
 import SaveChip from "./save-chip";
 import { WHEEL_IDLE_MS, CREATOR_LABEL_MAX, CREATOR_LABEL_MIN, accumulateWheel, stepLabelSize, wheelAmount, wheelScalable, wheelScaleShape } from "@/lib/wheel-resize";
-import { creatorTools, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, resizeMap, eraseWall, shiftSceneContents, type MapAnchor, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
+import { toolsFor, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, resizeMap, eraseWall, shiftSceneContents, type MapAnchor, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
 /** `shift` is how far the drawing has moved since it was opened, from growing or shrinking on its top or left; the scene's tokens and fog follow it on save. */
 type Draft = { name:string; width:number; height:number; drawing:MapDrawing; shift?:{x:number;y:number} };
@@ -43,7 +46,7 @@ const fromScene=(s:Scene):Draft=>({name:s.name,width:s.width,height:s.height,dra
 type Tool=CreatorTool;
 type Tab="selected"|"layers"|"style"|"map";
 const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.units,unit:s.grid.unit}:defaultCreatorGrid;
-const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,label:<Type size={19}/>};
+const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,hex:<Hexagon size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,label:<Type size={19}/>};
 export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
@@ -70,6 +73,10 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [pointMode,setPointMode]=useState<"move"|"add"|"delete">("move");
   const [message,setMessage]=useState("");
   const [stampId,setStampId]=useState("chest");
+  // Paint hexes: what to paint, or restoring hexes as they were made; the hex under the pointer; Regenerate.
+  const [hexPaint,setHexPaint]=useState<HexPaint>({biome:"temperate",terrain:"forest"}),[hexRestore,setHexRestore]=useState(false);
+  const [hoverHex,setHoverHex]=useState<number|null>(null),[regenerating,setRegenerating]=useState(false);
+  const tools=toolsFor(!!draft.drawing.hexes);
   const [using,setUsing]=useState(false),[newMap,setNewMap]=useState(false),[focusText,setFocusText]=useState<string|null>(null);
   // An image to trace over: kept on this device only, never saved with the map.
   const [trace,setTrace]=useState<{url:string;x:number;y:number;w:number;h:number;opacity:number}|null>(null);
@@ -82,7 +89,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [pending,setPending]=useState<(()=>void)|null>(null);
   const undo=useRef<Draft[]>([]),redo=useRef<Draft[]>([]);
   const svg=useRef<SVGSVGElement>(null);
-  const gesture=useRef<{before:Draft;id:string;start:Point;index:number|null;newShape:boolean;ids?:string[];wall?:WallSegment;raw?:Point;erase?:boolean}|null>(null);
+  const gesture=useRef<{before:Draft;id:string;start:Point;index:number|null;newShape:boolean;ids?:string[];wall?:WallSegment;raw?:Point;erase?:boolean;hex?:{changed:boolean}}|null>(null);
   // Shaped rooms are drawn a corner at a time; doors look for the wall under the pointer.
   const [polyPoints,setPolyPoints]=useState<Point[]|null>(null),[polyHover,setPolyHover]=useState<Point|null>(null),[hoverWall,setHoverWall]=useState<WallSegment|null>(null);
   useEffect(()=>{setSelectedPoint(null);setPointMode("move");},[selected]);
@@ -124,7 +131,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       // Tokens, fog and notes already on the table move with a drawing that grew or shrank on its top or left.
       else if(shift)shiftSceneContents(scene,shift.x,shift.y);
       Object.assign(scene,data,{mapId:null});
-      if(use)setUpDrawnMapScene(scene,{fog:use.fog,markers:use.markers,grid,pieces:pieces?.looks??null});
+      if(use)setUpDrawnMapScene(scene,{fog:use.fog,markers:use.markers,grid,pieces:pieces?.looks??null,around:use.around});
     });
     setSource(id);setDirty(false);setMessage("");
     // The scene now matches this drawing, so every step in the history is measured from here.
@@ -143,12 +150,15 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const open=(id:string)=>{
     const s=workspace.scenes.find(s=>s.id===id && s.drawing);
     const next=s?fromScene(s):blank();setSource(s?.id??null);setDraft(next);current.current=next;
+    // A map without hexes has no Paint hexes tool.
+    if(!next.drawing.hexes)setTool(t=>t==="hex"?"select":t);
     setDirty(false);setSelected(null);undo.current=[];redo.current=[];setMessage("");
     setFill(next.drawing.style?.floor??unstyledColours.floor);setStroke(next.drawing.style?.wall??unstyledColours.wall);
   };
   const startMap=(map:GeneratedMap,keepTrace=false)=>{
     const next:Draft={name:map.name,width:map.width,height:map.height,drawing:map.drawing};
     setSource(null);setDraft(next);current.current=next;setDirty(true);setSelected(null);undo.current=[];redo.current=[];setMessage("");setNewMap(false);
+    if(!next.drawing.hexes)setTool(t=>t==="hex"?"select":t);
     if(!keepTrace)setTrace(null);
     setFill(map.drawing.style?.floor??unstyledColours.floor);setStroke(map.drawing.style?.wall??unstyledColours.wall);
   };
@@ -177,7 +187,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     return {x:p.x,y:p.y};
   };
   const walls=()=>wallSegments(orderedShapes(current.current.drawing).filter(s=>!layerState(current.current.drawing,s.id).locked));
-  const pickTool=(next:Tool)=>{setTool(next);if(next==="stamp")setTab("selected");setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
+  const pickTool=(next:Tool)=>{setTool(next);if(next==="stamp"||next==="hex")setTab("selected");setPolyPoints(null);setPolyHover(null);setHoverWall(null);if(next!=="select")setSelected(null);};
   const finishPoly=(pts:Point[]|null=polyPoints)=>{
     setPolyPoints(null);setPolyHover(null);
     if(!pts||pts.length<3){if(pts?.length)setMessage("A shaped room needs at least three corners.");return;}
@@ -202,11 +212,28 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     // Rooms and walls land on the same squares as the Maptable grid; Alt draws freely.
     return snapPoint(p,snap&&tool!=="path"&&!e.altKey?grid.size:null,draft.width,draft.height);
   };
+  /** Paints (or restores) one hex under a Paint hexes drag. */
+  const paintAt=(i:number|null)=>{
+    const g=gesture.current,cur=current.current,layer=cur.drawing.hexes;if(!g?.hex||!layer||i===null)return;
+    const hexes=hexRestore?restoreHex(layer,i):paintHex(layer,i,hexPaint);if(!hexes)return;
+    const next={...cur,drawing:{...cur.drawing,hexes}};g.hex.changed=true;current.current=next;setDraft(next);
+  };
   const start=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(e.button!==0||gesture.current||spaceHeld)return;
     e.currentTarget.focus();
     e.currentTarget.setPointerCapture(e.pointerId);
     const p=point(e),before=structuredClone(current.current);
+    if(tool==="hex"){
+      const layer=before.drawing.hexes,i=layer?hexAt(layer,rawPoint(e)):null;if(!layer)return;
+      if(e.altKey){
+        // Alt-click picks up a hex's biome and terrain.
+        if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+        const h=i===null?null:readHex(layer.cells,i);
+        if(h){setHexPaint({biome:h.biome,terrain:isWaterTerrain(h.terrain)?"water":h.terrain as PaintTerrain});setHexRestore(false);}
+        return;
+      }
+      gesture.current={before,id:"",start:p,index:null,newShape:false,hex:{changed:false}};paintAt(i);return;
+    }
     if(tool==="select") {
       const target=(e.target as Element).closest("[data-shape]");
       const id=target?.getAttribute("data-shape");if(!id){choose(null);return;}
@@ -257,7 +284,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       gesture.current={before,id,start:p,index:null,newShape:true,wall,raw,erase:true};setDrawingId(id);setHoverWall(null);
       const next=structuredClone(before);next.drawing.shapes.push(gap);current.current=next;setDraft(next);return;
     }
-    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp"|"label">;
+    const id=uid(),type=tool==="circle"?"ellipse":tool as Exclude<Tool,"select"|"poly"|"circle"|"stamp"|"label"|"hex">;
     const shape:MapShape={id,type,roomParts:[],stamp:null,rotation:0,flip:false,hidden:false,locked:false,name:({rect:"Room",ellipse:"Round room",line:"Wall",curve:"Curved wall",path:"Freehand wall",door:"Door",window:"Window"} as Record<string,string>)[type]+" "+(before.drawing.shapes.length+1),folderId:before.drawing.folders?.some(f=>f.id===selected)&&!layerState(before.drawing,selected!).locked?selected:null,smooth:type==="path",points:type==="curve"?[p,p,p]:[p,p],fill:["rect","circle","ellipse","door","window"].includes(tool)?fill:null,stroke,thickness,closed:false};
     gesture.current={before,id,start:p,index:null,newShape:true};choose(id);setDrawingId(id);
     if(type==="door"||type==="window"){
@@ -268,7 +295,9 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     const next=structuredClone(before);next.drawing.layerOrder=[...layerIds(next.drawing),id];next.drawing.shapes.push(shape);current.current=next;setDraft(next);
   };
   const move=(e:React.PointerEvent<SVGSVGElement>)=>{
-    const g=gesture.current;if(!g)return;const p=point(e);
+    const g=gesture.current;if(!g)return;
+    if(g.hex){const layer=current.current.drawing.hexes;if(layer)paintAt(hexAt(layer,rawPoint(e)));return;}
+    const p=point(e);
     let next:Draft;
     if(g.newShape){
       next=structuredClone(current.current);const s=next.drawing.shapes.find(s=>s.id===g.id)!;
@@ -300,6 +329,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const finish=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(!gesture.current)return;
     move(e);const g=gesture.current;gesture.current=null;setDrawingId(null);
+    if(g.hex){if(g.hex.changed)apply(current.current,g.before);return;}
     const s=current.current.drawing.shapes.find(s=>s.id===g.id)!;
     if(g.erase&&g.wall){
       const [a,b]=s.points,base=g.before,r=eraseWall(base.drawing.shapes,g.wall,a,b,uid,base.drawing.background);
@@ -416,13 +446,16 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label title="Shift + scroll to resize">Text size <output>{single.thickness}</output><input type="range" min={10} max={60} value={single.thickness} onChange={e=>patchShape({thickness:+e.target.value})}/></label>
     <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
   </>;
-  const selectedPanel=tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink} custom={custom} addStamp={asset=>commit(w=>{w.assets.push(asset);})} resizeStamp={(assetId,squares)=>commit(w=>{const a=w.assets.find(a=>a.id===assetId);if(a)a.squares=squares;})}/>:<div className="creator-panel">
+  const hexLayer=draft.drawing.hexes;
+  const setHexes=(fn:(h:NonNullable<MapDrawing["hexes"]>)=>NonNullable<MapDrawing["hexes"]>)=>change(d=>{if(d.drawing.hexes)d.drawing.hexes=fn(d.drawing.hexes);});
+  const restoreAll=()=>{const h=current.current.drawing.hexes;if(!h?.painted.length)return;setHexes(layer=>layer.painted.reduce((l,i)=>restoreHex(l,i)??l,layer));setMessage("Every painted hex is back as the generator made it. Ctrl+Z undoes this.");};
+  const selectedPanel=tool==="hex"&&hexLayer?<HexPaintPanel paint={hexPaint} setPaint={p=>{setHexPaint(p);setHexRestore(false);}} restore={hexRestore} setRestore={setHexRestore} painted={hexLayer.painted.length} clear={restoreAll} regenerate={()=>setRegenerating(true)}/>:tool==="stamp"?<StampLibrary chosen={stampId} choose={setStampId} ink={draft.drawing.style?.ink} custom={custom} addStamp={asset=>commit(w=>{w.assets.push(asset);})} resizeStamp={(assetId,squares)=>commit(w=>{const a=w.assets.find(a=>a.id===assetId);if(a)a.squares=squares;})}/>:<div className="creator-panel">
     {!selectedIds.length&&<>
       <p className="creator-empty">Nothing selected. Pick a tool on the left and drag on the map, or press V and click a shape to edit it.</p>
       <button onClick={()=>setNewMap(true)}><Sparkles size={15}/> Generate or trace a new map</button>
       <h3>New shapes</h3>{colours}{thicknessField}
       <h3>Shortcuts</h3>
-      <dl className="creator-keys">{creatorTools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Shift</kbd> + scroll</dt><dd>Resize the selection</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
+      <dl className="creator-keys">{tools.map(t=><div key={t.id}><dt><kbd>{t.key}</kbd></dt><dd>{t.label}</dd></div>)}<div><dt><kbd>Alt</kbd></dt><dd>Draw off the grid</dd></div><div><dt><kbd>Space</kbd></dt><dd>Drag to pan</dd></div><div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Zoom</dd></div><div><dt><kbd>Shift</kbd> + scroll</dt><dd>Resize the selection</dd></div><div><dt><kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate</dd></div></dl>
     </>}
     {single&&<>
       <label>{single.type==="label"?"Text":"Name"}<input key={single.id} maxLength={120} defaultValue={single.name} placeholder={single.type} id="creator-shape-name" onBlur={e=>{const name=e.target.value.trim();if(name&&name!==single.name)change(d=>{const s=d.drawing.shapes.find(s=>s.id===single.id);if(s)s.name=name;});}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/></label>
@@ -469,6 +502,9 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <div className="creator-actions"><button onClick={()=>setTrace({...trace,x:0,y:0,h:trace.h*draft.width/trace.w,w:draft.width})}>Fit to the map</button><button onClick={()=>setTrace(null)}><Trash2 size={15}/> Remove</button></div>
     </>}
     {draft.drawing.hexes&&<><h3>Hex map</h3>
+      <p className="creator-measure">{draft.drawing.hexes.cols} × {draft.drawing.hexes.rows} hexes, {draft.drawing.hexes.miles} {draft.drawing.hexes.miles===1?"mile":"miles"} each{draft.drawing.hexes.painted.length?`, ${draft.drawing.hexes.painted.length} painted by hand`:""}.</p>
+      <div className="creator-actions"><button onClick={()=>setRegenerating(true)}><Dices size={15}/> Regenerate…</button><button onClick={()=>pickTool("hex")}><Hexagon size={15}/> Paint hexes</button></div>
+      <p className="muted">Regenerate opens the generator with this map’s settings. Hexes you painted stay.</p>
       <HexLookFields look={draft.drawing.hexes} change={part=>change(d=>{if(d.drawing.hexes)d.drawing.hexes={...d.drawing.hexes,...part};})}/></>}
     <h3>This map</h3>
     <div className="creator-pair">{squares("width")}{squares("height")}</div>
@@ -496,7 +532,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     if(e.code==="Space"&&!(e.target as HTMLElement).closest("button")){e.preventDefault();setSpaceHeld(true);return;}
     if(tool==="select"&&single?.type==="stamp"&&e.key.toLowerCase()==="r"&&!e.ctrlKey&&!e.metaKey){e.preventDefault();turnStamp(e.shiftKey?-90:90);return;}
     if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.toLowerCase()==="e"){e.preventDefault();if(WALL_TOOLS.includes(tool))setErase(v=>!v);else{pickTool("line");setErase(true);}return;}
-    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){const next=toolForKey(e.key);if(next){pickTool(next);return;}}
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){const next=toolForKey(e.key,!!draft.drawing.hexes);if(next){pickTool(next);return;}}
     if((e.key==="Delete"||e.key==="Backspace") && selectedShape){e.preventDefault();e.stopPropagation();if(selectedIds.length===1&&selectedPoint!==null)removePoint(selectedShape.id,selectedPoint);else deleteShape();}
   }}>
     <header className="creator-header">
@@ -514,7 +550,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button disabled={saving} className="primary" onClick={()=>setUsing(true)}>Use in Maptable</button>
     </header>
     <div className="creator-layout" inert={saving}>
-      <nav className="creator-rail" aria-label="Drawing tools">{creatorTools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>pickTool(t.id)}>{TOOL_ICONS[t.id]}<span>{t.key}</span></button>)}</nav>
+      <nav className="creator-rail" aria-label="Drawing tools">{tools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>pickTool(t.id)}>{TOOL_ICONS[t.id]}<span>{t.key}</span></button>)}</nav>
       <div className="creator-canvas">
       <section ref={stage} className="creator-stage" aria-label="Map drawing area" data-panning={spaceHeld||undefined}
         onPointerDown={e=>{if(!spaceHeld&&e.button!==1)return;e.preventDefault();const el=stage.current!;pan.current={x:e.clientX,y:e.clientY,left:el.scrollLeft,top:el.scrollTop};e.currentTarget.setPointerCapture(e.pointerId);}}
@@ -522,8 +558,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
         onPointerUp={()=>{pan.current=null;}} onPointerCancel={()=>{pan.current=null;}}>
         <div className="creator-paper" style={{width:`${zoom*100}%`}}>
           <svg ref={svg} tabIndex={0} aria-label="Editable map drawing" viewBox={`0 0 ${draft.width} ${draft.height}`} style={{touchAction:"none",width:"100%",display:"block"}} onPointerDown={start} onPointerUp={finish} onPointerCancel={cancel} onDoubleClick={()=>{if(tool==="poly"&&polyPoints&&polyPoints.length>=3)finishPoly();}}
-            onPointerMove={e=>{if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window"||(erase&&WALL_TOOLS.includes(tool)))setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
-            onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);}}
+            onPointerMove={e=>{if(hexLayer&&(tool==="hex"||tool==="select")){const i=hexAt(hexLayer,rawPoint(e));if(i!==hoverHex)setHoverHex(i);}if(!gesture.current){if(tool==="poly")setPolyHover(point(e));else if(tool==="door"||tool==="window"||(erase&&WALL_TOOLS.includes(tool)))setHoverWall(nearestWall(walls(),rawPoint(e),grid.size*.5));}move(e);}}
+            onPointerLeave={()=>{setPolyHover(null);setHoverWall(null);setHoverHex(null);}}
             onDragOver={e=>{if(e.dataTransfer.types.includes("application/x-map-stamp")){e.preventDefault();e.dataTransfer.dropEffect="copy";}}}
             onDrop={e=>{const stamp=stampById(e.dataTransfer.getData("application/x-map-stamp"));if(!stamp)return;e.preventDefault();
               const raw=rawPoint(e as unknown as React.PointerEvent),id=uid();
@@ -533,6 +569,10 @@ export default function MapCreator({workspace,initialId,destination,commit,close
             <DrawingBackground drawing={draft.drawing} width={draft.width} height={draft.height} secrets/>
             {!draft.drawing.hexes&&<rect width={draft.width} height={draft.height} fill="url(#creator-grid)" pointerEvents="none"/>}
             {orderedShapes(draft.drawing).map(s=><DrawingShape key={s.id} shape={s} drawing={draft.drawing}/>)}
+            {tool==="hex"&&hexLayer&&<g pointerEvents="none">
+              {hexLayer.painted.length>0&&<path d={paintedOutlines(hexLayer).map(h=>hexOutline(h.x,h.y,hexLayer.size,hexLayer.orient,.86)).join("")} fill="none" stroke="#ffffff" strokeOpacity=".9" strokeWidth={Math.max(1.5,hexLayer.size/14)} strokeDasharray={`${hexLayer.size/5} ${hexLayer.size/7}`}/>}
+              {hoverHex!==null&&(()=>{const c=hexCentre(hexLayer,hoverHex);return <path d={hexOutline(c.x,c.y,hexLayer.size,hexLayer.orient)} fill={hexRestore?"#e5534b":"#2684ff"} fillOpacity=".18" stroke={hexRestore?"#e5534b":"#2684ff"} strokeWidth={Math.max(2,hexLayer.size/10)}/>;})()}
+            </g>}
             {trace&&<image href={trace.url} x={trace.x} y={trace.y} width={trace.w} height={trace.h} opacity={trace.opacity} preserveAspectRatio="none" pointerEvents="none"/>}
             {tool==="select" && selectedIds.length>1 && draft.drawing.shapes.filter(s=>selectedIds.includes(s.id)).map(s=><path key={s.id} d={shapePath(s)} fill="none" stroke="#2684ff" strokeWidth={3} strokeDasharray="8 6" pointerEvents="none"/>)}
             {single && tool==="select" && <g><path d={shapePath(single)} fill="none" stroke="#2684ff" strokeWidth={2} strokeDasharray="8 6" pointerEvents="none"/>{(single.type==="stamp"||single.type==="label"?[]:single.type==="rect"?rectCorners(single):single.points).map((p,i)=><circle key={i} data-shape={single.id} data-point={i} cx={p.x} cy={p.y} r={9} fill={selectedPoint===i?"#ffcf60":"white"} stroke="#2684ff" strokeWidth={3} style={{cursor:"crosshair"}}/>)}</g>}
@@ -563,7 +603,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
           </>}
         </div>
       </section>
-      {WALL_TOOLS.includes(tool)&&<div className="creator-overlay creator-wall-mode" role="group" aria-label="Wall tool mode"><span>{creatorTools.find(t=>t.id===tool)?.label}</span><span className="creator-wall-switch"><button type="button" aria-pressed={!erase} onClick={()=>setErase(false)}><PenLine size={14}/> Draw</button><button type="button" aria-pressed={erase} className="erase" onClick={()=>setErase(true)}><Eraser size={14}/> Erase</button></span><small>Press E to switch</small></div>}
+      {WALL_TOOLS.includes(tool)&&<div className="creator-overlay creator-wall-mode" role="group" aria-label="Wall tool mode"><span>{tools.find(t=>t.id===tool)?.label}</span><span className="creator-wall-switch"><button type="button" aria-pressed={!erase} onClick={()=>setErase(false)}><PenLine size={14}/> Draw</button><button type="button" aria-pressed={erase} className="erase" onClick={()=>setErase(true)}><Eraser size={14}/> Erase</button></span><small>Press E to switch</small></div>}
+      {hexLayer&&(tool==="hex"||(tool==="select"&&hoverHex!==null))&&<div className="creator-overlay creator-tool-hint" role="status">{hoverHex!==null?describeHex(hexLayer,hoverHex):hexRestore?"Click or drag across painted hexes to put them back as they were made.":"Click or drag across hexes to paint them. Alt-click a hex to pick up its biome and terrain."}</div>}
       {(tool==="poly"||tool==="door"||tool==="window"||tool==="stamp")&&<div className="creator-overlay creator-tool-hint" role="status">{tool==="stamp"?`Click the map to place a ${stampById(stampId)?.name.toLowerCase()??"stamp"}, or drag one from the library. Press V, select a stamp and press R to turn it.`:tool==="poly"?(polyPoints?.length?(polyPoints.length>=3?"Click the first corner, double-click or press Enter to close the room. Backspace takes back a corner.":"Keep clicking to add corners."):"Click to place each corner of the room."):"Point at a wall: the door sits in it, one square wide. Drag along the wall to make it wider."}</div>}
       <div className="creator-overlay creator-grid-status"><Grid3x3 size={15}/> {draft.drawing.hexes?`${draft.drawing.hexes.miles}-mile hexes, the same grid in Maptable`:`${grid.units} ${grid.unit} squares, same as Maptable`}<span/><button className="creator-link" aria-pressed={snap} onClick={()=>setSnap(v=>!v)}><Magnet size={15}/> Snap {snap?"on":"off"}</button><button className="creator-link" aria-pressed={join} title="Rooms that touch become one room with no wall between" onClick={()=>setJoin(!join)}><Combine size={15}/> Join rooms {join?"on":"off"}</button>{(snap||join)&&<span className="muted">Hold Alt to {snap&&join?"draw freely and keep rooms apart":snap?"draw freely":"keep rooms apart"}</span>}</div>
       <div className="creator-overlay creator-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(-.25)}><Minus size={16}/></button><output aria-label="Zoom">{Math.round(zoom*100)}%</output><button aria-label="Zoom in" onClick={()=>zoomBy(.25)}><Plus size={16}/></button><button onClick={()=>setZoom(1)}>Fit</button></div>
@@ -575,6 +616,11 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     </div>
     {message && <div className="creator-message" role="status">{message}</div>}
     {using && <UseMapDialog draft={draft} grid={grid} workspace={workspace} sceneName={source?workspace.scenes.find(s=>s.id===source)?.name??null:null} hadPieces={!!workspace.scenes.find(s=>s.id===source)?.tokens.some(t=>t.pieceOf)} destination={destination} close={()=>setUsing(false)} use={async choice=>{setUsing(false);const id=await save(choice);if(id)close(id);}}/>}
+    {regenerating && hexLayer && <HexRegenerateDialog layer={hexLayer} close={()=>setRegenerating(false)} regenerate={made=>{
+      setRegenerating(false);
+      change(d=>{d.drawing.hexes=made.layer;if(!made.same){d.width=made.width;d.height=made.height;}});
+      setMessage(made.same?"Map regenerated. Ctrl+Z brings back the one before.":"Map regenerated at its new size. Shapes you drew stay where they were; Ctrl+Z brings back the map before.");
+    }}/>}
     {newMap && <NewMapDialog grid={grid.size} close={()=>setNewMap(false)} start={m=>{setNewMap(false);guard(()=>startMap(m));}} trace={(file,size)=>{setNewMap(false);guard(()=>startTrace(file,size));}}/>}
     {pending && <div className="creator-prompt" role="dialog" aria-modal="true" aria-label="Uncommitted drawing"><div><h2>Keep your drawing?</h2><p>Save your changes before leaving this map.</p><div className="button-row"><button disabled={saving} onClick={async()=>{const action=pending;if(await save()){setPending(null);action();}}}>Save changes</button><button disabled={saving} onClick={()=>{const action=pending;setPending(null);action();}}>Discard changes</button><button disabled={saving} onClick={()=>setPending(null)}>Keep editing</button></div></div></div>}
   </main></StampSources.Provider>;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaultHexOptions, generateHexMap, normalizeHexOptions, climateBiome, hexLands, randomHexSeed, readMix, writeMix, mixLayouts } from "../lib/hexmap/generate.ts";
+import { defaultHexLook, defaultHexOptions, generateHexMap, normalizeHexOptions, climateBiome, hexLands, randomHexSeed, readMix, writeMix, mixLayouts } from "../lib/hexmap/generate.ts";
 import { applyHexPreset, hexPresets, matchingHexPreset } from "../lib/hexmap/presets.ts";
 import { hashText } from "../lib/hexmap/noise.ts";
 import { hexCells, hexGridFor, hexMapSize, hexNeighbours, fittingHexSize } from "../lib/hexmap/layout.ts";
@@ -10,7 +10,8 @@ import { isSettlement } from "../lib/hexmap/places.ts";
 import { hexSettingsCode, readHexSettingsCode } from "../lib/hexmap/code.ts";
 import { hexDistance } from "../lib/hexmap/layout.ts";
 import { groundOps } from "../lib/map-style.ts";
-import { resizeMap } from "../lib/map-creator.ts";
+import { resizeMap, toolForKey, toolsFor } from "../lib/map-creator.ts";
+import { describeHex, hexAt, hexCentre, paintHex, regenerateHexLayer, restoreHex } from "../lib/hexmap/paint.ts";
 import { setUpDrawnMapScene } from "../lib/map-export.ts";
 import { hexCenter, mapDrawingSchema, newScene } from "../lib/model.ts";
 
@@ -424,4 +425,92 @@ test("a settings code gives back the same map and look, and anything else is ref
   for (const bad of ["", "HEX1-", "HEX1-!!!", "HEX2-eyJ9", "HEX1-" + btoa("[1,2]"), "hello"]) assert.equal(readHexSettingsCode(bad), null, bad);
   const odd = readHexSettingsCode("HEX1-" + btoa(JSON.stringify({ cols: 9000, "look.look": "neon", "look.numbers": "yes", wild: 1 })).replace(/=+$/, ""));
   assert.equal(odd.options.cols, 100); assert.equal(odd.look.look, "painted"); assert.equal(odd.look.numbers, false);
+});
+
+test("painting a hex sets its biome and terrain, marks it painted, and water picks shallows or lake", () => {
+  const { layer } = generateHexMap(small({ seed: "paint-1", settlements: 3 }));
+  const land = hexesOf(layer).findIndex(h => h && !isWaterTerrain(h.terrain) && !layer.places.some(p => p.i === hexesOf(layer).indexOf(h)));
+  const painted = paintHex(layer, land, { biome: "volcanic", terrain: "mountain" });
+  assert.deepEqual(readHex(painted.cells, land), { biome: "volcanic", terrain: "mountain" });
+  assert.deepEqual(painted.painted, [land]);
+  assert.equal(paintHex(painted, land, { biome: "volcanic", terrain: "mountain" }), null, "painting the same again changes nothing");
+  // Water beside the sea becomes shallows; water inland becomes a lake.
+  const hexes = hexesOf(layer), shape = { cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: layer.outline, size: layer.size };
+  const nb = hexNeighbours(shape, hexCells(shape));
+  const coast = hexes.findIndex((h, i) => h && !isWaterTerrain(h.terrain) && nb[i].some(j => hexes[j]?.terrain === "deep" || hexes[j]?.terrain === "shallow"));
+  const inland = hexes.findIndex((h, i) => h && !isWaterTerrain(h.terrain) && nb[i].length === 6 && nb[i].every(j => hexes[j] && !isWaterTerrain(hexes[j].terrain)));
+  assert.equal(readHex(paintHex(layer, coast, { biome: "temperate", terrain: "water" }).cells, coast).terrain, "shallow");
+  assert.equal(readHex(paintHex(layer, inland, { biome: "temperate", terrain: "water" }).cells, inland).terrain, "lake");
+  // A place painted over with water goes.
+  const town = layer.places[0];
+  assert.ok(!paintHex(layer, town.i, { biome: "temperate", terrain: "water" }).places.some(p => p.i === town.i));
+  assert.ok(paintHex(layer, town.i, { biome: "temperate", terrain: "hills" }).places.some(p => p.i === town.i));
+  assert.ok(mapDrawingSchema.safeParse(drawingOf(painted)).success);
+});
+
+test("finding the hex under a point works for both orientations and every outline, at the map's offset", () => {
+  for (const orient of ["flat", "pointy"]) for (const outline of ["rect", "hex", "circle"]) {
+    const { layer } = generateHexMap(small({ orient, outline, seed: "find" }));
+    const moved = { ...layer, x: 35, y: -20 }, cells = hexCells({ cols: layer.cols, rows: layer.rows, orient, outline, size: layer.size });
+    for (const h of cells) {
+      const inside = !!readHex(layer.cells, h.i);
+      assert.equal(hexAt(moved, { x: h.x + 35, y: h.y - 20 }), inside ? h.i : null);
+      if (inside) assert.equal(hexAt(moved, { x: h.x + 35 + layer.size * 0.6, y: h.y - 20 }), h.i, "a point well inside the hex");
+      if (inside) assert.deepEqual(hexCentre(moved, h.i), { x: h.x + 35, y: h.y - 20 });
+    }
+    assert.equal(hexAt(moved, { x: -500, y: -500 }), null);
+  }
+});
+
+test("restoring a painted hex puts back what the generator made", () => {
+  const { layer } = generateHexMap(small({ seed: "restore" }));
+  const i = hexesOf(layer).findIndex(h => h && h.terrain === "flat");
+  const painted = paintHex(paintHex(layer, i, { biome: "fey", terrain: "forest" }), i + 1, { biome: "fey", terrain: "forest" }) ?? paintHex(layer, i, { biome: "fey", terrain: "forest" });
+  const back = restoreHex(painted, i);
+  assert.equal(back.cells.slice(i * 2, i * 2 + 2), layer.cells.slice(i * 2, i * 2 + 2));
+  assert.ok(!back.painted.includes(i));
+  assert.equal(restoreHex(back, i), null, "a hex that is not painted has nothing to restore");
+  assert.match(describeHex(painted, i), /^Hex \d{4} · Fey wilds forest( · .+)? · painted$/);
+});
+
+test("Regenerate keeps painted hexes, routes rivers and places around them, and keeps the size when it can", () => {
+  const { layer } = generateHexMap(small({ seed: "regen", rivers: 6, settlements: 6 }));
+  let edited = layer;
+  const land = hexesOf(layer).map((h, i) => h && !isWaterTerrain(h.terrain) ? i : -1).filter(i => i >= 0);
+  const lakeAt = land[Math.floor(land.length / 2)], peakAt = land[Math.floor(land.length / 3)];
+  edited = paintHex(edited, lakeAt, { biome: "temperate", terrain: "water" });
+  edited = paintHex(edited, peakAt, { biome: "volcanic", terrain: "peak" });
+  edited = { ...edited, x: 12, y: 8, look: "ink" };
+  const options = normalizeHexOptions({ ...layer.options, seed: "regen-2" });
+  const kept = regenerateHexLayer(edited, options, { ...defaultHexLook, look: "flat" }, true);
+  assert.ok(kept.same);
+  assert.equal(kept.layer.x, 12); assert.equal(kept.layer.size, layer.size);
+  assert.equal(kept.layer.look, "flat");
+  assert.deepEqual(readHex(kept.layer.cells, peakAt), { biome: "volcanic", terrain: "peak" });
+  assert.ok(isWaterTerrain(readHex(kept.layer.cells, lakeAt).terrain));
+  assert.deepEqual(kept.layer.painted, [lakeAt, peakAt].sort((a, b) => a - b));
+  assert.ok(!kept.layer.places.some(p => p.i === lakeAt), "no place on painted water");
+  assert.notEqual(kept.layer.cells, edited.cells, "the rest of the map changed");
+  const dropped = regenerateHexLayer(edited, options, defaultHexLook, false);
+  assert.deepEqual(dropped.layer.painted, []);
+  assert.equal(dropped.layer.cells, generateHexMap(options, layer.size).layer.cells);
+  // A new size keeps painted hexes by column and row and draws at a size that fits.
+  const bigger = regenerateHexLayer(edited, { ...options, cols: 30 }, defaultHexLook, true);
+  assert.ok(!bigger.same);
+  const c = peakAt % layer.cols, r = Math.floor(peakAt / layer.cols);
+  assert.deepEqual(readHex(bigger.layer.cells, r * 30 + c), { biome: "volcanic", terrain: "peak" });
+  assert.equal(bigger.layer.x, 0);
+  assert.ok(mapDrawingSchema.safeParse(drawingOf(bigger.layer)).success);
+  // Without painted hexes the generator makes exactly what it made before.
+  assert.equal(generateHexMap(options).layer.cells, generateHexMap(options, undefined, []).layer.cells);
+});
+
+test("Paint hexes is a tool only on hex maps", () => {
+  assert.equal(toolForKey("b"), null);
+  assert.equal(toolForKey("b", true), "hex");
+  assert.ok(!toolsFor(false).some(t => t.id === "hex"));
+  assert.ok(toolsFor(true).some(t => t.id === "hex"));
+  const saved = mapDrawingSchema.parse(drawingOf({ ...generateHexMap(small()).layer, painted: undefined }));
+  assert.deepEqual(saved.hexes.painted, [], "maps saved before painting read back with nothing painted");
+  assert.ok(!mapDrawingSchema.safeParse(drawingOf({ ...generateHexMap(small()).layer, painted: [99999] })).success);
 });
