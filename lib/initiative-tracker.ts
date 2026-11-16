@@ -40,6 +40,45 @@ export function reorderInitiative(scene:Scene,fromId:string,toId:string) {
  ids.splice(from,1);ids.splice(to,0,fromId);
  const state=scene.initiativeState??={round:1,currentId:null,order:[]};state.order=ids;
 }
+const cleanGroup = (group?:string|null) => group?.trim()||undefined;
+const remapState = (scene:Scene,before:string[],map:(id:string)=>string|null) => {
+ const state=scene.initiativeState;if(!state)return;
+ if(state.order.length){const next:string[]=[];for(const id of before){const m=map(id);if(m&&!next.includes(m))next.push(m);}state.order=next;}
+ if(state.currentId){const m=map(state.currentId);state.currentId=m;}
+};
+/** Join (or leave, with an empty group) an initiative group, keeping order and currentId ids valid. */
+export function setTokenInitiativeGroup(scene:Scene,tokenId:string,group:string|null|undefined) {
+ const token=scene.tokens.find(t=>t.id===tokenId);if(!token)return;
+ const next=cleanGroup(group),prev=cleanGroup(token.initiativeGroup);
+ if(next===prev)return;
+ const before=getInitiativeEntries(scene).map(e=>e.id);
+ if(next)token.initiativeGroup=next;else delete token.initiativeGroup;
+ const after=new Set(getInitiativeEntries(scene).map(e=>e.id));
+ const oldId=prev?`group:${prev}`:token.id,newId=next?`group:${next}`:token.id;
+ const ids:string[]=[];
+ for(const id of before){
+  ids.push(id);
+  // a token leaving a group lands just after that group's slot
+  if(id===oldId&&oldId!==newId&&after.has(newId)&&!before.includes(newId))ids.push(newId);
+ }
+ remapState(scene,ids,id=>{
+  if(id===oldId&&!after.has(oldId))return after.has(newId)?newId:null;
+  return after.has(id)?id:null;
+ });
+ const state=scene.initiativeState;
+ if(state?.currentId&&!after.has(state.currentId))state.currentId=null;
+}
+/** Rename a group on all members; merges into an existing group of the same name. */
+export function renameInitiativeGroup(scene:Scene,oldName:string,newName:string) {
+ const from=cleanGroup(oldName),to=cleanGroup(newName);
+ if(!from||!to||from===to)return;
+ const members=scene.tokens.filter(t=>cleanGroup(t.initiativeGroup)===from);
+ if(!members.length)return;
+ const before=getInitiativeEntries(scene).map(e=>e.id);
+ for(const t of members)t.initiativeGroup=to;
+ const oldId=`group:${from}`,newId=`group:${to}`;
+ remapState(scene,before,id=>id===oldId?newId:id);
+}
 /** Only observed additions receive a timestamp; legacy conditions keep unknown ages. */
 export function syncConditionRounds(scene:Scene,previousScene:Scene|undefined) {
  const round=getInitiativeRound(scene);
