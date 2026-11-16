@@ -331,7 +331,7 @@ export function characterRoll(character: RollSource | undefined, form: FormField
   if (field) {
     const v = character?.statsByCampaign?.[campaignId]?.[field.id];
     const n = typeof v === "number" ? v : typeof v === "string" && /^[+-]?\d+$/.test(v.trim()) ? Number(v) : null;
-    const f = field.roll === "d20" && n !== null ? `1d20${n < 0 ? "" : "+"}${n}` : field.roll === "formula" && typeof v === "string" ? v : field.roll === "custom" && field.rollFormula && n !== null ? field.rollFormula.replaceAll("{value}", String(n)) : null;
+    const f = field.roll === "d20" && n !== null ? `1d20${n < 0 ? "" : "+"}${n}` : field.roll === "formula" && typeof v === "string" ? v : field.roll === "custom" && field.rollFormula && !field.rollFormula.includes("{value}") ? field.rollFormula : field.roll === "custom" && field.rollFormula && n !== null ? field.rollFormula.replaceAll("{value}", String(n)) : null;
     if (f && validRoll(f)) return f.replace(/\s+/g, "").replace(/\+-/g, "-");
   }
   return validRoll(name) ? name.replace(/\s+/g, "") : null;
