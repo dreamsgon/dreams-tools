@@ -41,6 +41,7 @@ This guide covers features that are finished and live. Each page explains what t
 19. [VTT bridges (Foundry VTT)](VTT-Bridges)
 20. [Set up Foundry VTT](Foundry-VTT-Setup): step by step, from bridge key to your party in Foundry.
 21. [Set up Roll20](Roll20-Setup): move characters and monsters between Roll20 and RPG Tools as JSON.
+22. [Set up Fantasy Grounds](Fantasy-Grounds-Setup): import monster and sheet JSON as NPCs in Fantasy Grounds Unity, and export them back.
 
 ## Reference
 

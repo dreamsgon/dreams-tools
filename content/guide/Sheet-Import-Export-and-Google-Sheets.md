@@ -25,7 +25,7 @@ A character's sheet section › **⋯ › Export as .json** saves an `rpgtools-s
 
 A Google sheet's cached values are exported, never its link or cells.
 
-To move a character to or from **Roll20**, see [Set up Roll20](Roll20-Setup).
+To move a character to or from **Roll20**, see [Set up Roll20](Roll20-Setup). For **Fantasy Grounds**, see [Set up Fantasy Grounds](Fantasy-Grounds-Setup).
 
 ## Link a Google Sheet
 
