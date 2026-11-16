@@ -42,3 +42,18 @@
  .stat-roll-edit{grid-template-columns:minmax(0,1fr) auto}
  .stat-roll-edit .stat-formula{grid-column:1/2;grid-row:2}
 }
+.stat-worked{margin-left:6px;font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;min-width:2.2em}
+.stat-spend{font-size:12px;color:var(--muted);white-space:nowrap}
+.stat-spend.short{color:var(--danger)}
+.stat-roll-chip:disabled{opacity:.5;cursor:not-allowed}
+.stat-target{grid-column:1/-1;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.stat-target .inv-input{width:auto;flex:none}
+.stat-target input.inv-input{width:120px}
+.stat-target small{font-weight:400;color:var(--muted)}
+.stat-refs{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.stat-refs small{font-weight:400;color:var(--muted);margin-right:2px}
+.stat-refs button{font-family:var(--font-mono,ui-monospace,monospace);font-size:11.5px;border:1px solid var(--line);background:var(--raised,var(--panel));border-radius:3px;padding:1px 6px;color:var(--muted);cursor:pointer}
+.stat-refs button:hover{border-color:var(--accent);color:var(--accent)}
+.stat-form .spell-cost .inv-input:first-child{flex:1}
+.stat-form .spell-cost input[type=number]{width:80px;flex:none}
+.stat-form .inv-input::placeholder{font-weight:400;color:var(--muted);opacity:.75}

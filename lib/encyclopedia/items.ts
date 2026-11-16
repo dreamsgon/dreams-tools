@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseDice } from "../rolls.ts";
-import { statRollDice, statRolls, type StatRoll } from "./stat-rolls.ts";
+import { sheetOf, statRollDice, statRolls, type StatRoll } from "./stat-rolls.ts";
 
 /*
  * Inventories and spell lists on characters, for any game. The campaign's item settings (`campaign.items`) name the
@@ -319,7 +319,7 @@ export function applyInventoryAction<T extends Tracker>(parts: CharacterParts<T>
 // ---- Rolling from a character ------------------------------------------------------------------
 
 type RollSource = { sheet?: { items: { name: string; kind: string; formula?: string; label?: string }[] }; statsByCampaign?: Record<string, Record<string, unknown>> };
-type FormField = { id: string; label: string; type: string; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
+type FormField = { id: string; label: string; type: string; roll?: string; rollFormula?: string; rolls?: StatRoll[]; derived?: string; archived?: boolean };
 /**
  * The dice for a roll a store or lock asks for, by name: a roll on the character's sheet, then a stat form field that
  * rolls (its first roll, or "Strength Save" for the field's roll named Save), then the text itself when it is dice (so
@@ -329,11 +329,13 @@ export function characterRoll(character: RollSource | undefined, form: FormField
   const want = name.trim().toLowerCase();
   if (!want) return null;
   for (const it of character?.sheet?.items ?? []) if (it.formula && (it.name.toLowerCase() === want || it.label?.toLowerCase() === want) && validRoll(it.formula)) return it.formula.replace(/\s+/g, "");
+  const sheet = sheetOf(form, character?.statsByCampaign?.[campaignId] ?? {});
   for (const field of form) {
+    if (field.archived) continue;
     const rolls = statRolls(field), label = field.label.toLowerCase();
     const picked = label === want ? rolls : rolls.filter(r => `${label} ${r.name.toLowerCase()}` === want);
     const v = character?.statsByCampaign?.[campaignId]?.[field.id];
-    for (const r of picked) { const f = statRollDice(r.formula, v); if (f && validRoll(f)) return f; }
+    for (const r of picked) { const f = statRollDice(r.formula, v, sheet); if (f && validRoll(f)) return f; }
   }
   return validRoll(name) ? name.replace(/\s+/g, "") : null;
 }

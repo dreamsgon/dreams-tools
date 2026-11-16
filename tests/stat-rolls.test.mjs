@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {statRolls,statRollDice,statRollHint,statRollPreview,firstStatRoll,placeStat} from '../lib/encyclopedia/stat-rolls.ts';
+import {statRolls,statRollDice,statRollHint,statRollPreview,firstStatRoll,placeStat,derivedValue,rollOutcome,sheetOf,statNumber} from '../lib/encyclopedia/stat-rolls.ts';
 import {statFieldSchema,workspaceSchema,demoWorkspace,playerCampaign} from '../lib/encyclopedia/world-model.ts';
 import {characterRoll} from '../lib/encyclopedia/items.ts';
 import {fileRollOf} from '../lib/encyclopedia/sheet-export.ts';
@@ -27,7 +27,8 @@ test('a roll puts the value in, or says why it cannot',()=>{
  assert.equal(statRollDice('{value}','2d8 + 3'),'2d8+3');
  assert.equal(statRollDice('2d6+1',null),'2d6+1','plain dice need no value');
  assert.equal(statRollDice('1d20+{value}',''),null);
- assert.equal(statRollDice('1d20+{value}',true),null);
+ assert.equal(statRollDice('1d20+{value}',true),'1d20+1','a ticked checkbox counts as 1');
+ assert.equal(statRollDice('1d20+{value}',false),'1d20');
  assert.equal(statRollDice('1d20+{value}','sword'),null);
  assert.equal(statRollDice('1d20+{value}','1|x'),null);
  assert.equal(statRollHint('1d20+{value}','', 'number'),'Type a number to roll.');
@@ -71,4 +72,64 @@ test('named rolls and no-value stats save, export, roll from stores and stay off
  const pc=playerCampaign(s,c.id),mara=pc.entries.find(x=>x.id==='demo-mara');
  assert.ok(mara.stats.some(x=>x.id==='str'));
  assert.ok(!mara.stats.some(x=>x.id==='push'),'a stat with no value is not a blank line for players');
+});
+
+test('formulas read other stats, worked-out values and simple sums',()=>{
+ const sheet=sheetOf([
+  {id:'str',label:'Strength',type:'number',derived:'floor(({value}-10)/2)'},
+  {id:'agi',label:'Agility',type:'number',derived:'floor(({value}-10)/2)'},
+  {id:'tr',label:'Training',type:'number'},
+  {id:'pil',label:'Piloting',type:'checkbox'},
+  {id:'spot',label:'Spot',type:'number'},
+  {id:'spoth',label:'Spot Hidden',type:'number'},
+  {id:'old',label:'Gone',type:'number',archived:true},
+ ],{str:14,agi:9,tr:2,pil:true,spot:1,spoth:45,old:5});
+ assert.equal(derivedValue(sheet[0],sheet),2);
+ assert.equal(derivedValue(sheet[1],sheet),-1,'rounds down');
+ assert.equal(statRollDice('1d20+{Strength mod}',null,sheet),'1d20+2');
+ assert.equal(statRollDice('1d20+{Agility mod}',null,sheet),'1d20-1');
+ assert.equal(statRollDice('1d20+{agility MOD}+{Training}',null,sheet),'1d20+1','names ignore case');
+ assert.equal(statRollDice('1d20+{Strength mod}+{Piloting*Training}',null,sheet),'1d20+4','a checkbox is 1 or 0');
+ assert.equal(statRollDice('{Strength-10}d6',null,sheet),'4d6');
+ assert.equal(statRollDice('{value+Training}d10>=8',3,sheet),'5d10>=8');
+ assert.equal(statRollDice('1d100+{Spot Hidden}',null,sheet),'1d100+45','the longest name wins');
+ assert.equal(statRollDice('1d20+{Spot}',null,sheet),'1d20+1');
+ assert.equal(statRollDice('1d20+{floor(Strength/3)}',null,sheet),'1d20+4');
+ assert.equal(statRollDice('1d20+{Gone}',null,sheet),null,'archived stats are not on the sheet');
+ assert.equal(statRollDice('1d20+{Nope}',null,sheet),null);
+ assert.equal(statRollDice('1d20+{Strength',null,sheet),null);
+ const gap=sheetOf([{id:'a',label:'Agility',type:'number'}],{});
+ assert.equal(statRollDice('1d20+{Agility}',null,gap),null);
+ assert.equal(statRollHint('1d20+{Agility}',null,'none',gap),'Fill in Agility to roll this.');
+ assert.match(statRollHint('1d20+{Nope}',null,'none',gap),/needs dice/);
+ assert.equal(statNumber(' 4 '),4);assert.equal(statNumber('2d6'),null);
+ const loop=sheetOf([{id:'a',label:'A',type:'number',derived:'{A mod}+1'}],{a:1});
+ assert.equal(derivedValue(loop[0],loop),null,'a worked-out value that reads itself gives up');
+});
+
+test('the dialog previews with this character, and targets say success or fail',()=>{
+ const sheet=sheetOf([{id:'a',label:'Agility',type:'number'},{id:'b',label:'Wits',type:'number'}],{a:4});
+ assert.deepEqual(statRollPreview('1d20+{Agility}','none',sheet,null,'Chiree'),{text:'For Chiree this rolls 1d20+4.',bad:false});
+ assert.deepEqual(statRollPreview('1d20+{Wits}','none',sheet,null,'Chiree'),{text:'Once Wits is filled in. With 3 there: 1d20+3.',bad:false});
+ assert.equal(statRollPreview('1d20+{Charm}','none',sheet).bad,true);
+ assert.deepEqual(rollOutcome(14,{op:'atLeast',against:'15'},null),{ok:false,text:'Fail · needed 15 or more'});
+ assert.deepEqual(rollOutcome(40,{op:'atMost',against:'{value}'},55),{ok:true,text:'Success · needed 55 or under'});
+ assert.deepEqual(rollOutcome(2,{op:'atLeast',against:'{Agility-3}'},null,sheet),{ok:true,text:'Success · needed 1 or more'});
+ assert.equal(rollOutcome(2,{op:'atLeast',against:''},null),null);
+ assert.equal(rollOutcome(2,undefined,null),null);
+ assert.equal(rollOutcome(2,{op:'atMost',against:'{Wits}'},null,sheet),null,'no number to compare');
+});
+
+test('worked-out values, targets and spending save, and store rolls read other stats',()=>{
+ const base={options:[],visibility:'players',archived:false,section:''};
+ const agi={...base,id:'agi',label:'Agility',type:'number',derived:'floor(({value}-10)/2)',rolls:[{name:'Check',formula:'1d20+{Agility mod}',success:{op:'atLeast',against:'15'}}]};
+ const push={...base,id:'push',label:'Push',type:'none',spend:{tracker:'Stress',n:1},rolls:[{name:'Roll',formula:'1d20+{Agility}'}]};
+ assert.equal(statFieldSchema.safeParse(agi).success,true);
+ assert.equal(statFieldSchema.safeParse(push).success,true);
+ assert.equal(statFieldSchema.safeParse({...push,spend:{tracker:'Stress',n:0}}).success,false);
+ assert.equal(statFieldSchema.safeParse({...agi,rolls:[{name:'Check',formula:'1d20',success:{op:'over',against:'1'}}]}).success,false);
+ const ch={statsByCampaign:{c:{agi:16}}};
+ assert.equal(characterRoll(ch,[agi,push],'c','Agility'),'1d20+3');
+ assert.equal(characterRoll(ch,[agi,push],'c','Push'),'1d20+16');
+ assert.equal(characterRoll(ch,[{...agi,archived:true},push],'c','Agility'),null);
 });
