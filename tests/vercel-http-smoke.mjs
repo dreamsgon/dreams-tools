@@ -52,6 +52,7 @@ try{
   const zip=await fetch(manifest.download);assert.equal(zip.status,200);assert.equal(zip.headers.get('content-type'),'application/zip');const bytes=new Uint8Array(await zip.arrayBuffer());assert.equal(bytes[0],0x50);assert.equal(bytes[1],0x4b);assert.ok(Buffer.from(bytes).includes('scripts/main.mjs'));
   assert.equal((await fetch(base+'/api/bridge/foundry/other.txt')).status,404);
   assert.equal((await fetch(base+'/api/bridge/rolls',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
+  assert.match(await (await fetch(base+'/api/bridge/roll20/rpg-tools-roll20.js')).text(),/!rpgtools import/);assert.equal((await fetch(base+'/api/bridge/roll20/other.js')).status,404);
   for(const path of ['/api/bridge/quests','/api/bridge/recaps?since=2026-11-14T10:00:00Z'])assert.equal((await fetch(base+path,{headers:{Authorization:'Bearer rpgb_short'}})).status,401,path);
   assert.equal((await fetch(base+'/api/encyclopedia/bridge-keys',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:'{"campaignId":"demo-campaign","action":"create"}'})).status,401);
   const transfer=await fetch(base+'/api/transfers',{method:'POST',headers:{...forged,'Content-Type':'application/json'},body:JSON.stringify({purpose:'image',size:10,type:'image/png'})});assert.equal(transfer.status,401);

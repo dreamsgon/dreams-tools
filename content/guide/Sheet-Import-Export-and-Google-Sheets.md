@@ -25,6 +25,8 @@ A character's sheet section › **⋯ › Export as .json** saves an `rpgtools-s
 
 A Google sheet's cached values are exported, never its link or cells.
 
+To move a character to or from **Roll20**, see [Set up Roll20](Roll20-Setup).
+
 ## Link a Google Sheet
 
 A character page can link one Google Sheet. Its **Profile** tab then shows a **Character sheet** section with chosen cells copied from it: HP (with a maximum and your own label such as Stress), AC, Initiative, other stats and rolls with their formulas.
