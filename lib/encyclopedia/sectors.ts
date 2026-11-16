@@ -180,7 +180,8 @@ export const LOCAL_BUBBLE = { cols: 13, rows: 11 };
 const toHex = (fx: number, fy: number, sol: Hex): Hex => {
   // Point (in hex widths) to the nearest hex, through axial coordinates.
   const q = fx - fy / Math.sqrt(3), r = fy * 2 / Math.sqrt(3);
-  let rx = Math.round(q), rz = Math.round(r), ry = Math.round(-q - r);
+  let rx = Math.round(q), rz = Math.round(r);
+  const ry = Math.round(-q - r);
   const dx = Math.abs(rx - q), dz = Math.abs(rz - r), dy = Math.abs(ry - (-q - r));
   if (dx > dy && dx > dz) rx = -ry - rz; else if (dz > dy) rz = -rx - ry;
   const solCube = cube(sol), x = solCube[0] + rx, z = solCube[2] + rz;
