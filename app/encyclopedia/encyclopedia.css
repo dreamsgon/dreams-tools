@@ -1242,3 +1242,7 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .icon-grid .icon-add{background:var(--panel);color:var(--muted);border-style:dashed}
 .icon-hint{font-size:11px;line-height:1.4;color:var(--muted)}
 .world-pin-icon{border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 8px}.world-pin-icon summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500}.world-pin-icon summary .icon-preview{width:26px;height:26px;padding:3px;border-radius:4px;background:#f4f1e8}.world-pin-icon[open] summary{margin-bottom:8px}.world-pin-icon .text-button{margin-top:8px}
+.world-picture{display:flex;flex-direction:column;gap:12px}.world-picture label.button{cursor:pointer}.world-picture .aside-hint{margin-top:0}.world-picture .world-seg button{height:auto;min-height:32px;padding:4px 6px;font-size:12px;line-height:1.25}
+.world-picture-thumb{display:grid;place-items:center;min-height:120px;border:1px dashed var(--line);border-radius:var(--radius);background:var(--raised);overflow:hidden;color:var(--muted);font-size:12px}.world-picture-thumb canvas{display:block;width:100%;height:auto;max-height:220px;object-fit:contain}
+.world-generate-empty{display:grid;place-items:center;aspect-ratio:4/3;padding:24px;text-align:center;font-size:13px;color:var(--muted)}
+@media (min-width:821px){.world-generate-preview{position:sticky;top:0}}
