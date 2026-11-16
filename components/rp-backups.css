@@ -1,0 +1,64 @@
+/* The "GitHub & backups" sheet (components/rp-backups.tsx). Colours come from the shared tokens, so it works in both tools. */
+.rpb-entry { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+.rpb-last { color:var(--muted); font-size:12px; line-height:1.3; }
+.rpb-open { min-height:40px; }
+.rpb-backdrop { position:fixed; inset:0; z-index:var(--z-modal, 200); display:flex; align-items:center; justify-content:center; padding:16px; background:color-mix(in srgb, #000 50%, transparent); }
+.rpb-sheet { box-sizing:border-box; display:flex; flex-direction:column; width:min(100%,520px); max-height:calc(calc(100vh / var(--ui-zoom, 1)) - 32px); padding:18px 20px 20px; border:1px solid var(--line); border-radius:var(--radius-lg, 8px); background:var(--panel); color:var(--ink); box-shadow:0 18px 50px #0006; font-family:var(--font-sans, inherit); text-align:left; }
+.rpb-sheet:focus { outline:none; }
+.rpb-sheet *, .rpb-sheet *::before, .rpb-sheet *::after { box-sizing:border-box; }
+.rpb-grab { display:none; }
+.rpb-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.rpb-head h2 { margin:0; font-family:var(--font-display, inherit); font-size:20px; font-weight:600; line-height:1.3; letter-spacing:0; }
+.rpb-head p { margin:2px 0 0; color:var(--muted); font-size:13px; overflow-wrap:anywhere; }
+.rpb-close { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; margin:-6px -8px 0 0; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--muted); cursor:pointer; flex:none; }
+.rpb-close:hover { background:var(--chrome-hover, var(--hover)); color:var(--ink); }
+.rpb-tabs { display:grid; grid-template-columns:repeat(2,1fr); gap:3px; padding:3px; margin-bottom:14px; border-radius:var(--radius); background:var(--raised); }
+.rpb-tabs:has(button:only-child) { grid-template-columns:1fr; }
+.rpb-tabs button { min-height:40px; border:0; border-radius:var(--radius); background:none; color:var(--muted); font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+.rpb-tabs button[aria-selected="true"] { background:var(--panel); color:var(--ink); box-shadow:0 1px 3px #0003; }
+.rpb-body { overflow:auto; min-height:0; margin:-3px; padding:3px; }
+.rpb-panel { display:flex; flex-direction:column; gap:10px; }
+.rpb-tree { list-style:none; margin:0; padding:2px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); font-size:13px; }
+.rpb-tree li { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--line); }
+.rpb-tree li:last-child { border-bottom:0; }
+.rpb-tree li > span:first-child { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+.rpb-tree li > span:last-child { color:var(--muted); white-space:nowrap; }
+.rpb-row { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:56px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); }
+.rpb-row b { display:block; font-size:14px; font-weight:600; }
+.rpb-row small { display:block; margin-top:2px; color:var(--muted); font-size:12.5px; line-height:1.4; }
+.rpb-switch { position:relative; flex:none; width:52px; height:40px; padding:0; border:0; border-radius:20px; background:none; cursor:pointer; }
+.rpb-switch span { position:absolute; left:2px; top:8px; width:48px; height:24px; border-radius:12px; background:var(--line-strong, var(--line)); transition:background .15s; }
+.rpb-switch span::after { content:""; position:absolute; left:3px; top:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .15s; }
+.rpb-switch[aria-checked="true"] span { background:var(--accent); }
+.rpb-switch[aria-checked="true"] span::after { transform:translateX(24px); }
+.rpb-primary, .rpb-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:46px; padding:10px 16px; border:1px solid var(--line); border-radius:var(--radius); font:inherit; font-size:15px; font-weight:600; text-align:center; text-decoration:none; cursor:pointer; }
+.rpb-primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.rpb-primary:hover:not(:disabled) { background:var(--accent-hover, var(--accent)); }
+a.rpb-primary { color:var(--on-accent); }
+.rpb-secondary { background:var(--panel); color:var(--ink); }
+.rpb-secondary:hover:not(:disabled) { background:var(--chrome-hover, var(--hover)); }
+.rpb-primary:disabled, .rpb-secondary:disabled { opacity:.55; cursor:default; }
+.rpb-sheet button:focus-visible, .rpb-sheet a:focus-visible, .rpb-open:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.rpb-muted { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+.rpb-ok { display:flex; align-items:center; gap:6px; margin:0; color:var(--accent); font-size:13px; font-weight:600; }
+.rpb-alert { display:flex; align-items:flex-start; gap:8px; margin:0; padding:10px 12px; border-radius:var(--radius); background:var(--danger-soft); color:var(--danger); font-size:13px; line-height:1.5; }
+.rpb-alert svg, .rpb-card b svg { flex:none; margin-top:2px; }
+.rpb-source { display:flex; gap:6px; }
+.rpb-source span { display:inline-flex; align-items:center; min-height:32px; padding:4px 14px; border-radius:999px; border:1px solid var(--accent); background:var(--accent-soft); color:var(--ink); font-size:13px; font-weight:600; }
+.rpb-file { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.rpb-card { display:flex; flex-direction:column; gap:6px; padding:12px 14px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:var(--radius); background:var(--raised); font-size:13.5px; line-height:1.55; }
+.rpb-card b { display:flex; align-items:flex-start; gap:8px; font-size:14px; }
+.rpb-card > span { color:var(--muted); overflow-wrap:anywhere; }
+.rpb-card-error { border-left-color:var(--danger); }
+.rpb-card-error b { color:var(--danger); }
+.rpb-card-ok .rpb-primary { margin-top:6px; }
+.rpb-choice { border-color:var(--accent); background:var(--accent-soft); }
+.rpb-dot { flex:none; width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft), inset 0 0 0 3px var(--accent-soft); }
+@media (max-width:720px) {
+  .rpb-backdrop { align-items:flex-end; padding:0; }
+  .rpb-sheet { width:100%; max-height:calc(calc(100vh / var(--ui-zoom, 1)) * .9); padding:10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); border-width:1px 0 0; border-radius:16px 16px 0 0; }
+  .rpb-grab { display:block; flex:none; width:40px; height:4px; margin:0 auto 12px; border-radius:2px; background:var(--line-strong, var(--line)); }
+  .rpb-entry { align-items:stretch; flex:1 1 100%; }
+  .rpb-open { width:100%; justify-content:center; min-height:44px; }
+  .rpb-last { text-align:center; }
+}
