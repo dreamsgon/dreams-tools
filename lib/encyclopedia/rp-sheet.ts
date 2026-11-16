@@ -1,5 +1,6 @@
 /* Pure helpers for the "GitHub & backups" sheet: folder counts, the ZIP name, and what a ZIP turns out to be. */
 import { FOLDERS_LIST } from "./rp-export.ts";
+import type { Workspace } from "./world-model.ts";
 
 export type FolderRow = { name: string; detail: string };
 const files = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
@@ -56,3 +57,33 @@ export function shortDate(iso: string, now: Date = new Date()): string {
 }
 
 export const lastExportKey = (campaignId: string) => `rpg-tools:rp-last-export:${campaignId}`;
+
+export const lastPushKey = (campaignId: string) => `rpg-tools:rp-last-push:${campaignId}`;
+export type LastPush = { at: string; repository: string; branch: string; url?: string };
+/** Reads a stored last-push note; anything unreadable is ignored. */
+export function parseLastPush(raw: string | null): LastPush | null {
+  try {
+    const v = raw ? JSON.parse(raw) as Partial<LastPush> : null;
+    if (!v || typeof v.at !== "string" || Number.isNaN(Date.parse(v.at)) || typeof v.repository !== "string" || typeof v.branch !== "string") return null;
+    return { at: v.at, repository: v.repository, branch: v.branch, ...(typeof v.url === "string" && v.url.startsWith("https://github.com/") ? { url: v.url } : {}) };
+  } catch { return null; }
+}
+
+/** "Session N: <latest session title>" when the campaign has sessions, else "Update <campaign name>". */
+export function defaultCommitMessage(workspace: Workspace, campaignId: string): string {
+  const campaign = workspace.campaigns.find(c => c.id === campaignId);
+  const sessions = workspace.entries.filter(e => e.kind === "session" && e.campaignId === campaignId);
+  if (!sessions.length) return `Update ${(campaign?.name ?? "campaign").replace(/\s+/g, " ").trim()}`.slice(0, 100);
+  const day = (e: Workspace["entries"][number]) => e.recap?.playedOn ?? e.updatedAt;
+  const latest = [...sessions].sort((a, b) => day(b).localeCompare(day(a)) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id))[0];
+  const title = latest.title.replace(/\s+/g, " ").trim();
+  return (/^session\s+\d+/i.test(title) ? title : `Session ${sessions.length}: ${title}`).slice(0, 100);
+}
+
+/** What the Import tab says about a repository or ZIP that has no restore copy. `where` is "ZIP" or "repository". */
+export function restoreNotice(kind: ZipKind, where: "ZIP" | "repository", fallback: string): { step: "note" | "error"; title: string; message: string } {
+  if (kind === "player-safe") return { step: "note", title: "Player-safe export", message: `A player-safe export cannot be restored. It leaves out the GM-only folder and the restore copy, so a campaign made from it would be missing the GM's content. Use ${where === "ZIP" ? "the ZIP" : "the repository"} you made with the GM-only switch on.` };
+  if (kind === "numbered") return { step: "note", title: "RP repository found", message: `This looks like an RP repository in the numbered layout (it has 1-Now/ or 3-People/ folders), but it was not made by RPG Tools and has no .rpg-tools/campaign.json. Importing RP repositories is coming. Nothing was changed.` };
+  if (kind === "unknown") return { step: "error", title: "Nothing to restore", message: `This ${where} is not an RPG Tools export or an RP repository. It has no .rpg-tools/campaign.json and no 1-Now/ or 3-People/ folders.` };
+  return { step: "error", title: "No restore copy", message: fallback };
+}
