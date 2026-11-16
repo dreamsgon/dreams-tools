@@ -16,13 +16,9 @@ export default async function Home(){
   const first=user?.displayName.split(/[\s@]/)[0]||'';
   return <main className="rpg-hub home-page"><SiteHeader signedIn={!!user}/>
     {user?<>
-      <section className="home-hello home-hello-signed-in">
-        <div><h1>Welcome back{first?`, ${first}`:''}.</h1><p>Pick up where you left off, or open a tool.</p></div>
-        <nav className="home-tools" aria-label="Tools">
-          {doors.map(({label,short,href,Icon})=><a key={href} href={href} title={short}><Icon size={17} strokeWidth={1.7} aria-hidden="true"/>{label}</a>)}
-        </nav>
-      </section>
-      <HomeCampaigns/>
+      <HomeCampaigns first={first} tools={<nav className="home-tools" aria-label="Tools">
+        {doors.map(({label,short,href,Icon})=><a key={href} href={href} title={short}><Icon size={17} strokeWidth={1.7} aria-hidden="true"/>{label}</a>)}
+      </nav>}/>
     </>:<>
     <section className="home-hello">
       <h1>Maps for the table. <span>Memory for the world.</span></h1><p>Tools for game masters, on one account. Run the encounter on a shared map, and keep the lore your players keep asking about.</p>
