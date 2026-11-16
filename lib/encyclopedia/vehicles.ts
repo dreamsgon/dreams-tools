@@ -398,6 +398,52 @@ export function playerVehicle(v: Vehicle, t: VehicleType, readable: (id: string)
   };
 }
 
+/**
+ * The vehicle with everything GM-only taken out, still in the GM shape: for an AI connection that may only see what
+ * players see (lib/mcp/players-only.ts). Null when the vehicle's Overview isn't shared. `clean` strips GM secrets.
+ */
+export function playerSafeVehicle(v: Vehicle, clean: (text: string) => string): Vehicle | null {
+  if (v.visibility !== "players") return null;
+  const shown = <X extends { gm?: boolean }>(l: X[] | undefined) => (l ?? []).filter(x => !x.gm);
+  const crewShared = v.crewVisibility === "players";
+  const out: Vehicle = {
+    visibility: "players", typeId: v.typeId,
+    specs: shown(v.specs).map(x => ({ ...x, value: clean(x.value) })), gauges: shown(v.gauges), now: shown(v.now).map(x => ({ ...x, value: clean(x.value) })),
+    ...(v.subtitle ? { subtitle: clean(v.subtitle) } : {}),
+    ...(v.ownerId && !v.ownerGm ? { ownerId: v.ownerId } : {}), ...(v.commanderId && !v.commanderGm ? { commanderId: v.commanderId } : {}),
+    ...(!v.locationGm ? { ...(v.locationId ? { locationId: v.locationId } : {}), ...(v.locationText ? { locationText: clean(v.locationText) } : {}) } : {}),
+  };
+  if (v.stations) out.stations = shown(v.stations).filter(x => crewShared || x.pic);
+  if (crewShared) { out.crewVisibility = "players"; if (v.crew) out.crew = shown(v.crew); if (v.hands) out.hands = shown(v.hands); }
+  if (v.holdVisibility === "players") { out.holdVisibility = "players"; if (v.capacity !== undefined) out.capacity = v.capacity; if (v.cargo) out.cargo = shown(v.cargo); }
+  if (v.systemsVisibility === "players") { out.systemsVisibility = "players"; if (v.systems) out.systems = shown(v.systems); }
+  if (v.logVisibility === "players") { out.logVisibility = "players"; if (v.log) out.log = shown(v.log).map(l => ({ ...l, text: clean(l.text) || "…" })); }
+  return out;
+}
+
+/** The vehicle in words and short lists, for an AI reading the page (read_page). `title` names linked pages. */
+export function vehicleText(v: Vehicle, t: VehicleType, title: (id: string) => string) {
+  const name = (id?: string) => id ? title(id) || undefined : undefined;
+  const hidden = (gm?: boolean) => gm ? " (GM only)" : "";
+  const people = (x: Who) => x.characterId ? name(x.characterId) ?? "someone" : x.name;
+  return {
+    type: t.name, model: v.subtitle || undefined, playersSeeOverview: v.visibility === "players",
+    owner: name(v.ownerId) ? `${name(v.ownerId)}${hidden(v.ownerGm)}` : undefined,
+    [t.commander.toLowerCase()]: name(v.commanderId) ? `${name(v.commanderId)}${hidden(v.commanderGm)}` : undefined,
+    location: (name(v.locationId) ?? v.locationText) ? `${name(v.locationId) ?? v.locationText}${hidden(v.locationGm)}` : undefined,
+    stats: specRows(v, t).filter(r => r.value).map(r => `${r.label}: ${r.value}${hidden(r.gm)}`),
+    gauges: gaugeRows(v, t).map(r => `${r.label}: ${r.value}/${r.max}${r.unit ? ` ${r.unit}` : ""}${hidden(r.gm)}`),
+    rightNow: nowRows(v, t).filter(r => r.value).map(r => `${r.label}: ${r.value}${hidden(r.gm)}`),
+    stations: stationList(v, t).map(s => `${s.label}: ${people(s) ?? "open"}${hidden(s.gm)}`),
+    crew: (v.crew ?? []).map(c => `${people(c) ?? "someone"}${c.role ? ` (${c.role})` : ""}${hidden(c.gm)}`),
+    crewPlayersSee: v.crewVisibility === "players",
+    counts: handRows(v, t).filter(h => h.value).map(h => `${h.label}: ${h.value}${hidden(h.gm)}`),
+    hold: { title: holdTitle(t), unit: t.holdUnit, capacity: v.capacity, carrying: cargoUsed(v), playersSee: v.holdVisibility === "players", cargo: (v.cargo ?? []).map(c => `${c.qty} ${c.name}${c.note ? ` (${c.note})` : ""}${hidden(c.gm)}`) },
+    systems: { title: systemsTitle(t), playersSee: v.systemsVisibility === "players", list: (v.systems ?? []).map(x => `${x.name}: ${systemStateNames[x.state]}${x.roll ? `, roll ${x.roll}` : ""}${x.note ? ` (${x.note})` : ""}${hidden(x.gm)}`) },
+    log: { playersSee: v.logVisibility === "players", latest: (v.log ?? []).slice(0, 10).map(l => `${l.day ? `${l.day}: ` : ""}${logKindNames[l.kind]}: ${l.text}${hidden(l.gm)}`), entries: v.log?.length || undefined },
+  };
+}
+
 /** A short id for a new type or field: its name, made safe, plus a few random letters so two with one name differ. */
 export const typeFieldId = (label: string, taken: Iterable<string> = []) => {
   const used = new Set(taken), base = (slug(label) || "field").slice(0, 40);
