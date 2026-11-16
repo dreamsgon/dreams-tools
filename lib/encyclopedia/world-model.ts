@@ -35,8 +35,13 @@ export const statFieldSchema = z.object({
   roll:z.enum(["none","d20","formula","custom"]).optional(), rollFormula:z.string().trim().max(200).optional(),
   // Optional (added later, the rollable sheet): named rolls, like a spell's Attack and Damage. Formulas may use {value}.
   // When present they replace roll / rollFormula (see stat-rolls.ts). note is a short line under the stat's name.
-  rolls:z.array(z.object({name:z.string().trim().min(1).max(40),formula:z.string().trim().min(1).max(200)})).max(6).optional(),
+  rolls:z.array(z.object({name:z.string().trim().min(1).max(40),formula:z.string().trim().min(1).max(200),
+    // Optional: a target, so the roll card says Success or Fail (at least 15, at most {value}).
+    success:z.object({op:z.enum(["atLeast","atMost"]),against:z.string().trim().min(1).max(100)}).optional()})).max(6).optional(),
   note:z.string().trim().max(120).optional(),
+  // Optional (rollable sheet part 2): a worked-out value shown beside the value and read as {Name mod}, like floor(({value}-10)/2);
+  // and a tracker (by name, since each character has its own) that rolling this stat spends from.
+  derived:z.string().trim().max(200).optional(), spend:z.object({tracker:z.string().trim().min(1).max(40),n:z.number().int().min(1).max(1000)}).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
 export const characterSchema = z.object({

@@ -9,7 +9,7 @@ import type {TableResult} from "@/lib/encyclopedia/discord-table";
 
 /** A random table rolled from a page: what came up, how to roll it again, and what to post to Discord. */
 export type TableRollShown={title:string;roll:TableRoll;again:()=>void;result:TableResult};
-export type RollResult={id:number;title:string;formula:string;total:number;detail:string;at:number;table?:TableRollShown;logId?:string;base?:string;mode?:RollMode;/** Rolled and sent on the server: where it went, and how to roll it again. */server?:{note:string;again:()=>void}};
+export type RollResult={id:number;title:string;formula:string;total:number;detail:string;at:number;/** Success or fail against a target the sheet set. */outcome?:{ok:boolean;text:string};/** How to work out the outcome again, for Roll again. */judge?:RollOptions['outcome'];table?:TableRollShown;logId?:string;base?:string;mode?:RollMode;/** Rolled and sent on the server: where it went, and how to roll it again. */server?:{note:string;again:()=>void}};
 const EVENT="encyclopedia-roll";
 /** Pages listen for this to mark the row that came up in a table shown on them. */
 export const TABLE_ROLL_EVENT="encyclopedia-table-roll";
@@ -22,12 +22,15 @@ export type RollOptions={
   mode?:RollMode;
   /** Also add the roll to the per-browser roll log (the one Maptable shows). */
   log?:boolean;
+  /** Works out Success or Fail from the total (a sheet roll with a target). */
+  outcome?:(total:number)=>{ok:boolean;text:string}|null;
 };
 /** Rolls a formula and shows the result card. Rolls never change the encyclopedia. */
 export function rollInline(title:string,formula:string,options:RollOptions={}){
  const rolled=rollWithMode(formula,options.mode),{mode,total,detail}=rolled;
  const logged=options.log?recordLocalRoll({label:title,total,breakdown:rolled.breakdown}):undefined;
- const result:RollResult={id:++sequence,title,formula:rolled.formula,total,detail,at:Date.now(),base:formula,...(mode?{mode}:{}),...(logged?{logId:logged.id}:{})};
+ const outcome=options.outcome?.(total)??undefined;
+ const result:RollResult={id:++sequence,title,formula:rolled.formula,total,detail,at:Date.now(),base:formula,...(outcome?{outcome}:{}),...(options.outcome?{judge:options.outcome}:{}),...(mode?{mode}:{}),...(logged?{logId:logged.id}:{})};
  window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;
 }
 
@@ -70,7 +73,7 @@ export function RollResults({discord,onSetupDiscord}:{discord:DiscordTarget|null
  useEffect(()=>{let value=false;try{value=!!discord&&localStorage.getItem(autoKey(discord.campaignId))==="1";}catch{/* optional */}setAuto(value);},[discord]);
  const send=async(r:RollResult)=>{const d=target.current;if(!d)return;setSent({id:r.id,state:"sending"});
   try{if(r.table){await postTableResult({campaignId:d.campaignId},r.table.result);setSent({id:r.id,state:"sent"});return;}
-   const res=await fetch("/api/encyclopedia/discord-roll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({campaignId:d.campaignId,title:r.title,formula:r.formula,total:r.total,detail:r.detail.slice(0,400)})});const v=await res.json().catch(()=>({})) as {error?:string};if(!res.ok)throw new Error(v.error??"Discord did not accept the roll.");setSent({id:r.id,state:"sent"});if(r.logId)markLocalRoll(r.logId,"Posted to Discord");}
+   const res=await fetch("/api/encyclopedia/discord-roll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({campaignId:d.campaignId,title:r.title,formula:r.formula,total:r.total,detail:[r.detail,r.outcome?.text].filter(Boolean).join(" · ").slice(0,400)})});const v=await res.json().catch(()=>({})) as {error?:string};if(!res.ok)throw new Error(v.error??"Discord did not accept the roll.");setSent({id:r.id,state:"sent"});if(r.logId)markLocalRoll(r.logId,"Posted to Discord");}
   catch(e){setSent({id:r.id,state:"error",message:e instanceof Error?e.message:"Could not send to Discord."});}};
  useEffect(()=>{const on=(e:Event)=>{const r=(e as CustomEvent<RollResult>).detail;setRolls(old=>[r,...old].slice(0,6));if(autoRef.current&&target.current&&!r.server)void send(r);};window.addEventListener(EVENT,on);return()=>window.removeEventListener(EVENT,on);},[]);
  const [latest,...earlier]=rolls;if(!latest)return null;
@@ -80,13 +83,14 @@ export function RollResults({discord,onSetupDiscord}:{discord:DiscordTarget|null
    {latest.table?<><p className="roll-result-text" key={latest.id}>{latest.table.roll.text}</p>
     <div className="roll-result-detail">{[latest.formula,latest.detail].filter(Boolean).join(" · ")}{earlier.length?` · Earlier: ${earlier.slice(0,3).map(r=>r.table?short(r.table.roll.text):r.total).join(", ")}`:""}</div></>
    :<><div className="roll-result-total"><strong key={latest.id}>{latest.total}</strong><span>{latest.formula}</span></div>
-   <div className="roll-result-detail">{latest.mode?"":"Rolled "}{latest.detail}{earlier.length?` · Earlier: ${earlier.slice(0,4).map(r=>r.table?short(r.table.roll.text):r.total).join(", ")}`:""}</div></>}
+   <div className="roll-result-detail">{latest.mode?"":"Rolled "}{latest.detail}{earlier.length?` · Earlier: ${earlier.slice(0,4).map(r=>r.table?short(r.table.roll.text):r.total).join(", ")}`:""}</div>
+   {latest.outcome&&<p className={`roll-result-outcome ${latest.outcome.ok?"ok":"fail"}`}>{latest.outcome.text}</p>}</>}
    {status?.state==="error"&&<p className="roll-result-error" role="alert">{status.message}</p>}</div>
   <div className="roll-result-foot">
    {latest.server?<span className="roll-sent"><Check size={13}/> {latest.server.note}</span>:discord?(status?.state==="sent"?<span className="roll-sent"><Check size={13}/> Sent to {discord.label}</span>:<button disabled={status?.state==="sending"} onClick={()=>void send(latest)}><Send size={13}/> {status?.state==="sending"?"Sending…":"Send to Discord"}</button>)
     :onSetupDiscord?<button onClick={onSetupDiscord}><Send size={13}/> Set up Discord</button>:<span>Only you see this roll</span>}
    <span className="spacer"/>
    {discord&&<label className="roll-auto" title="Send every roll from this campaign to Discord"><input type="checkbox" checked={auto} onChange={e=>{setAuto(e.target.checked);try{localStorage.setItem(autoKey(discord.campaignId),e.target.checked?"1":"0");}catch{/* optional */}}}/> Always</label>}
-   <button onClick={()=>latest.server?latest.server.again():latest.table?latest.table.again():rollInline(latest.title,latest.base??latest.formula,{mode:latest.mode,log:!!latest.logId})}><RotateCcw size={13}/> Roll again</button></div>
+   <button onClick={()=>latest.server?latest.server.again():latest.table?latest.table.again():rollInline(latest.title,latest.base??latest.formula,{mode:latest.mode,log:!!latest.logId,outcome:latest.judge})}><RotateCcw size={13}/> Roll again</button></div>
  </div>;
 }
