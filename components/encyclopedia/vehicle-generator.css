@@ -1,0 +1,35 @@
+/* Roll up a vehicle (components/encyclopedia/vehicle-generator.tsx). */
+.vgen{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;min-height:360px}
+.vgen-options{display:flex;flex-direction:column;gap:14px}
+.vgen-options select{width:100%;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised,var(--panel));padding:6px 8px;font:inherit;color:var(--ink)}
+.vgen-templates{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.vgen-templates button{border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;background:var(--panel);color:var(--ink);cursor:pointer}
+.vgen-templates button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.vgen-reroll{align-self:flex-start}
+.vgen-preview{display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
+.vgen-head{display:flex;align-items:center;gap:12px;color:var(--accent)}
+.vgen-name{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.vgen-name input{font:inherit;font-size:22px;font-weight:700;color:var(--ink);border:1px solid transparent;border-radius:var(--radius);background:transparent;padding:2px 6px;margin-left:-6px;min-width:0}
+.vgen-name input:hover,.vgen-name input:focus{border-color:var(--line);background:var(--raised,var(--hover))}
+.vgen-name .muted{font-size:13px}
+.vgen-specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:0}
+.vgen-specs div{padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);min-width:0}
+.vgen-specs dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.vgen-specs dd{margin:2px 0 0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.vgen-gauges{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.vgen-gauges strong{color:var(--ink)}
+.vgen-lists{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.vgen-lists h4{margin:0 0 6px;font-size:13px}
+.vgen-lists ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.vgen-lists li{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.vgen-lists code{font-size:11px;padding:1px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.vgen-lists .sys-state{padding:1px 7px;font-size:11px}
+.vgen-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:16px}
+.vgen-rename{margin-right:auto;display:inline-flex;align-items:center;gap:6px;font-size:13px;min-width:0;overflow-wrap:anywhere}
+@media (max-width:760px){
+ .vgen{grid-template-columns:minmax(0,1fr)}
+ .vgen-lists{grid-template-columns:minmax(0,1fr)}
+ .vgen-specs{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .vgen-actions .button{flex:1}
+ .vgen-rename{flex-basis:100%}
+}

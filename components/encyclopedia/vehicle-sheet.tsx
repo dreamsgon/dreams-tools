@@ -5,7 +5,7 @@
  * The read-only version for the player site is VehicleReadOnly.
  */
 import {useMemo,useRef,useState,type ReactNode} from 'react';
-import {Compass,Crown,Settings2,Eye,EyeOff,ImagePlus,MapPin,Minus,Plus,Shield,Trash2} from 'lucide-react';
+import {Compass,Crown,Dices,Settings2,Eye,EyeOff,ImagePlus,MapPin,Minus,Plus,Shield,Trash2} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {changeType,gaugeRows,gaugeStep,newVehicle,nowRows,setGauge,setGm,setValue,specRows,vehicleTypeOf,vehicleTypesOf,type GaugeColour,type PlayerVehicle,type Vehicle} from '@/lib/encyclopedia/vehicles';
 import {newPicture} from '@/lib/encyclopedia/picture';
@@ -15,6 +15,7 @@ import {PageSlot} from './quest-facts';
 import {TargetPicker} from './quest-goals';
 import {VehicleArtIcon} from './vehicle-art';
 import {VehicleTypesDialog} from './vehicle-types';
+import {VehicleGenerator} from './vehicle-generator';
 import {SeatCards,SeatCardsReadOnly,SeatPins,VehicleCrew,pinsOf} from './vehicle-crew';
 import {confirmDialog} from '../confirm-dialog';
 import './quest-facts.css';
@@ -96,7 +97,7 @@ export function VehicleCrewTab({entry,data,update,onOpen}:{entry:Entry;data:Work
 
 /** The GM's Overview tab of a vehicle page. */
 export function VehicleSheet({entry,data,update,change,onOpen,onCrew}:{entry:Entry;data:Workspace;update:(p:Partial<Entry>)=>void;change:(f:(latest:Workspace)=>Workspace)=>boolean|void;onOpen:(id:string)=>void;onCrew:()=>void}){
- const [editTypes,setEditTypes]=useState(false);
+ const [editTypes,setEditTypes]=useState(false),[rollUp,setRollUp]=useState(false);
  const world=data.worlds.find(w=>w.id===entry.worldId),types=vehicleTypesOf(world);
  const vehicle=entry.vehicle??newVehicle(types[0]),type=vehicleTypeOf(vehicle,world);
  const save=(v:Vehicle)=>update({vehicle:v});
@@ -110,8 +111,10 @@ export function VehicleSheet({entry,data,update,change,onOpen,onCrew}:{entry:Ent
   <div className="vehicle-head">
    <label className="vehicle-type"><VehicleArtIcon art={type.art} size={26}/><select aria-label="Vehicle type" value={type.id} onChange={e=>void switchType(e.target.value)}>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
    <button type="button" className="icon-button vehicle-types-button" aria-label="Edit vehicle types" title="Edit vehicle types: make your own kinds of vehicle" onClick={()=>setEditTypes(true)}><Settings2 size={15}/></button>
+   <button type="button" className="icon-button vehicle-types-button" aria-label="Roll up a vehicle" title="Roll up a vehicle: a name, stats, cargo and systems" onClick={()=>setRollUp(true)}><Dices size={15}/></button>
    <input key={vehicle.subtitle??''} className="vehicle-subtitle" aria-label="Model and class" placeholder={`Model and class, such as “${type.id==='starship'?'Liberator · System frigate':type.id==='sailing-ship'?'Brigantine · Merchant raider':type.id==='carriage'?'Lacquered coach · Four-in-hand':type.id==='car'?'Interceptor · Road raider':'Courier · Light hauler'}”`} defaultValue={vehicle.subtitle??''} maxLength={120} onBlur={e=>{const v=e.target.value.trim();if(v!==(vehicle.subtitle??''))set({subtitle:v||undefined});}} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();}}/>
   </div>
+  {rollUp&&<VehicleGenerator entry={entry} data={data} vehicle={vehicle} update={update} change={change} onOpen={onOpen} onClose={()=>setRollUp(false)}/>}
   {editTypes&&<VehicleTypesDialog data={data} worldId={entry.worldId} start={type.id} change={change} onClose={()=>setEditTypes(false)}/>}
   <div className="vehicle-grid">
    <div className="vehicle-col vehicle-left">
