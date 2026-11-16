@@ -51,8 +51,8 @@ function command(args) {
 }
 
 /** Runs a scenario in the stand-in Fantasy Grounds. */
-async function run(scenario) {
-  const out = JSON.parse(await command(["EVAL", harness, "0", source, JSON.stringify(scenario)]));
+async function run(scenario, script = source) {
+  const out = JSON.parse(await command(["EVAL", harness, "0", script, JSON.stringify(scenario)]));
   out.npcs = Object.values(out.db.npc ?? {});
   return out;
 }
@@ -322,7 +322,7 @@ test("says what's wrong with files it can't use", { skip }, async () => {
     "RPG Tools: Name the NPC or character, like /rpgtools export Goblin.",
     out.chat[4],
   ]);
-  assert.match(out.chat[4], /^RPG Tools: RPG Tools 0\.1\.0\. \/rpgtools import/);
+  assert.match(out.chat[4], /^RPG Tools: RPG Tools 0\.2\.0\. \/rpgtools import/);
 });
 
 test("writes JSON that JavaScript reads back exactly", { skip }, async () => {
@@ -333,16 +333,51 @@ test("writes JSON that JavaScript reads back exactly", { skip }, async () => {
 });
 
 test("RPG Tools serves the extension as an .ext with extension.xml at its root", async () => {
-  const { fantasyGroundsExtension, FG_FILES } = await import("../lib/bridge/fantasy-grounds.ts");
-  const zip = Buffer.from(await fantasyGroundsExtension());
+  const { fantasyGroundsExtension, fantasyGroundsScript, FG_FILES } = await import("../lib/bridge/fantasy-grounds.ts");
+  const zip = Buffer.from(await fantasyGroundsExtension("https://tools.example:8443"));
+  const expected = name => name.endsWith(".lua") ? fantasyGroundsScript(readFileSync(new URL(name, dir), "utf8"), "https://tools.example:8443") : readFileSync(new URL(name, dir), "utf8");
   const names = [];
   for (let at = 0; zip.readUInt32LE(at) === 0x04034b50;) {
     const size = zip.readUInt32LE(at + 18), nameLen = zip.readUInt16LE(at + 26), extra = zip.readUInt16LE(at + 28);
     const name = zip.subarray(at + 30, at + 30 + nameLen).toString();
     names.push(name);
-    assert.equal(zip.subarray(at + 30 + nameLen + extra, at + 30 + nameLen + extra + size).toString(), readFileSync(new URL(name, dir), "utf8"));
+    assert.equal(zip.subarray(at + 30 + nameLen + extra, at + 30 + nameLen + extra + size).toString(), expected(name));
     at += 30 + nameLen + extra + size;
   }
   assert.deepEqual(names, [...FG_FILES]);
   assert.deepEqual(names, ["extension.xml", "scripts/rpgtools.lua"]);
+  assert.match(expected("scripts/rpgtools.lua"), /^SITE = "https:\/\/tools\.example:8443";$/m);
+  assert.doesNotMatch(expected("scripts/rpgtools.lua"), /__RPG_TOOLS_ORIGIN__/);
+});
+
+test("the ping answer for /rpgtools test holds no data and caps what it sends back", async () => {
+  const { fantasyGroundsPing } = await import("../lib/bridge/fantasy-grounds.ts");
+  const ping = q => fantasyGroundsPing(new URL(`https://tools.example/api/bridge/fantasygrounds/ping${q}`));
+  assert.deepEqual(ping("?v=0.2.0"), { ok: true, app: "RPG Tools" });
+  assert.deepEqual(ping(`?echo=${"a".repeat(1500)}`), { ok: true, app: "RPG Tools", echo: 1500 });
+  assert.equal(ping("?echo=<script>").echo, 8);
+  assert.equal(ping("?size=200000").pad.length, 200000);
+  assert.equal(ping("?size=99999999").pad.length, 300000);
+  assert.deepEqual(ping("?size=-5"), { ok: true, app: "RPG Tools" });
+});
+
+test("/rpgtools test reports whether Fantasy Grounds can reach this RPG Tools site", { skip }, async () => {
+  const { fantasyGroundsScript } = await import("../lib/bridge/fantasy-grounds.ts");
+  const script = fantasyGroundsScript(source, "https://tools.example");
+  const ok = await run({ web: "ok", fgVersion: [5, 1], steps: [{ slash: "test" }] }, script);
+  assert.equal(ok.urls.length, 3);
+  assert.ok(ok.urls.every(u => u.startsWith("https://tools.example/api/bridge/fantasygrounds/ping?")));
+  assert.equal(ok.chat[1], "RPG Tools: Test of https://tools.example: Ping: yes. Long address: yes. Big answer: yes. Fantasy Grounds can reach RPG Tools directly. Tell RPG Tools it worked!");
+
+  const down = await run({ web: "down", steps: [{ slash: "test other.example/" }] }, script);
+  assert.ok(down.urls.every(u => u.startsWith("https://other.example/api/bridge/fantasygrounds/ping?")));
+  assert.match(down.chat[1], /Ping: no \(no answer\)\. Long address: no \(no answer\)\. Big answer: no \(no answer\)\. Copy this message/);
+
+  const old = await run({ web: "ok", fgVersion: [4, 6], steps: [{ slash: "test" }] }, script);
+  assert.equal(Object.keys(old.urls).length, 0);
+  assert.match(old.chat[0], /needs Fantasy Grounds Unity 5\.1 or later/);
+
+  const unfilled = await run({ web: "ok", steps: [{ slash: "test" }] });
+  assert.equal(Object.keys(unfilled.urls).length, 0);
+  assert.match(unfilled.chat[0], /Name your RPG Tools site/);
 });
