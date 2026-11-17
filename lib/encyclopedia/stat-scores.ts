@@ -11,17 +11,19 @@ const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export type ScorePair = { name: string; score: StatField; mod: StatField };
 
 /**
- * Pairs in the same group named "<Name> score" and "<Name> modifier" (or "mod"), both numbers or the modifier text.
+ * Pairs in the same group named "<Name> score" (or just "<Name>") and "<Name> modifier" (or "mod"), the score a number.
  * A pair is skipped when another stat is already called <Name>, or the score is already a box.
  */
 export function scorePairs(fields: readonly StatField[]): ScorePair[] {
   const live = fields.filter(f => !f.archived), out: ScorePair[] = [];
   for (const score of live) {
-    const name = score.label.match(/^(.*\S)\s+score$/i)?.[1];
-    if (!name || score.type !== 'number' || score.look === 'score') continue;
+    // "Strength score" or plain "Strength", with "Strength modifier" (or "mod") in the same group.
+    const name = score.label.match(/^(.*\S)\s+score$/i)?.[1] ?? score.label.trim();
+    if (!name || score.type !== 'number' || score.look === 'score' || /\s(?:modifier|mod)$/i.test(name)) continue;
     const re = new RegExp(`^${escape(name)}\\s+(?:modifier|mod)$`, 'i');
-    const mod = live.find(f => f.section === score.section && re.test(f.label.trim()) && (f.type === 'number' || f.type === 'text'));
-    if (!mod || live.some(f => f.label.trim().toLowerCase() === name.toLowerCase())) continue;
+    const mod = live.find(f => f !== score && f.section === score.section && re.test(f.label.trim()) && (f.type === 'number' || f.type === 'text'));
+    const twin = (l: string) => l === name.toLowerCase() || l === `${name.toLowerCase()} score`;
+    if (!mod || live.some(f => f !== score && twin(f.label.trim().toLowerCase()))) continue;
     out.push({ name, score, mod });
   }
   return out;

@@ -107,3 +107,14 @@ test('a fact can start a new line: kept by layouts and sent to players', () => {
  assert.deepEqual(laid.facts.map(f=>[f.value,!!f.br]),[['Elf',false],['Bard',true]],'the layout’s line breaks win');
  assert.deepEqual(playerProfile(p,()=>true,t=>t,[]).facts.map(f=>!!f.br),[false,true]);
 });
+
+test('a plain "Strength" with "Strength modifier" pairs into a score box too, and a path from the AI’s computer is not a value', async () => {
+ const {scorePairs}=await import('../lib/encyclopedia/stat-scores.ts');
+ const {localFilePath}=await import('../lib/encyclopedia/sheet-import.ts');
+ const g=(id,label,type='number',extra={})=>({id,label,section:'Abilities',type,options:[],visibility:'gm',archived:false,...extra});
+ const fields=[g('a','Strength'),g('b','Strength modifier'),g('c','Dexterity'),g('d','Dexterity mod'),g('e','Wisdom'),g('f','Charisma score'),g('h','Charisma modifier'),g('i','Luck','text'),g('j','Luck modifier')];
+ assert.deepEqual(scorePairs(fields).map(p=>[p.name,p.score.id,p.mod.id]),[['Strength','a','b'],['Dexterity','c','d'],['Charisma','f','h']]);
+ assert.deepEqual(scorePairs([g('a','Strength',undefined,{look:'score'}),g('b','Strength modifier')]),[],'already a box');
+ for(const p of ['/workspace/generated_images/ibac.png','/mnt/data/portrait.png','sandbox:/mnt/data/x.png','file:///C:/x.png','C:\\Users\\me\\x.png'])assert.ok(localFilePath(p),p);
+ for(const p of ['Rogue 2','https://example.com/x.png','Common, Draconic','12'])assert.equal(localFilePath(p),false,p);
+});

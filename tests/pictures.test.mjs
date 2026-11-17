@@ -84,3 +84,12 @@ test('picture.token is optional and validated like the picture', () => {
   assert.ok(!parse({...base,token:{...newPicture(img2,300,500),size:.1}}).success);
   assert.ok(!parse({...base,token:{imageId:img2,width:3,height:3}}).success);
 });
+
+test('tokens can be Tiny (½) or Small (¾) as well as whole squares', async () => {
+ const {pictureSchema}=await import('../lib/encyclopedia/world-model.ts');
+ const {tokenSizes}=await import('../lib/encyclopedia/picture.ts');
+ const base=newPicture('3f2b9c1e-8d4a-4b6f-9e2a-1c5d7f8a9b0c',600,600);
+ for(const squares of [0.5,0.75,1,2,6])assert.ok(pictureSchema.safeParse({...base,squares}).success,String(squares));
+ for(const squares of [0.25,0.6,1.5,7])assert.equal(pictureSchema.safeParse({...base,squares}).success,false,String(squares));
+ assert.deepEqual(tokenSizes.slice(0,3).map(s=>s.squares),[0.5,0.75,1]);
+});
