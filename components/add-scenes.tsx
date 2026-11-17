@@ -3,6 +3,8 @@ import {useState} from "react";
 import { countLabel } from "@/lib/plural";
 import {Globe2,Mountain,Swords,type LucideIcon} from "lucide-react";
 import {Modal} from "./dialogs";
+import {confirmDialog} from "./confirm-dialog";
+import {sceneMoveQuestion} from "@/lib/scene-confirm";
 import {collectionPath,newScene,uid,type Scene,type Workspace} from "@/lib/model";
 const MAP_KINDS:[Scene["mapType"],string,string,LucideIcon][]=[
   ["encounter","Encounter map","A battle map for a fight, on a grid.",Swords],
@@ -24,8 +26,9 @@ export default function AddScenes({workspace:w,campaignId,initialDestination,ini
   const selected=w.scenes.filter(s=>selection.has(s.id)&&campaignFor(s.containerId)!==campaignId);
   const hiddenCount=selected.filter(s=>!candidates.some(c=>c.id===s.id)).length;
   const toggle=(id:string)=>setSelection(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;});
-  const transfer=(ids:string[],copy:boolean)=>{
+  const transfer=async(ids:string[],copy:boolean)=>{
     const originals=w.scenes.filter(s=>ids.includes(s.id)&&campaignFor(s.containerId)!==campaignId);if(!originals.length)return;
+    if(!copy&&!await confirmDialog(sceneMoveQuestion(w.collections,originals.map(s=>s.name),destination)))return;
     const copiedIds=new Map(originals.map(s=>[s.id,uid()]));
     commit(next=>{
       for(const original of originals){
