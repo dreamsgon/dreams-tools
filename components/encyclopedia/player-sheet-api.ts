@@ -4,6 +4,11 @@ import type {Sheet,SheetTab} from '@/lib/encyclopedia/sheet-link';
 import {recordLocalRoll} from '@/lib/local-roll-log';
 import {showServerRoll} from './rolls';
 import type {SheetRead} from './sheet-read';
+import {throwOwnDice,type ThrowDie} from '@/lib/dice-throw';
+
+/** From the roll dialog: a bonus such as +1d4 added on the server, and a note for the roll's label. */
+export type RollExtra={bonus?:string;note?:string};
+const extraOf=(x:RollExtra)=>({...(x.bonus?{bonus:x.bonus}:{}),...(x.note?{note:x.note}:{})});
 
 async function post<T>(url:string,body:unknown):Promise<T>{
  let res:Response;
@@ -28,17 +33,19 @@ export const unlinkMySheet=(ref:string,entryId:string)=>sheetCall({action:'unlin
 
 const notes={sent:'Sent to the roll log and the campaign’s Discord channel',skipped:'Rolled here. Dice rolls are set to “Don’t post” in Discord.',none:'Sent to the roll log. This campaign has no Discord channel.',failed:'Rolled, but Discord did not accept it.'};
 /** Rolls on the server from the formula stored on the sheet, then shows the result card. The browser sends no total. */
-export async function rollFromSheet(ref:string,entryId:string,itemId:string,mode:RollMode){
- const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes}>('/api/encyclopedia/player-roll',{ref,entryId,itemId,mode});
+export async function rollFromSheet(ref:string,entryId:string,itemId:string,mode:RollMode,extra:RollExtra={}){
+ const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes;dice?:ThrowDie[]}>('/api/encyclopedia/player-roll',{ref,entryId,itemId,mode,...extraOf(extra)});
  const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,formula:r.formula,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
- showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note:notes[r.discord]??notes.none,logId:logged?.id,again:()=>{void rollFromSheet(ref,entryId,itemId,mode).catch(()=>{});}});
+ await throwOwnDice(r.dice);
+ showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note:notes[r.discord]??notes.none,logId:logged?.id,again:()=>{void rollFromSheet(ref,entryId,itemId,mode,extra).catch(()=>{});}});
 }
 
 /** Rolls one of a stat's rolls on the server from the campaign's sheet. Spending (like 1 Stress) happens there too. */
-export async function rollStatFromSheet(ref:string,entryId:string,statId:string,rollName:string,mode:RollMode){
- const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes;outcome?:{ok:boolean;text:string};spent?:{label:string;n:number}}>('/api/encyclopedia/player-roll',{ref,entryId,statId,rollName,mode});
+export async function rollStatFromSheet(ref:string,entryId:string,statId:string,rollName:string,mode:RollMode,extra:RollExtra={}){
+ const r=await post<{title:string;formula:string;total:number;detail:string;breakdown:string;discord:keyof typeof notes;outcome?:{ok:boolean;text:string};spent?:{label:string;n:number};dice?:ThrowDie[]}>('/api/encyclopedia/player-roll',{ref,entryId,statId,rollName,mode,...extraOf(extra)});
  const logged=recordLocalRoll({label:r.title,total:r.total,breakdown:r.breakdown,formula:r.formula,...(r.discord==='sent'?{outcome:'Posted to Discord'}:{})});
+ await throwOwnDice(r.dice);
  const base=notes[r.discord]??notes.none,note=r.spent?`${base}${base.endsWith('.')?'':'.'} Spent ${r.spent.n} ${r.spent.label}.`:base;
- showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note,logId:logged?.id,...(r.outcome?{outcome:r.outcome}:{}),again:()=>{void rollStatFromSheet(ref,entryId,statId,rollName,mode).catch(()=>{});}});
+ showServerRoll({mode,title:r.title,formula:r.formula,total:r.total,detail:r.detail,note,logId:logged?.id,...(r.outcome?{outcome:r.outcome}:{}),again:()=>{void rollStatFromSheet(ref,entryId,statId,rollName,mode,extra).catch(()=>{});}});
  return r;
 }
