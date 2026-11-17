@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { hubHref } from "@/lib/campaign-switcher";
 import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
 import { altStep } from "./folder-reorder";
@@ -12,7 +13,7 @@ import "./campaigns.css";
 import { usePageTitle } from "./use-page-title";
 import { campaignTitle } from "@/lib/page-title";
 
-type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow };
+type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow; fromHub?: boolean };
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const mapsHref = (id: string) => `/maptable?campaign=${encodeURIComponent(id)}`;
 const COLLAPSED_KEY = "campaigns-collapsed-folders";
@@ -49,7 +50,11 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
       if (!live) return;
       setSummary(body);
       // The home page links here with ?new=1 to start a campaign straight away.
-      if (new URLSearchParams(window.location.search).get("new") === "1") setDialog({ kind: "new" });
+      const query = new URLSearchParams(window.location.search);
+      if (query.get("new") === "1") setDialog({ kind: "new" });
+      // A campaign's dashboard links here with ?notes=<key> to start notes for that campaign; it goes back to that dashboard after.
+      const forNotes = (body as CampaignSummary).rows.find(r => r.key === query.get("notes") && r.maptable && !r.encyclopedia);
+      if (forNotes) setDialog({ kind: "notes", row: forNotes, fromHub: true });
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load your campaigns."));
     return () => { live = false; };
   }, [signedIn]);
@@ -205,7 +210,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
-    {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
+    {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={dialog.fromHub ? () => window.location.assign(hubHref(dialog.row)) : () => setDialog(null)} send={send} fromHub={dialog.fromHub} />}
     {dialog?.kind === "match" && summary && <Match summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {notice && !moving && <div className="campaigns-toast" role="status"><Check size={16} aria-hidden="true" />{notice}</div>}
   </div>;
@@ -433,14 +438,18 @@ function NewCampaign({ summary, busy, close, send }: { summary: CampaignSummary;
   </Modal>;
 }
 
-function StartNotes({ row, summary, busy, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
+function StartNotes({ row, summary, busy, close, send, fromHub }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; close: () => void; send: Send; fromHub?: boolean }) {
   const [worldId, setWorldId] = useState(summary.worlds.find(w => !w.archived)?.id ?? ""), [newWorld, setNewWorld] = useState("");
   const ready = worldId || newWorld.trim();
   return <Modal title={`Start notes for ${row.name}`} intro="This makes an Encyclopedia campaign with the same name, paired with these maps." close={close} footer={<>
     <button type="button" className="campaigns-secondary" onClick={close}>Cancel</button>
     <button type="submit" form="start-notes" className="campaigns-primary" disabled={busy || !ready}>Start notes</button>
   </>}>
-    <form id="start-notes" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "complete", maptableId: row.maptable!.id, worldId, newWorld }, `Started notes for “${row.name}”.`, close); }}>
+    <form id="start-notes" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "complete", maptableId: row.maptable!.id, worldId, newWorld }, `Started notes for “${row.name}”.`, next => {
+      // Opened from the campaign's dashboard: go back to it (its address changes now that it has notes).
+      const now = fromHub && next.rows.find(r => r.maptable?.id === row.maptable!.id);
+      if (now) window.location.assign(hubHref(now)); else close();
+    }); }}>
       <WorldPicker summary={summary} worldId={worldId} setWorldId={setWorldId} newWorld={newWorld} setNewWorld={setNewWorld} />
     </form>
   </Modal>;

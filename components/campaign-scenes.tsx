@@ -57,6 +57,6 @@ export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, 
         </button>;
       })}</div>
     </section>)}
-    {!shown.length && <p className="muted">No scenes match.</p>}
+    {!all.length ? <p className="muted">No scenes in this campaign yet. Add scenes to start its table.</p> : !shown.length && <p className="muted">No scenes match.</p>}
   </div>;
 }
