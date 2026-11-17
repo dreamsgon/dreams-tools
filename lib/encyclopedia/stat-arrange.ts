@@ -74,3 +74,21 @@ export function formFromArrangement<T extends { id: string; archived?: boolean }
   const live = all.filter(f => !f.archived), gone = all.filter(f => f.archived);
   return [...arrangeStats(live, a).map(f => statOff(a, f.id) ? { ...f, archived: true } : f), ...gone];
 }
+
+type WithStats = { entries: { character?: { statsByCampaign: Record<string, Record<string, unknown>>; statLayout?: StatArrangement } | undefined }[] };
+/**
+ * The workspace after deleting stats from a campaign's form: every character's values for them (and a score box's typed
+ * modifier, kept under "<id>-mod") are removed, and they leave the characters' arrangements. Nothing changes when `ids` is empty.
+ */
+export function withoutDeletedStats<W extends WithStats>(w: W, campaignId: string, ids: readonly string[]): W {
+  if (!ids.length) return w;
+  const gone = new Set(ids.flatMap(id => [id, `${id.slice(0, 96)}-mod`]));
+  return { ...w, entries: w.entries.map(e => {
+    const c = e.character, values = c?.statsByCampaign[campaignId];
+    const hit = !!values && Object.keys(values).some(k => gone.has(k)), inLayout = !!c?.statLayout && [...(c.statLayout.order ?? []), ...(c.statLayout.off ?? [])].some(id => gone.has(id));
+    if (!c || (!hit && !inLayout)) return e;
+    const next = { ...c, statsByCampaign: hit ? { ...c.statsByCampaign, [campaignId]: Object.fromEntries(Object.entries(values!).filter(([k]) => !gone.has(k))) } : c.statsByCampaign };
+    if (inLayout) { const known = new Set([...(c.statLayout!.order ?? []), ...(c.statLayout!.off ?? [])].filter(id => !gone.has(id))); const layout = tidy(c.statLayout, known); if (layout) next.statLayout = layout; else delete next.statLayout; }
+    return { ...e, character: next };
+  }) };
+}

@@ -94,7 +94,7 @@ export function CharacterSheetSection({entry,change,data,campaign}:{entry:Entry;
     {!coGm&&<details className="sheet-menu"><summary className="button small icon-button" aria-label="More for this sheet"><MoreHorizontal size={15}/></summary>
      <div className="sheet-menu-list">{!imported&&<button type="button" disabled={needsGoogle} title={why} onClick={e=>{closeMenu(e);void changeCells();}}>Change cells</button>}{imported&&<button type="button" onClick={e=>{closeMenu(e);setDialog({});}}>Link a Google Sheet instead</button>}{canImport&&<button type="button" onClick={e=>{closeMenu(e);setExporting(true);}}>Export as .json</button>}<button type="button" className="danger" onClick={e=>{closeMenu(e);void unlink();}}>{imported?'Remove':'Unlink'}</button></div></details>}
    </>}>
-   <p className="sheet-visibility">{visible?'Players see the copied values, read only, because this character’s Stats tab is player visible.':sheet.linkedById?`Only you and ${sheet.linkedBy??'the player'} see this. Set the Stats tab to Player visible to show the copied values to every player.`:'Only you see this. Set the Stats tab to Player visible to show the copied values to players.'}</p>
+   <p className="sheet-visibility">{visible?'Players see the copied values, read only, because this character’s Stats & Skills tab is player visible.':sheet.linkedById?`Only you and ${sheet.linkedBy??'the player'} see this. Set the Stats tab to Player visible to show the copied values to every player.`:'Only you see this. Set the Stats tab to Player visible to show the copied values to players.'}</p>
    {notice&&<p role="status" className="sheet-notice">{notice}</p>}
   </SheetView>
   {dialogEl}{importEl}{exportEl}

@@ -184,7 +184,7 @@ export function exportSheet(s: Workspace, entryId: string, opts: { campaignId: s
   };
   if (fields.length > 100) warnings.push(`A sheet holds 100 fields, so ${fields.length - 100} were left out.`);
   if (rolls.length > 150) warnings.push(`A sheet holds 150 rolls, so ${rolls.length - 150} were left out.`);
-  if (players && !statsShown && (ch?.sheet || (ch?.trackers?.length ?? 0) || Object.keys(values).length)) warnings.push("This character’s Stats tab is GM only, so its stats, trackers and sheet were left out of the players’ copy.");
+  if (players && !statsShown && (ch?.sheet || (ch?.trackers?.length ?? 0) || Object.keys(values).length)) warnings.push("This character’s Stats & Skills tab is GM only, so its stats, trackers and sheet were left out of the players’ copy.");
   return { file, warnings };
 }
 

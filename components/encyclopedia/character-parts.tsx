@@ -35,7 +35,7 @@ export function CharacterReadOnly({profile,open,who='',settings}:{profile:Player
  for(const b of profile.blocks){if(b.full){flush();rows.push(<div className="org-row is-full" key={b.id}><ReadBlock block={b} open={open}/></div>);}else (b.column==='left'?left:right).push(b);}
  flush();
  return <div className="org-profile char-profile is-readonly">
-  {!!profile.facts?.length&&<div className="char-facts is-readonly" role="list" aria-label="Facts">{profile.facts.map(f=><div role="listitem" className="char-fact" key={f.id}><span className="char-fact-value">{f.value}</span><span className="char-fact-label">{f.label}</span></div>)}</div>}
+  {!!profile.facts?.length&&<div className="char-facts is-readonly" role="list" aria-label="Facts">{profile.facts.map(f=><div role="listitem" className={`char-fact${f.size?` size-${f.size}`:''}`} key={f.id}><span className="char-fact-value">{f.value}</span><span className="char-fact-label">{f.label}</span></div>)}</div>}
   {profile.traits.length>0&&<div className="char-traits" role="list" aria-label="Traits">{profile.traits.map(t=><span role="listitem" key={t.id}><TraitChip label={t.label} symbol={t.symbol}/></span>)}</div>}
   {!!profile.pins?.length&&<QuickFindReadOnly pins={profile.pins} who={who} settings={settings}/>}
   <div className="org-board">{rows}</div>
