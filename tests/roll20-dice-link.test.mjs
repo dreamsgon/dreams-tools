@@ -39,7 +39,7 @@ test('RPG Tools rolls as Roll20 chat: the RPG Tools result by default, or Roll20
 test('Roll20 chat rolls for RPG Tools: inline rolls, /r rolls, and never its own or whispered ones',()=>{
  assert.deepEqual(L.parseInlineTitle('Rolling 1d20+5[DEX] = (<span class="basicdiceroll">12</span>)+5'),{formula:'1d20+5[DEX]',detail:'(12)+5'});
  const attack={who:'Thorn:',name:'Shortbow',text:'ShortbowAttack17Damage6',rolls:[{label:'Attack',title:'Rolling 1d20+5 = (12)+5',total:'17'},{label:'Damage',title:'Rolling 1d6+3 = (3)+3',total:'6'}]};
- assert.deepEqual(L.rollFromChat(attack),{title:'Shortbow',total:17,formula:'1d20+5',detail:'Attack 17 (1d20+5) · Damage 6 (1d6+3)',who:'Thorn'});
+ assert.deepEqual(L.rollFromChat(attack),{title:'Shortbow',total:17,formula:'1d20+5',detail:'Attack 17 (1d20+5) · Damage 6 (1d6+3)',who:'Thorn',dice:[{formula:'1d20+5',detail:'(12)+5'},{formula:'1d6+3',detail:'(3)+3'}]});
  assert.deepEqual(L.rollFromChat({who:'Dana',text:'rolling 4d6k3',rolls:[{formula:'4d6k3',total:' 14 '}]}),{title:'Roll',total:14,formula:'4d6kh3',who:'Dana'});
  assert.equal(L.rollFromChat({...attack,whisper:true}),null);
  assert.equal(L.rollFromChat({...attack,text:'Longbow attackResult21viaRPG Tools'}),null,'a roll this extension typed doesn’t come back');
@@ -78,7 +78,7 @@ test('the extension passes rolls between tabs: to every Roll20 game, and to one 
  // On the RPG Tools page: rolls go out, Roll20 rolls come in, and a roll from Roll20 is never sent back.
  const page=extensionApi(tabs),win=new EventTarget(),doc={documentElement:{dataset:{}}};
  vm.runInNewContext(src('rpgtools.js'),{chrome:page.api,window:win,document:doc,CustomEvent,JSON,Promise});
- assert.equal(doc.documentElement.dataset.rpgtoolsDiceLink,'0.1.1');
+ assert.equal(doc.documentElement.dataset.rpgtoolsDiceLink,'0.1.2');
  win.dispatchEvent(new CustomEvent('rpgtools:roll',{detail:JSON.stringify({label:'Stealth',total:9})}));
  win.dispatchEvent(new CustomEvent('rpgtools:roll',{detail:JSON.stringify({label:'Thorn · Shortbow',total:17,source:'roll20'})}));
  assert.deepEqual(plain(page.sent),[{type:'rpgtools-roll',roll:{label:'Stealth',total:9}}]);
@@ -105,4 +105,24 @@ test('Roll20 dice faces for the 3D dice', () => {
   assert.equal(Link.linkedRollDice({ title: 'Odd', total: 4, formula: '2d6', detail: '(3)' }), null);
   assert.equal(Link.linkedRollDice({ title: 'Big', total: 30, formula: '1d6', detail: '(30)' }), null);
   assert.equal(Link.linkedRollDice({ title: 'Plain', total: 9 }), null);
+});
+
+test('Roll20 roll templates: their name, their labels and what they said, with sheet modifiers summed', () => {
+  const bite = { who: 'dreamsleever (GM):', text: 'BiteAdult Black DragonAttack: 16Damage: 25 piercing + 2 acid',
+    lines: ['Bite', 'Adult Black Dragon', 'Attack: 16', 'Damage: 25 piercing + 2 acid'],
+    rolls: [
+      { label: 'Attack:', title: 'Rolling 1d20+(11+0) = (5)+(11+0)', total: '16' },
+      { label: 'Damage:', title: 'Rolling 2d10+6+0 = (9+10)+6+0', total: '25' },
+      { label: 'Damage: 25 piercing +', title: 'Rolling 1d8+0 = (2)+0', total: '2' },
+    ] };
+  const roll = L.rollFromChat(bite);
+  assert.equal(roll.title, 'Bite · Adult Black Dragon');
+  assert.equal(roll.total, 16);
+  assert.equal(roll.formula, '1d20+11');
+  assert.equal(roll.text, 'Attack: 16 · Damage: 25 piercing + 2 acid');
+  assert.equal(roll.detail, 'Attack 16 (1d20+11) · Damage 25 (2d10+6) · Damage 2 (1d8)');
+  assert.deepEqual(roll.dice, [{ formula: '1d20+11', detail: '(5)+11' }, { formula: '2d10+6', detail: '(9+10)+6' }, { formula: '1d8', detail: '(2)' }]);
+  const app = Link.readExternalRoll(JSON.stringify(roll));
+  assert.equal(Link.externalLogEntry(app).breakdown, 'Attack: 16 · Damage: 25 piercing + 2 acid');
+  assert.deepEqual(Link.linkedRollDice(app).map(d => d.value), [5, 9, 10, 2]);
 });

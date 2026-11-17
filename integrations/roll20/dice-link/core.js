@@ -48,20 +48,44 @@ var RPGToolsLink = (function () {
    * One Roll20 chat message as a roll for RPG Tools, or null. `msg` is what the content script read from the page:
    * {who, name, text, whisper, rolls: [{label, title, formula, total}]}, where `title` is an inline roll's tooltip.
    */
+  /** "1d20+(11+0)" and its dice "(5)+(11+0)" as "1d20+11" and "(5)+11": sheet modifiers summed. */
+  function tidy(formula, detail) {
+    var f = String(formula || ""), d = String(detail || "");
+    f = f.replace(/\((-?\d+(?:\s*[+-]\s*\d+)+)\)/g, function (group, inner) {
+      var sum = inner.replace(/\s+/g, "").match(/[+-]?\d+/g).reduce(function (a, n) { return a + Number(n); }, 0);
+      d = d.split(group).join(String(sum));
+      return String(sum);
+    });
+    var clean = function (s) { return s.replace(/\+-/g, "-").replace(/\+0(?![\d.])/g, "").replace(/^0\+/, ""); };
+    return { formula: clean(f), detail: clean(d) };
+  }
+  /** "Attack" from "Attack:" or from "Damage: 25 piercing +" (the words before a colon). */
+  var labelOf = function (s) { var t = String(s || ""), at = t.indexOf(":"); return cell((at > 0 ? t.slice(0, at) : t).replace(/[\s+]+$/, ""), 60); };
+
   function rollFromChat(msg) {
     if (!msg || msg.whisper || String(msg.text || "").indexOf("via" + MARK) >= 0) return null;
     var rolls = (msg.rolls || []).map(function (r) {
       var parsed = r.title ? parseInlineTitle(r.title) : { formula: r.formula || "", detail: "" };
       var total = Number(String(r.total == null ? "" : r.total).replace(/[^\d.+-]/g, ""));
-      return { label: cell(r.label, 60), formula: parsed.formula || r.formula || "", detail: parsed.detail, total: total };
+      var t = tidy(parsed.formula || r.formula || "", parsed.detail);
+      return { label: labelOf(r.label), formula: t.formula, detail: t.detail, total: total };
     }).filter(function (r) { return isFinite(r.total) && String(r.total) !== "" && !isNaN(r.total); });
     if (!rolls.length) return null;
-    var first = rolls[0], name = cell(msg.name, 120) || first.label || "Roll";
+    // A roll template's first lines name it: "Bite" then "Adult Black Dragon" (lines without a number or a colon).
+    var lines = (msg.lines || []).map(function (l) { return cell(l, 200); }).filter(Boolean);
+    var heading = [];
+    while (heading.length < 2 && lines.length && !/[:\d]/.test(lines[0])) heading.push(lines.shift());
+    var first = rolls[0], name = cell(msg.name, 120) || heading.join(" · ") || first.label || "Roll";
     var detail = rolls.length > 1
       ? rolls.map(function (r) { return (r.label ? r.label + " " : "") + r.total + (r.formula ? " (" + (fromRoll20Formula(r.formula) || r.formula) + ")" : ""); }).join(" · ")
       : first.detail;
     var out = { title: name, total: first.total, formula: fromRoll20Formula(first.formula) || cell(first.formula, 200) };
     if (detail) out.detail = cell(detail, 600);
+    // What the message said, such as "Attack: 16 · Damage: 25 piercing + 2 acid", when it says more than a bare roll.
+    var said = cell(lines.join(" · "), 600);
+    if (said && (rolls.length > 1 || heading.length)) out.text = said;
+    // Each roll's own dice, so the 3D dice can show every roll in the message.
+    if (rolls.length > 1) out.dice = rolls.map(function (r) { return { formula: fromRoll20Formula(r.formula) || "", detail: r.detail }; }).filter(function (r) { return r.formula && r.detail; }).slice(0, 6);
     var who = cell(String(msg.who || "").replace(/:\s*$/, ""), 80);
     if (who) out.who = who;
     return out;

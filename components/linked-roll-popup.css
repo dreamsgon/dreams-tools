@@ -8,3 +8,4 @@
 @keyframes linked-roll-in{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.linked-roll{animation:none}}
 .linked-roll-dice{position:fixed;inset:0;pointer-events:none;z-index:var(--z-dice-roll,90)}.linked-roll-dice canvas{display:block;width:100%;height:100%}
+.linked-roll-text{font-size:12.5px;margin-top:4px;line-height:1.4;overflow-wrap:anywhere;max-height:9em;overflow:auto}
