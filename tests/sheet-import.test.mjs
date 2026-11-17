@@ -153,3 +153,9 @@ test('an imported sheet has no cells, and a linked one still needs them; players
  const pc=playerCampaign(ws,C),page=pc.entries.find(e=>e.id===r.entryId);
  assert.ok(page.sheet.items.length>5);assert.ok(page.sheet.items.every(i=>!('cell' in i)));
 });
+
+test('a gauge without a value (what is left is unknown) imports full', () => {
+ const file=read({...example(),gauges:[{label:'Hit Dice (d8)',max:2,shape:'pips',colour:'green'}]});
+ const [t]=I.gaugeTrackers(file,()=>'g1',false);
+ assert.equal(t.value,2);assert.equal(t.max,2);
+});

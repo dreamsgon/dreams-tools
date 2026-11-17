@@ -41,7 +41,8 @@ const fieldSchema = z.object({
 });
 const gaugeSchema = z.object({
   label: str(40).refine(s => s.length > 0, "A gauge needs a label"),
-  value: int, max: int,
+  // value is optional: a sheet that doesn't know what's left (hit dice after an unknown rest) starts the gauge full.
+  value: int.optional(), max: int,
   shape: z.enum(["bar", "pips"]).catch("bar").optional(),
   colour: z.enum(trackerColours).catch("purple").optional(),
   visibility,
@@ -287,7 +288,7 @@ export function gaugeTrackers(file: ImportFile, newId: () => string, defaultGm: 
     const big = Math.max(1, Math.min(maxTrackerValue, g.max));
     if (shape === "pips" && big > maxTrackerPips) shape = "bar";
     const gm = g.visibility ? g.visibility === "gm" : defaultGm;
-    return { id: newId(), label: g.label, shape, colour: g.colour ?? "purple", max: big, value: Math.max(0, Math.min(big, g.value)), ...(gm ? { gm: true } : {}) };
+    return { id: newId(), label: g.label, shape, colour: g.colour ?? "purple", max: big, value: Math.max(0, Math.min(big, g.value ?? big)), ...(gm ? { gm: true } : {}) };
   });
 }
 
