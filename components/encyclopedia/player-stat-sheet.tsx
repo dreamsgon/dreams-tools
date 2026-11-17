@@ -12,6 +12,7 @@ import {isSingleD20,type RollMode} from '@/lib/rolls';
 import {rollInline} from './rolls';
 import {rollStatFromSheet} from './player-sheet-api';
 import './inventory.css';
+import {GroupHead,useCollapsed} from './group-collapse';
 import './stat-sheet.css';
 
 const modeNames:Record<RollMode,string>={normal:'Normal',high:'Advantage',low:'Disadvantage'};
@@ -20,6 +21,7 @@ const shown=(v:StatRow['value'])=>v===null||v===''?'—':typeof v==='boolean'?(v
 
 export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,onChanged}:{title:string;entryId:string;stats:StatRow[];trackers:PlayerTracker[];memberRef?:string;canRoll:boolean;onChanged:()=>void}){
  const [mode,setMode]=useState<RollMode>('normal'),[error,setError]=useState(''),[open,setOpen]=useState<Set<string>>(new Set);
+ const collapse=useCollapsed(`player-stats:${entryId}`);
  const server=!!memberRef&&canRoll,anyRoll=stats.some(s=>s.rolls.some(r=>r.dice)),anyD20=stats.some(s=>s.rolls.some(r=>r.dice&&isSingleD20(r.dice)));
  const groups:{name:string;rows:StatRow[]}[]=[];
  for(const s of stats){const g=groups.find(x=>x.name===s.section);if(g)g.rows.push(s);else groups.push({name:s.section,rows:[s]});}
@@ -36,8 +38,8 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
   </div>}
   {error&&<p role="alert" className="stat-roll-hint">{error}</p>}
   {groups.map(g=><section key={g.name||'other'} className="inv-group stat-group">
-   {(g.name||groups.length>1)&&<div className="inv-group-head"><h3>{g.name||'Other'}</h3><small>{g.rows.length}</small><span className="inv-rule"/></div>}
-   {g.rows.some(s=>s.look==='score')&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{g.rows.filter(s=>s.look==='score').map(s=><div role="listitem" key={s.id} className="stat-box">
+   {(g.name||groups.length>1)&&<GroupHead title={g.name||'Other'} count={g.rows.length} closed={collapse.isClosed(g.name)} onToggle={()=>collapse.toggle(g.name)}/>}
+   {!((g.name||groups.length>1)&&collapse.isClosed(g.name))&&<>{g.rows.some(s=>s.look==='score')&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{g.rows.filter(s=>s.look==='score').map(s=><div role="listitem" key={s.id} className="stat-box">
     <span className="stat-box-label" title={s.description}>{s.label}</span>
     <span className="stat-box-read-mod" aria-label={`${s.label} modifier`}>{s.worked===undefined?'—':signed(s.worked)}</span>
     <span className="stat-box-score"><span className="stat-box-read-score" aria-label={`${s.label} score`}>{shown(s.value)}</span></span>
@@ -60,7 +62,7 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
      {s.type==='textarea'&&<div className="stat-long player-prose">{shown(s.value)}</div>}
      {s.description&&open.has(s.id)&&<p className="stat-description stat-read-description">{s.description}</p>}
      {hint&&<p className="stat-roll-hint">{s.rolls.length>1?`${hint.name}: `:''}{hint.hint}</p>}
-    </div>;})}</div>}
+    </div>;})}</div>}</>}
   </section>)}
  </div>;
 }

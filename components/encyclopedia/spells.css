@@ -1,0 +1,19 @@
+/* Spells tab, Cards view (components/encyclopedia/spells.tsx). */
+.spell-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.spell-card{display:flex;flex-direction:column;gap:8px;min-width:0;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));padding:12px;transition:border-color .15s}
+.spell-card:hover,.spell-card:focus-within{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.spell-card.is-hidden{border-style:dashed}
+.spell-card-kicker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.spell-card-name{appearance:none;border:0;background:none;padding:0;margin:0;font:inherit;font-size:15px;font-weight:700;color:var(--ink);text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.spell-card-name:hover{color:var(--accent)}
+.spell-card-details{display:flex;flex-wrap:wrap;gap:2px 12px;margin:0;font-size:12px}
+.spell-card-details div{display:inline-flex;gap:4px}
+.spell-card-details dt{color:var(--muted)}
+.spell-card-details dd{margin:0;color:var(--ink);font-weight:600}
+.spell-card-text{font-size:13px;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;overflow-wrap:anywhere}
+.spell-card-text.open{display:block;-webkit-line-clamp:unset;line-clamp:unset}
+.spell-card-more{align-self:flex-start;appearance:none;border:0;background:none;padding:0;font:inherit;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer}
+.spell-card-actions{margin-left:0}
+.spell-card-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:auto}
+.spell-card-foot .button{margin-left:auto}
+@media (max-width:519px){.spell-cards{grid-template-columns:minmax(0,1fr)}}

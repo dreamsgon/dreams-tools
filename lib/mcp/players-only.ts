@@ -24,7 +24,7 @@ export function playersBook(book: Book, campaignId: string): Book {
     const vehicle = e.vehicle ? playerSafeVehicle(e.vehicle, playerText) ?? undefined : undefined;
     if (!overview && !tabs.length && !found && !map && !vehicle) return [];
     const quest = e.quest && overview ? { ...e.quest, prep: undefined, linkIds: undefined, ...(e.quest.rewardHidden ? { reward: undefined, rewardIds: undefined } : {}), objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
-    const character = e.character ? { ...e.character, statblock: undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {} } : undefined;
+    const character = e.character ? { ...e.character, statblock: undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {}, features: e.character.featuresVisibility === "players" && e.character.features?.length ? e.character.features.filter(f => !f.gm) : undefined } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
       // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
       org: undefined, profile: undefined,

@@ -20,6 +20,7 @@ import {sheetSchema,playerSheet} from './sheet-link.ts';
 import {trackersSchema,playerTrackers,type PlayerTracker} from './trackers.ts';
 import {vehicleTypesSchema,vehicleSchema,vehicleRefs,peopleRefs,vehicleSearchText,vehicleTypeOf,playerVehicle,playerVehicleRoles,remapVehicle,type PlayerVehicle} from './vehicles.ts';
 import {profileSchema,characterLayoutSchema,profileRefs,profileSearchText,remapProfile,playerProfile,playerOrganizations,type PlayerProfile} from './character-profile.ts';
+import {featuresSchema,playerFeatures,type PlayerFeature} from './features.ts';
 import {inventorySchema,spellsSchema,itemSettingsSchema,itemSettingsOf,playerInventory,playerSpells,playerItemSettings,type PlayerInventory,type PlayerSpell} from './items.ts';
 import {storeSchema,storeRefs,remapStore,storeSearchText,playerStore,type PlayerStore} from './stores.ts';
 import {galaxySchema} from './galaxies.ts';
@@ -70,6 +71,8 @@ export const characterSchema = z.object({
   trackers:trackersSchema.optional(),
   // Optional (added later): money and items, and spells or powers (items.ts). The character's own player always sees both; others when shared.
   inventory:inventorySchema.optional(), spells:spellsSchema.optional(), spellsVisibility:visibilitySchema.optional(),
+  // Optional (added later): class features, feats and traits (features.ts). Like spells: the character's own player always sees them, others when shared; GM-only ones never.
+  features:featuresSchema.optional(), featuresVisibility:visibilitySchema.optional(),
   // Optional (added later): this character's own arrangement of the campaign's stats (stat-arrange.ts): their order, and the ones
   // switched off on this sheet. Ids of stats the form no longer has are ignored. Off stats are left out for players too.
   statLayout:z.object({order:z.array(id).max(500).optional(),off:z.array(id).max(500).optional()}).optional(),
@@ -381,13 +384,14 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const own=!!mine?.has(e.id),items=itemSettingsOf(c);
    const inventory=e.kind==='character'&&e.character&&(own||e.character.inventory?.visibility==='players')&&(e.character.inventory||own)?playerInventory(e.character.inventory,items):undefined;
    const spells=e.kind==='character'&&e.character&&items.spells.on&&(own||e.character.spellsVisibility==='players')&&(e.character.spells?.length||own)?playerSpells(e.character.spells):undefined;
+   const features=e.kind==='character'&&e.character?.features?.length&&(own||e.character.featuresVisibility==='players')?playerFeatures(e.character.features):undefined;
    // A store: when the GM shares it (and it is for one of this member's characters), or one of their characters runs it.
    const ownStore=!!e.store?.ownerId&&!!mine?.has(e.store.ownerId),forMe=!e.store?.who||e.store.who.some(id=>mine?.has(id));
    const store=e.kind==='store'&&e.store&&(ownStore||(e.store.visibility==='players'&&!e.store.awaiting&&forMe))?playerStore(e.store,mine??new Set(),Date.now()):undefined;
-   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!store)return [];
+   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!features?.length&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -400,7 +404,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='character'||src.profile?.visibility!=='players')continue;
   e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});
   // Pinned stats, items and spells: only from what this payload already gives players (shared tabs, GM-only lines left out). Statblock lines never.
-  const pins=playerPins(src.profile.pins,{stats:e.stats,items:e.inventory?.items,spells:e.spells});if(pins.length)e.profile.pins=pins;}
+  const pins=playerPins(src.profile.pins,{stats:e.stats,items:e.inventory?.items,spells:e.spells,features:e.features});if(pins.length)e.profile.pins=pins;}
  // A shared vehicle: GM-only values left out, and its owner, commander and location only when players can read those pages.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='vehicle'||src.vehicle?.visibility!=='players')continue;
   e.vehicle=playerVehicle(src.vehicle,vehicleTypeOf(src.vehicle,s.worlds.find(w=>w.id===src.worldId)),id=>readable.has(id),playerText);}

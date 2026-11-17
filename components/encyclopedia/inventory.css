@@ -187,3 +187,11 @@ textarea.inv-input{resize:vertical;line-height:1.45}
  .store-tools{grid-column:1/-1;justify-content:flex-end}
  .spell-form-grid{grid-template-columns:minmax(0,1fr)}
 }
+/* Collapsible group headings (group-collapse.tsx) */
+.inv-group-collapsible{align-items:center}
+.inv-group-toggle{display:inline-flex;align-items:baseline;gap:8px;border:0;background:none;padding:2px 4px 2px 0;margin-left:-2px;color:inherit;font:inherit;cursor:pointer;border-radius:4px}
+.inv-group-toggle svg{align-self:center;color:var(--muted);transition:color .15s}
+.inv-group-toggle:hover svg,.inv-group-toggle:hover h3{color:var(--accent)}
+.inv-group-toggle h3{margin:0;font-size:14px}
+.inv-group-toggle small{color:var(--muted);font-size:12px;white-space:nowrap}
+.inv-group-head.is-closed{opacity:.85}
