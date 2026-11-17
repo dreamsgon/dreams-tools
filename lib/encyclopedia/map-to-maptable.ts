@@ -37,6 +37,22 @@ export function tableBehind(m: MapData): boolean {
   return !!m.maptableSceneId && !!m.maptableBasis && m.maptableBasis !== tableBasis(m);
 }
 
+/**
+ * The Maptable campaign a map goes into: the one paired with the open Encyclopedia campaign, else the one paired with
+ * the map's own campaign, else one with the same name, else the first. Without this a map always went into the first
+ * Maptable campaign, which is rarely the one being played.
+ */
+export function tableCampaignFor(
+  campaigns: { id: string; name: string }[],
+  open: { name: string; maptableCampaignId?: string } | null | undefined,
+  own: { name: string; maptableCampaignId?: string } | null | undefined,
+): string | null {
+  const ids = new Set(campaigns.map(c => c.id)), same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  for (const c of [open, own]) if (c?.maptableCampaignId && ids.has(c.maptableCampaignId)) return c.maptableCampaignId;
+  for (const c of [open, own]) { const named = c && campaigns.find(m => same(m.name, c.name)); if (named) return named.id; }
+  return campaigns[0]?.id ?? null;
+}
+
 /** A Maptable grid laid exactly over the map's hexes or squares, measured in the map's miles or kilometres. */
 export function tableGrid(m: MapData, base: Grid): Grid {
   const { scale } = tableImageSize(m), each = cellDistance(m);
