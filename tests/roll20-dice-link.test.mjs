@@ -98,3 +98,11 @@ test('the extension download is made for this site and opens as one folder',asyn
  let listing;try{listing=execFileSync('unzip',['-l',file],{encoding:'utf8'});}catch{listing=null;}
  if(listing){for(const f of DICE_LINK_FILES)assert.match(listing,new RegExp(`rpg-tools-dice-link/${f.replace('.','\\.')}`));assert.match(execFileSync('unzip',['-p',file,'rpg-tools-dice-link/manifest.json'],{encoding:'utf8'}),/https:\/\/rpg\.example\/\*/);}
 });
+
+test('Roll20 dice faces for the 3D dice', () => {
+  assert.deepEqual(Link.linkedRollDice({ title: 'Attack', total: 17, formula: '1d20+5', detail: '(12)+5' }), [{ sides: 20, value: 12 }]);
+  assert.deepEqual(Link.linkedRollDice({ title: 'Damage', total: 11, formula: '2d6+1d4+2', detail: '(3+5)+(1)+2' }), [{ sides: 6, value: 3 }, { sides: 6, value: 5 }, { sides: 4, value: 1 }]);
+  assert.equal(Link.linkedRollDice({ title: 'Odd', total: 4, formula: '2d6', detail: '(3)' }), null);
+  assert.equal(Link.linkedRollDice({ title: 'Big', total: 30, formula: '1d6', detail: '(30)' }), null);
+  assert.equal(Link.linkedRollDice({ title: 'Plain', total: 9 }), null);
+});

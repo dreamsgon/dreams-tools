@@ -11,6 +11,7 @@ import "./global-dice.css";
 
 // The tray (three.js dice, tables, roll log) is only fetched the first time someone opens it.
 const StandardDiceTray = dynamic(() => import("./standard-dice-tray"), { ssr: false });
+const LinkedRollPopup = dynamic(() => import("./linked-roll-popup"), { ssr: false });
 
 /** Pages that already carry their own dice tray or have no tools to roll with. */
 export function hasOwnDice(pathname: string | null) {
@@ -34,9 +35,10 @@ export default function GlobalDice() {
   useEffect(() => onOpenDiceTray(next => { setUsed(true); setOpen({ panel: next, path: pathname }); }), [pathname]);
   // Rolls from Roll20 (through the RPG Tools dice link extension) go into the roll log on every page, Maptable included.
   useEffect(() => listenForLinkedRolls(), []);
-  if (hasOwnDice(pathname)) return null;
+  if (hasOwnDice(pathname)) return <LinkedRollPopup />;
   const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(panel === next ? null : next); };
   return <>
+    <LinkedRollPopup />
     <div className="global-dice" role="group" aria-label="Dice">
       <button type="button" aria-expanded={panel === "dice"} aria-controls="standard-dice-tray" title="Dice tray" aria-label="Dice tray" onClick={() => toggle("dice")}><Dices size={18} aria-hidden="true" /><span>Dice</span></button>
       <button type="button" aria-expanded={panel === "log"} aria-controls="local-roll-log" title="Roll log" aria-label="Roll log" onClick={() => toggle("log")}><ScrollText size={18} aria-hidden="true" /></button>

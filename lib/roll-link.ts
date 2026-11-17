@@ -37,3 +37,23 @@ export function listenForLinkedRolls() {
   window.addEventListener(externalRollEvent, on);
   return () => window.removeEventListener(externalRollEvent, on);
 }
+
+const physicalSides = [4, 6, 8, 10, 12, 20, 100];
+/**
+ * The dice a Roll20 roll showed, to throw as 3D dice, or null when they can't be read. Roll20's tooltip lists each
+ * group's dice in brackets, "(3+5)+2" for 2d6+2; a group counts only when it has as many dice as the formula says
+ * and each fits the die. Rolls with unknown dice show the popup alone, so the 3D dice never show a wrong number.
+ */
+export function linkedRollDice(roll: ExternalRoll): { sides: number; value: number }[] | null {
+  if (!roll.formula || !roll.detail) return null;
+  const groups = [...roll.formula.toLowerCase().matchAll(/(\d*)d(\d+)/g)].map(m => ({ count: Number(m[1] || 1), sides: Number(m[2]) }));
+  const shown = [...roll.detail.matchAll(/\(([^()]*)\)/g)].map(m => (m[1].match(/\d+/g) ?? []).map(Number));
+  if (!groups.length || groups.length !== shown.length) return null;
+  const dice: { sides: number; value: number }[] = [];
+  for (const [i, g] of groups.entries()) {
+    const values = shown[i];
+    if (!physicalSides.includes(g.sides) || values.length !== g.count) return null;
+    for (const value of values) { if (value < 1 || value > g.sides) return null; dice.push({ sides: g.sides, value }); }
+  }
+  return dice.length && dice.length <= 24 ? dice : null;
+}
