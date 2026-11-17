@@ -239,3 +239,30 @@ textarea.org-input{resize:vertical;line-height:1.5}
 .pin-readout p.pin-held{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 14px}
 .held-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px}
 @media(prefers-reduced-motion:reduce){.page-drop{transition:none}}
+/* Facts on a character profile: Species, Class, Level…, like the header of a printed sheet */
+.char-facts{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));margin-bottom:12px;overflow:hidden}
+.char-facts.is-empty{border-style:dashed;background:none}
+.char-fact{position:relative;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;min-width:120px;flex:1 1 120px;padding:10px 14px 8px;border-right:1px solid var(--line)}
+.char-fact:last-of-type{border-right:0}
+.char-fact.is-gm{background:repeating-linear-gradient(135deg,transparent 0 8px,color-mix(in srgb,var(--muted) 7%,transparent) 8px 16px)}
+.char-fact-value{width:100%;border:0;border-bottom:1px solid color-mix(in srgb,var(--line) 80%,transparent);background:transparent;color:var(--ink);font:inherit;font-size:15px;font-weight:600;padding:2px 0 3px;border-radius:0;min-height:24px}
+span.char-fact-value{display:block;overflow-wrap:anywhere}
+input.char-fact-value:hover{border-bottom-color:var(--muted)}
+input.char-fact-value:focus{outline:none;border-bottom-color:var(--accent)}
+.char-fact-value::placeholder{color:var(--muted);opacity:.5}
+.char-fact-label{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.char-fact-label-input{border:1px dashed var(--line);background:transparent;color:var(--muted);font:inherit;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:1px 4px;border-radius:4px}
+.char-fact-tools{position:absolute;top:2px;right:4px;display:inline-flex;gap:1px;opacity:0;transition:opacity .15s}
+.char-fact:hover .char-fact-tools,.char-fact:focus-within .char-fact-tools,.char-facts.is-arranging .char-fact-tools{opacity:1}
+.char-fact-tools .icon-button{width:20px;height:20px}
+.char-fact-add{border:0;background:none;color:var(--accent);font:inherit;font-size:12.5px;padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.char-fact-add:hover{text-decoration:underline}
+.char-fact-form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;flex:1 1 100%;border-top:1px solid var(--line)}
+.char-fact-form .org-input{width:180px}
+.char-fact-suggest{display:inline-flex;gap:4px;flex-wrap:wrap}
+.char-fact-chip{border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;font-size:12px;border-radius:999px;padding:2px 10px;cursor:pointer}
+.char-fact-chip:hover{border-color:var(--accent);color:var(--accent)}
+.char-facts.is-readonly .char-fact{min-width:110px}
+@media(max-width:620px){.char-fact{flex-basis:45%;border-bottom:1px solid var(--line)}}
+.char-fact{flex:1 1 auto}
+input.char-fact-value{field-sizing:content;min-width:100%;max-width:340px}

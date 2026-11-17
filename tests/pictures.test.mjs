@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newPicture,fitCircle,tokenImageFit,circleStyle} from '../lib/encyclopedia/picture.ts';
+import {newPicture,fitCircle,tokenImageFit,circleStyle,tokenPicture} from '../lib/encyclopedia/picture.ts';
 import {workspaceSchema,playerCampaign} from '../lib/encyclopedia/world-model.ts';
 
 const img='0b5a8c9e-3f1d-4c2a-9b7e-1d2c3b4a5f60';
@@ -53,4 +53,34 @@ test('a token ring can be any picked #rrggbb colour but not other text',()=>{
   const w=book('gm'),withRing=ring=>({...w,entries:[{...w.entries[0],picture:{...newPicture(img,5,5),ring}}]});
   assert.equal(workspaceSchema.parse(withRing('#12ab9f')).entries[0].picture.ring,'#12ab9f');
   for(const bad of ['red','#abc','#12ab9g','#12ab9f;x'])assert.throws(()=>workspaceSchema.parse(withRing(bad)),bad);
+});
+
+test('a token can have no ring, but only as a true/false choice',()=>{
+  const w=book('gm'),withFlag=noRing=>({...w,entries:[{...w.entries[0],picture:{...newPicture(img,5,5),noRing}}]});
+  assert.equal(workspaceSchema.parse(withFlag(true)).entries[0].picture.noRing,true);
+  assert.equal(workspaceSchema.safeParse(withFlag('yes')).success,false);
+});
+
+test('a separate token image has its own framing and the portrait stays', () => {
+  const img2='1c6b9d0f-4a2e-4d3b-8c8f-2e3d4c5b6a71';
+  const main={...newPicture(img,600,600),ring:'#d9b25e',squares:2};
+  assert.deepEqual(tokenPicture(main),main);
+  const split={...main,token:{...newPicture(img2,400,800),x:.4,y:.3,size:.5}};
+  const t=tokenPicture(split);
+  assert.equal(t.imageId,img2);assert.deepEqual([t.width,t.height,t.x,t.y,t.size],[400,800,.4,.3,.5]);
+  assert.equal(t.ring,'#d9b25e');assert.equal(t.squares,2);assert.equal('token' in t,false);
+  assert.equal(split.imageId,img,'the portrait keeps the main image');
+  assert.deepEqual(tokenImageFit(t),tokenImageFit({...split.token}));
+});
+
+test('picture.token is optional and validated like the picture', () => {
+  const img2='1c6b9d0f-4a2e-4d3b-8c8f-2e3d4c5b6a71';
+  const parse=p=>workspaceSchema.safeParse({schemaVersion:1,worlds:[{id:'w1',name:'W',description:'',archived:false}],campaigns:[],
+   entries:[{id:'e1',worldId:'w1',campaignId:null,parentId:null,title:'T',kind:'note',body:'',picture:p,updatedAt:'2026-01-01T00:00:00.000Z'}]});
+  const base=newPicture(img,600,600);
+  assert.ok(parse(base).success);
+  assert.ok(parse({...base,token:newPicture(img2,300,500)}).success);
+  assert.ok(!parse({...base,token:{...newPicture(img2,300,500),imageId:'nope'}}).success);
+  assert.ok(!parse({...base,token:{...newPicture(img2,300,500),size:.1}}).success);
+  assert.ok(!parse({...base,token:{imageId:img2,width:3,height:3}}).success);
 });

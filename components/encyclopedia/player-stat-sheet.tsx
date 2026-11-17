@@ -37,7 +37,13 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
   {error&&<p role="alert" className="stat-roll-hint">{error}</p>}
   {groups.map(g=><section key={g.name||'other'} className="inv-group stat-group">
    {(g.name||groups.length>1)&&<div className="inv-group-head"><h3>{g.name||'Other'}</h3><small>{g.rows.length}</small><span className="inv-rule"/></div>}
-   <div className="inv-rows" role="list">{g.rows.map(s=>{
+   {g.rows.some(s=>s.look==='score')&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{g.rows.filter(s=>s.look==='score').map(s=><div role="listitem" key={s.id} className="stat-box">
+    <span className="stat-box-label" title={s.description}>{s.label}</span>
+    <span className="stat-box-read-mod" aria-label={`${s.label} modifier`}>{s.worked===undefined?'—':signed(s.worked)}</span>
+    <span className="stat-box-score"><span className="stat-box-read-score" aria-label={`${s.label} score`}>{shown(s.value)}</span></span>
+    <span className="stat-box-rolls">{s.rolls.map(r=>r.dice&&<button type="button" key={r.name} className="roll-chip stat-roll-chip" title={`Roll ${r.dice}`} onClick={()=>roll(s,r,r.dice!)}><Dices size={12} aria-hidden="true"/>{r.name}</button>)}</span>
+   </div>)}</div>}
+   {g.rows.some(s=>s.look!=='score')&&<div className="inv-rows" role="list">{g.rows.filter(s=>s.look!=='score').map(s=>{
     const tracker=s.spend?trackers.find(t=>t.label.trim().toLowerCase()===s.spend!.tracker.trim().toLowerCase()):undefined;
     const short=!!s.spend&&server&&(!tracker||tracker.value<s.spend.n),hint=s.rolls.find(r=>!r.dice&&r.hint);
     return <div role="listitem" key={s.id} className="inv-row stat-row">
@@ -54,7 +60,7 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
      {s.type==='textarea'&&<div className="stat-long player-prose">{shown(s.value)}</div>}
      {s.description&&open.has(s.id)&&<p className="stat-description stat-read-description">{s.description}</p>}
      {hint&&<p className="stat-roll-hint">{s.rolls.length>1?`${hint.name}: `:''}{hint.hint}</p>}
-    </div>;})}</div>
+    </div>;})}</div>}
   </section>)}
  </div>;
 }

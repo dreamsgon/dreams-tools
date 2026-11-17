@@ -11,6 +11,7 @@ import './quest-goals.css';
 import {newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {goalStatus,goalStatusNames,goalStatuses,goalText,goalVerbs,setGoalParts,whereLabel,withGoalStatus,type GoalStatus,type Objective,type Quest} from '@/lib/encyclopedia/quests';
 import {PictureToken,usePictureSrc} from './character-picture';
+import {tokenPicture} from '@/lib/encyclopedia/picture';
 import {PageDrop} from './page-drag';
 import {confirmDialog} from '../confirm-dialog';
 
@@ -19,8 +20,8 @@ export const VerbIcon=({verb,size=15}:{verb?:string;size?:number})=>{const I=(ve
 
 /** A small round face: the page's picture when it has one, otherwise its initials. */
 export function Face({entry,size=26}:{entry?:Entry;size?:number}){
- const {src}=usePictureSrc(entry?.picture?.imageId);
- if(entry?.picture&&src)return <PictureToken picture={entry.picture} src={src} size={size} ring="var(--line-strong)"/>;
+ const {src}=usePictureSrc(entry?.picture?tokenPicture(entry.picture).imageId:undefined);
+ if(entry?.picture&&src)return <PictureToken picture={tokenPicture(entry.picture)} src={src} size={size} ring="var(--line-strong)"/>;
  const initials=(entry?.title??'?').split(/\s+/).filter(w=>/^\p{L}/u.test(w)).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
  return <span className="quest-face" aria-hidden="true" style={{width:size,height:size,fontSize:size*.4}}>{initials}</span>;
 }

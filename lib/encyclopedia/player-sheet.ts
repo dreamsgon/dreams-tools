@@ -15,6 +15,7 @@ import { sheetRollGroups } from './sheet-rolls.ts';
 import { defaultCharacter, visibleEntries, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
 import type { Rights } from './player-edit.ts';
 import { statRows } from './stat-rolls.ts';
+import { shownStats } from './stat-arrange.ts';
 import { setTrackerValue } from './trackers.ts';
 
 export class PlayerSheetError extends Error {
@@ -133,7 +134,7 @@ export function statRollOf(s: Workspace, campaignId: string, rights: Rights, ent
   const e = character(s, campaignId, rights, entryId), c = s.campaigns.find(x => x.id === campaignId)!;
   if (e.character?.statsVisibility !== 'players') no('Your GM hasn’t shared this character’s stats yet.');
   const shown = (c.statFields ?? []).filter(f => !f.archived && f.visibility === 'players');
-  const row = statRows(shown, e.character?.statsByCampaign[c.id] ?? {}).find(r => r.id === statId) ?? no('That stat is not on the sheet.', 404);
+  const row = statRows(shownStats(shown, e.character?.statLayout), e.character?.statsByCampaign[c.id] ?? {}).find(r => r.id === statId) ?? no('That stat is not on the sheet.', 404);
   const roll = row.rolls.find(r => r.name === rollName) ?? no('That roll is not on the sheet.', 404);
   if (!roll.dice) no(roll.hint ?? 'That roll can’t be rolled yet.', 400);
   const tracker = row.spend ? (e.character?.trackers ?? []).find(t => !t.gm && t.label.trim().toLowerCase() === row.spend!.tracker.trim().toLowerCase()) : undefined;

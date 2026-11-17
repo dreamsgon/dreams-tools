@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState,type PointerEvent as ReactPointerEvent} from 'react';
 import {ImagePlus,Crop,Trash2,ArrowUpRight,Check} from 'lucide-react';
 import type {Entry,Picture} from '@/lib/encyclopedia/world-model';
-import {newPicture,fitCircle,circleStyle,ringColors,tokenSizes} from '@/lib/encyclopedia/picture';
+import {newPicture,fitCircle,circleStyle,ringColors,tokenSizes,tokenPicture} from '@/lib/encyclopedia/picture';
 import {uploadMapImage} from './map-transfer';
 import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
@@ -22,34 +22,37 @@ export function usePictureSrc(imageId:string|undefined,playerToken?:string){
 
 /** The token the picture makes: its circle, inside the ring. */
 export function PictureToken({picture,src,size,ring}:{picture:Picture;src:string;size:number;ring?:string}){
- return <span className="picture-token" aria-hidden="true" style={{width:size,height:size,boxShadow:`0 0 0 3px ${picture.ring??ring??'var(--accent)'}`,backgroundImage:src?`url("${src}")`:undefined,...circleStyle(picture,size)}}/>;
+ return <span className="picture-token" aria-hidden="true" style={{width:size,height:size,boxShadow:picture.noRing?undefined:`0 0 0 3px ${picture.ring??ring??'var(--accent)'}`,backgroundImage:src?`url("${src}")`:undefined,...circleStyle(picture,size)}}/>;
 }
 
 const squaresLabel=(n:number)=>tokenSizes.find(s=>s.squares===n)?.label??`${n}×${n}`;
 
 /** A character's picture on its page: the whole picture, its token, and the controls to change either. */
 export function PicturePanel({entry,update,maptableHref}:{entry:Entry;update:(p:Partial<Entry>)=>void;maptableHref:string|null}){
- const picture=entry.picture,{src,failed}=usePictureSrc(picture?.imageId);
+ const picture=entry.picture,{src,failed}=usePictureSrc(picture?.imageId),{src:ownTokenSrc}=usePictureSrc(picture?.token?.imageId),tokenSrc=picture?.token?ownTokenSrc:src;
  const [framing,setFraming]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const file=useRef<HTMLInputElement>(null);
- async function upload(f:File){setBusy(true);setError('');try{const image=await uploadMapImage(f);update({picture:{...newPicture(image.imageId,image.imageWidth,image.imageHeight),ring:picture?.ring,squares:picture?.squares}});setFraming(true);}catch(e){setError(e instanceof Error?e.message:'Upload failed');}finally{setBusy(false);}}
- const input=<input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f);}}/>;
+ const file=useRef<HTMLInputElement>(null),tokenFile=useRef<HTMLInputElement>(null);
+ async function upload(f:File){setBusy(true);setError('');try{const image=await uploadMapImage(f);update({picture:{...newPicture(image.imageId,image.imageWidth,image.imageHeight),ring:picture?.ring,noRing:picture?.noRing,squares:picture?.squares,token:picture?.token}});setFraming(true);}catch(e){setError(e instanceof Error?e.message:'Upload failed');}finally{setBusy(false);}}
+ async function uploadToken(f:File){if(!picture)return;setBusy(true);setError('');try{const image=await uploadMapImage(f);update({picture:{...picture,token:newPicture(image.imageId,image.imageWidth,image.imageHeight)}});setFraming(true);}catch(e){setError(e instanceof Error?e.message:'Upload failed');}finally{setBusy(false);}}
+ const input=<input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f);}}/>,tokenInput=<input ref={tokenFile} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void uploadToken(f);}}/>;
  if(!picture)return <div className="picture-panel picture-empty">{input}<button className="picture-add" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={20}/><span><strong>{busy?'Uploading…':'Add a picture'}</strong><small>PNG, JPEG or WebP up to 8 MB. It becomes this character’s token in Maptable.</small></span></button>{error&&<p role="alert" className="form-error">{error}</p>}</div>;
- return <div className="picture-panel">{input}
+ return <div className="picture-panel">{input}{tokenInput}
   <button className="picture-full" onClick={()=>setFraming(true)} aria-label="Frame the token on this picture">{/* eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image cannot optimise it */}
   {src?<img src={src} alt=""/>:<span>{failed?'Picture unavailable':'Loading…'}</span>}</button>
   <div className="picture-side">
-   <div className="picture-token-row"><PictureToken picture={picture} src={src} size={64}/><span><strong>Token</strong><small>{squaresLabel(picture.squares??1)}</small></span></div>
+   <div className="picture-token-row"><PictureToken picture={tokenPicture(picture)} src={tokenSrc} size={64}/><span><strong>Token</strong><small>{squaresLabel(picture.squares??1)}{picture.token?' · own image':''}</small></span></div>
    <div className="picture-actions">
     <button className="button small" onClick={()=>setFraming(true)}><Crop size={14}/> Frame token</button>
     <button className="button small" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={14}/> {busy?'Uploading…':'Replace'}</button>
+    <button className="button small" disabled={busy} onClick={()=>tokenFile.current?.click()}><ImagePlus size={14}/> {picture.token?'Replace token image':'Use a different image'}</button>
+    {picture.token&&<button className="button small" onClick={()=>{const {token:_,...rest}=picture;update({picture:rest});}}>Use the portrait</button>}
     <button className="icon-button" aria-label="Remove picture" onClick={async()=>{if(await confirmDialog({title:'Remove this picture?',message:'Tokens already in Maptable keep theirs.',confirm:'Remove picture',danger:true}))update({picture:undefined});}}><Trash2 size={14}/></button>
    </div>
    {maptableHref?<a className="button small primary" href={maptableHref} target="_blank" rel="noopener">Add to Maptable <ArrowUpRight size={14}/></a>:<p className="aside-hint">Link this campaign to a Maptable campaign to add it as a token from here, or use Maptable’s token gallery.</p>}
    <p className="aside-hint">Players see the picture when they can see the Overview.</p>
    {error&&<p role="alert" className="form-error">{error}</p>}
   </div>
-  {framing&&<FrameDialog picture={picture} src={src} onClose={()=>setFraming(false)} onSave={p=>{update({picture:p});setFraming(false);}}/>}
+  {framing&&<FrameDialog picture={tokenPicture(picture)} src={tokenSrc} onClose={()=>setFraming(false)} onSave={p=>{const {imageId,width,height,x,y,size,...look}=p;update({picture:picture.token?{...picture,...look,token:{imageId,width,height,x,y,size}}:{...picture,...look,x,y,size}});setFraming(false);}}/>}
  </div>;
 }
 
@@ -73,9 +76,10 @@ function FrameDialog({picture,src,onSave,onClose}:{picture:Picture;src:string;on
     <label className="field-label">Circle size<input type="range" min={20} max={100} value={Math.round(p.size*100)} onChange={e=>setP(old=>fitCircle(old,old.x,old.y,Number(e.target.value)/100))}/></label>
     <label className="field-label">Size on the map<select value={p.squares??1} onChange={e=>setP({...p,squares:Number(e.target.value)})}>{tokenSizes.map(s=><option key={s.squares} value={s.squares}>{s.label}</option>)}</select></label>
     <fieldset className="ring-choice"><legend>Ring</legend>
-     <button type="button" aria-pressed={!p.ring} className="ring-auto" onClick={()=>setP({...p,ring:undefined})}>Role colour</button>
-     {ringColors.map(c=><button type="button" key={c} aria-label={`Ring ${c}`} aria-pressed={p.ring===c} style={{background:c}} onClick={()=>setP({...p,ring:c})}/>)}
-     <CustomColourSwatch value={p.ring} presets={ringColors} label="Pick any ring colour" onChange={ring=>setP({...p,ring})}/>
+     <button type="button" aria-pressed={!p.ring&&!p.noRing} className="ring-auto" onClick={()=>setP({...p,ring:undefined,noRing:undefined})}>Role colour</button>
+     <button type="button" aria-pressed={!!p.noRing} className="ring-auto ring-none" onClick={()=>setP({...p,ring:undefined,noRing:true})}>No ring</button>
+     {ringColors.map(c=><button type="button" key={c} aria-label={`Ring ${c}`} aria-pressed={p.ring===c&&!p.noRing} style={{background:c}} onClick={()=>setP({...p,ring:c,noRing:undefined})}/>)}
+     <CustomColourSwatch value={p.ring} presets={ringColors} label="Pick any ring colour" onChange={ring=>setP({...p,ring,noRing:undefined})}/>
     </fieldset>
    </div>
   </div>

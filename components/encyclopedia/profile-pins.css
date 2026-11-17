@@ -1,0 +1,55 @@
+/* Quick find on a character's Profile tab (profile-pins.tsx) */
+.pin-section{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
+.pin-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pin-section-head .eyebrow{letter-spacing:.12em}
+.pin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.pin-card{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px 12px 12px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));box-shadow:0 1px 2px rgb(0 0 0/.1);transition:border-color .15s,transform .15s}
+.pin-card:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.pin-card.is-missing{border-style:dashed;opacity:.7}
+.pin-card.pin-statblock{grid-column:span 2}
+.pin-head{display:flex;align-items:center;gap:6px;min-height:20px}
+.pin-source{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.pin-stat .pin-source svg{color:#86a8ea}.pin-item .pin-source svg{color:#d9b25e}.pin-spell .pin-source svg{color:#b39be6}.pin-statblock .pin-source svg{color:#ef8a99}
+.pin-gm{display:inline-flex;color:var(--muted)}
+.pin-tools{display:inline-flex;gap:2px;margin-left:auto;opacity:.55;transition:opacity .15s}
+.pin-card:hover .pin-tools,.pin-card:focus-within .pin-tools{opacity:1}
+.pin-tools .icon-button{width:22px;height:22px}
+.pin-title{font-size:14px;font-weight:600;line-height:1.3;color:var(--ink);text-align:left;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+button.pin-title{border:0;background:none;padding:0;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+button.pin-title:hover{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.pin-value{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;overflow-wrap:anywhere}
+.pin-sub{font-size:12px;color:var(--muted);line-height:1.35}
+.pin-rolls{display:flex;gap:4px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.pin-rolls .roll-chip{font-size:11.5px}
+/* A score box pinned: the modifier big and the score in its oval, like the Stats tab */
+.pin-card.is-box{align-items:center;text-align:center;padding-bottom:12px}
+.pin-card.is-box .pin-head{align-self:stretch}
+.pin-card.is-box .pin-title{text-align:center;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pin-big{font-size:32px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.pin-score{min-width:46px;padding:0 10px;height:24px;line-height:22px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.pin-card.is-box .pin-rolls{justify-content:center}
+.pin-statblock-text,.pin-statblock{margin:0;font-size:13px;line-height:1.5}
+.pin-empty{margin:0;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;display:flex;gap:6px;align-items:center}
+/* Pin to profile */
+.pin-picker-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:4px 0 10px}
+.pin-picker-tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:8px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.pin-picker-tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.pin-picker-tabs small{font-size:11px;background:var(--accent);color:var(--on-accent,#fff);border-radius:999px;padding:0 6px;line-height:16px}
+.pin-picker-search{margin-bottom:8px}
+.pin-picker-list{display:flex;flex-direction:column;gap:4px;max-height:460px;overflow:auto;padding-right:2px}
+.pin-choice{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);cursor:pointer}
+.pin-choice:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.pin-choice.is-on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
+.pin-choice:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.pin-choice-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.pin-choice-text strong{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pin-choice-text small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pin-choice .stat-switch{flex:none;width:36px;height:20px;border-radius:999px;border:1px solid var(--line);background:var(--raised,var(--panel));position:relative}
+.pin-choice .stat-switch span{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .15s}
+.pin-choice .stat-switch[data-on=true]{background:var(--accent);border-color:var(--accent)}
+.pin-choice .stat-switch[data-on=true] span{transform:translateX(16px);background:var(--on-accent,#fff)}
+.pin-picker-foot{margin:10px 0}
+@media(max-width:620px){
+ .pin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .pin-card.pin-statblock{grid-column:1/-1}
+}

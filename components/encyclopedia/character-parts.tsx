@@ -1,4 +1,5 @@
 'use client';
+import {QuickFindReadOnly,type PinSettings} from './profile-pins';
 import type {ReactNode} from 'react';
 import type {PlayerProfile,PlayerProfileBlock} from '@/lib/encyclopedia/character-profile';
 import type {EmblemSymbol,Standing} from '@/lib/encyclopedia/org-profile';
@@ -28,13 +29,15 @@ function ReadBlock({block,open}:{block:PlayerProfileBlock;open?:(id:string)=>voi
 }
 
 /** The character's profile exactly as players get it: used on the player pages and for the GM's Player view button. */
-export function CharacterReadOnly({profile,open}:{profile:PlayerProfile;open?:(id:string)=>void}){
+export function CharacterReadOnly({profile,open,who='',settings}:{profile:PlayerProfile;open?:(id:string)=>void;who?:string;settings?:PinSettings}){
  const rows:ReactNode[]=[];let left:PlayerProfileBlock[]=[],right:PlayerProfileBlock[]=[];
  const flush=()=>{if(left.length||right.length)rows.push(<div className="org-row" key={`r${rows.length}`}><div className="org-col">{left.map(b=><ReadBlock key={b.id} block={b} open={open}/>)}</div><div className="org-col">{right.map(b=><ReadBlock key={b.id} block={b} open={open}/>)}</div></div>);left=[];right=[];};
  for(const b of profile.blocks){if(b.full){flush();rows.push(<div className="org-row is-full" key={b.id}><ReadBlock block={b} open={open}/></div>);}else (b.column==='left'?left:right).push(b);}
  flush();
  return <div className="org-profile char-profile is-readonly">
+  {!!profile.facts?.length&&<div className="char-facts is-readonly" role="list" aria-label="Facts">{profile.facts.map(f=><div role="listitem" className="char-fact" key={f.id}><span className="char-fact-value">{f.value}</span><span className="char-fact-label">{f.label}</span></div>)}</div>}
   {profile.traits.length>0&&<div className="char-traits" role="list" aria-label="Traits">{profile.traits.map(t=><span role="listitem" key={t.id}><TraitChip label={t.label} symbol={t.symbol}/></span>)}</div>}
+  {!!profile.pins?.length&&<QuickFindReadOnly pins={profile.pins} who={who} settings={settings}/>}
   <div className="org-board">{rows}</div>
   {profile.bar&&profile.bar.fields.length>0&&<BottomBar title={profile.bar.title} fields={profile.bar.fields}/>}</div>;
 }

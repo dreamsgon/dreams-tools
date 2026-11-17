@@ -563,6 +563,7 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .ring-choice button{width:24px;height:24px;border-radius:50%;padding:0}
 .ring-choice button[aria-pressed=true]{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
 .ring-choice .ring-auto{width:auto;height:24px;border-radius:12px;padding:0 10px;font-size:11px;border:1px solid var(--line)}
+.ring-choice .ring-none{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--line) 5px 6px)}
 .frame-buttons{justify-content:flex-end;margin-top:22px}
 .character-row-picture{flex:none}
 @media(max-width:720px){.picture-panel{flex-direction:column}.picture-full img{max-width:100%}}
@@ -1262,3 +1263,7 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 /* Vehicles a character owns, commands or crews, on the player pages. */
 .player-rides{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 12px;font-size:13px;color:var(--muted)}
 .player-rides span{display:inline-flex;align-items:baseline;gap:5px}
+/* The page kind (Player characters, Quest, Map) and the campaign above the title open their lists */
+.article-meta button.kind-link,.article-meta button.article-place-link{cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;transition:text-decoration-color .15s,color .15s}
+.article-meta button.kind-link{color:var(--accent)}
+.article-meta button.kind-link:hover,.article-meta button.article-place-link:hover{text-decoration-color:currentColor;color:var(--accent)}

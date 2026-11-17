@@ -93,7 +93,7 @@ import CampaignScenes from "./campaign-scenes";
 import ConditionSymbol from "./condition-symbol";
 import ConditionEntry from "./condition-entry";
 import EncyclopediaTokens, { roleColor, loadEncyclopedia, encyclopediaCharacters, encyclopediaVehicles, type EncyclopediaCharacter, type EncyclopediaRaw } from "./encyclopedia-tokens";
-import { tokenImageFit } from "@/lib/encyclopedia/picture";
+import { tokenImageFit, tokenPicture } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import { InitiativeArrangeList } from "./initiative-arrange";
 import "./maptable-token-layout.css";
@@ -922,13 +922,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // A character's picture is copied into Maptable's assets once, framed the way its page frames the token.
   const pictureAsset = async (c: EncyclopediaCharacter) => {
     if (!c.picture) return null;
-    const r = await fetch(bookImageUrl(c.picture.imageId));
+    const pic = tokenPicture(c.picture);
+    const r = await fetch(bookImageUrl(pic.imageId));
     if (!r.ok) throw new Error(`The picture for ${c.name} could not be loaded. Try again, or add it without one from Saved tokens.`);
     const { src } = await uploadAsset(await r.blob(), `${c.name}.png`), id = uid();
-    commit(w => { w.assets.push({ id, name: c.name.slice(0, 120), src, width: c.picture!.width, height: c.picture!.height, kind: "image" }); w.assetLocations[id] = null; w.assetCampaigns[id] = campaignId; });
+    commit(w => { w.assets.push({ id, name: c.name.slice(0, 120), src, width: pic.width, height: pic.height, kind: "image" }); w.assetLocations[id] = null; w.assetCampaigns[id] = campaignId; });
     return id;
   };
-  const pictureLook = (c: EncyclopediaCharacter, assetId: string) => c.picture ? { assetId, ...tokenImageFit(c.picture), borderColor: c.picture.ring ?? roleColor[c.role], size: c.picture.squares ?? 1 } : {};
+  const pictureLook = (c: EncyclopediaCharacter, assetId: string) => c.picture ? { assetId, ...tokenImageFit(tokenPicture(c.picture)), ...(c.picture.noRing ? { borderWidth: 0 } : { borderColor: c.picture.ring ?? roleColor[c.role] }), size: c.picture.squares ?? 1 } : {};
   // Placing the same character twice quickly waits for the first run, so it finds the preset the first one made.
   const encyclopediaRuns = useRef(new Map<string, Promise<void>>());
   const addEncyclopediaToken = (c: EncyclopediaCharacter, point?: Point) => {
