@@ -454,7 +454,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       </aside>
     </div>
     {(tool === 'shape' || tool === 'zoom') && !mapTools && <MapToolsLoader onReady={setMapTools}/>}
-    {using && <WorldUseDialog entry={entry} map={map} data={data} imageUrl={url} setMap={setMap} onClose={() => setUsing(false)}/>}
+    {using && <WorldUseDialog entry={entry} map={map} data={data} campaign={campaign} imageUrl={url} setMap={setMap} onClose={() => setUsing(false)}/>}
     {generating && <WorldGenerateDialog map={map} ai={aiContext} survey={survey} onClose={() => setGenerating(false)} onUse={(patch, hand) => { setUndo(u => [...u.slice(-29), snapshot()]); setRedo([]); setMap(patch); setGenerating(false); setTool(hand ? 'shape' : 'terrain'); if (hand) { setShapeMode('land'); setRadius(6); } }}/>}
     {editingPin && <PinDialog key={editingPin.id} pin={editingPin} campaign={campaign} entries={visibleEntries(data, entry.worldId, entry.campaignId).filter(e => e.id !== entry.id)}
       onClose={() => setEditingPin(null)}
