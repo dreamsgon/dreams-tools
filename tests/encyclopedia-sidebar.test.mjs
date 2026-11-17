@@ -10,8 +10,8 @@ test('a campaign without a sidebar shows the starting layout', () => {
   const d=sidebarOf(undefined);
   assert.deepEqual(d.nav.map(x=>x.id),['quests','codex','relationships','characters','maps','calendar','tables','templates']);
   assert.ok(d.nav.every(x=>x.on));
-  assert.deepEqual(d.quick.map(l=>l.type==='tool'?l.tool:l.type==='view'?l.view:''),['form','share','look']);
-  assert.deepEqual(d.sections.map(x=>x.id),['lore','notes','orgs']);
+  assert.deepEqual(d.quick.map(l=>l.type==='tool'?l.tool:l.type==='view'?l.view:''),['form','items','share','look']);
+  assert.deepEqual(d.sections.map(x=>x.id),['lore','notes','sessions','orgs']);
   assert.equal(sidebarToSave(defaultSidebar()),undefined);
 });
 
@@ -34,8 +34,8 @@ test('menu items and sections are moved, hidden and shown', () => {
   assert.equal(moveNav(s,0,99),s);
   s=showNav(s,'codex',false);
   assert.equal(s.nav.find(x=>x.id==='codex').on,false);
-  s=moveSection(s,2,0);
-  assert.deepEqual(s.sections.map(x=>x.id),['orgs','lore','notes']);
+  s=moveSection(s,3,0);
+  assert.deepEqual(s.sections.map(x=>x.id),['orgs','lore','notes','sessions']);
   s=showSection(s,'lore',false);
   assert.equal(s.sections.find(x=>x.id==='lore').on,false);
   assert.notEqual(sidebarToSave(s),undefined);
@@ -44,17 +44,17 @@ test('menu items and sections are moved, hidden and shown', () => {
 test('quick links take any page, section, tool or web link, once each', () => {
   let s=defaultSidebar();
   s=addQuick(s,{type:'tool',tool:'form'},makeId);
-  assert.equal(s.quick.length,3,'already there');
+  assert.equal(s.quick.length,4,'already there');
   s=addQuick(s,{type:'tool',tool:'dice'},makeId);
   s=addQuick(s,{type:'page',page:'demo-mara'},makeId);
   s=addQuick(s,{type:'web',label:'  Sheets ',url:' https://example.com '},makeId);
-  assert.equal(s.quick.length,6);
+  assert.equal(s.quick.length,7);
   assert.deepEqual(s.quick.at(-1).label,'Sheets');
   assert.deepEqual(s.quick.at(-1).url,'https://example.com');
-  s=moveQuick(s,5,0);
+  s=moveQuick(s,6,0);
   assert.equal(s.quick[0].type,'web');
   s=removeQuick(s,s.quick[0].id);
-  assert.equal(s.quick.length,5);
+  assert.equal(s.quick.length,6);
   for(let i=0;i<20;i++)s=addQuick(s,{type:'web',label:'L'+i,url:`https://example.com/${i}`},makeId);
   assert.equal(s.quick.length,maxQuickLinks);
 });
@@ -81,7 +81,7 @@ test('categories are added, renamed, filled, ordered and removed', () => {
   assert.equal('kinds' in s.categories[0],false);
   s=removeCategory(s,made.id);
   assert.deepEqual(s.categories,[]);
-  assert.deepEqual(s.sections.map(x=>x.id),['lore','notes','orgs']);
+  assert.deepEqual(s.sections.map(x=>x.id),['lore','notes','sessions','orgs']);
 });
 
 test('a category lists its links, then every page of its kinds by name', () => {
@@ -95,7 +95,7 @@ test('a saved layout is made whole: new menu items and loose categories join, un
   const s=sidebarOf({nav:[{id:'maps',on:false},{id:'maps',on:true}],quick:[],sections:[{id:'gone',on:true},{id:'notes',on:false}],categories:[{id:'k1',name:'Mine',links:[]}]});
   assert.equal(s.nav.length,navIds.length);
   assert.deepEqual(s.nav[0],{id:'maps',on:false});
-  assert.deepEqual(s.sections.map(x=>x.id),['notes','lore','orgs','k1']);
+  assert.deepEqual(s.sections.map(x=>x.id),['notes','lore','sessions','orgs','k1']);
   assert.equal(s.sections[0].on,false);
 });
 

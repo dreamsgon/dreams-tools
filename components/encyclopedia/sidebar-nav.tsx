@@ -95,7 +95,7 @@ export function SidebarNav(p: SidebarNavProps) {
 
 
 function BuiltIn({ id, open, toggle, extra, children }: { id: BuiltInSection; open: boolean; toggle: () => void; extra?: ReactNode; children: ReactNode }) {
-  const bodyId = id === "lore" ? "world-lore-tree" : id === "notes" ? "campaign-notes-tree" : "organizations-list";
+  const bodyId = id === "lore" ? "world-lore-tree" : id === "notes" ? "campaign-notes-tree" : id === "sessions" ? "sessions-list" : "organizations-list";
   return <section className="navigation-section">
     <div className={`side-heading${id === "notes" ? " campaign-heading" : ""}`}><button className="section-toggle" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {sectionLabels[id]}</button>{extra}</div>
     {open && <div id={bodyId}>{children}</div>}

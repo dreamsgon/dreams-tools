@@ -27,9 +27,9 @@ export const toolIds = ["form", "share", "items", "dice", "log", "search", "tags
 export type ToolId = typeof toolIds[number];
 export const toolLabels: Record<ToolId, string> = { form: "Stat form", share: "Player view", items: "Items and spells", dice: "Dice", log: "Roll log", search: "Quick search", tags: "Tags", ai: "Connect an AI", backups: "Workspace & backups" };
 
-export const builtInSections = ["lore", "notes", "orgs"] as const;
+export const builtInSections = ["lore", "notes", "sessions", "orgs"] as const;
 export type BuiltInSection = typeof builtInSections[number];
-export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", orgs: "Organizations" };
+export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", sessions: "Sessions", orgs: "Organizations" };
 
 /** Page kinds a category can list on its own (the same kinds as Entry, less folders). */
 export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system"] as const;
@@ -70,7 +70,7 @@ export const sidebarSchema = z.object({
 });
 export type Sidebar = z.infer<typeof sidebarSchema>;
 
-const startingQuick: SidebarLink[] = [{ id: "q-form", type: "tool", tool: "form" }, { id: "q-share", type: "tool", tool: "share" }, { id: "q-look", type: "view", view: "look" }];
+const startingQuick: SidebarLink[] = [{ id: "q-form", type: "tool", tool: "form" }, { id: "q-items", type: "tool", tool: "items" }, { id: "q-share", type: "tool", tool: "share" }, { id: "q-look", type: "view", view: "look" }];
 /** The layout every campaign starts with, and what Reset goes back to. Categories are kept by Reset. */
 export function defaultSidebar(keep: SidebarCategory[] = []): Sidebar {
   return {
