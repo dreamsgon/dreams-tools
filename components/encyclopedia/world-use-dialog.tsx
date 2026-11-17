@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Download, Map as MapIcon } from 'lucide-react';
 import type { MapData } from '@/lib/encyclopedia/map-model';
-import type { Entry, Workspace } from '@/lib/encyclopedia/world-model';
-import { sceneForMap, tableBasis, tableImageSize, tablePicture } from '@/lib/encyclopedia/map-to-maptable';
+import type { Campaign, Entry, Workspace } from '@/lib/encyclopedia/world-model';
+import { sceneForMap, tableBasis, tableCampaignFor, tableImageSize, tablePicture } from '@/lib/encyclopedia/map-to-maptable';
 import { cellDistance } from '@/lib/encyclopedia/hex-crawl';
+import { campaignForScene } from '@/lib/exploration';
 import { uid, type Asset, type Workspace as TableWorkspace } from '@/lib/model';
 import { api, canvasBlob, download, uploadAsset } from '@/lib/api';
 import {ToolDialog} from './tool-dialog';
@@ -45,8 +46,8 @@ export async function renderMap(svg: SVGSVGElement, map: MapData, imageUrl: stri
 }
 
 /** Use in Maptable: put a world or area map on the table, with places as markers, or update the scene made before. */
-export function WorldUseDialog({ entry, map, data, imageUrl, setMap, onClose }: {
-  entry: Entry; map: MapData; data: Workspace; imageUrl?: string; setMap: (patch: Partial<MapData>) => void; onClose: () => void;
+export function WorldUseDialog({ entry, map, data, campaign, imageUrl, setMap, onClose }: {
+  entry: Entry; campaign?: Campaign; map: MapData; data: Workspace; imageUrl?: string; setMap: (patch: Partial<MapData>) => void; onClose: () => void;
 }) {
   const [table, setTable] = useState<{ workspace: TableWorkspace | null; revision: string | null } | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -60,6 +61,11 @@ export function WorldUseDialog({ entry, map, data, imageUrl, setMap, onClose }: 
   }, []);
   const existing = table?.workspace?.scenes.find(s => s.id === map.maptableSceneId);
   const campaigns = table?.workspace?.collections.filter(c => c.kind === 'campaign') ?? [];
+  const suggested = tableCampaignFor(campaigns, campaign, data.campaigns.find(c => c.id === entry.campaignId)), chosen = destination || suggested;
+  // A scene sent before this fix may sit in the first Maptable campaign. Updating it moves it to the chosen campaign,
+  // unless it is already somewhere inside that campaign (for example in one of its folders).
+  const existingCampaign = existing && table?.workspace ? campaignForScene(table.workspace, existing) : null;
+  const moving = !!existing && !!chosen && existingCampaign !== chosen;
   const areaScenes = Object.fromEntries(data.entries.filter(e => e.mapData?.maptableSceneId && table?.workspace?.scenes.some(s => s.id === e.mapData!.maptableSceneId)).map(e => [e.id, e.mapData!.maptableSceneId!]));
   const linked = map.pins.filter(p => p.areaMapId && areaScenes[p.areaMapId]).length;
   const size = tableImageSize(map), each = cellDistance(map);
@@ -73,7 +79,8 @@ export function WorldUseDialog({ entry, map, data, imageUrl, setMap, onClose }: 
     const blob = await renderMap(svg(), map, imageUrl);
     const { src } = await uploadAsset(blob, fileName(entry.title));
     const asset: Asset = { id: uid(), kind: 'image', name: entry.title.slice(0, 120), src, width: size.width, height: size.height };
-    const scene = sceneForMap(map, entry.title, asset, { markers, fog, grid }, areaScenes, existing, existing ? existing.containerId : destination || campaigns[0]?.id || null);
+    const scene = sceneForMap(map, entry.title, asset, { markers, fog, grid }, areaScenes, existing, existing ? existing.containerId : chosen);
+    if (moving) scene.containerId = chosen;
     const assets = [...table.workspace.assets, asset];
     const saved = await api<{ revision: string }>('/api/workspace', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: table.revision, patch: { assets, scenes: { upsert: [scene], remove: [] } } }) });
     // Keep our copy current so a second Use updates this scene instead of clashing with our own save.
@@ -89,14 +96,14 @@ export function WorldUseDialog({ entry, map, data, imageUrl, setMap, onClose }: 
         <p className="world-use-size"><strong>{entry.title}</strong><span>{size.width.toLocaleString()} × {size.height.toLocaleString()} px{map.scale ? ` · ${map.scale.width.toLocaleString()} ${map.scale.unit} across` : ''}</span></p>
         {loadError ? <p className="form-error" role="alert">{loadError}</p> : !table ? <p className="aside-hint">Looking for your Maptable scenes…</p>
           : !table.workspace ? <p className="aside-hint">Open Maptable once to set it up, then come back to put this map on the table.</p>
-          : existing ? <p className="aside-hint">Updates the scene “{existing.name}” with the map as it is now. Its tokens, drawings and other markers stay as they are.</p>
-          : campaigns.length > 1 && <label className="world-field">Put the scene in<select value={destination || campaigns[0].id} onChange={e => setDestination(e.target.value)}>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+          : <>{existing && <p className="aside-hint">Updates the scene “{existing.name}” with the map as it is now. Its tokens, drawings and other markers stay as they are.{moving ? ` It moves to ${campaigns.find(c => c.id === chosen)?.name ?? 'the chosen campaign'}.` : ''}</p>}
+          {campaigns.length > 1 ? <label className="world-field">Put the scene in<select value={chosen ?? ''} onChange={e => setDestination(e.target.value)}>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label> : !existing && campaigns.length === 1 && <p className="aside-hint">The scene goes in {campaigns[0].name}.</p>}</>}
         <label className="world-check"><input type="checkbox" checked={markers} onChange={e => setMarkers(e.target.checked)}/><span>Places become markers<small>{map.pins.length} place{map.pins.length === 1 ? '' : 's'}; GM-only places stay hidden on the table.{linked ? ` Double-clicking ${linked === 1 ? 'the place' : `the ${linked} places`} with an area map on the table opens that scene.` : ' Put a place’s area map on the table first, and double-clicking the place opens it.'}</small></span></label>
         <label className="world-check"><input type="checkbox" checked={fog} disabled={!map.fog?.enabled} onChange={e => setFog(e.target.checked)}/><span>Copy the fog<small>{map.fog?.enabled ? `The table starts with the ${map.fog.revealed.length} explored cell${map.fog.revealed.length === 1 ? '' : 's'} revealed.${existing ? ' This replaces the fog on the table.' : ''}` : 'This map has no fog.'}</small></span></label>
         <label className="world-check"><input type="checkbox" checked={grid} disabled={map.grid === 'none'} onChange={e => setGrid(e.target.checked)}/><span>{map.grid === 'square' ? 'Square' : 'Hex'} grid on the table<small>{map.grid === 'none' ? 'This map has no grid.' : `Lined up with the map${each ? `, ${Math.round(each * 10) / 10} ${map.scale!.unit} each` : ''}.`}</small></span></label>
         <p className="aside-hint">The picture leaves out GM-only lines and names. Use in Maptable again after you change the map to update the scene.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
-        {done && <p className="info-note" role="status">The map is on the table. <a href={maptableHref(done)} target="_blank" rel="noreferrer">Open in Maptable <ArrowUpRight size={13}/></a></p>}
+        {done && <p className="info-note" role="status">The map is on the table. <a href={maptableHref(done) + (chosen ? `&campaign=${encodeURIComponent(chosen)}` : '')} target="_blank" rel="noreferrer">Open in Maptable <ArrowUpRight size={13}/></a></p>}
         <div className="button-row world-generate-actions">
           <button type="button" className="button" disabled={!!busy} onClick={() => run('png', async () => download(await renderMap(svg(), map, imageUrl), fileName(entry.title)))}><Download size={15}/> {busy === 'png' ? 'Exporting…' : 'Export image'}</button>
           <button type="button" className="button primary" disabled={!!busy || !table?.workspace} onClick={use}><MapIcon size={15}/> {busy === 'use' ? 'Putting it on the table…' : existing ? 'Update the scene' : 'Use in Maptable'}</button>

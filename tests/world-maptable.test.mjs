@@ -116,3 +116,13 @@ test("an uploaded picture gets square grid cells instead of 24 × 18 stretched o
     assert.ok(columns >= 6 && columns <= 40 && rows >= 6 && rows <= 30, "stays within the map limits");
   }
 });
+
+test("a sent map goes into the Maptable campaign paired with the campaign, not the first one", async () => {
+  const { tableCampaignFor } = await import("../lib/encyclopedia/map-to-maptable.ts");
+  const table = [{ id: "m-test", name: "Deployment check" }, { id: "m-lmop", name: "Lost Mine" }, { id: "m-other", name: "Curse" }];
+  assert.equal(tableCampaignFor(table, { name: "Lost Mine of Phandelver", maptableCampaignId: "m-lmop" }, null), "m-lmop");
+  assert.equal(tableCampaignFor(table, null, { name: "Curse", maptableCampaignId: "m-other" }), "m-other", "a shared map opened outside a campaign follows its own");
+  assert.equal(tableCampaignFor(table, { name: "Lost Mine" }, null), "m-lmop", "an unpaired campaign with the same name");
+  assert.equal(tableCampaignFor(table, { name: "Elsewhere", maptableCampaignId: "gone" }, null), "m-test", "falls back to the first");
+  assert.equal(tableCampaignFor([], { name: "x" }, null), null);
+});
