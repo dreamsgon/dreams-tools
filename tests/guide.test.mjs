@@ -6,6 +6,7 @@ import {render, inline, guideHref, guideSlug, readSidebar} from '../lib/guide/ma
 test('guide links go to guide pages and images', () => {
   assert.equal(guideHref('Maptable-Basics'), '/guide/maptable-basics');
   assert.equal(guideHref('Home'), '/guide');
+  assert.equal(guideHref('/api/bridge/roll20/rpg-tools-dice-link.zip'), '/api/bridge/roll20/rpg-tools-dice-link.zip');
   assert.equal(guideHref('World-Maps#hex-crawls'), '/guide/world-maps#hex-crawls');
   assert.equal(guideHref('images/home.jpg'), '/guide-images/home.jpg');
   assert.equal(guideHref('https://example.com'), 'https://example.com');

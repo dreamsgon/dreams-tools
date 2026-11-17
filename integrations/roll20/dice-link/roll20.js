@@ -54,8 +54,12 @@
     if (id) { if (seen.has(id)) return; seen.add(id); }
     // Roll20 loads the chat archive when the game opens; only rolls made after that go across.
     if (Date.now() - started < 5000 || !settings.fromRoll20) { read(el); return; }
-    const roll = L.rollFromChat(read(el));
+    const msg = read(el), roll = L.rollFromChat(msg);
     if (roll) void Promise.resolve(api.runtime.sendMessage({ type: "from-roll20", roll })).catch(() => {});
+    // A message that looks like a roll but couldn't be read: shown in the console, so a sheet's new layout can be added.
+    else if (msg.whisper || el.querySelector("[class*='roll'], [class*='template']")) {
+      console.info("[RPG Tools Dice Link] Skipped a Roll20 message:", msg.whisper ? "it is whispered." : "no roll found in it.", el.outerHTML.slice(0, 4000));
+    }
   }
   function watch() {
     const log = document.querySelector(SEL.log);

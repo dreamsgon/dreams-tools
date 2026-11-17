@@ -3,7 +3,7 @@ import {createContext,useContext,useEffect,useRef,useState} from "react";
 import {Dices,X,RotateCcw,Send,Check} from "lucide-react";
 import {describeParts,type rollDice,type RollMode} from "@/lib/rolls";
 import {rollWithMode} from "@/lib/encyclopedia/roll-mode";
-import {markLocalRoll,recordLocalRoll} from "@/lib/local-roll-log";
+import {announceRoll,markLocalRoll,recordLocalRoll} from "@/lib/local-roll-log";
 import type {TableRoll} from "@/lib/encyclopedia/tables";
 import type {TableResult} from "@/lib/encyclopedia/discord-table";
 
@@ -29,6 +29,8 @@ export type RollOptions={
 export function rollInline(title:string,formula:string,options:RollOptions={}){
  const rolled=rollWithMode(formula,options.mode),{mode,total,detail}=rolled;
  const logged=options.log?recordLocalRoll({label:title,total,breakdown:rolled.breakdown,formula:rolled.formula}):undefined;
+ // Rolls that skip the log (statblock and page chips) still reach the dice link.
+ if(!logged)announceRoll({label:title,total,breakdown:rolled.breakdown,formula:rolled.formula});
  const outcome=options.outcome?.(total)??undefined;
  const result:RollResult={id:++sequence,title,formula:rolled.formula,total,detail,at:Date.now(),base:formula,...(outcome?{outcome}:{}),...(options.outcome?{judge:options.outcome}:{}),...(mode?{mode}:{}),...(logged?{logId:logged.id}:{})};
  window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;

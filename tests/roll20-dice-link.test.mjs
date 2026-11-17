@@ -78,7 +78,7 @@ test('the extension passes rolls between tabs: to every Roll20 game, and to one 
  // On the RPG Tools page: rolls go out, Roll20 rolls come in, and a roll from Roll20 is never sent back.
  const page=extensionApi(tabs),win=new EventTarget(),doc={documentElement:{dataset:{}}};
  vm.runInNewContext(src('rpgtools.js'),{chrome:page.api,window:win,document:doc,CustomEvent,JSON,Promise});
- assert.equal(doc.documentElement.dataset.rpgtoolsDiceLink,'0.1.0');
+ assert.equal(doc.documentElement.dataset.rpgtoolsDiceLink,'0.1.1');
  win.dispatchEvent(new CustomEvent('rpgtools:roll',{detail:JSON.stringify({label:'Stealth',total:9})}));
  win.dispatchEvent(new CustomEvent('rpgtools:roll',{detail:JSON.stringify({label:'Thorn · Shortbow',total:17,source:'roll20'})}));
  assert.deepEqual(plain(page.sent),[{type:'rpgtools-roll',roll:{label:'Stealth',total:9}}]);

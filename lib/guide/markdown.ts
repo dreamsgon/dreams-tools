@@ -16,11 +16,12 @@ export function guideSlug(name: string): string {
   return base === "Home" ? "" : base.toLowerCase();
 }
 
-/** Where a link in the guide points: other guide pages by name, images from public/guide-images, outside links as they are. */
+/** Where a link in the guide points: other guide pages by name, images from public/guide-images, this site's /api files and outside links as they are. */
 export function guideHref(target: string): string {
   if (/^(https?:|mailto:)/.test(target)) return target;
   if (target.startsWith("images/")) return `/guide-images/${target.slice(7)}`;
   if (target.startsWith("#")) return target;
+  // Paths on this site, such as /maptable or the bridge downloads under /api/bridge.
   if (target.startsWith("/")) return target;
   const [page, hash] = target.split("#");
   const slug = guideSlug(page);
