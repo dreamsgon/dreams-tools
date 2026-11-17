@@ -134,6 +134,8 @@ export function fieldRollOf(f: Pick<ImportField, "type" | "roll">): Pick<StatFie
 export type FieldAction = "match" | "new" | "skip";
 export type FieldPlan = { label: string; section: string; type: StatField["type"]; value: ImportField["value"]; matchId?: string; matchLabel?: string; action: FieldAction; roll: Pick<StatField, "roll" | "rollFormula"> | null };
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** A path on the AI's own computer (where a made picture was saved), which no page here can open. */
+export const localFilePath = (v: string) => /^\s*(?:sandbox:|file:\/\/|\/(?:workspace|mnt\/data|mnt\/user-data|tmp|home)\/|[a-z]:\\)/i.test(v);
 const formType: Record<ImportField["type"], StatField["type"]> = { number: "number", text: "text", longtext: "textarea", checkbox: "checkbox", choice: "select" };
 
 /** Each field of the file, matched to a stat form field with the same name (ignoring case and punctuation) when there is one. */
@@ -343,6 +345,8 @@ export function applyImport(s: Workspace, file: ImportFile, target: ImportTarget
   for (const p of planFields(file, form)) {
     const action = choice[p.label] ?? p.action;
     if (action === "skip") continue;
+    // A picture the AI made lives on its own computer ("/workspace/…", "/mnt/data/…"): the path is no use here.
+    if (typeof p.value === "string" && localFilePath(p.value)) { warnings.push(`${p.label}: “${p.value.slice(0, 60)}” is a file on the AI’s computer, not something this page can show, so it was left out. Add the picture with Add a picture instead.`); continue; }
     let field = action === "match" && p.matchId ? form.find(f => f.id === p.matchId) : undefined;
     if (!field) {
       if (form.length >= maxFields) { warnings.push(`${p.label}: the stat form is full (${maxFields} fields), so it was left out.`); continue; }

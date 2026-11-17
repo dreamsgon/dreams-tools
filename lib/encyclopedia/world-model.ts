@@ -141,7 +141,7 @@ export const pictureSchema = z.object({
         imageId: imageIdSchema, width: z.number().int().min(1).max(20000), height: z.number().int().min(1).max(20000),
         x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1), size: z.number().finite().min(0.2).max(1),
     }).optional(),
-    ring: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), noRing: z.boolean().optional(), /* true: the token has no ring at all */ squares: z.number().int().min(1).max(6).optional(),
+    ring: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), noRing: z.boolean().optional(), /* true: the token has no ring at all */ squares: z.number().min(0.5).max(6).refine(v => Number.isInteger(v) || v === 0.5 || v === 0.75, "A token is ½, ¾ or a whole number of squares").optional(),
 });
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({

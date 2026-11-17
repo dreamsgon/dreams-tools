@@ -2,7 +2,9 @@ import type { Picture } from "./world-model.ts";
 
 /** Token sizes offered for a picture, in grid squares. */
 export const tokenSizes = [
-  { squares: 1, label: "Medium or smaller" },
+  { squares: 0.5, label: "Tiny (½ square)" },
+  { squares: 0.75, label: "Small (¾ square)" },
+  { squares: 1, label: "Medium (1 square)" },
   { squares: 2, label: "Large (2×2)" },
   { squares: 3, label: "Huge (3×3)" },
   { squares: 4, label: "Gargantuan (4×4)" },
