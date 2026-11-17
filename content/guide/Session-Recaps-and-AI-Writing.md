@@ -4,6 +4,8 @@ Make a recap of each session, publish it to players, and keep a running **story 
 
 ## Make a recap
 
+![The New session recap dialog](images/session-recap.jpg)
+
 In a **session notes folder** or on a **session page**, choose **New session recap**. Pick the writer:
 
 - **Hand to my AI app**: RPG Tools makes a GM-only draft page and copies instructions for your connected AI app.

@@ -4,6 +4,8 @@ The RPG Encyclopedia is a campaign wiki. Open it at `/encyclopedia`. It holds **
 
 ## Pages inside pages
 
+![A place page with its sidebar](images/encyclopedia-page.jpg)
+
 Any page can hold sub-pages in the same campaign or shared lore; folders are not required as parents.
 
 - **Drag** a page in the sidebar onto another to nest it, or onto a row's edge to place it before or after. Rows show how many pages are inside.
@@ -12,6 +14,8 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 - **Hover** a link to preview the page. `{{word|note}}` adds a hover note to text.
 
 ## Writing
+
+![The same page on a phone](images/encyclopedia-phone.jpg)
 
 - Page text is Markdown. In Write mode there are buttons for a **GM secret** and a **Table**.
 - Wrap GM-only text in a secret block (players never receive it):

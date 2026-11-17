@@ -2,6 +2,8 @@
 
 ## The campaign hub and front page
 
+![A campaign hub on its Dashboard](images/campaign-hub.jpg)
+
 `/campaigns/<campaign>` is one campaign across both tools.
 
 - **Dashboard**: a grid of widgets pulled from the campaign, such as the next session, recent pages, the party and your scenes.
@@ -32,6 +34,8 @@ In the Encyclopedia's Connections, create a **player link**. Anyone holding it r
 - Many things have their own **eye** (quest rewards, vehicle values, inventory lines…). A hidden item never reaches the player site.
 
 ### Members and groups
+
+![The Members tab](images/members-tab.jpg)
 
 For real accounts rather than a shared link, use the **Members** tab on the campaign page (a campaign with notes has it):
 

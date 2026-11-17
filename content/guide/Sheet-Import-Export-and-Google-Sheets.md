@@ -4,6 +4,8 @@ Three ways to bring a character from another game or tool into RPG Tools, and on
 
 ## Import a character sheet with an AI (any game)
 
+**Import a sheet** and **Export** show only on characters in a campaign, because imported stats belong to that campaign's stat form. A character in a world's shared lore doesn't get them: pick your campaign at the top and use **Characters › Add character** (with *shared* left unticked) or **Characters › Import sheet**.
+
 Works for any game system. The AI app (ChatGPT or Claude) turns your sheet into a standard **`rpgtools-sheet`** JSON file that RPG Tools reads.
 
 1. In the Encyclopedia open **Characters › Import sheet** (a new character), or a character's sheet section › **Import a sheet** / **Import again** (to update).
@@ -17,6 +19,8 @@ Works for any game system. The AI app (ChatGPT or Claude) turns your sheet into 
 An **update** changes only what the file has, and a linked Google Sheet is never replaced. Dice the roller can't read are left out and listed. Players can't store an imported sheet.
 
 ## Export a sheet
+
+Roll20 and Fantasy Grounds can read and write these files too; see [Set up Roll20](Roll20-Setup) and [Set up Fantasy Grounds](Fantasy-Grounds-Setup).
 
 A character's sheet section › **⋯ › Export as .json** saves an `rpgtools-sheet` file that Import sheet reads back into the same page. Choose:
 

@@ -1,4 +1,12 @@
 /* The user guide (/guide): contents on the side, the page beside it. */
+.guide-tools { display:flex; flex-wrap:wrap; gap:8px; padding:20px 0 0; }
+.guide-tools a { display:inline-flex; align-items:center; gap:7px; min-height:38px; padding:6px 14px; border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--panel); color:var(--ink); font-size:13px; font-weight:600; }
+.guide-tools a:hover { border-color:var(--line-strong); background:var(--chrome-hover); }
+.guide-tools svg { flex:none; color:var(--accent); }
+.guide-tools .guide-tools-downloads { margin-left:auto; background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.guide-tools .guide-tools-downloads svg { color:inherit; }
+.guide-tools .guide-tools-downloads:hover { background:var(--accent-hover); }
+@media (max-width: 640px) { .guide-tools a { flex:1 1 calc(50% - 4px); justify-content:center; } .guide-tools .guide-tools-downloads { margin-left:0; } }
 .guide-layout { display:grid; grid-template-columns:240px minmax(0,1fr); gap:40px; padding:32px 0 64px; align-items:start; }
 .guide-contents { position:sticky; top:16px; max-height:calc(100vh / var(--ui-zoom, 1) - 32px); overflow-y:auto; font-size:13px; }
 .guide-contents-fold { display:none; }

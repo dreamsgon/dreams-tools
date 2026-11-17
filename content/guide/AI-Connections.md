@@ -4,6 +4,8 @@ RPG Tools can work with an AI two ways. Both are set up under **Connect an AI** 
 
 ## Way 1: connect an AI app (MCP)
 
+![The Connect an AI dialog](images/connect-ai.jpg)
+
 Use ChatGPT, Claude or any app that supports MCP connectors.
 
 1. In the Encyclopedia open **Connect an AI** and make a **named key** for a campaign.

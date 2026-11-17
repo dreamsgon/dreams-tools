@@ -4,6 +4,8 @@ Maptable is the table-running tool: scenes with a map image or a drawn map, toke
 
 ## Campaigns and scenes
 
+![A Maptable scene with tokens and the Tokens panel](images/maptable-board.jpg)
+
 - Open a campaign to see its **scenes as a picture grid** grouped by folder, with a **Continue** card at the top.
 - The **Scenes** panel has one **New** menu: upload a map, blank scene, area, world, split, copy from another campaign, or new folder. Each scene has a settings button (General, Map image and Size tabs, saved as you go).
 - The scene name in the header opens a **quick switcher**, with previous and next arrows.

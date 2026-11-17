@@ -1,6 +1,7 @@
 **[RPG Tools Guide](Home)**
 
 **Start**
+- [Tools and downloads](Tools-and-Downloads)
 - [Getting started](Getting-Started)
 - [Campaigns, players and sharing](Campaigns-Players-and-Sharing)
 
