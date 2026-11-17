@@ -230,14 +230,15 @@ const sameTarget = (a: SidebarLink, b: NewLink) => a.type === b.type && (a.type 
 /** Pick what a link opens: a page, a part of the Encyclopedia, a tool, or a web page. */
 function LinkPicker({ pages, kindLabels, pageIcon, has, onAdd }: { pages: Page[]; kindLabels: Record<string, string>; pageIcon: (k: string) => ReactNode; has: (l: NewLink) => boolean; onAdd: (l: NewLink) => void }) {
   const [kind, setKind] = useState<"page" | "view" | "tool" | "web">("page"), [q, setQ] = useState(""), [label, setLabel] = useState(""), [url, setUrl] = useState("");
-  const found = pages.filter(x => x.kind !== "folder" && x.title.toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => a.title.localeCompare(b.title)).slice(0, 8);
+  // Folders count as pages too, so a link can open a whole folder such as Sessions; they come first.
+  const found = pages.filter(x => x.title.toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => Number(b.kind === "folder") - Number(a.kind === "folder") || a.title.localeCompare(b.title)).slice(0, 12);
   const okUrl = /^https?:\/\/[^\s]+$/i.test(url.trim());
   return <div className="sb-picker">
     <div className="segmented" role="tablist" aria-label="Link to">
       {([["page", "A page"], ["view", "A section"], ["tool", "A tool"], ["web", "A web link"]] as const).map(([k, name]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{name}</button>)}
     </div>
     {kind === "page" && <>
-      <input className="sb-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a page…" aria-label="Find a page" autoFocus />
+      <input className="sb-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a page or folder…" aria-label="Find a page or folder" autoFocus />
       <ul className="sb-choices">{found.map(x => { const l = { type: "page", page: x.id } as const, there = has(l); return <li key={x.id}><button disabled={there} onClick={() => onAdd(l)}><span className="sb-icon">{pageIcon(x.kind)}</span><span>{x.title}<small>{x.campaignId ? kindLabels[x.kind] : `Shared lore · ${kindLabels[x.kind]}`}</small></span>{there ? <Check size={14} /> : <Plus size={14} />}</button></li>; })}
         {!found.length && <li className="sb-empty">No pages match.</li>}</ul>
     </>}
