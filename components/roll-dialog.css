@@ -1,0 +1,35 @@
+/* The roll dialog (components/roll-dialog.tsx). A native modal dialog, so it sits above every page's own panels. */
+.roll-dialog { position: fixed; inset: 0; margin: auto; height: fit-content; width: min(400px, calc(100vw / var(--ui-zoom, 1) - 32px)); max-height: calc(100dvh / var(--ui-zoom, 1) - 32px); overflow: auto; padding: 0; border: 1px solid var(--line-strong, var(--line, #c9d0d5)); border-radius: var(--radius-lg, 8px); background: var(--panel, #fff); color: var(--ink, #1c2329); box-shadow: 0 18px 48px rgb(0 0 0 / .28); font-family: var(--font-sans, system-ui, sans-serif); font-size: 14px; }
+.roll-dialog::backdrop { background: rgb(10 14 18 / .35); }
+.roll-dialog form { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; }
+.roll-dialog header { display: flex; align-items: center; gap: 8px; }
+.roll-dialog header strong { flex: 1; min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roll-dialog button { font: inherit; cursor: pointer; }
+.roll-dialog-x { display: inline-flex; padding: 6px; border: 0; border-radius: var(--radius, 4px); background: none; color: var(--muted, #56616a); }
+.roll-dialog-x:hover { background: var(--raised, #f5f7f8); color: var(--ink, #1c2329); }
+.roll-dialog-formula { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; padding: 10px 12px; border-radius: var(--radius, 4px); background: var(--accent-soft, #e0eeec); }
+.roll-dialog-formula code { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.roll-dialog-formula small { color: var(--muted, #56616a); }
+.roll-dialog-modes { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-strong, #c9d0d5); border-radius: var(--radius, 4px); overflow: hidden; }
+.roll-dialog-modes button { min-height: 38px; padding: 6px 4px; border: 0; border-left: 1px solid var(--line-strong, #c9d0d5); background: var(--panel, #fff); color: var(--ink, #1c2329); font-size: 13px; font-weight: 600; }
+.roll-dialog-modes button:first-child { border-left: 0; }
+.roll-dialog-modes button.on { background: var(--accent, #1f6f68); color: var(--on-accent, #fff); }
+.roll-dialog-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted, #56616a); }
+.roll-dialog-field input { min-height: 38px; padding: 7px 9px; border: 1px solid var(--line-strong, #c9d0d5); border-radius: var(--radius, 4px); background: var(--bg, #f5f6f7); color: var(--ink, #1c2329); font: inherit; font-size: 15px; font-weight: 400; }
+.roll-dialog-field input[aria-invalid="true"] { border-color: var(--danger, #a33a2e); }
+.roll-dialog-field small { font-weight: 400; }
+.roll-dialog-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.roll-dialog-quick button { min-height: 32px; padding: 4px 10px; border: 1px solid var(--line-strong, #c9d0d5); border-radius: 999px; background: var(--panel, #fff); color: var(--ink, #1c2329); font-size: 13px; }
+.roll-dialog-quick button:hover, .roll-dialog-modes button:not(.on):hover { background: var(--raised, #f5f7f8); }
+.roll-dialog-quick button.clear { border-style: dashed; color: var(--muted, #56616a); }
+.roll-dialog-error { margin: -4px 0 0; color: var(--danger, #a33a2e); font-size: 13px; }
+.roll-dialog-options { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
+.roll-dialog-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.roll-dialog-hint { margin: -6px 0 0; color: var(--muted, #56616a); font-size: 12px; }
+.roll-dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
+.roll-dialog footer button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border-radius: var(--radius, 4px); font-weight: 600; }
+.roll-dialog-cancel { border: 1px solid var(--line-strong, #c9d0d5); background: var(--panel, #fff); color: var(--ink, #1c2329); }
+.roll-dialog-go { border: 1px solid var(--accent, #1f6f68); background: var(--accent, #1f6f68); color: var(--on-accent, #fff); }
+.roll-dialog-go:disabled { opacity: .5; cursor: not-allowed; }
+.roll-dialog button:focus-visible, .roll-dialog input:focus-visible { outline: 2px solid var(--accent, #1f6f68); outline-offset: 1px; }
+@media (max-width: 640px) { .roll-dialog { margin: auto auto 0; width: calc(100vw / var(--ui-zoom, 1)); max-width: calc(100vw / var(--ui-zoom, 1)); border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) 0 0; padding-bottom: env(safe-area-inset-bottom); } }

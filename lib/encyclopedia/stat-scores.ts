@@ -64,3 +64,17 @@ export function combineScorePairs(s: Workspace, campaignId: string): { data: Wor
   });
   return { data: { ...s, campaigns: s.campaigns.map(x => x.id === campaignId ? { ...x, statFields: fields } : x), entries }, combined: pairs.map(p => p.name) };
 }
+
+/** A stat that looks like Dexterity: a score box called Dexterity or Dex, which Initiative rolls from in D&D-like games. */
+const dexterity = (fields: readonly StatField[]) => fields.find(f => !f.archived && f.look === 'score' && f.type === 'number' && /^dex(?:terity)?$/i.test(f.label.trim()));
+
+/**
+ * Initiative for the Quick strip: with a Dexterity score box it rolls 1d20 + its modifier and has no value of its own;
+ * without one it is a number each character types (their bonus) and rolls 1d20 + it. Null when Initiative already exists.
+ */
+export function initiativeStat(fields: readonly StatField[], id: string): StatField | null {
+  if (fields.some(f => !f.archived && f.label.trim().toLowerCase() === 'initiative')) return null;
+  const dex = dexterity(fields);
+  return { id, label: 'Initiative', section: '', type: dex ? 'none' : 'number', options: [], visibility: 'players', archived: false, quick: true,
+    rolls: [{ name: 'Roll', formula: dex ? `1d20+{${dex.label.trim()} mod}` : '1d20+{value}' }], ...(dex ? { note: `${dex.label.trim()} modifier` } : {}) };
+}

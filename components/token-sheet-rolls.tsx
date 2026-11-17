@@ -4,7 +4,6 @@ import {createPortal} from "react-dom";
 import {X} from "lucide-react";
 import {SheetRolls} from "./encyclopedia/sheet-rolls";
 import {requestMapRoll} from "@/lib/map-rolls";
-import {withKeepMode} from "@/lib/rolls";
 import type {SheetRollGroup} from "@/lib/encyclopedia/sheet-rolls";
 import type {Sheet} from "@/lib/encyclopedia/sheet-link";
 import {SheetWriteBack} from "./encyclopedia/sheet-hp";
@@ -37,7 +36,7 @@ export default function TokenSheetRolls({character,groups,tokenId,sceneId,campai
  },[at.y]);
  return createPortal(<div ref={box} tabIndex={-1} className="token-sheet-rolls" role="dialog" aria-label={`Roll from ${character}’s sheet`} style={{left:`min(${at.x}px, calc(calc(100vw / var(--ui-zoom, 1)) - 308px))`}}>
   <header><strong>{character}’s sheet</strong><button type="button" className="icon-only" aria-label="Close" onClick={onClose}><X size={14}/></button></header>
-  {groups.length>0&&<SheetRolls groups={groups} twice={false} compact onRoll={(name,formula,mode)=>{requestMapRoll({formula:withKeepMode(formula,mode),context:{sceneId,campaignId,label:`${character} · ${name}`.slice(0,120),tokenId}});onClose();}}/>}
+  {groups.length>0&&<SheetRolls groups={groups} twice={false} compact onRoll={(name,formula,mode)=>{requestMapRoll({formula,mode,context:{sceneId,campaignId,label:`${character} · ${name}`.slice(0,120),tokenId}});onClose();}}/>}
   {hp&&<>
    <SheetWriteBack sheet={hp.sheet} linker={hp.sheet.linkedById?hp.sheet.linkedBy??"The player":undefined} onChange={next=>hp.onSwitch(next.writeBack===true)}/>
    {hp.status&&<div className="sheet-hp-state" role="status">

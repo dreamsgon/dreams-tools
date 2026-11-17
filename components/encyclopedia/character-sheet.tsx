@@ -80,7 +80,7 @@ export function CharacterSheetSection({entry,change,data,campaign}:{entry:Entry;
  const reads=imported?`Imported ${timeAgo(sheet.readAt)||''}`.trim():sheet.mode==='template'?`Reads the ${TEMPLATE_TAB} tab`:`Reads ${sheet.items.length} picked ${sheet.items.length===1?'cell':'cells'}`;
  return <>
   <SheetView sheet={shown} note={rolls.length?imported?'Values come from the import. Import again to update them. Rolls show in the roll card, where they can go to Discord.':'Values are copied here when the sheet is read. Rolls show in the roll card, where they can go to Discord.':undefined}
-   rolling={rolls.length?<><SheetRolls groups={rolls} twice onRoll={(name,formula,mode)=>rollInline(`${entry.title} · ${name}`,formula,{mode,log:true})}/>
+   rolling={rolls.length?<><SheetRolls groups={rolls} twice onRoll={(name,formula,mode)=>void rollInline(`${entry.title} · ${name}`,formula,{mode,log:true})}/>
     <div className="sheet-log"><span className="eyebrow">ROLL LOG</span><SheetRollLog character={entry.title}/></div></>:undefined}
    hpTools={coGm||imported?undefined:<>
     <SheetWriteBack sheet={sheet} linker={theirs?sheet.linkedBy??'The player':undefined} onChange={next=>{change(withSheet(entry.id,old=>old?{...old,writeBack:next.writeBack}:old));}}/>

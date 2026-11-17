@@ -6,12 +6,12 @@
  * the campaign has the same rows; the values are this character's. Rolling never changes the encyclopedia.
  */
 import {useContext,useMemo,useState} from 'react';
-import {ArrowDown,ArrowUp,Check,ChevronDown,ChevronRight,Dices,EyeOff,Info,LayoutGrid,LayoutTemplate,Minus,Pencil,Plus,Search,Settings2,Square,Trash2,X} from 'lucide-react';
+import {ArrowDown,ArrowUp,Check,ChevronDown,ChevronRight,Dices,EyeOff,Info,LayoutGrid,LayoutTemplate,Minus,Pencil,Plus,Search,Settings2,Shield,Square,Trash2,X,Zap} from 'lucide-react';
 import {defaultCharacter,newId,statFieldSchema,type Campaign,type CharacterData,type Entry,type StatField,type Workspace} from '@/lib/encyclopedia/world-model';
-import {MAX_STAT_ROLLS,derivedValue,modKey,statModifier,placeStat,rollOutcome,sheetOf,statRollDice,statRollHint,statRollPreview,statRolls,renameStatRefs,targetNumber,type SheetStat,type StatRoll} from '@/lib/encyclopedia/stat-rolls';
+import {MAX_STAT_ROLLS,derivedValue,modKey,saveKey,sheetRolls,statModifier,placeStat,rollOutcome,sheetOf,statRollDice,statRollHint,statRollPreview,statRolls,renameStatRefs,targetNumber,type SheetStat,type StatRoll} from '@/lib/encyclopedia/stat-rolls';
 import {STAT_LAYOUTS,addLayout,type StatLayout} from '@/lib/encyclopedia/stat-layouts';
 import {arrangeStats,formFromArrangement,moveStat,moveStatGroup,shownStats,statGroups,statOff,tidy,toggleStat,type StatArrangement} from '@/lib/encyclopedia/stat-arrange';
-import {combineScorePairs,scorePairs} from '@/lib/encyclopedia/stat-scores';
+import {combineScorePairs,initiativeStat,scorePairs} from '@/lib/encyclopedia/stat-scores';
 import {setTrackerValue} from '@/lib/encyclopedia/trackers';
 import {isSingleD20,type RollMode} from '@/lib/rolls';
 import {RollHandler,rollInline} from './rolls';
@@ -28,26 +28,31 @@ const signed=(n:number)=>n<0?`−${-n}`:`+${n}`;
 const trackerOf=(c:CharacterData,label:string)=>(c.trackers??[]).find(t=>t.label.trim().toLowerCase()===label.trim().toLowerCase());
 
 export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,change}:{entry:Entry;data:Workspace;campaign?:Campaign;onChange:(c:CharacterData)=>void;onFields:(f:StatField[])=>void;onArrange:()=>void;change?:(f:(w:Workspace)=>Workspace)=>boolean|void}){
- const [q,setQ]=useState(''),[open,setOpen]=useState<Set<string>>(new Set),[form,setForm]=useState<StatField|'new'|null>(null),[mode,setMode]=useState<RollMode>('normal'),[layouts,setLayouts]=useState(false),[notice,setNotice]=useState('');
+ const [q,setQ]=useState(''),[open,setOpen]=useState<Set<string>>(new Set),[form,setForm]=useState<StatField|'new'|'quick'|null>(null),[quickPick,setQuickPick]=useState(false),[mode,setMode]=useState<RollMode>('normal'),[layouts,setLayouts]=useState(false),[notice,setNotice]=useState('');
  const [arranging,setArranging]=useState(false),[scope,setScope]=useState<'one'|'all'>('one');
  const collapse=useCollapsed(`stats:${campaign?.id??''}`);
  const handler=useContext(RollHandler);
  const c=entry.character??defaultCharacter(),all=campaign?.statFields??[],fields=all.filter(f=>!f.archived),values=c.statsByCampaign[campaign?.id??'']??{},layout=c.statLayout;
  const sheet=sheetOf(all,values);
  const listed=useMemo(()=>arranging?arrangeStats(fields,layout):shownStats(fields,layout),[fields,layout,arranging]);
- const groups=useMemo(()=>{const want=arranging?'':q.trim().toLowerCase();return statGroups(listed.filter(f=>!want||[f.label,f.section,f.note??''].some(x=>x.toLowerCase().includes(want))));},[listed,q,arranging]);
+ const quick=useMemo(()=>arranging?[]:listed.filter(f=>f.quick),[listed,arranging]);
+ const groups=useMemo(()=>{const want=arranging?'':q.trim().toLowerCase();return statGroups(listed.filter(f=>(arranging||!f.quick)&&(!want||[f.label,f.section,f.note??''].some(x=>x.toLowerCase().includes(want)))));},[listed,q,arranging]);
  if(!campaign)return <div className="info-note">Choose a campaign to use its sheet. Shared characters keep separate stat values in each campaign.</div>;
  const set=(id:string,value:Value)=>onChange({...c,statsByCampaign:{...c.statsByCampaign,[campaign.id]:{...values,[id]:value}}});
  const setLayout=(next:StatArrangement|undefined)=>{const {statLayout:_old,...rest}=c;void _old;const tidied=tidy(next,new Set(fields.map(f=>f.id)));onChange(tidied?{...rest,statLayout:tidied}:rest);};
- const anyRoll=fields.some(f=>statRolls(f).length>0),anyD20=fields.some(f=>statRolls(f).some(r=>isSingleD20(r.formula)));
+ const rollsOf=(f:StatField)=>sheetRolls(f,values,sheet);
+ const anyRoll=fields.some(f=>rollsOf(f).length>0),anyD20=fields.some(f=>rollsOf(f).some(r=>isSingleD20(r.formula)));
  const offCount=fields.filter(f=>statOff(layout,f.id)).length,pairs=scorePairs(all);
  const roll=(f:StatField,r:StatRoll,dice:string)=>{
-  const title=`${entry.title} · ${f.label}${statRolls(f).length>1||r.name!=='Roll'?` · ${r.name}`:''}`;
+  const title=`${entry.title} · ${f.label}${rollsOf(f).length>1||r.name!=='Roll'?` · ${r.name}`:''}`;
   const v=values[f.id]??null;
-  if(handler)handler(title,dice);else rollInline(title,dice,{mode:anyD20&&!isSingleD20(dice)?'normal':mode,outcome:r.success?t=>rollOutcome(t,r.success,v,sheet):undefined});
   setMode('normal');
-  const t=f.spend?trackerOf(c,f.spend.tracker):undefined;
-  if(f.spend&&t&&!handler)onChange({...c,trackers:setTrackerValue(c.trackers??[],t.id,t.value-f.spend.n)});
+  if(handler){handler(title,dice);return;}
+  // A stat that spends (like 1 Stress) spends only when the roll goes ahead, not when the roll dialog is cancelled.
+  void rollInline(title,dice,{mode:anyD20&&!isSingleD20(dice)?'normal':mode,outcome:r.success?t=>rollOutcome(t,r.success,v,sheet):undefined}).then(done=>{
+   const t=f.spend?trackerOf(c,f.spend.tracker):undefined;
+   if(done&&f.spend&&t)onChange({...c,trackers:setTrackerValue(c.trackers??[],t.id,t.value-f.spend.n)});
+  });
  };
  function applyLayout(l:StatLayout){
   const r=addLayout(all,l,newId);
@@ -74,10 +79,14 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
  const sections=[...new Set(fields.map(f=>f.section).filter(Boolean))];
  const hasValues=(id:string)=>data.entries.some(e=>{const v=e.character?.statsByCampaign[campaign.id]?.[id];return v!==undefined&&v!==null&&v!=='';});
  const setLook=(f:StatField,box:boolean)=>onFields(all.map(x=>{if(x.id!==f.id)return x;const {look:_l,...rest}=x;void _l;return box?{...rest,look:'score' as const}:rest;}));
+ /** Turns an optional flag (save, quick) on or off for some stats, leaving it out of the form when off. */
+ const flag=(ids:string[],key:'save'|'quick',on:boolean)=>onFields(all.map(x=>{if(!ids.includes(x.id))return x;const {[key]:_k,...rest}=x;void _k;return on?{...rest,[key]:true}:rest;}));
+ const dex=fields.find(f=>f.look==='score'&&/^dex(?:terity)?$/i.test(f.label.trim()));
+ const addInitiative=()=>{const i=initiativeStat(all,newId());if(i)onFields(placeStat(all,i));setQuickPick(false);};
 
- const chips=(f:StatField,compact=false)=>{
+ const chips=(f:StatField,compact=false,skip:string[]=[])=>{
   const v=values[f.id]??null,tracker=f.spend?trackerOf(c,f.spend.tracker):undefined,short=!!f.spend&&!handler&&(!tracker||tracker.value<f.spend.n);
-  return <>{statRolls(f).map(r=>{const dice=statRollDice(r.formula,v,sheet);if(!dice)return null;const need=targetNumber(r.success,v,sheet);return <button type="button" key={r.name} className="roll-chip stat-roll-chip" disabled={short} title={short?(tracker?`Needs ${f.spend!.n} ${tracker.label}; ${tracker.value} left`:`Add a tracker called ${f.spend!.tracker} to this character to roll this`):`Roll ${dice}${need?`, ${r.success!.op==='atLeast'?`needs ${need} or more`:`needs ${need} or under`}`:''}${f.spend?`, spends ${f.spend.n} ${f.spend.tracker}`:''}`} onClick={()=>roll(f,r,dice)}><Dices size={12} aria-hidden="true"/>{r.name}{!compact&&<span className="stat-dice">{dice}{need?` ${r.success!.op==='atLeast'?'≥':'≤'} ${need}`:''}</span>}</button>;})}
+  return <>{rollsOf(f).filter(r=>!skip.includes(r.name)).map(r=>{const dice=statRollDice(r.formula,v,sheet);if(!dice)return null;const need=targetNumber(r.success,v,sheet);return <button type="button" key={r.name} className="roll-chip stat-roll-chip" disabled={short} title={short?(tracker?`Needs ${f.spend!.n} ${tracker.label}; ${tracker.value} left`:`Add a tracker called ${f.spend!.tracker} to this character to roll this`):`Roll ${dice}${need?`, ${r.success!.op==='atLeast'?`needs ${need} or more`:`needs ${need} or under`}`:''}${f.spend?`, spends ${f.spend.n} ${f.spend.tracker}`:''}`} onClick={()=>roll(f,r,dice)}><Dices size={12} aria-hidden="true"/>{r.name}{!compact&&<span className="stat-dice">{dice}{need?` ${r.success!.op==='atLeast'?'≥':'≤'} ${need}`:''}</span>}</button>;})}
    {f.spend&&!compact&&<small className={`stat-spend${short?' short':''}`}>−{f.spend.n} {tracker?.label??f.spend.tracker}{tracker?` (${tracker.value} left)`:''}</small>}</>;
  };
  const details=(f:StatField)=>{const rolls=statRolls(f);return <div className="inv-detail read stat-detail">
@@ -88,12 +97,26 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
 
  const box=(f:StatField)=>{
   const v=values[f.id]??null,mod=values[modKey(f.id)],worked=statModifier({derived:f.derived,value:v,mod},sheet),auto=f.derived?derivedValue({derived:f.derived,value:v},sheet):null,isOpen=open.has(f.id);
+  const save=f.save?rollsOf(f).find(r=>r.name==='Save'):undefined,saveDice=save?statRollDice(save.formula,v,sheet):null;
   return <div role="listitem" key={f.id} className={`stat-box${f.visibility==='gm'?' is-hidden':''}${isOpen?' is-open':''}`}>
    <button type="button" className="stat-box-label" aria-expanded={isOpen} title={f.description??'Details, Change and Remove'} onClick={()=>toggle(f.id)}>{f.label}{f.visibility==='gm'&&<EyeOff size={11} aria-label="GM only"/>}</button>
    <ModInput label={`${f.label} modifier`} value={mod} placeholder={auto!==null?signed(auto):worked===null?'±0':signed(worked)} onSet={x=>set(modKey(f.id),x)}/>
    <span className="stat-box-score"><input type="number" className="stat-box-score-input" aria-label={`${f.label} score`} step="any" value={typeof v==='number'?v:''} placeholder="—" onChange={e=>set(f.id,e.target.value===''?null:Number(e.target.value))}/></span>
    {f.note&&<small className="stat-box-note">{f.note}</small>}
-   <span className="stat-box-rolls">{chips(f,true)}</span>
+   <span className="stat-box-rolls">{chips(f,true,save?['Save']:[])}</span>
+   {save&&<span className="stat-box-save"><span className="stat-box-save-name">Save</span><ModInput className="stat-box-save-input" label={`${f.label} save bonus`} value={values[saveKey(f.id)]} placeholder={worked===null?'±0':signed(worked)} onSet={x=>set(saveKey(f.id),x)}/>
+    <button type="button" className="icon-button stat-box-save-roll" disabled={!saveDice} aria-label={`Roll ${f.label} save`} title={saveDice?`Roll ${saveDice}`:'Type a save bonus or a modifier first'} onClick={()=>saveDice&&roll(f,save,saveDice)}><Dices size={13}/></button></span>}
+  </div>;
+ };
+ const quickCard=(f:StatField)=>{
+  const v=values[f.id]??null,box=f.look==='score',shownMod=box?statModifier({derived:f.derived,value:v,mod:values[modKey(f.id)]},sheet):f.derived?derivedValue({derived:f.derived,value:v},sheet):null;
+  return <div role="listitem" key={f.id} className={`stat-quick-card${f.visibility==='gm'?' is-hidden':''}${open.has(f.id)?' is-open':''}`}>
+   <button type="button" className="stat-quick-label" aria-expanded={open.has(f.id)} title={f.description??'Details, Change and Remove'} onClick={()=>toggle(f.id)}>{f.label}{f.visibility==='gm'&&<EyeOff size={11} aria-label="GM only"/>}</button>
+   {!box&&f.type==='number'&&<input type="number" className="stat-quick-input" aria-label={`${f.label} value`} step="any" placeholder="—" value={typeof v==='number'?v:''} onChange={e=>set(f.id,e.target.value===''?null:Number(e.target.value))}/>}
+   {!box&&f.type!=='number'&&f.type!=='none'&&f.type!=='textarea'&&<span className="stat-quick-value"><ValueInput f={f} v={v} onSet={x=>set(f.id,x)}/></span>}
+   {shownMod!==null&&<span className="stat-quick-mod">{signed(shownMod)}</span>}
+   {f.note&&<small className="stat-quick-note">{f.note}</small>}
+   <span className="stat-quick-rolls">{chips(f,true)}</span>
   </div>;
  };
  const row=(f:StatField)=>{
@@ -119,6 +142,8 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
    <button type="button" className="stat-switch" role="switch" aria-checked={!off} aria-label={`Show ${f.label} on this sheet`} onClick={()=>setLayout(toggleStat(layout,f.id))}><span/></button>
    <span className="stat-arrange-name"><strong>{f.label}</strong><small>{off?'Off on this sheet':v===undefined||v===null||v===''?'No value':typeof v==='boolean'?(v?'Yes':'No'):String(v).slice(0,40)}</small></span>
    {f.type==='number'&&<button type="button" className="stat-look-toggle" aria-pressed={f.look==='score'} title={`Show as a score box with a modifier, for every character in ${campaign.name}`} onClick={()=>setLook(f,f.look!=='score')}><Square size={13}/> Score box</button>}
+   {f.look==='score'&&<button type="button" className="stat-look-toggle" aria-pressed={!!f.save} title={`Show a saving throw under ${f.label}, for every character in ${campaign.name}`} onClick={()=>flag([f.id],'save',!f.save)}><Shield size={13}/> Save</button>}
+   <button type="button" className="stat-look-toggle" aria-pressed={!!f.quick} title={`Show ${f.label} in Quick at the top of the sheet, for every character in ${campaign.name}`} onClick={()=>flag([f.id],'quick',!f.quick)}><Zap size={13}/> Quick</button>
    <span className="stat-arrange-move"><button type="button" className="icon-button" aria-label={`Move ${f.label} up`} disabled={at===0} onClick={()=>setLayout({...layout,order:moveStat(listed,f.id,-1)})}><ArrowUp size={14}/></button><button type="button" className="icon-button" aria-label={`Move ${f.label} down`} disabled={at===g.fields.length-1} onClick={()=>setLayout({...layout,order:moveStat(listed,f.id,1)})}><ArrowDown size={14}/></button></span>
   </div>;
  };
@@ -138,6 +163,11 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
    {anyRoll&&!handler&&<div className="stat-sheet-mode" role="radiogroup" aria-label="Next roll">{(['normal','high','low'] as RollMode[]).map(m=><button key={m} type="button" role="radio" aria-checked={mode===m} className={mode===m?'on':''} onClick={()=>setMode(m)}>{anyD20||m==='normal'?modeNames[m]:m==='high'?'Keep higher':'Keep lower'}</button>)}</div>}
   </div>}
   {!fields.length&&<div className="character-empty"><h3>Build the sheet your campaign needs.</h3><p>Add stats in groups, like Attributes or Skills, and give each one the rolls your game uses. Nothing comes from a rulebook.</p><button className="button primary" onClick={()=>setForm('new')}><Plus size={15}/> Add a stat</button><LayoutPicker onPick={applyLayout}/></div>}
+  {fields.length>0&&!arranging&&!q.trim()&&<section className="stat-quick" aria-label="Quick">
+   {quick.length>0&&<div className="stat-quick-list" role="list">{quick.map(quickCard)}</div>}
+   <button type="button" className={`button small stat-quick-add${quick.length?'':' is-empty'}`} onClick={()=>setQuickPick(true)}><Zap size={14}/> {quick.length?'Add to Quick':'Add quick stats, like Initiative'}</button>
+   {quick.filter(f=>open.has(f.id)).map(f=><div key={f.id} className="stat-box-detail"><strong>{f.label}</strong>{details(f)}<button type="button" className="text-button" onClick={()=>flag([f.id],'quick',false)}>Take {f.label} off Quick</button></div>)}
+  </section>}
   {groups.map((g,gi)=>{
    const shut=!arranging&&!q.trim()&&(!!g.name||groups.length>1)&&collapse.isClosed(g.name),boxes=arranging?[]:g.fields.filter(f=>f.look==='score'&&f.type==='number'),rows=arranging?g.fields:g.fields.filter(f=>!boxes.includes(f)),openBox=boxes.filter(f=>open.has(f.id));
    return <section key={g.name||'other'} className="inv-group stat-group">
@@ -145,6 +175,7 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
      {groups.length>1&&<span className="stat-arrange-move"><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} up`} disabled={gi===0} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,-1)})}><ArrowUp size={14}/></button><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} down`} disabled={gi===groups.length-1} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,1)})}><ArrowDown size={14}/></button></span>}</div>
      :<GroupHead title={g.name||'Other'} count={g.fields.length} closed={shut} onToggle={()=>collapse.toggle(g.name)}/>)}
     {!shut&&<>{boxes.length>0&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{boxes.map(box)}</div>}
+    {boxes.length>0&&<button type="button" className="text-button stat-saves-toggle" title={`For every character in ${campaign.name}`} onClick={()=>{const on=!boxes.every(f=>f.save);flag(boxes.map(f=>f.id),'save',on);}}><Shield size={13}/> {boxes.every(f=>f.save)?'Hide saves':boxes.some(f=>f.save)?'Show every save':'Add saves under these'}</button>}
     {openBox.map(f=><div key={f.id} className="stat-box-detail"><strong>{f.label}</strong>{details(f)}</div>)}
     {rows.length>0&&<div className={arranging?'stat-arrange-rows':'inv-rows'} role="list">{rows.map(f=>arranging?arrangeRow(f,g):row(f))}</div>}</>}
    </section>;})}
@@ -152,16 +183,23 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
   {fields.length>0&&!arranging&&<div className="button-row stat-sheet-add"><button type="button" className="button" onClick={()=>setForm('new')}><Plus size={14}/> Add a stat</button><button type="button" className="button" onClick={()=>setLayouts(true)}><LayoutTemplate size={14}/> Add a layout</button><button type="button" className="button" onClick={onArrange}><Settings2 size={14}/> Stat form</button></div>}
   {notice&&<p role="status" className="aside-hint stat-layout-notice">{notice}</p>}
   {layouts&&<ToolDialog title="Add a layout" onClose={()=>setLayouts(false)} wide><p className="aside-hint">Adds a layout’s stats after yours, ready to rename. Stats with a name already on the sheet are skipped.</p><LayoutPicker onPick={l=>{applyLayout(l);setLayouts(false);}}/></ToolDialog>}
-  {form&&<StatForm start={form==='new'?undefined:form} campaign={campaign} sections={sections} sheet={sheet} values={values} who={entry.title} trackers={(c.trackers??[]).map(t=>t.label)} others={fields.filter(x=>form==='new'||x.id!==form.id)} locked={form!=='new'&&hasValues(form.id)} onClose={()=>setForm(null)} onSave={f=>{onFields(form==='new'?placeStat(all,f):renameStatRefs(all.map(x=>x.id===f.id?f:x),form.label,f.label));setForm(null);}}/>}
+  {quickPick&&<ToolDialog title="Add to Quick" onClose={()=>setQuickPick(false)}><p className="aside-hint">Quick stats sit at the top of the sheet for every character in {campaign.name}, ready to roll.</p>
+   <div className="stat-quick-pick">
+    {!fields.some(f=>f.label.trim().toLowerCase()==='initiative')&&<div className="stat-quick-option"><span><strong>Initiative</strong><small>{dex?`Rolls 1d20 + ${dex.label} modifier`:'Each character types their bonus; rolls 1d20 + it'}</small></span><button type="button" className="button small primary" onClick={addInitiative}><Plus size={14}/> Add</button></div>}
+    {fields.filter(f=>!f.quick).map(f=><div key={f.id} className="stat-quick-option"><span><strong>{f.label}</strong><small>{f.section||'No group'}</small></span><button type="button" className="button small" onClick={()=>flag([f.id],'quick',true)}><Plus size={14}/> Add</button></div>)}
+   </div>
+   <div className="button-row"><button type="button" className="button" onClick={()=>{setQuickPick(false);setForm('quick');}}><Plus size={14}/> A new stat</button><button type="button" className="button primary" onClick={()=>setQuickPick(false)}>Done</button></div>
+  </ToolDialog>}
+  {form&&<StatForm start={form==='new'||form==='quick'?undefined:form} quick={form==='quick'} campaign={campaign} sections={sections} sheet={sheet} values={values} who={entry.title} trackers={(c.trackers??[]).map(t=>t.label)} others={fields.filter(x=>form==='new'||form==='quick'||x.id!==form.id)} locked={form!=='new'&&form!=='quick'&&hasValues(form.id)} onClose={()=>setForm(null)} onSave={f=>{onFields(form==='new'||form==='quick'?placeStat(all,f):renameStatRefs(all.map(x=>x.id===f.id?f:x),form.label,f.label));setForm(null);}}/>}
  </div>;
 }
 
 /** A score box's modifier, typed with or without its sign. Empty means none typed (the worked-out one shows as a hint). */
-function ModInput({label,value,placeholder,onSet}:{label:string;value:unknown;placeholder:string;onSet:(v:number|null)=>void}){
+function ModInput({label,value,placeholder,onSet,className='stat-box-mod'}:{label:string;value:unknown;placeholder:string;onSet:(v:number|null)=>void;className?:string}){
  const shown=typeof value==='number'?signed(value).replace('−','-'):'';
  const [draft,setDraft]=useState<string|null>(null);
  const commit=()=>{if(draft===null)return;const t=draft.trim().replace(/[−–]/g,'-');setDraft(null);if(!t){onSet(null);return;}const n=Number(t);if(Number.isFinite(n))onSet(Math.round(n));};
- return <input className="stat-box-mod" inputMode="numeric" aria-label={label} maxLength={6} placeholder={placeholder} value={draft??shown} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.currentTarget.blur();}if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();const n=(typeof value==='number'?value:0)+(e.key==='ArrowUp'?1:-1);setDraft(null);onSet(n);}}}/>;
+ return <input className={className} inputMode="numeric" aria-label={label} maxLength={6} placeholder={placeholder} value={draft??shown} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.currentTarget.blur();}if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();const n=(typeof value==='number'?value:0)+(e.key==='ArrowUp'?1:-1);setDraft(null);onSet(n);}}}/>;
 }
 
 /** The starter layouts, one card each: what kind of roll, the groups it adds, and Use this. */
@@ -190,8 +228,8 @@ function ValueInput({f,v,onSet}:{f:StatField;v:Value;onSet:(v:Value)=>void}){
 }
 
 /** Add a stat / Change a stat: name, group, value, a note, its rolls and who sees it. */
-function StatForm({start,campaign,sections,sheet,values,who,trackers,others,locked,onSave,onClose}:{start?:StatField;campaign:Campaign;sections:string[];sheet:SheetStat[];values:Record<string,unknown>;who:string;trackers:string[];others:StatField[];locked:boolean;onSave:(f:StatField)=>void;onClose:()=>void}){
- const [f,setF]=useState<StatField>(()=>start?{...start,rolls:statRolls(start)}:{id:newId(),label:'',section:sections[0]??'',type:'number',options:[],visibility:'players',archived:false,rolls:[{name:'Roll',formula:'1d20+{value}'}]});
+function StatForm({start,quick,campaign,sections,sheet,values,who,trackers,others,locked,onSave,onClose}:{start?:StatField;quick?:boolean;campaign:Campaign;sections:string[];sheet:SheetStat[];values:Record<string,unknown>;who:string;trackers:string[];others:StatField[];locked:boolean;onSave:(f:StatField)=>void;onClose:()=>void}){
+ const [f,setF]=useState<StatField>(()=>start?{...start,rolls:statRolls(start)}:{id:newId(),label:'',section:sections[0]??'',type:'number',options:[],visibility:'players',archived:false,...(quick?{quick:true}:{}),rolls:[{name:'Roll',formula:'1d20+{value}'}]});
  const [options,setOptions]=useState((start?.options??[]).join(', ')),[error,setError]=useState(''),[focus,setFocus]=useState(0),[describe,setDescribe]=useState(!!start?.description),[refName,setRefName]=useState(start?.label??'');
  const set=(p:Partial<StatField>)=>setF(x=>({...x,...p}));
  // Renaming keeps this stat's own rolls pointing at it ({Might mod} becomes {Brawn mod}), skipping names other stats have.
@@ -250,6 +288,8 @@ function StatForm({start,campaign,sections,sheet,values,who,trackers,others,lock
      {f.spend&&<input className="inv-input" type="number" min={1} max={1000} aria-label="How many" value={f.spend.n} onChange={e=>set({spend:{...f.spend!,n:Math.max(1,Math.min(1000,Math.round(Number(e.target.value)||1)))}})}/>}</div>
    </div>
    <p className="aside-hint">Every character in {campaign.name} gets this stat. Values stay separate for each character.</p>
+   <label className="check-line"><input type="checkbox" checked={!!f.quick} onChange={e=>{const {quick:_q,...rest}=f;void _q;setF(e.target.checked?{...rest,quick:true}:rest);}}/> Show in Quick, at the top of the sheet</label>
+   {f.type==='number'&&f.look==='score'&&<label className="check-line"><input type="checkbox" checked={!!f.save} onChange={e=>{const {save:_s,...rest}=f;void _s;setF(e.target.checked?{...rest,save:true}:rest);}}/> Show a saving throw under it</label>}
    <label className="check-line"><input type="checkbox" checked={f.visibility==='gm'} onChange={e=>set({visibility:e.target.checked?'gm':'players'})}/> GM only, players never see it</label>
    {error&&<p className="form-error" role="alert">{error}</p>}
    <div className="button-row"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="submit" className="button primary" disabled={!f.label.trim()}>{start?'Save':'Add stat'}</button></div>

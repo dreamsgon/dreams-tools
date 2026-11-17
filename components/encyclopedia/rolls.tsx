@@ -6,6 +6,8 @@ import {rollWithMode} from "@/lib/encyclopedia/roll-mode";
 import {announceRoll,markLocalRoll,recordLocalRoll} from "@/lib/local-roll-log";
 import type {TableRoll} from "@/lib/encyclopedia/tables";
 import type {TableResult} from "@/lib/encyclopedia/discord-table";
+import {addBonus,askRoll,noteLabel} from "@/lib/roll-dialog";
+import {throwOwnDice} from "@/lib/dice-throw";
 
 /** A random table rolled from a page: what came up, how to roll it again, and what to post to Discord. */
 export type TableRollShown={title:string;roll:TableRoll;again:()=>void;result:TableResult};
@@ -25,15 +27,24 @@ export type RollOptions={
   /** Works out Success or Fail from the total (a sheet roll with a target). */
   outcome?:(total:number)=>{ok:boolean;text:string}|null;
 };
-/** Rolls a formula and shows the result card. Rolls never change the encyclopedia. */
-export function rollInline(title:string,formula:string,options:RollOptions={}){
+/**
+ * Asks about the roll in the roll dialog (bonus, Advantage, a note), then rolls it and shows the result card. Resolves
+ * to the roll, or null when the dialog was cancelled. Rolls never change the encyclopedia.
+ */
+export async function rollInline(title:string,formula:string,options:RollOptions={}):Promise<RollResult|null>{
+ const choice=await askRoll({title,formula,mode:options.mode,twice:true});
+ if(!choice)return null;
+ return rollNow(noteLabel(title,choice.note),addBonus(formula,choice.bonus),{...options,mode:choice.mode});
+}
+/** Rolls a formula straight away (Roll again, or after the dialog). The dice roll across the screen first when 3D dice are on. */
+export function rollNow(title:string,formula:string,options:RollOptions={}){
  const rolled=rollWithMode(formula,options.mode),{mode,total,detail}=rolled;
  const logged=options.log?recordLocalRoll({label:title,total,breakdown:rolled.breakdown,formula:rolled.formula}):undefined;
  // Rolls that skip the log (statblock and page chips) still reach the dice link.
  if(!logged)announceRoll({label:title,total,breakdown:rolled.breakdown,formula:rolled.formula});
  const outcome=options.outcome?.(total)??undefined;
  const result:RollResult={id:++sequence,title,formula:rolled.formula,total,detail,at:Date.now(),base:formula,...(outcome?{outcome}:{}),...(options.outcome?{judge:options.outcome}:{}),...(mode?{mode}:{}),...(logged?{logId:logged.id}:{})};
- window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result}));return result;
+ void throwOwnDice(rolled.dice).then(()=>window.dispatchEvent(new CustomEvent<RollResult>(EVENT,{detail:result})));return result;
 }
 
 /** Shows a roll the server made (a player's roll from their sheet). `note` says where it went; Roll again runs `again`. */
@@ -60,7 +71,7 @@ export const RollHandler=createContext<((title:string,formula:string)=>void)|nul
 
 export function RollChip({title,formula,label,context}:{title:string;formula:string;label:string|null;context?:string}){
  const what=[context,label].filter(Boolean).join(" "),handler=useContext(RollHandler);
- return <button type="button" className="roll-chip" title={`Roll ${formula}`} onClick={()=>(handler??rollInline)(what?`${title} · ${what}`:title,formula)}><Dices size={12} aria-hidden="true"/>{label??formula}</button>;
+ return <button type="button" className="roll-chip" title={`Roll ${formula}`} onClick={()=>void (handler??rollInline)(what?`${title} · ${what}`:title,formula)}><Dices size={12} aria-hidden="true"/>{label??formula}</button>;
 }
 
 const short=(text:string)=>text.length>28?text.slice(0,27).trimEnd()+"…":text;
@@ -93,6 +104,6 @@ export function RollResults({discord,onSetupDiscord}:{discord:DiscordTarget|null
     :onSetupDiscord?<button onClick={onSetupDiscord}><Send size={13}/> Set up Discord</button>:<span>Only you see this roll</span>}
    <span className="spacer"/>
    {discord&&<label className="roll-auto" title="Send every roll from this campaign to Discord"><input type="checkbox" checked={auto} onChange={e=>{setAuto(e.target.checked);try{localStorage.setItem(autoKey(discord.campaignId),e.target.checked?"1":"0");}catch{/* optional */}}}/> Always</label>}
-   <button onClick={()=>latest.server?latest.server.again():latest.table?latest.table.again():rollInline(latest.title,latest.base??latest.formula,{mode:latest.mode,log:!!latest.logId,outcome:latest.judge})}><RotateCcw size={13}/> Roll again</button></div>
+   <button onClick={()=>latest.server?latest.server.again():latest.table?latest.table.again():rollNow(latest.title,latest.base??latest.formula,{mode:latest.mode,log:!!latest.logId,outcome:latest.judge})}><RotateCcw size={13}/> Roll again</button></div>
  </div>;
 }
