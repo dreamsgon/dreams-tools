@@ -1,3 +1,4 @@
+import { BookOpen, Download, Flag, Map as MapIcon } from "lucide-react";
 import SiteHeader from "./site-header";
 import type { GuideGroup } from "@/lib/guide/markdown";
 import "./guide.css";
@@ -16,6 +17,12 @@ function Contents({ slug, contents }: { slug: string; contents: GuideGroup[] }) 
 export default function GuideView({ slug, html, contents }: { slug: string; html: string; contents: GuideGroup[] }) {
   return <main className="rpg-hub guide-page">
     <SiteHeader active="guide" account />
+    <nav className="guide-tools" aria-label="Tools and downloads">
+      <a href="/maptable"><MapIcon size={16} aria-hidden="true" />Open Maptable</a>
+      <a href="/encyclopedia"><BookOpen size={16} aria-hidden="true" />Open the Encyclopedia</a>
+      <a href="/campaigns"><Flag size={16} aria-hidden="true" />Campaigns</a>
+      <a href="/guide/tools-and-downloads" className="guide-tools-downloads" aria-current={slug === "tools-and-downloads" ? "page" : undefined}><Download size={16} aria-hidden="true" />Tools and downloads</a>
+    </nav>
     <div className="guide-layout">
       <nav className="guide-contents guide-contents-side" aria-label="Guide contents"><Contents slug={slug} contents={contents} /></nav>
       <details className="guide-contents guide-contents-fold"><summary>Guide contents</summary><nav aria-label="Guide contents"><Contents slug={slug} contents={contents} /></nav></details>

@@ -4,11 +4,15 @@ Run a space setting by drawing a galaxy, a sector, a star system and its planets
 
 ## 1. Galaxy
 
+![A generated galaxy](images/galaxy.jpg)
+
 Choose **Galaxy** as the entry type. The **Galaxy** tab draws it from its shape, arms and seed, with an Invented or Real chip, a short summary and five facts (type, size across, stars, age, distance), each typed in place.
 
 **Real galaxy or generate**: pick the Milky Way, Andromeda, Triangulum, the Large Magellanic Cloud or Messier 87 (rounded published figures), or generate one from shape, arms, size and seed with a live preview and **Reroll** for a new name. The same settings always draw the same galaxy.
 
 ## 2. Sector
+
+![A sector hex map](images/sector-hex-map.jpg)
 
 On the galaxy's picture choose **New sector** and tap where it lies. A **Sector** is a hex map of that part of the galaxy, **one hex = 5 light years**.
 
@@ -17,6 +21,8 @@ On the galaxy's picture choose **New sector** and tap where it lies. A **Sector*
 - On the **Hex map**, tap a hex to rename its system, change its star class, mark it charted or a rumour, write a note, see distance and light-speed time from another system, join or remove **lanes**, remove it, or add a system or rumour to an empty hex.
 
 ## 3. Star system
+
+![A star system survey chart](images/survey-chart.jpg)
 
 On a hex, press **Survey this system** to make a **Star system** page inside the sector (Sol gets real data). Its **Survey chart** tab shows:
 

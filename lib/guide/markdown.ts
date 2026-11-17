@@ -21,8 +21,8 @@ export function guideHref(target: string): string {
   if (/^(https?:|mailto:)/.test(target)) return target;
   if (target.startsWith("images/")) return `/guide-images/${target.slice(7)}`;
   if (target.startsWith("#")) return target;
-  // Files this site serves, such as the bridge downloads under /api/bridge.
-  if (target.startsWith("/api/")) return target;
+  // Paths on this site, such as /maptable or the bridge downloads under /api/bridge.
+  if (target.startsWith("/")) return target;
   const [page, hash] = target.split("#");
   const slug = guideSlug(page);
   return `/guide${slug ? `/${slug}` : ""}${hash ? `#${hash}` : ""}`;

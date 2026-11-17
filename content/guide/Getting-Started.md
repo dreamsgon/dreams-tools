@@ -16,6 +16,8 @@ A shared header at the top (the RPG Tools name, **Maptable** and **Encyclopedia*
 
 ## Campaigns across both tools
 
+![The Campaigns page](images/campaigns.jpg)
+
 Open **Campaigns**. It lists Maptable campaigns and Encyclopedia campaigns together.
 
 - **Pair them.** An Encyclopedia campaign can be paired with a Maptable campaign. Pairing moves and copies nothing, and unpairing leaves both as they were. **Match your campaigns** suggests pairs with the same name.
@@ -30,6 +32,8 @@ Open **Campaigns**. It lists Maptable campaigns and Encyclopedia campaigns toget
 > 4. Use **Open notes** for the Encyclopedia and **Open maps** for Maptable.
 
 ## Finding your way around
+
+![Quick search with Ctrl+K](images/quick-search.jpg)
 
 - **Breadcrumbs** show where you are. Every level is a button, the small arrow beside it lists other places at that level, and **Alt+Up** goes up a level. On a phone you get a Back button and a title that opens the whole path.
 - **Search: Ctrl/Cmd+K** opens quick search in the Encyclopedia. Jump to a page, create one with the name you typed, or go to the Dashboard, Characters, Maps, Calendar or Maptable. Type `#tagname` to list everything with a tag.

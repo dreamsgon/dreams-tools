@@ -9,6 +9,8 @@ This guide covers features that are finished and live. Each page explains what t
 
 ![The RPG Tools home page](images/home.jpg)
 
+**Looking for a tool or a download?** [Tools and downloads](Tools-and-Downloads) links to Maptable, the Encyclopedia and Campaigns, and has the Foundry module, the Roll20 script and dice link, and the Fantasy Grounds extension.
+
 ## Start here
 
 1. [Getting started](Getting-Started): sign in, campaigns, the shared header, themes, tags and search.
