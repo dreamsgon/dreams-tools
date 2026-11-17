@@ -181,10 +181,10 @@ const preloadParts = Object.values(lazyParts);
 type Panel = NavigationPanel;
 type Dialog = "scene-map" | "condition" | "split-map" | "add-scenes" | "map" | "token" | "export" | "connections" | "help" | null;
 const tools = [
-  { id: "select", label: "Select", Icon: MousePointer2 },
-  { id: "marquee", label: "Drag select", Icon: Scan },
-  { id: "pan", label: "Pan", Icon: Hand },
-  { id: "measure", label: "Measure", Icon: Ruler },
+  { id: "select", label: "Select", short: "Select", Icon: MousePointer2 },
+  { id: "marquee", label: "Drag select", short: "Box", Icon: Scan },
+  { id: "pan", label: "Pan", short: "Pan", Icon: Hand },
+  { id: "measure", label: "Measure", short: "Measure", Icon: Ruler },
 ] as const;
 
 /** The roll lists of the linked characters' sheets, by Encyclopedia entry id. */
@@ -1301,7 +1301,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       </header>
       {coGmBar}
       <div className="workspace">
-        <nav className="rail" aria-label="Workspace tools" onClick={()=>setMobileToolsOpen(false)}>
+        <nav className="rail" id="maptable-rail" aria-label="Workspace tools" onClick={()=>setMobileToolsOpen(false)}>
           <button
             className={panel === "scenes" || panel === "scene" ? "active" : ""}
             onClick={() => {
@@ -1360,12 +1360,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           </button>
           <button title="Map Creator" onClick={()=>{setGridAdjust(false);setCreatorOpen(true);}}><MapIcon size={21}/><span>Create map</span></button>
           <button title="Campaigns" onClick={toActiveCampaign}><LayoutDashboard size={21}/><span>Campaigns</span></button>
-        </nav>
-        <nav className="mobile-navigation" aria-label="Phone navigation">
-          <button onClick={()=>{setSidebar(false);setMobileToolsOpen(false);}}>Map</button>
-          <button aria-pressed={(panel==="scenes"||panel==="scene")&&sidebar} onClick={()=>{setPanel("scenes");setSidebar(true);setMobileToolsOpen(false);}}>Scenes</button>
-          <button aria-pressed={panel==="tokens"&&sidebar} onClick={()=>{setPanel("tokens");setSidebar(true);setMobileToolsOpen(false);}}>Tokens</button>
-          <button aria-expanded={mobileToolsOpen} onClick={()=>{setMobileToolsOpen(v=>!v);setMobileHeaderOpen(false);}}>Tools</button>
         </nav>
         {panel && sidebar && (
           <ResizableSidebar className="side-panel" storageKey={`maptable:sidebar-width:${navigationScope ?? "local"}`}>
@@ -2220,22 +2214,29 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           />
           {sheetPanel&&!player&&scene&&sheetPanel.sceneId===scene.id&&sheetOfToken(sheetPanel.tokenId)&&<TokenSheetRolls character={sheetOfToken(sheetPanel.tokenId)!.name} groups={sheetOfToken(sheetPanel.tokenId)!.groups} tokenId={sheetPanel.tokenId} sceneId={scene.id} campaignId={campaignId} at={sheetPanel} onClose={()=>setSheetPanel(null)} hp={(()=>{const info=sheetOfToken(sheetPanel.tokenId)!;return info.sheet&&!mapMemberRef()?{sheet:info.sheet,status:sheetHp.statuses[info.entryId],onSwitch:(on:boolean)=>{sheetHp.setWriteBack(info.entryId,on).catch(e=>setNotice(e instanceof Error?e.message:"Could not change write-back."));},onSignIn:()=>{void sheetHp.signIn(info.entryId);},onUseSheet:()=>sheetHp.useSheetValue(info.entryId),onWriteOurs:()=>sheetHp.writeOurs(info.entryId)}:undefined;})()}/>}
           <div className="toolbar" role="toolbar" aria-label="Map tools" ref={toolbarRef}>
-            {tools.map(({ id, label, Icon }) => (
+            {tools.map(({ id, label, short, Icon }) => (
               <button
                 key={id}
                 className={tool === id && !player ? "active" : ""}
                 aria-pressed={tool === id && !player}
-                onClick={() => chooseTool(id)}
+                onClick={() => { chooseTool(id); setMobileToolsOpen(false); }}
                 title={label}
               >
                 <Icon size={20} />
-                <span>{label}</span>
+                <span className="toolbar-label">{label}</span>
+                <span className="toolbar-short" aria-hidden="true">{short}</span>
               </button>
             ))}
             <div className="toolbar-divider" />
-            <button onClick={startQuickToken} title="Add token">
+            <button onClick={() => { startQuickToken(); setMobileToolsOpen(false); }} title="Add token">
               <Plus size={20} />
-              <span>Add token</span>
+              <span className="toolbar-label">Add token</span>
+              <span className="toolbar-short" aria-hidden="true">Token</span>
+            </button>
+            {/* Phones: one bottom bar. More opens the sheet of panels (Scenes, Tokens, Fog, Dice…). */}
+            <button className="mobile-only toolbar-more" aria-expanded={mobileToolsOpen} aria-controls="maptable-rail" onClick={()=>{setMobileToolsOpen(v=>!v);setMobileHeaderOpen(false);}} title="More tools and panels">
+              <LayoutGrid size={20} aria-hidden="true" />
+              <span>More</span>
             </button>
             <div className="toolbar-divider dice-tool" />
             <button className={"dice-tool "+(dicePanel==="dice"?"active":"")} aria-expanded={dicePanel==="dice"} aria-controls="standard-dice-tray" onClick={()=>toggleDicePanel("dice")} title="Dice tray">
