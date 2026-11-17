@@ -69,7 +69,7 @@ export const mapSchema=z.object({
  fog:z.object({enabled:z.boolean(),revealed:z.array(z.number().int().min(0).max(1199)).max(1200),previewImageId:imageIdSchema.optional(),previewBasis:z.string().max(16000).optional()}).optional(),
  paint:paintSchema.optional(),compass:z.boolean().optional(),scaleBar:z.boolean().optional(),
  paths:z.array(mapPathSchema).max(300).optional(),labels:z.array(mapLabelSchema).max(150).optional(),icons:z.array(mapIconSchema).max(40).optional(),
- hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),
+ hexes:z.array(hexNoteSchema).max(1200).optional(),party:partySchema.optional(),encounterTableId:id.nullable().optional(),maptableSceneId:z.string().min(1).max(120).optional(),maptableBasis:z.string().max(40).optional(),
  /** The climate a whole-planet map was made with, so land shaped by hand gets matching ice, deserts and forests. The seed is the map's seed. */
  planet:z.object({temp:z.number().int().min(-3).max(3),rain:z.number().int().min(0).max(100),tilt:z.number().int().min(0).max(80),rotation:z.enum(['spin','locked']),life:z.enum(['none','simple','complex']),size:z.enum(['tiny','small','medium','large']),volcanism:z.number().int().min(0).max(100),biomesOff:z.array(z.enum(terrains.map(t=>t.id) as [TerrainId,...TerrainId[]])).max(18)}).optional(),
  /** Where a closer map sits on the map it was zoomed in from, as a frame in fractions of that map. */
@@ -146,6 +146,8 @@ export function tilesFromPaint(m:MapData,paint:MapPaint):number[]{
 export function newMap(category:MapData['category']='region',preset:MapData['preset']='island',seed='A new world',columns=24,rows=18):MapData{
  return {category,source:'generated',visibility:'gm',columns,rows,grid:category==='hex'?'hex':'none',coordinates:category==='hex',tiles:generateTerrain(columns,rows,seed,preset),seed,preset,imageId:null,imageWidth:1200,imageHeight:800,pins:[]};
 }
+/** Columns and rows for an uploaded picture, so its grid and fog cells come out square instead of stretched to 24 × 18. */
+export function imageGrid(width:number,height:number){const ratio=Math.max(.05,Math.min(20,width/height)),columns=Math.max(6,Math.min(40,Math.round(Math.sqrt(432*ratio)))),rows=Math.max(6,Math.min(30,Math.round(columns/ratio)));return {columns:rows===30||rows===6?Math.max(6,Math.min(40,Math.round(rows*ratio))):columns,rows};}
 export function mapSize(m:MapData){return m.source==='image'?{width:m.imageWidth,height:m.imageHeight}:m.grid==='hex'?{width:Math.sqrt(3)*(m.columns+.5)*24,height:(1.5*(m.rows-1)+2)*24}:{width:m.columns*40,height:m.rows*40};}
 export function cellShape(m:MapData,index:number){
  const col=index%m.columns,row=Math.floor(index/m.columns),size=mapSize(m);
@@ -186,7 +188,7 @@ export function playerMap(m:MapData):MapData{
   labels:m.labels?.filter(l=>l.visibility==='players'&&pointRevealed(m,l.x,l.y)),
   hexes:m.hexes?.filter(h=>h.visibility==='players'&&(!fog||visible.has(h.cell))).map(h=>({...h,tableId:undefined})),
   party:m.party?.visibility==='players'&&(!fog||visible.has(m.party.cell))?{...m.party,trail:fog?m.party.trail.filter(c=>visible.has(c)):m.party.trail}:undefined,
-  encounterTableId:undefined,maptableSceneId:undefined,planet:undefined,zoomOf:undefined};
+  encounterTableId:undefined,maptableSceneId:undefined,maptableBasis:undefined,planet:undefined,zoomOf:undefined};
 }
 /** The parts of a line that lie outside the fog, so players only get what they have seen. */
 export function revealedRuns(m:MapData,points:{x:number;y:number}[]){

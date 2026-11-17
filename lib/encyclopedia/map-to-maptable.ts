@@ -20,6 +20,23 @@ export function tablePicture(m: MapData): MapData {
     paths: m.paths?.filter(p => p.visibility === 'players'), labels: m.labels?.filter(l => l.visibility === 'players') };
 }
 
+/**
+ * A short fingerprint of everything that goes onto the table (picture, places, fog, grid), leaving out the link itself,
+ * the player preview image and notes that stay in the Encyclopedia. It changes when the table scene would change.
+ */
+export function tableBasis(m: MapData): string {
+  const fog = m.fog ? { enabled: m.fog.enabled, revealed: [...m.fog.revealed].sort((a, b) => a - b) } : undefined;
+  const text = JSON.stringify({ ...m, fog, maptableSceneId: undefined, maptableBasis: undefined, hexes: undefined, party: undefined, encounterTableId: undefined, routes: undefined });
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 ^ c, 2246822507); }
+  return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36) + text.length.toString(36);
+}
+
+/** Whether a map already on the table has changed since it was last put there. Maps linked before fingerprints were kept count as current. */
+export function tableBehind(m: MapData): boolean {
+  return !!m.maptableSceneId && !!m.maptableBasis && m.maptableBasis !== tableBasis(m);
+}
+
 /** A Maptable grid laid exactly over the map's hexes or squares, measured in the map's miles or kilometres. */
 export function tableGrid(m: MapData, base: Grid): Grid {
   const { scale } = tableImageSize(m), each = cellDistance(m);
