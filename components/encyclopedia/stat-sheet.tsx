@@ -18,6 +18,7 @@ import {RollHandler,rollInline} from './rolls';
 import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
 import './inventory.css';
+import {GroupHead,useCollapsed} from './group-collapse';
 import './stat-sheet.css';
 
 type Value=string|number|boolean|null;
@@ -29,6 +30,7 @@ const trackerOf=(c:CharacterData,label:string)=>(c.trackers??[]).find(t=>t.label
 export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,change}:{entry:Entry;data:Workspace;campaign?:Campaign;onChange:(c:CharacterData)=>void;onFields:(f:StatField[])=>void;onArrange:()=>void;change?:(f:(w:Workspace)=>Workspace)=>boolean|void}){
  const [q,setQ]=useState(''),[open,setOpen]=useState<Set<string>>(new Set),[form,setForm]=useState<StatField|'new'|null>(null),[mode,setMode]=useState<RollMode>('normal'),[layouts,setLayouts]=useState(false),[notice,setNotice]=useState('');
  const [arranging,setArranging]=useState(false),[scope,setScope]=useState<'one'|'all'>('one');
+ const collapse=useCollapsed(`stats:${campaign?.id??''}`);
  const handler=useContext(RollHandler);
  const c=entry.character??defaultCharacter(),all=campaign?.statFields??[],fields=all.filter(f=>!f.archived),values=c.statsByCampaign[campaign?.id??'']??{},layout=c.statLayout;
  const sheet=sheetOf(all,values);
@@ -137,13 +139,14 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
   </div>}
   {!fields.length&&<div className="character-empty"><h3>Build the sheet your campaign needs.</h3><p>Add stats in groups, like Attributes or Skills, and give each one the rolls your game uses. Nothing comes from a rulebook.</p><button className="button primary" onClick={()=>setForm('new')}><Plus size={15}/> Add a stat</button><LayoutPicker onPick={applyLayout}/></div>}
   {groups.map((g,gi)=>{
-   const boxes=arranging?[]:g.fields.filter(f=>f.look==='score'&&f.type==='number'),rows=arranging?g.fields:g.fields.filter(f=>!boxes.includes(f)),openBox=boxes.filter(f=>open.has(f.id));
+   const shut=!arranging&&!q.trim()&&(!!g.name||groups.length>1)&&collapse.isClosed(g.name),boxes=arranging?[]:g.fields.filter(f=>f.look==='score'&&f.type==='number'),rows=arranging?g.fields:g.fields.filter(f=>!boxes.includes(f)),openBox=boxes.filter(f=>open.has(f.id));
    return <section key={g.name||'other'} className="inv-group stat-group">
-    {(g.name||groups.length>1||arranging)&&<div className="inv-group-head"><h3>{g.name||'Other'}</h3><small>{g.fields.length}</small><span className="inv-rule"/>
-     {arranging&&groups.length>1&&<span className="stat-arrange-move"><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} up`} disabled={gi===0} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,-1)})}><ArrowUp size={14}/></button><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} down`} disabled={gi===groups.length-1} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,1)})}><ArrowDown size={14}/></button></span>}</div>}
-    {boxes.length>0&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{boxes.map(box)}</div>}
+    {(g.name||groups.length>1||arranging)&&(arranging?<div className="inv-group-head"><h3>{g.name||'Other'}</h3><small>{g.fields.length}</small><span className="inv-rule"/>
+     {groups.length>1&&<span className="stat-arrange-move"><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} up`} disabled={gi===0} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,-1)})}><ArrowUp size={14}/></button><button type="button" className="icon-button" aria-label={`Move ${g.name||'Other'} down`} disabled={gi===groups.length-1} onClick={()=>setLayout({...layout,order:moveStatGroup(listed,g.name,1)})}><ArrowDown size={14}/></button></span>}</div>
+     :<GroupHead title={g.name||'Other'} count={g.fields.length} closed={shut} onToggle={()=>collapse.toggle(g.name)}/>)}
+    {!shut&&<>{boxes.length>0&&<div className="stat-boxes" role="list" aria-label={`${g.name||'Stats'} scores`}>{boxes.map(box)}</div>}
     {openBox.map(f=><div key={f.id} className="stat-box-detail"><strong>{f.label}</strong>{details(f)}</div>)}
-    {rows.length>0&&<div className={arranging?'stat-arrange-rows':'inv-rows'} role="list">{rows.map(f=>arranging?arrangeRow(f,g):row(f))}</div>}
+    {rows.length>0&&<div className={arranging?'stat-arrange-rows':'inv-rows'} role="list">{rows.map(f=>arranging?arrangeRow(f,g):row(f))}</div>}</>}
    </section>;})}
   {fields.length>0&&!groups.length&&<p className="muted inv-empty">{listed.length?'Nothing matches.':`Every stat is off on ${entry.title}’s sheet. Use Arrange to switch some on.`}</p>}
   {fields.length>0&&!arranging&&<div className="button-row stat-sheet-add"><button type="button" className="button" onClick={()=>setForm('new')}><Plus size={14}/> Add a stat</button><button type="button" className="button" onClick={()=>setLayouts(true)}><LayoutTemplate size={14}/> Add a layout</button><button type="button" className="button" onClick={onArrange}><Settings2 size={14}/> Stat form</button></div>}

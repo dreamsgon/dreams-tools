@@ -15,6 +15,7 @@ import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
 import {NoteText,RollsEditor,type Act} from './inventory';
 import {TrackerView} from './character-trackers';
+import {GroupHead,useCollapsed} from './group-collapse';
 import './inventory.css';
 
 type Shown=PlayerTracker&{gm?:boolean};
@@ -51,6 +52,7 @@ function SpellForm({start,settings,trackers,gm,onSave,onClose}:{start?:Spell;set
 
 export function SpellsPanel({name,spells,trackers,settings,gm,canEdit,act}:{name:string;spells:Spell[];trackers:Shown[];settings:PlayerItemSettings;gm:boolean;canEdit:boolean;act:Act}){
  const sp=settings.spells,canChange=canEdit&&(gm||settings.players.items);
+ const collapse=useCollapsed('spells');
  const [q,setQ]=useState(''),[onlyReady,setOnlyReady]=useState(false),[open,setOpen]=useState<string|null>(null),[form,setForm]=useState<Spell|'new'|null>(null);
  const used=new Set(spells.flatMap(s=>s.cost?[s.cost.trackerId]:[])),costTrackers=trackers.filter(t=>used.has(t.id));
  const groups=useMemo(()=>{
@@ -66,8 +68,8 @@ export function SpellsPanel({name,spells,trackers,settings,gm,canEdit,act}:{name
    {sp.ready&&<div className="segmented"><button type="button" className={!onlyReady?'on':''} onClick={()=>setOnlyReady(false)}>All</button><button type="button" className={onlyReady?'on':''} onClick={()=>setOnlyReady(true)}>{sp.ready}</button></div>}
   </div>}
   {groups.map(g=><section key={g.name||'other'} className="inv-group">
-   {(g.name||groups.length>1)&&<div className="inv-group-head"><h3>{g.name||'Other'}</h3><small>{g.spells.length}</small><span className="inv-rule"/></div>}
-   <div className="inv-rows" role="list">{g.spells.map(s=>{const isOpen=open===s.id,title=`${name} · ${s.name}`,cost=s.cost?trackers.find(t=>t.id===s.cost!.trackerId):undefined,details=sp.columns.map(c=>s.details?.[c]).filter(Boolean);
+   {(g.name||groups.length>1)&&<GroupHead title={g.name||'Other'} count={g.spells.length} closed={collapse.isClosed(g.name)} onToggle={()=>collapse.toggle(g.name)}/>}
+   {!((g.name||groups.length>1)&&collapse.isClosed(g.name))&&<div className="inv-rows" role="list">{g.spells.map(s=>{const isOpen=open===s.id,title=`${name} · ${s.name}`,cost=s.cost?trackers.find(t=>t.id===s.cost!.trackerId):undefined,details=sp.columns.map(c=>s.details?.[c]).filter(Boolean);
     return <div role="listitem" key={s.id} className={`inv-row spell-row${s.gm?' is-hidden':''}`}>
      <div className="inv-line">
       {sp.ready&&<button type="button" className={`icon-button spell-ready${s.ready?' on':''}`} disabled={!canChange} aria-pressed={!!s.ready} aria-label={`${s.name}: ${s.ready?`not ${sp.ready.toLowerCase()}`:sp.ready.toLowerCase()}`} title={s.ready?sp.ready:`Not ${sp.ready.toLowerCase()}`} onClick={()=>void act({action:'spell-edit',spellId:s.id,spell:{ready:!s.ready}})}><Star size={15} fill={s.ready?'currentColor':'none'}/></button>}
@@ -85,7 +87,7 @@ export function SpellsPanel({name,spells,trackers,settings,gm,canEdit,act}:{name
       {s.text?<NoteText text={s.text} title={title}/>:<p className="muted">No text yet.</p>}
       {canChange&&<div className="inv-detail-tools"><button type="button" className="button small" onClick={()=>setForm(s)}><Pencil size={14}/> Change</button><button type="button" className="button small danger inv-remove" onClick={async()=>{if(await confirmDialog({title:`Remove ${s.name}?`,message:`The ${sp.one}, its text and its rolls go.`,confirm:'Remove',danger:true}))void act({action:'spell-remove',spellId:s.id});}}><Trash2 size={14}/> Remove</button></div>}
      </div>}
-    </div>;})}</div>
+    </div>;})}</div>}
   </section>)}
   {!spells.length&&<p className="muted inv-empty">No {sp.tab.toLowerCase()} yet.</p>}
   {spells.length>0&&!groups.length&&<p className="muted inv-empty">Nothing matches.</p>}

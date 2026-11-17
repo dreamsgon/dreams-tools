@@ -11,6 +11,7 @@ import {carried,formatMoney,moneyParts,parseMoney,validRoll,worth,MAX_ROLLS,type
 import {RollChip} from './rolls';
 import {ToolDialog} from './tool-dialog';
 import {confirmDialog} from '../confirm-dialog';
+import {GroupHead,useCollapsed} from './group-collapse';
 import './inventory.css';
 
 export type Act=(a:InventoryAction)=>Promise<boolean>|boolean;
@@ -126,7 +127,7 @@ export type InventoryProps={
 };
 export function InventoryPanel({name,items,coins,capacity,settings,gm,canEdit,act,give,catalog,extra}:InventoryProps){
  const p=settings.players,canItems=canEdit&&(gm||p.items),canCoins=canEdit&&(gm||p.coins),values=gm||p.values,show=settings.show,unit=unitOf(settings);
- const [q,setQ]=useState(''),[cat,setCat]=useState<string|null>(null),[open,setOpen]=useState<string|null>(null);
+ const [q,setQ]=useState(''),[cat,setCat]=useState<string|null>(null),[open,setOpen]=useState<string|null>(null),collapse=useCollapsed('inventory');
  const [newName,setNewName]=useState(''),[newQty,setNewQty]=useState('1'),[newCat,setNewCat]=useState(settings.categories[0]??''),[giving,setGiving]=useState<Item|'coins'|null>(null),[picking,setPicking]=useState(false);
  const groups=useMemo(()=>{
   const want=q.trim().toLowerCase(),shown=items.filter(i=>(!cat||(i.category??'')===cat)&&(!want||i.name.toLowerCase().includes(want)||(i.note??'').toLowerCase().includes(want)));
@@ -149,8 +150,8 @@ export function InventoryPanel({name,items,coins,capacity,settings,gm,canEdit,ac
    {usedCats.length>1&&<div className="inv-chips" role="group" aria-label="Category">{[null,...settings.categories.filter(c=>usedCats.includes(c)),...usedCats.filter(c=>!settings.categories.includes(c))].map(c=><button type="button" key={c??'all'} className={cat===c?'on':''} aria-pressed={cat===c} onClick={()=>setCat(c)}>{c??'All'}</button>)}</div>}
   </div>}
   {groups.map(g=><section key={g.name||'other'} className="inv-group">
-   <div className="inv-group-head"><h3>{g.name||(groups.length>1?'Other':'Items')}</h3><small>{g.items.length} line{g.items.length===1?'':'s'}</small><span className="inv-rule"/>{show.weight&&unit&&<small>{fmt(carried(g.items))} {unit}</small>}</div>
-   <div className="inv-rows" role="list">{g.items.map(i=>{const isOpen=open===i.id,title=`${name} · ${i.name}`;return <div role="listitem" key={i.id} className={`inv-row${i.gm?' is-hidden':''}${isOpen?' open':''}`}>
+   <GroupHead title={g.name||(groups.length>1?'Other':'Items')} count={`${g.items.length} line${g.items.length===1?'':'s'}`} closed={collapse.isClosed(g.name)} onToggle={()=>collapse.toggle(g.name)} extra={show.weight&&unit&&<small>{fmt(carried(g.items))} {unit}</small>}/>
+   {!collapse.isClosed(g.name)&&<div className="inv-rows" role="list">{g.items.map(i=>{const isOpen=open===i.id,title=`${name} · ${i.name}`;return <div role="listitem" key={i.id} className={`inv-row${i.gm?' is-hidden':''}${isOpen?' open':''}`}>
     <div className="inv-line">
      {show.equipped&&<button type="button" className={`icon-button inv-equip${i.equipped?' on':''}`} disabled={!canItems} aria-pressed={!!i.equipped} aria-label={i.equipped?`${i.name}: in use. Put away`:`${i.name}: put to use`} title={i.equipped?'Worn or in hand':'Carried'} onClick={()=>void edit(i,{equipped:!i.equipped})}>{i.equipped?<ShieldCheck size={15}/>:<Shield size={15}/>}</button>}
      <span className="inv-qty">{canItems&&<button type="button" aria-label={`One less ${i.name}`} disabled={i.qty<=0} onClick={()=>void edit(i,{qty:i.qty-1})}><Minus size={12}/></button>}<strong>{i.qty}</strong>{canItems&&<button type="button" aria-label={`One more ${i.name}`} onClick={()=>void edit(i,{qty:i.qty+1})}><Plus size={12}/></button>}</span>
@@ -187,7 +188,7 @@ export function InventoryPanel({name,items,coins,capacity,settings,gm,canEdit,ac
      {i.note?<NoteText text={i.note} title={title}/>:<p className="muted">No note.</p>}
      {give&&canEdit&&give.targets.length>0&&<div className="inv-detail-tools"><button type="button" className="button small" onClick={()=>setGiving(i)}><Gift size={14}/> Give to…</button></div>}
     </div>)}
-   </div>;})}</div>
+   </div>;})}</div>}
   </section>)}
   {!items.length&&<p className="muted inv-empty">{canItems?'Nothing carried yet. Add the first item below.':'Nothing carried.'}</p>}
   {items.length>0&&!groups.length&&<p className="muted inv-empty">Nothing matches.</p>}
