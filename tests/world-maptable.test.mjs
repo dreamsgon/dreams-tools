@@ -87,3 +87,32 @@ test("the party on an area map reveals its place on the world map", () => {
   assert.equal(revealInParents(next, "area"), next, "nothing changes the second time");
   assert.equal(revealInParents(w, "other"), w);
 });
+
+test("the map page knows when the table copy is behind", async () => {
+  const { tableBasis, tableBehind } = await import("../lib/encyclopedia/map-to-maptable.ts");
+  const m = { ...newMap("region", "island", "Behind"), pins: [pin()] };
+  assert.equal(tableBehind(m), false, "a map that was never sent is not behind");
+  const sent = { ...m, maptableSceneId: "scene-1", maptableBasis: tableBasis(m) };
+  assert.equal(tableBasis(sent), tableBasis(m), "the link itself does not change the fingerprint");
+  assert.equal(tableBehind(sent), false);
+  assert.equal(tableBehind({ ...sent, hexes: [], encounterTableId: null }), false, "Encyclopedia-only notes do not count");
+  assert.equal(tableBehind({ ...sent, pins: [pin({ title: "Saltmere Docks" })] }), true, "a renamed place does");
+  assert.equal(tableBehind({ ...sent, fog: { enabled: true, revealed: [3, 1] } }), true);
+  const fogged = { ...sent, fog: { enabled: true, revealed: [3, 1] } }, synced = { ...fogged, maptableBasis: tableBasis(fogged) };
+  assert.equal(tableBehind({ ...synced, fog: { enabled: true, revealed: [1, 3], previewImageId: "6f1c2c1a-8a4b-4c3e-9a51-2f6a0f1b9d10", previewBasis: "x" } }), false, "player preview images and cell order do not count");
+  assert.equal(tableBehind({ ...m, maptableSceneId: "scene-1" }), false, "maps sent before fingerprints were kept are not flagged");
+  assert.equal(playerMap(synced).maptableBasis, undefined, "players never get the fingerprint");
+});
+
+test("an uploaded picture gets square grid cells instead of 24 × 18 stretched over it", async () => {
+  const { imageGrid } = await import("../lib/encyclopedia/map-model.ts");
+  assert.deepEqual(imageGrid(4000, 3000), { columns: 24, rows: 18 }, "a 4:3 picture keeps the old grid");
+  for (const [w, h] of [[1000, 1000], [1080, 1920], [1920, 1080], [3000, 1200]]) {
+    const { columns, rows } = imageGrid(w, h), cellW = w / columns, cellH = h / rows;
+    assert.ok(Math.abs(cellW / cellH - 1) < 0.08, `${w}×${h} gives ${columns}×${rows}`);
+  }
+  for (const [w, h] of [[6000, 100], [100, 6000]]) {
+    const { columns, rows } = imageGrid(w, h);
+    assert.ok(columns >= 6 && columns <= 40 && rows >= 6 && rows <= 30, "stays within the map limits");
+  }
+});

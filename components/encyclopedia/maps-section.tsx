@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {Map as MapIcon,Plus,Upload,Search,ArrowUpRight,Image as ImageIcon} from 'lucide-react';
-import {mapKinds,newMap,type MapData} from '@/lib/encyclopedia/map-model';
+import {imageGrid,mapKinds,newMap,type MapData} from '@/lib/encyclopedia/map-model';
 import {defaultWorldOptions,generateWorld,worldKinds,type WorldKind} from '@/lib/encyclopedia/world-generator';
 import {folderPath,newId,visibleEntries,type Workspace,type Entry} from '@/lib/encyclopedia/world-model';
 import {ToolDialog} from './tool-dialog';
@@ -24,7 +24,7 @@ function MapCreator({mode,campaignId,worldId,data,onClose,onCreate}:{mode:'make'
  const folders=data.entries.filter(e=>e.kind==='folder'&&e.worldId===worldId&&e.campaignId===(shared?null:campaignId));
  return <ToolDialog title={mode==='make'?'Make a basic map':mode==='upload'?'Upload a map':'Import a map package'} wide onClose={()=>{if(!busy)onClose();}}><form className="details-form map-create-form" onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{
  if(mode==='import'){if(!file)throw new Error('Choose a .map.json package');const result=await importMapPackage(file);onCreate(name.trim()||result.title,result.mapData,shared,parent||null,result.body,result.tabs);}
- else {let map=newMap(category,'blank',seed,cols,rows);if(mode==='make'&&land!=='blank')map={...map,...generateWorld({...defaultWorldOptions(cols,rows,seed||'world'),kind:land,places:false},map),compass:true,scaleBar:true};if(mode==='upload'){if(!file)throw new Error('Choose an image');const image=await uploadMapImage(file);map={...map,...image,source:'image',tiles:[],grid:category==='hex'?'hex':'none'};}onCreate(name.trim(),map,shared,parent||null);}
+ else {let map=newMap(category,'blank',seed,cols,rows);if(mode==='make'&&land!=='blank')map={...map,...generateWorld({...defaultWorldOptions(cols,rows,seed||'world'),kind:land,places:false},map),compass:true,scaleBar:true};if(mode==='upload'){if(!file)throw new Error('Choose an image');const image=await uploadMapImage(file);map={...map,...image,...imageGrid(image.imageWidth,image.imageHeight),source:'image',tiles:[],grid:category==='hex'?'hex':'none'};}onCreate(name.trim(),map,shared,parent||null);}
  }catch(err){setError(err instanceof Error?err.message:'Could not create map');}finally{setBusy(false);}}}>
  <div className="map-create-columns"><div><label>Map name<input autoFocus required={mode!=='import'} maxLength={160} value={name} onChange={e=>setName(e.target.value)} placeholder={mode==='import'?'Use the package name':'The Northern Reaches'}/></label>
  {mode!=='import'&&<label>Map type<select value={category} onChange={e=>setCategory(e.target.value as MapData['category'])}>{Object.entries(mapKinds).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>}

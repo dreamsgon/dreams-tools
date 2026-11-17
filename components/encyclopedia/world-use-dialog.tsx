@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Download, Map as MapIcon } from 'lucide-react';
 import type { MapData } from '@/lib/encyclopedia/map-model';
 import type { Entry, Workspace } from '@/lib/encyclopedia/world-model';
-import { sceneForMap, tableImageSize, tablePicture } from '@/lib/encyclopedia/map-to-maptable';
+import { sceneForMap, tableBasis, tableImageSize, tablePicture } from '@/lib/encyclopedia/map-to-maptable';
 import { cellDistance } from '@/lib/encyclopedia/hex-crawl';
 import { uid, type Asset, type Workspace as TableWorkspace } from '@/lib/model';
 import { api, canvasBlob, download, uploadAsset } from '@/lib/api';
@@ -76,7 +76,7 @@ export function WorldUseDialog({ entry, map, data, imageUrl, setMap, onClose }: 
     const saved = await api<{ revision: string }>('/api/workspace', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: table.revision, patch: { assets, scenes: { upsert: [scene], remove: [] } } }) });
     // Keep our copy current so a second Use updates this scene instead of clashing with our own save.
     setTable({ revision: saved.revision, workspace: { ...table.workspace, assets, scenes: existing ? table.workspace.scenes.map(s => s.id === scene.id ? scene : s) : [...table.workspace.scenes, scene] } });
-    setMap({ maptableSceneId: scene.id });
+    setMap({ maptableSceneId: scene.id, maptableBasis: tableBasis(map) });
     setDone(scene.id);
   });
 
