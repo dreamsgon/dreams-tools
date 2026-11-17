@@ -45,7 +45,7 @@ function SpellForm({start,settings,trackers,gm,onSave,onClose}:{start?:Spell;set
      <select className="inv-input" value={s.cost?.trackerId??''} onChange={e=>set({cost:e.target.value?{trackerId:e.target.value,n:s.cost?.n??1}:null})}><option value="">Nothing</option>{trackers.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
      {s.cost&&<input className="inv-input" type="number" min={1} max={1000} aria-label="How many" value={s.cost.n} onChange={e=>set({cost:{...s.cost!,n:Math.max(1,Math.min(1000,Math.round(Number(e.target.value)||1)))}})}/>}
     </div>
-    {!trackers.length&&<small>Add a tracker on the Stats tab first, then a {sp.one} can spend from it.</small>}
+    {!trackers.length&&<small>Add a tracker on the Stats & Skills tab first, then a {sp.one} can spend from it.</small>}
    </div>
    {sp.ready&&<label className="check-line"><input type="checkbox" checked={!!s.ready} onChange={e=>set({ready:e.target.checked})}/> {sp.ready}</label>}
    {gm&&<label className="check-line"><input type="checkbox" checked={!!s.gm} onChange={e=>set({gm:e.target.checked})}/> Hide from players</label>}

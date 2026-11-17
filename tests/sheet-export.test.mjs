@@ -71,7 +71,7 @@ test('a GM-only Stats tab keeps stats, trackers and the sheet out of the players
  const w=workspaceSchema.parse({...a.w,entries:a.w.entries.map(x=>x.id===a.id?{...x,character:{...x.character,statsVisibility:'gm'}}:x)});
  const {file,warnings}=X.exportSheet(w,a.id,{campaignId:C,audience:'players',now:AT});
  assert.deepEqual([file.fields.length,file.gauges.length,file.rolls.length,file.core],[0,0,0,undefined]);
- assert.match(warnings[0],/Stats tab is GM only/);
+ assert.match(warnings[0],/Stats & Skills tab is GM only/);
  assert.ok(file.lists.length>0,'player-visible tabs still go');
 });
 

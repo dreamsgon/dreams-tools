@@ -11,6 +11,7 @@ import { writingKinds, type WritingKind } from "@/lib/encyclopedia/ai-styles";
 import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
+import { withoutDeletedStats } from "@/lib/encyclopedia/stat-arrange";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
@@ -459,7 +460,7 @@ export default function WorkspaceApp() {
   <BottomBar pagesRef={pagesBtn} moreRef={moreBtn} pagesOpen={mobile} pagesCurrent={!overlay&&view==='overview'} onPages={()=>{setMoreOpen(false);setMobile(m=>!m);}} searchOpen={palette} onSearch={()=>{setMobile(false);openSearch();}} canCreate={!!world} newOpen={modal?.type==='entry'} onNew={()=>{setMobile(false);setModal({type:"entry"});}} mapsCurrent={!overlay&&view==='maps'} onMaps={()=>showSection("maps")} moreOpen={moreOpen} moreCurrent={!overlay&&moreViews.includes(view)} onMore={()=>{setMobile(false);setMoreOpen(true);}}/>
   {moreOpen && <MoreSheet groups={moreGroups} onClose={restore=>{setMoreOpen(false);if(restore)setTimeout(()=>moreBtn.current?.focus(),0);}}/>}
   {toast && <div className="toast" role="status"><Check size={16}/>{toast}</div>}
-  {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)})}/>}
+  {tool==='form'&&campaign&&<StatFormBuilder key={campaign.id} campaign={campaign} data={data} onClose={()=>setTool(null)} onSave={statFields=>change(withoutDeletedStats({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,statFields}:c)},campaign.id,(campaign.statFields??[]).filter(f=>!statFields.some(x=>x.id===f.id)).map(f=>f.id)))}/>}
   {tool==='items'&&campaign&&<ItemSettingsDialog key={campaign.id} campaign={campaign} onClose={()=>setTool(null)} onSave={items=>change({...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,items}:c)})}/>}
   {tool==='share'&&campaign&&<PlayerSharing key={campaign.id} data={data} campaignId={campaign.id} saved={status==='All changes saved'} onClose={()=>setTool(null)}/>}
   {backups && campaign && <BackupsSheet campaignId={campaign.id} campaignName={campaign.name} workspace={data} canRestore={!memberRef()} onSaveGithub={github => change(latest => ({ ...latest, campaigns: latest.campaigns.map(c => c.id === campaign.id ? { ...c, github } : c) }))} close={() => setBackups(false)} onRestored={() => { void pull().catch(() => undefined); }}/>}
