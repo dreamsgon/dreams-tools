@@ -75,6 +75,7 @@ import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
 import { maptableCoGmRefusal } from "@/lib/maptable-co-gm";
 import { confirmDialog } from "./confirm-dialog";
+import { sceneDeleteQuestion, sceneMoveQuestion } from "@/lib/scene-confirm";
 import SaveChip from "./save-chip";
 import { useAutosave } from "./use-autosave";
 import PanelTip from "./panel-tip";
@@ -1471,8 +1472,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                   <Field label="Kind of map"><select value={scene.mapType} onChange={e=>updateScene(s=>{s.mapType=e.target.value as Scene["mapType"];})}><option value="encounter">Encounter map</option><option value="area">Area map</option><option value="world">World map</option></select></Field>
                   <p className="muted">Area and world maps also show up in Explore.</p>
                   <Field label="Campaign and folder">
-                    <select aria-label="Move scene to" value={scene.containerId ?? ""} onChange={(e) => {
+                    <select aria-label="Move scene to" value={scene.containerId ?? ""} onChange={async (e) => {
                       const containerId = e.target.value || null;
+                      if (containerId === scene.containerId || !await confirmDialog(sceneMoveQuestion(workspace.collections, [scene.name], containerId))) return;
                       updateScene((s) => { s.containerId = containerId; s.folder = ""; });
                       setLocation(containerId);
                     }}><LocationOptions workspace={workspace} /></select>
@@ -1495,7 +1497,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     <button
                       disabled={workspace.scenes.length < 2}
                       className="danger"
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!await confirmDialog(sceneDeleteQuestion(scene.name))) return;
                         commit((w) => {
                           w.scenes = w.scenes.filter((s) => s.id !== scene.id);
                           w.activeId = w.scenes[0].id;

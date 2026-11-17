@@ -8,6 +8,8 @@ import { Folder, FolderOpen, Plus, BookOpen, ChevronDown, ChevronRight, ChevronU
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 import { uid, collectionPath, canMoveCollection, type Workspace, type Collection } from "@/lib/model";
 import { altStep } from "./folder-reorder";
+import { confirmDialog } from "./confirm-dialog";
+import { sceneMoveQuestion } from "@/lib/scene-confirm";
 import { moveSibling, canMoveSibling, placeBeside, dropPlace } from "@/lib/folder-order";
 
 type Props = {
@@ -181,6 +183,19 @@ export default function SceneOrganizer({ workspace: w, location, setLocation, co
         return;
       }
       if(drag?.active) drag.target=findTarget(drag.item,e.clientX,e.clientY);
+      if(drag?.active && drag.target !== undefined && accepts(drag.item,drag.target) && drag.item.kind === "scene") {
+        // A scene changing campaign or folder is asked about first; folders still move straight away.
+        const target = drag.target, item = drag.item;
+        resetDrag();
+        if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+        void confirmDialog(sceneMoveQuestion(w.collections, [item.name], target)).then(ok => {
+          if(!ok){setAnnouncement(`${item.name} was not moved.`);return;}
+          commit((next) => {const s=next.scenes.find((s)=>s.id===item.id);if(s){s.containerId=target;s.folder="";}});
+          setClosed((old)=>{const next=new Set(old);if(target)next.delete(target);return next;});
+          setAnnouncement(`Moved ${item.name} to ${collectionPath(w.collections,target)}. Undo restores the move.`);
+        });
+        return;
+      }
       if(drag?.active && drag.target !== undefined && accepts(drag.item,drag.target)) {
         const target = drag.target;
         commit((next) => {
