@@ -15,11 +15,16 @@ export function isNewPlace(a: Place | null, b: Place): boolean {
   return !a || a.worldId !== b.worldId || a.campaignId !== b.campaignId || a.view !== b.view || a.entryId !== b.entryId;
 }
 
-/** The address for a place, such as ?entry=<id> or ?world=<id>&view=maps. */
-export function placeQuery(place: Place): string {
+/**
+ * The address for a place, such as ?entry=<id> or ?world=<id>&view=maps.
+ * `entryCampaignId` is the open page's own campaign (null for a world page): a world page read inside a campaign
+ * also names that campaign (?entry=<id>&campaign=<id>), so a refresh or a shared link stays in the campaign.
+ */
+export function placeQuery(place: Place, entryCampaignId?: string | null): string {
   const q = new URLSearchParams();
   if (place.entryId) {
     q.set("entry", place.entryId);
+    if (place.campaignId && entryCampaignId !== undefined && place.campaignId !== entryCampaignId) q.set("campaign", place.campaignId);
     if (place.tab && TAB.test(place.tab)) q.set("tab", place.tab);
   } else {
     if (place.worldId) q.set("world", place.worldId);
@@ -41,7 +46,9 @@ export function placeFromQuery(query: URLSearchParams, data: Workspace): Place |
   const entry = data.entries.find(e => e.id === query.get("entry"));
   if (entry) {
     const tab = query.get("tab");
-    return { worldId: entry.worldId, campaignId: entry.campaignId ?? null, view: "overview", entryId: entry.id, ...(tab && TAB.test(tab) ? { tab } : {}) };
+    // A world page (no campaign of its own) opened from a campaign, as ?entry=<id>&campaign=<id>, stays in that campaign when it is in the same world.
+    const within = entry.campaignId ? null : data.campaigns.find(c => c.id === query.get("campaign") && c.worldId === entry.worldId);
+    return { worldId: entry.worldId, campaignId: entry.campaignId ?? within?.id ?? null, view: "overview", entryId: entry.id, ...(tab && TAB.test(tab) ? { tab } : {}) };
   }
   // ?maptable=<Maptable campaign id> (from Maptable's header) opens the paired campaign; no match is the same as no parameter.
   const paired = query.get("maptable");

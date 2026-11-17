@@ -29,7 +29,7 @@ Open **Campaigns**. It lists Maptable campaigns and Encyclopedia campaigns toget
 > 1. Sign in and open **Campaigns**.
 > 2. Choose **New campaign**, name it, and create it in both tools.
 > 3. Open its card to reach the **campaign hub** (`/campaigns/<campaign>`): a Dashboard (scenes, next session, recent pages, party) and the Front page.
-> 4. Use **Open notes** for the Encyclopedia and **Open maps** for Maptable.
+> 4. Use **Open notes** for the Encyclopedia and **Open in Maptable** for that campaign's table (the scene you last had open in it, else its first scene). Every link on the hub, including the Maptable and Encyclopedia links at the top of the site, opens this campaign.
 
 ## Finding your way around
 

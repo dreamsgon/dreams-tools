@@ -34,6 +34,18 @@ test("links from Maptable and the Campaigns page still open the page or campaign
   assert.deepEqual(read("?campaign=c1"), { worldId: "w2", campaignId: "c1", view: "overview", entryId: null });
 });
 
+test("a world page opened from a campaign stays in that campaign", () => {
+  const two = { ...data, campaigns: [...data.campaigns, { id: "c2", worldId: "w1", name: "Lore camp" }] };
+  const from = (search) => placeFromQuery(new URLSearchParams(search), two);
+  assert.deepEqual(from("?entry=e2&campaign=c2"), { worldId: "w1", campaignId: "c2", view: "overview", entryId: "e2" });
+  assert.deepEqual(from("?entry=e2&campaign=c1"), { worldId: "w1", campaignId: null, view: "overview", entryId: "e2" }, "a campaign in another world is ignored");
+  assert.deepEqual(from("?entry=e1&campaign=c2"), { worldId: "w2", campaignId: "c1", view: "overview", entryId: "e1" }, "a campaign page keeps its own campaign");
+  const inside = { worldId: "w1", campaignId: "c2", view: "overview", entryId: "e2" };
+  assert.equal(placeQuery(inside, null), "?entry=e2&campaign=c2");
+  assert.deepEqual(from(placeQuery(inside, null)), inside);
+  assert.equal(placeQuery({ worldId: "w2", campaignId: "c1", view: "overview", entryId: "e1" }, "c1"), "?entry=e1", "a campaign page needs no extra campaign");
+});
+
 test("deleted or unknown places fall back instead of opening nothing", () => {
   assert.equal(read(""), null);
   assert.equal(read("?world=gone"), null);

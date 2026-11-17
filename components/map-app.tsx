@@ -144,7 +144,7 @@ import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/worl
 import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
 import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
-import { maptableSearch, readMaptablePlace } from "@/lib/maptable-place";
+import { campaignTableScene, maptableSearch, readMaptablePlace } from "@/lib/maptable-place";
 import { maptableTitle } from "@/lib/page-title";
 import { usePageTitle } from "./use-page-title";
 // Editors and panels that open on demand load as separate chunks; they are fetched while the
@@ -361,7 +361,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const overviewCampaignId = dashboard && overview ? overview.id : null;
   useEffect(() => {
     if (!navigationReady || !workspace || creatorOpen) return;
-    const place = dashboard ? { campaignId: overviewCampaignId, sceneId: null } : { campaignId, sceneId: scene?.id ?? null };
+    const place = dashboard ? { campaignId: overviewCampaignId, sceneId: null, view: "scenes" as const } : { campaignId, sceneId: scene?.id ?? null };
     try {
       const search = maptableSearch(window.location.search, place);
       if (search !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + search + window.location.hash);
@@ -431,10 +431,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       let saved = null;
       saved = navigationScope ? parseNavigationState(readRemembered(navigationStorageKey(scopeOf(navigationScope)!))) : null;
       // /maptable?campaign=<id>&scene=<id> (an Encyclopedia link or a bookmark) opens that scene; the address then follows the open scene.
-      let requested: string | null = null, requestedCampaign: string | null = null;
-      if (!navigationRestored.current) { try { const place = readMaptablePlace(window.location.search, data); requested = place.sceneId; requestedCampaign = place.campaignId; } catch { requested = null; } }
+      // /maptable?campaign=<id> (Open in Maptable on a campaign's dashboard, the Campaigns page, the Encyclopedia) opens that campaign's
+      // table: the scene you had open when it is in that campaign, else its first scene. ?campaign=<id>&view=scenes opens its scene list.
+      let requested: string | null = null, requestedCampaign: string | null = null, sceneList = false;
+      if (!navigationRestored.current) { try { const place = readMaptablePlace(window.location.search, data); requested = place.sceneId; requestedCampaign = place.campaignId; sceneList = place.view === "scenes"; } catch { requested = null; } }
+      const remembered = navigationRestored.current ? state.current?.activeId : saved?.activeId;
+      if (!requested && requestedCampaign && !sceneList) requested = campaignTableScene(data, requestedCampaign, remembered ?? data.activeId);
       const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
-      const activeId = linked ?? (navigationRestored.current ? state.current?.activeId : saved?.activeId);
+      const activeId = linked ?? remembered;
       if (activeId) data = preserveActiveScene(data, activeId);
       if (!navigationRestored.current) {
         navigationRestored.current = true;
@@ -450,15 +454,12 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           // A campaign that was deleted since falls back to the dashboard's campaign list.
           if (saved.overview && (saved.overview.id === null || data.collections.some(c => c.id === saved.overview?.id && c.kind === "campaign"))) setOverview(saved.overview);
         } else if (phoneWidth()) setSidebar(false); // Phones open on the map with the side sheet closed (handoff 2.7).
-        // /maptable?campaign=<id> (from the Campaigns page) opens that campaign's scenes once.
-        if (!linked && requestedCampaign && data.collections.some(c => c.id === requestedCampaign && c.kind === "campaign")) {
-          setDashboard(true); setCreatorOpen(false);
-          const inCampaign = (id: string | null) => { for (let n = 0; id && n < 100; n++) { const c = data.collections.find(item => item.id === id); if (!c || c.kind === "campaign") return c?.id === requestedCampaign; id = c.parentId; } return false; };
-          if (data.scenes.some(s => inCampaign(s.containerId))) setOverview({ id: requestedCampaign });
-          else { setOverview(null); setDashboardLocation(requestedCampaign); }
-        }
-        if (requested || requestedCampaign) {
-          if (linked) { setDashboard(false); setCreatorOpen(false); }
+        // A campaign asked for by its scene list, or one with no scenes yet, opens that campaign's own page of scenes (never the list of every campaign).
+        if (!linked && requestedCampaign) { setDashboard(true); setCreatorOpen(false); setOverview({ id: requestedCampaign }); }
+        if (linked) {
+          setDashboard(false); setCreatorOpen(false);
+          // The Scenes panel opens in the campaign that was asked for.
+          if (requestedCampaign) setLocation(requestedCampaign);
         }
         setNavigationReady(true);
       }
@@ -1203,14 +1204,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   /**
    * Picking a campaign in the switcher. In place: the board opens that campaign's first scene with the side panel left as it
    * is (Scenes stays Scenes, Tokens stays Tokens); the Campaigns list opens that campaign's scenes. The change is only the
-   * open scene, so unsaved edits stay in the workspace and autosave carries on. One with no scenes here goes to its hub.
+   * open scene, so unsaved edits stay in the workspace and autosave carries on. One with no scenes opens its own (empty) scene page; one not in this Maptable goes to its hub.
    */
   const switchCampaign = (row: CampaignRow) => {
     const id = row.maptable?.id, local = id && workspace.collections.some(c => c.id === id && c.kind === "campaign");
     const first = local ? scenesInOrder(workspace, id)[0] : undefined;
     if (!id || !local) { void leaveSaved().then(ok => { if (ok) window.location.assign(id ? `/maptable?campaign=${encodeURIComponent(id)}` : hubHref(row)); }); return; }
     setGridAdjust(false); setSearch("");
-    if (!first) { setOverview(null); setDashboardLocation(id); setDashboard(true); return; } // no scenes yet: the Campaigns list with it selected, as ?campaign= does
+    if (!first) { setOverview({ id }); setDashboard(true); return; } // no scenes yet: that campaign's own page, as ?campaign= does
     if (dashboard) { setOverview({ id }); return; }
     activate(first.scene.id); setLocation(id); setOverview(null);
   };
@@ -1230,7 +1231,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()} autosave={{on:autosave.on,set:setAutosave,changes:unsaved,lastSaved}}/>;
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
   if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
-  const overviewOpen = dashboard && overview && workspace.scenes.some(s => campaignFor(s.containerId) === overview.id);
+  // A campaign's own page opens even before it has scenes, so a link to that campaign never lands on the list of every campaign.
+  const overviewOpen = dashboard && overview && (overview.id ? workspace.collections.some(c => c.id === overview.id && c.kind === "campaign") : workspace.scenes.some(s => campaignFor(s.containerId) === null));
   const coGmBar = member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true" /><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a co-GM here. Your changes save to their maps.</span><a href={`/encyclopedia#m-${mapMemberRef()}`}>Open the Encyclopedia</a><NextLink href="/campaigns">Back to Campaigns</NextLink></div>;
   // The Encyclopedia link follows the active campaign: the open overview, else the open scene's campaign. Co-GMs keep their own link.
   const activeCampaignId = overviewOpen ? overview.id : campaignId;
@@ -1243,7 +1245,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     {coGmBar}
     {overviewOpen ? <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={overview.id}
       lastSceneId={campaignFor(scene.containerId) === overview.id ? scene.id : null} open={enterScene} back={() => setOverview(null)}
-      addScenes={() => { const target = campaignFor(scene.containerId) === overview.id ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === overview.id); if (target) { enterScene(target.id); setNewMapType("encounter"); setDialog("add-scenes"); } }} /></div> :
+      addScenes={() => { const target = campaignFor(scene.containerId) === overview.id ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === overview.id); if (target) enterScene(target.id); else openCampaign(overview.id); setNewMapType("encounter"); setDialog("add-scenes"); }} /></div> :
     <div className="dashboard-content">
       {saveRecovery}
       {workspace.scenes.some((s) => s.id === scene.id) && <button className="dashboard-continue" onClick={() => setDashboard(false)}>

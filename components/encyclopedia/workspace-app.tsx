@@ -181,10 +181,10 @@ export default function WorkspaceApp() {
     // The address always names the open page, tab or view, so it can be bookmarked or shared. A different page or view is a new history entry (Back and Forward work); a tab switch only replaces.
     useEffect(() => {
         if (!loaded) return;
-        const entryId = view === "overview" ? selected : null, kind = entryId ? current.current.entries.find(e => e.id === entryId)?.kind : undefined;
+        const entryId = view === "overview" ? selected : null, open = entryId ? current.current.entries.find(e => e.id === entryId) : undefined, kind = open?.kind;
         const tab = entryId && tabAt?.entry === entryId && tabAt.tab !== defaultTab(kind ?? "") ? tabAt.tab : null;
         const place: Place = { worldId, campaignId, view, entryId, tab };
-        const search = placeQuery(place);
+        const search = placeQuery(place, open ? open.campaignId ?? null : undefined);
         if (!memberRef()) remember(PLACE_KEY, search);
         if (search !== window.location.search) {
             const url = window.location.pathname + search + window.location.hash;
