@@ -34,6 +34,8 @@ export type SheetStat = { label: string; type: string; derived?: string; value: 
  * this key in the character's values. With none typed, the modifier is worked out from `derived` when the stat has one.
  */
 export const modKey = (fieldId: string) => `${fieldId.slice(0, 96)}-mod`;
+/** A score box's saving throw bonus, when the GM types one, is kept under this key; with none typed the save uses the modifier. */
+export const saveKey = (fieldId: string) => `${fieldId.slice(0, 96)}-save`;
 /** A score box's modifier: the one typed in, else the worked-out one; null when it has neither. */
 export function statModifier(st: Pick<SheetStat, 'derived' | 'value' | 'mod'>, sheet: SheetStat[], depth = 0): number | null {
   return statNumber(st.mod) ?? derivedValue(st, sheet, depth);
@@ -188,9 +190,29 @@ export function placeStat<F extends { section: string }>(fields: F[], field: F):
   return at < 0 ? [...fields, field] : [...fields.slice(0, at + 1), field, ...fields.slice(at + 1)];
 }
 
+type SheetRollField = RollFields & { id: string; label: string; look?: 'score'; save?: boolean; derived?: string };
+/** A score box's save bonus: the one typed for it, else its modifier; null when it has neither. */
+export function saveBonus(f: Pick<SheetRollField, 'id' | 'derived'>, values: Record<string, unknown>, sheet: SheetStat[]): number | null {
+  return statNumber(values[saveKey(f.id)]) ?? statModifier({ derived: f.derived, value: values[f.id] ?? null, mod: values[modKey(f.id)] }, sheet);
+}
+/**
+ * The rolls a stat shows on the sheet: its own, and for a score box a Check (d20 + its modifier) when it has no rolls of
+ * its own, and a Save (d20 + its save bonus) when the form shows saves. Players and Maptable read the same list.
+ */
+export function sheetRolls(f: SheetRollField, values: Record<string, unknown>, sheet: SheetStat[]): StatRoll[] {
+  const own = statRolls(f);
+  if (f.look !== 'score') return own;
+  const out = own.length ? [...own] : [{ name: 'Check', formula: `1d20+{${f.label} mod}` }];
+  if (f.save && !out.some(r => r.name.toLowerCase() === 'save')) {
+    const n = saveBonus(f, values, sheet);
+    out.push({ name: 'Save', formula: n === null ? `1d20+{${f.label} mod}` : `1d20${n < 0 ? '' : '+'}${n}` });
+  }
+  return out;
+}
+
 export type StatRowRoll = { name: string; dice: string | null; hint?: string; need?: { op: StatSuccess['op']; n: number } };
-export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; description?: string; worked?: number; look?: 'score'; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
-export type RowField = { id: string; label: string; section: string; type: StatField['type']; look?: 'score'; note?: string; description?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
+export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; description?: string; worked?: number; look?: 'score'; save?: number; quick?: true; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
+export type RowField = { id: string; label: string; section: string; type: StatField['type']; look?: 'score'; save?: boolean; quick?: boolean; note?: string; description?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
 
 /**
  * The sheet as rows, with every roll worked out for this character: what a player page and a Maptable token show.
@@ -203,11 +225,12 @@ export function statRows(fields: RowField[], values: Record<string, unknown>): S
   const live = fields.filter(f => !f.archived), sheet = sheetOf(live, values);
   return live.map(f => {
     const v = values[f.id] ?? null, box = f.look === 'score', worked = box ? statModifier({ derived: f.derived, value: v, mod: values[modKey(f.id)] }, sheet) : f.derived ? derivedValue({ derived: f.derived, value: v }, sheet) : null;
-    const rolls = statRolls(f).map(r => {
+    const save = box && f.save ? saveBonus(f, values, sheet) : null;
+    const rolls = sheetRolls(f, values, sheet).map(r => {
       const dice = statRollDice(r.formula, v, sheet), n = r.success ? targetNumber(r.success, v, sheet) : null;
       return { name: r.name, dice, ...(dice ? {} : { hint: rowHint(statRollHint(r.formula, v, f.type, sheet)) }), ...(r.success && n !== null ? { need: { op: r.success.op, n: Number(n) } } : {}) };
     });
-    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(f.description ? { description: f.description } : {}), ...(worked !== null ? { worked } : {}), ...(box ? { look: 'score' as const } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
+    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(f.description ? { description: f.description } : {}), ...(worked !== null ? { worked } : {}), ...(box ? { look: 'score' as const } : {}), ...(save !== null ? { save } : {}), ...(f.quick ? { quick: true as const } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
   });
 }
 

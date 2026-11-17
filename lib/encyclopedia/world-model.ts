@@ -55,6 +55,9 @@ export const statFieldSchema = z.object({
   // Optional (added later): "score" shows a number stat as a score box like a D&D ability: the value is the score, with a
   // modifier typed beside it (kept under modKey in the character's values) or worked out from `derived`. Rolls read it as {Name mod}.
   look:z.enum(["score"]).optional(),
+  // Optional (added later): save shows a saving throw under a score box (its bonus typed beside it, kept under saveKey, else the
+  // modifier); quick shows the stat in the Quick strip at the top of the sheet, like Initiative.
+  save:z.boolean().optional(), quick:z.boolean().optional(),
   derived:z.string().trim().max(200).optional(), spend:z.object({tracker:z.string().trim().min(1).max(40),n:z.number().int().min(1).max(1000)}).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
