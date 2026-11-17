@@ -6,7 +6,7 @@
  * what it points at.
  */
 import {useState,type ReactNode} from 'react';
-import {ArrowDown,ArrowUp,Award,BookOpen,Dices,EyeOff,Pin,Search,Shield,Sparkles,Swords,X} from 'lucide-react';
+import {ArrowDown,ArrowUp,Award,GripVertical,BookOpen,Dices,EyeOff,Pin,Search,Shield,Sparkles,Swords,X} from 'lucide-react';
 import {defaultCharacter,newId,type Campaign,type Entry,type StatField} from '@/lib/encyclopedia/world-model';
 import {cellSizeNames,cellSizes,maxPins,type CellSize,type Profile,type ProfilePin} from '@/lib/encyclopedia/character-profile';
 import {isPinned,lineRef,movePin,pinKindNames,pinnedLine,sizePin,statblockLines,togglePin,type PinKind,type PlayerPin} from '@/lib/encyclopedia/profile-pins';
@@ -16,6 +16,8 @@ import {shownStats,statOff} from '@/lib/encyclopedia/stat-arrange';
 import {statblockSegments} from '@/lib/encyclopedia/statblock';
 import {formatMoney,itemSettingsOf,type ItemRoll,type ItemSettings} from '@/lib/encyclopedia/items';
 import {RollChip} from './rolls';
+import {useDragOrder} from './drag-order';
+import {moveTo} from '@/lib/encyclopedia/drag-order';
 import {ToolDialog} from './tool-dialog';
 import './profile-pins.css';
 
@@ -28,9 +30,9 @@ const kindIcons:Record<PinKind,typeof Pin>={stat:Dices,item:Shield,spell:Sparkle
 /** What one pin card shows, the same for the GM and players. */
 type Card={id:string;size?:CellSize;kind:PinKind;source:string;title:string;big?:string;score?:string;value?:string;sub?:string;rolls:{name:string;dice:string}[];statblock?:string;gmOnly?:string;missing?:boolean;tab?:string};
 
-function PinCard({card,who,tools,onOpen}:{card:Card;who:string;tools?:ReactNode;onOpen?:(tab:string)=>void}){
+function PinCard({card,who,tools,onOpen,drag}:{card:Card;who:string;tools?:ReactNode;onOpen?:(tab:string)=>void;drag?:object}){
  const Icon=kindIcons[card.kind];
- return <div role="listitem" className={`pin-card pin-${card.kind}${card.big!==undefined?' is-box':''}${card.missing?' is-missing':''}${card.size?` size-${card.size}`:''}`}>
+ return <div role="listitem" className={`pin-card pin-${card.kind}${card.big!==undefined?' is-box':''}${card.missing?' is-missing':''}${card.size?` size-${card.size}`:''}`} {...drag}>
   <div className="pin-head"><span className="pin-source"><Icon size={11} aria-hidden="true"/>{card.source}</span>{card.gmOnly&&<span className="pin-gm" title={card.gmOnly}><EyeOff size={11} aria-label={card.gmOnly}/></span>}{tools}</div>
   {card.statblock!==undefined?<p className="pin-statblock">{statblockSegments(card.statblock).map((s,j)=>s.formula?<RollChip key={j} title={who} formula={s.formula} label={s.text.trim()} context={s.context}/>:<span key={j}>{s.text}</span>)}</p>:<>
    {onOpen&&card.tab?<button type="button" className="pin-title" title={`Open the ${card.source} tab`} onClick={()=>onOpen(card.tab!)}>{card.title}</button>:<strong className="pin-title">{card.title}</strong>}
@@ -102,10 +104,11 @@ export function QuickFind({entry,campaign,profile,setProfile,arranging,onTab}:{e
  const [picking,setPicking]=useState(false);
  const cards=gmCards(entry,profile,campaign),pins=profile.pins??[];
  const setPins=(f:(l:ProfilePin[])=>ProfilePin[])=>setProfile(p=>{const next=f(p.pins??[]);const {pins:_old,...rest}=p;void _old;return next.length?{...rest,pins:next}:rest;});
+ const dnd=useDragOrder((id,target,after)=>setPins(l=>moveTo(l,id,target,after)));
  return <section className="pin-section" aria-label="Quick find">
   <div className="pin-section-head"><span className="eyebrow">QUICK FIND</span>
    <button type="button" className="button small" onClick={()=>setPicking(true)}><Pin size={13}/> {cards.length?'Change pins':'Pin to profile'}</button></div>
-  {cards.length?<div className="pin-grid" role="list">{cards.map((card,i)=><PinCard key={card.id} card={card} who={entry.title} onOpen={onTab} tools={<span className="pin-tools">
+  {cards.length?<div className="pin-grid" role="list">{cards.map((card,i)=><PinCard key={card.id} card={card} who={entry.title} onOpen={onTab} drag={dnd.item(card.id,{on:arranging})} tools={<span className="pin-tools">{arranging&&<span className="drag-grip" title="Drag to move" aria-hidden="true"><GripVertical size={13}/></span>}
    {arranging&&<><button type="button" className="icon-button" aria-label={`Move ${card.title} earlier`} disabled={i===0} onClick={()=>setPins(l=>movePin(l,card.id,-1))}><ArrowUp size={12}/></button><button type="button" className="icon-button" aria-label={`Move ${card.title} later`} disabled={i===cards.length-1} onClick={()=>setPins(l=>movePin(l,card.id,1))}><ArrowDown size={12}/></button><SizePick size={card.size} name={card.title} onSize={sz=>setPins(l=>sizePin(l,card.id,sz))}/></>}
    <button type="button" className="icon-button pin-remove" aria-label={`Unpin ${card.title}`} title="Unpin" onClick={()=>setPins(l=>l.filter(x=>x.id!==card.id))}><X size={12}/></button></span>}/>)}</div>
   :<p className="pin-empty">Pin stats, skills, items, spells, features and statblock lines here to find them at a glance and roll them from the profile.</p>}

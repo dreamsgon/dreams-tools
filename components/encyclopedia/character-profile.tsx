@@ -1,6 +1,6 @@
 'use client';
 import {Fragment,useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,Trash2,WrapText} from 'lucide-react';
+import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,GripVertical,Trash2,WrapText} from 'lucide-react';
 import {defaultCharacter,newId,playerCampaign,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {emblemSymbols,moveBlockBy,placeBlock,switchColumn,type EmblemSymbol} from '@/lib/encyclopedia/org-profile';
 import {applyCharacterLayout,factFontSize,defaultProfile,factSuggestions,maxFacts,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
@@ -15,6 +15,8 @@ import {AddBlockMenu,ArrangeBar,BarEditor,BeliefsList,Board,BlockFrame,ItemTools
 import {CharacterReadOnly,OrgLine,TraitChip} from './character-parts';
 import {CharacterSheetSection} from './character-sheet';
 import {QuickFind,SizePick} from './profile-pins';
+import {useDragOrder} from './drag-order';
+import {moveTo} from '@/lib/encyclopedia/drag-order';
 import {fillable,suggestTrait} from '@/lib/encyclopedia/profile-suggest';
 import {itemSettingsOf} from '@/lib/encyclopedia/items';
 
@@ -73,13 +75,15 @@ function Facts({profile,setProfile,arranging}:{profile:Profile;setProfile:(f:(p:
  const set=(f:(l:Fact[])=>Fact[])=>setProfile(p=>{const next=f(p.facts??[]);const {facts:_old,...rest}=p;void _old;return next.length?{...rest,facts:next}:rest;});
  const patchFact=(id:string,x:Partial<Fact>)=>set(l=>l.map(f=>f.id===id?{...f,...x}:f));
  const add=(name:string)=>{const t=name.trim().slice(0,40);if(!t)return;const id=newId();set(l=>[...l,{id,label:t,value:''}]);setLabel('');setAdding(false);requestAnimationFrame(()=>document.getElementById(`fact-${id}`)?.focus());};
+ const dnd=useDragOrder((id,target,after)=>set(l=>moveTo(l,id,target,after)));
  const free=factSuggestions.filter(x=>!facts.some(f=>f.label.trim().toLowerCase()===x.toLowerCase()));
  if(!facts.length&&!adding)return <div className="char-facts is-empty"><button type="button" className="char-fact-add" onClick={()=>setAdding(true)}><Plus size={13}/> Add fields like Species or Class</button></div>;
  return <><div className="char-facts-frame"><div className={`char-facts${arranging?' is-arranging':''}`} role="list" aria-label="Facts">
-  {facts.map((f,i)=><Fragment key={f.id}>{f.br&&i>0&&<span className="char-fact-break" aria-hidden="true"/>}<div role="listitem" className={`char-fact${f.gm?' is-gm':''}${f.size?` size-${f.size}`:''}`}>
+  {facts.map((f,i)=><Fragment key={f.id}>{f.br&&i>0&&<span className="char-fact-break" aria-hidden="true"/>}<div role="listitem" className={`char-fact${f.gm?' is-gm':''}${f.size?` size-${f.size}`:''}`} {...dnd.item(f.id,{on:arranging,handle:true})}>
    <textarea id={`fact-${f.id}`} className="char-fact-value" rows={f.value.length>(f.size==='l'?90:f.size==='m'?40:22)?2:1} style={{fontSize:factFontSize(f.value)}} aria-label={f.label||'Fact'} maxLength={300} placeholder="—" value={f.value} onKeyDown={e=>{if(e.key==='Enter')e.preventDefault();}} onChange={e=>patchFact(f.id,{value:e.target.value.replace(/\s*\n\s*/g,' ')})}/>
    {arranging?<input className="char-fact-label-input" aria-label="Field name" maxLength={40} value={f.label} onChange={e=>patchFact(f.id,{label:e.target.value})}/>:<span className="char-fact-label">{f.label}{f.gm&&<EyeOff size={10} aria-label="GM only"/>}</span>}
    {arranging&&<span className="char-fact-tools"><span>
+    <span className="drag-grip" title="Drag to move" aria-hidden="true" {...dnd.grip(f.id)}><GripVertical size={13}/></span>
     <button type="button" className="icon-button" aria-label={`Move ${f.label} left`} disabled={i===0} onClick={()=>set(l=>{const n=[...l];[n[i-1],n[i]]=[n[i],n[i-1]];return n;})}><ArrowLeft size={11}/></button><button type="button" className="icon-button" aria-label={`Move ${f.label} right`} disabled={i===facts.length-1} onClick={()=>set(l=>{const n=[...l];[n[i+1],n[i]]=[n[i],n[i+1]];return n;})}><ArrowRight size={11}/></button>
     <SizePick size={f.size} name={f.label} onSize={sz=>patchFact(f.id,{size:sz==='s'?undefined:sz})}/></span><span>
     <button type="button" className="icon-button" aria-pressed={!!f.br} disabled={i===0} aria-label={f.br?`${f.label} starts a new line. Keep it on the line before`:`Start a new line at ${f.label}`} title={f.br?'Starts a new line':'Start a new line here'} onClick={()=>patchFact(f.id,{br:f.br?undefined:true})}><WrapText size={11}/></button>
