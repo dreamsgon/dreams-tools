@@ -24,9 +24,11 @@ export function SidebarResize({width,maxWidth,onChange}:{width:number;maxWidth:n
  onPointerUp={e=>{drag.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
  onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}} />;
 }
+/** Which sidebar sections are open: World Lore, Campaign Notes, Organizations and the GM's categories ("cat:<id>"). Open unless closed. */
 export function useNavigationSections(){
- const [sections,setSections]=useState({lore:true,notes:true,orgs:true}),[ready,setReady]=useState(false);
- useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem('ttrpg-navigation-sections')??'null');if(saved)setSections({lore:typeof saved.lore==='boolean'?saved.lore:true,notes:typeof saved.notes==='boolean'?saved.notes:true,orgs:typeof saved.orgs==='boolean'?saved.orgs:true});}catch{}setReady(true);},[]);
- useEffect(()=>{if(ready)try{localStorage.setItem('ttrpg-navigation-sections',JSON.stringify(sections));}catch{}},[sections,ready]);
- return {sections,toggle:(key:'lore'|'notes'|'orgs')=>setSections(s=>({...s,[key]:!s[key]})),open:(key:'lore'|'notes'|'orgs')=>setSections(s=>({...s,[key]:true}))};
+ const [closed,setClosed]=useState<Record<string,boolean>>({}),[ready,setReady]=useState(false);
+ useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem('ttrpg-navigation-sections')??'null');if(saved&&typeof saved==='object')setClosed(Object.fromEntries(Object.entries(saved).filter(([,v])=>typeof v==='boolean')) as Record<string,boolean>);}catch{}setReady(true);},[]);
+ useEffect(()=>{if(ready)try{localStorage.setItem('ttrpg-navigation-sections',JSON.stringify(closed));}catch{}},[closed,ready]);
+ const isOpen=(key:string)=>closed[key]??true;
+ return {sections:{lore:isOpen('lore'),notes:isOpen('notes'),orgs:isOpen('orgs')},isOpen,toggle:(key:string)=>setClosed(s=>({...s,[key]:!(s[key]??true)})),open:(key:string)=>setClosed(s=>({...s,[key]:true}))};
 }
