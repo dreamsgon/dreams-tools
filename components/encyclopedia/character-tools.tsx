@@ -11,9 +11,9 @@ import {tagsOn} from '@/lib/tags';
 import {ToolDialog} from './tool-dialog';
 const SheetImportDialog=dynamic(()=>import('./sheet-import-dialog').then(m=>m.SheetImportDialog));
 export const roles={pc:'Player Characters',companion:'Companions / Sidekicks',npc:'NPCs',creature:'Creatures'};
-export function CharactersSection({data,worldId,campaignId,change,onOpen,onForm,onShare,onNewFolder}:{data:Workspace;worldId:string;campaignId:string|null;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onForm:()=>void;onShare:()=>void;onNewFolder:()=>void}){
+export function CharactersSection({data,worldId,campaignId,change,onOpen,onForm,onShare,onNewFolder,initialRole='pc'}:{data:Workspace;worldId:string;campaignId:string|null;change:(s:Workspace)=>void;onOpen:(id:string)=>void;onForm:()=>void;onShare:()=>void;onNewFolder:()=>void;initialRole?:CharacterData['role']}){
  const {library}=useTags("encyclopedia"),tagsFor=(e:Entry)=>library?tagsOn(library,`entry:${e.id}`):[];
- const [role,setRole]=useState<CharacterData['role']>('pc'),[query,setQuery]=useState(''),[group,setGroup]=useState(''),[status,setStatus]=useState(''),[tag,setTag]=useState(''),[location,setLocation]=useState(''),[faction,setFaction]=useState(''),[creating,setCreating]=useState(false),[importing,setImporting]=useState(false),[collapsed,setCollapsed]=useState<Set<string>>(new Set);
+ const [role,setRole]=useState<CharacterData['role']>(initialRole),[query,setQuery]=useState(''),[group,setGroup]=useState(''),[status,setStatus]=useState(''),[tag,setTag]=useState(''),[location,setLocation]=useState(''),[faction,setFaction]=useState(''),[creating,setCreating]=useState(false),[importing,setImporting]=useState(false),[collapsed,setCollapsed]=useState<Set<string>>(new Set);
  const all=visibleEntries(data,worldId,campaignId).filter(e=>e.kind==='character'),cast=all.filter(e=>(e.character?.role??'npc')===role);
  const get=(e:Entry)=>e.character??defaultCharacter();
  const groups=visibleEntries(data,worldId,campaignId).filter(e=>e.kind==='folder').sort(compareEntries);

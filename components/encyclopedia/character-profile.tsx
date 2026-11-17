@@ -1,9 +1,9 @@
 'use client';
 import {useState} from 'react';
-import {Check,Eye,LayoutGrid,Pencil,Plus,Sparkles,Trash2} from 'lucide-react';
+import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,Trash2} from 'lucide-react';
 import {defaultCharacter,newId,playerCampaign,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {emblemSymbols,moveBlockBy,placeBlock,switchColumn,type EmblemSymbol} from '@/lib/encyclopedia/org-profile';
-import {applyCharacterLayout,defaultProfile,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
+import {applyCharacterLayout,defaultProfile,factSuggestions,maxFacts,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
 import {confirmDialog} from '../confirm-dialog';
 import {memberRef} from './member-view';
 import {ToolDialog} from './tool-dialog';
@@ -14,10 +14,12 @@ import {applyDrop,dropRefusal,type DropTarget} from '@/lib/encyclopedia/profile-
 import {AddBlockMenu,ArrangeBar,BarEditor,BeliefsList,Board,BlockFrame,ItemTools,StandingSelect,TextBlockBody,type Arrange} from './profile-board';
 import {CharacterReadOnly,OrgLine,TraitChip} from './character-parts';
 import {CharacterSheetSection} from './character-sheet';
+import {QuickFind} from './profile-pins';
 import {fillable,suggestTrait} from '@/lib/encyclopedia/profile-suggest';
+import {itemSettingsOf} from '@/lib/encyclopedia/items';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
-type Props={entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[]};
+type Props={entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[];/** Opens another tab of this page (a pin's title). */onTab?:(tab:string)=>void};
 
 type Ctx={
  entry:Entry;data:Workspace;change:Change;open:(id:string)=>void;
@@ -60,6 +62,34 @@ function Traits({profile,setProfile}:{profile:Profile;setProfile:(f:(p:Profile)=
   </div>
   {form==='new'&&<TraitForm have={profile.traits.map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>[...l,{id:newId(),...t}]);setForm(null);}}/>}
   {editing&&<TraitForm key={editing.id} initial={editing} have={profile.traits.filter(t=>t.id!==editing.id).map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>l.map(x=>x.id===editing.id?{id:x.id,...t}:x));setForm(null);}}/>}
+ </div>;
+}
+
+/* ---- Facts: Species, Class, Level… ---- */
+
+type Fact=NonNullable<Profile['facts']>[number];
+function Facts({profile,setProfile,arranging}:{profile:Profile;setProfile:(f:(p:Profile)=>Profile)=>void;arranging:boolean}){
+ const facts=profile.facts??[],[adding,setAdding]=useState(false),[label,setLabel]=useState('');
+ const set=(f:(l:Fact[])=>Fact[])=>setProfile(p=>{const next=f(p.facts??[]);const {facts:_old,...rest}=p;void _old;return next.length?{...rest,facts:next}:rest;});
+ const patchFact=(id:string,x:Partial<Fact>)=>set(l=>l.map(f=>f.id===id?{...f,...x}:f));
+ const add=(name:string)=>{const t=name.trim().slice(0,40);if(!t)return;const id=newId();set(l=>[...l,{id,label:t,value:''}]);setLabel('');setAdding(false);requestAnimationFrame(()=>document.getElementById(`fact-${id}`)?.focus());};
+ const free=factSuggestions.filter(x=>!facts.some(f=>f.label.trim().toLowerCase()===x.toLowerCase()));
+ if(!facts.length&&!adding)return <div className="char-facts is-empty"><button type="button" className="char-fact-add" onClick={()=>setAdding(true)}><Plus size={13}/> Add fields like Species or Class</button></div>;
+ return <div className={`char-facts${arranging?' is-arranging':''}`} role="list" aria-label="Facts">
+  {facts.map((f,i)=><div role="listitem" key={f.id} className={`char-fact${f.gm?' is-gm':''}`}>
+   <input id={`fact-${f.id}`} className="char-fact-value" aria-label={f.label||'Fact'} maxLength={300} placeholder="—" value={f.value} onChange={e=>patchFact(f.id,{value:e.target.value})}/>
+   {arranging?<input className="char-fact-label-input" aria-label="Field name" maxLength={40} value={f.label} onChange={e=>patchFact(f.id,{label:e.target.value})}/>:<span className="char-fact-label">{f.label}{f.gm&&<EyeOff size={10} aria-label="GM only"/>}</span>}
+   <span className="char-fact-tools">
+    {arranging&&<><button type="button" className="icon-button" aria-label={`Move ${f.label} left`} disabled={i===0} onClick={()=>set(l=>{const n=[...l];[n[i-1],n[i]]=[n[i],n[i-1]];return n;})}><ArrowLeft size={11}/></button><button type="button" className="icon-button" aria-label={`Move ${f.label} right`} disabled={i===facts.length-1} onClick={()=>set(l=>{const n=[...l];[n[i+1],n[i]]=[n[i],n[i+1]];return n;})}><ArrowRight size={11}/></button></>}
+    <button type="button" className="icon-button" aria-pressed={!!f.gm} aria-label={f.gm?`${f.label} is GM only. Show it to players`:`Make ${f.label} GM only`} title={f.gm?'GM only':'Players see this'} onClick={()=>patchFact(f.id,{gm:f.gm?undefined:true})}>{f.gm?<EyeOff size={11}/>:<Eye size={11}/>}</button>
+    <button type="button" className="icon-button" aria-label={`Remove ${f.label}`} onClick={()=>set(l=>l.filter(x=>x.id!==f.id))}><Trash2 size={11}/></button>
+   </span>
+  </div>)}
+  {adding?<form className="char-fact-form" onSubmit={e=>{e.preventDefault();add(label);}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setAdding(false);}}}>
+   <input className="org-input" autoFocus aria-label="Field name" placeholder="Field name" maxLength={40} list="fact-names" value={label} onChange={e=>setLabel(e.target.value)}/><datalist id="fact-names">{free.map(x=><option key={x} value={x}/>)}</datalist>
+   <button className="button small primary" type="submit" disabled={!label.trim()}>Add</button><button className="button small" type="button" onClick={()=>setAdding(false)}>Cancel</button>
+   <span className="char-fact-suggest">{free.slice(0,6).map(x=><button type="button" key={x} className="char-fact-chip" onClick={()=>add(x)}>{x}</button>)}</span>
+  </form>:facts.length<maxFacts&&<button type="button" className="char-fact-add" aria-label="Add a field" onClick={()=>setAdding(true)}><Plus size={13}/> Field</button>}
  </div>;
 }
 
@@ -121,7 +151,7 @@ function Block({b,ctx,arrange}:{b:ProfileBlock;ctx:Ctx;arrange:Arrange<ProfileBl
 }
 
 /** The GM's Profile tab of a character page. */
-export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Props){
+export function CharacterProfile({entry,data,campaign,change,onOpen,linked,onTab}:Props){
  const world=data.worlds.find(w=>w.id===entry.worldId),profile=profileOf(entry,world),coGm=!!memberRef();
  const [arranging,setArranging]=useState(false),[scope,setScope]=useState<'one'|'world'>('one'),[showPlayer,setShowPlayer]=useState(false);
  const [picker,setPicker]=useState<string|null>(null),[editing,setEditing]=useState<string|null>(null),[dragId,setDrag]=useState<string|null>(null),[overId,setOver]=useState<string|null>(null),[renaming,setRenaming]=useState<string|null>(null);
@@ -167,8 +197,10 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Prop
   </div>
   {profile.visibility==='gm'&&<p className="org-hint">Players can’t see this tab yet. Use Tab visibility above to share it.</p>}
   {notice&&<p role="status" className="info-note org-notice">{notice}</p>}
+  <Facts profile={profile} setProfile={setProfile} arranging={arranging}/>
   <Traits profile={profile} setProfile={setProfile}/>
   <CharacterSheetSection entry={entry} change={change} data={data} campaign={campaign}/>
+  <QuickFind entry={entry} campaign={campaign} profile={profile} setProfile={setProfile} arranging={arranging} onTab={onTab}/>
   {arranging&&<ArrangeBar what="characters" scope={scope} setScope={setScope} coGm={coGm} onDone={()=>void done()}/>}
   <Board blocks={profile.blocks} arranging={arranging} dragId={dragId} overId={overId} setOver={setOver} drop={arrange.drop} render={b=><Block key={b.id} b={b} ctx={ctx} arrange={arrange}/>}/>
   {arranging&&<AddBlockMenu count={profile.blocks.length} kinds={profileBlockKinds.map(k=>({kind:k,name:profileBlockInfo[k].name,blurb:profileBlockInfo[k].blurb,taken:singleProfileKinds.includes(k)&&profile.blocks.some(b=>b.kind===k)}))} onAdd={k=>addBlock(k as ProfileBlockKind)}/>}
@@ -178,7 +210,7 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked}:Prop
    :<BottomBar title={profile.bar.title} fields={profile.bar.fields.map(f=>({...f,value:f.value||'—'}))}><button type="button" className="text-button" onClick={()=>{setBarEdit(true);setArranging(false);}}><Pencil size={12}/> Change this bar</button></BottomBar>}
   {showPlayer&&<ToolDialog title="Player view" wide onClose={()=>setShowPlayer(false)}>
    <p className="modal-intro">This is how players see the profile{profile.visibility==='gm'?' once you share the tab':''}. People and pages players can’t read, organizations whose own profile isn’t shared, and anything marked GM only, are left out.</p>
-   {shown?.profile?<div className="org-player-preview"><CharacterReadOnly profile={shown.profile}/></div>:<p className="org-empty">There’s no campaign in this world to show the player view for yet.</p>}
+   {shown?.profile?<div className="org-player-preview"><CharacterReadOnly profile={shown.profile} who={entry.title} settings={itemSettingsOf(campaign)}/></div>:<p className="org-empty">There’s no campaign in this world to show the player view for yet.</p>}
   </ToolDialog>}
  </div>;
 }

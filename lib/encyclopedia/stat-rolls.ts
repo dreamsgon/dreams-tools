@@ -28,7 +28,16 @@ export function statRolls(f: RollFields): StatRoll[] {
  * `derived` formula). {value} on its own puts the value in as written, so a text stat holding 2d8+3 rolls that.
  * Numbers that come out with a fraction round down.
  */
-export type SheetStat = { label: string; type: string; derived?: string; value: unknown };
+export type SheetStat = { label: string; type: string; derived?: string; value: unknown; score?: boolean; mod?: unknown };
+/**
+ * A score box (a number stat with look "score", like a D&D ability) keeps the modifier the GM types beside its score under
+ * this key in the character's values. With none typed, the modifier is worked out from `derived` when the stat has one.
+ */
+export const modKey = (fieldId: string) => `${fieldId.slice(0, 96)}-mod`;
+/** A score box's modifier: the one typed in, else the worked-out one; null when it has neither. */
+export function statModifier(st: Pick<SheetStat, 'derived' | 'value' | 'mod'>, sheet: SheetStat[], depth = 0): number | null {
+  return statNumber(st.mod) ?? derivedValue(st, sheet, depth);
+}
 export type Outcome = { ok: boolean; text: string };
 export type StatSuccess = { op: 'atLeast' | 'atMost'; against: string };
 type Found = { dice: string } | { missing: string } | { bad: true };
@@ -42,8 +51,8 @@ export function statNumber(v: unknown): number | null {
   return null;
 }
 /** The sheet a formula reads: the form's stats with this character's values. */
-export function sheetOf(fields: { id: string; label: string; type: string; derived?: string; archived?: boolean }[], values: Record<string, unknown>): SheetStat[] {
-  return fields.filter(f => !f.archived).map(f => ({ label: f.label, type: f.type, derived: f.derived, value: values[f.id] }));
+export function sheetOf(fields: { id: string; label: string; type: string; derived?: string; archived?: boolean; look?: string }[], values: Record<string, unknown>): SheetStat[] {
+  return fields.filter(f => !f.archived).map(f => ({ label: f.label, type: f.type, derived: f.derived, value: values[f.id], ...(f.look === 'score' ? { score: true, mod: values[modKey(f.id)] } : {}) }));
 }
 
 const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -77,7 +86,7 @@ function arithmetic(src: string): number {
 function braceNumber(inner: string, self: unknown, sheet: SheetStat[], depth: number): number {
   const names: [string, () => number][] = [['value', () => { const n = statNumber(self); if (n === null) throw new Missing('value'); return n; }]];
   for (const st of sheet) {
-    if (st.derived) names.push([`${st.label} mod`, () => derivedValue(st, sheet, depth + 1) ?? (() => { throw new Missing(st.label); })()]);
+    if (st.derived || st.score) names.push([`${st.label} mod`, () => statModifier(st, sheet, depth + 1) ?? (() => { throw new Missing(`${st.label} modifier`); })()]);
     names.push([st.label, () => { const n = statNumber(st.value); if (n === null) throw new Missing(st.label); return n; }]);
   }
   names.sort((a, b) => b[0].length - a[0].length);
@@ -180,8 +189,8 @@ export function placeStat<F extends { section: string }>(fields: F[], field: F):
 }
 
 export type StatRowRoll = { name: string; dice: string | null; hint?: string; need?: { op: StatSuccess['op']; n: number } };
-export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; description?: string; worked?: number; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
-export type RowField = { id: string; label: string; section: string; type: StatField['type']; note?: string; description?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
+export type StatRow = { id: string; label: string; section: string; type: string; value: unknown; note?: string; description?: string; worked?: number; look?: 'score'; rolls: StatRowRoll[]; spend?: { tracker: string; n: number } };
+export type RowField = { id: string; label: string; section: string; type: StatField['type']; look?: 'score'; note?: string; description?: string; derived?: string; spend?: { tracker: string; n: number }; archived?: boolean; roll?: string; rollFormula?: string; rolls?: StatRoll[] };
 
 /**
  * The sheet as rows, with every roll worked out for this character: what a player page and a Maptable token show.
@@ -193,12 +202,12 @@ const rowHint = (h: string | null) => h === null ? undefined : h.startsWith('Its
 export function statRows(fields: RowField[], values: Record<string, unknown>): StatRow[] {
   const live = fields.filter(f => !f.archived), sheet = sheetOf(live, values);
   return live.map(f => {
-    const v = values[f.id] ?? null, worked = f.derived ? derivedValue({ derived: f.derived, value: v }, sheet) : null;
+    const v = values[f.id] ?? null, box = f.look === 'score', worked = box ? statModifier({ derived: f.derived, value: v, mod: values[modKey(f.id)] }, sheet) : f.derived ? derivedValue({ derived: f.derived, value: v }, sheet) : null;
     const rolls = statRolls(f).map(r => {
       const dice = statRollDice(r.formula, v, sheet), n = r.success ? targetNumber(r.success, v, sheet) : null;
       return { name: r.name, dice, ...(dice ? {} : { hint: rowHint(statRollHint(r.formula, v, f.type, sheet)) }), ...(r.success && n !== null ? { need: { op: r.success.op, n: Number(n) } } : {}) };
     });
-    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(f.description ? { description: f.description } : {}), ...(worked !== null ? { worked } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
+    return { id: f.id, label: f.label, section: f.section, type: f.type, value: v, ...(f.note ? { note: f.note } : {}), ...(f.description ? { description: f.description } : {}), ...(worked !== null ? { worked } : {}), ...(box ? { look: 'score' as const } : {}), rolls, ...(f.spend ? { spend: f.spend } : {}) };
   });
 }
 

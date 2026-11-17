@@ -9,7 +9,7 @@ import {newToken,type Workspace} from "@/lib/model";
 import {tokenInitials} from "@/lib/token-initials";
 import {roleSide} from "@/lib/token-gallery";
 import {encyclopediaPlacementId,toggleArmed,type ArmedToken} from "@/lib/token-arming";
-import {circleStyle} from "@/lib/encyclopedia/picture";
+import {circleStyle,tokenPicture} from "@/lib/encyclopedia/picture";
 import {bookImageUrl,bookWorkspaceUrl} from "@/lib/maptable-member";
 import {campaignCharacters,encyclopediaCharacters,encyclopediaVehicles,pairedCampaign,type EncyclopediaCharacter,type EncyclopediaRaw} from "@/lib/encyclopedia-characters";
 
@@ -44,7 +44,7 @@ export default function EncyclopediaTokens({disabled,onAdd,campaignId,coGm,works
  const shown=useMemo(()=>(list??[]).filter(c=>!q||`${c.name} ${c.detail} ${c.world} ${c.origin??""}`.toLowerCase().includes(q)),[list,q]);
  const worlds=[...new Set(shown.map(c=>c.world))];
  const face=(c:EncyclopediaCharacter)=>{
-  if(c.picture)return <span className="token-face ency-token-picture" aria-hidden="true" data-picture="true" style={{width:32,height:32,borderColor:c.picture.ring??roleColor[c.role],backgroundImage:`url("${bookImageUrl(c.picture.imageId)}")`,...circleStyle(c.picture,28)}}/>;
+  if(c.picture)return <span className="token-face ency-token-picture" aria-hidden="true" data-picture="true" style={{width:32,height:32,borderColor:c.picture.noRing?"transparent":c.picture.ring??roleColor[c.role],backgroundImage:`url("${bookImageUrl(tokenPicture(c.picture).imageId)}")`,...circleStyle(tokenPicture(c.picture),28)}}/>;
   const token={...newToken(c.name),disposition:roleSide[c.role],sideColours:true};
   return <TokenFace token={token} workspace={workspace} campaignId={campaignId} initials={tokenInitials(c.name)} size={32}/>;
  };

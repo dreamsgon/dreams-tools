@@ -16,6 +16,7 @@ import { RollPanel } from "./roll-widget";
 import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
+import { tokenPicture } from "@/lib/encyclopedia/picture";
 import { campaignTargets } from "@/lib/tags";
 import CampaignMembers, { type MembersView } from "./campaign-members";
 import { BackupsButton } from "./rp-backups";
@@ -270,9 +271,9 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
 }
 
 function PartyMember({ member: p }: { member: CampaignHub["party"][number] }) {
-  const { src } = usePictureSrc(p.picture?.imageId);
+  const { src } = usePictureSrc(p.picture ? tokenPicture(p.picture).imageId : undefined);
   return <li><a href={entryHref(p.id)}>
-    {p.picture ? <PictureToken picture={p.picture} src={src} size={36} /> : <span className="hub-token-empty" aria-hidden="true"><User size={16} /></span>}
+    {p.picture ? <PictureToken picture={tokenPicture(p.picture)} src={src} size={36} /> : <span className="hub-token-empty" aria-hidden="true"><User size={16} /></span>}
     <span><strong>{p.title}</strong><small>{[p.role === "pc" ? "Player character" : "Companion", p.group].filter(Boolean).join(" · ")}</small></span>
   </a></li>;
 }

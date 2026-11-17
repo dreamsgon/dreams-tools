@@ -1,5 +1,7 @@
 import {scopeMapWeather} from './map-weather.ts';
 import { statRows } from './stat-rolls.ts';
+import { shownStats } from './stat-arrange.ts';
+import { playerPins } from './profile-pins.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
@@ -48,6 +50,9 @@ export const statFieldSchema = z.object({
   description:z.string().trim().max(2000).optional(),
   // Optional (rollable sheet part 2): a worked-out value shown beside the value and read as {Name mod}, like floor(({value}-10)/2);
   // and a tracker (by name, since each character has its own) that rolling this stat spends from.
+  // Optional (added later): "score" shows a number stat as a score box like a D&D ability: the value is the score, with a
+  // modifier typed beside it (kept under modKey in the character's values) or worked out from `derived`. Rolls read it as {Name mod}.
+  look:z.enum(["score"]).optional(),
   derived:z.string().trim().max(200).optional(), spend:z.object({tracker:z.string().trim().min(1).max(40),n:z.number().int().min(1).max(1000)}).optional(),
 }).superRefine((f,ctx)=>{if(f.type==="select" && !f.options.length)ctx.addIssue({code:"custom",message:"Dropdowns need at least one option"});if(new Set(f.options).size!==f.options.length)ctx.addIssue({code:"custom",message:"Dropdown options must be unique"});});
 export const statValueSchema=z.union([z.string().max(10000),z.number().finite(),z.boolean(),z.null()]);
@@ -64,6 +69,9 @@ export const characterSchema = z.object({
   trackers:trackersSchema.optional(),
   // Optional (added later): money and items, and spells or powers (items.ts). The character's own player always sees both; others when shared.
   inventory:inventorySchema.optional(), spells:spellsSchema.optional(), spellsVisibility:visibilitySchema.optional(),
+  // Optional (added later): this character's own arrangement of the campaign's stats (stat-arrange.ts): their order, and the ones
+  // switched off on this sheet. Ids of stats the form no longer has are ignored. Off stats are left out for players too.
+  statLayout:z.object({order:z.array(id).max(500).optional(),off:z.array(id).max(500).optional()}).optional(),
 });
 export type CharacterData=z.infer<typeof characterSchema>;
 export type ArticleTab=z.infer<typeof tabSchema>;
@@ -122,7 +130,12 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
 export const pictureSchema = z.object({
     imageId: imageIdSchema, width: z.number().int().min(1).max(20000), height: z.number().int().min(1).max(20000),
     x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1), size: z.number().finite().min(0.2).max(1),
-    ring: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), squares: z.number().int().min(1).max(6).optional(),
+    /* Optional separate token image with its own framing; the portrait keeps the main picture. */
+    token: z.object({
+        imageId: imageIdSchema, width: z.number().int().min(1).max(20000), height: z.number().int().min(1).max(20000),
+        x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1), size: z.number().finite().min(0.2).max(1),
+    }).optional(),
+    ring: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), noRing: z.boolean().optional(), /* true: the token has no ring at all */ squares: z.number().int().min(1).max(6).optional(),
 });
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
@@ -371,7 +384,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(fields,values):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -382,7 +395,9 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
   e.org=playerOrg(src.org,id=>readable.has(id),playerText,{title,subgroups,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id))),vehicles:candidates.filter(x=>x.kind==='vehicle'&&readable.has(x.id)&&x.vehicle?.ownerId===src.id&&!x.vehicle.ownerGm&&x.vehicle.visibility==='players').map(x=>({id:x.id,title:x.title})).sort((a,b)=>a.title.localeCompare(b.title))});}
  // A shared character Profile: organizations only where the page and its own Profile are shared and the character's place isn't GM only.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='character'||src.profile?.visibility!=='players')continue;
-  e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});}
+  e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});
+  // Pinned stats, items and spells: only from what this payload already gives players (shared tabs, GM-only lines left out). Statblock lines never.
+  const pins=playerPins(src.profile.pins,{stats:e.stats,items:e.inventory?.items,spells:e.spells});if(pins.length)e.profile.pins=pins;}
  // A shared vehicle: GM-only values left out, and its owner, commander and location only when players can read those pages.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='vehicle'||src.vehicle?.visibility!=='players')continue;
   e.vehicle=playerVehicle(src.vehicle,vehicleTypeOf(src.vehicle,s.worlds.find(w=>w.id===src.worldId)),id=>readable.has(id),playerText);}

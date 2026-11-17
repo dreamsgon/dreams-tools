@@ -9,6 +9,7 @@ import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import type { Token, Workspace as Maps } from "../model.ts";
 import type { Picture } from "../encyclopedia/world-model.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
+import { tokenPicture } from "../encyclopedia/picture.ts";
 
 /** Where the image is: the app's own bucket ("m") or the GM's optional S3 bucket ("s"), and the token circle to cut out. */
 export type AvatarSource = { b: "m" | "s"; k: string; p: string; c?: [x: number, y: number, size: number] };
@@ -67,5 +68,6 @@ export function tokenAvatar(prefix: string, maps: Maps, token: Pick<Token, "asse
 /** An Encyclopedia page's picture, cut to its token circle. */
 export function pictureAvatar(owner: string, picture: Picture, env: NodeJS.ProcessEnv = process.env): string | null {
   const prefix = `users/${encodeURIComponent(owner)}/`;
-  return avatarUrl({ b: "m", k: encyclopediaPrefix(owner) + "images/" + picture.imageId, p: prefix, c: [picture.x, picture.y, picture.size] }, env);
+  const t = tokenPicture(picture);
+  return avatarUrl({ b: "m", k: encyclopediaPrefix(owner) + "images/" + t.imageId, p: prefix, c: [t.x, t.y, t.size] }, env);
 }

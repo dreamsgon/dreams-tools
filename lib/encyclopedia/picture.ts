@@ -13,6 +13,12 @@ export const ringColors = ["#d9b25e", "#ef8a99", "#86a8ea", "#7fc39a", "#b39be6"
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** The picture the token uses: the main one, or its separate token image with its own framing. Ring, no ring and squares carry over. */
+export function tokenPicture(p: Picture): Picture {
+  const { token, ...rest } = p;
+  return token ? { ...rest, ...token } : rest;
+}
+
 /** A new picture's token circle: the largest circle that fits, centred a little above the middle (where faces usually are). */
 export function newPicture(imageId: string, width: number, height: number): Picture {
   const tall = height > width;
