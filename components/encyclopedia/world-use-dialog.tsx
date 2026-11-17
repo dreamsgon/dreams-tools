@@ -20,7 +20,7 @@ const loaded = (src: string) => new Promise<HTMLImageElement>((resolve, reject) 
 });
 
 /** Draw the map's SVG (and its uploaded image, if it has one) onto a canvas at table size. */
-async function renderMap(svg: SVGSVGElement, map: MapData, imageUrl: string | undefined): Promise<Blob> {
+export async function renderMap(svg: SVGSVGElement, map: MapData, imageUrl: string | undefined): Promise<Blob> {
   const { width, height } = tableImageSize(map);
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
@@ -36,7 +36,9 @@ async function renderMap(svg: SVGSVGElement, map: MapData, imageUrl: string | un
   clone.removeAttribute('style');
   // Images inside an SVG drawn as a picture don't load, so the uploaded image is drawn first, above.
   clone.querySelectorAll('image').forEach(i => i.remove());
-  if (map.source === 'image') clone.querySelector('rect')?.remove();
+  // Only the paper behind the map, not the fog mask's rectangles in <defs>, which come first: removing one of those
+  // left the paper over the picture, so an uploaded map went onto the table as a blank page.
+  if (map.source === 'image') clone.querySelectorAll('.map-paper').forEach(r => r.remove());
   const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
   try { ctx.drawImage(await loaded(url), 0, 0, width, height); } finally { URL.revokeObjectURL(url); }
   return canvasBlob(canvas);
