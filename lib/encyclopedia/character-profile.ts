@@ -44,6 +44,8 @@ export const cellSizes = ["s", "m", "l"] as const;
 export type CellSize = typeof cellSizes[number];
 export const cellSizeNames: Record<CellSize, string> = { s: "Small", m: "Medium", l: "Large" };
 const size = z.enum(cellSizes).optional();
+/** A fact that starts a new line in the facts box. */
+const br = z.boolean().optional();
 export const maxPins = 40;
 /** `ref` is the stat's, item's or spell's id, or a statblock line's text (trimmed, its first 300 characters). */
 export const pinSchema = z.object({ id: oid, kind: z.enum(pinKinds), ref: z.string().trim().min(1).max(300), size });
@@ -57,7 +59,7 @@ export const profileSchema = z.object({
   bar: z.object({ title: text(40), hidden: z.boolean().optional(), fields: z.array(barFieldSchema).max(maxBarFields) }),
   pins: z.array(pinSchema).max(maxPins).optional(),
   /** Facts: labelled fields at the top, like Species, Class or Level. Same shape as the bar's fields. */
-  facts: z.array(barFieldSchema.extend({ size })).max(maxFacts).optional(),
+  facts: z.array(barFieldSchema.extend({ size, br })).max(maxFacts).optional(),
 }).superRefine((p, ctx) => {
   const bad = (message: string) => ctx.addIssue({ code: "custom", message });
   if (!unique(p.blocks.map(b => b.id))) bad("Block ids must be unique");
@@ -82,7 +84,7 @@ export const characterLayoutSchema = z.object({
   blocks: z.array(z.object({ id: oid, kind: z.enum(profileBlockKinds), title: text(80), gm: z.boolean().optional(), column: z.enum(["left", "right"]), full: z.boolean().optional() })).max(maxBlocks),
   bar: z.object({ title: text(40), hidden: z.boolean().optional(), fields: z.array(z.object({ id: oid, label: text(40), gm: z.boolean().optional() })).max(maxBarFields) }),
   /** Optional (added later): the facts' labels every character starts with. */
-  facts: z.array(z.object({ id: oid, label: text(40), gm: z.boolean().optional(), size })).max(maxFacts).optional(),
+  facts: z.array(z.object({ id: oid, label: text(40), gm: z.boolean().optional(), size, br })).max(maxFacts).optional(),
 }).superRefine((l, ctx) => {
   if (!unique(l.blocks.map(b => b.id)) || !unique(l.bar.fields.map(f => f.id)) || !unique((l.facts ?? []).map(f => f.id))) ctx.addIssue({ code: "custom", message: "Layout ids must be unique" });
 });
@@ -118,7 +120,7 @@ export function profileFromLayout(layout: CharacterLayout): Profile {
     visibility: "gm", traits: [],
     blocks: layout.blocks.map(b => emptyProfileBlock(b.kind, b.id, b.title, b.column, b)),
     bar: { title: layout.bar.title, ...(layout.bar.hidden ? { hidden: true } : {}), fields: layout.bar.fields.map(f => ({ id: f.id, label: f.label, value: "", ...(f.gm ? { gm: true } : {}) })) },
-    ...(layout.facts?.length ? { facts: layout.facts.map(f => ({ id: f.id, label: f.label, value: "", ...(f.gm ? { gm: true } : {}), ...(f.size ? { size: f.size } : {}) })) } : {}),
+    ...(layout.facts?.length ? { facts: layout.facts.map(f => ({ id: f.id, label: f.label, value: "", ...(f.gm ? { gm: true } : {}), ...(f.size ? { size: f.size } : {}), ...(f.br ? { br: true } : {}) })) } : {}),
   };
 }
 /** The profile a new character starts with: the world's shared layout if it has one, else the default. Older pages show this too. */
@@ -130,7 +132,7 @@ export const profileOf = (entry: Pick<Entry, "profile">, world?: Pick<World, "ch
 export const profileLayoutOf = (p: Profile): CharacterLayout => ({
   blocks: p.blocks.map(b => ({ id: b.id, kind: b.kind, title: b.title, column: b.column, ...(b.gm ? { gm: true } : {}), ...(b.full ? { full: true } : {}) })),
   bar: { title: p.bar.title, ...(p.bar.hidden ? { hidden: true } : {}), fields: p.bar.fields.map(f => ({ id: f.id, label: f.label, ...(f.gm ? { gm: true } : {}) })) },
-  ...(p.facts?.length ? { facts: p.facts.map(f => ({ id: f.id, label: f.label, ...(f.gm ? { gm: true } : {}), ...(f.size ? { size: f.size } : {}) })) } : {}),
+  ...(p.facts?.length ? { facts: p.facts.map(f => ({ id: f.id, label: f.label, ...(f.gm ? { gm: true } : {}), ...(f.size ? { size: f.size } : {}), ...(f.br ? { br: true } : {}) })) } : {}),
 });
 
 /** Whether a block holds anything its owner wrote. */
@@ -147,7 +149,13 @@ export function profileBlockHasContent(b: ProfileBlock): boolean {
 export function layOutProfile(p: Profile, layout: CharacterLayout): Profile {
   // Facts follow the layout's labels like the bar's fields do; a fact with a value the layout doesn't have is kept.
   const facts = layOutBar({ title: "", fields: p.facts ?? [] }, { title: "", fields: layout.facts ?? [] }).fields.concat((p.facts ?? []).filter(f => f.value.trim() && !(layout.facts ?? []).some(l => l.id === f.id || l.label.trim().toLowerCase() === f.label.trim().toLowerCase()))).filter((f, i, all) => all.findIndex(x => x.id === f.id) === i).slice(0, maxFacts)
-    .map(f => { const own = f as typeof f & { size?: CellSize }, lf = (layout.facts ?? []).find(l => l.id === f.id), mine = (p.facts ?? []).find(x => x.id === f.id) ?? (lf && (p.facts ?? []).find(x => x.label.trim().toLowerCase() === lf.label.trim().toLowerCase())), sz = lf?.size ?? mine?.size ?? own.size; const { size: _s, ...bare } = own; void _s; return sz ? { ...bare, size: sz } : bare; });
+    .map(f => {
+      const own = f as typeof f & { size?: CellSize; br?: boolean }, lf = (layout.facts ?? []).find(l => l.id === f.id), mine = (p.facts ?? []).find(x => x.id === f.id) ?? (lf && (p.facts ?? []).find(x => x.label.trim().toLowerCase() === lf.label.trim().toLowerCase()));
+      // The layout's width and line break win; without a layout entry the character's own stay.
+      const sz = lf?.size ?? mine?.size ?? own.size, nl = lf ? !!lf.br : !!(mine?.br ?? own.br);
+      const { size: _s, br: _b, ...bare } = own; void _s; void _b;
+      return { ...bare, ...(sz ? { size: sz } : {}), ...(nl ? { br: true } : {}) };
+    });
   const { facts: _old, ...rest } = p; void _old;
   return { ...rest, ...(facts.length ? { facts } : {}), blocks: layOutBlocks<ProfileBlock, CharacterLayout["blocks"][number]>(p.blocks, layout.blocks, lb => emptyProfileBlock(lb.kind, lb.id, lb.title, lb.column, lb), profileBlockHasContent), bar: layOutBar(p.bar, layout.bar) };
 }
@@ -339,10 +347,13 @@ export type PlayerProfileBlock = { id: string; kind: ProfileBlockKind; title: st
   | { kind: "text"; text: string }
   | { kind: "linked"; linked: PlayerLink[] }
 );
+/** A fact's text size in px: smaller as it gets longer, so "Darkvision 60 ft, tremorsense 10 ft" still fits its cell. */
+export const factFontSize = (v: string) => { const n = v.trim().length; return n <= 16 ? 15 : n <= 28 ? 13.5 : n <= 48 ? 12.5 : 11.5; };
+
 export type PlayerProfile = {
   traits: { id: string; label: string; symbol?: EmblemSymbol }[];
   /** Facts like Species and Class: shared ones with a value. */
-  facts?: { id: string; label: string; value: string; size?: CellSize }[];
+  facts?: { id: string; label: string; value: string; size?: CellSize; br?: boolean }[];
   /** Pinned stats, items and spells, taken from what players already get (playerPins). */
   pins?: PlayerPin[];
   blocks: PlayerProfileBlock[];
@@ -379,7 +390,7 @@ export function playerProfile(p: Profile, readable: (entryId: string) => boolean
     else blocks.push({ ...head, kind: "linked", linked: (context.linked ?? []).filter(l => readable(l.id)) });
   }
   const fields = p.bar.hidden ? [] : p.bar.fields.filter((f: OrgBarField) => !f.gm).map(f => ({ id: f.id, label: clean(f.label), value: clean(f.value) })).filter(f => f.label && f.value);
-  const facts = (p.facts ?? []).filter(f => !f.gm).map(f => ({ id: f.id, label: clean(f.label), value: clean(f.value), ...(f.size ? { size: f.size } : {}) })).filter(f => f.label && f.value);
+  const facts = (p.facts ?? []).filter(f => !f.gm).map(f => ({ id: f.id, label: clean(f.label), value: clean(f.value), ...(f.size ? { size: f.size } : {}), ...(f.br ? { br: true } : {}) })).filter(f => f.label && f.value);
   return {
     ...(facts.length ? { facts } : {}),
     traits: p.traits.filter(t => !t.gm).map(t => ({ id: t.id, label: clean(t.label), ...(t.symbol ? { symbol: t.symbol } : {}) })).filter(t => t.label),

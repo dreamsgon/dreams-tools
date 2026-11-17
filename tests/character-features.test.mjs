@@ -97,3 +97,13 @@ test('withoutDeletedStats removes the stats’ values, typed modifiers and arran
  assert.equal(withoutDeletedStats(w,'c1',[]),w);
  assert.deepEqual(w.entries[0].character.statsByCampaign.c1,{str:10,'str-mod':0,dex:12},'does not mutate');
 });
+
+test('a fact can start a new line: kept by layouts and sent to players', () => {
+ const p={...defaultProfile(),facts:[{id:'k1',label:'Species',value:'Dragon'},{id:'k2',label:'Class',value:'Paladin',br:true}]};
+ const layout=profileLayoutOf(p);
+ assert.deepEqual(layout.facts,[{id:'k1',label:'Species'},{id:'k2',label:'Class',br:true}]);
+ assert.deepEqual(profileFromLayout(layout).facts.map(f=>!!f.br),[false,true]);
+ const laid=layOutProfile({...defaultProfile(),facts:[{id:'k1',label:'Species',value:'Elf',br:true},{id:'k2',label:'Class',value:'Bard'}]},layout);
+ assert.deepEqual(laid.facts.map(f=>[f.value,!!f.br]),[['Elf',false],['Bard',true]],'the layout’s line breaks win');
+ assert.deepEqual(playerProfile(p,()=>true,t=>t,[]).facts.map(f=>!!f.br),[false,true]);
+});

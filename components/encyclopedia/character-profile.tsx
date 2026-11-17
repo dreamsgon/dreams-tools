@@ -1,9 +1,9 @@
 'use client';
-import {useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,Trash2} from 'lucide-react';
+import {Fragment,useState} from 'react';
+import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,Trash2,WrapText} from 'lucide-react';
 import {defaultCharacter,newId,playerCampaign,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {emblemSymbols,moveBlockBy,placeBlock,switchColumn,type EmblemSymbol} from '@/lib/encyclopedia/org-profile';
-import {applyCharacterLayout,defaultProfile,factSuggestions,maxFacts,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
+import {applyCharacterLayout,factFontSize,defaultProfile,factSuggestions,maxFacts,joinOrg,leaveOrg,maxTies,maxTraits,newProfileBlock,organizationsOf,profileBlockHasContent,profileBlockInfo,profileBlockKinds,profileLayoutOf,profileOf,setOrgPlace,singleProfileKinds,type Profile,type ProfileBlock,type ProfileBlockKind,type ProfileBlockOf} from '@/lib/encyclopedia/character-profile';
 import {confirmDialog} from '../confirm-dialog';
 import {memberRef} from './member-view';
 import {ToolDialog} from './tool-dialog';
@@ -75,23 +75,25 @@ function Facts({profile,setProfile,arranging}:{profile:Profile;setProfile:(f:(p:
  const add=(name:string)=>{const t=name.trim().slice(0,40);if(!t)return;const id=newId();set(l=>[...l,{id,label:t,value:''}]);setLabel('');setAdding(false);requestAnimationFrame(()=>document.getElementById(`fact-${id}`)?.focus());};
  const free=factSuggestions.filter(x=>!facts.some(f=>f.label.trim().toLowerCase()===x.toLowerCase()));
  if(!facts.length&&!adding)return <div className="char-facts is-empty"><button type="button" className="char-fact-add" onClick={()=>setAdding(true)}><Plus size={13}/> Add fields like Species or Class</button></div>;
- return <div className={`char-facts${arranging?' is-arranging':''}`} role="list" aria-label="Facts">
-  {facts.map((f,i)=><div role="listitem" key={f.id} className={`char-fact${f.gm?' is-gm':''}${f.size?` size-${f.size}`:''}`}>
-   <input id={`fact-${f.id}`} className="char-fact-value" aria-label={f.label||'Fact'} maxLength={300} placeholder="—" value={f.value} onChange={e=>patchFact(f.id,{value:e.target.value})}/>
+ return <><div className="char-facts-frame"><div className={`char-facts${arranging?' is-arranging':''}`} role="list" aria-label="Facts">
+  {facts.map((f,i)=><Fragment key={f.id}>{f.br&&i>0&&<span className="char-fact-break" aria-hidden="true"/>}<div role="listitem" className={`char-fact${f.gm?' is-gm':''}${f.size?` size-${f.size}`:''}`}>
+   <textarea id={`fact-${f.id}`} className="char-fact-value" rows={f.value.length>(f.size==='l'?90:f.size==='m'?40:22)?2:1} style={{fontSize:factFontSize(f.value)}} aria-label={f.label||'Fact'} maxLength={300} placeholder="—" value={f.value} onKeyDown={e=>{if(e.key==='Enter')e.preventDefault();}} onChange={e=>patchFact(f.id,{value:e.target.value.replace(/\s*\n\s*/g,' ')})}/>
    {arranging?<input className="char-fact-label-input" aria-label="Field name" maxLength={40} value={f.label} onChange={e=>patchFact(f.id,{label:e.target.value})}/>:<span className="char-fact-label">{f.label}{f.gm&&<EyeOff size={10} aria-label="GM only"/>}</span>}
-   {arranging&&<span className="char-fact-tools">
+   {arranging&&<span className="char-fact-tools"><span>
     <button type="button" className="icon-button" aria-label={`Move ${f.label} left`} disabled={i===0} onClick={()=>set(l=>{const n=[...l];[n[i-1],n[i]]=[n[i],n[i-1]];return n;})}><ArrowLeft size={11}/></button><button type="button" className="icon-button" aria-label={`Move ${f.label} right`} disabled={i===facts.length-1} onClick={()=>set(l=>{const n=[...l];[n[i+1],n[i]]=[n[i],n[i+1]];return n;})}><ArrowRight size={11}/></button>
-    <SizePick size={f.size} name={f.label} onSize={sz=>patchFact(f.id,{size:sz==='s'?undefined:sz})}/>
+    <SizePick size={f.size} name={f.label} onSize={sz=>patchFact(f.id,{size:sz==='s'?undefined:sz})}/></span><span>
+    <button type="button" className="icon-button" aria-pressed={!!f.br} disabled={i===0} aria-label={f.br?`${f.label} starts a new line. Keep it on the line before`:`Start a new line at ${f.label}`} title={f.br?'Starts a new line':'Start a new line here'} onClick={()=>patchFact(f.id,{br:f.br?undefined:true})}><WrapText size={11}/></button>
     <button type="button" className="icon-button" aria-pressed={!!f.gm} aria-label={f.gm?`${f.label} is GM only. Show it to players`:`Make ${f.label} GM only`} title={f.gm?'GM only':'Players see this'} onClick={()=>patchFact(f.id,{gm:f.gm?undefined:true})}>{f.gm?<EyeOff size={11}/>:<Eye size={11}/>}</button>
     <button type="button" className="icon-button" aria-label={`Remove ${f.label}`} onClick={()=>set(l=>l.filter(x=>x.id!==f.id))}><Trash2 size={11}/></button>
-   </span>}
-  </div>)}
-  {adding?<form className="char-fact-form" onSubmit={e=>{e.preventDefault();add(label);}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setAdding(false);}}}>
+   </span></span>}
+  </div></Fragment>)}
+ </div></div>
+ <div className="char-facts-foot">{adding?<form className="char-fact-form" onSubmit={e=>{e.preventDefault();add(label);}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setAdding(false);}}}>
    <input className="org-input" autoFocus aria-label="Field name" placeholder="Field name" maxLength={40} list="fact-names" value={label} onChange={e=>setLabel(e.target.value)}/><datalist id="fact-names">{free.map(x=><option key={x} value={x}/>)}</datalist>
    <button className="button small primary" type="submit" disabled={!label.trim()}>Add</button><button className="button small" type="button" onClick={()=>setAdding(false)}>Cancel</button>
    <span className="char-fact-suggest">{free.slice(0,6).map(x=><button type="button" key={x} className="char-fact-chip" onClick={()=>add(x)}>{x}</button>)}</span>
-  </form>:facts.length<maxFacts&&<button type="button" className="char-fact-add" aria-label="Add a field" onClick={()=>setAdding(true)}><Plus size={13}/> Field</button>}
- </div>;
+  </form>:facts.length<maxFacts&&<button type="button" className="char-fact-add" aria-label="Add a field" onClick={()=>setAdding(true)}><Plus size={13}/> Field</button>}</div>
+ </>;
 }
 
 /* ---- Block bodies ---- */
