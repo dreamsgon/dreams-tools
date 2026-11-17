@@ -17,8 +17,12 @@ import {NoteText,RollsEditor,type Act} from './inventory';
 import {TrackerView} from './character-trackers';
 import {GroupHead,useCollapsed} from './group-collapse';
 import './inventory.css';
+import './spells.css';
 
 type Shown=PlayerTracker&{gm?:boolean};
+type View='list'|'cards';
+const VIEW_KEY='encyclopedia:spells-view';
+const readView=():View=>{try{return window.localStorage.getItem(VIEW_KEY)==='cards'?'cards':'list';}catch{return 'list';}};
 
 function SpellForm({start,settings,trackers,gm,onSave,onClose}:{start?:Spell;settings:PlayerItemSettings;trackers:Shown[];gm:boolean;onSave:(s:SpellInput)=>Promise<boolean>|boolean;onClose:()=>void}){
  const sp=settings.spells,[busy,setBusy]=useState(false);
@@ -54,40 +58,61 @@ export function SpellsPanel({name,spells,trackers,settings,gm,canEdit,act}:{name
  const sp=settings.spells,canChange=canEdit&&(gm||settings.players.items);
  const collapse=useCollapsed('spells');
  const [q,setQ]=useState(''),[onlyReady,setOnlyReady]=useState(false),[open,setOpen]=useState<string|null>(null),[form,setForm]=useState<Spell|'new'|null>(null);
+ const [view,setViewState]=useState<View>(()=>typeof window==='undefined'?'list':readView());
+ const setView=(v:View)=>{setViewState(v);try{window.localStorage.setItem(VIEW_KEY,v);}catch{/* storage unavailable */}};
  const used=new Set(spells.flatMap(s=>s.cost?[s.cost.trackerId]:[])),costTrackers=trackers.filter(t=>used.has(t.id));
  const groups=useMemo(()=>{
   const want=q.trim().toLowerCase(),shown=spells.filter(s=>(!onlyReady||s.ready)&&(!want||[s.name,s.text??'',...(s.tags??[])].some(x=>x.toLowerCase().includes(want))));
   const names=[...sp.groups,...new Set(shown.map(s=>s.group??'').filter(g=>g&&!sp.groups.includes(g)))];
   return [...names.map(g=>({name:g,spells:shown.filter(s=>s.group===g)})),{name:'',spells:shown.filter(s=>!s.group||!names.includes(s.group))}].filter(g=>g.spells.length);
  },[spells,q,onlyReady,sp.groups]);
+ const pieces=(s:Spell)=>{
+  const isOpen=open===s.id,title=`${name} · ${s.name}`,cost=s.cost?trackers.find(t=>t.id===s.cost!.trackerId):undefined,details=sp.columns.map(c=>s.details?.[c]).filter(Boolean) as string[];
+  return {isOpen,title,details,toggle:()=>setOpen(isOpen?null:s.id),
+   pairs:sp.columns.flatMap(c=>s.details?.[c]?[[c,s.details[c]] as [string,string]]:[]),
+   ready:sp.ready?<button type="button" className={`icon-button spell-ready${s.ready?' on':''}`} disabled={!canChange} aria-pressed={!!s.ready} aria-label={`${s.name}: ${s.ready?`not ${sp.ready.toLowerCase()}`:sp.ready.toLowerCase()}`} title={s.ready?sp.ready:`Not ${sp.ready.toLowerCase()}`} onClick={()=>void act({action:'spell-edit',spellId:s.id,spell:{ready:!s.ready}})}><Star size={15} fill={s.ready?'currentColor':'none'}/></button>:null,
+   flag:s.gm?<span className="inv-flag"><EyeOff size={11}/> GM only</span>:null,
+   rolls:(s.rolls??[]).map(r=><RollChip key={r.name} title={title} formula={r.formula} label={r.name}/>),
+   cast:s.cost?<button type="button" className="spell-cast" disabled={!canEdit||!cost||cost.value<s.cost.n} title={cost?`${cost.label}: ${cost.value} of ${cost.max} left`:'Its tracker is gone'} onClick={()=>void act({action:'cast',spellId:s.id})}><Sparkles size={13}/>{sp.verb}<small>−{s.cost.n} {cost?.label??'?'}</small></button>:null,
+   eye:gm?<button type="button" className={`icon-button inv-eye${s.gm?' off':''}`} aria-pressed={!s.gm} aria-label={s.gm?`Show ${s.name} to players`:`Hide ${s.name} from players`} onClick={()=>void act({action:'spell-edit',spellId:s.id,spell:{gm:!s.gm}})}>{s.gm?<EyeOff size={14}/>:<Eye size={14}/>}</button>:null,
+   remove:<button type="button" className="button small danger inv-remove" onClick={async()=>{if(await confirmDialog({title:`Remove ${s.name}?`,message:`The ${sp.one}, its text and its rolls go.`,confirm:'Remove',danger:true}))void act({action:'spell-remove',spellId:s.id});}}><Trash2 size={14}/> Remove</button>};
+ };
  const save=(s:SpellInput)=>form==='new'?act({action:'spell-add',spell:s}):form?act({action:'spell-edit',spellId:form.id,spell:s}):false;
  return <div className="spells">
   {costTrackers.length>0&&<div className="spell-trackers">{costTrackers.map(t=><TrackerView key={t.id} t={t}/>)}</div>}
   {spells.length>0&&<div className="inv-filters">
    <label className="inv-search"><Search size={14} aria-hidden="true"/><input aria-label={`Find a ${sp.one}`} placeholder={`Find a ${sp.one}`} value={q} onChange={e=>setQ(e.target.value)}/></label>
    {sp.ready&&<div className="segmented"><button type="button" className={!onlyReady?'on':''} onClick={()=>setOnlyReady(false)}>All</button><button type="button" className={onlyReady?'on':''} onClick={()=>setOnlyReady(true)}>{sp.ready}</button></div>}
+   <div className="segmented" role="group" aria-label="View"><button type="button" className={view==='list'?'on':''} aria-pressed={view==='list'} onClick={()=>setView('list')}>List</button><button type="button" className={view==='cards'?'on':''} aria-pressed={view==='cards'} onClick={()=>setView('cards')}>Cards</button></div>
   </div>}
   {groups.map(g=><section key={g.name||'other'} className="inv-group">
    {(g.name||groups.length>1)&&<GroupHead title={g.name||'Other'} count={g.spells.length} closed={collapse.isClosed(g.name)} onToggle={()=>collapse.toggle(g.name)}/>}
-   {!((g.name||groups.length>1)&&collapse.isClosed(g.name))&&<div className="inv-rows" role="list">{g.spells.map(s=>{const isOpen=open===s.id,title=`${name} · ${s.name}`,cost=s.cost?trackers.find(t=>t.id===s.cost!.trackerId):undefined,details=sp.columns.map(c=>s.details?.[c]).filter(Boolean);
+   {!((g.name||groups.length>1)&&collapse.isClosed(g.name))&&(view==='cards'?<div className="spell-cards" role="list">{g.spells.map(s=>{const p=pieces(s);
+    return <div role="listitem" key={s.id} className={`spell-card${s.gm?' is-hidden':''}`}>
+     <div className="spell-card-kicker">{[g.name,...(s.tags??[])].filter(Boolean).join(' · ')||sp.one}{p.flag}</div>
+     <button type="button" className="spell-card-name" aria-expanded={p.isOpen} onClick={p.toggle}>{s.name}</button>
+     {p.pairs.length>0&&<dl className="spell-card-details">{p.pairs.map(([l,v])=><div key={l}><dt>{l}</dt><dd>{v}</dd></div>)}</dl>}
+     {s.text&&<div className={`spell-card-text${p.isOpen?' open':''}`}><NoteText text={s.text} title={p.title}/></div>}
+     {s.text&&<button type="button" className="spell-card-more" onClick={p.toggle}>{p.isOpen?'Less':'More'}</button>}
+     {(s.rolls?.length||s.cost)?<div className="spell-actions spell-card-actions">{p.rolls}{p.cast}</div>:null}
+     <div className="spell-card-foot">{p.ready}{p.eye}{canChange&&<button type="button" className="button small" onClick={()=>setForm(s)}><Pencil size={14}/> Change</button>}{p.isOpen&&canChange&&p.remove}</div>
+    </div>;})}</div>:<div className="inv-rows" role="list">{g.spells.map(s=>{const p=pieces(s);
     return <div role="listitem" key={s.id} className={`inv-row spell-row${s.gm?' is-hidden':''}`}>
      <div className="inv-line">
-      {sp.ready&&<button type="button" className={`icon-button spell-ready${s.ready?' on':''}`} disabled={!canChange} aria-pressed={!!s.ready} aria-label={`${s.name}: ${s.ready?`not ${sp.ready.toLowerCase()}`:sp.ready.toLowerCase()}`} title={s.ready?sp.ready:`Not ${sp.ready.toLowerCase()}`} onClick={()=>void act({action:'spell-edit',spellId:s.id,spell:{ready:!s.ready}})}><Star size={15} fill={s.ready?'currentColor':'none'}/></button>}
+      {p.ready}
       <span className="spell-main">
-       <span className="store-name"><button type="button" className="inv-name" aria-expanded={isOpen} onClick={()=>setOpen(isOpen?null:s.id)}>{isOpen?<ChevronDown size={14}/>:<ChevronRight size={14}/>}<span>{s.name}</span></button>{(s.tags??[]).map(t=><span key={t} className="spell-tag">{t}</span>)}{s.gm&&<span className="inv-flag"><EyeOff size={11}/> GM only</span>}</span>
-       {details.length>0&&<span className="spell-sub">{details.join(' · ')}</span>}
+       <span className="store-name"><button type="button" className="inv-name" aria-expanded={p.isOpen} onClick={p.toggle}>{p.isOpen?<ChevronDown size={14}/>:<ChevronRight size={14}/>}<span>{s.name}</span></button>{(s.tags??[]).map(t=><span key={t} className="spell-tag">{t}</span>)}{p.flag}</span>
+       {p.details.length>0&&<span className="spell-sub">{p.details.join(' · ')}</span>}
       </span>
       <span className="spell-actions">
-       {(s.rolls??[]).map(r=><RollChip key={r.name} title={title} formula={r.formula} label={r.name}/>)}
-       {s.cost&&<button type="button" className="spell-cast" disabled={!canEdit||!cost||cost.value<s.cost.n} title={cost?`${cost.label}: ${cost.value} of ${cost.max} left`:'Its tracker is gone'} onClick={()=>void act({action:'cast',spellId:s.id})}><Sparkles size={13}/>{sp.verb}<small>−{s.cost.n} {cost?.label??'?'}</small></button>}
-       {gm&&<button type="button" className={`icon-button inv-eye${s.gm?' off':''}`} aria-pressed={!s.gm} aria-label={s.gm?`Show ${s.name} to players`:`Hide ${s.name} from players`} onClick={()=>void act({action:'spell-edit',spellId:s.id,spell:{gm:!s.gm}})}>{s.gm?<EyeOff size={14}/>:<Eye size={14}/>}</button>}
+       {p.rolls}{p.cast}{p.eye}
       </span>
      </div>
-     {isOpen&&<div className="inv-detail read">
-      {s.text?<NoteText text={s.text} title={title}/>:<p className="muted">No text yet.</p>}
-      {canChange&&<div className="inv-detail-tools"><button type="button" className="button small" onClick={()=>setForm(s)}><Pencil size={14}/> Change</button><button type="button" className="button small danger inv-remove" onClick={async()=>{if(await confirmDialog({title:`Remove ${s.name}?`,message:`The ${sp.one}, its text and its rolls go.`,confirm:'Remove',danger:true}))void act({action:'spell-remove',spellId:s.id});}}><Trash2 size={14}/> Remove</button></div>}
+     {p.isOpen&&<div className="inv-detail read">
+      {s.text?<NoteText text={s.text} title={p.title}/>:<p className="muted">No text yet.</p>}
+      {canChange&&<div className="inv-detail-tools"><button type="button" className="button small" onClick={()=>setForm(s)}><Pencil size={14}/> Change</button>{p.remove}</div>}
      </div>}
-    </div>;})}</div>}
+    </div>;})}</div>)}
   </section>)}
   {!spells.length&&<p className="muted inv-empty">No {sp.tab.toLowerCase()} yet.</p>}
   {spells.length>0&&!groups.length&&<p className="muted inv-empty">Nothing matches.</p>}
