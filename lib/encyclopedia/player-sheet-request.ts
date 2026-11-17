@@ -11,6 +11,7 @@ import { readPublishedSheet, SheetReadError } from './sheet-published.ts';
 import { PlayerSheetError, cleanTabs, linkSheet, linkerKey, publishedLinkOf, refreshOwnSheet, rollOf, statRollOf, tabsSchema, unlinkSheet } from './player-sheet.ts';
 import { outcomeOf } from './stat-rolls.ts';
 import { rollWithMode } from './roll-mode.ts';
+import { BONUS_MAX, NOTE_MAX, addBonus, noteLabel } from '../roll-dialog.ts';
 import { PROOF_MINUTES, checkProof, proveRoll } from './player-dice.ts';
 import { createThrottle } from './throttle.ts';
 import { addPlayerLog, editPlayerLog, removePlayerLog } from './quest-log.ts';
@@ -46,10 +47,12 @@ const sheetAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('unlink'), ref, entryId: id }),
 ]);
 const mode = z.enum(['normal', 'high', 'low']);
+// From the roll dialog: a situational bonus added to the stored dice (like +1d4) and a note for the roll's label.
+const extra = { bonus: z.string().max(BONUS_MAX + 10).optional(), note: z.string().max(NOTE_MAX * 2).optional() };
 const rollAction = z.union([
-  z.object({ ref, entryId: id, itemId: id, mode }),
+  z.object({ ref, entryId: id, itemId: id, mode, ...extra }),
   // A roll from the campaign's stat sheet: the stat and the roll's name; the dice are worked out here.
-  z.object({ ref, entryId: id, statId: id, rollName: z.string().trim().min(1).max(40), mode }),
+  z.object({ ref, entryId: id, statId: id, rollName: z.string().trim().min(1).max(40), mode, ...extra }),
 ]);
 const noLongerMember = 'You can no longer open this campaign. You may have left it, or the GM changed what your group can see.';
 
@@ -67,7 +70,7 @@ async function memberOf(deps: Deps, r: string, signIn = 'Sign in to use your cha
 }
 const failure = (e: unknown, fallback: string) =>
   e instanceof PlayerSheetError || e instanceof TrackerError || e instanceof ItemError ? json({ error: e.message }, e.status)
-  : e instanceof SheetReadError ? json({ error: e.message }, 400)
+  : e instanceof SheetReadError || e instanceof BonusError ? json({ error: e.message }, 400)
   : e instanceof z.ZodError || e instanceof SyntaxError ? json({ error: 'That request isn’t valid.' }, 400)
   : json({ error: fallback }, 500);
 
@@ -109,6 +112,13 @@ export async function handlePlayerSheet(request: Request, deps: Deps) {
   } catch (e) { return failure(e, 'Could not save your sheet. Keep this tab open and try again.'); }
 }
 
+class BonusError extends Error {}
+/** The stored dice with the roll dialog's bonus (the player's own, shown in the formula, so the GM sees it on Discord). Checked before anything is spent. */
+function withBonus(formula: string, bonus: string | undefined) {
+  if (!bonus?.trim()) return formula;
+  try { return addBonus(formula, bonus); } catch (e) { throw new BonusError(e instanceof Error ? e.message : 'That bonus can’t be added to this roll.'); }
+}
+
 export async function handlePlayerRoll(request: Request, deps: Deps) {
   try {
     const got = await start(request, deps, ROLL_BODY);
@@ -123,16 +133,17 @@ export async function handlePlayerRoll(request: Request, deps: Deps) {
       let done = false;
       for (let attempt = 0; attempt < 4 && !done; attempt++) {
         const read = await deps.store.read(m.owner), got = statRollOf(read.data, m.campaignId, m.rights, body.entryId, body.statId, body.rollName);
-        data = read.data; target = { entryId: got.entryId, character: got.character, name: got.name, formula: got.dice }; need = got.need; spent = got.spent;
+        data = read.data; target = { entryId: got.entryId, character: got.character, name: got.name, formula: withBonus(got.dice, body.bonus) }; need = got.need; spent = got.spent;
         done = !got.spent || !!await deps.store.save(m.owner, got.spend(read.data), read.revision, { name: m.name, as: 'player' });
       }
       if (!done) return json({ error: 'The campaign is busy. Try again in a moment.' }, 409);
     } else {
       data = (await deps.store.read(m.owner)).data;
-      target = rollOf(data, m.campaignId, m.rights, linkerKey(m.owner, m.campaignId, m.userId), body.entryId, body.itemId);
+      const item = rollOf(data, m.campaignId, m.rights, linkerKey(m.owner, m.campaignId, m.userId), body.entryId, body.itemId);
+      target = { ...item, formula: withBonus(item.formula, body.bonus) };
     }
     const rolled = rollWithMode(target!.formula, body.mode, deps.random), outcome = outcomeOf(rolled.total, need);
-    const title = `${target!.character} · ${target!.name}`, detail = [rolled.detail, outcome?.text, spent ? `spent ${spent.n} ${spent.label}` : ''].filter(Boolean).join(' · ');
+    const title = noteLabel(`${target!.character} · ${target!.name}`, plainLabel(body.note, NOTE_MAX)), detail = [rolled.detail, outcome?.text, spent ? `spent ${spent.n} ${spent.label}` : ''].filter(Boolean).join(' · ');
     // The server's roll is the one that counts. With no Discord channel set up it is still rolled and returned.
     let discord: 'sent' | 'skipped' | 'none' | 'failed' = 'none';
     let channel = true;
@@ -141,7 +152,7 @@ export async function handlePlayerRoll(request: Request, deps: Deps) {
       try { discord = (await deps.post(m, { kind: 'roll', title, formula: rolled.formula, total: rolled.total, detail, who: target!.character, avatarOf: target!.entryId })).skipped ? 'skipped' : 'sent'; }
       catch { discord = 'failed'; }
     }
-    return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, discord, ...(outcome ? { outcome } : {}), ...(spent ? { spent } : {}) });
+    return json({ title, formula: rolled.formula, total: rolled.total, detail: rolled.detail, breakdown: rolled.breakdown, dice: rolled.dice.slice(0, 100), discord, ...(outcome ? { outcome } : {}), ...(spent ? { spent } : {}) });
   } catch (e) { return failure(e, 'Could not roll. Try again.'); }
 }
 

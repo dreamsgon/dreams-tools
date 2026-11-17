@@ -2,7 +2,7 @@ import * as C from 'cannon-es';
 import {Vector3,Quaternion} from 'three';
 import {diceGeometry,diceFaces} from './dice-geometry.ts';
 export type Pose=[number,number,number,number,number,number,number];
-export type PhysicalBody={sides:number;value:number;labels?:'tens'|'units';impacts?:{time:number;strength:number}[];frames:Pose[]};
+export type PhysicalBody={sides:number;value:number;labels?:'tens'|'units';/** Face numbers swapped on this die so it lands showing a number decided beforehand (see showValues). */relabel?:Record<number,number>;impacts?:{time:number;strength:number}[];frames:Pose[]};
 export type DiceMotion={bodies:PhysicalBody[];duration:number;width:number;height:number;collisions?:number};
 export type PhysicalDie={sides:number;value:number;motion?:DiceMotion};
 const supported=[4,6,8,10,12,20,100];
@@ -26,4 +26,16 @@ export function simulateDice(sidesList:number[],random:()=>number=Math.random,as
   for(const p of physical)p.record.value=landedValue(p.record.sides,p.body.quaternion);
   for(const target of batch){if(!target.motion)continue;target.motion.duration=duration;target.motion.collisions=collisions;const b=target.motion.bodies;target.value=target.sides===100?((b[0].value-1)*10+b[1].value-1)||100:b[0].value;}
  }return results;
+}
+
+/**
+ * Makes thrown dice show numbers already rolled (a roll made on the server, or in Roll20): on each die the face it lands
+ * on and the face with the wanted number swap labels. The throw itself is unchanged. `values` follow `dice` in order.
+ */
+export function showValues(dice:PhysicalDie[],values:number[]){
+ dice.forEach((d,i)=>{const want=values[i];if(!d.motion||!want||want<1||want>d.sides)return;
+  const n=want%100,wants=d.sides===100?[Math.floor(n/10)+1,n%10+1]:[want];
+  d.motion.bodies.forEach((b,j)=>{const w=wants[j];if(!w||b.value===w)return;b.relabel={[b.value]:w,[w]:b.value};b.value=w;});
+  d.value=want;});
+ return dice;
 }

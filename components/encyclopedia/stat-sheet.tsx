@@ -46,10 +46,13 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
  const roll=(f:StatField,r:StatRoll,dice:string)=>{
   const title=`${entry.title} · ${f.label}${rollsOf(f).length>1||r.name!=='Roll'?` · ${r.name}`:''}`;
   const v=values[f.id]??null;
-  if(handler)handler(title,dice);else rollInline(title,dice,{mode:anyD20&&!isSingleD20(dice)?'normal':mode,outcome:r.success?t=>rollOutcome(t,r.success,v,sheet):undefined});
   setMode('normal');
-  const t=f.spend?trackerOf(c,f.spend.tracker):undefined;
-  if(f.spend&&t&&!handler)onChange({...c,trackers:setTrackerValue(c.trackers??[],t.id,t.value-f.spend.n)});
+  if(handler){handler(title,dice);return;}
+  // A stat that spends (like 1 Stress) spends only when the roll goes ahead, not when the roll dialog is cancelled.
+  void rollInline(title,dice,{mode:anyD20&&!isSingleD20(dice)?'normal':mode,outcome:r.success?t=>rollOutcome(t,r.success,v,sheet):undefined}).then(done=>{
+   const t=f.spend?trackerOf(c,f.spend.tracker):undefined;
+   if(done&&f.spend&&t)onChange({...c,trackers:setTrackerValue(c.trackers??[],t.id,t.value-f.spend.n)});
+  });
  };
  function applyLayout(l:StatLayout){
   const r=addLayout(all,l,newId);

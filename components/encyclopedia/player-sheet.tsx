@@ -11,6 +11,7 @@ import {confirmDialog} from '../confirm-dialog';
 import {SheetView} from './sheet-view';
 import {SheetRolls,SheetRollLog} from './sheet-rolls';
 import {rollInline} from './rolls';
+import {askRoll} from '@/lib/roll-dialog';
 import {readGoogle} from './sheet-read';
 import {linkMySheet,readPublishedAsMember,refreshMySheet,rollFromSheet,unlinkMySheet} from './player-sheet-api';
 import './character-sheet.css';
@@ -55,8 +56,8 @@ export function PlayerSheetSection({title,entryId,sheet,state,memberRef,onChange
  const rolling=rolls.length?<>
   <SheetRolls groups={rolls} twice onRoll={(name,formula,mode,itemId)=>{
    setNotice('');
-   if(serverRolls)void rollFromSheet(memberRef,entryId,itemId,mode).catch(fail);
-   else rollInline(`${title} · ${name}`,formula,{mode,log:true});
+   if(serverRolls)void askRoll({title:`${title} · ${name}`,formula,mode,twice:true}).then(c=>c&&rollFromSheet(memberRef,entryId,itemId,c.mode,{bonus:c.bonus,note:c.note})).catch(fail);
+   else void rollInline(`${title} · ${name}`,formula,{mode,log:true});
   }}/>
   {!serverRolls&&<p className="sheet-local-hint">Rolls here stay on this device.</p>}
   <div className="sheet-log"><span className="eyebrow">ROLL LOG</span><SheetRollLog character={title}/></div></>:undefined;

@@ -4,6 +4,8 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import type {DiceAppearance} from './dice-appearance';
 type Die=import("./dice-physics").PhysicalDie;
+/** A face's number, after any swap that makes the die show a number rolled beforehand. */
+const shownFace=(d:{relabel?:Record<number,number>},n:number)=>d.relabel?.[n]??n;
 import {diceGeometry,diceFaces} from './dice-geometry.ts';
 export {diceGeometry,diceFaces} from './dice-geometry.ts';
 export function startThreeDice(canvas:HTMLCanvasElement,dice:Die[],style:DiceAppearance,reduced:boolean){
@@ -20,7 +22,7 @@ export function startThreeDice(canvas:HTMLCanvasElement,dice:Die[],style:DiceApp
   const geometry=diceGeometry(d.sides),faces=diceFaces(geometry),group=new THREE.Group(),material=new THREE.MeshPhysicalMaterial({color:style.color,metalness:style.material==="metal"?1:style.material==="glass"||style.material==="gemstone"?0:.25,roughness:style.roughness??(style.material==="glass"?.04:.18),transmission:style.material==="glass"?.92:style.material==="gemstone"?.58:0,transparent:style.material==="glass"||style.material==="gemstone",opacity:style.material==="glass"?.65:style.material==="gemstone"?.9:1,thickness:2,ior:style.material==="gemstone"?2.1:1.5,attenuationColor:new THREE.Color(style.color),attenuationDistance:style.material==="gemstone"?1.5:5,clearcoat:1,clearcoatRoughness:.1,flatShading:d.sides!==6,envMapIntensity:style.material==="metal"?2.2:1.2});resources.push(geometry,material);const body=d.sides===6?new RoundedBoxGeometry(1.65,1.65,1.65,3,.085):geometry;if(body!==geometry)resources.push(body);const mesh=new THREE.Mesh(body,material);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
   const edges=new THREE.EdgesGeometry(geometry,15),edgeMaterial=new THREE.LineBasicMaterial({color:new THREE.Color(style.color).lerp(new THREE.Color('#fff2bc'),.45),transparent:true,opacity:.5});resources.push(edges,edgeMaterial);if(d.sides!==6)group.add(new THREE.LineSegments(edges,edgeMaterial));
   const vertices:THREE.Vector3[]=[];for(const face of faces)for(const point of face.points)if(!vertices.some(p=>p.distanceToSquared(point)<1e-8))vertices.push(point);
-  const labels=faces.flatMap((face,i)=>d.sides===4?face.points.map(point=>({...face,center:face.center.clone().lerp(point,.48),value:vertices.findIndex(p=>p.distanceToSquared(point)<1e-8)+1})): [{...face,value:i+1}]);
+  const labels=faces.flatMap((face,i)=>d.sides===4?face.points.map(point=>({...face,center:face.center.clone().lerp(point,.48),value:shownFace(d,vertices.findIndex(p=>p.distanceToSquared(point)<1e-8)+1)})): [{...face,value:shownFace(d,i+1)}]);
   const highlights:THREE.Object3D[]=[];
   labels.forEach((face)=>{
    const value=d.labels==='tens'?String((face.value-1)*10).padStart(2,'0'):d.labels==='units'?String(face.value-1):String(face.value);let labelMaterial=labelMaterials.get(value);if(!labelMaterial){const c=document.createElement('canvas');c.width=256;c.height=256;const ctx=c.getContext('2d')!;

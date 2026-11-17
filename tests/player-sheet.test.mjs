@@ -247,6 +247,27 @@ test('player roll route rolls on the server from the stored formula and ignores 
  const s2=setup({skipped:true});s2.state.data=s.state.data;assert.equal((await (await rollCall(s2,{entryId:'ayla',itemId:'atk'})).json()).discord,'skipped');
 });
 
+test('player roll route adds the roll dialog’s bonus and note on the server, and returns the dice',async()=>{
+ R.resetThrottles();
+ const s=setup();
+ let r=await rollCall(s,{entryId:'ayla',itemId:'per',bonus:'1d4',note:'Listening at the door'});
+ assert.equal(r.status,200);let v=await r.json();
+ assert.equal(v.formula,'1d20+4+1d4');assert.equal(v.title,'Ayla · Perception · Listening at the door');
+ assert.equal(v.total,rollWithMode('1d20+4+1d4','normal',()=>0.5).total);
+ assert.deepEqual(v.dice,[{sides:20,value:11},{sides:4,value:3}]);
+ r=await rollCall(s,{entryId:'ayla',itemId:'per',bonus:'-2',mode:'high'});v=await r.json();
+ assert.equal(v.formula,'2d20kh1+4-2');assert.equal(v.dice.length,2);
+ r=await rollCall(s,{entryId:'ayla',itemId:'per',bonus:'+1d4*9'});
+ assert.equal(r.status,400);assert.match((await r.json()).error,/dice or a number/);
+ // A stat that spends checks the bonus first: a bad bonus spends nothing.
+ R.resetThrottles();
+ const t=setup();t.state.data=statWorld();
+ r=await rollCall(t,{entryId:'ayla',statId:'push',rollName:'Roll',bonus:'oops'});
+ assert.equal(r.status,400);assert.equal(ent(t.state.data,'ayla').character.trackers[0].value,1,'Stress was not spent');
+ r=await rollCall(t,{entryId:'ayla',statId:'agi',rollName:'Check',bonus:'+1d4',note:'Climb **the** wall'});v=await r.json();
+ assert.equal(v.formula,'1d20+3+1d4');assert.equal(v.title,'Ayla · Agility · Check · Climb the wall','markdown is taken out of the note');
+});
+
 test('player roll route refuses other pages, hidden items, non-rolls, strangers and rolls too fast',async()=>{
  R.resetThrottles();
  const s=setup();

@@ -11,6 +11,7 @@ import type {PlayerTracker} from '@/lib/encyclopedia/trackers';
 import {isSingleD20,type RollMode} from '@/lib/rolls';
 import {rollInline} from './rolls';
 import {rollStatFromSheet} from './player-sheet-api';
+import {askRoll} from '@/lib/roll-dialog';
 import './inventory.css';
 import {GroupHead,useCollapsed} from './group-collapse';
 import './stat-sheet.css';
@@ -29,8 +30,10 @@ export function PlayerStatSheet({title,entryId,stats,trackers,memberRef,canRoll,
  const roll=(s:StatRow,r:StatRow['rolls'][number],dice:string)=>{
   setError('');
   const m=anyD20&&!isSingleD20(dice)?'normal':mode;setMode('normal');
-  if(server)void rollStatFromSheet(memberRef!,entryId,s.id,r.name,m).then(x=>{if(x.spent)onChanged();}).catch(e=>setError(e instanceof Error?e.message:'Could not roll. Try again.'));
-  else rollInline(`${title} · ${s.label}${s.rolls.length>1||r.name!=='Roll'?` · ${r.name}`:''}`,dice,{mode:m,log:true,...(r.need?{outcome:(t:number)=>outcomeOf(t,r.need)}:{})});
+  const label=`${title} · ${s.label}${s.rolls.length>1||r.name!=='Roll'?` · ${r.name}`:''}`;
+  // On the server the dice come from the stored sheet; the roll dialog's bonus and note go with them.
+  if(server)void askRoll({title:label,formula:dice,mode:m,twice:true}).then(c=>c&&rollStatFromSheet(memberRef!,entryId,s.id,r.name,c.mode,{bonus:c.bonus,note:c.note})).then(x=>{if(x&&x.spent)onChanged();}).catch(e=>setError(e instanceof Error?e.message:'Could not roll. Try again.'));
+  else void rollInline(label,dice,{mode:m,log:true,...(r.need?{outcome:(t:number)=>outcomeOf(t,r.need)}:{})});
  };
  return <div className="stat-sheet player-stat-sheet">
   {anyRoll&&<div className="stat-sheet-tools">

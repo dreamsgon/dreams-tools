@@ -138,3 +138,10 @@ export function describeParts(parts:RollPart[]){
 }
 /** A dice group written back as notation, such as "4d6kh3", "2d6!", "5d10>=8", "2d20<=14" or "4dF". */
 export const termLabel=(t:Term)=>t.pm?`${t.count}dF`:`${t.count}d${t.sides}${t.keep?`k${t.keep.high?"h":"l"}${t.keep.n}`:""}${t.explode?"!":""}${t.target!==undefined?`${t.under?"<=":">="}${t.target}`:""}`;
+
+/** The dice that came up, one by one, to throw as 3D dice: every die rolled, kept or dropped. Plus/minus dice and odd dice (d3, d7) are left out. */
+export function thrownDice(parts:RollPart[]):{sides:number;value:number}[]{
+  const out:{sides:number;value:number}[]=[];
+  for(const p of parts){if(!p.count||p.pm||![4,6,8,10,12,20,100].includes(p.sides))continue;for(const v of p.rolled??p.dice)out.push({sides:p.sides,value:v});}
+  return out;
+}
