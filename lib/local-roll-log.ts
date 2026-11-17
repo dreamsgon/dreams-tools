@@ -18,9 +18,14 @@ export function recordLocalRoll(input:LocalRollInput){
  if(typeof window==='undefined'||!Number.isFinite(input.total))return;
  const entry:LocalRollEntry={...input,id:globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random()}`,timestamp:Date.now()};
  save([entry,...readLocalRollLog()].slice(0,100));
+ announceRoll(entry);
+ return entry;
+}
+/** Tells a browser extension (the RPG Tools dice link) about a roll, logged or not. */
+export function announceRoll(entry:LocalRollInput){
+ if(typeof window==='undefined')return;
  // A string, so an extension's content script (another JavaScript world) can read it.
  try{window.dispatchEvent(new CustomEvent(rollAnnounceEvent,{detail:JSON.stringify({label:entry.label,total:entry.total,breakdown:entry.breakdown,...(entry.formula?{formula:entry.formula}:{}),...(entry.outcome?{outcome:entry.outcome}:{}),...(entry.source?{source:entry.source}:{})})}));}catch{}
- return entry;
 }
 /** Adds a note to a roll already in the log, such as that it was posted to Discord. */
 export function markLocalRoll(id:string,outcome:string){if(typeof window==='undefined')return;const all=readLocalRollLog();if(all.some(e=>e.id===id))save(all.map(e=>e.id===id?{...e,outcome}:e));}

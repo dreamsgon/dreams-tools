@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RPG Tools Dice Link",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sends rolls made in RPG Tools to your Roll20 game's chat, and Roll20 rolls to the RPG Tools roll log.",
   "permissions": ["storage"],
   "host_permissions": ["https://app.roll20.net/*", "__RPG_TOOLS_MATCH__"],
