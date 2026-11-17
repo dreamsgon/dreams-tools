@@ -6,7 +6,9 @@ import { recordLocalRoll } from "./local-roll-log.ts";
  * marked as from Roll20 so the extension doesn't send it back.
  */
 export const externalRollEvent = "rpgtools:external-roll";
-export type ExternalRoll = { title: string; total: number; formula?: string; detail?: string; who?: string };
+export type ExternalRoll = { title: string; total: number; formula?: string; detail?: string; who?: string;
+  /** What the Roll20 message said, such as "Attack: 16 · Damage: 25 piercing + 2 acid". */ text?: string;
+  /** Each roll's dice when the message held several rolls. */ dice?: { formula: string; detail: string }[] };
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
 /** The roll in an event's detail, checked, or null. */
@@ -21,13 +23,19 @@ export function readExternalRoll(detail: unknown): ExternalRoll | null {
   if (formula) roll.formula = formula;
   if (extra) roll.detail = extra;
   if (who) roll.who = who;
+  const said = text(o.text, 600);
+  if (said) roll.text = said;
+  if (Array.isArray(o.dice)) {
+    const dice = o.dice.slice(0, 6).map(d => ({ formula: text(d?.formula, 200), detail: text(d?.detail, 300) })).filter(d => d.formula && d.detail);
+    if (dice.length) roll.dice = dice;
+  }
   return roll;
 }
 
 /** The roll log entry for a Roll20 roll. */
 export const externalLogEntry = (r: ExternalRoll) => ({
   label: r.who ? `${r.who} · ${r.title}` : r.title, total: r.total,
-  breakdown: [r.formula, r.detail].filter(Boolean).join(" · ") || "Rolled in Roll20",
+  breakdown: r.text || [r.formula, r.detail].filter(Boolean).join(" · ") || "Rolled in Roll20",
   outcome: "From Roll20", source: "roll20" as const, ...(r.formula ? { formula: r.formula } : {}),
 });
 
@@ -45,9 +53,18 @@ const physicalSides = [4, 6, 8, 10, 12, 20, 100];
  * and each fits the die. Rolls with unknown dice show the popup alone, so the 3D dice never show a wrong number.
  */
 export function linkedRollDice(roll: ExternalRoll): { sides: number; value: number }[] | null {
-  if (!roll.formula || !roll.detail) return null;
-  const groups = [...roll.formula.toLowerCase().matchAll(/(\d*)d(\d+)/g)].map(m => ({ count: Number(m[1] || 1), sides: Number(m[2]) }));
-  const shown = [...roll.detail.matchAll(/\(([^()]*)\)/g)].map(m => (m[1].match(/\d+/g) ?? []).map(Number));
+  const sets = roll.dice?.length ? roll.dice : roll.formula && roll.detail ? [{ formula: roll.formula, detail: roll.detail }] : [];
+  const dice: { sides: number; value: number }[] = [];
+  for (const set of sets) {
+    const one = diceOf(set.formula, set.detail);
+    if (!one) return null;
+    dice.push(...one);
+  }
+  return dice.length && dice.length <= 24 ? dice : null;
+}
+function diceOf(formula: string, detail: string) {
+  const groups = [...formula.toLowerCase().matchAll(/(\d*)d(\d+)/g)].map(m => ({ count: Number(m[1] || 1), sides: Number(m[2]) }));
+  const shown = [...detail.matchAll(/\(([^()]*)\)/g)].map(m => (m[1].match(/\d+/g) ?? []).map(Number));
   if (!groups.length || groups.length !== shown.length) return null;
   const dice: { sides: number; value: number }[] = [];
   for (const [i, g] of groups.entries()) {
@@ -55,5 +72,5 @@ export function linkedRollDice(roll: ExternalRoll): { sides: number; value: numb
     if (!physicalSides.includes(g.sides) || values.length !== g.count) return null;
     for (const value of values) { if (value < 1 || value > g.sides) return null; dice.push({ sides: g.sides, value }); }
   }
-  return dice.length && dice.length <= 24 ? dice : null;
+  return dice;
 }

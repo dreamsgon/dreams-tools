@@ -33,6 +33,14 @@
   // ---- Roll20 rolls to RPG Tools ----
   const started = Date.now(), seen = new Set();
   let lastWho = "";
+  /** The words just before an inline roll in its row of a roll template, such as "Attack" in "Attack: 16". */
+  function labelBefore(el, r) {
+    const box = r.parentElement?.closest("div, p, li, td, span[class*='row'], span[class*='sheet-']") ?? r.parentElement;
+    if (!box || !el.contains(box)) return "";
+    const range = document.createRange();
+    range.setStart(box, 0); range.setEndBefore(r);
+    return range.toString().split(/\n/).pop().replace(/[:\s]+$/, "").trim().slice(-40);
+  }
   /** What a chat message holds, read from the page, for RPGToolsLink.rollFromChat. */
   function read(el) {
     const by = el.querySelector(".by")?.textContent?.trim();
@@ -42,11 +50,14 @@
       rolls.push({ formula: (el.querySelector(".formula")?.textContent ?? "").replace(/^\s*rolling\s*/i, ""), total: el.querySelector(".rolled")?.textContent ?? "" });
     }
     for (const r of el.querySelectorAll(".inlinerollresult")) {
-      const row = r.closest("tr"), label = row && row.cells.length > 1 ? row.cells[0].textContent : "";
-      rolls.push({ label, title: r.getAttribute("original-title") || r.getAttribute("title") || "", total: r.textContent });
+      const row = r.closest("tr");
+      rolls.push({ label: row && row.cells.length > 1 ? row.cells[0].textContent : labelBefore(el, r), title: r.getAttribute("original-title") || r.getAttribute("title") || "", total: r.textContent });
     }
     const name = el.querySelector("caption, .sheet-template-name, th")?.textContent ?? "";
-    return { who: by || lastWho, name, text: el.textContent, whisper: el.classList.contains("private") || el.classList.contains("whisper"), rolls };
+    // The message as people read it, line by line ("Bite", "Adult Black Dragon", "Attack: 16"), without who sent it.
+    const lines = String(el.innerText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (by && lines[0] && by.indexOf(lines[0]) === 0) lines.shift();
+    return { who: by || lastWho, name, text: el.textContent, lines, whisper: el.classList.contains("private") || el.classList.contains("whisper"), rolls };
   }
   function handle(el) {
     if (!(el instanceof HTMLElement) || !el.classList.contains("message")) return;

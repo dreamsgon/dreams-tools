@@ -55,7 +55,7 @@ export default function LinkedRollPopup() {
         <div className="linked-roll-head"><span>{r.who ? `${r.who} · ${r.title}` : r.title}</span>
           <button type="button" className="icon-button" aria-label="Close" onClick={() => setRolls(old => old.filter(o => o.id !== r.id))}><X size={13} /></button></div>
         <div className="linked-roll-total"><strong>{r.total}</strong>{r.formula && <span>{r.formula}</span>}</div>
-        {r.detail && <div className="linked-roll-detail">{r.detail}</div>}
+        {r.text ? <div className="linked-roll-text">{r.text}</div> : r.detail && <div className="linked-roll-detail">{r.detail}</div>}
         {i === 0 && <div className="linked-roll-foot"><span>From Roll20</span>
           <label title="Roll the dice from Roll20 across the screen"><input type="checkbox" checked={threeD} onChange={e => toggle3D(e.target.checked)} /> 3D dice</label></div>}
       </div>)}
