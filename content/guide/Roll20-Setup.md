@@ -19,7 +19,7 @@ To roll between the two while you play, add the **dice link** browser extension.
 1. In RPG Tools, open the **Encyclopedia** and go to **AI & GitHub › Other tables › Connect a table**.
 2. Under **Roll20**, press **Copy the Roll20 script**. You can also press **Open the script** to see it in a new window.
 
-The script is at `/api/bridge/roll20/rpg-tools-roll20.js` on your RPG Tools site.
+You can also [open the script here](/api/bridge/roll20/rpg-tools-roll20.js) and copy it.
 
 ## 2. Add it to your game
 
@@ -83,7 +83,7 @@ It works with any Roll20 account, so you don't need Pro. It runs in **Chrome**, 
 
 ### Install it
 
-1. In RPG Tools, open **Connect a table** and press **Download the dice link** under Roll20. Unzip the file. You get a folder named `rpg-tools-dice-link`.
+1. [Download the dice link](/api/bridge/roll20/rpg-tools-dice-link.zip), or press **Download the dice link** under Roll20 in **Connect a table**. Unzip the file. You get a folder named `rpg-tools-dice-link`.
 2. In your browser, open `chrome://extensions` (in Edge, `edge://extensions`).
 3. Turn on **Developer mode**, press **Load unpacked**, and choose the `rpg-tools-dice-link` folder.
 4. Pin **RPG Tools Dice Link** from the extensions menu, so its settings are one click away.
