@@ -1,0 +1,56 @@
+/* The Encyclopedia sidebar's quick links, categories and Customize mode (components/encyclopedia/sidebar-nav.tsx). */
+.sb-quick{display:flex;flex-wrap:wrap;align-items:center;row-gap:4px}
+.sb-quick .sb-customize-button{margin-left:auto;border:0;padding:5px;color:var(--muted);opacity:.7}
+.sb-quick .sb-customize-button:hover,.sb-quick .sb-customize-button:focus-visible{opacity:1;color:var(--ink);background:var(--hover)}
+.sb-category .tree-item svg.sb-out{margin-left:auto;flex:none}
+
+.sb-custom{padding:4px 4px 18px;border-top:1px solid var(--line);margin-top:8px}
+.sb-custom-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 8px 2px}
+.sb-custom-head strong{font-size:14px}
+.sb-custom h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 8px 6px}
+.sb-hint{font-size:12px;line-height:1.5;color:var(--muted);margin:6px 8px}
+.sb-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.sb-list li{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 4px 0 2px;border-radius:var(--radius-sm);background:var(--raised);font-size:13px}
+.sb-list li[draggable=true]{cursor:grab}
+.sb-list li.dragging{opacity:.45}
+.sb-list li.off .sb-label,.sb-list li.off .sb-icon{opacity:.45}
+.sb-list li.off .sb-label{text-decoration:line-through}
+.sb-list li.sb-empty{background:none;color:var(--muted);font-size:12px;padding-left:8px}
+.sb-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-label small{color:var(--muted);font-size:11px}
+.sb-icon{flex:none;color:var(--muted);display:inline-flex}
+.sb-grip{display:flex;padding:6px 2px;color:var(--muted);cursor:grab;border-radius:var(--radius-sm)}
+.sb-grip:hover{color:var(--ink)}
+.sb-arrow,.sb-eye{display:flex;align-items:center;justify-content:center;width:26px;height:28px;flex:none;color:var(--muted);border-radius:var(--radius-sm)}
+.sb-arrow:hover:not(:disabled),.sb-eye:hover{color:var(--ink);background:var(--hover)}
+.sb-arrow:disabled{opacity:.25}
+.sb-eye[aria-pressed=true]{color:var(--accent)}
+.sb-add{display:flex;align-items:center;gap:5px;margin:8px 8px 0;font-size:12px}
+.sb-name{display:flex;gap:6px;margin:8px 4px 0}
+.sb-name input,.sb-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--control,var(--panel));color:var(--ink);padding:7px 9px;font-size:13px}
+.sb-custom-foot{display:flex;justify-content:space-between;gap:8px;margin:18px 8px 0;font-size:12px}
+.sb-custom-foot .text-button{font-size:12px}
+
+.sb-picker{display:grid;gap:10px}
+.sb-picker .segmented{flex-wrap:wrap}
+.sb-choices{list-style:none;margin:0;padding:0;display:grid;gap:2px;max-height:300px;overflow:auto}
+.sb-choices button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 9px;border-radius:var(--radius-sm);font-size:13px}
+.sb-choices button:hover:not(:disabled){background:var(--hover)}
+.sb-choices button:disabled{opacity:.55;cursor:default}
+.sb-choices button>span:not(.sb-icon){flex:1;min-width:0;display:flex;flex-direction:column}
+.sb-choices small{color:var(--muted);font-size:11px}
+.sb-choices button>svg:last-child{color:var(--accent);flex:none}
+.sb-choices .sb-empty{color:var(--muted);font-size:12px;padding:8px}
+.sb-web{display:grid;gap:10px}
+.sb-web label,.sb-field{display:grid;gap:5px;font-size:12px;color:var(--muted)}
+.sb-web .button{justify-self:start;display:inline-flex;align-items:center;gap:6px}
+.sb-cat-dialog{display:grid;gap:6px;min-width:min(480px,calc(100vw / var(--ui-zoom, 1) - 64px))}
+.sb-cat-dialog h3{font-size:12px;font-weight:600;margin:14px 0 4px}
+.sb-cat-dialog .sb-list li{padding-left:8px}
+.sb-kinds{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.sb-kinds label{display:flex;align-items:center;gap:6px}
+.sb-dialog-foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+.sb-danger{color:var(--danger,#b42318);display:flex;align-items:center;gap:5px}
+.is-co-gm .sb-customize-button{display:none}
+.sb-input::placeholder,.sb-name input::placeholder{color:var(--muted);opacity:.7}
+.sb-category a.tree-item{color:inherit;text-decoration:none}

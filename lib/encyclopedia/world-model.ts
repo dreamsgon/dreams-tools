@@ -10,6 +10,7 @@ import {infoRows,templateOf} from './templates.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
 import {aiWritingSchema} from './ai-styles.ts';
 import {dashboardSchema} from './dashboard.ts';
+import {sidebarSchema,remapSidebarPages} from './sidebar.ts';
 import {questSchema,playerQuest,newQuest,questCategoriesSchema,questCategories} from './quests.ts';
 import {codexSchema,codexCategory,inboxNoteSchema,playerCodex} from './codex.ts';
 import {lookSchema,playerLook} from './look.ts';
@@ -121,7 +122,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): how the AI writes recaps, The story so far and generator text (ai-styles.ts). Never sent to players.
   aiWriting:aiWritingSchema.optional(),
   // Optional (added later): coins, weight, item categories, what spells are called and what players may change (items.ts).
-  items:itemSettingsSchema.optional() });
+  items:itemSettingsSchema.optional(),
+  // Optional (added later): the GM's Encyclopedia sidebar for this campaign: menu order, quick links and their own categories (sidebar.ts).
+  sidebar:sidebarSchema.optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -284,7 +287,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     const links=(body:string)=>body.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,(full,target,label)=>ids.has(target)?`[[${ref(target)}${label??""}]]`:full);
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
-        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}) }; delete copy.maptableCampaignId; delete copy.discord; return copy; })],
+        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}), ...(c.sidebar ? { sidebar: remapSidebarPages(c.sidebar, ids) } : {}) }; delete copy.maptableCampaignId; delete copy.discord; return copy; })],
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,...(e.mapData.zoomOf?{zoomOf:ids.has(e.mapData.zoomOf.mapId)?{...e.mapData.zoomOf,mapId:ref(e.mapData.zoomOf.mapId)}:undefined}:{}),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, store:e.store?remapStore(e.store,id=>ids.get(id)):undefined, sector:e.sector?{...e.sector,systems:e.sector.systems.map(x=>({...x,pageId:x.pageId?ids.get(x.pageId):undefined}))}:undefined, starSystem:e.starSystem?remapSystem(e.starSystem,id=>ids.get(id)):undefined, planet:e.planet?{...e.planet,systemPageId:ids.get(e.planet.systemPageId)??e.planet.systemPageId,worldMapId:e.planet.worldMapId?ids.get(e.planet.worldMapId):undefined}:undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }
