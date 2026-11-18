@@ -56,7 +56,7 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
     }
   }
   const prefix = `users/${encodeURIComponent(grant.owner)}/`;
-  const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(bucket, prefix, maps!.workspace, s, mode) : undefined;
+  const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(prefix, maps!.workspace, s, mode) : undefined;
   const perms = grant.perms ?? fromLevel(grant.level);
   // Transcripts are the GM's raw material: only a connection that may see GM-only things reads them.
   const store = new EncyclopediaStore(bucket);
