@@ -21,6 +21,27 @@ import { orderFromScene, slotSchema } from "./combat.ts";
 import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
 import { freshReads, markAll, markTopic } from "./reader.ts";
+import { isSolo, soloCharacters } from "../solo.ts";
+
+/** The made-up member a solo player's view is worked out for: one of the built-in Players group. */
+const SOLO_PLAYER = "solo-player";
+function asPlayer(list: MemberList) {
+  const players = list.groups.find(g => g.builtin === "players");
+  return { ...list, members: [...list.members, { userId: SOLO_PLAYER, name: "Player", groups: players ? [players.id] : [], joinedAt: "" }] };
+}
+/**
+ * What a solo campaign's owner may do in the player view: what the Players group may (reading always, so the view
+ * never locks them out of their own forum), and no moderating, board settings or GM-only things.
+ */
+export function soloPlayerRights(list: MemberList, owner: string) {
+  const r = forumRights(asPlayer(list), SOLO_PLAYER, owner);
+  return { ...r, owner: false, gm: false, moderate: false, boards: false, read: true };
+}
+/** The boards as a member of the Players group sees them in the player view, their masks applied. */
+function soloPlayerAccess(forum: Forum, list: MemberList, owner: string) {
+  const as = asPlayer(list), r = forumRights(as, SOLO_PLAYER, owner);
+  return boardAccess(forum, as, SOLO_PLAYER, { ...r, owner: false, gm: false, moderate: false, boards: false });
+}
 
 export type Found = { owner: string; campaignId: string; list: MemberList };
 export type Deps = {
@@ -121,16 +142,20 @@ const signIn = "Sign in to open the forum.";
 const notMember = "You can't open this forum. You may have left the campaign, or the GM changed what your group can do.";
 
 /** Who is asking and what they may see: the context the views and changes need. */
-async function contextOf(deps: Deps, campaign: string, now: Date, marks = true) {
+async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, playerView = false) {
   const userId = await deps.user();
   if (!userId) return { fail: json({ error: signIn }, 401) };
   const found = await deps.campaign(userId, campaign);
   if (!found) return { fail: json({ error: notMember }, 404) };
-  const rights = forumRights(found.list, userId, found.owner);
+  let rights = forumRights(found.list, userId, found.owner);
   if (!rights.read) return { fail: json({ error: "Your group can't read the forum." }, 403) };
   const workspace = await deps.workspace(found.owner);
   if (!workspace.campaigns.some(c => c.id === found.campaignId)) return { fail: json({ error: notMember }, 404) };
-  const editable = rights.owner ? new Set<string>() : pageRights(found.list, userId).edit;
+  // A solo campaign's owner plays its player characters and companions (lib/solo.ts), and may switch to the player view:
+  // the Players group's forum rights and the pages players may read, posting as those characters or as themselves.
+  const solo = rights.owner && isSolo(workspace, found.campaignId) ? { player: playerView } : undefined;
+  if (solo?.player) rights = soloPlayerRights(found.list, found.owner);
+  const editable = solo ? soloCharacters(workspace, found.campaignId) : rights.owner ? new Set<string>() : pageRights(found.list, userId).edit;
   // Players read the pages the player view gives them; the GM and co-GMs read every page.
   const readable = rights.gm ? null : new Set(playerCampaign(workspace, found.campaignId, editable).entries.map(e => e.id));
   // Pictures don't need read marks or presence.
@@ -145,7 +170,7 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true) 
   // A first visit starts with everything before the member joined (the GM: before now) marked read.
   const joined = found.list.members.find(m => m.userId === userId)?.joinedAt;
   const reads = mine.reads ?? freshReads(joined && joined < now.toISOString() ? joined : now.toISOString());
-  const ctx: Context = { forum, list: found.list, owner: found.owner, workspace, campaignId: found.campaignId, viewer: { userId, rights, key: campaign, editable, access: boardAccess(forum, found.list, userId, rights) }, readable, reads, presence: presence.presence, alerts: alerts.alerts, now };
+  const ctx: Context = { forum, list: found.list, owner: found.owner, workspace, campaignId: found.campaignId, viewer: { userId, rights, key: campaign, editable, access: solo?.player ? soloPlayerAccess(forum, found.list, found.owner) : boardAccess(forum, found.list, userId, rights) }, readable, reads, presence: presence.presence, alerts: alerts.alerts, now, ...(solo ? { solo } : {}) };
   return { ctx, found, userId, fresh: marks && !mine.reads, presence };
 }
 
@@ -464,8 +489,10 @@ export async function handleForum(request: Request, deps: Deps) {
     if (Number(request.headers.get("content-length") ?? 0) > FORUM_BODY) return json({ error: "That post is too long." }, 413);
     const text = await request.text();
     if (text.length > FORUM_BODY) return json({ error: "That post is too long." }, 413);
-    const body = bodySchema.parse(JSON.parse(text)), now = deps.now?.() ?? new Date();
-    const got = await contextOf(deps, body.campaign, now);
+    const raw: unknown = JSON.parse(text), body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
+    // The player view of a solo campaign's owner (contextOf); ignored for anyone else.
+    const playerView = typeof raw === "object" && raw !== null && (raw as { playerView?: unknown }).playerView === true;
+    const got = await contextOf(deps, body.campaign, now, true, playerView);
     if (got.fail) return got.fail;
     const { ctx, found, userId } = got;
     if ((body.action === "view" ? readThrottle : writeThrottle).hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);

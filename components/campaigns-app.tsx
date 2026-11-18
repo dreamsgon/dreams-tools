@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, Upload, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, Upload, UserRound, X } from "lucide-react";
 import { hubHref } from "@/lib/campaign-switcher";
 import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
@@ -256,6 +256,12 @@ function Details({ row, summary, busy, error, close, send, onDeleted }: { row: C
       <div><dt>World</dt><dd>{row.encyclopedia?.worldName || "None yet"}</dd></div>
       <div><dt>Maps</dt><dd>{row.maptable ? plural(row.maptable.scenes, "scene") : "Not in Maptable"}</dd></div>
       <div><dt>Pages</dt><dd>{row.encyclopedia ? `${plural(row.encyclopedia.pages, "page")}, ${plural(row.encyclopedia.characters, "character")}` : "Not in the Encyclopedia"}</dd></div>
+      {row.encyclopedia && <div className="campaigns-pair"><dt>Players</dt><dd>
+        <label className="campaigns-solo" title="Solo play: no other players, just you with an oracle or an AI. You keep every GM power and play the player characters; the forum gets a Player view for your character posts.">
+          <input type="checkbox" checked={row.encyclopedia.solo} disabled={busy} onChange={e => send({ action: "solo", encyclopediaId: row.encyclopedia!.id, on: e.target.checked }, e.target.checked ? "Solo play is on. Your player characters are yours to play." : "Solo play is off.")} />
+          Just me, solo
+        </label>
+      </dd></div>}
       {summary.folders.length > 0 && <div className="campaigns-pair"><dt><label htmlFor="campaign-folder">Folder</label></dt><dd>
         <select id="campaign-folder" value={row.folderId ?? ""} disabled={busy} onChange={e => send({ action: "moveCampaign", key: row.key, folderId: e.target.value || null }, "Moved.")}>
           <option value="">Top level</option>
@@ -420,20 +426,23 @@ function WorldPicker({ summary, worldId, setWorldId, newWorld, setNewWorld }: { 
 function NewCampaign({ summary, busy, close, send }: { summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
   const firstWorld = summary.worlds.find(w => !w.archived)?.id ?? "";
   const [name, setName] = useState(""), [description, setDescription] = useState(""), [worldId, setWorldId] = useState(firstWorld), [newWorld, setNewWorld] = useState("");
-  const [maptable, setMaptable] = useState(true), [encyclopedia, setEncyclopedia] = useState(true);
+  const [maptable, setMaptable] = useState(true), [encyclopedia, setEncyclopedia] = useState(true), [solo, setSolo] = useState(false);
   const worldName = worldId ? summary.worlds.find(w => w.id === worldId)?.name : newWorld.trim() || "a new";
   const ready = name.trim() && (maptable || encyclopedia) && (!encyclopedia || worldId || newWorld.trim());
   return <Modal title="New campaign" close={close} footer={<>
     <button type="button" className="campaigns-secondary" onClick={close}>Cancel</button>
     <button type="submit" form="new-campaign" className="campaigns-primary" disabled={busy || !ready}>Create campaign</button>
   </>}>
-    <form id="new-campaign" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "create", name, description, maptable, encyclopedia, worldId, newWorld }, `Created “${name.trim()}”.`, close); }}>
+    <form id="new-campaign" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "create", name, description, maptable, encyclopedia, worldId, newWorld, ...(solo && encyclopedia ? { solo: true } : {}) }, `Created “${name.trim()}”.`, close); }}>
       <label>Name<input autoFocus value={name} maxLength={120} onChange={e => setName(e.target.value)} /></label>
       <label>Description<input value={description} maxLength={1000} placeholder="Optional: one line your players would recognise" onChange={e => setDescription(e.target.value)} /></label>
       {encyclopedia && <WorldPicker summary={summary} worldId={worldId} setWorldId={setWorldId} newWorld={newWorld} setNewWorld={setNewWorld} />}
       <fieldset><legend>Set it up in</legend>
         <label className="campaigns-check"><input type="checkbox" checked={maptable} onChange={e => setMaptable(e.target.checked)} /><MapIcon size={16} aria-hidden="true" /><span><strong>Maptable</strong> a campaign folder for its scenes</span></label>
         <label className="campaigns-check"><input type="checkbox" checked={encyclopedia} onChange={e => setEncyclopedia(e.target.checked)} /><BookOpen size={16} aria-hidden="true" /><span><strong>Encyclopedia</strong> campaign notes in {worldId ? `the ${worldName}` : "a new"} world</span></label>
+      </fieldset>
+      <fieldset><legend>Who plays</legend>
+        <label className="campaigns-check"><input type="checkbox" checked={solo && encyclopedia} disabled={!encyclopedia} onChange={e => setSolo(e.target.checked)} /><UserRound size={16} aria-hidden="true" /><span><strong>Just me, solo</strong> no other players, with an oracle or an AI. You keep every GM power and play the player characters, with a player view for your character posts.{!encyclopedia && " Needs Encyclopedia notes, which hold your characters."}</span></label>
       </fieldset>
     </form>
   </Modal>;

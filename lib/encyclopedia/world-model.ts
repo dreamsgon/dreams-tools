@@ -117,6 +117,8 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   maptableCampaignId:z.string().min(1).max(120).optional(),
   // Optional (added later): the GM set up this campaign's forum (lib/forum). Forums start switched off.
   forum:z.boolean().optional(),
+  // Optional (added later): solo play (lib/solo.ts): one person with no other players, who keeps every GM power and plays the player characters.
+  solo:z.boolean().optional(),
   // Optional (added later): the Campaigns page folder (a Maptable campaign folder id) this campaign sits in when it has no Maptable campaign of its own.
   folderId:z.string().min(1).max(120).optional(),
   // Optional (added later): the widgets on the campaign front page players see first.

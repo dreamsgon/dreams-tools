@@ -52,8 +52,23 @@ export function forumHash(key: string, place: Place) {
 export const validKey = (key: string) => /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/.test(key);
 
 export class ForumRequestError extends Error { status: number; code: string; constructor(message: string, status: number, code = '') { super(message); this.status = status; this.code = code; } }
+/*
+ * Solo campaigns: their owner may read and post in the player view (lib/forum/request.ts). The choice is kept per
+ * campaign on this device, and every request for that campaign carries it; the server ignores it for anyone else.
+ */
+const playerViews = new Map<string, boolean>(), viewKey = (key: string) => `forum:player-view:${key}`;
+export function playerViewOn(key: string) {
+  if (!playerViews.has(key)) { try { playerViews.set(key, localStorage.getItem(viewKey(key)) === '1'); } catch { playerViews.set(key, false); } }
+  return playerViews.get(key)!;
+}
+export function setPlayerView(key: string, on: boolean) {
+  playerViews.set(key, on);
+  try { if (on) localStorage.setItem(viewKey(key), '1'); else localStorage.removeItem(viewKey(key)); } catch { /* storage may be off */ }
+}
+
 export async function forumCall<T = Record<string, unknown>>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
-  const r = await fetch('/api/forum', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+  const send = typeof body.campaign === 'string' && playerViewOn(body.campaign) ? { ...body, playerView: true } : body;
+  const r = await fetch('/api/forum', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(send), signal });
   const value = await r.json().catch(() => ({})) as T & { error?: string; code?: string };
   if (!r.ok) throw new ForumRequestError(value.error ?? 'The forum is unavailable right now.', r.status, value.code);
   return value;

@@ -222,3 +222,8 @@
 
 /* A tall section spans 2 or 3 rows; the minimum keeps it visibly tall even where its neighbours are short or missing. */
 .hub-h2 { min-height:440px; } .hub-h3 { min-height:680px; }
+/* Members tab: solo play. */
+.hub-solo { margin-bottom:16px; }
+.hub-solo label { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+.hub-solo p { margin:0; color:var(--muted); font-size:13.5px; }
+.hub-solo.on { border-left:3px solid var(--accent, currentColor); }

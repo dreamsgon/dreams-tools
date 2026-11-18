@@ -4,7 +4,7 @@
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, ArrowUp, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArrowUp, Crown, UserRound, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline, withEmoji, type HtmlBlock } from '@/lib/forum/markup';
 import type { HtmlNode } from '@/lib/forum/html';
@@ -169,9 +169,9 @@ export function PostText({ text, links, rolls }: { text: string; links?: Links; 
 }
 
 /** The top bar: the in-world date, the staff as circles, and who you are. */
-export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+export function TopBar({ frame, k, go, setPlayer }: { frame: Frame; k: string; go: Go; setPlayer?: (on: boolean) => void }) {
   const r = frame.you.rights;
-  return <div className="board-bar">
+  return <>{frame.solo && setPlayer && <SoloSwitch player={frame.solo.player} setPlayer={setPlayer} />}<div className="board-bar">
     <p className="board-date">{frame.date ? <><b>{frame.date}</b></> : <span className="muted">No calendar date yet</span>}</p>
     <div className="board-staff" aria-label="Staff">{frame.staff.slice(0, 8).map(s => <Circle key={s.name + s.role} name={s.name} title={`${s.name} · ${s.role}`} />)}<span className="muted">Staff</span></div>
     <div className="board-you">
@@ -181,6 +181,20 @@ export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
       {(frame.you.cast.length > 0 || frame.you.waiting.length > 0) && <Waiting frame={frame} k={k} go={go} />}
       <Link k={k} go={go} to={{ view: 'profile' }} className="you" title="Your forum profile: pronouns, timezone, no-goes and post styles"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'} · Profile</small></span></Link>
     </div>
+  </div></>;
+}
+
+/** A solo campaign's GM view / Player view switch: the player view reads the forum as players would and posts as your characters. */
+function SoloSwitch({ player, setPlayer }: { player: boolean; setPlayer: (on: boolean) => void }) {
+  return <div className={`solo-bar${player ? ' player' : ''}`}>
+    <span className="solo-tag">Solo</span>
+    <div className="solo-switch" role="group" aria-label="View the forum as">
+      <button type="button" aria-pressed={!player} className={player ? '' : 'on'} onClick={() => player && setPlayer(false)}><Crown size={13} aria-hidden="true" />GM view</button>
+      <button type="button" aria-pressed={player} className={player ? 'on' : ''} onClick={() => !player && setPlayer(true)}><UserRound size={13} aria-hidden="true" />Player view</button>
+    </div>
+    <span className="muted small">{player
+      ? 'You see what players see, and post as your player characters or as yourself. GM-only things are hidden.'
+      : 'Every GM power, and your player characters are at the top of Post as. Switch to Player view to write your character posts.'}</span>
   </div>;
 }
 
