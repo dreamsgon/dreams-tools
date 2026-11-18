@@ -967,7 +967,8 @@ export async function callTool(c: McpContext, name: unknown, args: unknown, opts
       const asked = input.view === "players" ? "players" : input.view === undefined || input.view === "gm" ? "gm" : fail("view must be gm or players.");
       const sc = sceneFor(c, input), mode = perms.seeSecrets === "off" ? "players" : asked;
       if (!c.picture) return error("Pictures of scenes aren't available on this connection. Use read_scene.");
-      const pic = await c.picture(sc, mode);
+      // The picture is drawn by another function (/api/scene-picture); a failure there is a plain tool error.
+      const pic = await c.picture(sc, mode).catch((e: unknown) => fail(e instanceof Error ? e.message : "The scene picture couldn't be drawn. Use read_scene."));
       const shown = placedTokens(sc).filter(t => mode === "gm" || !t.hidden).map(t => `${t.name}${tokenSquare(sc, t) ? ` ${tokenSquare(sc, t)}` : ""}`);
       const legend = [`${sc.name}, ${mode === "gm" ? "GM view: hidden tokens are dashed and fog is see-through" : "as players see it"}.`, gridOn(sc) ? "Square names run along the top (letters) and left (numbers)." : "", shown.length ? `Tokens: ${shown.join(", ")}.` : "No tokens.", getCurrentInitiativeEntry(sc) ? `The gold ring marks whose turn it is (${getCurrentInitiativeEntry(sc)!.label}).` : "", pic.note ?? ""].filter(Boolean).join(" ");
       return { content: [{ type: "image", data: pic.data, mimeType: pic.mimeType }, { type: "text", text: `${NOTE}\n${legend}` }], isError: false };
