@@ -10,7 +10,7 @@ import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validK
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
-import { PrintView, TrashView } from './forum-moderate';
+import { PrintView, ReportsView, TrashView } from './forum-moderate';
 import { Notices, SearchView } from './forum-find';
 
 export default function ForumApp() {
@@ -25,6 +25,14 @@ export default function ForumApp() {
     try {
       const v = await forumCall<View>({ action: 'view', campaign: k, page: pageOf(p) }, controller.signal);
       if (controller.signal.aborted) return;
+      if (p.view === 'place') {
+        // From a place page in the Encyclopedia: its board, with a new topic open when the reader may start one.
+        const b = v.frame.boards.find(x => x.place?.id === p.id);
+        if (b) { location.replace(forumHash(k, { view: 'board', id: b.id, ...(b.start ? { start: true } : {}) })); return; }
+        setView(v); setStatus(0);
+        setError(`No board in this forum is tied to that place yet.${v.frame.you.rights.boards ? ' Add a location board for it in Forum settings.' : ''}`);
+        return;
+      }
       setView(v); setError(''); setStatus(0);
       const at = forumHash(k, p);
       if (shown.current !== at) { shown.current = at; if (!quiet) window.scrollTo({ top: 0 }); }
@@ -79,13 +87,14 @@ export default function ForumApp() {
       <main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
         {page.kind === 'index' && <IndexPage frame={frame} k={k} go={go} />}
-        {page.kind === 'board' && <BoardView key={page.board.id + (page.archive ? ':a' : '')} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'board' && <BoardView key={page.board.id + (page.archive ? ':a' : '')} frame={frame} page={page} k={k} go={go} done={done} startOpen={place.view === 'board' && !!place.start} />}
         {page.kind === 'topic' && place.view === 'reply' && <ReplyView key={'r' + page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
         {page.kind === 'topic' && place.view === 'edit' && <EditView key={'e' + place.post} frame={frame} page={page} k={k} go={go} done={done} postId={place.post} />}
         {page.kind === 'topic' && place.view === 'print' && <PrintView key={'p' + page.topic.id} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && place.view !== 'print' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
         {page.kind === 'search' && <SearchView key={forumHash(k, place)} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'trash' && <TrashView frame={frame} page={page} k={k} go={go} done={() => done()} />}
+        {page.kind === 'reports' && <ReportsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'settings' && <SettingsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'active' && <>
           <Crumbs frame={frame} k={k} go={go} last="Active topics" />

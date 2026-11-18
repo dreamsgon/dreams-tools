@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {ArrowUp,ArrowDown,BookOpen,Pencil,Plus,Trash2,Eye,EyeOff,Users,Lock,History,LayoutTemplate,ListOrdered,Map as MapIcon,ArrowUpRight,Link as LinkIcon,Sparkles} from 'lucide-react';
+import {ArrowUp,ArrowDown,BookOpen,Pencil,Plus,Trash2,Eye,EyeOff,Users,Lock,History,LayoutTemplate,ListOrdered,Map as MapIcon,ArrowUpRight,Link as LinkIcon,Sparkles,MessagesSquare} from 'lucide-react';
 import {workspaceSchema,canParent,compareEntries,defaultCharacter,folderPath,newId,reorderEntry,maptableLinks,type Entry,type Workspace,type Campaign,type ArticleTab} from '@/lib/encyclopedia/world-model';
 import {MapEditor,openMapEditorNext} from './map-editor';
 import {areaMapFor,revealInParents} from '@/lib/encyclopedia/hex-crawl';
@@ -108,6 +108,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  {!(isProfile&&org)&&<div className="article-title"><h1>{entry.title}</h1><button aria-label="Rename entry" onClick={onRename}><Pencil size={17}/></button></div>}
  {entry.kind!=='folder'&&<TagRow className="article-tags" targets={[`entry:${entry.id}`]} onTagClick={onTag}/>}
  {entry.kind==='character'&&<div className="character-summary"><button className="button" onClick={()=>setDetails(true)}><Users size={15}/> Character details</button><span>{character.status}</span>{character.location&&<span>{character.location}</span>}{character.faction&&<span>{character.faction}</span>}</div>}
+ {entry.kind==='place'&&campaign&&<div className="character-summary"><a className="button" href={`/forum#c-${encodeURIComponent(campaign.id)}&place=${encodeURIComponent(entry.id)}`} title="Open this place's board in the campaign forum, with a new topic ready to write"><MessagesSquare size={15}/> Start a forum scene here</a></div>}
  {entry.kind==='quest'&&<QuestDetail entry={entry} data={data} campaign={campaign} update={update} change={change} onOpen={onOpen}/>}
  {entry.kind==='character'&&<PicturePanel entry={entry} update={update} maptableHref={campaign?.maptableCampaignId?`/maptable?campaign=${encodeURIComponent(campaign.maptableCampaignId)}&addCharacter=${encodeURIComponent(entry.id)}`:null}/>}
  <div className="article-tabs" role="tablist" aria-label="Article tabs">{tabs.map(t=><button key={t.id} role="tab" aria-selected={active.id===t.id} onClick={()=>pick(t.id)}>{t.visibility==='gm'?<EyeOff size={13}/>:<Eye size={13}/>} {t.title}</button>)}<button aria-label="Add tab" disabled={custom.length>=30} onClick={()=>setTabDialog('new')}><Plus size={16}/> Add tab</button></div>

@@ -4,7 +4,7 @@
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, ArrowUp, Bot, Dices, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArrowUp, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
@@ -201,6 +201,13 @@ export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go })
           <p className="forum-desc">Topics moved to the Trash wait 30 days, so they can be brought back, then go for good.</p>
         </div>
         <p className="forum-counts"><span><b>{frame.footer.stats.trash}</b> {frame.footer.stats.trash === 1 ? 'topic' : 'topics'}</span></p>
+      </article>
+      <article className={`forum forum-ooc trash-row${frame.footer.stats.reported ? ' reported' : ''}`}>
+        <div className="forum-info">
+          <h3 className="forum-name"><Flag size={15} aria-hidden="true" /><Link k={k} go={go} to={{ view: 'reports' }}>Reported posts</Link></h3>
+          <p className="forum-desc">Posts readers reported to the moderating team, with their reasons, until you dismiss them.</p>
+        </div>
+        <p className="forum-counts"><span><b>{frame.footer.stats.reported}</b> {frame.footer.stats.reported === 1 ? 'post' : 'posts'}</span></p>
       </article></div>
     </section>}
   </>;

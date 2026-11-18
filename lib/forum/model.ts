@@ -15,7 +15,7 @@ import { NARRATION } from "./reader.ts";
 import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMetaSchema, type Combat, type Slot } from "./combat.ts";
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300 } as const;
 /** Days a topic stays in the Trash before it goes for good. */
 export const TRASH_DAYS = 30;
 
@@ -84,6 +84,8 @@ export const topicSummarySchema = z.object({
   /** Posts an AI connection suggested, waiting for the GM (worked out from the topic file). */
   suggested: z.number().int().min(1).max(20).optional(),
 });
+/** A reader telling the moderating team about a post: who, why and when. One per reader per post. */
+export const reportSchema = z.object({ id, topicId: id, postId: id, by: userId, reason: z.string().trim().min(1).max(300), at });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
 export const forumSchema = z.object({
@@ -98,6 +100,8 @@ export const forumSchema = z.object({
   characters: z.array(id).max(FORUM_LIMITS.characters),
   /** The last few days of posts, newest last (`recentSchema`). Older forums have none. */
   recent: z.array(recentSchema).max(FORUM_LIMITS.recent).optional(),
+  /** Posts readers reported to the moderating team, until a moderator dismisses them (`reportSchema`). */
+  reports: z.array(reportSchema).max(FORUM_LIMITS.reports).optional(),
 });
 export const postSchema = z.object({
   id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional(),
@@ -123,6 +127,7 @@ export type Post = z.infer<typeof postSchema>;
 export type Topic = z.infer<typeof topicSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type Recent = z.infer<typeof recentSchema>;
+export type Report = z.infer<typeof reportSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
 const fail = (message: string): never => { throw new ForumError(message); };
@@ -306,6 +311,27 @@ export function decideSuggestion(f: Forum, topic: Topic, input: { suggestionId: 
   if (input.op === "skip") return { topic: rest, forum: (g, latest) => putSummary(g, summarize(latest ?? rest, g.topics.find(t => t.id === topic.id) ?? s)) };
   const body = input.body ?? sug.body, posted = reply(f, rest, { body, as: sug.as, rolls: input.rolls, ai: true }, who, postId, now);
   return { ...posted, out: { postId, body: String(body), as: sug.as } };
+}
+
+/**
+ * Reports a post to the moderating team, with a short reason. Anyone who can read the topic may, except about their
+ * own post; reporting it again replaces their reason. The oldest reports go when the list is full.
+ */
+export function reportPost(f: Forum, topic: Topic, input: { postId: string; reason: unknown }, who: Poster, reportId: string, now: Date): Change<{ reportId: string }> {
+  seenBy(f, topic.id, who);
+  const p = topic.posts.find(x => x.id === input.postId) ?? fail("That post was removed.");
+  if (p.by.userId === who.userId) fail("You can't report your own post. Edit or delete it instead.");
+  const reason = typeof input.reason === "string" ? input.reason.replace(/\s+/g, " ").trim() : "";
+  if (!reason) fail("Say what's wrong, in a few words.");
+  if (reason.length > 300) fail("Keep the reason under 300 characters.");
+  const report: Report = { id: reportId, topicId: topic.id, postId: p.id, by: who.userId, reason, at: now.toISOString() };
+  return { forum: g => ({ ...g, reports: [...(g.reports ?? []).filter(r => !(r.postId === p.id && r.by === who.userId)), report].slice(-FORUM_LIMITS.reports) }), out: { reportId } };
+}
+/** A moderator clears the reports about a post (dealt with, or nothing wrong). */
+export function dismissReports(f: Forum, input: { postId: string }, who: Poster): Change {
+  if (!who.rights.moderate) fail("Only moderators can dismiss reports.");
+  if (!(f.reports ?? []).some(r => r.postId === input.postId)) fail("Those reports were already dismissed.");
+  return { forum: g => ({ ...g, reports: (g.reports ?? []).filter(r => r.postId !== input.postId) }) };
 }
 
 const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === postId) ?? fail("That post was removed.");

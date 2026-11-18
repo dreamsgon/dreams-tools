@@ -8,7 +8,7 @@ import { z } from "zod";
 export const ALERT_LIMIT = 50;
 const at = z.string().datetime(), id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 export const alertSchema = z.object({
-  id: z.string().min(1).max(220), at, kind: z.enum(["mention", "quote", "private", "turn"]),
+  id: z.string().min(1).max(220), at, kind: z.enum(["mention", "quote", "private", "turn", "report"]),
   topicId: id, postId: id.optional(),
   /** Who did it: their account and the character they wrote as. */
   by: z.string().min(1).max(100), as: id.nullable(),

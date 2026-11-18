@@ -10,10 +10,10 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, ForumError, accessOn, addBoard, decideSuggestion, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  FORUM_LIMITS, ForumError, accessOn, addBoard, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { activePage, boardPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
 import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
@@ -59,7 +59,7 @@ const as = id.nullable();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
-  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }),
+  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
@@ -70,6 +70,8 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional() }),
   z.object({ action: z.literal("aiSettings"), campaign: key, ai: z.unknown() }),
   z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000) }),
+  z.object({ action: z.literal("report"), campaign: key, topicId: id, postId: id, reason: z.string().max(600) }),
+  z.object({ action: z.literal("dismissReports"), campaign: key, postId: id }),
   z.object({ action: z.literal("suggestion"), campaign: key, topicId: id, suggestionId: id, op: z.enum(["approve", "skip"]), body: z.string().max(40_000).optional() }),
   z.object({ action: z.literal("delete"), campaign: key, topicId: id, postId: id }),
   z.object({ action: z.literal("deleteTopic"), campaign: key, topicId: id }),
@@ -160,6 +162,15 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       return json({ frame: frameOf(ctx), page: { kind: "search", boardId: page.boardId ?? null, ...searchPage(ctx, page.q, got, { of: all.length }) } });
     }
     case "members": return json({ frame: frameOf(ctx), page: { kind: "members", ...membersPage(ctx) } });
+    case "reports": {
+      if (!ctx.viewer.rights.moderate) return json({ error: "Only moderators can read reports." }, 403);
+      const ids = [...new Set([...reportedPosts(ctx).values()].map(r => r[0]!.topicId))].slice(0, 100), topics = new Map<string, Topic | null>();
+      for (let i = 0; i < ids.length; i += 10) {
+        const batch = await Promise.all(ids.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t).catch(() => null)));
+        batch.forEach((b, n) => topics.set(ids[i + n]!, b?.topic ?? null));
+      }
+      return json({ frame: frameOf(ctx), page: { kind: "reports", ...reportsPage(ctx, topics) } });
+    }
     case "settings": {
       if (!ctx.viewer.rights.boards) return json({ error: "Your group can't change the boards." }, 403);
       const groups = ctx.list.groups.map(g => ({ id: g.id, name: g.name, read: g.perms.forumRead ?? "no", start: g.perms.forumStart ?? "no", reply: g.perms.forumReply ?? "no", gm: g.perms.seeGm === "yes" }));
@@ -204,6 +215,8 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
       return run(null, f => startTopic(f, { ...body, private: only, rolls: rollPost(body.body, random) }, who, ids, now));
     }
     case "reply": { const postId = newId(), rolls = rollPost(body.body, random); return run(body.topicId, (f, t) => reply(f, needTopic(t), { ...body, rolls }, who, postId, now)); }
+    case "report": { const n = newId(); return run(body.topicId, (f, t) => reportPost(f, needTopic(t), body, who, n, now)); }
+    case "dismissReports": return run(null, f => dismissReports(f, body, who));
     case "suggestion": {
       const postId = newId();
       return run(body.topicId, (f, t) => {
@@ -299,6 +312,19 @@ export async function sendAlerts(deps: { store: Pick<ForumStore, "read" | "write
   }));
 }
 
+/** Tells the moderating team who can see the topic about a report (never the reporter). Best effort. */
+async function reportAlerts(deps: Deps, ctx: Context, found: Found, report: { topicId: string; postId: string }, now: Date) {
+  const { forum } = await deps.store.read(found.owner, found.campaignId), s = forum.topics.find(t => t.id === report.topicId);
+  if (!s) return;
+  const staff = [found.owner, ...ctx.list.members.map(m => m.userId)].filter(u => u !== ctx.viewer.userId);
+  await Promise.all(staff.slice(0, 40).map(async u => {
+    const rights = forumRights(ctx.list, u, found.owner);
+    if (!rights.moderate || !canSee(s, { userId: u, rights, access: boardAccess(forum, ctx.list, u, rights) })) return;
+    const item: Alert = { id: `report:${report.postId}:${ctx.viewer.userId}`, at: now.toISOString(), kind: "report", topicId: report.topicId, postId: report.postId, by: ctx.viewer.userId, as: null };
+    await deps.store.writeAlerts(found.owner, found.campaignId, u, a => addAlerts(a, [item], now)).catch(() => undefined);
+  }));
+}
+
 /** Who to tell that a fight came round to them: the players of the new turn's characters, or the GM for NPCs. */
 function turnTakers(ctx: Context, found: Found, s: TopicSummary) {
   const before = ctx.forum.topics.find(t => t.id === s.id)?.combat, after = s.combat;
@@ -387,6 +413,7 @@ export async function handleForum(request: Request, deps: Deps) {
       if (topicId) await sendAlerts(deps, ctx, found, { topicId, postId: made?.postId, body: body.body, as: body.as, private: body.action === "start" && body.private ? membersFromKeys(ctx, body.private) : [] }, now).catch(() => undefined);
     }
     if (body.action === "suggestion" && out && "postId" in out) { const p = out as { postId: string; body: string; as: string | null }; await sendAlerts(deps, ctx, found, { topicId: body.topicId, postId: p.postId, body: p.body, as: p.as, private: [] }, now).catch(() => undefined); }
+    if (body.action === "report") await reportAlerts(deps, ctx, found, body, now).catch(() => undefined);
     if (body.action === "combat") await sendAlerts(deps, ctx, found, { topicId: body.topicId, body: "", as: null, private: [] }, now).catch(() => undefined);
     return json({ ok: true, ...(out ?? {}) });
   } catch (e) {

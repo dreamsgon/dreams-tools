@@ -1,7 +1,7 @@
 'use client';
 /* Finding your way: alerts in the top bar, the notices strip under the banner, and search. */
 import { useEffect, useRef, useState } from 'react';
-import { AtSign, Bell, EyeOff, Megaphone, Quote, Search, Swords, X } from 'lucide-react';
+import { AtSign, Bell, EyeOff, Megaphone, Quote, Search, Swords, X, Flag } from 'lucide-react';
 import { forumCall, when, type Frame, type PageData } from './forum-api';
 import { Crumbs, Link, Portrait, TopicRow, type Go } from './forum-parts';
 
@@ -20,8 +20,8 @@ function useAway(open: boolean, close: () => void) {
   return box;
 }
 
-const alertText = { mention: 'mentioned you in', quote: 'quoted you in', private: 'added you to the private topic', turn: 'says it’s your turn in' } as const;
-const alertIcon = { mention: AtSign, quote: Quote, private: EyeOff, turn: Swords } as const;
+const alertText = { mention: 'mentioned you in', quote: 'quoted you in', private: 'added you to the private topic', turn: 'says it’s your turn in', report: 'reported a post in' } as const;
+const alertIcon = { mention: AtSign, quote: Quote, private: EyeOff, turn: Swords, report: Flag } as const;
 
 /** The bell: who named you, quoted you, added you to a private topic or says it's your turn. Opening it marks them seen. */
 export function Alerts({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
