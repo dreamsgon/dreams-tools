@@ -110,7 +110,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
 
   // The site header's Maptable and Encyclopedia links open this campaign too, once it is known.
   const L = hub ? hubLinks(hub.row) : null;
-  const header = <SiteHeader signedIn active="campaigns" maptableHref={L?.maptable ?? undefined} encyclopediaHref={L?.notes() ?? undefined} />;
+  const header = <SiteHeader signedIn active="campaigns" maptableHref={L?.maptable ?? undefined} encyclopediaHref={L?.notes() ?? undefined} forumHref={L?.forum ?? undefined} />;
   if (error) return <>{header}<div className="hub-message"><h1>Campaign unavailable</h1><p>{error}</p><Link href="/campaigns">Back to Campaigns</Link></div></>;
   if (!hub || !L) return <>{header}<div className="hub-message"><p>Loading campaign…</p></div></>;
   const { row } = hub, e = row.encyclopedia, m = row.maptable, look = hub.look ?? undefined;

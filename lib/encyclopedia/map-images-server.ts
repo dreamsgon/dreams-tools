@@ -34,4 +34,11 @@ export async function readImageUpload(request:Request,owner:string,transferOwner
  await bucket.delete(transfer.key).catch(()=>{});
  return new Uint8Array(transfer.bytes);
 }
+/** A picture someone staged in their own storage, stored with the owner's pictures (the forum's pictures and emoji). */
+export async function saveStagedImage(owner:string,uploader:string,transferId:string,maxBytes:number){
+ const bucket=getBucket(),transfer=await readTransfer(bucket,`users/${encodeURIComponent(uploader)}/`,'image',transferId);
+ await bucket.delete(transfer.key).catch(()=>{});
+ if(transfer.bytes.byteLength>maxBytes)throw Error(`Choose a picture up to ${maxBytes>=1024*1024?`${Math.round(maxBytes/1024/1024)} MB`:`${Math.round(maxBytes/1024)} KB`}.`);
+ return (await saveMapImage(owner,new Uint8Array(transfer.bytes))).id;
+}
 export function imageResponse(object:{url:string}){return new Response(null,{status:303,headers:{Location:object.url,'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'}});}

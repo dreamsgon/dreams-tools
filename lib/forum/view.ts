@@ -250,6 +250,8 @@ export function frameOf(ctx: Context) {
   return {
     campaign: { name: c.name },
     settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner, notices: s.notices ?? [] },
+    /** The campaign's emoji (shown in posts unless the GM turned them off) and whether this viewer may put them in posts. */
+    emoji: emojiOf(ctx),
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
@@ -276,6 +278,17 @@ export function frameOf(ctx: Context) {
   };
 }
 export type Frame = ReturnType<typeof frameOf>;
+
+function emojiOf(ctx: Context) {
+  const e = ctx.forum.emoji;
+  if (!e || e.use === "off") return { list: [] as { code: string; imageId: string; set: string }[], may: false };
+  return { list: e.list.map(x => ({ code: x.code, imageId: x.imageId, set: x.set ?? "" })), may: e.use === "all" || ctx.viewer.rights.moderate };
+}
+/** Pictures added to the forum for posts, newest first, for the Insert › Picture menu. */
+export function picturesPage(ctx: Context) {
+  const all = (ctx.forum.uploads ?? []).filter(u => u.kind === "post");
+  return { pictures: all.slice(-120).reverse().map(u => ({ id: u.id, at: u.at, mine: u.by === ctx.viewer.userId, by: memberName(ctx, u.by) })), total: all.length };
+}
 
 export function boardPage(ctx: Context, boardId: string, opts: { archive?: boolean } = {}) {
   const b = ctx.forum.boards.find(x => x.id === boardId);
@@ -382,6 +395,8 @@ export function forumImages(ctx: Context) {
   for (const id of ctx.forum.characters) add(entries.get(id));
   for (const b of ctx.forum.boards) if (b.placeId && readsBoard(ctx, b.id)) add(entries.get(b.placeId));
   for (const c of castOf(ctx)) if (c.picture) out.add(c.picture.imageId);
+  // Pictures added to the forum for posts, and the campaign's emoji.
+  for (const u of ctx.forum.uploads ?? []) out.add(u.id);
   const look = campaignOf(ctx).look;
   if (look?.banner && ctx.forum.settings.banner) out.add(look.banner.imageId);
   return out;
@@ -430,7 +445,7 @@ export function searchPage(ctx: Context, q: string, topics: readonly { summary: 
 }
 /** A line around the first word found, with the markup taken out. */
 function snippetOf(body: string, words: readonly string[]) {
-  const plain = body.replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_m, t: string, l?: string) => l || t).replace(/[*_`>#]+/g, "").replace(/\s+/g, " ").trim();
+  const plain = body.replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(/\[img(?:=([^\]\n]*))?\][a-f0-9-]{36}\[\/img\]/gi, (_m, alt?: string) => ` (picture${alt?.trim() ? `: ${alt.trim()}` : ""}) `).replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_m, t: string, l?: string) => l || t).replace(/[*_`>#]+/g, "").replace(/\s+/g, " ").trim();
   const low = plain.toLocaleLowerCase(), at = Math.min(...words.map(w => { const i = low.indexOf(w); return i < 0 ? Infinity : i; }));
   const from = Number.isFinite(at) ? Math.max(0, at - 70) : 0, text = plain.slice(from, from + 180);
   return (from > 0 ? "…" : "") + text + (from + 180 < plain.length ? "…" : "");

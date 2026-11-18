@@ -5,7 +5,8 @@
  * posting. The same box is the Quick reply under a topic, the full reply page and the edit page.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Bold, ChevronDown, Dices, Eye, Italic, Link2, MessageSquareQuote, PanelTopClose, Quote, Search, Smile, Underline } from 'lucide-react';
+import { Bold, ChevronDown, Eye, Italic, MessageSquareQuote, PanelTopClose, Quote, Search, Underline } from 'lucide-react';
+import { EmojiPicker, InsertMenu } from './forum-insert';
 import { wordCount } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
 import { Circle, Portrait, PostText } from './forum-parts';
@@ -65,18 +66,8 @@ function AsPicker({ frame, k, kind, state }: { frame: Frame; k: string; kind: 'i
   </div>;
 }
 
-/* A small set of emoji for roleplay posts. */
-const EMOJI = ['😀', '😂', '😅', '😊', '😍', '😘', '😎', '🤔', '😏', '😬', '😢', '😭', '😡', '😱', '🙄', '😴', '🤫', '🥺', '👍', '👎', '👏', '🙏', '💪', '🤝', '❤️', '💔', '✨', '🔥', '⚔️', '🛡️', '🏹', '🗡️', '🪄', '📜', '🎲', '🍺', '🌙', '☀️', '🌊', '💀'];
-
 /** The toolbar: each button wraps the selection (or inserts a placeholder) in the post's markup. */
-function Toolbar({ box, set, preview, setPreview }: { box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void }) {
-  const [emoji, setEmoji] = useState(false), emojiBox = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!emoji) return;
-    const away = (e: Event) => { if (!emojiBox.current?.contains(e.target as Node)) setEmoji(false); };
-    document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
-  }, [emoji]);
+function Toolbar({ frame, k, box, set, preview, setPreview }: { frame: Frame; k: string; box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void }) {
   const edit = (make: (sel: string) => { text: string; select?: [number, number] }) => {
     const t = box.current; if (!t) return;
     const { selectionStart: a, selectionEnd: b, value } = t, made = make(value.slice(a, b));
@@ -95,18 +86,15 @@ function Toolbar({ box, set, preview, setPreview }: { box: RefObject<HTMLTextAre
     {tool('Speech', <MessageSquareQuote size={15} />, () => wrap('“', '”', 'What they say'))}
     {tool('Quote', <Quote size={15} />, () => lines('> ', 'Quoted text'))}
     {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }))}
-    {tool('Page link', <Link2 size={15} />, () => wrap('[[', ']]', 'Page name'))}
-    {tool('Roll dice', <Dices size={15} />, () => wrap('[roll=Attack]', '[/roll]', '1d20+5'))}
-    <span className="emoji-wrap" ref={emojiBox}>
-      {tool('Emoji', <Smile size={15} />, () => setEmoji(o => !o))}
-      {emoji && <span className="emoji-pop" role="dialog" aria-label="Emoji">{EMOJI.map(e => <button type="button" key={e} onClick={() => { edit(() => ({ text: e })); setEmoji(false); }}>{e}</button>)}</span>}
-    </span>
+    <span className="sep" />
+    <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} insert={text => edit(() => ({ text }))} />
+    <EmojiPicker frame={frame} k={k} disabled={preview} insert={text => edit(() => ({ text }))} />
     <span className="sep" />
     <button type="button" title="Preview" aria-label="Preview" aria-pressed={preview} className={preview ? 'on' : ''} onClick={() => setPreview(!preview)}><Eye size={15} /><span className="tl">Preview</span></button>
   </div>;
 }
 
-export const MARKUP_HINT = 'Blank lines start paragraphs. **bold**, *italic*, __underline__, “speech”, > quote, [[page link]], [collapse=Title]…[/collapse], [roll=Attack vs 15]1d20+5[/roll] (the forum rolls it when you post).';
+export const MARKUP_HINT = 'Blank lines start paragraphs. **bold**, *italic*, __underline__, “speech”, > quote, [[page link]], [collapse=Title]…[/collapse], [roll=Attack vs 15]1d20+5[/roll] (the forum rolls it when you post), :emoji:.';
 
 /**
  * Write a reply, a new topic (with `title`) or an edit (with `initial`). Unsent text stays in this browser under
@@ -144,7 +132,7 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
       {label && <span className="composer-kind">{label}</span>}
     </div>
     {withTitle && <input className="composer-title" placeholder="Topic title" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" />}
-    <Toolbar box={box} set={setBody} preview={preview} setPreview={setPreview} />
+    <Toolbar frame={frame} k={k} box={box} set={setBody} preview={preview} setPreview={setPreview} />
     {preview ? <div className="composer-preview" aria-label="Preview">{body.trim() ? <PostText text={body} /> : <p className="muted">Nothing to preview yet.</p>}</div>
       : <textarea ref={box} value={body} onChange={e => setBody(e.target.value)} rows={big ? 18 : withTitle ? 10 : 7} placeholder={kind === 'ic' ? 'Write your post…' : 'Write to the table…'} aria-label="Post text" onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send(); }} />}
     <div className="composer-foot">

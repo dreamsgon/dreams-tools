@@ -14,8 +14,11 @@ import { can, type MemberList } from "../members.ts";
 import { NARRATION } from "./reader.ts";
 import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMetaSchema, type Combat, type Slot } from "./combat.ts";
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
+import { emojiCodes, pictureIds } from "./markup.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300 } as const;
+/** Largest picture in a post, and largest emoji, in bytes. */
+export const PICTURE_BYTES = 8 * 1024 * 1024, EMOJI_BYTES = 256 * 1024;
 /** Days a topic stays in the Trash before it goes for good. */
 export const TRASH_DAYS = 30;
 
@@ -86,6 +89,14 @@ export const topicSummarySchema = z.object({
 });
 /** A reader telling the moderating team about a post: who, why and when. One per reader per post. */
 export const reportSchema = z.object({ id, topicId: id, postId: id, by: userId, reason: z.string().trim().min(1).max(300), at });
+/** A picture someone added to the forum (stored with the GM's pictures): for posts, or one of the campaign's emoji. */
+const imageId = z.string().uuid();
+export const uploadSchema = z.object({ id: imageId, by: userId, at, kind: z.enum(["post", "emoji"]) });
+/** One of the campaign's own emoji: members write :code: (lowercase letters, digits and _) or pick it. */
+export const EMOJI_CODE = /^[a-z][a-z0-9_]{1,31}$/;
+export const emojiSchema = z.object({ code: z.string().regex(EMOJI_CODE), imageId, set: z.string().trim().max(30).optional() });
+/** The campaign's emoji, and who may put them in posts: everyone who can post, moderators only, or nobody. */
+export const emojiSettingsSchema = z.object({ use: z.enum(["all", "staff", "off"]), list: z.array(emojiSchema).max(FORUM_LIMITS.emoji) });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
 export const forumSchema = z.object({
@@ -102,6 +113,10 @@ export const forumSchema = z.object({
   recent: z.array(recentSchema).max(FORUM_LIMITS.recent).optional(),
   /** Posts readers reported to the moderating team, until a moderator dismisses them (`reportSchema`). */
   reports: z.array(reportSchema).max(FORUM_LIMITS.reports).optional(),
+  /** Pictures added to the forum (`uploadSchema`): readers may load these, and posts may show them. */
+  uploads: z.array(uploadSchema).max(FORUM_LIMITS.uploads).optional(),
+  /** The campaign's own emoji (`emojiSettingsSchema`). */
+  emoji: emojiSettingsSchema.optional(),
 });
 export const postSchema = z.object({
   id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional(),
@@ -128,6 +143,8 @@ export type Topic = z.infer<typeof topicSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type Recent = z.infer<typeof recentSchema>;
 export type Report = z.infer<typeof reportSchema>;
+export type Upload = z.infer<typeof uploadSchema>;
+export type EmojiSettings = z.infer<typeof emojiSettingsSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
 const fail = (message: string): never => { throw new ForumError(message); };
@@ -207,6 +224,25 @@ const cleanBody = (s: unknown) => {
   return v.length > FORUM_LIMITS.body ? fail(`Keep a post under ${FORUM_LIMITS.body.toLocaleString("en")} characters.`) : v;
 };
 
+/**
+ * What a post may hold beyond text: pictures only from the forum's own (`uploads`), and only from a group that may
+ * add pictures; the campaign's emoji only when the GM lets this person use them.
+ */
+export function checkMarkup(f: Forum, body: string, who: Poster, before = "") {
+  const had = new Set(pictureIds(before)), added = pictureIds(body).filter(x => !had.has(x));
+  if (added.length) {
+    if (!who.rights.pictures) fail("Your group can't add pictures to posts.");
+    const known = new Set((f.uploads ?? []).filter(u => u.kind === "post").map(u => u.id));
+    if (added.some(x => !known.has(x))) fail("That picture isn't in this forum any more. Add it again.");
+  }
+  const e = f.emoji;
+  if (e && e.use === "staff" && !who.rights.moderate) {
+    const codes = new Set(e.list.map(x => x.code)), old = new Set(emojiCodes(before));
+    if (emojiCodes(body).some(c => codes.has(c) && !old.has(c))) fail("Only moderators can use the campaign's emoji. Take out the :codes: or use standard emoji.");
+  }
+  return body;
+}
+
 /** Checks who a post is written as: a character of theirs in character (GMs: any, or themselves), themselves out of character. */
 export function checkAs(f: Forum, board: Board, as: string | null, who: Poster): string | null {
   if (kindOf(f, board) === "ooc") return as === null ? null : fail("Out of character boards are for posting as yourself.");
@@ -260,7 +296,7 @@ const withAi = (ai: boolean | undefined, who: Poster) => ai && who.rights.modera
 export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
-  const title = cleanTitle(input.title), body = cleanBody(input.body);
+  const title = cleanTitle(input.title), body = checkMarkup(f, cleanBody(input.body), who);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
   const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who) }] };
@@ -274,7 +310,7 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
   if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   if (topic.posts.length >= FORUM_LIMITS.posts) fail("This topic is full. Start a new one to carry on.");
-  const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
+  const as = checkAs(f, board, input.as, who), body = checkMarkup(f, cleanBody(input.body), who);
   // In a fight, a post in the current turn is marked with it.
   const turn = s.combat && countsFor(s.combat, as, who.rights.gm) ? turnMeta(s.combat) : undefined;
   const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}), ...withAi(input.ai, who) }] };
@@ -341,7 +377,7 @@ export function editPost(f: Forum, topic: Topic, input: { postId: string; body: 
   const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only edit your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
-  const body = cleanBody(input.body);
+  const body = checkMarkup(f, cleanBody(input.body), who, p.body);
   const rolls = input.reroll ? input.reroll(p.rolls, body) : p.rolls;
   const next: Topic = { ...topic, posts: topic.posts.map(x => { if (x.id !== p.id) return x; const y = { ...x, body, editedAt: now.toISOString() }; delete y.rolls; return { ...y, ...withRolls(rolls) }; }) };
   return { topic: next, forum: g => g };
@@ -431,6 +467,37 @@ export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string
 
 /* Boards and settings: the GM, or groups that may add and arrange boards. */
 const needBoards = (who: Poster) => { if (!who.rights.boards) fail("Your group can't change the boards."); };
+
+/**
+ * Whether someone may add a picture: for posts, a group that may add pictures; emoji, those who arrange the forum.
+ * Checked before the picture is stored, and again when it's noted in the forum.
+ */
+export function mayUpload(f: Forum, who: Poster, kind: Upload["kind"]) {
+  if (kind === "post" ? !who.rights.pictures : !who.rights.boards) fail(kind === "post" ? "Your group can't add pictures to posts." : "Only those who arrange the forum can add emoji.");
+  const all = f.uploads ?? [];
+  if (all.length >= FORUM_LIMITS.uploads) fail(`This forum holds ${FORUM_LIMITS.uploads.toLocaleString("en")} pictures, its most. Ask your GM to clear some out.`);
+  if (!who.rights.owner && all.filter(u => u.by === who.userId).length >= FORUM_LIMITS.uploadsEach) fail(`You've added ${FORUM_LIMITS.uploadsEach} pictures to this forum, the most for one member.`);
+}
+/** Notes a picture someone stored for the forum, so readers may load it. */
+export function addUpload(f: Forum, input: { id: string; kind: Upload["kind"] }, who: Poster, now: Date): Change<{ id: string }> {
+  mayUpload(f, who, input.kind);
+  const u: Upload = uploadSchema.parse({ id: input.id, by: who.userId, at: now.toISOString(), kind: input.kind });
+  return { forum: g => ({ ...g, uploads: [...(g.uploads ?? []).filter(x => x.id !== u.id), u].slice(-FORUM_LIMITS.uploads) }), out: { id: u.id } };
+}
+/** The campaign's emoji: codes, sets and who may use them. Each picture must be one added as an emoji. */
+export function setEmoji(f: Forum, input: unknown, who: Poster): Change {
+  needBoards(who);
+  const parsed = emojiSettingsSchema.safeParse(input);
+  if (!parsed.success) fail(parsed.error.issues.some(i => i.path.includes("code")) ? "Emoji codes are 2 to 32 lowercase letters, digits or _, starting with a letter." : `Keep it to ${FORUM_LIMITS.emoji} emoji.`);
+  const e = parsed.data!, seen = new Set<string>(), mine = new Set((f.uploads ?? []).filter(u => u.kind === "emoji").map(u => u.id));
+  for (const x of e.list) {
+    if (seen.has(x.code)) fail(`Two emoji use :${x.code}:. Give each its own code.`);
+    seen.add(x.code);
+    if (!mine.has(x.imageId)) fail("One of those pictures was removed. Add it again.");
+  }
+  const list = e.list.map(x => x.set ? x : { code: x.code, imageId: x.imageId });
+  return { forum: g => ({ ...g, emoji: { use: e.use, list } }) };
+}
 
 export function setSettings(_f: Forum, input: unknown, who: Poster): Change {
   needBoards(who);
