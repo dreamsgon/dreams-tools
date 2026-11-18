@@ -8,7 +8,7 @@ import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
-import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
+import { CARD_STYLES, DEFAULT_STRIP, STRIP_FIELDS, TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { featureRefs, linkTargets, withoutHtml } from "./markup.ts";
 import { playerFeatures } from "../encyclopedia/features.ts";
@@ -32,7 +32,9 @@ export type Context = {
 };
 
 export type Picture = { imageId: string; x: number; y: number };
-export type Card = { id: string; name: string; role: string; picture: Picture | null; url: string | null; traits: string[]; fields: { label: string; value: string }[] };
+/** A row of the GM's card design (forum settings › Hover card), with this reader's values; `gm` rows hold a GM-only field. */
+export type CardRow = { style: (typeof CARD_STYLES)[number]; items: { label: string; value: string }[]; gm: boolean };
+export type Card = { id: string; name: string; role: string; picture: Picture | null; url: string | null; traits: string[]; fields: { label: string; value: string }[]; rows: CardRow[] | null };
 export type Byline = { name: string; as: string | null; picture: Picture | null };
 export type LastPost = Byline & { topicId: string; title: string; at: string };
 
@@ -90,7 +92,81 @@ export function cardOf(ctx: Context, e: Entry): Card {
       fields.push({ label: f.label, value: String(v).slice(0, 120) });
     }
   }
-  return { id: e.id, name: e.title, role: roleNames[ch?.role ?? "npc"]!, picture: pictureOf(e), url: pageUrl(ctx, e.id), traits: traits.slice(0, 6), fields: fields.slice(0, 8) };
+  const design = ctx.forum.card?.rows;
+  return { id: e.id, name: e.title, role: roleNames[ch?.role ?? "npc"]!, picture: pictureOf(e), url: pageUrl(ctx, e.id), traits: traits.slice(0, 6), fields: fields.slice(0, 8), rows: design ? cardRows(ctx, e, design) : null };
+}
+/**
+ * The values a card field has on a character, as this reader may see them: players only get stats and facts shared
+ * with players (and never GM-only ones); the GM gets everything, GM-only marked. Empty values are left out.
+ */
+export function cardValue(ctx: Context, e: Entry, field: string): { label: string; value: string; gm: boolean } | null {
+  const c = campaignOf(ctx), gmView = ctx.viewer.rights.gm, ch = e.character, p = e.profile;
+  if (field === "role") return { label: "Role", value: roleNames[ch?.role ?? "npc"]!, gm: false };
+  if (field === "traits") {
+    const list = p && (gmView || p.visibility === "players") ? p.traits.filter(t => t.label.trim() && (gmView || !t.gm)).map(t => t.label) : [];
+    return list.length ? { label: "Traits", value: list.slice(0, 8).join("\u0000"), gm: false } : null;
+  }
+  if (field.startsWith("fact:")) {
+    const label = field.slice(5), f = p && (gmView || p.visibility === "players") ? (p.facts ?? []).find(x => x.label.trim().toLowerCase() === label.trim().toLowerCase() && x.value.trim() && (gmView || !x.gm)) : undefined;
+    return f ? { label: f.label, value: f.value.slice(0, 200), gm: !!f.gm || p?.visibility !== "players" } : null;
+  }
+  if (!field.startsWith("stat:")) return null;
+  const sf = (c.statFields ?? []).find(x => x.id === field.slice(5));
+  if (!sf || sf.archived || !ch || !["text", "number", "select"].includes(sf.type)) return null;
+  const hidden = sf.visibility !== "players" || ch.statsVisibility !== "players" || (ch.statLayout?.off ?? []).includes(sf.id);
+  if (hidden && !gmView) return null;
+  const v = ch.statsByCampaign[c.id]?.[sf.id];
+  if (v === null || v === undefined || v === "" || typeof v === "boolean") return null;
+  return { label: sf.label, value: String(v).slice(0, 120), gm: hidden };
+}
+function cardRows(ctx: Context, e: Entry, design: NonNullable<Forum["card"]>["rows"]): CardRow[] {
+  return design.flatMap(r => {
+    const got = r.fields.map(f => cardValue(ctx, e, f)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (!got.length) return [];
+    // Traits split into one chip each.
+    const items = got.flatMap(x => x.value.includes("\u0000") ? x.value.split("\u0000").map(v => ({ label: x.label, value: v })) : [{ label: x.label, value: x.value }]);
+    return [{ style: r.style, items, gm: got.some(x => x.gm) }];
+  });
+}
+/** Fields the card designer offers: the campaign's stats, Profile fact labels its characters use, traits and role. */
+export function cardFields(ctx: Context) {
+  const c = campaignOf(ctx), facts = new Map<string, string>();
+  for (const e of entriesOf(ctx).values()) if (e.kind === "character") for (const f of e.profile?.facts ?? []) { const l = f.label.trim(); if (l && !facts.has(l.toLowerCase()) && facts.size < 60) facts.set(l.toLowerCase(), l.slice(0, 60)); }
+  return [
+    ...(c.statFields ?? []).filter(f => !f.archived && ["text", "number", "select"].includes(f.type)).map(f => ({ id: `stat:${f.id}`, label: f.label, from: f.visibility === "players" ? "Stat" : "Stat · GM only" })),
+    ...[...facts.values()].map(l => ({ id: `fact:${l}`, label: l, from: "Profile fact" })),
+    { id: "traits", label: "Traits", from: "Profile" }, { id: "role", label: "Role", from: "Character" },
+  ];
+}
+/** A character to preview the card designer with: the player character with the most to show, and each field's value. */
+export function cardSample(ctx: Context) {
+  const fields = cardFields(ctx);
+  const chars = [...entriesOf(ctx).values()].filter(e => e.kind === "character").slice(0, 400);
+  let best: { e: Entry; values: Record<string, { label: string; value: string; gm: boolean }>; n: number } | null = null;
+  for (const e of chars) {
+    const values: Record<string, { label: string; value: string; gm: boolean }> = {};
+    for (const f of fields) { const v = cardValue(ctx, e, f.id); if (v) values[f.id] = v; }
+    const n = Object.keys(values).length + (e.character?.role === "pc" ? 100 : 0);
+    if (!best || n > best.n) best = { e, values, n };
+  }
+  return best ? { name: best.e.title, role: roleNames[best.e.character?.role ?? "npc"]!, picture: pictureOf(best.e), values: best.values } : null;
+}
+/** A member's forum profile answers for the strip under their in-character posts, in the GM's order. */
+export type StripItem = { field: (typeof STRIP_FIELDS)[number]; label: string; value: string; hidden: boolean };
+const STRIP_LABEL: Record<(typeof STRIP_FIELDS)[number], string> = { pronouns: "Player pronouns", timezone: "Timezone", activity: "Activity", mature: "Mature threads?", nogoes: "No-goes" };
+const MATURE: Record<string, string> = { yes: "Yes", ask: "Ask first", no: "No" };
+export function stripOf(ctx: Context, userId: string): StripItem[] {
+  const prof = ctx.forum.profiles?.[userId], strip = ctx.forum.strip ?? DEFAULT_STRIP;
+  if (!prof) return [];
+  return strip.fields.flatMap(field => {
+    const raw = field === "mature" ? (prof.mature ? MATURE[prof.mature]! : "") : prof[field] ?? "";
+    return raw.trim() ? [{ field, label: STRIP_LABEL[field], value: raw, hidden: strip.hidden.includes(field) }] : [];
+  });
+}
+/** The viewer's own forum profile, and what the strip shows. */
+export function profilePage(ctx: Context) {
+  const strip = ctx.forum.strip ?? DEFAULT_STRIP;
+  return { profile: ctx.forum.profiles?.[ctx.viewer.userId] ?? {}, strip: strip.fields.map(f => ({ field: f, label: STRIP_LABEL[f], hidden: strip.hidden.includes(f) })) };
 }
 
 function bylineOf(ctx: Context, entries: Map<string, Entry>, a: Author): Byline {
@@ -271,6 +347,8 @@ export function frameOf(ctx: Context) {
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
+      /** Their saved post styles (forum profile), for Insert. */
+      styles: f.profiles?.[ctx.viewer.userId]?.styles ?? [],
       unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting, alerts: alertsOf(ctx, entries),
       /** The AI help this viewer may use (ai.ts). */
       ai: aiFor(f.settings.ai, ctx.viewer.rights),
@@ -375,7 +453,9 @@ export function topicPage(ctx: Context, topic: Topic) {
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
       const reports = (ctx.forum.reports ?? []).filter(x => x.postId === p.id);
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1),
+      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null,
+        /** The player strip, under posts written as a character. */
+        strip: p.by.as && cards[p.by.as] ? stripOf(ctx, p.by.userId) : [], name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1),
         /** Reports about it (moderators), and whether the viewer reported it. */
         reports: r.moderate ? reports.map(x => ({ by: memberName(ctx, x.by), reason: x.reason, at: x.at })) : [], reported: reports.some(x => x.by === ctx.viewer.userId), canReport: !mine && !s.trashed && !r.moderate };
     }),

@@ -4,7 +4,7 @@ import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-mod
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
 import { ForumStore, forumKey } from '../lib/forum/store.ts';
-import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
+import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage, cardFields, cardSample, stripOf, profilePage } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
 import * as K from '../lib/forum/markup.ts';
@@ -1268,4 +1268,100 @@ test('html: a board\'s permissions decide which groups may use it; the GM always
   // A picture in HTML must be one of the forum's.
   f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { html: 'yes' } } }, gm, groups));
   assert.throws(() => M.editPost(f, c.topic, { postId: 'a1', body: '[html]<img src="00000000-0000-4000-8000-000000000009">[/html]' }, who('p1'), NOW), /isn't in this forum/);
+});
+
+// ---- Writing extras: the hover card designer, forum profiles, the player strip and post styles ------------
+const profiled = () => workspaceSchema.parse({
+  ...workspace,
+  entries: workspace.entries.map(e => e.id !== 'hero' ? e : {
+    ...e, profile: {
+      visibility: 'players', blocks: [], bar: { title: 'Right now', fields: [] },
+      traits: [{ id: 't1', label: 'Brave' }, { id: 't2', label: 'Loud' }, { id: 't3', label: 'Cursed', gm: true }],
+      facts: [{ id: 'f1', label: 'Origin', value: 'Saltmarsh' }, { id: 'f2', label: 'True name', value: 'Ilsa', gm: true }, { id: 'f3', label: 'Alias', value: '' }],
+    },
+  }),
+});
+
+test('hover card: the GM designs rows of fields; players only get rows they may read, empty ones are skipped', () => {
+  const ws = profiled(), hero = ws.entries.find(e => e.id === 'hero'), villain = ws.entries.find(e => e.id === 'villain');
+  let f = withBoards();
+  const gm = poster(f, OWNER), p1 = poster(f, 'p1');
+  const design = { rows: [{ style: 'title', fields: ['fact:origin'] }, { style: 'chips', fields: ['traits'] }, { style: 'pair', fields: ['stat:cls', 'stat:sec'] }, { style: 'box', fields: ['fact:True name'] }, { style: 'quote', fields: ['fact:Alias'] }, { style: 'sub', fields: ['role'] }] };
+  assert.throws(() => M.setCardDesign(f, design, p1), msg(/boards|can't/i));
+  assert.throws(() => M.setCardDesign(f, { rows: [{ style: 'bar', fields: ['role'] }] }, gm), msg(/rows/));
+  assert.throws(() => M.setCardDesign(f, { rows: [{ style: 'box', fields: [] }] }, gm), msg(/rows/));
+  f = apply(f, M.setCardDesign(f, design, gm));
+  const player = cardOf(ctxFor(f, 'p1', ws), hero).rows;
+  assert.deepEqual(player.map(r => [r.style, r.items.map(x => x.value), r.gm]), [
+    ['title', ['Saltmarsh'], false], ['chips', ['Brave', 'Loud'], false], ['pair', ['Bard'], false], ['sub', ['Player character'], false],
+  ]);
+  assert.equal(JSON.stringify(cardOf(ctxFor(f, 'p1', ws), hero)).includes('Ilsa'), false, 'GM-only facts stay out');
+  assert.equal(JSON.stringify(cardOf(ctxFor(f, 'p1', ws), villain)).includes('Lich'), false, 'stats the GM keeps hidden stay out');
+  const gmRows = cardOf(ctxFor(f, OWNER, ws), hero).rows;
+  assert.deepEqual(gmRows.map(r => [r.style, r.items.map(x => x.value), r.gm]), [
+    ['title', ['Saltmarsh'], false], ['chips', ['Brave', 'Loud', 'Cursed'], false], ['pair', ['Bard', 'Is a spy'], true], ['box', ['Ilsa'], true], ['sub', ['Player character'], false],
+  ]);
+  // The designer's fields and its preview character.
+  const ctx = ctxFor(f, OWNER, ws);
+  assert.deepEqual(cardFields(ctx).map(x => x.id), ['stat:cls', 'stat:sec', 'fact:Origin', 'fact:True name', 'fact:Alias', 'traits', 'role']);
+  assert.equal(cardSample(ctx).name, 'Hero');
+  assert.equal(cardSample(ctx).values['fact:Origin'].value, 'Saltmarsh');
+  // No design: the card as it was.
+  f = apply(f, M.setCardDesign(f, { rows: [] }, gm));
+  assert.equal(f.card, undefined);
+  assert.equal(cardOf(ctxFor(f, 'p1', ws), hero).rows, null);
+});
+
+test('forum profile: members keep their own; the strip shows the GM\'s chosen answers under posts as a character', () => {
+  let { forum: f, topic } = seeded();
+  const p1 = poster(f, 'p1'), gm = poster(f, OWNER);
+  assert.throws(() => M.setProfile(f, { nogoes: 'x'.repeat(401) }, p1), msg(/no-goes/));
+  assert.throws(() => M.setProfile(f, { styles: Array.from({ length: 5 }, (_, i) => ({ id: 's' + i, name: 'S', body: '{text}' })) }, p1), msg(/post styles/));
+  assert.throws(() => M.setProfile(f, { styles: [{ id: 's', name: 'A', body: '' }, { id: 's', name: 'B', body: '' }] }, p1), msg(/share/));
+  f = apply(f, M.setProfile(f, { pronouns: 'they/them', timezone: '', mature: 'ask', nogoes: 'Spiders', styles: [{ id: 's1', name: 'Boxed', body: '[quote]{text}[/quote]' }] }, p1));
+  assert.deepEqual(f.profiles.p1, { pronouns: 'they/them', mature: 'ask', nogoes: 'Spiders', styles: [{ id: 's1', name: 'Boxed', body: '[quote]{text}[/quote]' }] });
+  // The strip: in the GM's order, no-goes covered by default, blanks left out.
+  const ctx = u => ctxFor(f, u);
+  assert.deepEqual(stripOf(ctx('p2'), 'p1').map(x => [x.label, x.value, x.hidden]), [['Player pronouns', 'they/them', false], ['Mature threads?', 'Ask first', false], ['No-goes', 'Spiders', true]]);
+  assert.deepEqual(topicPage(ctx('p2'), topic).posts[0].strip.map(x => x.field), ['pronouns', 'mature', 'nogoes']);
+  assert.throws(() => M.setStrip(f, { fields: ['pronouns'], hidden: [] }, p1), msg(/boards|can't/i));
+  f = apply(f, M.setStrip(f, { fields: ['nogoes', 'pronouns'], hidden: [] }, gm));
+  assert.deepEqual(stripOf(ctx('p2'), 'p1').map(x => [x.field, x.hidden]), [['nogoes', false], ['pronouns', false]]);
+  // Out of character, nobody posts as a character, so no strip; their saved styles reach the composer.
+  const chat = M.startTopic(f, { boardId: 'ooc-chat', title: 'OOC', body: 'Hi', as: null }, poster(f, 'p1'), ids('t2', 'b1'), NOW);
+  assert.deepEqual(topicPage(ctxFor(apply(f, chat), 'p2'), chat.topic).posts[0].strip, []);
+  assert.deepEqual(frameOf(ctx('p1')).you.styles.map(s => s.name), ['Boxed']);
+  assert.deepEqual(frameOf(ctx('p2')).you.styles, []);
+  assert.equal(profilePage(ctx('p1')).profile.pronouns, 'they/them');
+  // Clearing everything removes the profile.
+  f = apply(f, M.setProfile(f, {}, p1));
+  assert.equal(f.profiles.p1, undefined);
+});
+
+test('request: hover card, strip and profile save through the forum, and the settings page carries them', async () => {
+  const { post } = harness();
+  const ok = async body => { const r = await post({ campaign: KEY, ...body }); assert.equal(r.status, 200, await r.clone().text()); return r.json(); };
+  await ok({ action: 'profile', profile: { pronouns: 'he/him', styles: [{ id: 's1', name: 'Plain', body: '{text}' }] } });
+  const page = await ok({ action: 'view', page: { kind: 'profile' } });
+  assert.equal(page.page.profile.pronouns, 'he/him');
+  assert.deepEqual(page.frame.you.styles.map(s => s.id), ['s1']);
+  const refused = await post({ campaign: KEY, action: 'cardDesign', card: { rows: [{ style: 'box', fields: ['role'] }] } });
+  assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /boards/);
+  const gm = harness({ user: OWNER });
+  const r = await gm.post({ campaign: KEY, action: 'cardDesign', card: { rows: [{ style: 'box', fields: ['stat:cls'] }] } });
+  assert.equal(r.status, 200);
+  const s = await (await gm.post({ campaign: KEY, action: 'view', page: { kind: 'settings' } })).json();
+  assert.deepEqual(s.page.card.rows, [{ style: 'box', fields: ['stat:cls'] }]);
+  assert.ok(s.page.card.fields.some(x => x.id === 'stat:sec' && x.from.includes('GM only')));
+  assert.deepEqual(s.page.strip, M.DEFAULT_STRIP);
+});
+
+test('post styles: {text} takes the words as written, or as escaped HTML text inside an [html] part', () => {
+  assert.deepEqual(K.fillStyle('[quote]{text}[/quote]', '**Hi**'), { text: '[quote]**Hi**[/quote]', select: [7, 13] });
+  assert.equal(K.fillStyle('[html]<div style="color:red">{text}</div>[/html]', 'a < b\nnext\n\nsecond').text, '[html]<div style="color:red"><p>a &lt; b<br>next</p><p>second</p></div>[/html]');
+  assert.equal(K.fillStyle('[html]<hr>[/html]\n{text}', 'x').text, '[html]<hr>[/html]\nx');
+  assert.equal(K.fillStyle('Header', 'x').text, 'Header\n\nx');
+  const blocks = K.postBlocks(K.fillStyle('[html]<div>{text}</div>[/html]', 'one\n\ntwo').text);
+  assert.deepEqual(blocks[0].nodes[0].children.map(c => c.tag), ['p', 'p']);
 });

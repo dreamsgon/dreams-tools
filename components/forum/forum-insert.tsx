@@ -5,7 +5,7 @@
  * emoji are stored with the GM's pictures through the forum (lib/forum/request.ts, action `upload`).
  */
 import { useEffect, useRef, useState } from 'react';
-import { AtSign, Code2, Dices, Gem, ImagePlus, Link2, Map as MapIcon, PanelTopClose, Search, Smile, Upload } from 'lucide-react';
+import { AtSign, Brush, Code2, Dices, Gem, ImagePlus, Link2, Map as MapIcon, PanelTopClose, Search, Smile, Upload } from 'lucide-react';
 import { stageTransfer } from '@/lib/transfer-client';
 import { forumCall, usePicture, when, type Frame } from './forum-api';
 import { Emoji } from './forum-parts';
@@ -37,8 +37,8 @@ type Insert = (text: string, select?: [number, number]) => void;
 type Wrap = (before: string, after: string, placeholder: string) => void;
 
 /** Insert: a picture, a feature or spell of the character you post as, a roll, a page link or collapsible text. */
-export function InsertMenu({ frame, k, insert, wrap, disabled, as, html }: { frame: Frame; k: string; insert: Insert; wrap: Wrap; disabled: boolean; as: string | null; html: boolean }) {
-  const [open, setOpen] = useState<'' | 'menu' | 'picture' | 'feature' | 'map'>(''), box = useAway(!!open, () => setOpen(''));
+export function InsertMenu({ frame, k, insert, wrap, style, disabled, as, html }: { frame: Frame; k: string; insert: Insert; wrap: Wrap; style: (body: string) => void; disabled: boolean; as: string | null; html: boolean }) {
+  const [open, setOpen] = useState<'' | 'menu' | 'picture' | 'feature' | 'map' | 'styles'>(''), box = useAway(!!open, () => setOpen(''));
   const item = (icon: React.ReactNode, name: string, about: string, run: () => void) =>
     <button type="button" role="menuitem" onClick={run}><span className="ins-ic" aria-hidden="true">{icon}</span><span><b>{name}</b><small>{about}</small></span></button>;
   const done = (run: () => void) => () => { setOpen(''); run(); };
@@ -52,7 +52,14 @@ export function InsertMenu({ frame, k, insert, wrap, disabled, as, html }: { fra
       {item(<Dices size={16} />, 'Roll', 'Rolled by the forum when you post, so nobody can change it', done(() => wrap('[roll=Attack]', '[/roll]', '1d20+5')))}
       {item(<Link2 size={16} />, 'Encyclopedia page', 'A link that opens the page for readers who may read it. Or type [[ ]]', done(() => wrap('[[', ']]', 'Page name')))}
       {html && item(<Code2 size={16} />, 'HTML', 'Your own layout: tags and styles. Scripts and outside pictures are taken out', done(() => wrap('[html]\n<div style="padding: 14px 18px; border: 1px solid #b8891c; background: #fbf3dc; color: #2b261d; font-family: Georgia, serif">\n', '\n</div>\n[/html]', 'Your text')))}
+      {frame.you.styles.length > 0 && item(<Brush size={16} />, 'My post styles', 'Wraps what you’ve written in one of your saved layouts', () => setOpen('styles'))}
       {item(<PanelTopClose size={16} />, 'Collapsible text', 'A title that opens to show more: handouts, long notes', done(() => wrap('[collapse=Read more]\n', '\n[/collapse]', 'Text readers open when they want it')))}
+    </span>}
+    {open === 'styles' && <span className="tool-pop insert-pop" role="menu" aria-label="My post styles">
+      <b className="pop-title">My post styles</b>
+      {frame.you.styles.map(s => { const needs = !html && /\[html\]/i.test(s.body), at = s.body.indexOf('{text}');
+        return <button key={s.id} type="button" role="menuitem" disabled={needs} onClick={done(() => style(s.body))}><span className="ins-ic" aria-hidden="true"><Brush size={16} /></span><span><b>{s.name}</b><small>{needs ? 'Uses HTML, which your group can’t use on this board' : at < 0 ? 'Goes in before your text' : 'Your text goes in its {text}'}</small></span></button>; })}
+      <button type="button" className="f-btn ghost small" onClick={() => setOpen('menu')}>Back</button>
     </span>}
     {open === 'feature' && as && <FeaturePicker k={k} as={as} onBack={() => setOpen('menu')} onPick={(kind, id, name) => { setOpen(''); insert(`[${kind}=${as}/${id}]${name.replace(/[[\]\n]/g, ' ').slice(0, 80)}[/${kind}]`); }} />}
     {open === 'map' && <MapPicker k={k} onBack={() => setOpen('menu')} onPick={(id, name) => { setOpen(''); insert(`\n[img=Map: ${name.replace(/[\]\n]/g, ' ').slice(0, 110)}]${id}[/img]\n`); }} />}

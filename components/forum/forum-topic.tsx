@@ -13,6 +13,7 @@ import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-mod
 import { CombatPanel, CombatSetup } from './forum-combat';
 import { AiTopicHelp } from './forum-ai';
 import { SuggestedPosts } from './forum-suggested';
+import { CardRows, PlayerStrip } from './forum-profile';
 
 type Done = (place?: Place) => Promise<void>;
 
@@ -75,9 +76,10 @@ type CardData = TopicPage['cards'][string];
 function HoverCard({ card }: { card: CardData }) {
   return <div className="mini-card" role="tooltip">
     <p className="mini-name">{card.name}</p>
+    {card.rows ? (card.rows.length ? <CardRows rows={card.rows} /> : <p className="mini-quote">Nothing shared about them yet.</p>) : <>
     <p className="mini-role">{card.role}</p>
     {card.traits.length > 0 && <p className="mini-traits">{card.traits.map(t => <span key={t} className="chip">{t}</span>)}</p>}
-    {card.fields.length > 0 ? <dl className="mini-fields">{card.fields.map(f => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl> : <p className="mini-quote">Nothing shared about them yet.</p>}
+    {card.fields.length > 0 ? <dl className="mini-fields">{card.fields.map(f => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl> : <p className="mini-quote">Nothing shared about them yet.</p>}</>}
     {card.url && <a className="mini-link" href={card.url}>Open their page</a>}
   </div>;
 }
@@ -133,6 +135,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
     </div>
+    <PlayerStrip items={p.strip} />
   </article>;
 }
 

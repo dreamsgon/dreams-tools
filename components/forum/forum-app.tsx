@@ -13,6 +13,7 @@ import { SettingsView } from './forum-settings';
 import { PrintView, ReportsView, TrashView } from './forum-moderate';
 import { Notices, SearchView } from './forum-find';
 import { ForumPicker } from './forum-pick';
+import { ProfileView } from './forum-profile';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
@@ -97,6 +98,7 @@ export default function ForumApp() {
         {page.kind === 'search' && <SearchView key={forumHash(k, place)} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'trash' && <TrashView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'reports' && <ReportsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
+        {page.kind === 'profile' && <ProfileView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'settings' && <SettingsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'active' && <>
           <Crumbs frame={frame} k={k} go={go} last="Active topics" />

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Bold, ChevronDown, Eye, Italic, MessageSquareQuote, PanelTopClose, Quote, Search, Underline } from 'lucide-react';
 import { EmojiPicker, InsertMenu, TagPicker } from './forum-insert';
-import { wordCount } from '@/lib/forum/markup';
+import { fillStyle, wordCount } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
 import { Circle, Portrait, PostText } from './forum-parts';
 import { AiComposerHelp } from './forum-ai';
@@ -89,7 +89,7 @@ function Toolbar({ frame, k, box, set, preview, setPreview, as, html }: { frame:
     {tool('Quote', <Quote size={15} />, () => bb ? wrap('[quote]', '[/quote]', 'Quoted text') : lines('> ', 'Quoted text'))}
     {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }))}
     <span className="sep" />
-    <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} as={as} html={html} insert={text => edit(() => ({ text }))} />
+    <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} style={body => edit(sel => fillStyle(body, sel || 'Your text'))} as={as} html={html} insert={text => edit(() => ({ text }))} />
     <EmojiPicker frame={frame} k={k} disabled={preview} insert={text => edit(() => ({ text }))} />
     <TagPicker frame={frame} disabled={preview} insert={text => edit(() => ({ text }))} />
     <span className="sep" />

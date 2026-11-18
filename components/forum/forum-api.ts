@@ -1,12 +1,14 @@
 'use client';
 /* The forum's requests (app/api/forum) and the shapes they return (lib/forum/view.ts). */
 import { useEffect, useState } from 'react';
-import type { EmojiSettings, ForumSettings, TopicTag } from '@/lib/forum/model';
+import type { CardDesign, EmojiSettings, ForumSettings, Strip, TopicTag } from '@/lib/forum/model';
 import type { ForumAi } from '@/lib/forum/ai';
 import type { AiConnection } from '@/lib/forum/request';
-import type { Frame, Picture, picturesPage, activePage, boardPage, membersPage, reportsPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
+import type { Frame, Picture, CardRow, StripItem, cardFields, cardSample, profilePage, picturesPage, activePage, boardPage, membersPage, reportsPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
 
-export type { Frame, Picture };
+export type { Frame, Picture, CardRow, StripItem };
+export type CardField = ReturnType<typeof cardFields>[number];
+export type CardSample = ReturnType<typeof cardSample>;
 export type BoardPage = NonNullable<ReturnType<typeof boardPage>>;
 export type TopicPage = NonNullable<ReturnType<typeof topicPage>>;
 export type PageData =
@@ -18,13 +20,14 @@ export type PageData =
   | ({ kind: 'trash' } & ReturnType<typeof trashPage>)
   | ({ kind: 'reports' } & ReturnType<typeof reportsPage>)
   | ({ kind: 'pictures' } & ReturnType<typeof picturesPage>)
+  | ({ kind: 'profile' } & ReturnType<typeof profilePage>)
   | ({ kind: 'search'; boardId: string | null } & ReturnType<typeof searchPage>)
-  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
+  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; card: CardDesign & { fields: CardField[]; sample: CardSample }; strip: Strip; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
 export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply' | 'html', Tri>>>;
 export type View = { frame: Frame; page: PageData };
-export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' | 'reports' } | { view: 'board'; id: string; archive?: boolean; start?: boolean } | { view: 'topic'; id: string } | { view: 'place'; id: string }
+export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' | 'reports' | 'profile' } | { view: 'board'; id: string; archive?: boolean; start?: boolean } | { view: 'topic'; id: string } | { view: 'place'; id: string }
   | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string } | { view: 'print'; id: string } | { view: 'search'; q: string; board?: string };
 
 /**
@@ -38,7 +41,7 @@ export function parseForumHash(hash: string): { key: string; place: Place } {
   const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : rest.get('print') === '1' ? { view: 'print', id: topic! } : { view: 'topic', id: topic! })
     : ok(board) ? { view: 'board', id: board!, ...(rest.get('archive') === '1' ? { archive: true } : rest.get('new') === '1' ? { start: true } : {}) }
     : ok(placeId) ? { view: 'place', id: placeId! }
-    : view === 'search' ? { view: 'search', q: (rest.get('q') ?? '').slice(0, 100), ...(ok(rest.get('in')) ? { board: rest.get('in')! } : {}) } : view === 'active' || view === 'members' || view === 'settings' || view === 'trash' || view === 'reports' ? { view } : { view: 'index' };
+    : view === 'search' ? { view: 'search', q: (rest.get('q') ?? '').slice(0, 100), ...(ok(rest.get('in')) ? { board: rest.get('in')! } : {}) } : view === 'active' || view === 'members' || view === 'settings' || view === 'trash' || view === 'reports' || view === 'profile' ? { view } : { view: 'index' };
   return { key, place };
 }
 export function forumHash(key: string, place: Place) {

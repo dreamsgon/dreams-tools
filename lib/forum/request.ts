@@ -10,10 +10,10 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, setTopicTags, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, setTopicTags, setCardDesign, setStrip, setProfile, DEFAULT_STRIP, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { cardFields, cardSample, profilePage, picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
 import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
@@ -65,7 +65,7 @@ const key = z.string().regex(keyPattern);
 const as = id.nullable();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
+  z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }), z.object({ kind: z.literal("profile") }),
   z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }), z.object({ kind: z.literal("sheet"), id }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
 ]);
@@ -95,6 +95,9 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("upload"), campaign: key, transferId: z.string().uuid(), kind: z.enum(["post", "emoji"]) }),
   z.object({ action: z.literal("emoji"), campaign: key, emoji: z.unknown() }),
   z.object({ action: z.literal("topicTags"), campaign: key, tags: z.unknown() }),
+  z.object({ action: z.literal("cardDesign"), campaign: key, card: z.unknown() }),
+  z.object({ action: z.literal("strip"), campaign: key, strip: z.unknown() }),
+  z.object({ action: z.literal("profile"), campaign: key, profile: z.unknown() }),
   z.object({ action: z.literal("addCategory"), campaign: key, name: z.string().max(200), kind: z.enum(["ic", "ooc"]) }),
   z.object({ action: z.literal("editCategory"), campaign: key, id, name: z.string().max(200) }),
   z.object({ action: z.literal("deleteCategory"), campaign: key, id }),
@@ -197,8 +200,9 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       const masks = Object.fromEntries(ctx.forum.boards.flatMap(b => b.masks ? [[b.id, b.masks]] : []));
       // Only the campaign's owner chooses the forum's AI, as it spends their API key.
       const connections = ctx.viewer.rights.owner && deps.ai ? await deps.ai.connections(found.owner, found.campaignId).catch(() => []) : [];
-      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, topicTags: ctx.forum.topicTags ?? [], ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
+      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, topicTags: ctx.forum.topicTags ?? [], card: { rows: ctx.forum.card?.rows ?? [], fields: cardFields(ctx), sample: cardSample(ctx) }, strip: ctx.forum.strip ?? DEFAULT_STRIP, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
     }
+    case "profile": return json({ frame: frameOf(ctx), page: { kind: "profile", ...profilePage(ctx) } });
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
   }
 }
@@ -278,6 +282,9 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     })();
     case "emoji": return run(null, f => setEmoji(f, body.emoji, who));
     case "topicTags": return run(null, f => setTopicTags(f, body.tags, who));
+    case "cardDesign": return run(null, f => setCardDesign(f, body.card, who));
+    case "strip": return run(null, f => setStrip(f, body.strip, who));
+    case "profile": return run(null, f => setProfile(f, body.profile, who));
     case "addCategory": { const n = newId(); return run(null, f => addCategory(f, body, who, n)); }
     case "editCategory": return run(null, f => editCategory(f, body, who));
     case "deleteCategory": return run(null, f => deleteCategory(f, body, who));
