@@ -222,3 +222,15 @@ export const cleanName = (name: unknown, what = "campaign") => {
   if (typeof name !== "string" || !name.trim()) throw new Error(`Give the ${what} a name.`);
   return name.trim().replace(/\s+/g, " ").slice(0, 120);
 };
+
+/**
+ * A campaign row by its key. Maptable only knows its own campaign id, so it links to a campaign's
+ * dashboard as `m:<maptable id>`; that finds the row even when the campaign also has notes (key `e:<id>`).
+ */
+export function rowByKey<R extends { key: string; maptable: { id: string } | null; encyclopedia: { id: string } | null }>(rows: readonly R[], key: string): R | undefined {
+  return rows.find(r => r.key === key)
+    ?? (key.startsWith("m:") ? rows.find(r => r.maptable?.id === key.slice(2)) : key.startsWith("e:") ? rows.find(r => r.encyclopedia?.id === key.slice(2)) : undefined);
+}
+
+/** A Maptable campaign's dashboard, or the Campaigns page for maps not in a campaign. */
+export const maptableHubHref = (maptableCampaignId: string | null) => maptableCampaignId ? `/campaigns/${encodeURIComponent(`m:${maptableCampaignId}`)}` : "/campaigns";

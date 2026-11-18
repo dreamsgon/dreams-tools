@@ -2,7 +2,8 @@ import { scenesInOrder } from "./scene-order.ts";
 
 /**
  * Where you are in Maptable, kept in the address as ?campaign=<id>&scene=<id> so it can be bookmarked. Other parameters are left alone.
- * `view: "scenes"` is a campaign's scene list (?campaign=<id>&view=scenes); without it, ?campaign=<id> opens that campaign's table.
+ * `view: "scenes"` is a campaign's Scene Picker (?campaign=<id>&view=scenes); without it, ?campaign=<id> opens that campaign's table.
+ * With no campaign, `view: "scenes"` is the Scene Picker for maps not in a campaign (?view=unfiled).
  */
 export type MaptablePlace = { campaignId: string | null; sceneId: string | null; view?: "scenes" };
 type Data = { scenes: { id: string; containerId?: string | null }[]; collections: { id: string; kind: string; parentId?: string | null }[] };
@@ -12,7 +13,7 @@ export function maptableSearch(current: string, place: MaptablePlace): string {
   const old = new URLSearchParams(current), next = new URLSearchParams();
   if (place.campaignId) next.set("campaign", place.campaignId);
   if (place.sceneId) next.set("scene", place.sceneId);
-  else if (place.campaignId && place.view === "scenes") next.set("view", "scenes");
+  else if (place.view === "scenes") next.set("view", place.campaignId ? "scenes" : "unfiled");
   old.forEach((value, key) => { if (key !== "campaign" && key !== "scene" && key !== "view") next.append(key, value); });
   const text = next.toString();
   return text ? `?${text}` : "";
@@ -25,7 +26,8 @@ export function readMaptablePlace(search: string, data: Data): MaptablePlace {
     sceneId: scene && data.scenes.some(s => s.id === scene) ? scene : null,
     campaignId: campaign && data.collections.some(c => c.id === campaign && c.kind === "campaign") ? campaign : null,
   };
-  if (place.campaignId && !place.sceneId && query.get("view") === "scenes") place.view = "scenes";
+  const view = query.get("view");
+  if (!place.sceneId && (place.campaignId ? view === "scenes" : view === "unfiled" && !campaign)) place.view = "scenes";
   return place;
 }
 

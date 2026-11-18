@@ -24,7 +24,10 @@ test("Maptable reads a place back and drops what is missing", () => {
 test("a campaign's scene list has its own address; a bare ?campaign= is that campaign's table", () => {
   assert.equal(maptableSearch("?campaign=camp", { campaignId: "camp", sceneId: null, view: "scenes" }), "?campaign=camp&view=scenes");
   assert.equal(maptableSearch("?campaign=camp&view=scenes", { campaignId: "camp", sceneId: "s1" }), "?campaign=camp&scene=s1", "an open scene drops view");
-  assert.equal(maptableSearch("?view=scenes", { campaignId: null, sceneId: null, view: "scenes" }), "", "no campaign, no view");
+  assert.equal(maptableSearch("?view=scenes", { campaignId: null, sceneId: null, view: "scenes" }), "?view=unfiled", "no campaign: the picker for maps not in a campaign");
+  assert.deepEqual(readMaptablePlace("?view=unfiled", data), { campaignId: null, sceneId: null, view: "scenes" });
+  assert.deepEqual(readMaptablePlace("?campaign=gone&view=unfiled", data), { campaignId: null, sceneId: null }, "a missing campaign is not the unfiled picker");
+  assert.deepEqual(readMaptablePlace("?view=scenes", data), { campaignId: null, sceneId: null });
   assert.deepEqual(readMaptablePlace("?campaign=camp&view=scenes", data), { campaignId: "camp", sceneId: null, view: "scenes" });
   assert.deepEqual(readMaptablePlace("?campaign=camp", data), { campaignId: "camp", sceneId: null });
   assert.deepEqual(readMaptablePlace("?campaign=camp&scene=s1&view=scenes", data), { campaignId: "camp", sceneId: "s1" });

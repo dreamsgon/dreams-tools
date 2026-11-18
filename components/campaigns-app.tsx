@@ -198,7 +198,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
         </div>
         <div className="campaigns-foot">
           {archivedCount > 0 && <span>{plural(archivedCount, "campaign")} in archived worlds <button type="button" className="campaigns-link" onClick={() => setArchived(!archived)}>{archived ? "Hide" : "Show"}</button></span>}
-          {summary.loose > 0 && <span><MapIcon size={15} aria-hidden="true" />{plural(summary.loose, "map")} not in a campaign <a className="campaigns-link" href="/maptable">Sort them</a></span>}
+          {summary.loose > 0 && <span><MapIcon size={15} aria-hidden="true" />{plural(summary.loose, "map")} not in a campaign <a className="campaigns-link" href="/maptable?view=unfiled">Sort them</a></span>}
           <span><TagIcon size={15} aria-hidden="true" /><button type="button" className="campaigns-link" onClick={() => setTagsOpen(true)}>Manage tags</button></span>
           <span><Download size={15} aria-hidden="true" /><a className="campaigns-link" href="/api/campaigns?download=backup">Download a backup of both tools</a></span>
         </div>

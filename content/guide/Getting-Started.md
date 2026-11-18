@@ -8,7 +8,7 @@ An email and password account. Sign up on the RPG Tools home page and confirm yo
 
 | Tool | Address | Use it for |
 |---|---|---|
-| Maptable | `/maptable` | Running the table: maps, tokens, fog, initiative, dice |
+| Maptable | `/maptable` | Running the table: maps, tokens, fog, initiative, dice. Opens on the Scene Picker of the campaign you were last in |
 | Encyclopedia | `/encyclopedia` | Prepping and remembering: pages, characters, quests, maps, calendars |
 | Campaigns | `/campaigns` | One list of every campaign in either tool |
 
