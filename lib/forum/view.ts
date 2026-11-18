@@ -7,7 +7,7 @@ import { playerText, visibleEntries, type Entry, type Workspace } from "../encyc
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
-import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
 import { unseen, type Alerts } from "./alerts.ts";
@@ -170,6 +170,8 @@ function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): T
 
 export type BoardRow = {
   id: string; categoryId: string; parentId: string | null; name: string; description: string; kind: "ic" | "ooc"; locked: boolean;
+  /** Location, campaign or out of character, and full or half width. */
+  type: "location" | "campaign" | "ooc"; width: "full" | "half";
   place: { id: string; name: string; picture: Picture | null; url: string | null } | null;
   topics: number; replies: number; last: LastPost | null; unread: boolean;
   /** Whether the viewer may start a topic here (their group, the board's masks and its lock). */
@@ -181,6 +183,7 @@ function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow
   const place = b.placeId ? entries.get(b.placeId) : undefined;
   return {
     id: b.id, categoryId: b.categoryId, parentId: b.parentId, name: b.name, description: b.description, kind: kindOf(ctx.forum, b), locked: !!b.locked,
+    type: typeOf(ctx.forum, b), width: widthOf(ctx.forum, b),
     place: place ? { id: place.id, name: place.title, picture: pictureOf(place), url: pageUrl(ctx, place.id) } : null,
     topics: topics.length, replies: topics.reduce((n, t) => n + t.replies, 0), last: latest ? lastOf(ctx, entries, latest) : null,
     unread: topics.some(t => isUnread(ctx.reads, t, ctx.viewer.userId)),

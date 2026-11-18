@@ -845,3 +845,25 @@ test('request: combat start, turn alerts, rolls by the server and Maptable impor
   assert.match((await (await gm.post({ action: 'combat', campaign: KEY, topicId, op: 'order', sceneId: 'nope' })).json()).error, /no fight/);
   assert.equal((await p1.post({ action: 'combatSources', campaign: KEY })).status, 400);
 });
+
+// ---- Board kind and width ------------------------------------------------------------------------
+test('boards: a kind (location, campaign, out of character) and a width, defaulting from the category', () => {
+  let f = withBoards();
+  const gm = poster(f, OWNER), add = (input, id) => { const c = M.addBoard(f, { categoryId: 'locations', name: id, ...input }, gm, id); f = apply(f, c); return f.boards.find(b => b.id === id); };
+  const plain = add({ placeId: 'tavern' }, 'b1');
+  assert.deepEqual([plain.type, plain.width, plain.placeId, M.typeOf(f, plain), M.widthOf(f, plain)], [undefined, undefined, 'tavern', 'location', 'full'], 'defaults are left out');
+  const story = add({ type: 'campaign', width: 'half', placeId: 'tavern' }, 'b2');
+  assert.deepEqual([story.type, story.width, story.placeId, M.kindOf(f, story)], ['campaign', 'half', undefined, 'ic'], 'only a location keeps a place');
+  const chat = add({ type: 'ooc' }, 'b3');
+  assert.deepEqual([M.kindOf(f, chat), M.widthOf(f, chat)], ['ooc', 'half'], 'out of character is half width unless told');
+  assert.throws(() => M.startTopic(f, { boardId: 'b3', title: 'x', body: 'y', as: 'hero' }, poster(f, 'p1'), ids('t9', 'p9'), NOW), /posting as yourself/);
+  const ooc = M.addBoard(f, { categoryId: 'ooc', name: 'Story', type: 'campaign', width: 'full' }, gm, 'b4'); f = apply(f, ooc);
+  assert.equal(M.kindOf(f, f.boards.find(b => b.id === 'b4')), 'ic', 'a campaign board in an out-of-character category is in character');
+  // A board with topics may switch between location and campaign but stays in character.
+  f = apply(f, M.startTopic(f, { boardId: 'b1', title: 'Hi', body: 'Hello', as: 'hero' }, poster(f, 'p1'), ids('t1', 'a1'), NOW));
+  f = apply(f, M.editBoard(f, { id: 'b1', categoryId: 'locations', name: 'b1', type: 'campaign', width: 'half' }, gm));
+  assert.deepEqual([f.boards.find(b => b.id === 'b1').type, f.boards.find(b => b.id === 'b1').width], ['campaign', 'half']);
+  assert.throws(() => M.editBoard(f, { id: 'b1', categoryId: 'locations', name: 'b1', type: 'ooc' }, gm), /stays in character or out of character/);
+  const rows = frameOf(ctxFor(f, 'p1')).boards;
+  assert.deepEqual(rows.filter(r => r.id.startsWith('b')).map(r => [r.id, r.type, r.width]), [['b1', 'campaign', 'half'], ['b2', 'campaign', 'half'], ['b3', 'ooc', 'half'], ['b4', 'campaign', 'full']]);
+});

@@ -48,6 +48,13 @@ export const boardSchema = z.object({
   /** Only moderators may start topics here (announcements, rules). */
   locked: z.boolean().optional(),
   /**
+   * What kind of board it is: a location (tied to a place, with its art), a campaign board (a story with no single
+   * place) or out of character. Left out: as its category says (in character boards are locations).
+   */
+  type: z.enum(["location", "campaign", "ooc"]).optional(),
+  /** Full width or half (half-width boards sit side by side on the index). Left out: in character full, out of character half. */
+  width: z.enum(["full", "half"]).optional(),
+  /**
    * Permission masks: per group, Yes, No or Never for reading, starting topics and replying here instead of what
    * the group says for the whole forum. A subforum without its own setting follows its board. GMs aren't masked.
    */
@@ -166,7 +173,10 @@ export function canSee(t: Pick<TopicSummary, "trashed" | "private" | "by" | "boa
 }
 
 const boardOf = (f: Forum, boardId: string) => f.boards.find(b => b.id === boardId) ?? fail("That board was removed.");
-export const kindOf = (f: Forum, board: Board) => f.categories.find(c => c.id === board.categoryId)?.kind ?? "ooc";
+export const kindOf = (f: Forum, board: Pick<Board, "categoryId" | "type">) => board.type ? (board.type === "ooc" ? "ooc" : "ic") : f.categories.find(c => c.id === board.categoryId)?.kind ?? "ooc";
+/** A board's kind in full, and its width, with the defaults worked out. */
+export const typeOf = (f: Forum, board: Pick<Board, "categoryId" | "type">) => board.type ?? (kindOf(f, board) === "ic" ? "location" : "ooc");
+export const widthOf = (f: Forum, board: Pick<Board, "categoryId" | "type" | "width">) => board.width ?? (kindOf(f, board) === "ic" ? "full" : "half");
 const summaryOf = (f: Forum, topicId: string) => f.topics.find(t => t.id === topicId) ?? fail("That topic was removed.");
 /** The topic's summary, if the person may see it; trashed topics only for moderators when `trash` is set. */
 const seenBy = (f: Forum, topicId: string, who: Poster, trash = false) => {
@@ -386,7 +396,7 @@ export function deleteCategory(f: Forum, input: { id: string }, who: Poster): Ch
   return { forum: g => ({ ...g, categories: g.categories.filter(c => c.id !== input.id) }) };
 }
 
-type BoardInput = { categoryId: string; parentId?: string | null; name: unknown; description?: unknown; placeId?: string | null; locked?: boolean };
+type BoardInput = { categoryId: string; parentId?: string | null; name: unknown; description?: unknown; placeId?: string | null; locked?: boolean; type?: Board["type"]; width?: Board["width"] };
 function cleanBoardInput(f: Forum, input: BoardInput, self?: string): Omit<Board, "id"> {
   if (!f.categories.some(c => c.id === input.categoryId)) fail("That category was removed.");
   const parentId = input.parentId || null;
@@ -399,8 +409,14 @@ function cleanBoardInput(f: Forum, input: BoardInput, self?: string): Omit<Board
   const name = nameOf(60).safeParse(input.name);
   if (!name.success) fail("Give the board a name.");
   const description = typeof input.description === "string" ? input.description.replace(/\s+/g, " ").trim().slice(0, 300) : "";
-  const placeId = input.placeId && id.safeParse(input.placeId).success ? input.placeId : undefined;
-  return { categoryId: input.categoryId, parentId, name: name.data!, description, ...(placeId ? { placeId } : {}), ...(input.locked ? { locked: true } : {}) };
+  const cat = f.categories.find(c => c.id === input.categoryId)!.kind;
+  // The kind is kept only when it differs from what the category gives, so a board follows its category by default.
+  const type = input.type && input.type !== (cat === "ic" ? "location" : "ooc") ? input.type : undefined;
+  const kind = type ? (type === "ooc" ? "ooc" : "ic") : cat;
+  const width = input.width && input.width !== (kind === "ic" ? "full" : "half") ? input.width : undefined;
+  // Only a location board is tied to a place.
+  const placeId = (type ?? (cat === "ic" ? "location" : "ooc")) === "location" && input.placeId && id.safeParse(input.placeId).success ? input.placeId : undefined;
+  return { categoryId: input.categoryId, parentId, name: name.data!, description, ...(placeId ? { placeId } : {}), ...(input.locked ? { locked: true } : {}), ...(type ? { type } : {}), ...(width ? { width } : {}) };
 }
 export function addBoard(f: Forum, input: BoardInput, who: Poster, newId: string): Change<{ id: string }> {
   needBoards(who);
