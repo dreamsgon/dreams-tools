@@ -8,6 +8,7 @@ import { Archive, ArrowUp, EyeOff, Hourglass, Lock, Pin, MessageSquare, ScrollTe
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
+import { Alerts, SearchBox } from './forum-find';
 
 export type Go = (place: Place) => void;
 type Row = Frame['boards'][number];
@@ -74,7 +75,9 @@ export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
     <p className="board-date">{frame.date ? <><b>{frame.date}</b></> : <span className="muted">No calendar date yet</span>}</p>
     <div className="board-staff" aria-label="Staff">{frame.staff.slice(0, 8).map(s => <Circle key={s.name + s.role} name={s.name} title={`${s.name} · ${s.role}`} />)}<span className="muted">Staff</span></div>
     <div className="board-you">
+      <SearchBox go={go} />
       {r.boards && <Link k={k} go={go} to={{ view: 'settings' }} className="f-btn ghost small">Forum settings</Link>}
+      <Alerts frame={frame} k={k} go={go} />
       {(frame.you.cast.length > 0 || frame.you.waiting.length > 0) && <Waiting frame={frame} k={k} go={go} />}
       <span className="you"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'}</small></span></span>
     </div>

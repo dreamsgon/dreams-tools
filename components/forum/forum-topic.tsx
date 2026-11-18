@@ -21,7 +21,7 @@ async function afterPosting(k: string, topicId: string, after: AfterPost) {
 
 export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: BoardPage; k: string; go: Go; done: Done }) {
   const b = page.board, art = b.place?.picture ?? null, [writing, setWriting] = useState(false), r = frame.you.rights;
-  const subs = frame.boards.filter(x => x.parentId === b.id), canStart = r.start && (!b.locked || r.moderate) && !page.archive;
+  const subs = frame.boards.filter(x => x.parentId === b.id), canStart = b.start && !page.archive;
   const [only, setOnly] = useState<string[] | null>(null), [picked, setPicked] = useState<string[]>([]);
   const shown = new Set(page.topics.map(t => t.id)), chosen = picked.filter(id => shown.has(id));
   const start = async (v: { title: string; body: string; as: string | null; after: AfterPost }) => {

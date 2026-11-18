@@ -11,6 +11,7 @@ import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle,
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
 import { PrintView, TrashView } from './forum-moderate';
+import { Notices, SearchView } from './forum-find';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
@@ -74,6 +75,7 @@ export default function ForumApp() {
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} />
       <Banner frame={frame} k={k} go={go} />
+      <Notices frame={frame} />
       <main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
         {page.kind === 'index' && <IndexPage frame={frame} k={k} go={go} />}
@@ -82,6 +84,7 @@ export default function ForumApp() {
         {page.kind === 'topic' && place.view === 'edit' && <EditView key={'e' + place.post} frame={frame} page={page} k={k} go={go} done={done} postId={place.post} />}
         {page.kind === 'topic' && place.view === 'print' && <PrintView key={'p' + page.topic.id} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && place.view !== 'print' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'search' && <SearchView key={forumHash(k, place)} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'trash' && <TrashView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'settings' && <SettingsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'active' && <>

@@ -433,6 +433,35 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .print-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 14px; }
 .print-preview { display: block; width: 100%; height: calc(75vh / var(--ui-zoom, 1)); border: 1px solid var(--line); background: #fff; }
 
+/* Finding your way: alerts, notices, search; and per-board permissions in settings. */
+.alert-btn.due { border-color: var(--accent); color: var(--accent) !important; }
+.alert-btn.due .wait-count { background: var(--accent); color: var(--on-accent); }
+.alert-panel li:not(.due) { opacity: 1; }
+.alert-line { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.alert-line b { color: var(--ink); }
+.search-box { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--line-strong); background: var(--raised); color: var(--muted); }
+.search-box input { width: 170px; padding: 5px 0; border: 0; background: transparent; color: var(--ink); font-size: 13px; outline: none; }
+.search-box:focus-within { border-color: var(--accent); }
+.notices { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-top: 0; }
+.notice { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 14px; background: var(--accent-soft); font-size: 14px; }
+.notice > svg { flex: none; color: var(--accent); }
+.notice span { flex: 1; min-width: 0; }
+.search-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; }
+.search-form input[type="search"] { flex: 1; min-width: 200px; padding: 7px 10px; font-size: 15px; }
+.search-hit { margin-bottom: 8px; }
+.hit-posts { list-style: none; margin: 0; padding: 8px 14px 8px 28px; display: grid; gap: 8px; background: var(--raised); border: 1px solid var(--line); border-top: 0; }
+.hit-posts p { margin: 2px 0 0; font: 16px/1.45 var(--font-reading); color: var(--ink); }
+.hit-posts mark { background: var(--accent-soft); color: var(--ink); padding: 0 1px; box-shadow: inset 0 -2px 0 var(--accent); }
+.settings-card h3 svg { vertical-align: -2px; color: var(--accent); }
+.notice-row { grid-template-columns: minmax(0, 1fr) auto; }
+.f-btn.on { border-color: var(--accent-2); color: var(--accent-2) !important; }
+.mask-form { display: grid; gap: 8px; padding: 10px; width: 100%; background: var(--panel); border: 1px solid var(--line-strong); }
+.mask-table { display: grid; gap: 2px; }
+.mask-table > div { display: grid; grid-template-columns: minmax(110px, 1fr) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.mask-head { font: 600 11px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.mask-table select { width: 100%; padding: 4px 6px; font-size: 12.5px; }
+.mask-table select.set { border-color: var(--accent-2); color: var(--accent-2); font-weight: 600; }
+
 /* Phones and narrow windows. */
 @container page (max-width: 900px) {
   .forum, .forum-ic { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
@@ -512,4 +541,10 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .topics-head { flex-wrap: wrap; }
   .trash-meta { padding: 8px 12px; }
   .print-preview { height: calc(65vh / var(--ui-zoom, 1)); }
+  .search-box { order: -1; width: 100%; }
+  .search-box input { width: 100%; }
+  .notice { padding: 8px 12px; }
+  .mask-table > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mask-table > div > span[role="rowheader"] { grid-column: 1 / -1; margin-top: 6px; }
+  .mask-head span:first-child { display: none; }
 }

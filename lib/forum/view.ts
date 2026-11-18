@@ -7,12 +7,13 @@ import { playerText, visibleEntries, type Entry, type Workspace } from "../encyc
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
-import { TRASH_DAYS, boardTree, canSee, kindOf, type Author, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
+import { unseen, type Alerts } from "./alerts.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
 
-export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string> };
+export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string>; access?: Readonly<Record<string, BoardAccess>> };
 export type Context = {
   forum: Forum; list: MemberList; owner: string; workspace: Workspace; campaignId: string; viewer: Viewer;
   /** Pages this viewer may open on the player pages; null when they see every page (the GM). */
@@ -21,6 +22,8 @@ export type Context = {
   reads?: Reads;
   /** Who has been reading lately. */
   presence?: Presence | null;
+  /** The viewer's alerts (alerts.ts). */
+  alerts?: Alerts | null;
   now?: Date;
 };
 
@@ -160,6 +163,8 @@ export type BoardRow = {
   id: string; categoryId: string; parentId: string | null; name: string; description: string; kind: "ic" | "ooc"; locked: boolean;
   place: { id: string; name: string; picture: Picture | null; url: string | null } | null;
   topics: number; replies: number; last: LastPost | null; unread: boolean;
+  /** Whether the viewer may start a topic here (their group, the board's masks and its lock). */
+  start: boolean;
 };
 function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow {
   const ids = new Set([b.id, ...ctx.forum.boards.filter(x => x.parentId === b.id).map(x => x.id)]);
@@ -170,8 +175,11 @@ function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow
     place: place ? { id: place.id, name: place.title, picture: pictureOf(place), url: pageUrl(ctx, place.id) } : null,
     topics: topics.length, replies: topics.reduce((n, t) => n + t.replies, 0), last: latest ? lastOf(ctx, entries, latest) : null,
     unread: topics.some(t => isUnread(ctx.reads, t, ctx.viewer.userId)),
+    start: accessOn(ctx.viewer, b.id).start && (!b.locked || ctx.viewer.rights.moderate),
   };
 }
+/** Boards this viewer may read. */
+const readsBoard = (ctx: Context, boardId: string) => accessOn(ctx.viewer, boardId).read;
 
 /** The current in-world date: the first calendar this viewer may see. */
 function dateOf(ctx: Context) {
@@ -226,16 +234,17 @@ export function frameOf(ctx: Context) {
   const banner = s.banner && c.look?.banner && (ctx.viewer.rights.gm || c.look.players !== false) ? { imageId: c.look.banner.imageId, y: c.look.banner.y } : null;
   return {
     campaign: { name: c.name },
-    settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner },
+    settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner, notices: s.notices ?? [] },
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
-      unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting,
+      unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting, alerts: alertsOf(ctx, entries),
       /** Members by key and name, for choosing who a private topic is for. */
       people: ctx.viewer.rights.start ? [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].filter(u => u !== ctx.viewer.userId).map(u => ({ key: memberKey(ctx, u), name: memberName(ctx, u), gm: u === ctx.owner || can(ctx.list, u, "seeGm") })) : [],
     },
-    categories: f.categories,
-    boards: boardTree(f).flatMap(({ boards }) => boards.flatMap(({ board, subs }) => [board, ...subs])).map(b => boardRow(ctx, entries, b)),
+    // A category whose boards are all masked from this viewer isn't shown (those who arrange boards see it).
+    categories: f.categories.filter(c => ctx.viewer.rights.boards || !f.boards.some(b => b.categoryId === c.id) || f.boards.some(b => b.categoryId === c.id && readsBoard(ctx, b.id))),
+    boards: boardTree(f).flatMap(({ boards }) => boards.flatMap(({ board, subs }) => [board, ...subs])).filter(b => readsBoard(ctx, b.id)).map(b => boardRow(ctx, entries, b)),
     footer: {
       active: live(ctx).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 5).map(t => topicRow(ctx, entries, t)),
       top: counts.slice(0, 5).map(([userId, posts]) => ({ name: memberName(ctx, userId), posts })),
@@ -253,7 +262,7 @@ export type Frame = ReturnType<typeof frameOf>;
 
 export function boardPage(ctx: Context, boardId: string, opts: { archive?: boolean } = {}) {
   const b = ctx.forum.boards.find(x => x.id === boardId);
-  if (!b) return null;
+  if (!b || !readsBoard(ctx, b.id)) return null;
   const entries = entriesOf(ctx), place = b.placeId ? entries.get(b.placeId) : undefined;
   const all = shownTopics(ctx).filter(t => t.boardId === b.id), archive = !!opts.archive;
   const topics = all.filter(t => !!t.archived === archive).sort((x, y) => Number(y.pinned && !archive) - Number(x.pinned && !archive) || y.lastAt.localeCompare(x.lastAt));
@@ -280,7 +289,7 @@ export function topicPage(ctx: Context, topic: Topic) {
   }
   return {
     links,
-    topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: r.reply && (!s.locked || r.moderate) && !s.archived && !s.trashed },
+    topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: accessOn(ctx.viewer, s.boardId).reply && (!s.locked || r.moderate) && !s.archived && !s.trashed },
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
     posts: topic.posts.map((p, i) => {
@@ -324,9 +333,57 @@ export function placesOf(ctx: Context) {
 export function forumImages(ctx: Context) {
   const entries = entriesOf(ctx), out = new Set<string>(), add = (e?: Entry) => { if (e?.picture) out.add(e.picture.imageId); };
   for (const id of ctx.forum.characters) add(entries.get(id));
-  for (const b of ctx.forum.boards) if (b.placeId) add(entries.get(b.placeId));
+  for (const b of ctx.forum.boards) if (b.placeId && readsBoard(ctx, b.id)) add(entries.get(b.placeId));
   for (const c of castOf(ctx)) if (c.picture) out.add(c.picture.imageId);
   const look = campaignOf(ctx).look;
   if (look?.banner && ctx.forum.settings.banner) out.add(look.banner.imageId);
   return out;
+}
+
+/** The viewer's alerts on topics they can still see, newest first, with who and where. */
+function alertsOf(ctx: Context, entries: Map<string, Entry>) {
+  const shown = new Map(shownTopics(ctx).map(t => [t.id, t])), a = ctx.alerts;
+  const items = (a?.items ?? []).filter(x => shown.has(x.topicId));
+  return {
+    unseen: a ? unseen({ ...a, items }) : 0,
+    items: items.slice(0, 20).map(x => {
+      const e = x.as ? entries.get(x.as) : undefined;
+      return { id: x.id, kind: x.kind, at: x.at, topicId: x.topicId, title: shown.get(x.topicId)!.title, name: e?.title ?? memberName(ctx, x.by), picture: e ? pictureOf(e) : null, fresh: !!a && x.at > a.seen };
+    }),
+  };
+}
+
+/** Everyone a post could name: members by name, and characters by title with the members who play them (the GM for the rest). */
+export function namesOf(ctx: Context) {
+  const out = new Map<string, Set<string>>(), add = (name: string, u: string) => { const k = name.trim(); if (k) out.set(k, (out.get(k) ?? new Set()).add(u)); };
+  for (const u of [ctx.owner, ...ctx.list.members.map(m => m.userId)]) add(memberName(ctx, u), u);
+  for (const e of entriesOf(ctx).values()) {
+    if (e.kind !== "character") continue;
+    const a = ctx.list.pages?.[e.id], users = new Set(Object.entries(a?.people ?? {}).filter(([, p]) => p.edit).map(([u]) => u));
+    for (const [g, on] of Object.entries(a?.groups ?? {})) if (on) for (const m of ctx.list.members) if (m.groups.includes(g)) users.add(m.userId);
+    for (const u of users.size ? users : [ctx.owner]) add(e.title, u);
+  }
+  return out;
+}
+
+/** Search: the latest topics this viewer can read (and their posts), matching every word of the query. */
+export function searchPage(ctx: Context, q: string, topics: readonly { summary: TopicSummary; topic: Topic | null }[], searched: { of: number }) {
+  const entries = entriesOf(ctx), words = q.toLocaleLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  const has = (text: string) => { const t = text.toLocaleLowerCase(); return words.every(w => t.includes(w)); };
+  const results = [];
+  for (const { summary: s, topic } of topics) {
+    const kind = (() => { const b = ctx.forum.boards.find(x => x.id === s.boardId); return b ? kindOf(ctx.forum, b) : "ooc"; })();
+    const hits = (topic?.posts ?? []).flatMap((p, i) => has(p.body) ? [{ postId: p.id, number: i + 1, name: (p.by.as && entries.get(p.by.as)?.title) || (kind === "ic" && !p.by.as ? "Game Master" : memberName(ctx, p.by.userId)), snippet: snippetOf(p.body, words) }] : []);
+    if (!hits.length && !has(s.title)) continue;
+    results.push({ ...topicRow(ctx, entries, s), board: ctx.forum.boards.find(b => b.id === s.boardId)?.name ?? "", hits: hits.slice(0, 3), more: Math.max(0, hits.length - 3) });
+    if (results.length >= 40) break;
+  }
+  return { q, results, searched: topics.length, of: searched.of };
+}
+/** A line around the first word found, with the markup taken out. */
+function snippetOf(body: string, words: readonly string[]) {
+  const plain = body.replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_m, t: string, l?: string) => l || t).replace(/[*_`>#]+/g, "").replace(/\s+/g, " ").trim();
+  const low = plain.toLocaleLowerCase(), at = Math.min(...words.map(w => { const i = low.indexOf(w); return i < 0 ? Infinity : i; }));
+  const from = Number.isFinite(at) ? Math.max(0, at - 70) : 0, text = plain.slice(from, from + 180);
+  return (from > 0 ? "…" : "") + text + (from + 180 < plain.length ? "…" : "");
 }

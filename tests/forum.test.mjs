@@ -8,6 +8,7 @@ import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, f
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
 import * as K from '../lib/forum/markup.ts';
+import * as A from '../lib/forum/alerts.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -595,4 +596,108 @@ test('request: multi-moderation, private topics by member key, the Trash page an
   const file = await (await gm.post({ action: 'export', campaign: KEY, boardId: 'ooc-chat' })).json();
   assert.deepEqual(file.topics.map(t => t.title).sort(), ['One', 'Two']);
   assert.equal(file.topics[0].posts[0].name, 'Gamemaster');
+});
+
+// ---- 14. Permission masks, notices, alerts and search ------------------------------------------
+test('permission masks: a group told No or Never on a board loses it there; subforums follow; GMs are never masked', () => {
+  let f = withBoards();
+  f.boards.push({ id: 'cellar', categoryId: 'locations', parentId: 'tavern-board', name: 'Cellar', description: '' });
+  const l = list(), access = u => M.boardAccess(f, l, u, M.forumRights(l, u, OWNER));
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: true, reply: true });
+  assert.throws(() => M.setMasks(f, { id: 'tavern-board', masks: {} }, poster(f, 'p1'), ['players']), msg(/can't change the boards/));
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { reply: 'no', start: 'no' }, nobody: { read: 'no' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.deepEqual(f.boards[1].masks, { players: { reply: 'no', start: 'no' } }, 'unknown groups are dropped');
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: false, reply: false });
+  assert.deepEqual(access('p1').cellar, { read: true, start: false, reply: false }, 'the subforum follows its board');
+  assert.deepEqual(access('p1')['ooc-chat'], { read: true, start: true, reply: true });
+  // Guests may be let in to reply on one board; Never wins over Yes.
+  f = apply(f, M.setMasks(f, { id: 'ooc-chat', masks: { guests: { reply: 'yes' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.equal(access('g1')['ooc-chat'].reply, true);
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { read: 'never' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.equal(access('p1')['tavern-board'].read, false);
+  assert.equal(access('p1').cellar.read, false, "a subforum can't be read when its board can't");
+  assert.equal(access('co')['tavern-board'].read, true, 'co-GMs see GM-only things, so they are not masked');
+  assert.equal(access(OWNER)['tavern-board'].read, true);
+  // Masked boards and their topics disappear from the player's views, and they can't post there.
+  const t = M.startTopic(f, { boardId: 'tavern-board', title: 'Hidden', body: 'x', as: 'villain' }, poster(f, OWNER), ids('th', 'h1'), NOW);
+  f = apply(f, t);
+  const ctx = ctxFor(f, 'p1'); ctx.viewer.access = access('p1');
+  const frame = frameOf(ctx);
+  assert.deepEqual(frame.boards.map(b => b.id), ['ooc-chat']);
+  assert.equal(frame.categories.some(c => c.id === 'locations'), false, 'a category with nothing to read is left out');
+  assert.equal(frame.footer.stats.topics, 0);
+  assert.equal(boardPage(ctx, 'tavern-board'), null);
+  assert.equal(topicPage(ctx, t.topic), null);
+  const p1 = { ...poster(f, 'p1'), access: access('p1') };
+  assert.throws(() => M.reply(f, t.topic, { body: 'x', as: 'hero' }, p1, 'h2', NOW), msg(/removed/));
+  // Editing the board keeps its masks.
+  f = apply(f, M.editBoard(f, { id: 'tavern-board', categoryId: 'locations', name: 'Tavern!' }, poster(f, OWNER)));
+  assert.ok(f.boards.find(b => b.id === 'tavern-board').masks);
+});
+
+test('alerts: @names and quotes find members and the players of characters', () => {
+  const names = ['Pat', 'Hero', 'Sea Witch', 'Quinn'];
+  assert.deepEqual([...A.mentioned('Hey @pat and @Sea Witch, also @Quinnly and email@Hero.x', names)].sort(), ['Pat', 'Sea Witch']);
+  assert.deepEqual([...A.quoted('> She said so\n> — Hero\n\nreply', names)], ['Hero']);
+  let a = A.addAlerts(null, [{ id: 'mention:t:1', at: NOW.toISOString(), kind: 'mention', topicId: 't', postId: 'p1', by: 'gm', as: null }], NOW);
+  a = A.addAlerts(a, [{ id: 'mention:t:1', at: NOW.toISOString(), kind: 'mention', topicId: 't', postId: 'p1', by: 'gm', as: null }], NOW);
+  assert.equal(a.items.length, 1, 'once each');
+  assert.equal(A.unseen(a), 1);
+  assert.equal(A.unseen({ ...a, seen: NOW.toISOString() }), 0);
+});
+
+test('request: alerts for mentions, quotes and private topics reach only people who can see the topic', async () => {
+  const gm = harness({ user: OWNER });
+  const people = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.you.people;
+  const key = name => people.find(p => p.name === name).key;
+  // A private topic for Quinn that names Pat: Pat isn't in it, so only Quinn hears.
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Quiet', body: 'Hi @Quinn and @Pat', as: null, private: [key('Quinn')] })).json();
+  const as = async (u, deps = {}) => { const h = harness({ user: u }); h.deps.store = gm.store; Object.assign(h.deps, deps); return h; };
+  const frameOfUser = async h => (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
+  const quinn = await as('p2', { now: () => new Date(NOW.getTime() + 1000) }), pat = await as('p1');
+  const qa = (await frameOfUser(quinn)).you.alerts;
+  assert.equal(qa.unseen, 1);
+  assert.deepEqual([qa.items[0].kind, qa.items[0].title, qa.items[0].name], ['mention', 'Quiet', 'Gamemaster']);
+  assert.equal((await frameOfUser(pat)).you.alerts.items.length, 0, 'Pat cannot see the private topic');
+  // Writing as a character: naming the Hero alerts Pat, who plays it; quoting the Villain alerts the GM, who runs it.
+  const { id: tavern } = await (await gm.post({ action: 'addBoard', campaign: KEY, categoryId: 'locations', name: 'Tavern' })).json();
+  const made = await (await gm.post({ action: 'start', campaign: KEY, boardId: tavern, title: 'Tavern', body: 'The door opens.', as: null })).json(), open = made.topicId;
+  assert.ok(open, JSON.stringify(made));
+  const replied = await (await pat.post({ action: 'reply', campaign: KEY, topicId: open, body: '> Leave.\n> — Villain\n\nNo. @Hero stays.', as: 'hero' })).json();
+  assert.equal(replied.ok, true, JSON.stringify(replied));
+  assert.equal((await frameOfUser(pat)).you.alerts.items.length, 0, 'never for your own post');
+  const g = (await frameOfUser(gm)).you.alerts;
+  assert.deepEqual(g.items.map(x => [x.kind, x.name]), [['quote', 'Hero']]);
+  assert.equal((await (await gm.post({ action: 'alertsSeen', campaign: KEY })).json()).ok, true);
+  assert.equal((await frameOfUser(gm)).you.alerts.unseen, 0);
+  assert.ok(topicId);
+});
+
+test('request: search finds titles and posts the reader can see; notices save with the banner; masks via settings', async () => {
+  const gm = harness({ user: OWNER });
+  await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Lanterns', body: 'The green lantern burns.', as: null });
+  await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Secret', body: 'Another green lantern.', as: null, private: [] });
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  const search = async (h, q, extra = {}) => (await h.post({ action: 'view', campaign: KEY, page: { kind: 'search', q, ...extra } }));
+  const found = await (await search(p1, 'GREEN lantern')).json();
+  assert.deepEqual(found.page.results.map(r => r.title), ['Lanterns']);
+  assert.match(found.page.results[0].hits[0].snippet, /green lantern/);
+  assert.equal((await (await search(gm, 'green lantern')).json()).page.results.length, 2);
+  assert.equal((await (await search(p1, 'lanterns')).json()).page.results[0].hits.length, 0, 'a title match with no post match');
+  assert.equal((await (await search(p1, 'green', { boardId: 'tavern-board' })).json()).page.results.length, 0);
+  assert.equal((await search(p1, 'g')).status, 400);
+  // Notices.
+  const settings = { title: '', tagline: '', links: [], banner: true, notices: [{ id: 'n1', text: 'Session on Saturday' }] };
+  assert.equal((await p1.post({ action: 'settings', campaign: KEY, settings })).status, 400);
+  await gm.post({ action: 'settings', campaign: KEY, settings });
+  assert.deepEqual((await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.settings.notices, [{ id: 'n1', text: 'Session on Saturday' }]);
+  // Masks through the settings page and the masks action.
+  assert.equal((await (await gm.post({ action: 'masks', campaign: KEY, id: 'ooc-chat', masks: { players: { start: 'no' } } })).json()).ok, true);
+  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'settings' } })).json()).page;
+  assert.deepEqual(page.masks['ooc-chat'], { players: { start: 'no' } });
+  assert.deepEqual(page.groups.find(g => g.id === 'players'), { id: 'players', name: 'Players', read: 'yes', start: 'yes', reply: 'yes', gm: false });
+  const refused = await p1.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'x', body: 'y', as: null });
+  assert.match((await refused.json()).error, /can't start topics on this board/);
+  const board = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'board', id: 'ooc-chat' } })).json()).page;
+  assert.equal(board.board.start, false);
 });

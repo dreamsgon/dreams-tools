@@ -8,6 +8,7 @@ import type { Bucket } from "../storage-types.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import { ForumError, emptyForum, forumSchema, topicSchema, type Change, type Forum, type Topic } from "./model.ts";
 import { presenceSchema, readsSchema, touch, type Presence, type Reads } from "./reader.ts";
+import { alertsSchema, type Alerts } from "./alerts.ts";
 
 type Store = Bucket & { delete?(key: string): Promise<unknown> };
 const base = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `forum/${encodeURIComponent(campaignId)}/`;
@@ -18,6 +19,7 @@ export const topicKey = (owner: string, campaignId: string, topicId: string) => 
 };
 /** A reader's marks, under a hash of their account so the key never shows it. */
 export const readsKey = (owner: string, campaignId: string, userId: string) => base(owner, campaignId) + `reads/${createHash("sha256").update(userId).digest("hex").slice(0, 40)}.json`;
+export const alertsKey = (owner: string, campaignId: string, userId: string) => base(owner, campaignId) + `alerts/${createHash("sha256").update(userId).digest("hex").slice(0, 40)}.json`;
 export const presenceKey = (owner: string, campaignId: string) => base(owner, campaignId) + "presence.json";
 const put = (bucket: Store, key: string, value: unknown, etag: string | null) =>
   bucket.put(key, JSON.stringify(value), { onlyIf: etag ? { etagMatches: etag } : { etagDoesNotMatch: "*" }, httpMetadata: { contentType: "application/json" } });
@@ -82,6 +84,22 @@ export class ForumStore {
       if (await put(this.bucket, readsKey(owner, campaignId, userId), readsSchema.parse(next), etag)) return next;
     }
     throw new ForumError("Your read marks were busy. Try again.");
+  }
+
+  async readAlerts(owner: string, campaignId: string, userId: string): Promise<{ alerts: Alerts | null; etag: string | null }> {
+    const object = await this.bucket.get(alertsKey(owner, campaignId, userId));
+    if (!object) return { alerts: null, etag: null };
+    const parsed = alertsSchema.safeParse(await object.json().catch(() => null));
+    return { alerts: parsed.success ? parsed.data : null, etag: object.etag };
+  }
+  /** Changes someone's alerts; `edit` returns null when there's nothing to write. */
+  async writeAlerts(owner: string, campaignId: string, userId: string, edit: (a: Alerts | null) => Alerts | null): Promise<Alerts | null> {
+    for (let tries = 0; tries < 3; tries++) {
+      const { alerts, etag } = await this.readAlerts(owner, campaignId, userId), next = edit(alerts);
+      if (!next) return alerts;
+      if (await put(this.bucket, alertsKey(owner, campaignId, userId), alertsSchema.parse(next), etag)) return next;
+    }
+    throw new ForumError("Your alerts were busy. Try again.");
   }
 
   async readPresence(owner: string, campaignId: string): Promise<{ presence: Presence | null; etag: string | null }> {

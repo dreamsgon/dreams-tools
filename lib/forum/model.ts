@@ -21,6 +21,7 @@ const userId = z.string().min(1).max(100);
 const at = z.string().datetime();
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
 
+const tri = z.enum(["yes", "no", "never"]);
 /** A link in the banner: site-relative or https only. */
 export const forumLinkSchema = z.object({ label: nameOf(40), url: z.string().trim().max(500).regex(/^(?:\/(?!\/)|https:\/\/)\S*$/) });
 export const forumSettingsSchema = z.object({
@@ -30,6 +31,8 @@ export const forumSettingsSchema = z.object({
   links: z.array(forumLinkSchema).max(FORUM_LIMITS.links),
   /** Use the campaign's banner picture (its Look) behind the title. */
   banner: z.boolean(),
+  /** The notices strip under the banner: short lines from the GM, each dismissible by a reader. */
+  notices: z.array(z.object({ id, text: z.string().trim().min(1).max(240) })).max(3).optional(),
 });
 /** `ic`: in character, where players post as their characters. `ooc`: out of character, where they post as themselves. */
 export const categorySchema = z.object({ id, name: nameOf(60), kind: z.enum(["ic", "ooc"]) });
@@ -42,6 +45,11 @@ export const boardSchema = z.object({
   placeId: id.optional(),
   /** Only moderators may start topics here (announcements, rules). */
   locked: z.boolean().optional(),
+  /**
+   * Permission masks: per group, Yes, No or Never for reading, starting topics and replying here instead of what
+   * the group says for the whole forum. A subforum without its own setting follows its board. GMs aren't masked.
+   */
+  masks: z.record(id, z.object({ read: tri.optional(), start: tri.optional(), reply: tri.optional() })).optional(),
 });
 /** Who wrote something: the member's account, and the character they wrote as (null: as themselves). */
 export const authorSchema = z.object({ userId, as: id.nullable() });
@@ -110,12 +118,40 @@ export function forumRights(list: MemberList, who: string, owner: string): Forum
   return { owner: o, gm: c("seeGm"), read, start: read && c("forumStart"), reply: read && c("forumReply"), pictures: c("forumPictures"), moderate: read && c("forumModerate"), boards: read && c("forumBoards") };
 }
 
+export type BoardAccess = { read: boolean; start: boolean; reply: boolean };
+export const MASKED = ["read", "start", "reply"] as const;
+const maskPerm = { read: "forumRead", start: "forumStart", reply: "forumReply" } as const;
+/**
+ * What someone may do on each board once its permission masks are applied: for each of their groups, the board's
+ * setting (or its parent board's), else the group's own; then Yes in any group and Never in none, as for the
+ * forum. Starting and replying also need reading. GMs and the owner keep their forum rights everywhere.
+ */
+export function boardAccess(f: Forum, list: MemberList, who: string, rights: ForumRights): Record<string, BoardAccess> {
+  const out: Record<string, BoardAccess> = {}, member = list.members.find(m => m.userId === who);
+  for (const b of f.boards) {
+    if (rights.gm || !member || !(b.masks || f.boards.find(x => x.id === b.parentId)?.masks)) { out[b.id] = { read: rights.read, start: rights.start, reply: rights.reply }; continue; }
+    const parent = b.parentId ? f.boards.find(x => x.id === b.parentId) : undefined;
+    const says = (r: (typeof MASKED)[number]) => {
+      const said = member.groups.map(g => b.masks?.[g]?.[r] ?? parent?.masks?.[g]?.[r] ?? list.groups.find(x => x.id === g)?.perms[maskPerm[r]]).filter(Boolean);
+      return said.includes("yes") && !said.includes("never");
+    };
+    const read = says("read");
+    out[b.id] = { read, start: read && says("start"), reply: read && says("reply") };
+  }
+  // A subforum can't be read when its board can't.
+  for (const b of f.boards) if (b.parentId && out[b.parentId] && !out[b.parentId]!.read) out[b.id] = { read: false, start: false, reply: false };
+  return out;
+}
+
 /** The person asking: their account, rights and the characters they may post as. GMs may also post in character as themselves (narration). */
-export type Poster = { userId: string; rights: ForumRights; cast: ReadonlySet<string> };
+export type Poster = { userId: string; rights: ForumRights; cast: ReadonlySet<string>; access?: Readonly<Record<string, BoardAccess>> };
+/** Someone's rights on one board (their forum rights when no masks were worked out). */
+export const accessOn = (who: { rights: ForumRights; access?: Readonly<Record<string, BoardAccess>> }, boardId: string): BoardAccess =>
+  who.access?.[boardId] ?? { read: who.rights.read, start: who.rights.start, reply: who.rights.reply };
 
 /** Whether someone sees a topic: not in the Trash, and for a private topic, one of its members, its starter or a GM. */
-export function canSee(t: Pick<TopicSummary, "trashed" | "private" | "by">, who: { userId: string; rights: Pick<ForumRights, "gm"> }) {
-  if (t.trashed) return false;
+export function canSee(t: Pick<TopicSummary, "trashed" | "private" | "by" | "boardId">, who: { userId: string; rights: Pick<ForumRights, "gm">; access?: Readonly<Record<string, BoardAccess>> }) {
+  if (t.trashed || who.access?.[t.boardId]?.read === false) return false;
   return !t.private || who.rights.gm || t.by.userId === who.userId || t.private.includes(who.userId);
 }
 
@@ -144,7 +180,9 @@ export function checkAs(f: Forum, board: Board, as: string | null, who: Poster):
 
 const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) => {
   const b = boardOf(f, boardId);
-  if (!(starting ? who.rights.start : who.rights.reply)) fail(starting ? "Your group can't start topics." : "Your group can't reply.");
+  const may = accessOn(who, boardId);
+  if (!may.read) fail("That board was removed.");
+  if (!(starting ? may.start : may.reply)) fail(starting ? (who.rights.start ? "Your group can't start topics on this board." : "Your group can't start topics.") : (who.rights.reply ? "Your group can't reply on this board." : "Your group can't reply."));
   if (starting && b.locked && !who.rights.moderate) fail("Only moderators start topics on this board.");
   return b;
 };
@@ -323,9 +361,21 @@ export function addBoard(f: Forum, input: BoardInput, who: Poster, newId: string
 }
 export function editBoard(f: Forum, input: BoardInput & { id: string }, who: Poster): Change {
   needBoards(who);
-  const old = boardOf(f, input.id), next: Board = { id: old.id, ...cleanBoardInput(f, input, old.id) };
+  const old = boardOf(f, input.id), next: Board = { id: old.id, ...cleanBoardInput(f, input, old.id), ...(old.masks ? { masks: old.masks } : {}) };
   if (kindOf(f, old) !== kindOf(f, next) && f.topics.some(t => t.boardId === old.id)) fail("A board with topics stays in character or out of character.");
   return { forum: g => ({ ...g, boards: g.boards.map(b => b.id === old.id ? next : b) }) };
+}
+/** Sets a board's permission masks: per group, Yes, No or Never (left out: as the group says for the forum). */
+export function setMasks(f: Forum, input: { id: string; masks: Record<string, Partial<Record<(typeof MASKED)[number], "yes" | "no" | "never">>> }, who: Poster, groups: readonly string[]): Change {
+  needBoards(who);
+  boardOf(f, input.id);
+  const masks: NonNullable<Board["masks"]> = {};
+  for (const [g, m] of Object.entries(input.masks)) {
+    if (!groups.includes(g)) continue;
+    const kept = Object.fromEntries(MASKED.flatMap(r => m[r] ? [[r, m[r]]] : []));
+    if (Object.keys(kept).length) masks[g] = kept;
+  }
+  return { forum: g => ({ ...g, boards: g.boards.map(b => { if (b.id !== input.id) return b; const rest = { ...b }; delete rest.masks; return Object.keys(masks).length ? { ...rest, masks } : rest; }) }) };
 }
 export function deleteBoard(f: Forum, input: { id: string }, who: Poster): Change {
   needBoards(who);
