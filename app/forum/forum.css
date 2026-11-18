@@ -394,6 +394,45 @@ html.forum-focus .forum-page { max-width: 900px; padding-top: 24px; }
 html.forum-focus .reply-page .composer { border-color: var(--line-strong); }
 html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom, 1)); font-size: 20px; line-height: 1.65; }
 
+/* Moderation: picking topics, the multi-moderation bar, archives, private topics, the Trash, print and download. */
+.forum-root .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.forum-root .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.topics-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.topics-tools a.f-btn { text-decoration: none; }
+.topic-row.pickable { grid-template-columns: 26px minmax(0, 1fr) 90px 190px; }
+.topic-row.picked { background: var(--accent-soft); border-color: var(--line-strong); }
+.topic-pick { display: grid; place-items: center; align-self: stretch; cursor: pointer; }
+.topic-pick input { width: 17px; height: 17px; accent-color: var(--accent); }
+.mod-pickall { margin: 4px 0 6px 14px; color: var(--muted); }
+.mod-bar { position: sticky; top: 8px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; padding: 8px 12px; background: var(--raised); border: 1px solid var(--line-strong); box-shadow: 0 4px 14px rgba(0, 0, 0, .15); }
+.mod-bar > b { margin-right: 6px; font-size: 13px; }
+.mod-bar .form-error { flex-basis: 100%; }
+.tag.private { border-color: var(--accent-2); color: var(--accent-2); }
+.private-line { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 13px; color: var(--accent-2); }
+.private-pick { margin: 8px 0 12px; padding: 10px 12px; border: 1px dashed var(--line-strong); background: var(--panel); }
+.private-pick p { margin: 6px 0; }
+.private-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.private-chips .chip { display: inline-flex; align-items: center; gap: 4px; }
+.private-chips .chip button { display: inline-grid; place-items: center; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.private-search { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.private-search input { width: 170px; padding: 4px 6px; font-size: 13px; }
+.private-results { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.private-results button { padding: 3px 10px; border: 1px solid var(--line-strong); background: var(--raised); color: var(--ink); font-size: 13px; cursor: pointer; }
+.private-results button:hover { border-color: var(--accent); color: var(--accent); }
+.trash-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--danger); background: var(--panel); color: var(--ink); }
+.trash-banner > svg { color: var(--danger); }
+.trash-banner p { flex: 1; min-width: 220px; margin: 0; font-size: 14px; }
+.trash-item { margin-bottom: 8px; }
+.trash-item .topic-row { border-bottom: 0; }
+.trash-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 7px 14px; background: var(--raised); border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.trash-acts { display: flex; gap: 6px; }
+.category-staff .category-title { color: var(--muted); }
+.trash-row .forum-name svg { color: var(--muted); }
+.trash-row .forum-counts { display: block; text-align: left; }
+.board-download { display: inline-flex; align-items: center; gap: 4px; }
+.print-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 14px; }
+.print-preview { display: block; width: 100%; height: calc(75vh / var(--ui-zoom, 1)); border: 1px solid var(--line); background: #fff; }
+
 /* Phones and narrow windows. */
 @container page (max-width: 900px) {
   .forum, .forum-ic { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
@@ -464,4 +503,13 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .as-line { flex-wrap: wrap; }
   .as-line select { min-width: 0; width: 100%; }
   .link-row { grid-template-columns: minmax(0, 1fr); }
+  .topic-row.pickable { grid-template-columns: 26px minmax(0, 1fr); }
+  .topic-row.pickable > :not(.topic-pick) { grid-column: 2; }
+  .topic-row.pickable .topic-pick { grid-row: 1 / span 3; align-self: start; padding-top: 2px; }
+  .mod-bar { top: 4px; padding: 8px; }
+  .mod-bar .f-select { width: 100%; }
+  .mod-bar .f-select select { flex: 1; }
+  .topics-head { flex-wrap: wrap; }
+  .trash-meta { padding: 8px 12px; }
+  .print-preview { height: calc(65vh / var(--ui-zoom, 1)); }
 }

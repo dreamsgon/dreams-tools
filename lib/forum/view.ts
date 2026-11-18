@@ -6,7 +6,8 @@
 import { playerText, visibleEntries, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
-import { boardTree, kindOf, type Author, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { createHash } from "node:crypto";
+import { TRASH_DAYS, boardTree, canSee, kindOf, type Author, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
@@ -96,7 +97,11 @@ export type Turn = { name: string; picture: Picture | null; mine: boolean };
 export type TopicRow = {
   id: string; boardId: string; title: string; pinned: boolean; locked: boolean; replies: number;
   by: Byline; at: string; last: LastPost; cast: { id: string; name: string; picture: Picture | null }[];
-  unread: boolean; next: Turn | null;
+  unread: boolean; next: Turn | null; archived: boolean;
+  /** Who a private topic is for (names), or null. */
+  only: string[] | null;
+  /** In the Trash: when, by whom and when it goes for good. */
+  trashed: { at: string; by: string; until: string } | null;
 };
 /** Characters a member other than the GM may edit: the rest are the GM's to play. */
 const playerRunOf = (ctx: Context) => {
@@ -104,7 +109,25 @@ const playerRunOf = (ctx: Context) => {
   for (const [page, a] of Object.entries(ctx.list.pages ?? {})) if (Object.values(a.people).some(p => p.edit) || Object.values(a.groups).some(Boolean)) out.add(page);
   return out;
 };
-const memo = new WeakMap<Context, Set<string>>();
+const memo = new WeakMap<Context, Set<string>>(), seen = new WeakMap<Context, TopicSummary[]>();
+/** The topics this viewer sees: not in the Trash, and private ones only for their members and GMs. */
+export function shownTopics(ctx: Context) {
+  let list = seen.get(ctx);
+  if (!list) seen.set(ctx, list = ctx.forum.topics.filter(t => canSee(t, ctx.viewer)));
+  return list;
+}
+const live = (ctx: Context) => shownTopics(ctx).filter(t => !t.archived);
+/**
+ * A member as the browser may name them for a private topic: a short key made from the campaign and their account,
+ * never the account itself. The server turns keys back into members.
+ */
+export const memberKey = (ctx: Pick<Context, "owner" | "campaignId">, userId: string) => createHash("sha256").update(`${ctx.owner}|${ctx.campaignId}|${userId}`).digest("hex").slice(0, 16);
+export function membersFromKeys(ctx: Context, keys: readonly string[]) {
+  const want = new Set(keys);
+  return [ctx.owner, ...ctx.list.members.map(m => m.userId)].filter(u => want.has(memberKey(ctx, u)));
+}
+/** Who a private topic is for, by name. */
+const privateNames = (ctx: Context, t: TopicSummary) => t.private ? [...new Set([t.by.userId, ...t.private])].map(u => memberName(ctx, u)) : null;
 /** Whether the viewer writes for this participant of a topic. */
 function controls(ctx: Context, who: string) {
   if (who === NARRATION) return ctx.viewer.rights.gm;
@@ -115,7 +138,7 @@ function controls(ctx: Context, who: string) {
   return !run.has(who);
 }
 function turnOf(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): Turn | null {
-  if (t.locked) return null;
+  if (t.locked || t.archived || t.trashed) return null;
   const board = ctx.forum.boards.find(b => b.id === t.boardId);
   if (!board || kindOf(ctx.forum, board) !== "ic") return null;
   const who = nextUp(t);
@@ -128,7 +151,8 @@ function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): T
   return {
     id: t.id, boardId: t.boardId, title: t.title, pinned: t.pinned, locked: t.locked, replies: t.replies, by: bylineOf(ctx, entries, t.by), at: t.at, last: lastOf(ctx, entries, t),
     cast: t.cast.flatMap(id => { const e = entries.get(id); return e ? [{ id, name: e.title, picture: pictureOf(e) }] : []; }).slice(0, 6),
-    unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t),
+    unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t), archived: !!t.archived, only: privateNames(ctx, t),
+    trashed: t.trashed ? { at: t.trashed.at, by: memberName(ctx, t.trashed.by), until: new Date(new Date(t.trashed.at).getTime() + TRASH_DAYS * 86_400_000).toISOString() } : null,
   };
 }
 
@@ -139,7 +163,7 @@ export type BoardRow = {
 };
 function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow {
   const ids = new Set([b.id, ...ctx.forum.boards.filter(x => x.parentId === b.id).map(x => x.id)]);
-  const topics = ctx.forum.topics.filter(t => ids.has(t.boardId)), latest = topics.reduce<TopicSummary | null>((a, t) => !a || t.lastAt > a.lastAt ? t : a, null);
+  const topics = shownTopics(ctx).filter(t => ids.has(t.boardId)), latest = topics.reduce<TopicSummary | null>((a, t) => !a || t.lastAt > a.lastAt ? t : a, null);
   const place = b.placeId ? entries.get(b.placeId) : undefined;
   return {
     id: b.id, categoryId: b.categoryId, parentId: b.parentId, name: b.name, description: b.description, kind: kindOf(ctx.forum, b), locked: !!b.locked,
@@ -177,7 +201,7 @@ function colourOf(ctx: Context, userId: string) {
  */
 function waitingOf(ctx: Context, entries: Map<string, Entry>) {
   const out: (TopicRow & { board: string })[] = [];
-  for (const t of ctx.forum.topics) {
+  for (const t of live(ctx)) {
     if (t.locked || !orderOf(t).some(who => controls(ctx, who))) continue;
     const row = topicRow(ctx, entries, t);
     if (row.next) out.push({ ...row, board: ctx.forum.boards.find(b => b.id === t.boardId)?.name ?? "" });
@@ -188,7 +212,8 @@ function waitingOf(ctx: Context, entries: Map<string, Entry>) {
 /** Characters who posted in the last day and a half, with the times of their posts; the browser keeps today's. */
 function recentCharacters(ctx: Context, entries: Map<string, Entry>, now: Date) {
   const since = new Date(now.getTime() - 36 * 3_600_000).toISOString(), by = new Map<string, string[]>();
-  for (const r of ctx.forum.recent ?? []) if (r.as && r.at >= since && entries.has(r.as)) by.set(r.as, [...(by.get(r.as) ?? []), r.at]);
+  const ok = new Set(shownTopics(ctx).map(t => t.id));
+  for (const r of ctx.forum.recent ?? []) if (r.as && r.at >= since && entries.has(r.as) && ok.has(r.topicId)) by.set(r.as, [...(by.get(r.as) ?? []), r.at]);
   return [...by].map(([id, at]) => { const e = entries.get(id)!; return { id, name: e.title, picture: pictureOf(e), url: pageUrl(ctx, id), at }; }).sort((a, b) => b.at.length - a.at.length || a.name.localeCompare(b.name));
 }
 
@@ -205,15 +230,17 @@ export function frameOf(ctx: Context) {
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
-      unread: f.topics.filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting,
+      unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting,
+      /** Members by key and name, for choosing who a private topic is for. */
+      people: ctx.viewer.rights.start ? [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].filter(u => u !== ctx.viewer.userId).map(u => ({ key: memberKey(ctx, u), name: memberName(ctx, u), gm: u === ctx.owner || can(ctx.list, u, "seeGm") })) : [],
     },
     categories: f.categories,
     boards: boardTree(f).flatMap(({ boards }) => boards.flatMap(({ board, subs }) => [board, ...subs])).map(b => boardRow(ctx, entries, b)),
     footer: {
-      active: [...f.topics].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 5).map(t => topicRow(ctx, entries, t)),
+      active: live(ctx).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 5).map(t => topicRow(ctx, entries, t)),
       top: counts.slice(0, 5).map(([userId, posts]) => ({ name: memberName(ctx, userId), posts })),
       stats: {
-        topics: f.topics.length, posts: f.topics.reduce((n, t) => n + t.replies + 1, 0), members: ctx.list.members.length + 1, characters: f.characters.length,
+        topics: shownTopics(ctx).length, posts: shownTopics(ctx).reduce((n, t) => n + t.replies + 1, 0), trash: ctx.viewer.rights.moderate ? f.topics.filter(t => t.trashed).length : 0, members: ctx.list.members.length + 1, characters: f.characters.length,
         peak: ctx.presence?.peak ?? null, newest: newest ? newest.name : null,
       },
       online: online.map(id => ({ name: memberName(ctx, id), color: colourOf(ctx, id), you: id === ctx.viewer.userId })),
@@ -224,12 +251,13 @@ export function frameOf(ctx: Context) {
 }
 export type Frame = ReturnType<typeof frameOf>;
 
-export function boardPage(ctx: Context, boardId: string) {
+export function boardPage(ctx: Context, boardId: string, opts: { archive?: boolean } = {}) {
   const b = ctx.forum.boards.find(x => x.id === boardId);
   if (!b) return null;
   const entries = entriesOf(ctx), place = b.placeId ? entries.get(b.placeId) : undefined;
-  const topics = ctx.forum.topics.filter(t => t.boardId === b.id).sort((x, y) => Number(y.pinned) - Number(x.pinned) || y.lastAt.localeCompare(x.lastAt));
-  return { board: boardRow(ctx, entries, b), place: place ? { summary: summaryOf(ctx, place) } : null, topics: topics.map(t => topicRow(ctx, entries, t)) };
+  const all = shownTopics(ctx).filter(t => t.boardId === b.id), archive = !!opts.archive;
+  const topics = all.filter(t => !!t.archived === archive).sort((x, y) => Number(y.pinned && !archive) - Number(x.pinned && !archive) || y.lastAt.localeCompare(x.lastAt));
+  return { board: boardRow(ctx, entries, b), place: place ? { summary: summaryOf(ctx, place) } : null, topics: topics.map(t => topicRow(ctx, entries, t)), archive, archived: all.filter(t => t.archived).length };
 }
 /** A page's first line, as this viewer may read it: players get the shared overview without its secrets. */
 const summaryOf = (ctx: Context, e: Entry) => ctx.viewer.rights.gm ? firstLine(e.body) : e.overviewVisibility === "players" ? firstLine(playerText(e.body)) : "";
@@ -238,7 +266,8 @@ const firstLine = (text: string) => text.split("\n").map(l => l.replace(/[#>*`[\
 /** A topic with its posts, the hover card of each character in it and what the viewer may do to each post. */
 export function topicPage(ctx: Context, topic: Topic) {
   const s = ctx.forum.topics.find(t => t.id === topic.id);
-  if (!s) return null;
+  // Moderators may open a topic in the Trash to look before restoring it.
+  if (!s || !(canSee(s, ctx.viewer) || (s.trashed && ctx.viewer.rights.moderate && canSee({ ...s, trashed: undefined }, ctx.viewer)))) return null;
   const entries = entriesOf(ctx), board = ctx.forum.boards.find(b => b.id === s.boardId), r = ctx.viewer.rights;
   const cards: Record<string, Card> = {};
   for (const p of topic.posts) if (p.by.as && !cards[p.by.as]) { const e = entries.get(p.by.as); if (e) cards[e.id] = cardOf(ctx, e); }
@@ -251,11 +280,11 @@ export function topicPage(ctx: Context, topic: Topic) {
   }
   return {
     links,
-    topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: r.reply && (!s.locked || r.moderate) },
+    topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: r.reply && (!s.locked || r.moderate) && !s.archived && !s.trashed },
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
     posts: topic.posts.map((p, i) => {
-      const mine = p.by.userId === ctx.viewer.userId, open = !s.locked || r.moderate;
+      const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
       return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
     }),
     cards,
@@ -265,7 +294,14 @@ export function topicPage(ctx: Context, topic: Topic) {
 /** Every topic, latest activity first. */
 export function activePage(ctx: Context, limit = 50) {
   const entries = entriesOf(ctx);
-  return { topics: [...ctx.forum.topics].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, limit).map(t => topicRow(ctx, entries, t)) };
+  return { topics: live(ctx).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, limit).map(t => topicRow(ctx, entries, t)) };
+}
+
+/** The Trash (moderators): topics waiting to go for good, newest first. */
+export function trashPage(ctx: Context) {
+  const entries = entriesOf(ctx);
+  const topics = ctx.forum.topics.filter(t => t.trashed && canSee({ ...t, trashed: undefined }, ctx.viewer)).sort((a, b) => b.trashed!.at.localeCompare(a.trashed!.at));
+  return { topics: topics.map(t => ({ ...topicRow(ctx, entries, t), board: ctx.forum.boards.find(b => b.id === t.boardId)?.name ?? "" })), days: TRASH_DAYS };
 }
 
 /** The members and their post counts, most posts first. */

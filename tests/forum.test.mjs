@@ -4,7 +4,7 @@ import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-mod
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
 import { ForumStore, forumKey } from '../lib/forum/store.ts';
-import { frameOf, topicPage, boardPage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
+import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
 import * as K from '../lib/forum/markup.ts';
@@ -496,4 +496,103 @@ test('view: page links resolve only to pages the reader may open, and summaries 
   assert.deepEqual(Object.keys(gm.links).sort(), ['Tavern', 'Villain']);
   const board = boardPage(ctxFor(f, 'p1', ws), 'tavern-board');
   assert.equal(board.place.summary, 'Warm and loud.', 'no secret line in the board summary');
+});
+
+// ---- 13. Moderation ---------------------------------------------------------------------------
+test('private topics: only the starter, the people named and the GMs see them, anywhere', () => {
+  const f0 = withBoards();
+  const c = M.startTopic(f0, { boardId: 'ooc-chat', title: 'Secret plan', body: 'Shh', as: null, private: ['p2', 'p1', 'p2'] }, poster(f0, 'p1'), ids('t9', 'z1'), NOW);
+  const f = apply(f0, c);
+  assert.deepEqual(f.topics[0].private, ['p2'], 'the starter is left out and names are not repeated');
+  const sees = u => M.canSee(f.topics[0], ctxFor(f, u).viewer);
+  assert.deepEqual(['p1', 'p2', OWNER, 'co', 'g1'].map(sees), [true, true, true, true, false]);
+  const guest = ctxFor(f, 'g1');
+  assert.equal(boardPage(guest, 'ooc-chat').topics.length, 0);
+  assert.equal(frameOf(guest).footer.stats.topics, 0);
+  assert.equal(frameOf(guest).footer.active.length, 0);
+  assert.equal(topicPage(guest, c.topic), null);
+  assert.throws(() => M.reply(f, c.topic, { body: 'hi', as: null }, poster(f, 'g1'), 'z2', NOW), msg(/removed/));
+  assert.deepEqual(boardPage(ctxFor(f, 'p2'), 'ooc-chat').topics[0].only, ['Pat', 'Quinn']);
+});
+
+test('trash: moderators move a topic there and back; it leaves the lists; old ones expire', () => {
+  let { forum, topic } = seeded();
+  assert.throws(() => M.trashTopic(forum, { topicId: 't1' }, poster(forum, 'p1'), NOW), msg(/Only moderators/));
+  forum = apply(forum, M.trashTopic(forum, { topicId: 't1' }, poster(forum, OWNER), NOW));
+  assert.deepEqual(forum.topics[0].trashed, { at: NOW.toISOString(), by: OWNER });
+  assert.equal(forum.counts.p1, 1, 'posts count until it goes for good');
+  const player = ctxFor(forum, 'p1');
+  assert.equal(boardPage(player, 'tavern-board').topics.length, 0);
+  assert.equal(topicPage(player, topic), null);
+  assert.equal(frameOf(player).footer.stats.trash, 0, 'players are not told about the Trash');
+  assert.throws(() => M.reply(forum, topic, { body: 'x', as: 'hero' }, poster(forum, 'p1'), 'a9', NOW), msg(/removed/));
+  const gm = ctxFor(forum, OWNER);
+  assert.equal(frameOf(gm).footer.stats.trash, 1);
+  const trash = trashPage(gm);
+  assert.equal(trash.topics[0].board, 'Tavern');
+  assert.equal(trash.topics[0].trashed.by, 'Gamemaster');
+  const shown = topicPage(gm, topic);
+  assert.equal(shown.topic.canReply, false, 'moderators may look but not reply');
+  assert.deepEqual(M.expiredTrash(forum, new Date(NOW.getTime() + 29 * 86_400_000)), []);
+  assert.deepEqual(M.expiredTrash(forum, new Date(NOW.getTime() + 31 * 86_400_000)), ['t1']);
+  forum = apply(forum, M.trashTopic(forum, { topicId: 't1', restore: true }, poster(forum, OWNER), NOW));
+  assert.equal(forum.topics[0].trashed, undefined);
+  assert.equal(boardPage(ctxFor(forum, 'p1'), 'tavern-board').topics.length, 1);
+});
+
+test('archive: archived topics leave the board for its archive and take no replies', () => {
+  let { forum, topic } = seeded();
+  assert.throws(() => M.setTopic(forum, topic, { topicId: 't1', archived: true }, poster(forum, 'p1')), msg(/archive/));
+  forum = apply(forum, M.setTopic(forum, topic, { topicId: 't1', archived: true }, poster(forum, OWNER)));
+  assert.equal(forum.topics[0].archived, true);
+  assert.throws(() => M.reply(forum, topic, { body: 'x', as: 'hero' }, poster(forum, 'p1'), 'a9', NOW), msg(/archived/));
+  const player = ctxFor(forum, 'p1');
+  const board = boardPage(player, 'tavern-board');
+  assert.deepEqual([board.topics.length, board.archived], [0, 1]);
+  assert.equal(boardPage(player, 'tavern-board', { archive: true }).topics[0].archived, true);
+  assert.equal(activePage(player).topics.length, 0);
+  assert.equal(topicPage(player, topic).topic.canReply, false);
+  assert.equal(topicPage(player, topic).topic.next, null, 'nobody is waited on in an archived topic');
+  // A later summary (from a reply by a moderator after bringing it back) keeps the flags it should.
+  forum = apply(forum, M.setTopic(forum, topic, { topicId: 't1', archived: false }, poster(forum, OWNER)));
+  assert.equal(!!forum.topics[0].archived, false);
+});
+
+test('request: multi-moderation, private topics by member key, the Trash page and GM-only board download', async () => {
+  const gm = harness({ user: OWNER });
+  const start = async (h, title, extra = {}) => (await (await h.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title, body: 'Hello', as: null, ...extra })).json()).topicId;
+  const a = await start(gm, 'One'), b = await start(gm, 'Two');
+  const index = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json();
+  const quinn = index.frame.you.people.find(p => p.name === 'Quinn');
+  assert.match(quinn.key, /^[a-f0-9]{16}$/);
+  assert.equal(JSON.stringify(index.frame.you.people).includes('"p2"'), false, 'no account ids reach the browser');
+  const c = await start(gm, 'For Quinn', { private: [quinn.key] });
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  const p2 = harness({ user: 'p2' }); p2.deps.store = gm.store;
+  const board = async h => (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'board', id: 'ooc-chat' } })).json()).page;
+  assert.deepEqual((await board(p1)).topics.map(t => t.title).sort(), ['One', 'Two']);
+  assert.deepEqual((await board(p2)).topics.map(t => t.title).sort(), ['For Quinn', 'One', 'Two']);
+  // Players can't multi-moderate.
+  assert.equal((await p1.post({ action: 'bulk', campaign: KEY, topicIds: [a], op: 'lock' })).status, 400);
+  const out = await (await gm.post({ action: 'bulk', campaign: KEY, topicIds: [a, b], op: 'lock' })).json();
+  assert.equal(out.done, 2);
+  assert.ok((await board(p1)).topics.every(t => t.locked));
+  await gm.post({ action: 'bulk', campaign: KEY, topicIds: [a], op: 'archive' });
+  assert.equal((await board(p1)).archived, 1);
+  await gm.post({ action: 'bulk', campaign: KEY, topicIds: [b, c], op: 'trash' });
+  assert.deepEqual((await board(p2)).topics.map(t => t.title), []);
+  assert.equal((await p1.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).status, 403);
+  const trash = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).json();
+  assert.deepEqual(trash.page.topics.map(t => t.title).sort(), ['For Quinn', 'Two']);
+  assert.equal((await (await gm.post({ action: 'trash', campaign: KEY, topicId: b, restore: true })).json()).ok, true);
+  // After 30 days, opening the Trash clears what's left in it for good.
+  gm.deps.now = () => new Date(NOW.getTime() + 31 * 86_400_000);
+  const later = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).json();
+  assert.deepEqual(later.page.topics, []);
+  assert.equal(await gm.store.readTopic(OWNER, 'camp', c), null);
+  // Downloading a whole board is the GM's.
+  assert.equal((await p1.post({ action: 'export', campaign: KEY, boardId: 'ooc-chat' })).status, 400);
+  const file = await (await gm.post({ action: 'export', campaign: KEY, boardId: 'ooc-chat' })).json();
+  assert.deepEqual(file.topics.map(t => t.title).sort(), ['One', 'Two']);
+  assert.equal(file.topics[0].posts[0].name, 'Gamemaster');
 });

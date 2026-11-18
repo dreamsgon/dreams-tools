@@ -2,7 +2,7 @@
 /* The forum's requests (app/api/forum) and the shapes they return (lib/forum/view.ts). */
 import { useEffect, useState } from 'react';
 import type { ForumSettings } from '@/lib/forum/model';
-import type { Frame, Picture, activePage, boardPage, membersPage, topicPage } from '@/lib/forum/view';
+import type { Frame, Picture, activePage, boardPage, membersPage, topicPage, trashPage } from '@/lib/forum/view';
 
 export type { Frame, Picture };
 export type BoardPage = NonNullable<ReturnType<typeof boardPage>>;
@@ -13,20 +13,23 @@ export type PageData =
   | ({ kind: 'topic' } & TopicPage)
   | ({ kind: 'active' } & ReturnType<typeof activePage>)
   | ({ kind: 'members' } & ReturnType<typeof membersPage>)
+  | ({ kind: 'trash' } & ReturnType<typeof trashPage>)
   | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings };
 export type View = { frame: Frame; page: PageData };
-export type Place = { view: 'index' | 'active' | 'members' | 'settings' } | { view: 'board'; id: string } | { view: 'topic'; id: string } | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string };
+export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' } | { view: 'board'; id: string; archive?: boolean } | { view: 'topic'; id: string }
+  | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string } | { view: 'print'; id: string };
 
 /** The forum keeps its campaign in the address hash: #<key>, then &board=<id>, &topic=<id> (with &reply=1 or &edit=<post>) or &view=<page>. */
 export function parseForumHash(hash: string): { key: string; place: Place } {
   const text = hash.replace(/^#/, ''), at = text.indexOf('&'), key = at < 0 ? text : text.slice(0, at);
   const rest = new URLSearchParams(at < 0 ? '' : text.slice(at + 1)), ok = (v: string | null) => !!v && /^[A-Za-z0-9_-]{1,100}$/.test(v);
   const board = rest.get('board'), topic = rest.get('topic'), view = rest.get('view'), edit = rest.get('edit');
-  const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : { view: 'topic', id: topic! }) : ok(board) ? { view: 'board', id: board! } : view === 'active' || view === 'members' || view === 'settings' ? { view } : { view: 'index' };
+  const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : rest.get('print') === '1' ? { view: 'print', id: topic! } : { view: 'topic', id: topic! })
+    : ok(board) ? { view: 'board', id: board!, ...(rest.get('archive') === '1' ? { archive: true } : {}) } : view === 'active' || view === 'members' || view === 'settings' || view === 'trash' ? { view } : { view: 'index' };
   return { key, place };
 }
 export function forumHash(key: string, place: Place) {
-  const at = place.view === 'board' ? `&board=${place.id}` : place.view === 'topic' ? `&topic=${place.id}` : place.view === 'reply' ? `&topic=${place.id}&reply=1`
+  const at = place.view === 'board' ? `&board=${place.id}${place.archive ? '&archive=1' : ''}` : place.view === 'topic' ? `&topic=${place.id}` : place.view === 'reply' ? `&topic=${place.id}&reply=1` : place.view === 'print' ? `&topic=${place.id}&print=1`
     : place.view === 'edit' ? `&topic=${place.id}&edit=${place.post}` : place.view === 'index' ? '' : `&view=${place.view}`;
   return `#${key}${at}`;
 }
@@ -40,7 +43,8 @@ export async function forumCall<T = Record<string, unknown>>(body: Record<string
   return value;
 }
 /** The page the server builds for a place: the reply and edit pages read the topic. */
-export const pageOf = (place: Place) => place.view === 'board' ? { kind: 'board', id: place.id } : place.view === 'topic' || place.view === 'reply' || place.view === 'edit' ? { kind: 'topic', id: place.id } : { kind: place.view };
+export const pageOf = (place: Place) => place.view === 'board' ? { kind: 'board', id: place.id, ...(place.archive ? { archive: true } : {}) }
+  : place.view === 'topic' || place.view === 'reply' || place.view === 'edit' || place.view === 'print' ? { kind: 'topic', id: place.id } : { kind: place.view };
 
 /* Pictures load once per page visit and stay as object URLs, so a refresh doesn't fetch them again. */
 const pictures = new Map<string, Promise<string>>();

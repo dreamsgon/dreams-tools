@@ -4,7 +4,7 @@
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowUp, Hourglass, Lock, Pin, MessageSquare, ScrollText, Users, X } from 'lucide-react';
+import { Archive, ArrowUp, EyeOff, Hourglass, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
@@ -157,13 +157,26 @@ export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go })
         {top.length ? top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />) : <p className="muted empty">No boards here yet.{frame.you.rights.boards && <> <Link k={k} go={go} to={{ view: 'settings' }}>Add one in Forum settings</Link>.</>}</p>}
       </div>
     </section>;
-  })}</>;
+  })}
+    {frame.you.rights.moderate && <section className="category category-staff">
+      <h2 className="category-title">Staff only <span className="tag">Moderators</span></h2>
+      <div className="category-forums"><article className="forum forum-ooc trash-row">
+        <div className="forum-info">
+          <h3 className="forum-name"><Trash2 size={15} aria-hidden="true" /><Link k={k} go={go} to={{ view: 'trash' }}>Trash can</Link></h3>
+          <p className="forum-desc">Topics moved to the Trash wait 30 days, so they can be brought back, then go for good.</p>
+        </div>
+        <p className="forum-counts"><span><b>{frame.footer.stats.trash}</b> {frame.footer.stats.trash === 1 ? 'topic' : 'topics'}</span></p>
+      </article></div>
+    </section>}
+  </>;
 }
 
-export function TopicRow({ t, k, go, board }: { t: TopicRowData; k: string; go: Go; board?: string }) {
-  return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}`}>
+/** A topic in a list. Moderators get a box to pick it for multi-moderation. */
+export function TopicRow({ t, k, go, board, pick }: { t: TopicRowData; k: string; go: Go; board?: string; pick?: { on: boolean; set: (on: boolean) => void } }) {
+  return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}${pick ? ' pickable' : ''}${pick?.on ? ' picked' : ''}`}>
+    {pick && <label className="topic-pick"><input type="checkbox" checked={pick.on} onChange={e => pick.set(e.target.checked)} aria-label={`Select ${t.title}`} /></label>}
     <div className="topic-main">
-      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
+      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
       <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
       {t.next && <span className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={12} aria-hidden="true" />{turnText(t.next)}</span>}
       {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}

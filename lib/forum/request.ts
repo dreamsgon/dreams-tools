@@ -10,10 +10,10 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  ForumError, addBoard, addCategory, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, forumRights, moveItem, reply, setSettings, setTopic, startTopic,
+  FORUM_LIMITS, ForumError, addBoard, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic,
 } from "./model.ts";
-import { activePage, boardPage, castOf, forumImages, frameOf, membersPage, placesOf, topicPage, type Context } from "./view.ts";
+import { activePage, boardPage, castOf, forumImages, frameOf, memberName, membersFromKeys, membersPage, placesOf, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import type { ForumStore } from "./store.ts";
 import { freshReads, markAll, markTopic } from "./reader.ts";
 
@@ -44,16 +44,20 @@ const as = id.nullable();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
-  z.object({ kind: z.literal("board"), id }), z.object({ kind: z.literal("topic"), id }),
+  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }),
 ]);
+const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema }),
-  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as }),
+  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional() }),
   z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as }),
   z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000) }),
   z.object({ action: z.literal("delete"), campaign: key, topicId: id, postId: id }),
   z.object({ action: z.literal("deleteTopic"), campaign: key, topicId: id }),
-  z.object({ action: z.literal("topic"), campaign: key, topicId: id, pinned: z.boolean().optional(), locked: z.boolean().optional(), title: z.string().max(500).optional(), boardId: id.optional() }),
+  z.object({ action: z.literal("topic"), campaign: key, topicId: id, pinned: z.boolean().optional(), locked: z.boolean().optional(), archived: z.boolean().optional(), title: z.string().max(500).optional(), boardId: id.optional() }),
+  z.object({ action: z.literal("trash"), campaign: key, topicId: id, restore: z.boolean().optional() }),
+  z.object({ action: z.literal("bulk"), campaign: key, topicIds: z.array(id).min(1).max(FORUM_LIMITS.bulk), op: z.enum(bulkOps), boardId: id.optional() }),
+  z.object({ action: z.literal("export"), campaign: key, boardId: id }),
   z.object({ action: z.literal("settings"), campaign: key, settings: z.unknown() }),
   z.object({ action: z.literal("addCategory"), campaign: key, name: z.string().max(200), kind: z.enum(["ic", "ooc"]) }),
   z.object({ action: z.literal("editCategory"), campaign: key, id, name: z.string().max(200) }),
@@ -97,7 +101,7 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true) 
 
 async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof pageSchema>) {
   switch (page.kind) {
-    case "board": { const p = boardPage(ctx, page.id); return p ? json({ frame: frameOf(ctx), page: { kind: "board", ...p } }) : json({ error: "That board was removed." }, 404); }
+    case "board": { const p = boardPage(ctx, page.id, { archive: page.archive }); return p ? json({ frame: frameOf(ctx), page: { kind: "board", ...p } }) : json({ error: "That board was removed." }, 404); }
     case "topic": {
       const stored = await deps.store.readTopic(found.owner, found.campaignId, page.id), p = stored ? topicPage(ctx, stored.topic) : null;
       if (!p) return json({ error: "That topic was removed." }, 404);
@@ -111,20 +115,51 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       return json({ frame: frameOf(ctx), page: { kind: "topic", ...p } });
     }
     case "active": return json({ frame: frameOf(ctx), page: { kind: "active", ...activePage(ctx) } });
+    case "trash": {
+      if (!ctx.viewer.rights.moderate) return json({ error: "Only moderators can open the Trash." }, 403);
+      // Topics whose 30 days are up go for good when a moderator next opens the Trash.
+      const who = posterOf(ctx);
+      for (const topicId of expiredTrash(ctx.forum, ctx.now ?? new Date()).slice(0, 10)) {
+        await deps.store.apply(found.owner, found.campaignId, topicId, (f, t) => t ? deleteTopic(f, t, who) : { forum: g => ({ ...g, topics: g.topics.filter(x => x.id !== topicId) }) }).catch(() => undefined);
+      }
+      ctx.forum = (await deps.store.read(found.owner, found.campaignId)).forum;
+      return json({ frame: frameOf(ctx), page: { kind: "trash", ...trashPage(ctx) } });
+    }
     case "members": return json({ frame: frameOf(ctx), page: { kind: "members", ...membersPage(ctx) } });
     case "settings": return ctx.viewer.rights.boards ? json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings } }) : json({ error: "Your group can't change the boards." }, 403);
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
   }
 }
 
+const posterOf = (ctx: Context): Poster => ({ userId: ctx.viewer.userId, rights: ctx.viewer.rights, cast: new Set(castOf(ctx).map(c => c.id)) });
+
+/** A board's topics with their posts, as text (GMs only, as players shouldn't take a whole board away). */
+async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: string) {
+  if (!ctx.viewer.rights.gm) throw new ForumError("Only the GM can download a whole board.");
+  const board = ctx.forum.boards.find(b => b.id === boardId) ?? (() => { throw new ForumError("That board was removed."); })();
+  const ic = kindOf(ctx.forum, board) === "ic", names = new Map(castOf(ctx).map(c => [c.id, c.name]));
+  const topics = shownTopics(ctx).filter(t => t.boardId === boardId).sort((a, b) => a.at.localeCompare(b.at)).slice(0, 300), out = [];
+  for (let i = 0; i < topics.length; i += 10) {
+    const batch = await Promise.all(topics.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t.id)));
+    for (const [n, got] of batch.entries()) {
+      if (!got) continue;
+      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: p.body })) });
+    }
+  }
+  return { board: board.name, topics: out };
+}
+
 /** Runs one change through the store. Changes that touch a topic read it there first. */
 function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" }>, now: Date) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
-  const who: Poster = { userId: ctx.viewer.userId, rights: ctx.viewer.rights, cast: new Set(castOf(ctx).map(c => c.id)) };
+  const who = posterOf(ctx);
   const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>) => deps.store.apply(found.owner, found.campaignId, topicId, make);
   const needTopic = (t: Topic | null) => t ?? (() => { throw new ForumError("That topic was removed."); })();
   switch (body.action) {
-    case "start": { const ids = { topic: newId(), post: newId() }; return run(null, f => startTopic(f, body, who, ids, now)); }
+    case "start": {
+      const ids = { topic: newId(), post: newId() }, only = body.private ? membersFromKeys(ctx, body.private) : undefined;
+      return run(null, f => startTopic(f, { ...body, private: only }, who, ids, now));
+    }
     case "reply": { const postId = newId(); return run(body.topicId, (f, t) => reply(f, needTopic(t), body, who, postId, now)); }
     case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), body, who, now));
     case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who));
@@ -138,8 +173,31 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     case "editBoard": return run(null, f => editBoard(f, body, who));
     case "deleteBoard": return run(null, f => deleteBoard(f, body, who));
     case "move": return run(null, f => moveItem(f, body, who));
+    case "trash": return run(null, f => trashTopic(f, body, who, now));
+    case "bulk": return bulk(deps, ctx, found, body, who, now);
+    case "export": return exportBoard(deps, ctx, found, body.boardId);
     case "readAll": return deps.store.writeReads(found.owner, found.campaignId, ctx.viewer.userId, () => markAll(now)).then(() => undefined);
   }
+}
+
+/** Multi-moderation: one change per topic, in turn. Reports how many changed and the first problem, if any. */
+async function bulk(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "bulk" }>, who: Poster, now: Date) {
+  if (!who.rights.moderate) throw new ForumError("Only moderators can moderate topics.");
+  if (body.op === "move" && !body.boardId) throw new ForumError("Choose a board to move them to.");
+  let done = 0, problem = "";
+  for (const topicId of [...new Set(body.topicIds)]) {
+    const s = ctx.forum.topics.find(t => t.id === topicId);
+    if (!s || !canSee(s, ctx.viewer)) continue;
+    try {
+      if (body.op === "trash") await deps.store.apply(found.owner, found.campaignId, null, f => trashTopic(f, { topicId }, who, now));
+      else {
+        const patch = { pin: { pinned: true }, unpin: { pinned: false }, lock: { locked: true }, unlock: { locked: false }, archive: { archived: true }, unarchive: { archived: false }, move: { boardId: body.boardId } }[body.op];
+        await deps.store.apply(found.owner, found.campaignId, body.op === "move" ? topicId : null, (f, t) => setTopic(f, t, { topicId, ...patch }, who));
+      }
+      done++;
+    } catch (e) { if (!problem) problem = e instanceof ForumError ? e.message : "Some topics couldn't be changed."; }
+  }
+  return { done, ...(problem ? { problem } : {}) };
 }
 
 export async function handleForum(request: Request, deps: Deps) {

@@ -4,13 +4,14 @@
  * Quick reply; the full reply page (with focus mode and the topic newest first under it) and the edit page.
  */
 import { useEffect, useState } from 'react';
-import { Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Quote, Reply, Trash2, PenLine } from 'lucide-react';
+import { Archive, ArchiveRestore, EyeOff, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
-import { forumCall, fullDate, when, type BoardPage, type Frame, type TopicPage } from './forum-api';
+import { forumCall, fullDate, when, type BoardPage, type Frame, type Place, type TopicPage } from './forum-api';
 import { Composer, type AfterPost } from './forum-compose';
 import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go } from './forum-parts';
+import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-moderate';
 
-type Done = (place?: { view: 'topic'; id: string }) => Promise<void>;
+type Done = (place?: Place) => Promise<void>;
 
 /** Pins or locks a topic after posting, when a moderator chose that. */
 async function afterPosting(k: string, topicId: string, after: AfterPost) {
@@ -20,14 +21,17 @@ async function afterPosting(k: string, topicId: string, after: AfterPost) {
 
 export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: BoardPage; k: string; go: Go; done: Done }) {
   const b = page.board, art = b.place?.picture ?? null, [writing, setWriting] = useState(false), r = frame.you.rights;
-  const subs = frame.boards.filter(x => x.parentId === b.id), canStart = r.start && (!b.locked || r.moderate);
+  const subs = frame.boards.filter(x => x.parentId === b.id), canStart = r.start && (!b.locked || r.moderate) && !page.archive;
+  const [only, setOnly] = useState<string[] | null>(null), [picked, setPicked] = useState<string[]>([]);
+  const shown = new Set(page.topics.map(t => t.id)), chosen = picked.filter(id => shown.has(id));
   const start = async (v: { title: string; body: string; as: string | null; after: AfterPost }) => {
-    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as });
+    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as, ...(only ? { private: only } : {}) });
     await afterPosting(k, out.topicId, v.after);
-    setWriting(false); await done({ view: 'topic', id: out.topicId });
+    setWriting(false); setOnly(null); await done({ view: 'topic', id: out.topicId });
   };
+  const all = page.topics.length > 0 && chosen.length === page.topics.length;
   return <>
-    <Crumbs frame={frame} boardId={b.id} k={k} go={go} />
+    <Crumbs frame={frame} boardId={b.id} k={k} go={go} last={page.archive ? 'Archive' : undefined} />
     {b.kind === 'ic' ? <header className="location">
       <Portrait k={k} picture={art} name={b.place?.name ?? b.name} className="portrait location-art" />
       <div className="location-info">
@@ -37,11 +41,26 @@ export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: Bo
         <p className="location-now">{frame.date && <><b>{frame.date}</b> · </>}{b.topics} {b.topics === 1 ? 'topic' : 'topics'} · {b.replies} {b.replies === 1 ? 'reply' : 'replies'}{b.place?.url && <> · <a href={b.place.url}>Read about it in the Encyclopedia</a></>}</p>
       </div>
     </header> : <header className="topic-head board-plain"><h2 className="location-name">{b.name}</h2>{b.description && <p className="location-summary">{b.description}</p>}</header>}
-    {subs.length > 0 && <section className="subforums"><h2 className="category-title">Subforums</h2>{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="forum sub"><span className="forum-name">{s.name}</span><small>{s.topics} topics · {s.replies} replies</small></Link>)}</section>}
+    {subs.length > 0 && !page.archive && <section className="subforums"><h2 className="category-title">Subforums</h2>{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="forum sub"><span className="forum-name">{s.name}</span><small>{s.topics} topics · {s.replies} replies</small></Link>)}</section>}
     <section className="topics">
-      <div className="topics-head"><h2 className="category-title">Topics</h2>{canStart && !writing && <button className="f-btn" onClick={() => setWriting(true)}><PenLine size={14} aria-hidden="true" />New topic</button>}</div>
-      {writing && <Composer frame={frame} k={k} kind={b.kind} title after mode="full" label="New topic" draftKey={`${k}:new:${b.id}`} onPost={start} onCancel={() => setWriting(false)} />}
-      {page.topics.length ? page.topics.map(t => <TopicRow key={t.id} t={t} k={k} go={go} />) : <p className="muted empty">No topics yet.{canStart && ' Start the first one.'}</p>}
+      <div className="topics-head">
+        <h2 className="category-title">{page.archive ? <><Archive size={15} aria-hidden="true" /> Archive</> : 'Topics'}</h2>
+        <span className="topics-tools">
+          {page.archive ? <Link k={k} go={go} to={{ view: 'board', id: b.id }} className="f-btn ghost small">Back to the topics</Link>
+            : page.archived > 0 && <Link k={k} go={go} to={{ view: 'board', id: b.id, archive: true }} className="f-btn ghost small"><Archive size={13} aria-hidden="true" />Archive ({page.archived})</Link>}
+          {r.gm && page.topics.length > 0 && <BoardDownload k={k} boardId={b.id} name={`${frame.settings.title} - ${b.name}`} />}
+          {canStart && !writing && <button className="f-btn" onClick={() => setWriting(true)}><PenLine size={14} aria-hidden="true" />New topic</button>}
+        </span>
+      </div>
+      {page.archive && <p className="muted">Finished topics, kept to read. Nobody can reply until a moderator brings one back.</p>}
+      {writing && <>
+        <PrivatePicker frame={frame} value={only} onChange={setOnly} />
+        <Composer frame={frame} k={k} kind={b.kind} title after mode="full" label={only ? 'New private topic' : 'New topic'} draftKey={`${k}:new:${b.id}`} onPost={start} onCancel={() => { setWriting(false); setOnly(null); }} />
+      </>}
+      {r.moderate && page.topics.length > 0 && <div className="mod-pickall"><label className="check"><input type="checkbox" checked={all} onChange={e => setPicked(e.target.checked ? page.topics.map(t => t.id) : [])} />Select all</label></div>}
+      <ModBar frame={frame} k={k} picked={chosen} kind={b.kind} archive={page.archive} clear={() => setPicked([])} done={() => done()} />
+      {page.topics.length ? page.topics.map(t => <TopicRow key={t.id} t={t} k={k} go={go} pick={r.moderate ? { on: chosen.includes(t.id), set: on => setPicked(p => on ? [...p, t.id] : p.filter(x => x !== t.id)) } : undefined} />)
+        : <p className="muted empty">{page.archive ? 'Nothing is archived here.' : <>No topics yet.{canStart && ' Start the first one.'}</>}</p>}
     </section>
   </>;
 }
@@ -105,19 +124,29 @@ function ModTools({ frame, page, k, done, go }: { frame: Frame; page: TopicPage;
   const t = page.topic, r = frame.you.rights, [error, setError] = useState(''), [renaming, setRenaming] = useState(false), [title, setTitle] = useState(t.title);
   const call = async (body: Record<string, unknown>) => { setError(''); try { await forumCall({ campaign: k, topicId: t.id, ...body }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not change the topic.'); } };
   const sameKind = frame.boards.filter(b => b.kind === t.kind);
-  if (!r.moderate && !t.canRename) return null;
+  const trash = async () => {
+    if (!await confirmDialog({ title: 'Move this topic to the Trash?', message: `Moderators can bring “${t.title}” back from the Trash for 30 days. After that it goes for good.`, confirm: 'Move to Trash', danger: true })) return;
+    try { await forumCall({ action: 'trash', campaign: k, topicId: t.id }); go({ view: 'board', id: t.boardId }); } catch (e) { setError(e instanceof Error ? e.message : 'Could not move it to the Trash.'); }
+  };
+  const print = <Link k={k} go={go} to={{ view: 'print', id: t.id }} className="f-btn ghost small"><Printer size={13} aria-hidden="true" />Print · download</Link>;
+  if (t.trashed) return null;
   return <div className="mod-tools">
     {renaming ? <form onSubmit={e => { e.preventDefault(); void call({ action: 'topic', title }).then(() => setRenaming(false)); }}><input value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" /><button className="f-btn small">Save</button><button type="button" className="f-btn ghost small" onClick={() => setRenaming(false)}>Cancel</button></form>
       : t.canRename && <button className="f-btn ghost small" onClick={() => setRenaming(true)}><Pencil size={13} aria-hidden="true" />Rename</button>}
     {r.moderate && <>
-      <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', pinned: !t.pinned })}><Pin size={13} aria-hidden="true" />{t.pinned ? 'Unpin' : 'Pin'}</button>
-      <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', locked: !t.locked })}><Lock size={13} aria-hidden="true" />{t.locked ? 'Unlock' : 'Lock'}</button>
+      {!t.archived && <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', pinned: !t.pinned })}><Pin size={13} aria-hidden="true" />{t.pinned ? 'Unpin' : 'Pin'}</button>}
+      {!t.archived && <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', locked: !t.locked })}><Lock size={13} aria-hidden="true" />{t.locked ? 'Unlock' : 'Lock'}</button>}
+      <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', archived: !t.archived })}>{t.archived ? <><ArchiveRestore size={13} aria-hidden="true" />Bring back</> : <><Archive size={13} aria-hidden="true" />Archive</>}</button>
       <label className="f-select small">Move to <select value={t.boardId} onChange={e => void call({ action: 'topic', boardId: e.target.value })}>{sameKind.map(b => <option key={b.id} value={b.id}>{b.parentId ? '— ' : ''}{b.name}</option>)}</select></label>
-      <button className="f-btn ghost small danger" onClick={() => void (async () => { if (await confirmDialog({ title: 'Delete this topic?', message: `“${t.title}” and its ${t.replies + 1} posts are removed, and they come off everyone’s post counts. This can’t be undone.`, confirm: 'Delete topic', danger: true })) { try { await forumCall({ action: 'deleteTopic', campaign: k, topicId: t.id }); go({ view: 'board', id: t.boardId }); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete.'); } } })()}><Trash2 size={13} aria-hidden="true" />Delete topic</button>
+      <button className="f-btn ghost small danger" onClick={() => void trash()}><Trash2 size={13} aria-hidden="true" />Move to Trash</button>
     </>}
+    {print}
     {error && <p className="form-error" role="alert">{error}</p>}
   </div>;
 }
+
+/** Why a topic takes no replies. */
+const closedNote = (t: TopicPage['topic']) => t.trashed ? 'This topic is in the Trash.' : t.archived ? 'This topic is archived. A moderator can bring it back to reply.' : t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.';
 
 export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
   const t = page.topic, [quote, setQuote] = useState<{ text: string; n: number }>();
@@ -137,8 +166,10 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   return <>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="topic-head">
-      <div className="topic-title-row"><h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.title}</h2>{addReply}</div>
+      <div className="topic-title-row"><h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.archived && <Archive size={16} aria-label="Archived" />}{t.title}</h2>{addReply}</div>
       <p className="muted">{t.kind === 'ic' ? 'In character' : 'Out of character'} · started by {t.by.name} · {t.replies + 1} {t.replies ? 'posts' : 'post'}</p>
+      {t.only && <p className="private-line"><EyeOff size={13} aria-hidden="true" />Private: only {t.only.join(', ')} and the GMs can see this topic.</p>}
+      <TrashedBanner t={t} k={k} go={go} done={() => done()} />
       {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}{firstNew && <> · <a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></>}</p>}
       {!t.next && firstNew && <p className="turn-line"><a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></p>}
       {t.cast.length > 0 && <p className="topic-cast">{t.cast.map(c => <span key={c.id} className="cast-chip"><Portrait k={k} picture={c.picture} name={c.name} className="portrait tiny" />{c.name}</span>)}</p>}
@@ -149,7 +180,7 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
       <div className="reply-head"><h2 className="category-title">Quick reply</h2>{addReply && <span className="reply-full">For more room, a preview of the topic and focus mode, use {addReply}</span>}</div>
       <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} quote={quote} preferred={preferred} onPost={send} after label="Quick reply" />
     </section>
-      : <p className="muted locked-note">{t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.'}</p>}
+      : <p className="muted locked-note">{closedNote(t)}</p>}
   </>;
 }
 
@@ -191,7 +222,7 @@ function useFocusMode() {
 export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
   const t = page.topic, focus = useFocusMode(), mine = [...page.posts].reverse().find(p => p.mine);
   const send = async (v: { body: string; as: string | null; after: AfterPost }) => { await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id }); };
-  if (!t.canReply) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.'}</p></>;
+  if (!t.canReply) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{closedNote(t)}</p></>;
   return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="page-head"><h2 className="topic-name">Reply to {t.title}</h2>{focus.button}</header>

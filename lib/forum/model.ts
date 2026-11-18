@@ -12,7 +12,9 @@ import { z } from "zod";
 import { can, type MemberList } from "../members.ts";
 import { NARRATION } from "./reader.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50 } as const;
+/** Days a topic stays in the Trash before it goes for good. */
+export const TRASH_DAYS = 30;
 
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const userId = z.string().min(1).max(100);
@@ -51,6 +53,12 @@ export const topicSummarySchema = z.object({
   cast: z.array(id).max(40),
   /** Who takes turns, in order of their first post: characters, and "*" for the GM's narration (reader.ts). */
   order: z.array(z.string().min(1).max(100)).max(41).optional(),
+  /** Archived: kept out of the board's list (in its Archive instead) and closed to replies. */
+  archived: z.boolean().optional(),
+  /** In the Trash: hidden from everyone but moderators until restored or deleted for good. */
+  trashed: z.object({ at, by: userId }).optional(),
+  /** A private topic: only these members (and whoever started it), the GM and co-GMs see it. */
+  private: z.array(userId).max(FORUM_LIMITS.privateMembers).optional(),
 });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
@@ -105,9 +113,21 @@ export function forumRights(list: MemberList, who: string, owner: string): Forum
 /** The person asking: their account, rights and the characters they may post as. GMs may also post in character as themselves (narration). */
 export type Poster = { userId: string; rights: ForumRights; cast: ReadonlySet<string> };
 
+/** Whether someone sees a topic: not in the Trash, and for a private topic, one of its members, its starter or a GM. */
+export function canSee(t: Pick<TopicSummary, "trashed" | "private" | "by">, who: { userId: string; rights: Pick<ForumRights, "gm"> }) {
+  if (t.trashed) return false;
+  return !t.private || who.rights.gm || t.by.userId === who.userId || t.private.includes(who.userId);
+}
+
 const boardOf = (f: Forum, boardId: string) => f.boards.find(b => b.id === boardId) ?? fail("That board was removed.");
 export const kindOf = (f: Forum, board: Board) => f.categories.find(c => c.id === board.categoryId)?.kind ?? "ooc";
 const summaryOf = (f: Forum, topicId: string) => f.topics.find(t => t.id === topicId) ?? fail("That topic was removed.");
+/** The topic's summary, if the person may see it; trashed topics only for moderators when `trash` is set. */
+const seenBy = (f: Forum, topicId: string, who: Poster, trash = false) => {
+  const s = summaryOf(f, topicId);
+  if (s.trashed ? !(trash && who.rights.moderate) : !canSee(s, who)) fail("That topic was removed.");
+  return s;
+};
 const cleanTitle = (s: unknown) => { const v = typeof s === "string" ? s.replace(/\s+/g, " ").trim() : ""; return v ? v.slice(0, FORUM_LIMITS.title) : fail("Give the topic a title."); };
 const cleanBody = (s: unknown) => {
   const v = typeof s === "string" ? s.replace(/\r\n?/g, "\n").replace(/\n{4,}/g, "\n\n\n").trim() : "";
@@ -130,7 +150,8 @@ const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) =
 };
 
 /** The topic's summary worked out again from its posts, keeping what moderators set (pinned, locked, title). */
-export function summarize(topic: Topic, base: Pick<TopicSummary, "title" | "pinned" | "locked">): TopicSummary {
+type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private">>;
+export function summarize(topic: Topic, base: Kept): TopicSummary {
   const first = topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1]!;
   const cast: string[] = [], order: string[] = [];
   for (const p of topic.posts) {
@@ -138,7 +159,10 @@ export function summarize(topic: Topic, base: Pick<TopicSummary, "title" | "pinn
     const who = p.by.as ?? NARRATION;
     if (!order.includes(who) && order.length < 41) order.push(who);
   }
-  return { id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order };
+  return {
+    id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order,
+    ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}),
+  };
 }
 const putSummary = (f: Forum, s: TopicSummary): Forum => ({ ...f, topics: f.topics.some(t => t.id === s.id) ? f.topics.map(t => t.id === s.id ? s : t) : [...f.topics, s] });
 const addCount = (f: Forum, userId: string, n: number): Forum => ({ ...f, counts: { ...f.counts, [userId]: Math.max(0, (f.counts[userId] ?? 0) + n) } });
@@ -155,19 +179,21 @@ const addCharacter = (f: Forum, as: string | null): Forum => !as || f.characters
 export type Change<T = undefined> = { topic?: Topic | null; forum: (f: Forum, latest?: Topic) => Forum; out?: T };
 /* `latest` is the topic file as stored when the forum file is saved: another reply may have landed after this one. */
 
-export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
+export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
+  const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = cleanBody(input.body);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
   const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp }] };
-  const summary = summarize(topic, { title, pinned: false, locked: false });
+  const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}) });
   const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
   return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
 
 export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
-  const s = summaryOf(f, topic.id), board = cleanBoard(f, s.boardId, who, false);
+  const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
+  if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   if (topic.posts.length >= FORUM_LIMITS.posts) fail("This topic is full. Start a new one to carry on.");
   const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
@@ -180,7 +206,7 @@ const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === 
 const mayChange = (p: Post, who: Poster) => p.by.userId === who.userId || who.rights.moderate;
 
 export function editPost(f: Forum, topic: Topic, input: { postId: string; body: unknown }, who: Poster, now: Date): Change {
-  const s = summaryOf(f, topic.id), p = postOf(topic, input.postId);
+  const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only edit your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   const body = cleanBody(input.body);
@@ -190,7 +216,7 @@ export function editPost(f: Forum, topic: Topic, input: { postId: string; body: 
 
 /** Deletes one post. The first post can only go with the whole topic. */
 export function deletePost(f: Forum, topic: Topic, input: { postId: string }, who: Poster): Change {
-  const s = summaryOf(f, topic.id), p = postOf(topic, input.postId);
+  const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only delete your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   if (topic.posts[0]!.id === p.id) return topic.posts.length === 1 ? removeTopic(topic) : fail("The first post starts the topic. Delete the topic instead.");
@@ -202,18 +228,28 @@ const removeTopic = (topic: Topic): Change => ({
   topic: null,
   forum: g => unlog(topic.posts.reduce((x, p) => addCount(x, p.by.userId, -1), { ...g, topics: g.topics.filter(t => t.id !== topic.id) }), r => r.topicId === topic.id),
 });
-/** Moderators delete a whole topic; its posts come off their writers' counts. */
+/** Moderators delete a whole topic for good (from the Trash); its posts come off their writers' counts. */
 export function deleteTopic(f: Forum, topic: Topic, who: Poster): Change {
   summaryOf(f, topic.id);
   if (!who.rights.moderate) fail("Only moderators can delete a topic.");
   return removeTopic(topic);
 }
+/** Moderators move a topic to the Trash, or bring it back. It keeps its posts and counts until deleted for good. */
+export function trashTopic(f: Forum, input: { topicId: string; restore?: boolean }, who: Poster, now: Date): Change {
+  const s = summaryOf(f, input.topicId);
+  if (!who.rights.moderate) fail("Only moderators can move topics to the Trash.");
+  if (!input.restore && !canSee({ ...s, trashed: undefined }, who)) fail("That topic was removed.");
+  const trashed = input.restore ? undefined : { at: now.toISOString(), by: who.userId };
+  return { forum: g => ({ ...g, topics: g.topics.map(t => { if (t.id !== s.id) return t; const rest = { ...t }; delete rest.trashed; return trashed ? { ...rest, trashed } : rest; }) }) };
+}
+/** Topics whose time in the Trash is up. */
+export const expiredTrash = (f: Forum, now: Date) => f.topics.filter(t => t.trashed && now.getTime() - new Date(t.trashed.at).getTime() > TRASH_DAYS * 86_400_000).map(t => t.id);
 
 /** Pin, lock, rename or move a topic. Moderators, or the person who started it for its title. */
-export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string; pinned?: boolean; locked?: boolean; title?: unknown; boardId?: string }, who: Poster): Change {
-  const s = summaryOf(f, input.topicId), starter = s.by.userId === who.userId;
-  const mod = input.pinned !== undefined || input.locked !== undefined || input.boardId !== undefined;
-  if (mod && !who.rights.moderate) fail("Only moderators can pin, lock or move topics.");
+export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string; pinned?: boolean; locked?: boolean; archived?: boolean; title?: unknown; boardId?: string }, who: Poster): Change {
+  const s = seenBy(f, input.topicId, who), starter = s.by.userId === who.userId;
+  const mod = input.pinned !== undefined || input.locked !== undefined || input.boardId !== undefined || input.archived !== undefined;
+  if (mod && !who.rights.moderate) fail("Only moderators can pin, lock, archive or move topics.");
   if (input.title !== undefined && !starter && !who.rights.moderate) fail("Only the person who started it or a moderator can rename a topic.");
   const title = input.title === undefined ? undefined : cleanTitle(input.title);
   let moved: Topic | undefined;
@@ -222,7 +258,12 @@ export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string
     if (kindOf(f, from) !== kindOf(f, to)) fail("Topics move between in-character boards, or between out-of-character boards.");
     moved = { ...(topic ?? fail("That topic was removed.")), boardId: to.id };
   }
-  const patch = (t: TopicSummary): TopicSummary => ({ ...t, ...(input.pinned !== undefined ? { pinned: input.pinned } : {}), ...(input.locked !== undefined ? { locked: input.locked } : {}), ...(title ? { title } : {}), ...(moved ? { boardId: moved.boardId } : {}) });
+  const patch = (t: TopicSummary): TopicSummary => {
+    const next: TopicSummary = { ...t, ...(input.pinned !== undefined ? { pinned: input.pinned } : {}), ...(input.locked !== undefined ? { locked: input.locked } : {}), ...(title ? { title } : {}), ...(moved ? { boardId: moved.boardId } : {}) };
+    if (input.archived === true) next.archived = true;
+    if (input.archived === false) delete next.archived;
+    return next;
+  };
   return { ...(moved ? { topic: moved } : {}), forum: g => ({ ...g, topics: g.topics.map(t => t.id === s.id ? patch(t) : t) }) };
 }
 
