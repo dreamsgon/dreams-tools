@@ -2,7 +2,7 @@
  * Every link on a campaign's dashboard names that campaign, so whatever you open from it (Maptable,
  * the Encyclopedia, a scene, a page, the Campaigns page) opens in the campaign you were managing.
  */
-type Row = { key: string; maptable: { id: string } | null; encyclopedia: { id: string } | null };
+type Row = { key: string; maptable: { id: string } | null; encyclopedia: { id: string; forum?: boolean } | null };
 const enc = encodeURIComponent;
 
 export function hubLinks(row: Row) {
@@ -18,8 +18,8 @@ export function hubLinks(row: Row) {
     notes: (view?: string) => e ? `/encyclopedia?campaign=${enc(e)}${view ? `&view=${enc(view)}` : ""}` : null,
     /** A page, opened inside this campaign (a world page otherwise opens outside any campaign). */
     entry: (entryId: string) => `/encyclopedia?entry=${enc(entryId)}${e ? `&campaign=${enc(e)}` : ""}`,
-    /** This campaign's forum (lib/forum). It lives with the notes, so it needs them. */
-    forum: e ? `/forum#c-${enc(e)}` : null,
+    /** This campaign's forum (lib/forum), once the GM has set it up. It lives with the notes, so it needs them. */
+    forum: e && row.encyclopedia?.forum ? `/forum#c-${enc(e)}` : null,
     /** The Campaigns page with this campaign's Start notes dialog open; it comes back here when done. */
     startNotes: `/campaigns?notes=${enc(row.key)}`,
   };

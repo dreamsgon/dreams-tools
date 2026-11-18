@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Bell, CalendarDays, Check, ChevronRight, Dices, FileText, Flag, Folder, GripVertical, LayoutGrid, Link2, ListChecks, Map as MapIcon, PenLine, Pin, Plus, Settings, SlidersHorizontal, Star, X, Goal } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Bell, CalendarDays, Check, ChevronRight, Dices, FileText, Flag, Folder, GripVertical, LayoutGrid, Link2, ListChecks, Map as MapIcon, MessagesSquare, PenLine, Pin, Plus, Settings, SlidersHorizontal, Star, X, Goal } from "lucide-react";
 import { folderChoices, homeCampaigns, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
 import {
   applyHomeAction, campaignShowNames, campaignShows, hasWidget, homeHeights, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, setWidgetHeight, toggleWidget,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/home-layout";
 import type { HomeData } from "@/lib/home-server";
 import { Attention, Folders, Head, Links, Notes, Pinned, Quests, Roll, Sessions, Todo, type Act } from "./home-widgets";
-import { facts, KindIcon, kindName, mapsHref, notesHref, openHref, pageHref, plural, when } from "./home-shared";
+import { facts, KindIcon, kindName, forumHref, mapsHref, notesHref, openHref, pageHref, plural, when } from "./home-shared";
 
 export { when };
 
@@ -162,7 +162,7 @@ function Recent({ layout, data }: { layout: HomeLayout; data: HomeData }) {
 
 /** The campaign you worked on last, with the pages you changed in it. */
 function ContinueCard({ row }: { row: CampaignRow }) {
-  const e = row.encyclopedia, notes = notesHref(row), maps = mapsHref(row);
+  const e = row.encyclopedia, notes = notesHref(row), maps = mapsHref(row), forum = forumHref(row);
   const latest = e?.latest ?? [];
   return <section className="home-continue" aria-labelledby="home-continue-title">
     <div className="home-continue-main">
@@ -171,8 +171,9 @@ function ContinueCard({ row }: { row: CampaignRow }) {
       {e?.description && <p className="home-continue-text">{e.description}</p>}
       <p className="home-continue-facts">{[e?.worldName, ...facts(row).map(([n, l]) => `${n} ${l}`)].filter(Boolean).join(" · ")}</p>
       <div className="home-continue-actions">
-        {notes && <a className="home-button home-button-primary" href={notes}><BookOpen size={15} aria-hidden="true" />Open notes</a>}
-        {maps && <a className={notes ? "home-button" : "home-button home-button-primary"} href={maps}><MapIcon size={15} aria-hidden="true" />Open maps</a>}
+        {notes && <a className="home-button home-button-primary" href={notes}><BookOpen size={15} aria-hidden="true" />Wiki</a>}
+        {maps && <a className={notes ? "home-button" : "home-button home-button-primary"} href={maps}><MapIcon size={15} aria-hidden="true" />Maps</a>}
+        {forum && <a className="home-button" href={forum}><MessagesSquare size={15} aria-hidden="true" />Forum</a>}
         <Link className="home-button home-button-quiet" href={openHref(row)}><LayoutGrid size={15} aria-hidden="true" />Campaign hub</Link>
       </div>
     </div>
@@ -189,7 +190,7 @@ function ContinueCard({ row }: { row: CampaignRow }) {
 }
 
 function CampaignCard({ row, pinned, onPin }: { row: CampaignRow; pinned: boolean; onPin: () => void }) {
-  const e = row.encyclopedia, notes = notesHref(row), maps = mapsHref(row);
+  const e = row.encyclopedia, notes = notesHref(row), maps = mapsHref(row), forum = forumHref(row);
   return <article className="home-campaign">
     <Link className="home-campaign-art" href={openHref(row)} tabIndex={-1} aria-hidden="true" />
     <button type="button" className="home-pin" aria-pressed={pinned} aria-label={`${pinned ? "Unpin" : "Pin"} ${row.name}`} title={pinned ? "Unpin" : "Pin to the top"} onClick={onPin}><Star size={14} aria-hidden="true" /></button>
@@ -199,8 +200,9 @@ function CampaignCard({ row, pinned, onPin }: { row: CampaignRow; pinned: boolea
       <dl className="home-campaign-facts">{facts(row).map(([n, l]) => <div key={l}><dt>{l}</dt><dd>{n}</dd></div>)}</dl>
       <div className="home-campaign-foot">
         <span className="home-campaign-links">
-          {notes && <a href={notes}><BookOpen size={14} aria-hidden="true" />Notes</a>}
+          {notes && <a href={notes}><BookOpen size={14} aria-hidden="true" />Wiki</a>}
           {maps && <a href={maps}><MapIcon size={14} aria-hidden="true" />Maps</a>}
+          {forum && <a href={forum}><MessagesSquare size={14} aria-hidden="true" />Forum</a>}
         </span>
         {e?.lastEdited && <span>{when(e.lastEdited)}</span>}
       </div>

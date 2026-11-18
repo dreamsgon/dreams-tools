@@ -19,6 +19,8 @@ export function when(iso: string, now = Date.now()) {
 export const openHref = (r: { key: string }) => `/campaigns/${encodeURIComponent(r.key)}`;
 export const notesHref = (r: CampaignRow) => r.encyclopedia ? `/encyclopedia?campaign=${encodeURIComponent(r.encyclopedia.id)}` : null;
 export const mapsHref = (r: CampaignRow) => r.maptable ? `/maptable?campaign=${encodeURIComponent(r.maptable.id)}` : null;
+/** The campaign's forum, once the GM has set it up. */
+export const forumHref = (r: CampaignRow) => r.encyclopedia?.forum ? `/forum#c-${encodeURIComponent(r.encyclopedia.id)}` : null;
 export const pageHref = (p: { id: string }) => `/encyclopedia?entry=${encodeURIComponent(p.id)}`;
 const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page", vehicle: "Vehicle", galaxy: "Galaxy", sector: "Sector", system: "Star system", store: "Store", quest: "Quest" };
 export const kindName = (kind: string) => kindNames[kind] ?? "Page";

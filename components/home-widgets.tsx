@@ -7,7 +7,7 @@ import { isLinkUrl, type HomeAction, type HomeLayout, type HomeTodo } from "@/li
 import type { HomeData } from "@/lib/home-server";
 import { openDiceTray } from "@/lib/dice-open";
 import { sessionTime } from "./front-page-view";
-import { kindName, mapsHref, notesHref, openHref, pageHref, plural, when } from "./home-shared";
+import { kindName, forumHref, mapsHref, notesHref, openHref, pageHref, plural, when } from "./home-shared";
 import { folderColor } from "@/lib/folder-color";
 import { RollPanel } from "./roll-widget";
 
@@ -75,11 +75,11 @@ export function Folders({ layout, data }: Part) {
           </span>}
         </button>
         {isOpen && (inside.length ? <ul>{inside.map(r => {
-          const notes = notesHref(r), maps = mapsHref(r);
+          const notes = notesHref(r), maps = mapsHref(r), forum = forumHref(r);
           return <li key={r.key}>
             <Link href={openHref(r)} className="home-frow"><span className="home-fmini" style={tint(folderColor(r.key))} aria-hidden="true" />
               <span><strong>{r.name}</strong><small>{[r.encyclopedia && plural(r.encyclopedia.pages, "page"), r.maptable && plural(r.maptable.scenes, "scene"), r.encyclopedia?.lastEdited && when(r.encyclopedia.lastEdited)].filter(Boolean).join(" · ")}</small></span></Link>
-            <span className="home-fgo">{notes && <a href={notes}>Notes</a>}{maps && <a href={maps}>Maps</a>}</span>
+            <span className="home-fgo">{notes && <a href={notes}>Wiki</a>}{maps && <a href={maps}>Maps</a>}{forum && <a href={forum}>Forum</a>}</span>
           </li>;
         })}</ul> : <p className="home-muted home-folder-empty">No campaigns in this folder.</p>)}
       </div>;

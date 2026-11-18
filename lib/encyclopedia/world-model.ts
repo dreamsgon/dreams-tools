@@ -115,6 +115,8 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   discord:z.object({maptableCampaignId:z.string().min(1).max(120), route:z.enum(["combat","exploration","world"]).optional()}).optional(),
   // Optional (added later): the Maptable campaign that holds this campaign's maps, set on the Campaigns page.
   maptableCampaignId:z.string().min(1).max(120).optional(),
+  // Optional (added later): the GM set up this campaign's forum (lib/forum). Forums start switched off.
+  forum:z.boolean().optional(),
   // Optional (added later): the Campaigns page folder (a Maptable campaign folder id) this campaign sits in when it has no Maptable campaign of its own.
   folderId:z.string().min(1).max(120).optional(),
   // Optional (added later): the widgets on the campaign front page players see first.
@@ -419,7 +421,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  for(const e of entries){if(e.info)e.info=e.info.filter(r=>!r.pageId||readable.has(r.pageId));if(e.quest)e.quest={...e.quest,giverId:e.quest.giverId&&readable.has(e.quest.giverId)?e.quest.giverId:null,placeId:e.quest.placeId&&readable.has(e.quest.placeId)?e.quest.placeId:null,rewardIds:e.quest.rewardIds.filter(id=>readable.has(id)),objectives:e.quest.objectives.map(o=>({...o,...('targetId' in o?{targetId:o.targetId&&readable.has(o.targetId)?o.targetId:null}:{}),...('whereId' in o?{whereId:o.whereId&&readable.has(o.whereId)?o.whereId:null}:{})}))};if(e.mapData)e.mapData={...e.mapData,paths:e.mapData.paths?.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null})),labels:e.mapData.labels?.map(l=>({...l,entryId:l.entryId&&readable.has(l.entryId)?l.entryId:null})),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId&&readable.has(p.entryId)?p.entryId:null,areaMapId:p.areaMapId&&readable.has(p.areaMapId)?p.areaMapId:null,weatherLinks:p.weatherLinks?.filter(l=>l.campaignId===c.id&&calendars.some(cal=>cal.id===l.calendarId&&cal.weather?.regions.some(r=>r.id===l.regionId)))}))};}
  const sessionsNewestFirst=candidates.filter(e=>e.kind==='session').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(e=>e.id);
  const frontPage=resolveFrontPage(c.frontPage,{entries,calendars,clean:playerText,sessionsNewestFirst});
- return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look),items:playerItemSettings(itemSettingsOf(c))},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
+ return {schemaVersion:1,calendars,campaign:{id:c.id,name:c.name,look:playerLook(c.look),items:playerItemSettings(itemSettingsOf(c)),...(c.forum?{forum:true}:{})},world:{name:s.worlds.find(w=>w.id===c.worldId)!.name},entries,frontPage};
 }
 export type PlayerCampaign=ReturnType<typeof playerCampaign>;
 // Pages players can read that link to this one, from the text players can read (shared tabs, GM secrets removed).

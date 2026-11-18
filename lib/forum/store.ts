@@ -36,6 +36,17 @@ export class ForumStore {
     return { forum: parsed.data, etag: object.etag };
   }
 
+  /** Whether this campaign has a forum: the GM set one up (Campaigns), or it was used before forums were opt-in. */
+  async exists(owner: string, campaignId: string) {
+    return !!(await this.bucket.head(forumKey(owner, campaignId)));
+  }
+
+  /** Sets up an empty forum, leaving one that is already there as it is. */
+  async create(owner: string, campaignId: string) {
+    if (await this.exists(owner, campaignId)) return;
+    await put(this.bucket, forumKey(owner, campaignId), emptyForum(), null);
+  }
+
   async readTopic(owner: string, campaignId: string, topicId: string): Promise<{ topic: Topic; etag: string } | null> {
     const object = await this.bucket.get(topicKey(owner, campaignId, topicId));
     if (!object) return null;
