@@ -99,7 +99,7 @@ test('end to end: a link, the join page, asking, the bell, letting in, Campaigns
  assert.equal([...b.data.keys()].some(k=>k.includes(token)),false,'the link itself is never a storage key');
  const page=await store.describe(token,mara,NOW);
  assert.equal(page.campaign,'The Salt Road');assert.equal(page.ownerName,'Dreams');assert.equal(page.group.name,'Players');assert.equal(page.status,'invited');assert.equal(page.approve,true);
- assert.ok(page.can.includes('Edit their own character page'));assert.ok(page.can.includes('Read and post in the forum, when it arrives'));
+ assert.ok(page.can.includes('Edit their own character page'));assert.ok(page.can.includes('Read and post in the forum'));
  assert.equal((await store.describe(token,null,NOW)).status,'signedOut');assert.equal((await store.describe(token,gm,NOW)).status,'owner');
  assert.equal(await store.describe('f'.repeat(64),mara,NOW),null);
  assert.deepEqual(await store.join(token,mara,'Mara',NOW),{outcome:'asked',campaign:'The Salt Road'});

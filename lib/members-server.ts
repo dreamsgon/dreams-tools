@@ -138,7 +138,7 @@ export class MemberStore {
       : list.members.some(m => m.userId === who.userId && m.groups.includes(group.id)) ? "member"
       : list.requests.some(r => r.userId === who.userId) ? "waiting" : "invited";
     const can = permissionKeys.filter(k => group.perms[k] === "yes" && !permissionInfo[k].forum && k !== "addSubPages").map(k => permissionInfo[k].name);
-    if (group.perms.forumRead === "yes") can.push(group.perms.forumStart === "yes" || group.perms.forumReply === "yes" ? "Read and post in the forum, when it arrives" : "Read the forum, when it arrives");
+    if (group.perms.forumRead === "yes") can.push(group.perms.forumStart === "yes" || group.perms.forumReply === "yes" ? "Read and post in the forum" : "Read the forum");
     return { campaign: campaign.name, world: campaign.world, ownerName: list.ownerName || "the GM", group: { name: group.name, color: group.color }, can, approve: link.approve, status, name: who?.displayName ?? "" };
   }
 
@@ -205,7 +205,7 @@ export class MemberStore {
     for (const { owner, ...i } of await this.membershipItems(userId)) {
       const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
       if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
-      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps") });
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps"), forum: can(list, userId, "forumRead") });
     }
     return out;
   }
@@ -227,6 +227,17 @@ export class MemberStore {
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
     return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages"), maps: can(list, userId, "editMaps") } : null;
+  }
+
+  /**
+   * The campaign a member's `ref` names and its member list, for the forum, which checks its own permissions
+   * (lib/forum/model.ts forumRights). Null when they aren't a member of it.
+   */
+  async forumAs(userId: string, ref: string) {
+    const found = await this.byRef(userId, ref);
+    if (!found) return null;
+    const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
+    return list?.members.some(m => m.userId === userId) ? { owner: found.owner, campaignId: found.campaignId, list } : null;
   }
 
   /**
@@ -298,5 +309,5 @@ export class MemberStore {
 }
 
 export type Membership = { owner: string; campaignId: string; campaign: string; world: string; ownerName: string; role: string; groups: string[]; asking: boolean; at: string };
-export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean; maps?: boolean };
+export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean; maps?: boolean; forum?: boolean };
 export type Notice = { id: string; kind: "ask" | "join" | "left"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };

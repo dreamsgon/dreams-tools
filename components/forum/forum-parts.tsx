@@ -1,0 +1,160 @@
+'use client';
+/*
+ * The forum's pieces. Class names follow the campaign theme contract (the Campaign Skin Studio prototype), so a
+ * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
+ */
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Lock, Pin, MessageSquare, ScrollText, Users } from 'lucide-react';
+import { proseBlocks, proseParts } from '@/lib/encyclopedia/player-prose';
+import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
+
+export type Go = (place: Place) => void;
+type Row = Frame['boards'][number];
+type TopicRowData = Frame['footer']['active'][number];
+
+export function Link({ k, to, go, className, children, title }: { k: string; to: Place; go: Go; className?: string; children: ReactNode; title?: string }) {
+  return <a className={className} title={title} href={forumHash(k, to)} onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); go(to); }}>{children}</a>;
+}
+
+/** A picture from the campaign, framed the way the Encyclopedia frames it; initials when there is none. */
+export function Portrait({ k, picture, name, className = 'portrait', style }: { k: string; picture: Picture | null; name: string; className?: string; style?: CSSProperties }) {
+  const src = usePicture(k, picture?.imageId);
+  const position = picture ? `${(picture.x * 100).toFixed(1)}% ${(picture.y * 100).toFixed(1)}%` : undefined;
+  // eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image can't optimise it
+  const img = <img src={src} alt="" style={{ objectPosition: position }} />;
+  return <span className={`${className}${src ? '' : ' portrait-empty'}`} style={style} aria-hidden="true">{src ? img : <span>{initials(name)}</span>}</span>;
+}
+export const Circle = ({ name, title }: { name: string; title?: string }) => <span className="circ" title={title ?? name} aria-hidden="true">{initials(name)}</span>;
+
+/** Post text: paragraphs, headings, lists, quotes, **bold** and code, the way Encyclopedia pages read. */
+export function PostText({ text }: { text: string }) {
+  const inline = (t: string): ReactNode => proseParts(t).map((p, i) => p.type === 'bold' ? <strong key={i}>{p.text}</strong> : p.type === 'code' ? <code key={i}>{p.text}</code> : p.type === 'link' ? <span key={i} className="wiki">{p.label}</span> : <Italic key={i} text={p.text} />);
+  return <div className="prose post-text">{proseBlocks(text).map((b, i) => {
+    switch (b.type) {
+      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}>{inline(b.text)}</H>; }
+      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• {inline(b.text)}</p>;
+      case 'quote': return <blockquote key={i}>{inline(b.text)}</blockquote>;
+      case 'code': return <pre key={i}>{b.text || ' '}</pre>;
+      case 'paragraph': return <p key={i}>{inline(b.text)}</p>;
+      default: return null;
+    }
+  })}</div>;
+}
+/** *Italics*, which roleplay posts use a lot (thoughts, emphasis). */
+function Italic({ text }: { text: string }) {
+  const parts = text.split(/(\*[^*\n]+\*|_[^_\n]+_)/g);
+  return <>{parts.map((p, i) => i % 2 ? <em key={i}>{p.slice(1, -1)}</em> : p)}</>;
+}
+
+/** The top bar: the in-world date, the staff as circles, and who you are. */
+export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  const r = frame.you.rights;
+  return <div className="board-bar">
+    <p className="board-date">{frame.date ? <><b>{frame.date}</b></> : <span className="muted">No calendar date yet</span>}</p>
+    <div className="board-staff" aria-label="Staff">{frame.staff.slice(0, 8).map(s => <Circle key={s.name + s.role} name={s.name} title={`${s.name} · ${s.role}`} />)}<span className="muted">Staff</span></div>
+    <div className="board-you">
+      {r.boards && <Link k={k} go={go} to={{ view: 'settings' }} className="f-btn ghost small">Forum settings</Link>}
+      <span className="you"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'}</small></span></span>
+    </div>
+  </div>;
+}
+
+/** The banner the GM sets: title, tagline, campaign picture and links. */
+export function Banner({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  const src = usePicture(k, frame.banner?.imageId);
+  return <header className={`board-head${src ? ' has-art' : ''}`} style={src ? { '--banner': `url("${src}")`, '--banner-y': `${(frame.banner!.y * 100).toFixed(1)}%` } as CSSProperties : undefined}>
+    <div className="board-head-text">
+      <h1 className="board-title"><Link k={k} go={go} to={{ view: 'index' }}>{frame.settings.title}</Link></h1>
+      {frame.settings.tagline && <p className="board-tagline">{frame.settings.tagline}</p>}
+    </div>
+    <nav className="board-nav" aria-label="Forum links">
+      <Link k={k} go={go} to={{ view: 'index' }}>Forum</Link>
+      <Link k={k} go={go} to={{ view: 'active' }}>Active topics</Link>
+      <Link k={k} go={go} to={{ view: 'members' }}>Members</Link>
+      {frame.settings.links.map((l, i) => <a key={i} href={l.url} rel={l.url.startsWith('https://') ? 'noopener noreferrer' : undefined} target={l.url.startsWith('https://') ? '_blank' : undefined}>{l.label}</a>)}
+    </nav>
+  </header>;
+}
+
+function LastLine({ last, k, go }: { last: Row['last']; k: string; go: Go }) {
+  if (!last) return <div className="forum-last"><small className="muted">No topics yet</small></div>;
+  return <div className="forum-last">
+    <Portrait k={k} picture={last.picture} name={last.name} className="portrait small" />
+    <div><Link k={k} go={go} to={{ view: 'topic', id: last.topicId }}>{last.title}</Link><small>by {last.name} · {when(last.at)}</small></div>
+  </div>;
+}
+
+/** One board in the index: location boards with their place art, out-of-character boards as cards. */
+function BoardRow({ row, subs, k, go }: { row: Row; subs: Row[]; k: string; go: Go }) {
+  const art = usePicture(k, row.place?.picture?.imageId);
+  return <article className={`forum${row.kind === 'ic' ? ' forum-ic' : ' forum-ooc'}`}>
+    {row.kind === 'ic' && <div className="forum-art" style={art ? { backgroundImage: `url("${art}")`, backgroundPosition: `${(row.place!.picture!.x * 100).toFixed(1)}% ${(row.place!.picture!.y * 100).toFixed(1)}%` } : undefined} aria-hidden="true" />}
+    <div className="forum-info">
+      <h3 className="forum-name"><Link k={k} go={go} to={{ view: 'board', id: row.id }}>{row.name}</Link>{row.locked && <Lock size={13} aria-label="Moderators start topics here" />}</h3>
+      {row.description && <p className="forum-desc">{row.description}</p>}
+      {subs.length > 0 && <p className="forum-subs">{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="chip">{s.name}</Link>)}</p>}
+      {row.place && <p className="forum-place">Location · {row.place.url ? <a href={row.place.url}>{row.place.name}</a> : row.place.name}</p>}
+    </div>
+    <p className="forum-counts"><span><b>{row.topics}</b> {row.topics === 1 ? 'topic' : 'topics'}</span><span><b>{row.replies}</b> {row.replies === 1 ? 'reply' : 'replies'}</span></p>
+    <LastLine last={row.last} k={k} go={go} />
+  </article>;
+}
+
+export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  return <>{frame.categories.map(c => {
+    const top = frame.boards.filter(b => b.categoryId === c.id && !b.parentId);
+    return <section key={c.id} className={`category category-${c.kind}`}>
+      <h2 className="category-title">{c.name} <span className="tag">{c.kind === 'ic' ? 'In character' : 'Out of character'}</span></h2>
+      <div className="category-forums">
+        {top.length ? top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />) : <p className="muted empty">No boards here yet.{frame.you.rights.boards && <> <Link k={k} go={go} to={{ view: 'settings' }}>Add one in Forum settings</Link>.</>}</p>}
+      </div>
+    </section>;
+  })}</>;
+}
+
+export function TopicRow({ t, k, go, board }: { t: TopicRowData; k: string; go: Go; board?: string }) {
+  return <article className={`topic-row${t.pinned ? ' pinned' : ''}`}>
+    <div className="topic-main">
+      <h3 className="topic-title">{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link></h3>
+      <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
+      {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}
+    </div>
+    <p className="topic-count"><b>{t.replies}</b> {t.replies === 1 ? 'reply' : 'replies'}</p>
+    <div className="topic-last">
+      <Portrait k={k} picture={t.last.picture} name={t.last.name} className="portrait small" />
+      <small><b>{t.last.name}</b><br />{when(t.last.at)}</small>
+    </div>
+  </article>;
+}
+
+/** The footer: moderating team, active topics and top posters, then the forum's totals. */
+export function Footer({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  const f = frame.footer;
+  return <footer className="board-foot">
+    <div className="foot-cols">
+      <section><h3><Users size={14} aria-hidden="true" />Moderating team</h3><ul className="foot-staff">{frame.staff.map(s => <li key={s.name + s.role}><Circle name={s.name} /><span><b>{s.name}</b><small>{s.role}</small></span></li>)}</ul></section>
+      <section><h3><MessageSquare size={14} aria-hidden="true" /><Link k={k} go={go} to={{ view: 'active' }}>Active topics</Link></h3>
+        {f.active.length ? <ul className="foot-list">{f.active.map(t => <li key={t.id}><Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link><small>{t.last.name} · {when(t.last.at)}</small></li>)}</ul> : <p className="muted">Nothing yet.</p>}
+        <Link k={k} go={go} to={{ view: 'active' }} className="foot-more">See all active topics</Link></section>
+      <section><h3><ScrollText size={14} aria-hidden="true" /><Link k={k} go={go} to={{ view: 'members' }}>Top posters</Link></h3>
+        {f.top.length ? <ol className="foot-list">{f.top.map(p => <li key={p.name}><span>{p.name}</span><small>{p.posts} {p.posts === 1 ? 'post' : 'posts'}</small></li>)}</ol> : <p className="muted">No posts yet.</p>}
+        <Link k={k} go={go} to={{ view: 'members' }} className="foot-more">All members</Link></section>
+    </div>
+    <p className="foot-stats">{frame.settings.title} · {f.stats.members} {f.stats.members === 1 ? 'member' : 'members'} · {f.stats.topics} {f.stats.topics === 1 ? 'topic' : 'topics'} · {f.stats.posts} {f.stats.posts === 1 ? 'post' : 'posts'}</p>
+  </footer>;
+}
+
+/** Breadcrumbs: Forum › category › board (› topic). */
+export function Crumbs({ frame, boardId, k, go, last }: { frame: Frame; boardId?: string; k: string; go: Go; last?: string }) {
+  const board = frame.boards.find(b => b.id === boardId), parent = board?.parentId ? frame.boards.find(b => b.id === board.parentId) : undefined, cat = frame.categories.find(c => c.id === board?.categoryId);
+  return <nav className="crumbs" aria-label="Breadcrumb">
+    <Link k={k} go={go} to={{ view: 'index' }}>Forum</Link>
+    {cat && <><span aria-hidden="true">›</span><span>{cat.name}</span></>}
+    {parent && <><span aria-hidden="true">›</span><Link k={k} go={go} to={{ view: 'board', id: parent.id }}>{parent.name}</Link></>}
+    {board && <><span aria-hidden="true">›</span>{last ? <Link k={k} go={go} to={{ view: 'board', id: board.id }}>{board.name}</Link> : <span aria-current="page">{board.name}</span>}</>}
+    {last && <><span aria-hidden="true">›</span><span aria-current="page">{last}</span></>}
+  </nav>;
+}
+
+/** Shown while a hover card is open on a phone, where there's no hover: tap the portrait. */
+export function useToggle() { const [open, setOpen] = useState(false); return { open, toggle: () => setOpen(o => !o), close: () => setOpen(false) }; }

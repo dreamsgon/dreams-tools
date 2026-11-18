@@ -178,7 +178,7 @@ function Groups({ view, act, busy }: Part) {
       <tbody>
         <tr className="mem-section"><th colSpan={view.groups.length + 2}>Campaign</th></tr>
         {table(rows(false))}
-        <tr className="mem-section"><th colSpan={view.groups.length + 2}>Forum <small>Kept now, used when the forum arrives.</small></th></tr>
+        <tr className="mem-section"><th colSpan={view.groups.length + 2}>Forum <small>Who reads, posts and moderates in the campaign forum.</small></th></tr>
         {table(rows(true))}
       </tbody>
     </table></div>

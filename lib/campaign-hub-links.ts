@@ -18,6 +18,8 @@ export function hubLinks(row: Row) {
     notes: (view?: string) => e ? `/encyclopedia?campaign=${enc(e)}${view ? `&view=${enc(view)}` : ""}` : null,
     /** A page, opened inside this campaign (a world page otherwise opens outside any campaign). */
     entry: (entryId: string) => `/encyclopedia?entry=${enc(entryId)}${e ? `&campaign=${enc(e)}` : ""}`,
+    /** This campaign's forum (lib/forum). It lives with the notes, so it needs them. */
+    forum: e ? `/forum#c-${enc(e)}` : null,
     /** The Campaigns page with this campaign's Start notes dialog open; it comes back here when done. */
     startNotes: `/campaigns?notes=${enc(row.key)}`,
   };
