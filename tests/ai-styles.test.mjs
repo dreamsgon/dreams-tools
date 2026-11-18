@@ -106,10 +106,10 @@ async function setup(w){
 test('Write it again uses the style the recap was asked with, or the one picked now with its length',async()=>{
  const s=await setup(world(withGrim()));
  const f=fakeFetch([oaSay('Short again.'),oaSay('In German.')]);
- await writeRecapAgain(s.b,OWNER,C,s.connection.id,'s13','',f);
+ await writeRecapAgain(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},'s13','',f);
  const first=f.sent[0].body.messages[1].content;
  assert.match(first,/Past tense, plain, as a story/);assert.match(first,/Length: about 250 to 600 words\./,'the length asked for stays');
- await writeRecapAgain(s.b,OWNER,C,s.connection.id,'s13','More dialogue.',f,'grim-1');
+ await writeRecapAgain(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},'s13','More dialogue.',f,'grim-1');
  const second=f.sent[1].body.messages[1].content;
  assert.match(second,/Write in German\./);assert.match(second,/Length: about 150 to 300 words\./);assert.match(second,/asks: More dialogue\./);
 });
@@ -118,18 +118,18 @@ test('The story so far writes in the picked style and length; a sample saves not
  const w=publishRecap(world(withGrim()),'s13',true,NOW);
  const s=await setup(w);
  const f=fakeFetch([oaSay('Story.')]);
- await writeStory(s.b,OWNER,C,s.connection.id,f,{styleId:'builtin-bullets',length:'detailed'});
+ await writeStory(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},f,{styleId:'builtin-bullets',length:'detailed'});
  const asked=f.sent[0].body.messages[1].content;
  assert.match(asked,/Use short bullet points/);assert.match(asked,/Length: about 300 to 500 words\./);
  const before=JSON.stringify((await s.store.read(OWNER)).data);
  const sf=fakeFetch([oaSay('Ich bin Ostra.'),oaSay('A sample story.')]);
- const r=await writeSample(s.b,OWNER,C,s.connection.id,{kind:'recap',style:grim,entryId:'s13'},sf);
+ const r=await writeSample(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},{kind:'recap',style:grim,entryId:'s13'},sf);
  assert.equal(r.text,'Ich bin Ostra.');assert.equal(r.by,'Sonnet');
  assert.match(sf.sent[0].body.messages[1].content,/Write in German\./);assert.match(sf.sent[0].body.messages[1].content,/Arrival at Greyfen/);
- assert.equal((await writeSample(s.b,OWNER,C,s.connection.id,{kind:'story',style:builtInStyles[1]},sf)).text,'A sample story.');
+ assert.equal((await writeSample(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},{kind:'story',style:builtInStyles[1]},sf)).text,'A sample story.');
  assert.equal(JSON.stringify((await s.store.read(OWNER)).data),before,'nothing is saved');
- await assert.rejects(writeSample(s.b,OWNER,C,s.connection.id,{kind:'recap',style:{...grim,length:'huge'},entryId:'s13'},sf));
- await assert.rejects(writeSample(s.b,OWNER,C,s.connection.id,{kind:'recap',style:grim,entryId:'nope'},sf),/Pick a session/);
+ await assert.rejects(writeSample(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},{kind:'recap',style:{...grim,length:'huge'},entryId:'s13'},sf));
+ await assert.rejects(writeSample(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},{kind:'recap',style:grim,entryId:'nope'},sf),/Pick a session/);
 });
 
 test('MCP prompts for AI apps follow the campaign’s styles',()=>{

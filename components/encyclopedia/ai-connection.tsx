@@ -5,6 +5,7 @@ import './ai-connection.css';
 import {confirmDialog} from '../confirm-dialog';
 import {actionGroups,modeNames,presets,type Choice,type Mode,type Perms} from '@/lib/mcp/permissions';
 import {providers,providerOf,type ProviderId} from '@/lib/ai/providers';
+import {deviceKey,fetchConnections,forgetDeviceKey,onDeviceAi,saveDeviceKey} from '@/lib/ai/device-keys';
 
 type Level='read'|'assist'|'run';
 type Api={provider:ProviderId;baseUrl?:string;model:string;last4:string;limit:number|null;used:number};
@@ -24,6 +25,8 @@ function ago(iso:string|undefined,now:number){
  if(s<90)return 'used just now';if(s<3600)return `used ${Math.round(s/60)} minutes ago`;if(s<86400)return `used ${Math.round(s/3600)} hours ago`;
  const d=Math.round(s/86400);return d===1?'used yesterday':`used ${d} days ago`;
 }
+/** Re-renders when this browser's AI keys change (pasted, forgotten, or changed in another tab). */
+function useDeviceKeys(){const [,set]=useState(0);useEffect(()=>onDeviceAi(()=>set(n=>n+1)),[]);}
 async function post(body:object){
  const r=await fetch('/api/encyclopedia/ai-connections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error??'Something went wrong. Try again.');return data;
@@ -35,7 +38,8 @@ export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{
  const [list,setList]=useState<Connection[]|null>(null),[level,setLevel]=useState<Mode>('helper'),[name,setName]=useState(''),[way,setWay]=useState<'app'|'key'>('app');
  const [now]=useState(()=>Date.now()),[busy,setBusy]=useState(false),[error,setError]=useState(''),[made,setMade]=useState<{name:string;mode:Mode|'custom';url:string}|null>(null),[editing,setEditing]=useState<string|null>(null);
  useEffect(()=>{const d=ref.current;if(d&&!d.open)d.showModal();},[]);
- useEffect(()=>{let live=true;fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r=>r.json()).then(d=>{if(!live)return;if(d.connections)setList(d.connections);else setError(d.error??'Could not load the connections.');}).catch(()=>live&&setError('Could not load the connections.'));return()=>{live=false;};},[campaignId]);
+ useDeviceKeys();
+ useEffect(()=>{let live=true;fetchConnections<Connection>(campaignId).then(l=>{if(live)setList(l);}).catch(e=>live&&setError(e instanceof Error?e.message:'Could not load the connections.'));return()=>{live=false;};},[campaignId]);
  async function make(){
   setBusy(true);setError('');
   try{const d=await post({campaignId,action:'create',name:name.trim()||'My AI',level});setList(l=>[...(l??[]),d.connection]);setMade({name:d.connection.name,mode:d.connection.mode,url:`${location.origin}/api/mcp/${d.key}`});setName('');}
@@ -51,9 +55,9 @@ export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{
  }
  const open=list?.find(c=>c.id===editing);
  async function revoke(c:Connection){
-  if(!await confirmDialog(c.api?{title:`Remove ${c.name}?`,message:'Its saved API key is deleted from RPG Tools. Nothing changes in your account with the provider.',confirm:'Remove',danger:true}:{title:`Revoke ${c.name}?`,message:'That AI app loses access to this campaign right away. You can make a new connection later.',confirm:'Revoke',danger:true}))return;
+  if(!await confirmDialog(c.api?{title:`Remove ${c.name}?`,message:'Its key is forgotten on this device, and other devices can’t use it here any more. Nothing changes in your account with the provider.',confirm:'Remove',danger:true}:{title:`Revoke ${c.name}?`,message:'That AI app loses access to this campaign right away. You can make a new connection later.',confirm:'Revoke',danger:true}))return;
   setError('');
-  try{await post({campaignId,action:'revoke',id:c.id});setList(l=>l?.filter(x=>x.id!==c.id)??null);}catch(e){setError((e as Error).message);}
+  try{await post({campaignId,action:'revoke',id:c.id});if(c.api)forgetDeviceKey(c.id);setList(l=>l?.filter(x=>x.id!==c.id)??null);}catch(e){setError((e as Error).message);}
  }
  return <dialog ref={ref} className="ai-dialog" aria-labelledby="ai-title" onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===ref.current)onClose();}}>
   {made?<Ready made={made} campaignName={campaignName} onDone={()=>setMade(null)} onClose={onClose}/>:open?<MayDo c={open} campaignId={campaignId} campaignName={campaignName} now={now} error={error} onChange={how=>void change(open,how)} onSaved={c=>setList(l=>l?.map(x=>x.id===c.id?c:x)??null)} onBack={()=>setEditing(null)} onClose={onClose}/>:<>
@@ -83,7 +87,7 @@ export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{
    {list===null?<p className="ai-empty">{error?'':'Loading…'}</p>:!list.length?<p className="ai-empty">No AI apps yet.</p>:
     <ul className="ai-list">{list.map(c=><li key={c.id}>
      <span className={`ai-dot ${c.lastUsedAt&&now-Date.parse(c.lastUsedAt)<36e5?'live':''}`} aria-hidden/>
-     <span className="ai-who"><strong>{c.name}</strong>{c.api?<><span className="ai-badge ai-key-badge">{providerOf(c.api.provider).name} key</span><small>{c.api.model} · key ending …{c.api.last4} · {usage(c.api)}</small></>:<> · {ago(c.lastUsedAt,now)}</>}</span>
+     <span className="ai-who"><strong>{c.name}</strong>{c.api?<><span className="ai-badge ai-key-badge">{providerOf(c.api.provider).name} key</span><small>{c.api.model} · key ending …{c.api.last4} · {usage(c.api)}</small><small className={deviceKey(c.id)?'ai-device on':'ai-device'}>{deviceKey(c.id)?<><Lock size={11}/> Key on this device</>:<>No key on this device. <button type="button" className="inline-link" onClick={()=>{setError('');setEditing(c.id);}}>Paste it</button></>}</small></>:<> · {ago(c.lastUsedAt,now)}</>}</span>
      <span className="ai-badge">{modeNames[c.mode]}</span>
      <button type="button" className="button small" onClick={()=>{setError('');setEditing(c.id);}}>Edit</button>
      <button type="button" className="button small ai-revoke" onClick={()=>void revoke(c)}>{c.api?'Remove':'Revoke'}</button>
@@ -163,15 +167,15 @@ function ApiForm({campaignId,full,onMade}:{campaignId:string;full:boolean;onMade
    setBusy('check');const chosen=models?model:await check();
    if(!chosen){setError('Choose a model.');return;}
    setBusy('save');
-   const d=await post({campaignId,action:'createApi',provider,apiKey:key,model:chosen,limit:limit.trim()||null,level:mode,name:name.trim()||undefined,...(provider==='other'?{baseUrl}:{})});
-   onMade(d.connection);
+   const d=await post({campaignId,action:'createApi',provider,last4:key.trim().slice(-4),model:chosen,limit:limit.trim()||null,level:mode,name:name.trim()||undefined,...(provider==='other'?{baseUrl}:{})});
+   saveDeviceKey(d.connection.id,key);onMade(d.connection);
   }catch(e){setError((e as Error).message);}finally{setBusy('');}
  }
  return <form className="ai-api" onSubmit={e=>{e.preventDefault();void save();}}>
   <h3 className="ai-label" id="ai-provider">Provider</h3>
   <div className="ai-providers" role="radiogroup" aria-labelledby="ai-provider">{providers.map(x=><button key={x.id} type="button" role="radio" aria-checked={provider===x.id} className={provider===x.id?'on':''} title={x.sub} onClick={()=>pick(x.id)}>{x.name}{x.name!==x.sub&&<small>{x.sub}</small>}</button>)}</div>
   {provider==='other'&&<label className="ai-field"><span className="ai-label">Address of the API</span><input value={baseUrl} placeholder="https://example.com/v1" inputMode="url" onChange={e=>{setBaseUrl(e.target.value);setModels(null);}}/><small>Any service that speaks the OpenAI-style chat API, on a public https address.</small></label>}
-  <label className="ai-field"><span className="ai-label">{p.name} API key</span><input type="password" value={key} autoComplete="off" spellCheck={false} placeholder="Paste the key" onChange={e=>{setKey(e.target.value);setModels(null);}}/><small>Make one at {p.keyFrom}. It&apos;s stored encrypted, used only by RPG Tools&apos; server, and never shown again.</small></label>
+  <label className="ai-field"><span className="ai-label">{p.name} API key</span><input type="password" value={key} autoComplete="off" spellCheck={false} placeholder="Paste the key" onChange={e=>{setKey(e.target.value);setModels(null);}}/><small>Make one at {p.keyFrom}. It&apos;s kept only in this browser: RPG Tools never saves it. It goes along with each AI request you make here and is forgotten after. On another device, paste it again.</small></label>
   <div className="ai-field-row">
    <label className="ai-field"><span className="ai-label">Model</span><div className="ai-inline"><input list="ai-models" value={model} placeholder={models?'Pick or type a model':'Check the key to list models'} onChange={e=>setModel(e.target.value)}/><button type="button" className="button" disabled={!key.trim()||!!busy} onClick={()=>{setError('');setBusy('check');check().catch(e=>setError((e as Error).message)).finally(()=>setBusy(''));}}>{busy==='check'?'Checking…':models?'Reload':'Check key'}</button></div>{models&&modelList('ai-models',models)}<small>{models?`${models.length} models from ${p.name}. Models that can't use tools can only answer questions.`:'Listed from the provider once the key checks out.'}</small></label>
    <label className="ai-field ai-limit"><span className="ai-label">Monthly limit</span><input value={limit} inputMode="numeric" placeholder="No limit" onChange={e=>setLimit(e.target.value)}/><small>Tokens. It stops and tells you when it&apos;s reached.</small></label>
@@ -184,20 +188,33 @@ function ApiForm({campaignId,full,onMade}:{campaignId:string;full:boolean;onMade
  </form>;
 }
 
-/** In "What it may do" for an API connection: change the model or the limit, or replace the key. */
+/**
+ * In "What it may do" for an API connection: change the model or the limit, and the key on this device: paste it (a key
+ * pasted on another device isn't here), replace it, or forget it here. The key never goes to RPG Tools to keep.
+ */
 function ApiSettings({c,api,campaignId,onSaved}:{c:Connection;api:Api;campaignId:string;onSaved:(c:Connection)=>void}){
+ useDeviceKeys();
+ const here=deviceKey(c.id);
  const [model,setModel]=useState(api.model),[limit,setLimit]=useState(api.limit?api.limit.toLocaleString('en-US'):''),[key,setKey]=useState(''),[models,setModels]=useState<string[]|null>(null),[busy,setBusy]=useState(''),[note,setNote]=useState('');
  const p=providerOf(api.provider),dirty=model!==api.model||(limit.trim()?Number(limit.replace(/[,\s_]/g,'')):null)!==api.limit||!!key.trim();
+ const keyFor=()=>key.trim()||here||'';
  async function run(what:string,f:()=>Promise<void>){setBusy(what);setNote('');try{await f();}catch(e){setNote((e as Error).message);}finally{setBusy('');}}
  return <section className="ai-api-settings" aria-label="Model and key">
   <h3 className="ai-label">{p.name} · key ending …{api.last4} · {usage(api)}</h3>
+  <p className={here?'ai-device on':'ai-device'}>{here?<><Lock size={12}/> The key is on this device. RPG Tools never saves it.</>:<>This device doesn&apos;t have the key yet. Paste it below to use {c.name} here. It stays in this browser.</>}</p>
   <div className="ai-field-row">
-   <label className="ai-field"><span className="ai-label">Model</span><div className="ai-inline"><input list="ai-models-edit" value={model} onChange={e=>setModel(e.target.value)}/><button type="button" className="button" disabled={!!busy} onClick={()=>void run('models',async()=>{const d=await post({campaignId,action:'models',id:c.id,...(key.trim()?{provider:api.provider,apiKey:key,...(api.baseUrl?{baseUrl:api.baseUrl}:{})}:{})});setModels(d.models);})}>{busy==='models'?'Loading…':'List models'}</button></div>{models&&modelList('ai-models-edit',models)}</label>
+   <label className="ai-field"><span className="ai-label">Model</span><div className="ai-inline"><input list="ai-models-edit" value={model} onChange={e=>setModel(e.target.value)}/><button type="button" className="button" disabled={!!busy||!keyFor()} title={keyFor()?undefined:'Paste the key first'} onClick={()=>void run('models',async()=>{const d=await post({campaignId,action:'models',id:c.id,provider:api.provider,apiKey:keyFor(),...(api.baseUrl?{baseUrl:api.baseUrl}:{})});setModels(d.models);})}>{busy==='models'?'Loading…':'List models'}</button></div>{models&&modelList('ai-models-edit',models)}</label>
    <label className="ai-field ai-limit"><span className="ai-label">Monthly limit</span><input value={limit} inputMode="numeric" placeholder="No limit" onChange={e=>setLimit(e.target.value)}/></label>
   </div>
-  <label className="ai-field"><span className="ai-label">Replace key</span><input type="password" value={key} autoComplete="off" spellCheck={false} placeholder="Paste a new key to replace the saved one" onChange={e=>setKey(e.target.value)}/></label>
+  <label className="ai-field"><span className="ai-label">{here?'Replace the key on this device':'Key for this device'}</span><input type="password" value={key} autoComplete="off" spellCheck={false} placeholder={here?'Paste a new key':`Paste the ${p.name} key ending …${api.last4}`} onChange={e=>setKey(e.target.value)}/></label>
   <div className="ai-inline ai-api-save"><button type="button" className="button primary" disabled={!dirty||!!busy} onClick={()=>void run('save',async()=>{
-   if(key.trim())await post({campaignId,action:'models',provider:api.provider,apiKey:key,...(api.baseUrl?{baseUrl:api.baseUrl}:{})});
-   const d=await post({campaignId,action:'updateApi',id:c.id,model,limit:limit.trim()||null,...(key.trim()?{apiKey:key}:{})});onSaved(d.connection);setKey('');setNote('Saved.');})}>{busy==='save'?'Saving…':'Save'}</button>{note&&<span role="status">{note}</span>}</div>
+   const fresh=key.trim();
+   // A pasted key is checked with the provider (it passes through, unsaved), then kept in this browser.
+   if(fresh)await post({campaignId,action:'models',provider:api.provider,apiKey:fresh,...(api.baseUrl?{baseUrl:api.baseUrl}:{})});
+   const d=await post({campaignId,action:'updateApi',id:c.id,model,limit:limit.trim()||null,...(fresh&&fresh.slice(-4)!==api.last4?{last4:fresh.slice(-4)}:{})});
+   if(fresh)saveDeviceKey(c.id,fresh);
+   onSaved(d.connection);setKey('');setNote(fresh?'Saved. The key is on this device.':'Saved.');})}>{busy==='save'?'Saving…':'Save'}</button>
+   {here&&<button type="button" className="button" disabled={!!busy} onClick={()=>{forgetDeviceKey(c.id);setNote('Forgotten on this device.');}}>Forget the key on this device</button>}
+   {note&&<span role="status">{note}</span>}</div>
  </section>;
 }

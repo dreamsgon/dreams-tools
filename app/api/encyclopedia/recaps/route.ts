@@ -10,6 +10,8 @@ export const dynamic='force-dynamic';
 // Writing a recap with the GM's own API key reads the whole transcript and waits on the AI twice.
 export const maxDuration=300;
 const id=z.string().min(1).max(120).regex(/^[A-Za-z0-9_-]+$/);
+// The GM's key from their device, for this request only: RPG Tools never saves it.
+const apiKey=z.string().max(500);
 const message=(e:unknown,fallback:string)=>e instanceof Error&&!(e instanceof z.ZodError)?e.message:fallback;
 // A session recap's transcript (kept outside the workspace), reading one from a public link, writing or checking it with the GM's API key, and its Discord post. The GM only.
 export async function GET(request:Request){
@@ -24,11 +26,11 @@ const action=z.discriminatedUnion('action',[
  z.object({action:z.literal('transcript'),entryId:id,text:z.string().max(TRANSCRIPT_LIMIT)}),
  z.object({action:z.literal('discord'),entryId:id}),
  z.object({action:z.literal('link'),link:z.string().max(1000)}),
- z.object({action:z.literal('write'),entryId:id,campaignId:id,connectionId:id}),
- z.object({action:z.literal('again'),entryId:id,campaignId:id,connectionId:id,note:z.string().max(500),styleId:id.optional()}),
- z.object({action:z.literal('sample'),campaignId:id,connectionId:id,kind:z.enum(['recap','story']),style:z.unknown(),entryId:id.optional()}),
- z.object({action:z.literal('check'),entryId:id,campaignId:id,connectionId:id}),
- z.object({action:z.literal('story'),campaignId:id,connectionId:id,note:z.string().max(500).optional(),keep:z.boolean().optional(),before:z.string().max(6000).optional(),styleId:id.optional(),length:z.enum(['short','standard','detailed']).optional()}),
+ z.object({action:z.literal('write'),entryId:id,campaignId:id,connectionId:id,apiKey}),
+ z.object({action:z.literal('again'),entryId:id,campaignId:id,connectionId:id,apiKey,note:z.string().max(500),styleId:id.optional()}),
+ z.object({action:z.literal('sample'),campaignId:id,connectionId:id,apiKey,kind:z.enum(['recap','story']),style:z.unknown(),entryId:id.optional()}),
+ z.object({action:z.literal('check'),entryId:id,campaignId:id,connectionId:id,apiKey}),
+ z.object({action:z.literal('story'),campaignId:id,connectionId:id,apiKey,note:z.string().max(500).optional(),keep:z.boolean().optional(),before:z.string().max(6000).optional(),styleId:id.optional(),length:z.enum(['short','standard','detailed']).optional()}),
 ]);
 export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
@@ -41,11 +43,12 @@ export async function POST(request:Request){
   }
   // A public Google Doc, Drive file, GitHub file or Notion page, read for the New session recap dialog.
   if(input.action==='link')return json(await readLink(input.link));
-  if(input.action==='write')return json(await writeRecap(bucket,owner,input.campaignId,input.connectionId,input.entryId));
-  if(input.action==='again')return json(await writeRecapAgain(bucket,owner,input.campaignId,input.connectionId,input.entryId,input.note,fetch,input.styleId));
-  if(input.action==='sample')return json(await writeSample(bucket,owner,input.campaignId,input.connectionId,{kind:input.kind,style:input.style,entryId:input.entryId}));
-  if(input.action==='check')return json(await checkRecap(bucket,owner,input.campaignId,input.connectionId,input.entryId));
-  if(input.action==='story')return json(await writeStory(bucket,owner,input.campaignId,input.connectionId,fetch,{note:input.note,keep:input.keep,before:input.before,styleId:input.styleId,length:input.length}));
+  const use='connectionId' in input?{connectionId:input.connectionId,apiKey:input.apiKey}:null;
+  if(input.action==='write')return json(await writeRecap(bucket,owner,input.campaignId,use!,input.entryId));
+  if(input.action==='again')return json(await writeRecapAgain(bucket,owner,input.campaignId,use!,input.entryId,input.note,fetch,input.styleId));
+  if(input.action==='sample')return json(await writeSample(bucket,owner,input.campaignId,use!,{kind:input.kind,style:input.style,entryId:input.entryId}));
+  if(input.action==='check')return json(await checkRecap(bucket,owner,input.campaignId,use!,input.entryId));
+  if(input.action==='story')return json(await writeStory(bucket,owner,input.campaignId,use!,fetch,{note:input.note,keep:input.keep,before:input.before,styleId:input.styleId,length:input.length}));
   const {data}=await store.read(owner),page=data.entries.find(e=>e.id===input.entryId);
   if(!page?.recap||!page.campaignId)throw Error('That page has no recap.');
   if(page.recap.status!=='published')throw Error('Publish the recap to players before posting it.');

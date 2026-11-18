@@ -5,7 +5,7 @@ const {demoWorkspace}=await import('../lib/encyclopedia/world-model.ts');
 const {EncyclopediaStore}=await import('../lib/encyclopedia/store.ts');
 const {initialWorkspace,newScene,newToken}=await import('../lib/model.ts');
 const {saveWorkspace}=await import('../lib/workspace-storage.ts');
-const {cleanApi,createApiConnection,grantFor,listConnections,publicConnection,revokeConnection,updateApi,overLimit,addUsage}=await import('../lib/mcp/connections.ts');
+const {claimStoredKeys,cleanApi,createApiConnection,grantFor,listConnections,ownTarget,publicConnection,revokeConnection,targetFor,updateApi,overLimit,addUsage}=await import('../lib/mcp/connections.ts');
 const {readActivity}=await import('../lib/mcp/activity.ts');
 const {cleanBaseUrl,cleanLimit,baseUrlFor,providers}=await import('../lib/ai/providers.ts');
 const {lock,unlock,cleanApiKey,LockedKeyError}=await import('../lib/ai/secret.ts');
@@ -68,19 +68,53 @@ test('the address for Other must be public https, and limits are tokens',()=>{
  assert.ok(providers.some(p=>p.id==='google'&&p.name==='Google AI Studio'));
 });
 
-test('keys are stored locked, shown only by their last four characters, and need the same secret to open',async()=>{
- const locked=lock(KEY);assert.ok(locked.startsWith('v1:'));assert.ok(!locked.includes(KEY));assert.equal(unlock(locked),KEY);
- assert.throws(()=>unlock(locked,{AI_KEY_SECRET:'another'}),LockedKeyError);
+test('API keys are never saved on the server: only their last four characters, and each request brings its key',async()=>{
  assert.throws(()=>cleanApiKey('has spaces in it'));assert.throws(()=>cleanApiKey('short'));
  const {b,connection}=await setup();
  assert.equal(connection.name,'GPT');assert.equal(connection.mode,'helper');assert.equal(connection.api.last4,'abcd');assert.equal(connection.api.limit,2_000_000);
  assert.equal(connection.api.key,undefined);assert.equal(connection.hash,undefined);
- for(const {text} of b.data.values())assert.ok(!text.includes(KEY),'the plain key is never saved');
+ const saved=()=>[...b.data.values()].map(v=>v.text).join('\n');
+ assert.ok(!saved().includes(KEY),'the key is never saved');
+ const list=()=>JSON.parse([...b.data].find(([k])=>k.includes('ai-connections/'))[1].text).connections;
+ assert.equal(list()[0].api.key,undefined,'not even locked');
+ // The browser sends only the last four characters when it makes or re-keys a connection.
+ assert.equal(cleanApi({provider:'openai',model:'m',last4:'wxyz'}).last4,'wxyz');assert.equal(cleanApi({provider:'openai',model:'m',last4:'wxyz'}).key,undefined);
+ assert.throws(()=>cleanApi({provider:'openai',model:'m'}),/Paste the API key/);assert.throws(()=>cleanApi({provider:'openai',model:'m',last4:'12345'}));
  assert.equal(await grantFor(b,'rpg_'+'0'.repeat(64)),null);
- const swapped=await updateApi(b,OWNER,CAMPAIGN,connection.id,{model:'gpt-other',limit:null,apiKey:'sk-new-key-0000wxyz'});
+ const swapped=await updateApi(b,OWNER,CAMPAIGN,connection.id,{model:'gpt-other',limit:null,last4:'wxyz'});
  assert.equal(swapped.api.model,'gpt-other');assert.equal(swapped.api.limit,null);assert.equal(swapped.api.last4,'wxyz');
- assert.equal(unlock((await listConnections(b,OWNER,CAMPAIGN))[0].api.key),'sk-new-key-0000wxyz');
+ assert.equal((await listConnections(b,OWNER,CAMPAIGN))[0].api.key,undefined);
+ // A request without this device's key says where to paste it; with it, the key is used and still not saved.
+ const c=(await listConnections(b,OWNER,CAMPAIGN))[0];
+ assert.throws(()=>targetFor(c,''),/This device doesn't have the key for GPT/);
+ assert.deepEqual(targetFor(c,KEY),{provider:'openai',baseUrl:undefined,key:KEY,model:'gpt-other'});
+ await chatTurn(b,OWNER,CAMPAIGN,{connectionId:c.id,apiKey:KEY},[{role:'user',text:'Hi'}],undefined,fakeFetch([oaSay('Hello.')]));
+ assert.ok(!saved().includes(KEY),'still never saved after a request');
+ await assert.rejects(chatTurn(b,OWNER,CAMPAIGN,{connectionId:c.id,apiKey:''},[{role:'user',text:'Hi'}],undefined,fakeFetch([])),/doesn't have the key/);
  assert.equal(await revokeConnection(b,OWNER,CAMPAIGN,connection.id),true);assert.equal((await listConnections(b,OWNER,CAMPAIGN)).length,0);
+});
+
+test('a key an older version saved is handed to the GM once and taken off the server',async()=>{
+ const {b,connection}=await setup();
+ const path=[...b.data.keys()].find(k=>k.includes('ai-connections/'));
+ // As older versions saved it: locked with the server's secret.
+ const old=JSON.parse(b.data.get(path).text);old.connections[0].api.key=lock(KEY);b.data.set(path,{text:JSON.stringify(old),etag:'old'});
+ const broken=await createApiConnection(b,OWNER,CAMPAIGN,'Broken','helper',cleanApi({provider:'openai',model:'m',last4:'zzzz'}));
+ const again=JSON.parse(b.data.get(path).text);again.connections.find(x=>x.id===broken.id).api.key='v1:not-a-real-lock';
+ assert.equal(again.connections.find(x=>x.id===connection.id).api.key,undefined,'any write drops a saved key');
+ again.connections.find(x=>x.id===connection.id).api.key=lock(KEY);b.data.set(path,{text:JSON.stringify(again),etag:'old2'});
+ assert.deepEqual(await claimStoredKeys(b,OWNER,CAMPAIGN),[{id:connection.id,key:KEY}],'a key that can no longer be opened is dropped');
+ assert.ok(!b.data.get(path).text.includes('"key"'),'no key is left on the server');
+ assert.deepEqual(await claimStoredKeys(b,OWNER,CAMPAIGN),[],'handed back only once');
+ // The lock itself still works for the one hand-back.
+ assert.throws(()=>unlock(lock(KEY),{AI_KEY_SECRET:'another'}),LockedKeyError);
+});
+
+test('your own AI for one request is checked and named after its provider',()=>{
+ assert.deepEqual(ownTarget({provider:'anthropic',model:'claude-opus-5-5',apiKey:KEY}),{provider:'anthropic',key:KEY,model:'claude-opus-5-5',name:'Claude'});
+ assert.equal(ownTarget({provider:'other',baseUrl:'https://api.example.com/v1/',model:'m',apiKey:KEY}).baseUrl,'https://api.example.com/v1');
+ assert.throws(()=>ownTarget({provider:'nope',model:'m',apiKey:KEY}),/provider/);assert.throws(()=>ownTarget({provider:'other',baseUrl:'https://10.0.0.1',model:'m',apiKey:KEY}));
+ assert.throws(()=>ownTarget({provider:'openai',model:'m',apiKey:'short'}));
 });
 
 test('model lists come from the provider, and a refused key says so without echoing it',async()=>{
@@ -126,7 +160,7 @@ test('in the AI panel, a helper suggestion waits for the GM, tokens are counted,
  assert.deepEqual(cleanHistory([{role:'assistant',text:'Hello'},{role:'user',text:'Hi'}]),[{role:'user',text:'Hi'}]);
  const {b,connection}=await setup('openai','helper');
  const f=fakeFetch([oaCall('set_condition',{token:'Bram',condition:'Restrained',on:true}),oaSay('Bram is grabbed. Approve Restrained below.')]);
- const r=await chatTurn(b,OWNER,CAMPAIGN,connection.id,[{role:'user',text:'The hag grabs Bram'}],'Greyfen marsh',f);
+ const r=await chatTurn(b,OWNER,CAMPAIGN,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},[{role:'user',text:'The hag grabs Bram'}],'Greyfen marsh',f);
  assert.equal(r.steps[0].ok,true);assert.ok(r.steps[0].waiting,'set to Ask me, so it waits');assert.match(r.steps[0].summary,/Restrained/);
  assert.match(f.sent[0].body.messages[0].content,/Greyfen marsh/);
  assert.ok(!f.sent[0].body.tools.some(t=>t.function.name==='move_token'),'Off tools are not offered');
@@ -134,6 +168,6 @@ test('in the AI panel, a helper suggestion waits for the GM, tokens are counted,
  assert.equal(r.api.used,150);
  await addUsage(b,OWNER,CAMPAIGN,connection.id,2_000_000);
  const [c]=await listConnections(b,OWNER,CAMPAIGN);assert.equal(overLimit(c.api),true);assert.equal(publicConnection(c).api.used,2_000_150);
- await assert.rejects(chatTurn(b,OWNER,CAMPAIGN,connection.id,[{role:'user',text:'More'}],undefined,fakeFetch([])),/used this month's 2,000,000 tokens/);
+ await assert.rejects(chatTurn(b,OWNER,CAMPAIGN,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},[{role:'user',text:'More'}],undefined,fakeFetch([])),/used this month's 2,000,000 tokens/);
  const next=await addUsage(b,OWNER,CAMPAIGN,connection.id,1,new Date('2099-01-01T00:00:00Z'));assert.equal(next.api.used,1,'a new month starts at zero');
 });

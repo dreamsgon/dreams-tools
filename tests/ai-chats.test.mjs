@@ -127,9 +127,9 @@ test('the AI panel saves each turn of a chat with an API key connection',async()
  await new EncyclopediaStore(b).save(OWNER,book,0);
  const connection=await createApiConnection(b,OWNER,CAMPAIGN,undefined,'helper',cleanApi({provider:'openai',model:'gpt-test',apiKey:'sk-test-1234567890abcd',limit:'2,000,000'}));
  const say=text=>async()=>new Response(JSON.stringify({choices:[{message:{content:text},finish_reason:'stop'}],usage:{total_tokens:10}}),{status:200,headers:{'content-type':'application/json'}});
- const r1=await chatTurn(b,OWNER,CAMPAIGN,connection.id,[{role:'user',text:'Name an innkeeper'}],'Greyfen marsh',say('Old Tamsin.'));
+ const r1=await chatTurn(b,OWNER,CAMPAIGN,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},[{role:'user',text:'Name an innkeeper'}],'Greyfen marsh',say('Old Tamsin.'));
  assert.equal(r1.chat.title,'Name an innkeeper');assert.equal(r1.chat.count,2);assert.equal(r1.chat.connectionName,connection.name);
- const r2=await chatTurn(b,OWNER,CAMPAIGN,connection.id,[{role:'user',text:'Name an innkeeper'},{role:'assistant',text:'Old Tamsin.'},{role:'user',text:'And her inn?'}],'Greyfen marsh',say('The Drowned Lamp.'),r1.chat.id);
+ const r2=await chatTurn(b,OWNER,CAMPAIGN,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},[{role:'user',text:'Name an innkeeper'},{role:'assistant',text:'Old Tamsin.'},{role:'user',text:'And her inn?'}],'Greyfen marsh',say('The Drowned Lamp.'),r1.chat.id);
  assert.equal(r2.chat.id,r1.chat.id);assert.equal(r2.chat.count,4);
  const saved=await readChat(b,OWNER,CAMPAIGN,r1.chat.id);
  assert.deepEqual(saved.turns.map(t=>t.text),['Name an innkeeper','Old Tamsin.','And her inn?','The Drowned Lamp.']);
@@ -137,7 +137,7 @@ test('the AI panel saves each turn of a chat with an API key connection',async()
  let sent;
  const watch=async(url,init)=>{sent=JSON.parse(init.body);return say('Noted.')();};
  const long=Array.from({length:59},(_,i)=>({role:i%2?'assistant':'user',text:`m${i}`}));
- await chatTurn(b,OWNER,CAMPAIGN,connection.id,cleanHistory(long),undefined,watch,r1.chat.id);
+ await chatTurn(b,OWNER,CAMPAIGN,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},cleanHistory(long),undefined,watch,r1.chat.id);
  const said=sent.messages.filter(m=>m.role!=='system').map(m=>m.content);
  assert.ok(said.length<=CONTEXT_TURNS);
  assert.equal(said.at(-1),'m58');

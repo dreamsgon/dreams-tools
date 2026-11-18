@@ -2,6 +2,8 @@
 import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {avatarSrc} from "@/lib/avatar";
+import {DeviceAi} from "./device-ai";
+import {forgetDeviceAi} from "@/lib/ai/device-keys";
 export type AccountUser={name:string;username:string;email:string;avatar:string;pendingEmail:string};
 type Status={text:string;ok:boolean}|null;
 /** Shows "dr•••••@gmail.com": enough to recognize, not enough to read over a shoulder or on a stream. */
@@ -54,7 +56,7 @@ export default function AccountSettings({user}:{user:AccountUser}){
   <p className="account-lead">Your profile is what players and other GMs see. Sign-in details stay private to you.</p>
   <div className="account-layout">
    <nav className="account-side" aria-label="Account sections">
-    <a href="#profile">Profile</a><a href="#email">Email</a><a href="#password">Password</a><a href="#devices">Signed-in devices</a>
+    <a href="#profile">Profile</a><a href="#email">Email</a><a href="#password">Password</a><a href="#device-ai">AI on this device</a><a href="#devices">Signed-in devices</a>
    </nav>
    <div className="account-sections">
     <section id="profile" className="account-section" aria-labelledby="profile-h">
@@ -113,12 +115,14 @@ export default function AccountSettings({user}:{user:AccountUser}){
      <Note status={status.password??null}/>
     </section>
 
+    <DeviceAi/>
+
     <section id="devices" className="account-section" aria-labelledby="devices-h">
      <h2 id="devices-h">Signed-in devices</h2>
-     <p className="account-hint">Use this if you signed in on a shared or lost device. Sign out everywhere ends every session, including this one.</p>
+     <p className="account-hint">Use this if you signed in on a shared or lost device. Sign out everywhere ends every session, including this one. Signing out also forgets the AI keys on this device.</p>
      <div className="account-row">
-      <button type="button" disabled={disabled} onClick={()=>void run("devices",async()=>{await post({action:"logout"});location.assign("/account");return "";})}>Sign out</button>
-      <button type="button" className="account-danger" disabled={disabled} onClick={()=>void run("devices",async()=>{await post({action:"logout-all"});location.assign("/account");return "";})}>Sign out everywhere</button>
+      <button type="button" disabled={disabled} onClick={()=>void run("devices",async()=>{forgetDeviceAi();await post({action:"logout"});location.assign("/account");return "";})}>Sign out</button>
+      <button type="button" className="account-danger" disabled={disabled} onClick={()=>void run("devices",async()=>{forgetDeviceAi();await post({action:"logout-all"});location.assign("/account");return "";})}>Sign out everywhere</button>
      </div>
      <Note status={status.devices?.ok===false?status.devices:null}/>
     </section>

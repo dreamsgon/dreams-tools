@@ -8,17 +8,22 @@ import { encyclopediaPrefix, hashToken } from "../encyclopedia/store.ts";
 import { levels, type Level } from "./tools.ts";
 import { cleanPerms, fillPerms, fromLevel, isMode, levelFor, modeOf, presets, type Perms } from "./permissions.ts";
 import { cleanBaseUrl, cleanLimit, cleanModel, isProvider, providerOf, thisMonth, type ProviderId } from "../ai/providers.ts";
-import { cleanApiKey, lock } from "../ai/secret.ts";
+import { cleanApiKey, unlock } from "../ai/secret.ts";
 
 /**
  * A connection made with the GM's own AI API key: RPG Tools calls the AI itself, from the AI panel.
- * `key` is the API key locked with lib/ai/secret.ts; `used` counts tokens in `month` (YYYY-MM).
+ * The key itself is never saved here: it lives only in the browsers the GM pasted it into (lib/ai/device-keys.ts) and
+ * comes with each request that uses it. `last4` is shown so the GM can tell keys apart; `used` counts tokens in `month`
+ * (YYYY-MM). `key` is only in connections saved before keys moved to devices: the GM's next visit takes it out
+ * (claimStoredKeys), and no AI request ever reads it.
  */
-export type ApiSettings = { provider: ProviderId; baseUrl?: string; model: string; key: string; last4: string; limit: number | null; month: string; used: number };
+export type ApiSettings = { provider: ProviderId; baseUrl?: string; model: string; key?: string; last4: string; limit: number | null; month: string; used: number };
 /** `perms` is what the GM chose action by action; older connections only have `level`. An API connection has no rpg_ key, so `hash` is empty. */
 export type Connection = { id: string; name: string; level: Level; perms?: Perms; hash: string; createdAt: string; lastUsedAt?: string; api?: ApiSettings };
 export type PublicApi = Omit<ApiSettings, "key" | "month">;
 export type PublicConnection = Omit<Connection, "hash" | "api"> & { perms: Perms; mode: ReturnType<typeof modeOf>; api?: PublicApi };
+/** One request with an API-key connection: which one, and its key from the asking browser (used for the request, never saved). */
+export type KeyUse = { connectionId: string; apiKey: string };
 export type KeyGrant = { owner: string; campaignId: string; connectionId: string | null; level: Level; perms?: Perms; legacy?: "encyclopedia" | "maptable" };
 
 export const permsOf = (c: Pick<Connection, "level" | "perms">): Perms => c.perms ? fillPerms(c.perms) : fromLevel(c.level);
@@ -51,8 +56,49 @@ export async function listConnections(bucket: S3Bucket, owner: string, campaignI
   const saved = await object.json<{ connections?: Connection[] }>();
   return Array.isArray(saved.connections) ? saved.connections.filter(c => c && typeof c.id === "string" && isLevel(c.level)) : [];
 }
+/** Every write leaves out any saved API key, so a key saved before keys moved to devices goes with the first change. */
+const withoutKey = (c: Connection): Connection => { if (!c.api?.key) return c; const { key: _gone, ...api } = c.api; return { ...c, api }; };
 async function writeConnections(bucket: S3Bucket, owner: string, campaignId: string, connections: Connection[]) {
-  await bucket.put(listPath(owner, campaignId), JSON.stringify({ connections }), { httpMetadata: { contentType: "application/json" } });
+  await bucket.put(listPath(owner, campaignId), JSON.stringify({ connections: connections.map(withoutKey) }), { httpMetadata: { contentType: "application/json" } });
+}
+
+/**
+ * Takes out the API keys that older versions saved on the server, and hands them to the GM's browser to keep there.
+ * Keys that can't be opened any more are dropped too; the GM pastes those again. After this the campaign's
+ * connections hold no keys at all.
+ */
+export async function claimStoredKeys(bucket: S3Bucket, owner: string, campaignId: string): Promise<{ id: string; key: string }[]> {
+  const list = await listConnections(bucket, owner, campaignId);
+  if (!list.some(c => c.api?.key)) return [];
+  const moved = list.flatMap(c => {
+    if (!c.api?.key) return [];
+    try { return [{ id: c.id, key: unlock(c.api.key) }]; } catch { return []; }
+  });
+  await writeConnections(bucket, owner, campaignId, list);
+  return moved;
+}
+
+/** The last four characters of a key, as the browser sends them (the key itself stays on the device). */
+export function cleanLast4(v: unknown) {
+  if (typeof v !== "string" || !/^[\x21-\x7e]{1,4}$/.test(v)) throw Error("Paste the API key.");
+  return v;
+}
+
+/**
+ * Where one request goes: the connection's provider, address and model, with the key the asking browser sent. The key is
+ * used for this request only and never saved.
+ */
+export function targetFor(c: Connection, apiKey: unknown) {
+  if (!c.api) throw Error("That AI connection was removed.");
+  if (typeof apiKey !== "string" || !apiKey) throw Error(`This device doesn't have the key for ${c.name}. Paste it in Connect an AI › Edit ${c.name}, and it stays on this device.`);
+  return { provider: c.api.provider, baseUrl: c.api.baseUrl, key: cleanApiKey(apiKey), model: c.api.model };
+}
+
+/** Someone's own AI, kept on their device and sent with one request (a player's forum help): checked, used once, never saved. */
+export function ownTarget(v: unknown) {
+  const o = v && typeof v === "object" ? v as Record<string, unknown> : {};
+  if (!isProvider(o.provider)) throw Error("Choose your AI's provider again in Account settings › AI on this device.");
+  return { provider: o.provider, ...(o.provider === "other" ? { baseUrl: cleanBaseUrl(o.baseUrl) } : {}), key: cleanApiKey(o.apiKey), model: cleanModel(o.model), name: providerOf(o.provider).ai };
 }
 
 export async function createConnection(bucket: S3Bucket, owner: string, campaignId: string, name: unknown, how: unknown, now = new Date()) {
@@ -66,13 +112,16 @@ export async function createConnection(bucket: S3Bucket, owner: string, campaign
   return { key: `rpg_${token}`, connection: publicConnection(connection) };
 }
 
-/** Checks what the GM typed for an API connection. The key is checked against the provider by the caller first. */
-export function cleanApi(input: { provider: unknown; baseUrl?: unknown; model: unknown; limit?: unknown; apiKey: unknown }, now = new Date()): ApiSettings {
+/**
+ * Checks what the GM typed for an API connection. The key stays in the GM's browser: only its last four characters
+ * come here (or, from tests and older callers, the key, of which only the last four are kept).
+ */
+export function cleanApi(input: { provider: unknown; baseUrl?: unknown; model: unknown; limit?: unknown; last4?: unknown; apiKey?: unknown }, now = new Date()): ApiSettings {
   if (!isProvider(input.provider)) throw Error("Choose a provider.");
-  const apiKey = cleanApiKey(input.apiKey);
+  const last4 = input.apiKey !== undefined ? cleanApiKey(input.apiKey).slice(-4) : cleanLast4(input.last4);
   return {
     provider: input.provider, ...(input.provider === "other" ? { baseUrl: cleanBaseUrl(input.baseUrl) } : {}),
-    model: cleanModel(input.model), key: lock(apiKey), last4: apiKey.slice(-4), limit: cleanLimit(input.limit), month: thisMonth(now), used: 0,
+    model: cleanModel(input.model), last4, limit: cleanLimit(input.limit), month: thisMonth(now), used: 0,
   };
 }
 
@@ -86,15 +135,16 @@ export async function createApiConnection(bucket: S3Bucket, owner: string, campa
   return publicConnection(connection);
 }
 
-/** Changes the model or monthly limit, or replaces the key, of an API connection. */
-export async function updateApi(bucket: S3Bucket, owner: string, campaignId: string, id: unknown, changes: { model?: unknown; limit?: unknown; apiKey?: unknown; baseUrl?: unknown }) {
+/** Changes the model or monthly limit of an API connection, or notes a new key's last four characters (the key stays on the device). */
+export async function updateApi(bucket: S3Bucket, owner: string, campaignId: string, id: unknown, changes: { model?: unknown; limit?: unknown; apiKey?: unknown; last4?: unknown; baseUrl?: unknown }) {
   const list = await listConnections(bucket, owner, campaignId), c = list.find(x => x.id === id);
   if (!c?.api) throw Error("That connection was already removed.");
   const api = { ...c.api };
   if (changes.model !== undefined) api.model = cleanModel(changes.model);
   if (changes.limit !== undefined) api.limit = cleanLimit(changes.limit);
   if (changes.baseUrl !== undefined && api.provider === "other") api.baseUrl = cleanBaseUrl(changes.baseUrl);
-  if (changes.apiKey !== undefined) { const key = cleanApiKey(changes.apiKey); api.key = lock(key); api.last4 = key.slice(-4); }
+  if (changes.apiKey !== undefined) api.last4 = cleanApiKey(changes.apiKey).slice(-4);
+  else if (changes.last4 !== undefined) api.last4 = cleanLast4(changes.last4);
   const next = { ...c, api };
   await writeConnections(bucket, owner, campaignId, list.map(x => x === c ? next : x));
   return publicConnection(next);

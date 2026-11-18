@@ -166,7 +166,7 @@ function AiSettings({ page, k, done }: { page: Settings; k: string; done: Done }
     <select value={v[key]} onChange={e => setV({ ...v, [key]: e.target.value })}>{(['all', 'staff', 'off'] as const).map(u => <option key={u} value={u}>{USE_LABEL[u]}</option>)}</select></label>;
   return <section className="settings-card ai-settings">
     <h2><Sparkles size={15} aria-hidden="true" /> AI</h2>
-    <p className="muted">The forum uses one of this campaign’s API-key connections (Connect an AI, on the campaign’s page in the Encyclopedia). Every request counts toward that connection’s monthly limit. The AI only gets forum text the person asking can read, with characters as players see them, never GM-only pages.</p>
+    <p className="muted">Turn the forum’s AI on with one of this campaign’s API-key connections (Connect an AI, on the campaign’s page in the Encyclopedia). AI keys stay on each person’s own device and RPG Tools never saves them: you use this connection’s key from your device, and its tokens count toward its monthly limit. Everyone else uses their own AI, added under Account settings › AI on this device. The AI only gets forum text the person asking can read, with characters as players see them, never GM-only pages.</p>
     <div className="ai-pick" role="radiogroup" aria-label="Connection the forum uses">
       {list.map(c => <label key={c.id} className={`ai-choice${v.connectionId === c.id ? ' on' : ''}`}><input type="radio" name="ai-conn" checked={v.connectionId === c.id} onChange={() => setV({ ...v, connectionId: c.id })} />
         <span><b>{c.name}</b><small>{c.model} · {c.used.toLocaleString()}{c.limit ? ` of ${c.limit.toLocaleString()}` : ''} tokens this month</small></span></label>)}

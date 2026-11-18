@@ -15,6 +15,7 @@ import {parsePastedDraft,readSystemDraft,systemDraftPrompt,type SystemDraftReque
 import {ToolDialog} from './tool-dialog';
 import {useKeys} from './world-ai-check';
 import {SystemOrbit} from './system-art';
+import {keyFields} from '@/lib/ai/device-keys';
 
 const amountNames={auto:'Auto',none:'None',some:'Some',many:'Many'};
 function Seg<T extends string>({label,values,value,set,names}:{label:string;values:readonly T[];value:T;set:(v:T)=>void;names:(v:T)=>string}){
@@ -35,7 +36,7 @@ export function SystemDialog({name:startName,system,orgs,ai,onApply,onClose}:{na
  const ask=async()=>{
   if(!key||!ai?.campaignId||!draftRequest.setting)return;
   setBusy(true);setError('');
-  const r=await fetch('/api/encyclopedia/tie-writer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId:ai.campaignId,connectionId:key.id,systemDraft:draftRequest})})
+  const r=await fetch('/api/encyclopedia/tie-writer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId:ai.campaignId,...keyFields(key.id),systemDraft:draftRequest})})
    .then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
   setBusy(false);
   if(!r.ok){setError(r.b.error??'Could not ask the AI.');return;}

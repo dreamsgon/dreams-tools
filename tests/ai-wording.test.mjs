@@ -58,7 +58,7 @@ test('the AI panel’s chat with an API key follows the campaign’s chat instru
  const connection=await createApiConnection(b,'gm-1','demo-campaign',undefined,'helper',cleanApi({provider:'openai',model:'gpt-test',apiKey:'sk-test-1234567890abcd',limit:'2,000,000'}));
  let sent;
  const f=async(url,init)=>{sent=JSON.parse(init.body);return new Response(JSON.stringify({choices:[{message:{content:'Sure.'},finish_reason:'stop'}],usage:{total_tokens:10}}),{status:200,headers:{'content-type':'application/json'}});};
- await chatTurn(b,'gm-1','demo-campaign',connection.id,[{role:'user',text:'Name an innkeeper'}],undefined,f);
+ await chatTurn(b,'gm-1','demo-campaign',{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},[{role:'user',text:'Name an innkeeper'}],undefined,f);
  const system=sent.messages[0].content;
  assert.match(system,/Keep replies short and useful at the table: a short list or two\. The GM's own instructions for this campaign: Answer as a co-GM\./);
 });

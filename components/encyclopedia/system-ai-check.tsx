@@ -6,6 +6,7 @@ import { fitWords, pageText, type Fit } from '@/lib/encyclopedia/world-check';
 import { systemCheckPrompt, systemFields, type SystemChange, type SystemCheck, type SystemCheckRequest } from '@/lib/encyclopedia/system-check';
 import { word } from '@/lib/encyclopedia/star-systems';
 import { useKeys } from './world-ai-check';
+import { keyFields } from '@/lib/ai/device-keys';
 
 type Checked = SystemCheck & { by: string; model: string; tokens: number; skipped: number };
 const MAX_PAGES = 8;
@@ -49,7 +50,7 @@ export function SystemAiCheck({ campaignId, campaign, pages, suggested, request,
   const run = async () => {
     if (!chosen || !campaignId) return;
     setBusy(true); setError('');
-    const r = await fetch('/api/encyclopedia/tie-writer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, connectionId: chosen.id, systemCheck: full }) })
+    const r = await fetch('/api/encyclopedia/tie-writer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, ...keyFields(chosen.id), systemCheck: full }) })
       .then(r => r.json().then(b => ({ ok: r.ok, b }))).catch(() => ({ ok: false, b: { error: 'Couldn’t reach RPG Tools. Check your connection and try again.' } }));
     setBusy(false);
     if (!r.ok) { setError(r.b.error ?? 'Could not check the system.'); return; }

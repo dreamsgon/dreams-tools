@@ -4,6 +4,7 @@ import { Check, ClipboardCopy, Sparkles, X } from 'lucide-react';
 import type { Entry } from '@/lib/encyclopedia/world-model';
 import { fitWords, pageText, worldCheckPrompt, worldSettings, type Fit, type WorldChange, type WorldCheck, type WorldCheckRequest } from '@/lib/encyclopedia/world-check';
 import { rainWord, temperatureWords } from '@/lib/encyclopedia/planet-generator';
+import { fetchConnections, keyFields } from '@/lib/ai/device-keys';
 
 type Key = { id: string; name: string; model: string };
 type Checked = WorldCheck & { by: string; model: string; tokens: number; skipped: number };
@@ -27,8 +28,8 @@ export function useKeys(campaignId: string | null) {
   useEffect(() => {
     if (!campaignId) return;
     let live = true;
-    fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r => r.ok ? r.json() : { connections: [] }).then((b: { connections?: { id: string; name: string; api?: { model: string } }[] }) => {
-      if (live) setKeys((b.connections ?? []).flatMap(c => c.api ? [{ id: c.id, name: c.name, model: c.api.model }] : []));
+    fetchConnections<{ id: string; name: string; api?: { model: string } }>(campaignId).then(list => {
+      if (live) setKeys(list.flatMap(c => c.api ? [{ id: c.id, name: c.name, model: c.api.model }] : []));
     }).catch(() => { if (live) setKeys([]); });
     return () => { live = false; };
   }, [campaignId]);
@@ -65,7 +66,7 @@ export function WorldAiCheck({ campaignId, campaign, pages, suggested, request, 
   const run = async () => {
     if (!chosen || !campaignId) return;
     setBusy(true); setError('');
-    const r = await fetch('/api/encyclopedia/tie-writer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, connectionId: chosen.id, check: full }) })
+    const r = await fetch('/api/encyclopedia/tie-writer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId, ...keyFields(chosen.id), check: full }) })
       .then(r => r.json().then(b => ({ ok: r.ok, b }))).catch(() => ({ ok: false, b: { error: 'Couldn’t reach RPG Tools. Check your connection and try again.' } }));
     setBusy(false);
     if (!r.ok) { setError(r.b.error ?? 'Could not check the world.'); return; }
