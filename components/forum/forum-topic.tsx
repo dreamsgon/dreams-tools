@@ -3,13 +3,14 @@
  * A board's topic list; a topic's posts with their 250×400 portraits and hover cards, the GM's narration and the
  * Quick reply; the full reply page (with focus mode and the topic newest first under it) and the edit page.
  */
-import { useEffect, useState } from 'react';
-import { Archive, ArchiveRestore, EyeOff, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { Archive, ArchiveRestore, EyeOff, Swords, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type Place, type TopicPage } from './forum-api';
 import { Composer, type AfterPost } from './forum-compose';
 import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go } from './forum-parts';
 import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-moderate';
+import { CombatPanel, CombatSetup } from './forum-combat';
 
 type Done = (place?: Place) => Promise<void>;
 
@@ -88,7 +89,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
   // In character, a post written as nobody is the GM's narration.
   const narration = !card && topic.kind === 'ic' && !p.as, name = card?.name ?? (narration ? 'Game Master' : p.name);
   const quote = () => onQuote(p.body.split('\n').filter(l => l.trim()).slice(0, 3).map(l => '> ' + l.replace(/^>\s?/, '')).join('\n') + `\n> — ${name}`);
-  const meta = <span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}</span>;
+  const meta = <span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}{p.turn && <span className="tag turn-meta" title={`Written in round ${p.turn.round}, turn ${p.turn.n} of ${p.turn.of}: ${p.turn.name}`}><Swords size={10} aria-hidden="true" />R{p.turn.round} · {p.turn.name}</span>}</span>;
   const actions = <footer className="post-actions">
     {topic.canReply && <button type="button" onClick={quote}><Quote size={13} aria-hidden="true" />Quote</button>}
     {p.canEdit && <button type="button" onClick={() => go({ view: 'edit', id: topic.id, post: p.id })}><Pencil size={13} aria-hidden="true" />Edit</button>}
@@ -96,7 +97,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
   </footer>;
   if (narration) return <article className={`post post-gm${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
     <header className="gm-band"><span className="gm-seal" aria-hidden="true">✦</span><div><h3 className="post-name">Game Master</h3><small>Narration by {p.name}</small></div>{meta}</header>
-    <div className="gm-body"><PostText text={p.body} links={links} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>
+    <div className="gm-body"><PostText text={p.body} links={links} rolls={p.rolls} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>
   </article>;
   return <article className={`post${flip ? ' flip' : ''}${card ? ' post-ic' : ' post-ooc'}${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
     <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3>{meta}</header>
@@ -112,7 +113,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
         </div> : <div className="mini mini-self"><Circle name={p.name} /><small className="mini-player"><b>{p.name}</b><br />{p.posts} {p.posts === 1 ? 'post' : 'posts'}</small></div>}
       </aside>
       <div className="post-main">
-        <div className="post-body"><PostText text={p.body} links={links} /></div>
+        <div className="post-body"><PostText text={p.body} links={links} rolls={p.rolls} /></div>
         {actions}
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
@@ -120,7 +121,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
   </article>;
 }
 
-function ModTools({ frame, page, k, done, go }: { frame: Frame; page: TopicPage; k: string; done: Done; go: Go }) {
+function ModTools({ frame, page, k, done, go, fight }: { frame: Frame; page: TopicPage; k: string; done: Done; go: Go; fight?: () => void }) {
   const t = page.topic, r = frame.you.rights, [error, setError] = useState(''), [renaming, setRenaming] = useState(false), [title, setTitle] = useState(t.title);
   const call = async (body: Record<string, unknown>) => { setError(''); try { await forumCall({ campaign: k, topicId: t.id, ...body }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not change the topic.'); } };
   const sameKind = frame.boards.filter(b => b.kind === t.kind);
@@ -138,6 +139,7 @@ function ModTools({ frame, page, k, done, go }: { frame: Frame; page: TopicPage;
       {!t.archived && <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', locked: !t.locked })}><Lock size={13} aria-hidden="true" />{t.locked ? 'Unlock' : 'Lock'}</button>}
       <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', archived: !t.archived })}>{t.archived ? <><ArchiveRestore size={13} aria-hidden="true" />Bring back</> : <><Archive size={13} aria-hidden="true" />Archive</>}</button>
       <label className="f-select small">Move to <select value={t.boardId} onChange={e => void call({ action: 'topic', boardId: e.target.value })}>{sameKind.map(b => <option key={b.id} value={b.id}>{b.parentId ? '— ' : ''}{b.name}</option>)}</select></label>
+      {fight && <button className="f-btn ghost small" onClick={fight}><Swords size={13} aria-hidden="true" />Start combat</button>}
       <button className="f-btn ghost small danger" onClick={() => void trash()}><Trash2 size={13} aria-hidden="true" />Move to Trash</button>
     </>}
     {print}
@@ -149,7 +151,10 @@ function ModTools({ frame, page, k, done, go }: { frame: Frame; page: TopicPage;
 const closedNote = (t: TopicPage['topic']) => t.trashed ? 'This topic is in the Trash.' : t.archived ? 'This topic is archived. A moderator can bring it back to reply.' : t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.';
 
 export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
-  const t = page.topic, [quote, setQuote] = useState<{ text: string; n: number }>();
+  const t = page.topic, [quote, setQuote] = useState<{ text: string; n: number }>(), [setup, setSetup] = useState(false);
+  const canFight = frame.you.rights.moderate && t.kind === 'ic' && !page.combat && !t.archived && !t.trashed;
+  const slot = page.combat?.order.find(s => s.now);
+  const yours = slot?.as.filter(x => x.mine && !x.done).map(x => x.name) ?? [];
   // What was new when the topic was opened stays marked while you read, though the server now has it read.
   const [readBefore] = useState(page.readBefore);
   const isFresh = (p: TopicPage['posts'][number]) => !!readBefore && !p.mine && p.at > readBefore;
@@ -173,10 +178,13 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
       {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}{firstNew && <> · <a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></>}</p>}
       {!t.next && firstNew && <p className="turn-line"><a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></p>}
       {t.cast.length > 0 && <p className="topic-cast">{t.cast.map(c => <span key={c.id} className="cast-chip"><Portrait k={k} picture={c.picture} name={c.name} className="portrait tiny" />{c.name}</span>)}</p>}
-      <ModTools frame={frame} page={page} k={k} done={done} go={go} />
+      <ModTools frame={frame} page={page} k={k} done={done} go={go} fight={canFight && !setup ? () => setSetup(true) : undefined} />
     </header>
-    <div className="posts">{page.posts.map((p, i) => <Post key={p.id} p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} go={go} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} links={page.links} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} />)}</div>
+    {setup && canFight && <CombatSetup frame={frame} page={page} k={k} onCancel={() => setSetup(false)} done={async () => { setSetup(false); await done(); }} />}
+    <CombatPanel frame={frame} page={page} k={k} done={() => done()} />
+    <div className="posts">{page.posts.map((p, i) => <Fragment key={p.id}>{p.turn && p.turn.round !== page.posts[i - 1]?.turn?.round && <p className="sysline"><Swords size={13} aria-hidden="true" />{page.posts[i - 1]?.turn ? `Round ${p.turn.round}` : `Combat · round ${p.turn.round}`}</p>}<Post p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} go={go} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} links={page.links} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} /></Fragment>)}</div>
     {t.canReply ? <section className="reply">
+      {slot && t.next?.mine && <p className="your-turn"><Swords size={15} aria-hidden="true" /><span>It’s your turn in round {page.combat!.round}{yours.length ? <> as <b>{yours.join(' and ')}</b></> : <>: <b>{slot.name}</b></>}. {slot.as.length ? (slot.as.length > 1 ? `${slot.name} is a group turn: it moves on once each of them has posted.` : 'Posting as them moves the fight on.') : 'Narration, or a post as an NPC, moves the fight on.'}</span></p>}
       <div className="reply-head"><h2 className="category-title">Quick reply</h2>{addReply && <span className="reply-full">For more room, a preview of the topic and focus mode, use {addReply}</span>}</div>
       <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} quote={quote} preferred={preferred} onPost={send} after label="Quick reply" />
     </section>
@@ -198,7 +206,7 @@ function TopicReview({ page, k }: { page: TopicPage; k: string }) {
       const card = p.as ? page.cards[p.as] : null, name = card?.name ?? (page.topic.kind === 'ic' ? 'Game Master' : p.name);
       return <article key={p.id} className="review-post">
         <header>{!card && page.topic.kind === 'ic' ? <span className="as-seal tiny" aria-hidden="true">✦</span> : <Portrait k={k} picture={card?.picture ?? null} name={name} className="portrait tiny" />}<b>{name}</b><small className="muted">#{p.number} · {when(p.at)}</small></header>
-        <PostText text={p.body} links={page.links} />
+        <PostText text={p.body} links={page.links} rolls={p.rolls} />
       </article>;
     })}
   </section>;

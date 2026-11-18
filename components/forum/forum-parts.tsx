@@ -4,10 +4,11 @@
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, ArrowUp, EyeOff, Hourglass, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArrowUp, Dices, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline } from '@/lib/forum/markup';
-import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
+import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
+import { ROLL_TAG, type Roll } from '@/lib/forum/rolls';
 import { Alerts, SearchBox } from './forum-find';
 
 export type Go = (place: Place) => void;
@@ -35,9 +36,29 @@ type Turn = NonNullable<TopicRowData['next']>;
 export const turnText = (t: Turn) => t.mine ? `Your turn as ${t.name}` : `${t.name}’s turn`;
 
 type Links = Record<string, { title: string; url: string; summary: string }>;
-/** One line of post text: bold, italic, underline, code, “speech” and [[page links]] (a link when the reader may open the page). */
-function Inline({ text, links }: { text: string; links?: Links }) {
-  return <>{postInline(text).map((p, i) => {
+/** The post's rolls and the index of the first roll tag in this piece of text (tags take results in the order they appear). */
+type RollList = { list?: readonly (Roll | null)[]; first: number };
+const tagCount = (text: string) => (text.match(ROLL_TAG) ?? []).length;
+/** A roll in a post: the dice the server rolled, the total, and Hit or Miss against a number when the tag gave one. */
+function RollCard({ r, label, expr, preview }: { r: Roll | null | undefined; label: string; expr: string; preview: boolean }) {
+  if (!r) return preview ? <span className="roll-card pending"><Dices size={15} aria-hidden="true" /><b>{label || 'Roll'}</b><span className="roll-expr">{expr}</span><span className="muted small">rolled when you post</span></span>
+    : <code>[roll{label ? `=${label}` : ''}]{expr}[/roll]</code>;
+  const d20 = r.dice.length === 1 && r.dice[0]!.sides === 20 && r.dice[0]!.keep.filter(Boolean).length === 1 ? r.dice[0]!.values[r.dice[0]!.keep.indexOf(true)] : null;
+  const hit = r.vs === null ? null : r.total >= r.vs;
+  return <span className="roll-card" title={`${r.expr}${r.at ? ` · rolled again when the post was edited, ${fullDate(r.at)}` : ' · rolled by the forum when posted'}`}>
+    <Dices size={15} aria-hidden="true" />
+    <span className="roll-what"><b>{r.label || 'Roll'}</b><span className="roll-expr">{r.expr}</span></span>
+    <span className="roll-dice" aria-label={`Dice: ${r.dice.map(d => d.values.join(', ')).join('; ')}`}>{r.dice.map((d, i) => <span key={i} className="roll-group">{d.sign < 0 && '−'}{d.values.map((v, j) => <i key={j} className={`${d.keep[j] ? '' : 'drop'}${v === d.sides ? ' max' : v === 1 ? ' min' : ''}`}>{v}</i>)}</span>)}{r.mod !== 0 && <span className="roll-mod">{r.mod > 0 ? '+' : '−'} {Math.abs(r.mod)}</span>}</span>
+    <b className="roll-total">{r.total}</b>
+    {hit !== null && <span className={`roll-stamp ${hit ? 'hit' : 'miss'}`}>{hit ? 'Hit' : 'Miss'} · vs {r.vs}</span>}
+    {d20 === 20 && <span className="roll-stamp nat">Natural 20</span>}{d20 === 1 && <span className="roll-stamp nat1">Natural 1</span>}
+    {r.at && <span className="roll-stamp edit">Rerolled on edit</span>}
+  </span>;
+}
+/** One line of post text: bold, italic, underline, code, “speech” and [[page links]] (a link when the reader may open the page) and roll cards. */
+function Inline({ text, links, rolls }: { text: string; links?: Links; rolls?: RollList }) {
+  const parts = postInline(text), nth = parts.map((p, i) => parts.slice(0, i).filter(q => q.type === 'roll').length);
+  return <>{parts.map((p, i) => {
     switch (p.type) {
       case 'bold': return <strong key={i}>{p.text}</strong>;
       case 'italic': return <em key={i}>{p.text}</em>;
@@ -45,27 +66,35 @@ function Inline({ text, links }: { text: string; links?: Links }) {
       case 'code': return <code key={i}>{p.text}</code>;
       case 'speech': return <span key={i} className="speech">{p.text}</span>;
       case 'link': { const l = links?.[p.target]; return l ? <a key={i} className="wiki" href={l.url} title={l.summary ? `${l.title}: ${l.summary}` : l.title}>{p.label}</a> : <span key={i} className="wiki">{p.label}</span>; }
+      case 'roll': { return <RollCard key={i} r={rolls?.list?.[(rolls?.first ?? 0) + nth[i]!]} label={p.label} expr={p.expr} preview={!rolls?.list} />; }
       default: return <span key={i}>{p.text}</span>;
     }
   })}</>;
 }
-function Blocks({ blocks, links }: { blocks: ProseBlock[]; links?: Links }) {
+function Blocks({ blocks, links, rolls }: { blocks: ProseBlock[]; links?: Links; rolls?: RollList }) {
+  const starts = blocks.map((_, i) => (rolls?.first ?? 0) + blocks.slice(0, i).reduce((n, b) => n + ('text' in b ? tagCount(b.text) : 0), 0));
   return <>{blocks.map((b, i) => {
+    const r = rolls && { list: rolls.list, first: starts[i]! };
     switch (b.type) {
-      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}><Inline text={b.text} links={links} /></H>; }
-      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• <Inline text={b.text} links={links} /></p>;
-      case 'quote': return <blockquote key={i}><Inline text={b.text} links={links} /></blockquote>;
+      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}><Inline text={b.text} links={links} rolls={r} /></H>; }
+      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• <Inline text={b.text} links={links} rolls={r} /></p>;
+      case 'quote': return <blockquote key={i}><Inline text={b.text} links={links} rolls={r} /></blockquote>;
       case 'code': return <pre key={i}>{b.text || ' '}</pre>;
-      case 'paragraph': return <p key={i}><Inline text={b.text} links={links} /></p>;
+      case 'paragraph': return <p key={i}><Inline text={b.text} links={links} rolls={r} /></p>;
       default: return null;
     }
   })}</>;
 }
-/** Post text (lib/forum/markup.ts): page text plus underline, speech and collapsed sections. */
-export function PostText({ text, links }: { text: string; links?: Links }) {
-  return <div className="prose post-text">{postBlocks(text).map((b, i) => b.type === 'collapse'
-    ? <details key={i} className="clps"><summary>{b.title}</summary><div className="clps-body"><Blocks blocks={b.blocks} links={links} /></div></details>
-    : <Blocks key={i} blocks={[b]} links={links} />)}</div>;
+/**
+ * Post text (lib/forum/markup.ts): page text plus underline, speech, collapsed sections and roll cards. `rolls` are
+ * the post's dice in tag order; left out (a preview), roll tags show as still to roll.
+ */
+export function PostText({ text, links, rolls }: { text: string; links?: Links; rolls?: readonly (Roll | null)[] }) {
+  // Roll tags take their results in the order they appear in the whole post, code blocks included.
+  const blocks = postBlocks(text), at = (i: number) => blocks.slice(0, i).reduce((n, b) => n + (b.type === 'collapse' ? b.blocks.reduce((m, x) => m + ('text' in x ? tagCount(x.text) : 0), 0) : 'text' in b ? tagCount(b.text) : 0), 0);
+  return <div className="prose post-text">{blocks.map((b, i) => b.type === 'collapse'
+    ? <details key={i} className="clps"><summary>{b.title}</summary><div className="clps-body"><Blocks blocks={b.blocks} links={links} rolls={{ list: rolls, first: at(i) }} /></div></details>
+    : <Blocks key={i} blocks={[b]} links={links} rolls={{ list: rolls, first: at(i) }} />)}</div>;
 }
 
 /** The top bar: the in-world date, the staff as circles, and who you are. */
@@ -179,7 +208,7 @@ export function TopicRow({ t, k, go, board, pick }: { t: TopicRowData; k: string
   return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}${pick ? ' pickable' : ''}${pick?.on ? ' picked' : ''}`}>
     {pick && <label className="topic-pick"><input type="checkbox" checked={pick.on} onChange={e => pick.set(e.target.checked)} aria-label={`Select ${t.title}`} /></label>}
     <div className="topic-main">
-      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
+      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.combat && <span className="tag fight"><Swords size={11} aria-hidden="true" /> Combat · round {t.combat.round}</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
       <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
       {t.next && <span className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={12} aria-hidden="true" />{turnText(t.next)}</span>}
       {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}

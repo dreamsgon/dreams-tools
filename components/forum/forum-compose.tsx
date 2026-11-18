@@ -5,7 +5,7 @@
  * posting. The same box is the Quick reply under a topic, the full reply page and the edit page.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Bold, ChevronDown, Eye, Italic, Link2, MessageSquareQuote, PanelTopClose, Quote, Search, Smile, Underline } from 'lucide-react';
+import { Bold, ChevronDown, Dices, Eye, Italic, Link2, MessageSquareQuote, PanelTopClose, Quote, Search, Smile, Underline } from 'lucide-react';
 import { wordCount } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
 import { Circle, Portrait, PostText } from './forum-parts';
@@ -94,6 +94,7 @@ function Toolbar({ box, set, preview, setPreview }: { box: RefObject<HTMLTextAre
     {tool('Quote', <Quote size={15} />, () => lines('> ', 'Quoted text'))}
     {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }))}
     {tool('Page link', <Link2 size={15} />, () => wrap('[[', ']]', 'Page name'))}
+    {tool('Roll dice', <Dices size={15} />, () => wrap('[roll=Attack]', '[/roll]', '1d20+5'))}
     <span className="emoji-wrap" ref={emojiBox}>
       {tool('Emoji', <Smile size={15} />, () => setEmoji(o => !o))}
       {emoji && <span className="emoji-pop" role="dialog" aria-label="Emoji">{EMOJI.map(e => <button type="button" key={e} onClick={() => { edit(() => ({ text: e })); setEmoji(false); }}>{e}</button>)}</span>}
@@ -103,7 +104,7 @@ function Toolbar({ box, set, preview, setPreview }: { box: RefObject<HTMLTextAre
   </div>;
 }
 
-export const MARKUP_HINT = 'Blank lines start paragraphs. **bold**, *italic*, __underline__, “speech”, > quote, [[page link]], [collapse=Title]…[/collapse].';
+export const MARKUP_HINT = 'Blank lines start paragraphs. **bold**, *italic*, __underline__, “speech”, > quote, [[page link]], [collapse=Title]…[/collapse], [roll=Attack vs 15]1d20+5[/roll] (the forum rolls it when you post).';
 
 /**
  * Write a reply, a new topic (with `title`) or an edit (with `initial`). Unsent text stays in this browser under

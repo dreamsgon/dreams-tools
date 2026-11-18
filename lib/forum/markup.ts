@@ -28,9 +28,20 @@ export function postBlocks(text: string): PostBlock[] {
 
 export type Inline =
   | { type: "text" | "bold" | "code" | "italic" | "underline" | "speech"; text: string }
-  | { type: "link"; target: string; label: string };
-/** Inline parts: bold, code and links as on Encyclopedia pages, then underline, italic and speech. */
+  | { type: "link"; target: string; label: string }
+  | { type: "roll"; label: string; expr: string };
+/** Inline parts: [roll] tags (rolls.ts), bold, code and links as on Encyclopedia pages, then underline, italic and speech. */
 export function postInline(text: string): Inline[] {
+  const out: Inline[] = [];
+  const parts = text.split(/(\[roll(?:=[^\]\n]{0,60})?\][^[\]\n]{1,80}\[\/roll\])/gi);
+  for (const [i, part] of parts.entries()) {
+    if (!part) continue;
+    if (i % 2) { const m = /^\[roll(?:=([^\]\n]{0,60}))?\]([^[\]\n]{1,80})\[\/roll\]$/i.exec(part)!; out.push({ type: "roll", label: (m[1] ?? "").trim(), expr: m[2]!.trim() }); continue; }
+    out.push(...plainInline(part));
+  }
+  return out;
+}
+function plainInline(text: string): Inline[] {
   const out: Inline[] = [];
   for (const p of proseParts(text)) {
     if (p.type !== "text") { out.push(p); continue; }
@@ -52,4 +63,4 @@ export function linkTargets(text: string) {
 }
 
 /** Words in a post, as people count them. */
-export const wordCount = (text: string) => (text.replace(/\[\/?collapse[^\]]*\]/gi, " ").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
+export const wordCount = (text: string) => (text.replace(/\[roll[^\]]*\][^[\]]*\[\/roll\]/gi, " ").replace(/\[\/?collapse[^\]]*\]/gi, " ").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
