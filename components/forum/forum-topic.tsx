@@ -12,6 +12,7 @@ import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go }
 import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-moderate';
 import { CombatPanel, CombatSetup } from './forum-combat';
 import { AiTopicHelp } from './forum-ai';
+import { SuggestedPosts } from './forum-suggested';
 
 type Done = (place?: Place) => Promise<void>;
 
@@ -185,6 +186,7 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
     {setup && canFight && <CombatSetup frame={frame} page={page} k={k} onCancel={() => setSetup(false)} done={async () => { setSetup(false); await done(); }} />}
     <CombatPanel frame={frame} page={page} k={k} done={() => done()} />
     <div className="posts">{page.posts.map((p, i) => <Fragment key={p.id}>{p.turn && p.turn.round !== page.posts[i - 1]?.turn?.round && <p className="sysline"><Swords size={13} aria-hidden="true" />{page.posts[i - 1]?.turn ? `Round ${p.turn.round}` : `Combat · round ${p.turn.round}`}</p>}<Post p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} go={go} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} links={page.links} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} /></Fragment>)}</div>
+    <SuggestedPosts page={page} k={k} done={() => done()} />
     {t.canReply ? <section className="reply">
       {slot && t.next?.mine && <p className="your-turn"><Swords size={15} aria-hidden="true" /><span>It’s your turn in round {page.combat!.round}{yours.length ? <> as <b>{yours.join(' and ')}</b></> : <>: <b>{slot.name}</b></>}. {slot.as.length ? (slot.as.length > 1 ? `${slot.name} is a group turn: it moves on once each of them has posted.` : 'Posting as them moves the fight on.') : 'Narration, or a post as an NPC, moves the fight on.'}</span></p>}
       <div className="reply-head"><h2 className="category-title">Quick reply</h2>{addReply && <span className="reply-full">For more room, a preview of the topic and focus mode, use {addReply}</span>}</div>

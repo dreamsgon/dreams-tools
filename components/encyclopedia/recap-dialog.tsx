@@ -14,19 +14,20 @@ import {compactTranscript,openItems,sessionFolder,TRANSCRIPT_LIMIT,wordCount} fr
 import {IN_APP_LIMIT,recapTokens} from '@/lib/encyclopedia/recap-prompts';
 import {useWriters,writeWithKey} from './recap-panel';
 import {ToolDialog} from './tool-dialog';
+import {ForumSource} from './recap-forum-source';
 import {AiWritingDialog,StylePicker} from './ai-writing';
 import {styleFor} from '@/lib/encyclopedia/ai-styles';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
-type Kind='paste'|'file'|'thread'|'notion'|'drive'|'github';
-const sources:{kind:Kind|'forum';title:string;hint:string;icon:typeof Upload}[]=[
+type Kind='paste'|'file'|'thread'|'notion'|'drive'|'github'|'forum';
+const sources:{kind:Kind;title:string;hint:string;icon:typeof Upload}[]=[
  {kind:'paste',title:'Paste a transcript',hint:'Text with a speaker name at the start of each line, such as “Mara: I open the door.”',icon:ClipboardList},
  {kind:'file',title:'Upload a file',hint:'.txt or .md, or a Discord chat export (.json or .html). For .docx or .pdf, copy the text and paste it.',icon:Upload},
  {kind:'thread',title:'An RP thread',hint:'A play-by-post thread you exported or copied, from Discord or another forum.',icon:MessagesSquare},
  {kind:'notion',title:'A Notion page',hint:'Paste its link. RPG Tools reads it when it’s published to the web; otherwise your AI app reads it.',icon:BookText},
  {kind:'drive',title:'A Google Drive file',hint:'A Google Doc or text file. RPG Tools reads it when it’s shared with anyone with the link.',icon:HardDrive},
  {kind:'github',title:'A GitHub repository',hint:'A file, such as sessions/session-13.md, or a gist. RPG Tools reads public ones; your AI app reads private ones.',icon:GitBranch},
- {kind:'forum',title:'A forum topic',hint:'A topic from this campaign’s forum.',icon:MessageCircle},
+ {kind:'forum',title:'A forum topic',hint:'A topic from this campaign’s forum, with the dice results written in.',icon:MessageCircle},
 ];
 const hosts:Record<'notion'|'drive'|'github',RegExp>={notion:/(^|\.)notion\.(so|site)$/,drive:/^(docs|drive)\.google\.com$/,github:/^(github\.com|gist\.github\.com|raw\.githubusercontent\.com)$/};
 const linkName={notion:'Notion page',drive:'Google Drive file',github:'GitHub file'};
@@ -61,7 +62,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [mine,setMine]=useState(false),[writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);
  const fileInput=useRef<HTMLInputElement>(null);
  const characters=useMemo(()=>data.entries.filter(e=>e.kind==='character'&&e.worldId===campaign.worldId&&(e.campaignId===campaign.id||e.campaignId===null)).sort((a,b)=>(a.character?.role==='pc'?0:1)-(b.character?.role==='pc'?0:1)||a.title.localeCompare(b.title)),[data.entries,campaign]);
- const [fetched,setFetched]=useState(''),[unread,setUnread]=useState(false);
+ const [fetched,setFetched]=useState(''),[unread,setUnread]=useState(false),[topicId,setTopicId]=useState('');
  const isLink=kind==='notion'||kind==='drive'||kind==='github',words=wordCount(text);
  // A link RPG Tools couldn't read (or the GM chose not to): the AI app reads it with its own access.
  const appReads=isLink&&fetched!==link.trim();
@@ -85,7 +86,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
     if(r.b.title&&!page)setTitle(t=>/^Session \d+$/.test(t)?r.b.title.slice(0,160):t);
    }
   }else{
-   if(!text.trim()){setError(kind==='file'?'Choose a file first.':'Paste the transcript first.');return;}
+   if(!text.trim()){setError(kind==='file'?'Choose a file first.':kind==='forum'?'Choose a topic first.':'Paste the transcript first.');return;}
    if(text.length>TRANSCRIPT_LIMIT){setError('That’s over 2,000,000 characters. Split the session into two recaps.');return;}
    setCast(guessCast(speakersIn(text),characters));
   }
@@ -97,7 +98,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
   if(!title.trim()){setError('Give the session a title.');return;}
   setError('');setBusy(true);
   const request:RecapRequest|undefined=mine?undefined:{length,depth,...(style?{style}:{}),...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
-  const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':'A pasted transcript';
+  const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':kind==='forum'?`Forum topic: ${file}`:'A pasted transcript';
   let id='';
   const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,mine,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
   if(ok===false||!id){setBusy(false);return;}
@@ -146,12 +147,13 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  }
 
  return <ToolDialog title="New session recap" onClose={onClose} wide><div className="recap-dialog">
-  <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
+  <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':kind==='forum'?`Forum topic “${file}”`:'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
   <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key||mine?'Write it':'Hand it over'}</span></div>
   {step==='source'?<>
-   <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon,off=s.kind==='forum';return <button key={s.kind} role="radio" aria-checked={kind===s.kind} disabled={off} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(off)return;setKind(s.kind as Kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}{off&&<small className="soon">After the forum</small>}</strong><small>{s.hint}</small></span></button>;})}</div>
+   <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon;return <button key={s.kind} role="radio" aria-checked={kind===s.kind} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(kind==='forum'&&s.kind!=='forum'||s.kind==='forum'&&kind!=='forum'){setText('');setFile('');setTopicId('');}setKind(s.kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}</strong><small>{s.hint}</small></span></button>;})}</div>
    <input ref={fileInput} type="file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.html,.htm,text/plain,text/markdown,application/json,text/html" onChange={e=>{void pick(e.target.files?.[0]);e.target.value='';}}/>
    {isLink?<label className="field-title">Link to the {linkName[kind as 'notion']}<input className="recap-input" type="url" autoFocus value={link} placeholder={kind==='notion'?'https://www.notion.so/…/Session-13-notes':kind==='drive'?'https://docs.google.com/document/d/…':'https://github.com/you/campaign/blob/main/sessions/session-13.md'} onChange={e=>{setLink(e.target.value);setUnread(false);}}/>{fetched&&fetched===link.trim()&&<small className="link-read"><Check size={12}/> Read: {words.toLocaleString('en')} words · {playTime(words)}</small>}</label>
+   :kind==='forum'?<ForumSource campaignId={campaign.id} picked={topicId} onPick={t=>{setTopicId(t.id);setFile(t.title);setText(t.text);if(!page)setTitle(x=>/^Session \d+$/.test(x)?t.title.slice(0,160):x);}}/>
    :<label className="field-title"><span className="field-row"><span>{kind==='file'?(file?`From ${file}`:'The file’s text shows here'):kind==='thread'?'The thread':'Transcript'}</span>{words>0&&<small>{words.toLocaleString('en')} words · {playTime(words)}</small>}</span>
     {kind==='file'&&!text?<button className="drop-zone" onClick={()=>fileInput.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();void pick(e.dataTransfer.files[0]);}}>{busy?'Reading…':<><Upload size={16}/> Choose a file, or drop it here</>}</button>
     :<textarea className="recap-input transcript-paste" value={text} maxLength={TRANSCRIPT_LIMIT} placeholder={kind==='thread'?'Paste the thread. Each post’s author at the start of a line works best, such as “Mara: …”.':'GM: The ferry bumps against the Greyfen landing.\nMara (Bram): I keep my hand on my sword.'} onChange={e=>setText(e.target.value)}/>}</label>}

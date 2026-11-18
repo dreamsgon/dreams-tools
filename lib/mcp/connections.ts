@@ -6,7 +6,7 @@
 import type { S3Bucket } from "../storage.ts";
 import { encyclopediaPrefix, hashToken } from "../encyclopedia/store.ts";
 import { levels, type Level } from "./tools.ts";
-import { cleanPerms, fromLevel, isMode, levelFor, modeOf, presets, type Perms } from "./permissions.ts";
+import { cleanPerms, fillPerms, fromLevel, isMode, levelFor, modeOf, presets, type Perms } from "./permissions.ts";
 import { cleanBaseUrl, cleanLimit, cleanModel, isProvider, providerOf, thisMonth, type ProviderId } from "../ai/providers.ts";
 import { cleanApiKey, lock } from "../ai/secret.ts";
 
@@ -21,7 +21,7 @@ export type PublicApi = Omit<ApiSettings, "key" | "month">;
 export type PublicConnection = Omit<Connection, "hash" | "api"> & { perms: Perms; mode: ReturnType<typeof modeOf>; api?: PublicApi };
 export type KeyGrant = { owner: string; campaignId: string; connectionId: string | null; level: Level; perms?: Perms; legacy?: "encyclopedia" | "maptable" };
 
-export const permsOf = (c: Pick<Connection, "level" | "perms">): Perms => c.perms ?? fromLevel(c.level);
+export const permsOf = (c: Pick<Connection, "level" | "perms">): Perms => c.perms ? fillPerms(c.perms) : fromLevel(c.level);
 /** "helper", "gm" or "read" (what the dialog offers), or an older level name. */
 function chosen(v: unknown): { level: Level; perms?: Perms } {
   if (isLevel(v)) return { level: v }; // "read" is both: the same actions either way.

@@ -27,6 +27,8 @@ import { PART_SIZE, addFinds, compactTranscript, draftRecap, linkNames, openItem
 import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
 import { publishedRecaps, storyNow } from "../encyclopedia/recap-prompts.ts";
+import { ForumError } from "../forum/model.ts";
+import type { ForumMcp } from "../forum/mcp.ts";
 
 export type Level = "read" | "assist" | "run";
 export const levels: Level[] = ["read", "assist", "run"];
@@ -60,6 +62,8 @@ export type McpContext = {
   transcript?: (entryId: string) => Promise<string | null>;
   /** This connection's name, for "drafted by". */
   connection?: string;
+  /** The campaign's forum (lib/forum/mcp.ts). Missing where it can't be reached. */
+  forum?: ForumMcp;
 };
 export type Suggestion = { tool: string; args: Record<string, unknown>; summary: string; detail?: string; preview?: MovePreview };
 export const permsFor = (c: Pick<McpContext, "perms" | "level">): Perms => c.perms ?? fromLevel(c.level);
@@ -81,6 +85,11 @@ type Tool = {
   run?: (c: McpContext, a: Record<string, unknown>) => unknown | Promise<unknown>; write?: (a: Record<string, unknown>) => Change; picture?: true;
   /** How a suggestion reads in the GM's panel, when trying the change first would give it away (a dice roll). */
   ask?: (a: Record<string, unknown>) => string;
+  /**
+   * A forum tool: reads, or posts at once ("do") or as a suggestion waiting in the topic ("ask"). Arguments are
+   * checked by `forumArgs` before anything is read.
+   */
+  forum?: (f: ForumMcp, a: Record<string, unknown>, mode: "do" | "ask") => Promise<unknown>;
 };
 
 const str = (description: string, max = 200) => ({ type: "string", minLength: 1, maxLength: max, description });
@@ -820,6 +829,45 @@ const tools: Tool[] = [
       return { maps: next, summary: `Ended combat in ${s.name}`, detail: rounds ? `After ${rounds} round${rounds === 1 ? "" : "s"}` : undefined, reply: { ended: true, rounds } };
     }),
   },
+
+  // ---- The forum (lib/forum/mcp.ts) ----
+  {
+    name: "list_boards", title: "List the forum's boards", level: "read", readOnly: true,
+    description: "The campaign forum's categories and boards (in character locations and campaign boards, out of character boards) with their subforums, topic counts and latest activity.",
+    inputSchema: obj({}),
+    forum: f => f.boards(),
+  },
+  {
+    name: "list_topics", title: "List forum topics", level: "read", readOnly: true,
+    description: "Topics on one forum board, or the latest across the forum: replies, the last post, whose turn is next, and any fight's round.",
+    inputSchema: obj({ board: str("The board's name or id. Leave out for the latest topics everywhere."), archived: { type: "boolean", description: "List the board's archive instead." }, limit: { type: "integer", minimum: 1, maximum: 100, description: "How many (25 unless given)." } }),
+    forum: (f, a) => f.topics({ board: text(a, "board", false), archived: bool(a, "archived"), limit: a.limit === undefined ? undefined : Math.min(whole(a, "limit"), 100) }),
+  },
+  {
+    name: "read_topic", title: "Read a forum topic", level: "read", readOnly: true,
+    description: "A forum topic's posts, oldest first, with each post's character (or Game Master for narration), its player and the dice results written in; the fight's turn order when there is one, and whose turn is next. Gives the latest 30 posts unless from or last is set. Use it to recap a topic too: read it from post 1 in parts, then save_recap.",
+    inputSchema: obj({ topic: str("The topic's title or id."), from: { type: "integer", minimum: 1, description: "Start at this post number." }, last: { type: "integer", minimum: 1, maximum: 100, description: "How many posts (30 unless given)." } }, ["topic"]),
+    forum: (f, a) => f.read({ topic: text(a, "topic")!, from: a.from === undefined ? undefined : whole(a, "from"), last: a.last === undefined ? undefined : Math.min(whole(a, "last"), 100) }),
+  },
+  {
+    name: "whose_turn", title: "Whose turn in the forum", level: "read", readOnly: true,
+    description: "In-character forum topics waiting on the GM (narration or an NPC, including NPC turns in a fight) and the ones waiting on players, with how long each has waited.",
+    inputSchema: obj({}),
+    forum: f => f.turns(),
+  },
+  {
+    name: "post_to_forum", title: "Post in the forum", level: "assist", readOnly: false,
+    description: "Replies in a forum topic for the GM: in character as the GM's narration (leave out as) or as an NPC the GM plays; on an out of character board as the GM. Write only the world and NPCs, never what player characters do, say or feel. Dice like [roll=Attack vs 15]1d20+4[/roll] are rolled when it's posted. The post carries an AI mark. When the GM wants to see it first, it waits in the topic for them to approve, change or skip.",
+    inputSchema: obj({ topic: str("The topic's title or id."), body: str("The post. Paragraphs separated by blank lines; **bold**, *italic*, “speech” in quotes, [[Page]] links.", 20000), as: str("An NPC's name, or leave out for the GM's narration.", 120) }, ["topic", "body"]),
+    forum: (f, a, mode) => f.post({ topic: text(a, "topic")!, body: optionalText(a, "body", 20000, true), as: text(a, "as", false, 120) }, mode),
+  },
+  {
+    name: "start_topic", title: "Start a forum topic", level: "assist", readOnly: false,
+    description: "Starts a topic on a forum board for the GM, opened by the GM's narration or an NPC (in character) or by the GM (out of character). The first post carries an AI mark. When the GM wants to see it first, it waits in their AI panel.",
+    inputSchema: obj({ board: str("The board's name or id."), title: str("The topic's title.", 120), body: str("The first post.", 20000), as: str("An NPC's name, or leave out for the GM's narration.", 120) }, ["board", "title", "body"]),
+    forum: (f, a) => f.start({ board: text(a, "board")!, title: text(a, "title", true, 120)!, body: optionalText(a, "body", 20000, true), as: text(a, "as", false, 120) }),
+    ask: a => `Start “${String(a.title ?? "").slice(0, 120)}” on ${String(a.board ?? "").slice(0, 60)}`,
+  },
 ];
 
 // ---- Helpers for changes ----------------------------------------------------------------------
@@ -973,7 +1021,18 @@ export async function callTool(c: McpContext, name: unknown, args: unknown, opts
       const legend = [`${sc.name}, ${mode === "gm" ? "GM view: hidden tokens are dashed and fog is see-through" : "as players see it"}.`, gridOn(sc) ? "Square names run along the top (letters) and left (numbers)." : "", shown.length ? `Tokens: ${shown.join(", ")}.` : "No tokens.", getCurrentInitiativeEntry(sc) ? `The gold ring marks whose turn it is (${getCurrentInitiativeEntry(sc)!.label}).` : "", pic.note ?? ""].filter(Boolean).join(" ");
       return { content: [{ type: "image", data: pic.data, mimeType: pic.mimeType }, { type: "text", text: `${NOTE}\n${legend}` }], isError: false };
     }
-    if (tool.write) {
+    if (tool.forum) {
+      if (!c.forum) return error("This connection can't reach the campaign's forum.");
+      if (!tool.readOnly && c.paused && !opts.approved) return error("The GM has paused AI changes for this campaign. You can still read. Ask the GM to resume from the AI activity panel.");
+      const mode = !tool.readOnly && choice === "ask" && !opts.approved ? "ask" : "do";
+      if (mode === "ask" && tool.ask) {
+        // A new topic waits in the GM's AI panel; a reply waits in its topic (forum/mcp.ts).
+        if (!c.suggest) return error("This connection can't make suggestions.");
+        text(input, "board"); text(input, "title", true, 120); optionalText(input, "body", 20000, true); text(input, "as", false, 120);
+        const summary = tool.ask(input), id = await c.suggest({ tool: tool.name, args: input, summary, detail: snippet(String(input.body)) });
+        value = { waitingForGM: true, suggestion: id, summary, note: "This needs the GM's OK, so it hasn't happened yet: don't describe it as done. The GM approves or skips it in their AI panel. Use check_suggestions to see what they decided." };
+      } else value = await tool.forum(c.forum, input, mode);
+    } else if (tool.write) {
       if (c.paused && !opts.approved) return error("The GM has paused AI changes for this campaign. You can still read. Ask the GM to resume from the AI activity panel.");
       if (!c.commit) return error("This connection can't make changes.");
       const change = tool.write(input); // Checks the arguments before anything is read or saved.
@@ -988,9 +1047,9 @@ export async function callTool(c: McpContext, name: unknown, args: unknown, opts
     } else value = await tool.run!(c, input);
     let body = JSON.stringify(value);
     if (body.length > RESULT_LIMIT) body = body.slice(0, RESULT_LIMIT) + "… [cut short; ask for less, such as one page or one scene]";
-    return { content: [{ type: "text", text: tool.write ? body : `${NOTE}\n${body}` }], isError: false };
+    return { content: [{ type: "text", text: tool.write || (tool.forum && !tool.readOnly) ? body : `${NOTE}\n${body}` }], isError: false };
   } catch (e) {
-    if (e instanceof ToolError) return error(e.message);
+    if (e instanceof ToolError || e instanceof ForumError) return error(e.message);
     throw e;
   }
 }
@@ -1005,6 +1064,7 @@ export const serverInstructions = (c: McpContext) => [
     "New pages and log entries are GM-only unless you set playersSee: true. Only share with players what the GM asked for.",
 
     ...(c.level === "run" ? ["You can run the table: move tokens, change HP and conditions, reveal fog and run combat turns. The GM sees each change on the map as it happens. Don't act for the players: ask them what they do."] : []),
+    ...(c.forum && permsFor(c).forumPosts !== "off" ? ["In the campaign forum, whose_turn lists the topics waiting on the GM. Read a topic with read_topic before writing, then post_to_forum only the GM's narration and NPCs: players write their own characters."] : []),
     ...(Object.values(permsFor(c)).includes("ask") ? ["You are helping the GM run the game. Some changes need the GM's OK: those come back as waitingForGM and wait in the GM's AI panel. Don't say they happened until check_suggestions shows them approved."] : []),
   ]),
   ...(permsFor(c).seeSecrets === "off" ? ["You only see what players see: GM-only pages, secrets, hidden tokens and GM notes are left out."] : []),

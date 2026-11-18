@@ -31,11 +31,14 @@ Tools, in groups:
 | Dice | `roll` (fair server-side dice, posted to Discord when set up) |
 | Table (paired Maptable campaign only) | `move_token`, `damage`, `heal`, `set_condition`, `show_token`, `reveal_fog` |
 | Combat | `start_combat`, `next_turn`, `end_combat` |
+| Forum | `list_boards`, `list_topics`, `read_topic`, `whose_turn` (read); `post_to_forum`, `start_topic` (the GM's narration and NPCs, never player characters) |
 | Pictures | `view_scene` (the scene as an image: map, grid squares, tokens with names and HP, effects, fog, GM or players view) |
 
 Vehicles have no tools of their own. `create_page` with `kind` set to `vehicle` makes a vehicle page: `vehicleType` picks one of the world's vehicle types by name or id, and `rollUp` (with an optional `template`) fills it from the vehicle generator. A vehicle page always starts GM only. `read_page` returns the vehicle's sheet: type, owner, commander, stats, gauges, stations and crew, hold, systems and the latest 10 log entries, with GM-only parts marked. A players-only connection reads only what the vehicle's shared tabs show.
 
-Ready-made **prompts**: `prep_session`, `recap_session`, `run_scene`, `run_combat`, `story_so_far`.
+The forum tools read as the GM, or as a member of the Players group when **See GM-only things** is off (no private topics, the boards' permissions applied). **Post in the forum** set to **Ask me** leaves a reply in its topic, where the GM and co-GMs see it under the posts with **Approve**, **Change** or **Skip**; a new topic waits in the AI panel. Posts the AI makes carry the **AI draft** mark. A connection made before the forum tools posts when everything else is **Do it**, asks when it can write anything, and is off when it can't.
+
+Ready-made **prompts**: `prep_session`, `recap_session`, `recap_from_source` (also from a forum topic), `run_scene`, `run_combat`, `forum_turns` (the GM's turns in the forum), `story_so_far`.
 
 ### Seeing what the AI did
 

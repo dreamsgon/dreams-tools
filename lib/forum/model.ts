@@ -81,6 +81,8 @@ export const topicSummarySchema = z.object({
   private: z.array(userId).max(FORUM_LIMITS.privateMembers).optional(),
   /** A fight in progress (combat.ts). */
   combat: combatSchema.optional(),
+  /** Posts an AI connection suggested, waiting for the GM (worked out from the topic file). */
+  suggested: z.number().int().min(1).max(20).optional(),
 });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
@@ -106,7 +108,10 @@ export const postSchema = z.object({
   /** Drafted with the forum's AI and posted, after a read, by a moderator (`by`). */
   ai: z.literal(true).optional(),
 });
-export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts) });
+/** A post an AI connection (MCP) suggested, waiting in the topic for the GM or a co-GM to approve, change or skip. */
+export const suggestionSchema = z.object({ id, at, connection: nameOf(60), as: id.nullable(), body: z.string().min(1).max(FORUM_LIMITS.body) });
+export const SUGGESTED_LIMIT = 10;
+export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts), suggested: z.array(suggestionSchema).max(SUGGESTED_LIMIT).optional() });
 
 export type ForumSettings = z.infer<typeof forumSettingsSchema>;
 export type Category = z.infer<typeof categorySchema>;
@@ -116,6 +121,7 @@ export type TopicSummary = z.infer<typeof topicSummarySchema>;
 export type Forum = z.infer<typeof forumSchema>;
 export type Post = z.infer<typeof postSchema>;
 export type Topic = z.infer<typeof topicSchema>;
+export type Suggestion = z.infer<typeof suggestionSchema>;
 export type Recent = z.infer<typeof recentSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
@@ -225,6 +231,7 @@ export function summarize(topic: Topic, base: Kept): TopicSummary {
   return {
     id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order,
     ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}), ...(base.combat ? { combat: base.combat } : {}),
+    ...(topic.suggested?.length ? { suggested: topic.suggested.length } : {}),
   };
 }
 const putSummary = (f: Forum, s: TopicSummary): Forum => ({ ...f, topics: f.topics.some(t => t.id === s.id) ? f.topics.map(t => t.id === s.id ? s : t) : [...f.topics, s] });
@@ -274,6 +281,31 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
       return logPost(addCharacter(addCount(putSummary(g, summarize(latest ?? next, { ...cur, combat })), who.userId, 1), as), log);
     },
   };
+}
+
+/**
+ * An AI connection's post that waits in the topic for the GM's OK (its connection set to Ask me). `who` is the GM it
+ * posts for: the same checks as a reply, but nothing is posted yet.
+ */
+export function suggestPost(f: Forum, topic: Topic, input: { body: unknown; as: string | null }, who: Poster, meta: { id: string; connection: string }, now: Date): Change<{ suggestionId: string }> {
+  const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
+  if (s.archived) fail("This topic is archived.");
+  const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
+  if ((topic.suggested?.length ?? 0) >= SUGGESTED_LIMIT) fail(`This topic already has ${SUGGESTED_LIMIT} suggested posts waiting. Wait for the GM to go through them.`);
+  const next: Topic = { ...topic, suggested: [...(topic.suggested ?? []), { id: meta.id, at: now.toISOString(), connection: meta.connection.slice(0, 60), as, body }] };
+  return { topic: next, out: { suggestionId: meta.id }, forum: (g, latest) => putSummary(g, summarize(latest ?? next, g.topics.find(t => t.id === topic.id) ?? s)) };
+}
+
+/** The GM (or a co-GM) approves a suggested post, as it is or changed, and it's posted with the AI mark; or skips it. */
+export function decideSuggestion(f: Forum, topic: Topic, input: { suggestionId: string; op: "approve" | "skip"; body?: unknown; rolls?: (Roll | null)[] }, who: Poster, postId: string, now: Date): Change<{ postId: string; body: string; as: string | null } | undefined> {
+  const s = seenBy(f, topic.id, who);
+  if (!who.rights.gm) fail("Only the GM and co-GMs can answer the AI's suggested posts.");
+  const sug = topic.suggested?.find(x => x.id === input.suggestionId) ?? fail("That suggestion was already answered.");
+  const left = (topic.suggested ?? []).filter(x => x.id !== sug.id), rest: Topic = { ...topic, suggested: left };
+  if (!left.length) delete rest.suggested;
+  if (input.op === "skip") return { topic: rest, forum: (g, latest) => putSummary(g, summarize(latest ?? rest, g.topics.find(t => t.id === topic.id) ?? s)) };
+  const body = input.body ?? sug.body, posted = reply(f, rest, { body, as: sug.as, rolls: input.rolls, ai: true }, who, postId, now);
+  return { ...posted, out: { postId, body: String(body), as: sug.as } };
 }
 
 const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === postId) ?? fail("That post was removed.");

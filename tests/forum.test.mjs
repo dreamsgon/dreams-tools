@@ -12,6 +12,9 @@ import * as A from '../lib/forum/alerts.ts';
 import * as D from '../lib/forum/rolls.ts';
 import * as C from '../lib/forum/combat.ts';
 import { newScene, newToken } from '../lib/model.ts';
+import { forumMcp } from '../lib/forum/mcp.ts';
+import { callTool } from '../lib/mcp/tools.ts';
+import { fillPerms, presets } from '../lib/mcp/permissions.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -939,4 +942,85 @@ test('request: AI help sends only what the asker can read, by permission, and co
   assert.equal(posted.ok, true);
   const t = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
   assert.deepEqual(t.posts.map(p => p.ai), [false, false, true]);
+});
+
+test('mcp: AI apps read the forum as the GM or as players, post only for the GM, and suggested posts wait for a GM', async () => {
+  const gm = harness({ user: OWNER });
+  gm.store.bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: '0' });
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'tavern-board', title: 'Night at the Tavern', body: 'The fire crackles.', as: null })).json();
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'I order an ale.', as: 'hero' });
+  await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'GM notes', body: 'Shh.', as: null, private: [] });
+  const logs = []; let n = 0;
+  const mk = gmView => forumMcp({ store: gm.store, members: async () => list(), owner: OWNER, campaignId: 'camp', workspace, gm: gmView, connection: 'Claude', log: async (tool, s) => { logs.push([tool, s]); }, now: () => NOW, newId: () => 'm' + ++n, random: () => 4 });
+  const f = mk(true), players = mk(false);
+  const boards = await f.boards();
+  assert.deepEqual(boards.categories.map(c => [c.name, c.boards.map(b => [b.name, b.kind, b.place ?? null, b.topics])]), [['Locations', [['Tavern', 'location (in character)', 'Tavern', 1]]], ['Out of character', [['General chat', 'out of character', null, 1]]]]);
+  assert.deepEqual((await f.topics({})).topics.map(t => t.title).sort(), ['GM notes', 'Night at the Tavern']);
+  assert.deepEqual((await players.topics({})).topics.map(t => t.title), ['Night at the Tavern'], 'a players-only connection never sees a private topic');
+  await assert.rejects(players.read({ topic: 'GM notes' }), /No topic called/);
+  const turns = await f.turns();
+  assert.deepEqual(turns.gmTurn.map(t => [t.title, t.next]), [['Night at the Tavern', 'the Game Master']]);
+  const read = await f.read({ topic: 'night' });
+  assert.deepEqual(read.posts.map(p => [p.number, p.name, p.player, p.body]), [[1, 'Game Master', 'Gamemaster', 'The fire crackles.'], [2, 'Hero', 'Pat', 'I order an ale.']]);
+  assert.match(read.next, /the GM's turn/);
+  // Never as a player's character, and never in character on an out of character board.
+  await assert.rejects(f.post({ topic: 'night', body: 'Hero draws a sword.', as: 'Hero' }, 'do'), /played by a player/);
+  await assert.rejects(f.post({ topic: 'GM notes', body: 'Hm.', as: 'Villain' }, 'do'), /out of character/);
+  const done = await f.post({ topic: 'night', body: 'The door bangs open. [roll=Perception]1d20[/roll]', as: 'Villain' }, 'do');
+  assert.deepEqual([done.posted, done.as, done.rolls.length], [true, 'Villain', 1]);
+  // Ask me: the post waits in the topic, for the GMs only.
+  const ask = await f.post({ topic: 'night', body: 'A storm rolls in.' }, 'ask');
+  assert.equal(ask.waitingForGM, true);
+  const view = async (h) => (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
+  let page = await view(gm);
+  assert.deepEqual(page.posts.map(p => [p.as, p.ai]), [[null, false], ['hero', false], ['villain', true]]);
+  assert.deepEqual(page.suggested.map(s => [s.name, s.body, s.connection]), [['Game Master', 'A storm rolls in.', 'Claude']]);
+  assert.equal(page.topic.suggested, 1);
+  const theirs = await view(p1);
+  assert.deepEqual([theirs.suggested, theirs.topic.suggested], [[], 0]);
+  assert.match((await (await p1.post({ action: 'suggestion', campaign: KEY, topicId, suggestionId: ask.suggestion, op: 'approve' })).json()).error, /Only the GM and co-GMs/);
+  assert.equal((await (await gm.post({ action: 'suggestion', campaign: KEY, topicId, suggestionId: ask.suggestion, op: 'approve', body: 'A storm rolls in fast.' })).json()).ok, true);
+  page = await view(gm);
+  assert.deepEqual([page.posts.at(-1).body, page.posts.at(-1).ai, page.posts.at(-1).as, page.suggested.length, page.topic.suggested], ['A storm rolls in fast.', true, null, 0, 0]);
+  assert.match((await (await gm.post({ action: 'suggestion', campaign: KEY, topicId, suggestionId: ask.suggestion, op: 'approve' })).json()).error, /already answered/);
+  const rats = await f.post({ topic: 'night', body: 'Rats.' }, 'ask');
+  assert.equal((await (await gm.post({ action: 'suggestion', campaign: KEY, topicId, suggestionId: rats.suggestion, op: 'skip' })).json()).ok, true);
+  page = await view(gm);
+  assert.deepEqual([page.posts.length, page.suggested.length], [4, 0]);
+  const started = await f.start({ board: 'tavern', title: 'Market day', body: 'Stalls open.', as: 'Villain' });
+  assert.deepEqual([started.started, started.board], [true, 'Tavern']);
+  assert.deepEqual(logs.map(l => l[0]), ['post_to_forum', 'post_to_forum', 'post_to_forum', 'start_topic']);
+  assert.match(logs[1][1], /Suggested a post as narration/);
+});
+
+test('mcp: forum tools follow the connection\'s Post in the forum setting', async () => {
+  const rest = p => { const { forumPosts: _, ...x } = p; return x; };
+  assert.equal(fillPerms(rest(presets.gm)).forumPosts, 'do');
+  assert.equal(fillPerms(rest(presets.helper)).forumPosts, 'ask');
+  assert.equal(fillPerms(rest(presets.read)).forumPosts, 'off');
+  const calls = [], suggested = [];
+  const forum = {
+    post: async (a, mode) => { calls.push(['post', a, mode]); if (a.topic === 'gone') throw new M.ForumError('That topic was removed.'); return { posted: mode === 'do' }; },
+    start: async a => { calls.push(['start', a]); return { started: true }; },
+    read: async a => ({ title: a.topic }), boards: async () => ({}), topics: async () => ({}), turns: async () => ({}),
+  };
+  const c = { book: workspace, campaign: workspace.campaigns[0], maps: null, level: 'assist', perms: { ...presets.helper }, forum, suggest: async s => { suggested.push(s); return 'sug1'; }, commit: async () => ({}) };
+  const text = r => r.content[0].text;
+  let r = await callTool(c, 'post_to_forum', { topic: 'Night', body: 'Hi' });
+  assert.deepEqual(calls.at(-1), ['post', { topic: 'Night', body: 'Hi', as: undefined }, 'ask']);
+  r = await callTool(c, 'start_topic', { board: 'Tavern', title: 'Market', body: 'Stalls.' });
+  assert.match(text(r), /waitingForGM/);
+  assert.deepEqual([calls.length, suggested[0].tool, suggested[0].summary], [1, 'start_topic', 'Start “Market” on Tavern']);
+  await callTool(c, 'start_topic', { board: 'Tavern', title: 'Market', body: 'Stalls.' }, { approved: true });
+  assert.equal(calls.at(-1)[0], 'start');
+  await callTool({ ...c, perms: { ...presets.gm }, level: 'run' }, 'post_to_forum', { topic: 'Night', body: 'Hi', as: 'Villain' });
+  assert.equal(calls.at(-1)[2], 'do');
+  r = await callTool({ ...c, perms: { ...presets.gm }, level: 'run' }, 'post_to_forum', { topic: 'gone', body: 'Hi' });
+  assert.deepEqual([r.isError, text(r)], [true, 'That topic was removed.']);
+  assert.match(text(await callTool({ ...c, perms: { ...presets.helper, forumPosts: 'off' } }, 'post_to_forum', { topic: 'Night', body: 'Hi' })), /turned off/);
+  assert.match(text(await callTool({ ...c, paused: true }, 'post_to_forum', { topic: 'Night', body: 'Hi' })), /paused/);
+  assert.match(text(await callTool({ ...c, level: 'read', perms: presets.read }, 'post_to_forum', { topic: 'Night', body: 'Hi' })), /needs Assist/);
+  assert.match(text(await callTool({ ...c, level: 'read', perms: presets.read }, 'read_topic', { topic: 'Night' })), /"title":"Night"/);
+  assert.match(text(await callTool({ ...c, forum: undefined }, 'whose_turn', {})), /can't reach the campaign's forum/);
 });
