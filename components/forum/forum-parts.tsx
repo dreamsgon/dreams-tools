@@ -24,6 +24,16 @@ export function Link({ k, to, go, className, children, title }: { k: string; to:
  * emoji by code. Outside a forum, emoji show as their :code: and pictures don't load.
  */
 export const PostContext = createContext<{ k: string; emoji: ReadonlyMap<string, string> } | null>(null);
+/** The features and spells the topic's posts name, as this reader may see them (`kind:character:id`). */
+export const SheetContext = createContext<Readonly<Record<string, { name: string; group: string; note: string; text: string }>>>({});
+/** A feature or spell named in a post: its name, and its text on hover or focus for readers who may see it. */
+function FeatureChip({ kind, char, id, name }: { kind: 'feature' | 'spell'; char: string; id: string; name: string }) {
+  const line = useContext(SheetContext)[`${kind}:${char}:${id}`];
+  return <span className={`feat feat-${kind}`} tabIndex={line ? 0 : undefined} aria-label={line ? `${name}: ${[line.note, line.text].filter(Boolean).join('. ')}` : name}>
+    <span aria-hidden="true">{kind === 'spell' ? '✦' : '◆'}</span> {name}
+    {line && (line.note || line.text) && <span className="feat-card" aria-hidden="true"><b>{line.name}</b>{line.group && <small>{line.group}</small>}{line.note && <em>{line.note}</em>}{line.text && <span>{line.text}</span>}</span>}
+  </span>;
+}
 export const emojiMap = (frame: Frame) => new Map(frame.emoji.list.map(e => [e.code, e.imageId]));
 
 /** One of the campaign's emoji, about as tall as the text. */
@@ -90,6 +100,9 @@ function Inline({ text, links, rolls }: { text: string; links?: Links; rolls?: R
       case 'bold': return <strong key={i}><Emojified text={p.text} /></strong>;
       case 'italic': return <em key={i}><Emojified text={p.text} /></em>;
       case 'underline': return <u key={i}><Emojified text={p.text} /></u>;
+      case 'feature': return <FeatureChip key={i} kind={p.kind} char={p.char} id={p.id} name={p.name} />;
+      case 'strike': return <s key={i}><Emojified text={p.text} /></s>;
+      case 'url': return <a key={i} className="ext" href={p.href} target="_blank" rel="nofollow noopener noreferrer ugc">{p.label}</a>;
       case 'code': return <code key={i}>{p.text}</code>;
       case 'speech': return <span key={i} className="speech"><Emojified text={p.text} /></span>;
       case 'link': { const l = links?.[p.target]; return l ? <a key={i} className="wiki" href={l.url} title={l.summary ? `${l.title}: ${l.summary}` : l.title}>{p.label}</a> : <span key={i} className="wiki">{p.label}</span>; }
@@ -243,11 +256,14 @@ export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go })
 }
 
 /** A topic in a list. Moderators get a box to pick it for multi-moderation. */
+/** One of the forum's preset topic tags, in its colour. */
+export const TopicTagChip = ({ tag }: { tag: { label: string; color: string } }) => <span className={`tag topic-tag tc-${tag.color}`}>{tag.label}</span>;
+
 export function TopicRow({ t, k, go, board, pick }: { t: TopicRowData; k: string; go: Go; board?: string; pick?: { on: boolean; set: (on: boolean) => void } }) {
   return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}${pick ? ' pickable' : ''}${pick?.on ? ' picked' : ''}`}>
     {pick && <label className="topic-pick"><input type="checkbox" checked={pick.on} onChange={e => pick.set(e.target.checked)} aria-label={`Select ${t.title}`} /></label>}
     <div className="topic-main">
-      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.combat && <span className="tag fight"><Swords size={11} aria-hidden="true" /> Combat · round {t.combat.round}</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}{t.suggested > 0 && <span className="tag ai-mark" title="Posts your AI suggested, waiting for you to approve, change or skip"><Bot size={11} aria-hidden="true" /> {t.suggested === 1 ? 'AI suggestion' : `${t.suggested} AI suggestions`}</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
+      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.combat && <span className="tag fight"><Swords size={11} aria-hidden="true" /> Combat · round {t.combat.round}</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}{t.suggested > 0 && <span className="tag ai-mark" title="Posts your AI suggested, waiting for you to approve, change or skip"><Bot size={11} aria-hidden="true" /> {t.suggested === 1 ? 'AI suggestion' : `${t.suggested} AI suggestions`}</span>}{t.tags.map(x => <TopicTagChip key={x.id} tag={x} />)}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
       <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
       {t.next && <span className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={12} aria-hidden="true" />{turnText(t.next)}</span>}
       {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}

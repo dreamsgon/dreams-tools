@@ -12,6 +12,9 @@ const inline = (text: string) => postInline(text).map(p => {
     case 'bold': return `<b>${esc(p.text)}</b>`;
     case 'italic': return `<i>${esc(p.text)}</i>`;
     case 'underline': return `<u>${esc(p.text)}</u>`;
+    case 'feature': return `<b>${esc(p.name)}</b>`;
+    case 'strike': return `<s>${esc(p.text)}</s>`;
+    case 'url': return `<a href="${esc(p.href)}" rel="nofollow noopener noreferrer">${esc(p.label)}</a>`;
     case 'code': return `<code>${esc(p.text)}</code>`;
     case 'speech': return `<span class="speech">${esc(p.text)}</span>`;
     case 'link': return esc(p.label);

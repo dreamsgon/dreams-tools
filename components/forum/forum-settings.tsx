@@ -1,7 +1,8 @@
 'use client';
 /* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards, and (the GM) the AI. */
 import { useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Smile, Sparkles, Trash2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Smile, Sparkles, Tag, Trash2, Upload } from 'lucide-react';
+import type { TopicTag } from '@/lib/forum/model';
 import { Emoji } from './forum-parts';
 import { uploadForumPicture } from './forum-insert';
 import { confirmDialog } from '../confirm-dialog';
@@ -27,7 +28,7 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
   const [s, setS] = useState(page.settings), { call, error, busy } = useCall(k, done);
   const link = (i: number, patch: Partial<{ label: string; url: string }>) => setS({ ...s, links: s.links.map((l, n) => n === i ? { ...l, ...patch } : l) });
   return <section className="settings-card">
-    <h2>Banner, links and notices</h2>
+    <h2>Banner, links, notices and writing</h2>
     <label className="f-field">Title<input value={s.title} maxLength={80} placeholder="The campaign’s name" onChange={e => setS({ ...s, title: e.target.value })} /></label>
     <label className="f-field">Tagline<input value={s.tagline} maxLength={160} placeholder="A line under the title" onChange={e => setS({ ...s, tagline: e.target.value })} /></label>
     <label className="f-check"><input type="checkbox" checked={s.banner} onChange={e => setS({ ...s, banner: e.target.checked })} /><span>Use the campaign’s banner picture behind the title <small>(set it in the campaign’s Look in the Encyclopedia)</small></span></label>
@@ -46,7 +47,11 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
       <button className="f-btn ghost small" aria-label="Remove notice" onClick={() => setS({ ...s, notices: (s.notices ?? []).filter(x => x.id !== n.id) })}><Trash2 size={14} aria-hidden="true" /></button>
     </div>)}
     {(s.notices ?? []).length < 3 && <button className="f-btn ghost small" onClick={() => setS({ ...s, notices: [...(s.notices ?? []), { id: 'n' + Date.now().toString(36), text: '' }] })}><Plus size={14} aria-hidden="true" />Add a notice</button>}
-    <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'settings', settings: { ...s, notices: (s.notices ?? []).filter(n => n.text.trim()) } })}>{busy ? 'Saving…' : 'Save banner and notices'}</button></div>
+    <h3>Writing posts</h3>
+    <label className="f-field">The toolbar writes<select value={s.markup ?? 'markdown'} onChange={e => setS({ ...s, markup: e.target.value as 'markdown' | 'bbcode' })}>
+      <option value="markdown">Markdown: **bold**, *italic*, &gt; quote</option><option value="bbcode">BBCode: [b]bold[/b], [i]italic[/i], [quote]</option>
+    </select><small>Posts read both either way, so members can type whichever they know.</small></label>
+    <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'settings', settings: { ...s, notices: (s.notices ?? []).filter(n => n.text.trim()) } })}>{busy ? 'Saving…' : 'Save these settings'}</button></div>
     {error && <p className="form-error" role="alert">{error}</p>}
   </section>;
 }
@@ -235,10 +240,37 @@ function EmojiSettings({ page, k, done }: { page: Settings; k: string; done: Don
   </section>;
 }
 
+// The same colours as TAG_COLOURS in lib/forum/model.ts, which stays out of the browser bundle.
+const COLOUR_NAMES: Record<TopicTag['color'], string> = { gold: 'Gold', green: 'Green', blue: 'Blue', violet: 'Violet', red: 'Red', grey: 'Grey' };
+const TAG_COLOURS = Object.keys(COLOUR_NAMES) as TopicTag['color'][];
+
+/** Preset topic tags: names and colours a topic's starter can pick (up to three), like Open, Mature or Plot. */
+function TopicTagSettings({ page, k, done }: { page: Settings; k: string; done: Done }) {
+  const [list, setList] = useState<TopicTag[]>(page.topicTags), { call, error, busy } = useCall(k, done);
+  const set = (i: number, v: Partial<TopicTag>) => setList(list.map((x, n) => n === i ? { ...x, ...v } : x));
+  const add = () => setList([...list, { id: 't' + Math.random().toString(36).slice(2, 10), label: '', color: TAG_COLOURS[list.length % TAG_COLOURS.length] }]);
+  const empty = list.some(x => !x.label.trim()), twice = list.find((x, i) => list.findIndex(y => y.label.trim().toLowerCase() === x.label.trim().toLowerCase()) !== i);
+  return <section className="settings-card tag-settings">
+    <h2><Tag size={16} aria-hidden="true" /> Topic tags</h2>
+    <p className="muted">Tags a topic’s starter can put on it, up to three, such as Open, Closed, Mature or Main plot. They show beside the topic’s title. Moderators can change them on any topic.</p>
+    {list.length > 0 && <ul className="tag-rows">{list.map((x, i) => <li key={x.id}>
+      <span className={`tag topic-tag tc-${x.color}`}>{x.label.trim() || 'Tag'}</span>
+      <input aria-label="Tag name" value={x.label} maxLength={24} placeholder="Tag name" onChange={e => set(i, { label: e.target.value })} />
+      <label className="f-select small"><span className="sr-only">Colour</span><select value={x.color} onChange={e => set(i, { color: e.target.value as TopicTag['color'] })}>{TAG_COLOURS.map(c => <option key={c} value={c}>{COLOUR_NAMES[c]}</option>)}</select></label>
+      <button type="button" className="icon-btn" aria-label={`Remove ${x.label || 'this tag'}`} onClick={() => setList(list.filter((_, n) => n !== i))}><Trash2 size={14} /></button>
+    </li>)}</ul>}
+    <button type="button" className="f-btn ghost small" disabled={list.length >= 20} onClick={add}><Plus size={13} aria-hidden="true" />Add a tag</button>
+    {list.length < page.topicTags.length && <p className="muted small">Removing a tag takes it off every topic that has it.</p>}
+    {(empty || twice) && <p className="form-error">{empty ? 'Every tag needs a name.' : `Two tags are called ${twice!.label.trim()}.`}</p>}
+    <div className="settings-foot"><button className="f-btn" disabled={busy || empty || !!twice} onClick={() => void call({ action: 'topicTags', tags: list.map(x => ({ ...x, label: x.label.trim() })) })}>{busy ? 'Saving…' : 'Save tags'}</button></div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </section>;
+}
+
 export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page: Settings; k: string; go: Go; done: Done }) {
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
     <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
-    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
+    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} /><TopicTagSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
   </>;
 }

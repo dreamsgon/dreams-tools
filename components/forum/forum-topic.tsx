@@ -7,8 +7,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { Archive, ArchiveRestore, Check, EyeOff, Flag, Sparkles, Swords, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type Place, type TopicPage } from './forum-api';
-import { Composer, type AfterPost } from './forum-compose';
-import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go } from './forum-parts';
+import { Composer, TagChoice, type AfterPost } from './forum-compose';
+import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, TopicTagChip, turnText, type Go } from './forum-parts';
 import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-moderate';
 import { CombatPanel, CombatSetup } from './forum-combat';
 import { AiTopicHelp } from './forum-ai';
@@ -27,8 +27,8 @@ export function BoardView({ frame, page, k, go, done, startOpen }: { frame: Fram
   const subs = frame.boards.filter(x => x.parentId === b.id), canStart = b.start && !page.archive;
   const [only, setOnly] = useState<string[] | null>(null), [picked, setPicked] = useState<string[]>([]);
   const shown = new Set(page.topics.map(t => t.id)), chosen = picked.filter(id => shown.has(id));
-  const start = async (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean }) => {
-    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as, ...(only ? { private: only } : {}), ...(v.ai ? { ai: true } : {}) });
+  const start = async (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[] }) => {
+    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as, ...(only ? { private: only } : {}), ...(v.ai ? { ai: true } : {}), ...(v.tags.length ? { tags: v.tags } : {}) });
     await afterPosting(k, out.topicId, v.after);
     setWriting(false); setOnly(null); await done({ view: 'topic', id: out.topicId });
   };
@@ -137,7 +137,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
 }
 
 function ModTools({ frame, page, k, done, go, fight }: { frame: Frame; page: TopicPage; k: string; done: Done; go: Go; fight?: () => void }) {
-  const t = page.topic, r = frame.you.rights, [error, setError] = useState(''), [renaming, setRenaming] = useState(false), [title, setTitle] = useState(t.title);
+  const t = page.topic, r = frame.you.rights, [error, setError] = useState(''), [renaming, setRenaming] = useState(false), [title, setTitle] = useState(t.title), [tags, setTags] = useState(t.tags.map(x => x.id));
   const call = async (body: Record<string, unknown>) => { setError(''); try { await forumCall({ campaign: k, topicId: t.id, ...body }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not change the topic.'); } };
   const sameKind = frame.boards.filter(b => b.kind === t.kind);
   const trash = async () => {
@@ -147,8 +147,10 @@ function ModTools({ frame, page, k, done, go, fight }: { frame: Frame; page: Top
   const print = <Link k={k} go={go} to={{ view: 'print', id: t.id }} className="f-btn ghost small"><Printer size={13} aria-hidden="true" />Print · download</Link>;
   if (t.trashed) return null;
   return <div className="mod-tools">
-    {renaming ? <form onSubmit={e => { e.preventDefault(); void call({ action: 'topic', title }).then(() => setRenaming(false)); }}><input value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" /><button className="f-btn small">Save</button><button type="button" className="f-btn ghost small" onClick={() => setRenaming(false)}>Cancel</button></form>
-      : t.canRename && <button className="f-btn ghost small" onClick={() => setRenaming(true)}><Pencil size={13} aria-hidden="true" />Rename</button>}
+    {renaming ? <form className="rename-form" onSubmit={e => { e.preventDefault(); void call({ action: 'topic', title, ...(frame.topicTags.length ? { tags } : {}) }).then(() => setRenaming(false)); }}><input value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" />
+        {frame.topicTags.length > 0 && <TagChoice frame={frame} tags={tags} set={setTags} />}
+        <button className="f-btn small">Save</button><button type="button" className="f-btn ghost small" onClick={() => { setRenaming(false); setTitle(t.title); setTags(t.tags.map(x => x.id)); }}>Cancel</button></form>
+      : t.canRename && <button className="f-btn ghost small" onClick={() => setRenaming(true)}><Pencil size={13} aria-hidden="true" />{frame.topicTags.length ? 'Title and tags' : 'Rename'}</button>}
     {r.moderate && <>
       {!t.archived && <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', pinned: !t.pinned })}><Pin size={13} aria-hidden="true" />{t.pinned ? 'Unpin' : 'Pin'}</button>}
       {!t.archived && <button className="f-btn ghost small" onClick={() => void call({ action: 'topic', locked: !t.locked })}><Lock size={13} aria-hidden="true" />{t.locked ? 'Unlock' : 'Lock'}</button>}
@@ -187,6 +189,7 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="topic-head">
       <div className="topic-title-row"><h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.archived && <Archive size={16} aria-label="Archived" />}{t.title}</h2>{addReply}</div>
+      {t.tags.length > 0 && <p className="topic-tags">{t.tags.map(x => <TopicTagChip key={x.id} tag={x} />)}</p>}
       <p className="muted">{t.kind === 'ic' ? 'In character' : 'Out of character'} · started by {t.by.name} · {t.replies + 1} {t.replies ? 'posts' : 'post'}</p>
       {t.only && <p className="private-line"><EyeOff size={13} aria-hidden="true" />Private: only {t.only.join(', ')} and the GMs can see this topic.</p>}
       <TrashedBanner t={t} k={k} go={go} done={() => done()} />

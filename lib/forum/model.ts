@@ -16,7 +16,7 @@ import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMet
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
 import { emojiCodes, pictureIds } from "./markup.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3 } as const;
 /** Largest picture in a post, and largest emoji, in bytes. */
 export const PICTURE_BYTES = 8 * 1024 * 1024, EMOJI_BYTES = 256 * 1024;
 /** Days a topic stays in the Trash before it goes for good. */
@@ -39,6 +39,8 @@ export const forumSettingsSchema = z.object({
   banner: z.boolean(),
   /** The notices strip under the banner: short lines from the GM, each dismissible by a reader. */
   notices: z.array(z.object({ id, text: z.string().trim().min(1).max(240) })).max(3).optional(),
+  /** Which markup the composer's toolbar writes: Markdown (left out) or BBCode. Posts read both either way. */
+  markup: z.enum(["markdown", "bbcode"]).optional(),
   /** The forum's AI help (ai.ts); left out: no AI in the forum. Set with `setAi`, never with the banner. */
   ai: forumAiSchema.optional(),
 });
@@ -86,7 +88,12 @@ export const topicSummarySchema = z.object({
   combat: combatSchema.optional(),
   /** Posts an AI connection suggested, waiting for the GM (worked out from the topic file). */
   suggested: z.number().int().min(1).max(20).optional(),
+  /** The forum's preset tags on it (`topicTagSchema` ids), like Open or Finished. */
+  tags: z.array(id).max(FORUM_LIMITS.tagsPerTopic).optional(),
 });
+/** A preset tag the GM offers for topics, with one of the theme's colours. */
+export const TAG_COLOURS = ["gold", "green", "blue", "violet", "red", "grey"] as const;
+export const topicTagSchema = z.object({ id, label: nameOf(24), color: z.enum(TAG_COLOURS) });
 /** A reader telling the moderating team about a post: who, why and when. One per reader per post. */
 export const reportSchema = z.object({ id, topicId: id, postId: id, by: userId, reason: z.string().trim().min(1).max(300), at });
 /** A picture someone added to the forum (stored with the GM's pictures): for posts, or one of the campaign's emoji. */
@@ -117,6 +124,8 @@ export const forumSchema = z.object({
   uploads: z.array(uploadSchema).max(FORUM_LIMITS.uploads).optional(),
   /** The campaign's own emoji (`emojiSettingsSchema`). */
   emoji: emojiSettingsSchema.optional(),
+  /** Preset tags for topics (`topicTagSchema`), set in Forum settings. */
+  topicTags: z.array(topicTagSchema).max(FORUM_LIMITS.topicTags).optional(),
 });
 export const postSchema = z.object({
   id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional(),
@@ -144,6 +153,7 @@ export type Suggestion = z.infer<typeof suggestionSchema>;
 export type Recent = z.infer<typeof recentSchema>;
 export type Report = z.infer<typeof reportSchema>;
 export type Upload = z.infer<typeof uploadSchema>;
+export type TopicTag = z.infer<typeof topicTagSchema>;
 export type EmojiSettings = z.infer<typeof emojiSettingsSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
@@ -260,7 +270,7 @@ const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) =
 };
 
 /** The topic's summary worked out again from its posts, keeping what moderators set (pinned, locked, title). */
-type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private" | "combat">>;
+type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private" | "combat" | "tags">>;
 export function summarize(topic: Topic, base: Kept): TopicSummary {
   const first = topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1]!;
   const cast: string[] = [], order: string[] = [];
@@ -271,7 +281,7 @@ export function summarize(topic: Topic, base: Kept): TopicSummary {
   }
   return {
     id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order,
-    ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}), ...(base.combat ? { combat: base.combat } : {}),
+    ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}), ...(base.combat ? { combat: base.combat } : {}), ...(base.tags?.length ? { tags: base.tags } : {}),
     ...(topic.suggested?.length ? { suggested: topic.suggested.length } : {}),
   };
 }
@@ -293,14 +303,21 @@ export type Change<T = undefined> = { topic?: Topic | null; forum: (f: Forum, la
 const withRolls = (rolls: readonly (Roll | null)[] | undefined) => rolls?.length ? { rolls: rolls.slice(0, ROLL_LIMIT) } : {};
 /** The AI mark, for moderators who post a draft from Draft with AI. */
 const withAi = (ai: boolean | undefined, who: Poster) => ai && who.rights.moderate ? { ai: true as const } : {};
-export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
+/** Tags for a topic: the forum's own, each once, three at most. */
+const cleanTags = (f: Forum, tags: readonly string[]) => {
+  const known = new Set((f.topicTags ?? []).map(t => t.id)), out = [...new Set(tags)];
+  if (out.some(t => !known.has(t))) fail("That tag was removed. Pick from the forum's tags.");
+  return out.length > FORUM_LIMITS.tagsPerTopic ? fail(`A topic can have up to ${FORUM_LIMITS.tagsPerTopic} tags.`) : out;
+};
+export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean; tags?: string[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = checkMarkup(f, cleanBody(input.body), who);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
   const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who) }] };
-  const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}) });
+  const tags = input.tags?.length ? cleanTags(f, input.tags) : [];
+  const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}), ...(tags.length ? { tags } : {}) });
   const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
   return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
@@ -444,11 +461,13 @@ export function setCombat(f: Forum, input: { topicId: string; op: "start" | "ord
 export const expiredTrash = (f: Forum, now: Date) => f.topics.filter(t => t.trashed && now.getTime() - new Date(t.trashed.at).getTime() > TRASH_DAYS * 86_400_000).map(t => t.id);
 
 /** Pin, lock, rename or move a topic. Moderators, or the person who started it for its title. */
-export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string; pinned?: boolean; locked?: boolean; archived?: boolean; title?: unknown; boardId?: string }, who: Poster): Change {
+export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string; pinned?: boolean; locked?: boolean; archived?: boolean; title?: unknown; boardId?: string; tags?: string[] }, who: Poster): Change {
   const s = seenBy(f, input.topicId, who), starter = s.by.userId === who.userId;
   const mod = input.pinned !== undefined || input.locked !== undefined || input.boardId !== undefined || input.archived !== undefined;
   if (mod && !who.rights.moderate) fail("Only moderators can pin, lock, archive or move topics.");
   if (input.title !== undefined && !starter && !who.rights.moderate) fail("Only the person who started it or a moderator can rename a topic.");
+  if (input.tags !== undefined && !starter && !who.rights.moderate) fail("Only the person who started it or a moderator can change its tags.");
+  const tags = input.tags === undefined ? undefined : cleanTags(f, input.tags);
   const title = input.title === undefined ? undefined : cleanTitle(input.title);
   let moved: Topic | undefined;
   if (input.boardId !== undefined && input.boardId !== s.boardId) {
@@ -460,6 +479,7 @@ export function setTopic(f: Forum, topic: Topic | null, input: { topicId: string
     const next: TopicSummary = { ...t, ...(input.pinned !== undefined ? { pinned: input.pinned } : {}), ...(input.locked !== undefined ? { locked: input.locked } : {}), ...(title ? { title } : {}), ...(moved ? { boardId: moved.boardId } : {}) };
     if (input.archived === true) next.archived = true;
     if (input.archived === false) delete next.archived;
+    if (tags) { if (tags.length) next.tags = tags; else delete next.tags; }
     return next;
   };
   return { ...(moved ? { topic: moved } : {}), forum: g => ({ ...g, topics: g.topics.map(t => t.id === s.id ? patch(t) : t) }) };
@@ -497,6 +517,17 @@ export function setEmoji(f: Forum, input: unknown, who: Poster): Change {
   }
   const list = e.list.map(x => x.set ? x : { code: x.code, imageId: x.imageId });
   return { forum: g => ({ ...g, emoji: { use: e.use, list } }) };
+}
+
+/** The forum's preset topic tags. A tag taken away comes off the topics that had it. */
+export function setTopicTags(_f: Forum, input: unknown, who: Poster): Change {
+  needBoards(who);
+  const parsed = z.array(topicTagSchema).max(FORUM_LIMITS.topicTags).safeParse(input);
+  if (!parsed.success) fail(`Tags need a name of up to 24 characters, and a forum has up to ${FORUM_LIMITS.topicTags}.`);
+  const list = parsed.data!, ids = new Set(list.map(t => t.id));
+  if (ids.size !== list.length) fail("Two tags share an id.");
+  if (new Set(list.map(t => t.label.toLocaleLowerCase())).size !== list.length) fail("Two tags have the same name.");
+  return { forum: g => ({ ...g, topicTags: list, topics: g.topics.map(t => { if (!t.tags?.some(x => !ids.has(x))) return t; const n: TopicSummary = { ...t, tags: t.tags.filter(x => ids.has(x)) }; if (!n.tags?.length) delete n.tags; return n; }) }) };
 }
 
 export function setSettings(_f: Forum, input: unknown, who: Poster): Change {

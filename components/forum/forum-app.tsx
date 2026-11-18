@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
-import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, emojiMap } from './forum-parts';
+import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
 import { PrintView, ReportsView, TrashView } from './forum-moderate';
@@ -86,7 +86,7 @@ export default function ForumApp() {
       <TopBar frame={frame} k={k} go={go} />
       <Banner frame={frame} k={k} go={go} />
       <Notices frame={frame} />
-      <main className="board-main">
+      <SheetContext.Provider value={page.kind === 'topic' ? page.features : {}}><main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
         {page.kind === 'index' && <IndexPage frame={frame} k={k} go={go} />}
         {page.kind === 'board' && <BoardView key={page.board.id + (page.archive ? ':a' : '')} frame={frame} page={page} k={k} go={go} done={done} startOpen={place.view === 'board' && !!place.start} />}
@@ -108,7 +108,7 @@ export default function ForumApp() {
           <section className="members"><h2 className="category-title">Members</h2><p className="muted">Posts in character count towards the member’s own total.</p>
             <ol className="member-list">{page.members.map(m => { const w = whoStyle(m.color); return <li key={m.name + m.role}><Circle name={m.name} /><span><b className={w.className} style={w.style}>{m.name}</b><small>{m.role}{m.online && <> · <span className="online-dot" />online now</>}</small></span><span className="member-posts"><b>{m.posts}</b> {m.posts === 1 ? 'post' : 'posts'}</span></li>; })}</ol></section>
         </>}
-      </main>
+      </main></SheetContext.Provider>
       <Footer frame={frame} k={k} go={go} onReadAll={async () => { try { await forumCall({ action: 'readAll', campaign: k }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not mark the forum read.'); } }} />
       <BackToTop />
     </div>
