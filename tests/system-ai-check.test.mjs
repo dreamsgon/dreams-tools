@@ -90,10 +90,10 @@ test('checking uses the GM’s own key with the pages it may read, saves nothing
  const {s,w}=kel(),r={...systemCheckRequest(s,'Kel'),pages:['reach','missing']};
  const before=JSON.stringify((await new EncyclopediaStore(b).read(OWNER)).data);
  const f=fakeFetch([oaCall({verdict:'stretch',findings:[{title:'The Reach',fit:'stretch',text:'Warmer than the Reach.',quote:'Most worlds here are cold.',page:'The Veiled Reach',change:{world:w.id,field:'temp',value:-30}}]})]);
- const out=await checkSystem(b,OWNER,C,conn.id,r,f);
+ const out=await checkSystem(b,OWNER,C,{connectionId:conn.id,apiKey:'sk-test-1234567890abcd'},r,f);
  assert.equal(out.findings[0].change.value,-30);assert.equal(out.skipped,1);assert.equal(out.tokens,700);
  assert.match(userText(f.sent[0]),/### The Veiled Reach \(lore\)\nMost worlds here are cold\./);
  assert.equal((await listConnections(b,OWNER,C))[0].api.used,700);
  assert.equal(JSON.stringify((await new EncyclopediaStore(b).read(OWNER)).data),before);
- await assert.rejects(checkSystem(b,OWNER,C,conn.id,r,fakeFetch([oaCall({verdict:'fits',findings:[]})])),/didn't send a check/);
+ await assert.rejects(checkSystem(b,OWNER,C,{connectionId:conn.id,apiKey:'sk-test-1234567890abcd'},r,fakeFetch([oaCall({verdict:'fits',findings:[]})])),/didn't send a check/);
 });

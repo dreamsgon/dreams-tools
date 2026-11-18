@@ -97,7 +97,7 @@ test('checking calls the GM’s own key with the pages it may read, returns find
  const {b,connection}=await setup();
  const before=JSON.stringify((await new EncyclopediaStore(b).read(OWNER)).data);
  const f=fakeFetch([oaCall(answer)]);
- const out=await checkWorld(b,OWNER,C,connection.id,request,f);
+ const out=await checkWorld(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},request,f);
  assert.equal(out.findings.length,3);assert.equal(out.by,'Sonnet');assert.equal(out.model,'gpt-test');assert.equal(out.tokens,900);assert.equal(out.skipped,0);
  assert.match(userText(f.sent[0]),/### The Veiled Reach \(lore\)\nFew worlds in the Reach know warmth\./);
  assert.match(userText(f.sent[0]),/The Drowned Sun/);
@@ -110,11 +110,11 @@ test('a players-only connection never reads GM-only pages, and failures say so w
  const {b,connection}=await setup();
  await updateConnection(b,OWNER,C,connection.id,{perms:{...permsOf(connection),seeSecrets:'off'}});
  const f=fakeFetch([oaCall(answer)]);
- const out=await checkWorld(b,OWNER,C,connection.id,request,f);
+ const out=await checkWorld(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},request,f);
  assert.equal(out.skipped,1);
  assert.doesNotMatch(userText(f.sent[0]),/Drowned Sun|dying/);
- await assert.rejects(checkWorld(b,OWNER,C,connection.id,request,fakeFetch([oaCall({verdict:'fits',findings:[]})])),/didn't send a check/);
+ await assert.rejects(checkWorld(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},request,fakeFetch([oaCall({verdict:'fits',findings:[]})])),/didn't send a check/);
  assert.equal((await listConnections(b,OWNER,C))[0].api.used,1800);
- await assert.rejects(checkWorld(b,OWNER,C,'nope',request,fakeFetch([])),/was removed/);
- await assert.rejects(checkWorld(b,OWNER,C,connection.id,request,fakeFetch([[401,{error:{message:'Bad key'}}]])));
+ await assert.rejects(checkWorld(b,OWNER,C,{connectionId:'nope',apiKey:'sk-test-1234567890abcd'},request,fakeFetch([])),/was removed/);
+ await assert.rejects(checkWorld(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},request,fakeFetch([[401,{error:{message:'Bad key'}}]])));
 });

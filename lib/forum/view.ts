@@ -350,8 +350,8 @@ export function frameOf(ctx: Context) {
       /** Their saved post styles (forum profile), for Insert. */
       styles: f.profiles?.[ctx.viewer.userId]?.styles ?? [],
       unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting, alerts: alertsOf(ctx, entries),
-      /** The AI help this viewer may use (ai.ts). */
-      ai: aiFor(f.settings.ai, ctx.viewer.rights),
+      /** The AI help this viewer may use (ai.ts). The GM also gets the forum's connection, whose key their device may hold. */
+      ai: { ...aiFor(f.settings.ai, ctx.viewer.rights), ...(ctx.viewer.rights.owner && f.settings.ai ? { connectionId: f.settings.ai.connectionId } : {}) },
       /** Members by key and name, for choosing who a private topic is for. */
       people: ctx.viewer.rights.start ? [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].filter(u => u !== ctx.viewer.userId).map(u => ({ key: memberKey(ctx, u), name: memberName(ctx, u), gm: u === ctx.owner || can(ctx.list, u, "seeGm") })) : [],
     },

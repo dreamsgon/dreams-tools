@@ -6,9 +6,20 @@
 import { useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { forumCall, type Frame, type TopicPage } from './forum-api';
+import { deviceKey, ownAi } from '@/lib/ai/device-keys';
 
 type Summary = { summary: string; points: string[]; posts: number; by?: string };
 const errorOf = (e: unknown) => e instanceof Error ? e.message : 'The AI didn’t answer. Try again.';
+/**
+ * The key this request uses, from this device (keys are never saved by RPG Tools): the GM's key for the forum's
+ * connection, else the asker's own AI from Account settings. With neither, the forum says where to add one.
+ */
+function keyOf(frame: Frame) {
+  const id = frame.you.ai.connectionId, gm = id ? deviceKey(id) : null;
+  if (gm) return { apiKey: gm };
+  const own = ownAi();
+  return own ? { own } : {};
+}
 
 /** Summarize the topic, or catch up on what's new since you last read it. */
 export function AiTopicHelp({ frame, page, k, since }: { frame: Frame; page: TopicPage; k: string; since: string | null }) {
@@ -17,7 +28,7 @@ export function AiTopicHelp({ frame, page, k, since }: { frame: Frame; page: Top
   const fresh = since ? page.posts.filter(p => !p.mine && p.at > since).length : 0;
   const ask = async (op: 'summary' | 'catchUp') => {
     setBusy(op); setError('');
-    try { setOut({ ...await forumCall<Summary>({ action: 'ai', campaign: k, op, topicId: page.topic.id, ...(op === 'catchUp' && since ? { since } : {}) }), what: op }); }
+    try { setOut({ ...await forumCall<Summary>({ action: 'ai', campaign: k, ...keyOf(frame), op, topicId: page.topic.id, ...(op === 'catchUp' && since ? { since } : {}) }), what: op }); }
     catch (e) { setError(errorOf(e)); } finally { setBusy(''); }
   };
   return <div className="ai-help">
@@ -48,12 +59,12 @@ export function AiComposerHelp({ frame, k, where, body, as, title, onDraft }: { 
   if (!ai.check && !ai.draft) return null;
   const check = async () => {
     setBusy('check'); setError('');
-    try { const got = await forumCall<{ notes: Note[]; by?: string }>({ action: 'ai', campaign: k, op: 'check', ...where, body, as, ...(title ? { title } : {}) }); setNotes({ list: got.notes, by: got.by, for: body }); }
+    try { const got = await forumCall<{ notes: Note[]; by?: string }>({ action: 'ai', campaign: k, ...keyOf(frame), op: 'check', ...where, body, as, ...(title ? { title } : {}) }); setNotes({ list: got.notes, by: got.by, for: body }); }
     catch (e) { setError(errorOf(e)); } finally { setBusy(''); }
   };
   const draft = async () => {
     setBusy('draft'); setError('');
-    try { const got = await forumCall<{ body: string }>({ action: 'ai', campaign: k, op: 'draft', ...where, as, hint, ...(title ? { title } : {}) }); onDraft(got.body); setDrafting(false); setHint(''); }
+    try { const got = await forumCall<{ body: string }>({ action: 'ai', campaign: k, ...keyOf(frame), op: 'draft', ...where, as, hint, ...(title ? { title } : {}) }); onDraft(got.body); setDrafting(false); setHint(''); }
     catch (e) { setError(errorOf(e)); } finally { setBusy(''); }
   };
   return <div className="ai-compose">

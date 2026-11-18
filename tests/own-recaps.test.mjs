@@ -106,7 +106,7 @@ async function setup(){
 test('Check it with AI reads the GM’s recap and fills only the check list, through add_recap_finds',async()=>{
  const s=await setup();
  const f=fakeFetch([oaCall('save_finds',{found:[{name:'Tobin',kind:'character',text:'The ferryman at Greyfen.'}],quests:[{quest:'The Drowned Bell',log:'Found the bell.',tick:'Find the bell'}]})]);
- const r=await checkRecap(s.b,OWNER,C,s.connection.id,'s13',f);
+ const r=await checkRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},'s13',f);
  assert.equal(r.added,2);assert.equal(r.by,'Sonnet');assert.equal(r.tokens,700);
  const sent=f.sent[0].body;
  assert.deepEqual(sent.tool_choice,{type:'function',function:{name:'save_finds'}});
@@ -125,7 +125,7 @@ test('Check it with AI needs a written recap',async()=>{
  const s=await setup();
  const {data,revision}=await s.store.read(OWNER);
  await s.store.save(OWNER,{...data,entries:data.entries.map(e=>e.id==='s13'?{...e,body:''}:e)},revision);
- await assert.rejects(checkRecap(s.b,OWNER,C,s.connection.id,'s13',fakeFetch([])),/Write the recap first/);
+ await assert.rejects(checkRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},'s13',fakeFetch([])),/Write the recap first/);
  assert.match(checkPrompt({campaign:'C',title:'T',names:'',quests:'',recap:'R'}),/This campaign has no pages yet/);
 });
 
@@ -134,12 +134,12 @@ test('The story so far takes a note, can start fresh, and starts from the GM’s
  const {data,revision}=await s.store.read(OWNER);
  await s.store.save(OWNER,publishRecap(data,'s13',true,NOW),revision);
  const f=fakeFetch([oaSay('The party reached Greyfen.')]);
- const r=await writeStory(s.b,OWNER,C,s.connection.id,f,{note:'End on the bell.',before:'My own words so far.'});
+ const r=await writeStory(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},f,{note:'End on the bell.',before:'My own words so far.'});
  assert.equal(r.text,'The party reached Greyfen.');
  const asked=f.sent[0].body.messages[1].content;
  assert.match(asked,/The GM asks: End on the bell\./);assert.match(asked,/Keep what still holds:\nMy own words so far\./);
  const fresh=fakeFetch([oaSay('Fresh.')]);
- await writeStory(s.b,OWNER,C,s.connection.id,fresh,{keep:false,before:'My own words so far.'});
+ await writeStory(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},fresh,{keep:false,before:'My own words so far.'});
  assert.doesNotMatch(fresh.sent[0].body.messages[1].content,/Keep what still holds|My own words/);
  assert.doesNotMatch(storyPrompt({campaign:'C',recaps:[],left:0}),/The GM asks/);
 });

@@ -20,6 +20,7 @@ import {addFamily,addSuggestions,type GeneratedFamily,defaultFamilyOptions,defau
 import {ToolDialog} from './tool-dialog';
 import {Outline,TreeCanvas,type BoxInfo} from './family-tree';
 import {tieTone,useNarrow} from './connection-list';
+import {fetchConnections,keyFields} from '@/lib/ai/device-keys';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const newSeed=()=>Math.random().toString(36).slice(2,10);
@@ -40,8 +41,8 @@ function useKeyWriters(campaignId:string|null){
  useEffect(()=>{
   if(!campaignId)return;
   let live=true;
-  fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r=>r.ok?r.json():{connections:[]}).then((b:{connections?:{id:string;name:string;api?:{model:string}}[]})=>{
-   if(live)setKeys((b.connections??[]).flatMap(c=>c.api?[{id:c.id,name:c.name,model:c.api.model}]:[]));
+  fetchConnections<{id:string;name:string;api?:{model:string}}>(campaignId).then(list=>{
+   if(live)setKeys(list.flatMap(c=>c.api?[{id:c.id,name:c.name,model:c.api.model}]:[]));
   }).catch(()=>{if(live)setKeys([]);});
   return ()=>{live=false;};
  },[campaignId]);
@@ -51,7 +52,7 @@ function useKeyWriters(campaignId:string|null){
 type TieRequest={brief?:string;family?:string;ties:{key:string;from:{id?:string;name:string};to:{id?:string;name:string};tie:string;gm:boolean}[];people?:{key:string;name:string;note?:string}[]};
 type Written={notes:Record<string,string>;bios:Record<string,string>;skipped:number;by:string;tokens:number};
 async function writeNotes(campaignId:string,connectionId:string,request:TieRequest):Promise<Written>{
- const r=await fetch('/api/encyclopedia/tie-writer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId,connectionId,request})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+ const r=await fetch('/api/encyclopedia/tie-writer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId,...keyFields(connectionId),request})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
  if(!r.ok)throw Error(r.b.error??'Could not write the notes.');
  return r.b as Written;
 }

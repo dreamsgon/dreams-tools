@@ -149,6 +149,11 @@
 .ai-api-settings{padding:2px 14px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised,transparent)}
 .ai-api-save{margin-top:12px}
 .ai-api-save span{font-size:12px;color:var(--muted)}
+/* Whether this browser holds the connection's key (keys stay on the device: lib/ai/device-keys.ts). */
+.ai-device{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin:4px 0 0}
+.ai-device.on{color:var(--accent)}
+.ai-who small.ai-device{display:flex}
+.ai-device .inline-link{font-size:12px}
 @media (max-width:560px){
  .ai-ways,.ai-field-row{grid-template-columns:1fr}
 }

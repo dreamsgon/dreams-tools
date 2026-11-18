@@ -52,7 +52,11 @@ A GM can paste an API key from **Anthropic, OpenAI, xAI (Grok), Google AI Studio
 
 1. **Connect an AI › API key**, paste the key and press **Check key** to list its models.
 2. Pick a **model**, a **monthly token limit**, a **mode** and the **Do it / Ask me / Off** choices.
-3. The key is locked on the server and never sent back to the browser (only its last four characters show).
+3. The key stays **on this device**. RPG Tools never saves it: your browser keeps it, sends it along with each AI request you make, and the server forgets it as soon as that request is done. Only its last four characters are saved with the connection, so you can tell keys apart.
+
+**On another device**, the connection is there (name, model, limit, what it may do) but the key isn't: open **Connect an AI › Edit**, paste the key under **Key for this device**, and it stays there. **Forget the key on this device** removes it, and **Sign out** in Account settings forgets every AI key on that device. Keys saved on the server by older versions move to your browser the first time you open the campaign, and are deleted from the server.
+
+Players and co-GMs can add **their own AI** under **Account settings › AI on this device** (any provider above, with their own key, kept the same way). The forum's **Catch me up** and **Check my post** use it; the GM uses the forum's connection with the key on their device.
 
 With a key, the **AI panel**'s **Ask** tab lets the AI use RPG Tools' tools and answer inside the app. Every chat is **saved** with its campaign and available on any device, shared by Maptable and the Encyclopedia. The chat bar switches, searches, renames and deletes chats, and exports Markdown, copy, a session page or Discord (older messages beyond the latest 400 move to part files and are still included in exports).
 

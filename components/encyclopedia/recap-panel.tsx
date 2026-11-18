@@ -13,6 +13,7 @@ import {newId} from '@/lib/encyclopedia/world-model';
 import {confirmDialog} from '../confirm-dialog';
 import {AiWritingDialog,StylePicker} from './ai-writing';
 import {useWriters} from './use-writers';
+import {keyFields} from '@/lib/ai/device-keys';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const words=(n:number)=>`${n.toLocaleString('en')} word${n===1?'':'s'}`;
@@ -40,8 +41,8 @@ function useTranscript(entryId:string){
 export {useWriters,type KeyWriter} from './use-writers';
 
 /** Asks RPG Tools to write with an API-key connection. Returns the server's answer, or throws its message. */
-export async function writeWithKey(body:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string;styleId?:string}){
- const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+export async function writeWithKey({connectionId,...body}:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string;styleId?:string}){
+ const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,...keyFields(connectionId)})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
  if(!r.ok)throw Error(r.b.error??'Could not write the recap.');
  return r.b as {tokens:number;by:string;toCheck?:number;added?:number};
 }

@@ -68,11 +68,11 @@ test('drafting asks the GM’s own key, saves nothing and counts the tokens',asy
  const fake=replies=>async(url,init={})=>{const req=url instanceof Request?url:new Request(url,init);sent.push(JSON.parse(await req.text()));return new Response(JSON.stringify(replies.shift()),{status:200,headers:{'content-type':'application/json'}});};
  const before=JSON.stringify((await new EncyclopediaStore(b).read('gm-1')).data);
  const r={setting:'The Ashen Expanse',system:'Vesh',science:'realistic'};
- const out=await draftSystem(b,'gm-1','demo-campaign',conn.id,r,fake([reply(answer)]));
+ const out=await draftSystem(b,'gm-1','demo-campaign',{connectionId:conn.id,apiKey:'sk-test-1234567890abcd'},r,fake([reply(answer)]));
  assert.deepEqual(out.draft,answer);assert.equal(out.tokens,3000);assert.equal(out.by,'Helper');
  assert.match(sent[0].messages.find(m=>m.role==='user').content,/Setting: The Ashen Expanse/);
  assert.equal(sent[0].tools[0].function.name,'send_system');
  assert.equal(JSON.stringify((await new EncyclopediaStore(b).read('gm-1')).data),before);
- await assert.rejects(draftSystem(b,'gm-1','demo-campaign',conn.id,r,fake([reply({star:'G',premise:'',worlds:[]})])),/no worlds/);
+ await assert.rejects(draftSystem(b,'gm-1','demo-campaign',{connectionId:conn.id,apiKey:'sk-test-1234567890abcd'},r,fake([reply({star:'G',premise:'',worlds:[]})])),/no worlds/);
  assert.equal((await listConnections(b,'gm-1','demo-campaign'))[0].api.used,6000);
 });

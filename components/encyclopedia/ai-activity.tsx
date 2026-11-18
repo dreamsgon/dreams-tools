@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Map as MapIcon, Pause, Pencil, Play, Plus, ScrollText, Search, Send, Trash2, Undo2, User, X } from "lucide-react";
 import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
 import "./ai-connection.css";
+import { keepMoved, keyFields } from "@/lib/ai/device-keys";
 
 type Line = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; undone?: string; canUndo: boolean };
 /** Where a suggested move would put a token, for the dashed token on the map. */
@@ -69,7 +70,9 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     try {
       const res = await fetch(`/api/encyclopedia/ai-activity?${new URLSearchParams(which)}`, { cache: "no-store" });
       if (!res.ok) return;
-      const next = await res.json() as State;
+      const next = await res.json() as State & { moved?: { id: string; key: string }[] };
+      // A key an older version saved on the server comes back once: keep it on this device.
+      keepMoved(next.moved);
       const latest = next.entries[0]?.id ?? "";
       // A new line means the AI just saved something: fetch the workspace now instead of at the next poll.
       if (newest.current !== null && latest !== newest.current) changed.current();
@@ -151,7 +154,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     const next: Said[] = [...said.filter(m => !m.error), { role: "user", text }];
     setChatLog({ ...current, turns: next }); setDraft(""); setThinking(true); setMenu(""); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: chat.id, scene, ...(current.id ? { chatId: current.id } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, ...(current.id ? { chatId: current.id } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
       const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string; chat?: ChatMeta };
       if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
       const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");

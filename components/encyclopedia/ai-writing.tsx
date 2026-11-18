@@ -12,6 +12,7 @@ import {allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,locked
 import {ToolDialog} from './tool-dialog';
 import {useWriters} from './use-writers';
 import {confirmDialog} from '../confirm-dialog';
+import {keyFields} from '@/lib/ai/device-keys';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 
@@ -119,7 +120,7 @@ function Sample({data,campaign,kind,style}:{data:Workspace;campaign:Campaign;kin
  const run=async()=>{
   if(!chosen)return;
   setBusy(true);setError('');
-  const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sample',campaignId:campaign.id,connectionId:chosen.id,kind,style,...(kind==='recap'&&page?{entryId:page.id}:{})})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
+  const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sample',campaignId:campaign.id,...keyFields(chosen.id),kind,style,...(kind==='recap'&&page?{entryId:page.id}:{})})}).then(r=>r.json().then(b=>({ok:r.ok,b}))).catch(()=>({ok:false,b:{error:'Couldn’t reach RPG Tools. Check your connection and try again.'}}));
   setBusy(false);
   if(!r.ok){setError(r.b.error??'Could not write a sample.');return;}
   setText(r.b.text);

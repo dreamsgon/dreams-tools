@@ -30,6 +30,7 @@ import { hubLinks } from "@/lib/campaign-hub-links";
 import SiteHeader from "./site-header";
 import { ForumSetupDialog } from "./forum-setup-dialog";
 import type { ForumSetup } from "@/lib/forum/setup";
+import { keyFields } from "@/lib/ai/device-keys";
 
 // The Members tab (owners only) loads when it is opened.
 const CampaignMembers = dynamic(() => import("./campaign-members"));
@@ -494,7 +495,7 @@ function StoryField({ widget: w, hub, update }: { widget: Extract<FrontWidget, {
     if (!chosen || !campaignId) return;
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, connectionId: chosen.id, keep, before: w.body, styleId: style.id, ...(note.trim() ? { note: note.trim() } : {}) }) });
+      const r = await fetch("/api/encyclopedia/recaps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "story", campaignId, ...keyFields(chosen.id), keep, before: w.body, styleId: style.id, ...(note.trim() ? { note: note.trim() } : {}) }) });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || "Could not write the story.");
       // Nothing there yet: the draft goes straight in. Otherwise it waits beside the GM's own text.

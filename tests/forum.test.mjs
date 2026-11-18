@@ -912,7 +912,7 @@ test('ai: the campaign owner turns it on with a connection; the banner keeps it;
 });
 test('request: AI help sends only what the asker can read, by permission, and counts nothing when off', async () => {
   const gm = harness({ user: OWNER }), asks = [];
-  const fakeAi = { connections: async () => [{ id: 'c1', name: 'Claude', model: 'm', used: 0, limit: null }], run: async (_o, _c, conn, a) => { asks.push({ conn, ...a }); return a.tool.name === 'summary' ? { input: { summary: 'They talked.', points: ['Pat owes Quinn'] }, tokens: 10, name: 'Claude' } : a.tool.name === 'check' ? { input: { notes: [{ kind: 'spelling', quote: 'teh', note: 'the' }] }, tokens: 10, name: 'Claude' } : { input: { body: 'Thunder.' }, tokens: 10, name: 'Claude' }; } };
+  const fakeAi = { connections: async () => [{ id: 'c1', name: 'Claude', model: 'm', used: 0, limit: null }], run: async (_o, _c, use, a) => { asks.push({ use, ...a }); return a.tool.name === 'summary' ? { input: { summary: 'They talked.', points: ['Pat owes Quinn'] }, tokens: 10, name: 'Claude' } : a.tool.name === 'check' ? { input: { notes: [{ kind: 'spelling', quote: 'teh', note: 'the' }] }, tokens: 10, name: 'Claude' } : { input: { body: 'Thunder.' }, tokens: 10, name: 'Claude' }; } };
   gm.deps.ai = fakeAi;
   const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Plans', body: 'Saturday?', as: null })).json();
   const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store; p1.deps.ai = fakeAi;
@@ -924,22 +924,27 @@ test('request: AI help sends only what the asker can read, by permission, and co
   assert.equal((await (await gm.post({ action: 'aiSettings', campaign: KEY, ai: { connectionId: 'c1', catchUp: 'all', check: 'all', draft: 'staff' } })).json()).ok, true);
   const frame = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
   assert.deepEqual(frame.you.ai, { catchUp: true, check: true, draft: false });
-  const sum = await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId })).json();
+  const gmFrame = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
+  assert.equal(gmFrame.you.ai.connectionId, 'c1', "only the GM gets the forum's connection, whose key their device may hold");
+  // Keys come from the asker's device: without one, the forum says where to add it.
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId })).json()).error, /AI on this device/);
+  const sum = await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId, own: { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' } })).json();
   assert.deepEqual([sum.summary, sum.points, sum.posts, sum.by], ['They talked.', ['Pat owes Quinn'], 2, 'Claude']);
   assert.match(asks[0].prompt, /Saturday\?[\s\S]*Yes, Saturday\./);
-  assert.equal(asks[0].conn, 'c1');
-  const caught = await (await p1.post({ action: 'ai', campaign: KEY, op: 'catchUp', topicId, since: new Date(NOW.getTime() + 60_000).toISOString() })).json();
+  assert.deepEqual(asks[0].use, { own: { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' } }, 'a player uses their own AI');
+  const caught = await (await p1.post({ action: 'ai', campaign: KEY, op: 'catchUp', topicId, own: { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' }, since: new Date(NOW.getTime() + 60_000).toISOString() })).json();
   assert.equal(caught.summary, 'Nothing new since you last read it.', 'no AI call when nothing is new');
   assert.equal(asks.length, 1);
-  const check = await (await p1.post({ action: 'ai', campaign: KEY, op: 'check', topicId, body: 'See you at teh tavern', as: null })).json();
+  const check = await (await p1.post({ action: 'ai', campaign: KEY, op: 'check', topicId, body: 'See you at teh tavern', as: null, own: { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' } })).json();
   assert.deepEqual(check.notes, [{ kind: 'spelling', quote: 'teh', note: 'the' }]);
   assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'draft', topicId, as: null })).json()).error, /can't use that/);
-  const drafted = await (await gm.post({ action: 'ai', campaign: KEY, op: 'draft', boardId: 'ooc-chat', title: 'New', hint: 'storm' })).json();
+  const drafted = await (await gm.post({ action: 'ai', campaign: KEY, op: 'draft', boardId: 'ooc-chat', title: 'New', hint: 'storm', apiKey: 'sk-gm-device-key-5678' })).json();
   assert.equal(drafted.body, 'Thunder.');
   assert.match(asks.at(-1).prompt, /What the GM wants: storm/);
+  assert.deepEqual(asks.at(-1).use, { connectionId: 'c1', apiKey: 'sk-gm-device-key-5678' }, "the GM's key for the forum's connection, from their device");
   // A private topic Pat isn't in can't be summarized by Pat.
   const { topicId: secret } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Secret', body: 'Shh.', as: null, private: [] })).json();
-  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId: secret })).json()).error, /removed/);
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId: secret, own: { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' } })).json()).error, /removed/);
   const posted = await (await gm.post({ action: 'reply', campaign: KEY, topicId, body: 'Thunder.', as: null, ai: true })).json();
   assert.equal(posted.ok, true);
   const t = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;

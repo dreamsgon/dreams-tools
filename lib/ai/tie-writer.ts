@@ -6,10 +6,9 @@
  */
 import { z } from "zod";
 import type { S3Bucket } from "../storage.ts";
-import { addUsage, listConnections, overLimit, permsOf, publicApi } from "../mcp/connections.ts";
+import { addUsage, listConnections, overLimit, permsOf, publicApi, targetFor, type KeyUse } from "../mcp/connections.ts";
 import { loadContext } from "../mcp/load.ts";
 import { runOnce, ProviderError, type OnceTool } from "./chat.ts";
-import { unlock } from "./secret.ts";
 import type { Entry } from "../encyclopedia/world-model.ts";
 
 const name = z.string().trim().min(1).max(160), key = z.string().min(1).max(60);
@@ -90,15 +89,15 @@ export function readNotes(input: Record<string, unknown> | undefined, r: TieWrit
 }
 
 /** Writes the notes with a campaign's API-key connection. */
-export async function writeTieNotes(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, r: TieWriteRequest, fetchImpl: typeof fetch = fetch) {
+export async function writeTieNotes(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, r: TieWriteRequest, fetchImpl: typeof fetch = fetch) {
   if (!r.ties.length && !r.people?.length) throw Error("There is nothing to write.");
-  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === connectionId);
+  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === use.connectionId);
   if (!c?.api) throw Error("That AI connection was removed.");
   if (overLimit(c.api)) throw Error(`${c.name} has used this month's ${c.api.limit!.toLocaleString("en-US")} tokens. Raise the limit under What it may do.`);
   const ctx = await loadContext(bucket, { owner, campaignId, connectionId: c.id, level: c.level, ...(c.perms ? { perms: c.perms } : {}) });
   const { request, skipped } = forConnection(r, new Set(ctx.book.entries.map(e => e.id)), permsOf(c).seeSecrets !== "off");
   if (!request.ties.length && !request.people?.length) throw Error(`${c.name} only sees what players see, so it can't write these. Turn on “See GM-only things” for it under What it may do.`);
-  const target = { provider: c.api.provider, baseUrl: c.api.baseUrl, key: unlock(c.api.key), model: c.api.model };
+  const target = targetFor(c, use.apiKey);
   let tokens = 0;
   try {
     const out = await runOnce(target, TIE_SYSTEM, tiePrompt(ctx.campaign, ctx.book.entries, request), tieTool, 4_000, fetchImpl);

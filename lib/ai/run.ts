@@ -4,11 +4,10 @@
  * the hosted MCP server, and counts the tokens against the monthly limit.
  */
 import type { S3Bucket } from "../storage.ts";
-import { addUsage, listConnections, overLimit, publicApi } from "../mcp/connections.ts";
+import { addUsage, listConnections, overLimit, publicApi, targetFor, type KeyUse } from "../mcp/connections.ts";
 import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
 import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
-import { unlock } from "./secret.ts";
 import { chatLines } from "../encyclopedia/ai-styles.ts";
 import { CONTEXT_TURNS, saveExchange } from "./chats.ts";
 
@@ -28,8 +27,8 @@ export function cleanHistory(v: unknown): ChatTurn[] {
 }
 
 /** One turn of the AI panel's chat. The question and answer are saved to chat `chatId` (a new chat when it has none). */
-export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, connectionId: unknown, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch, chatId?: unknown) {
-  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === connectionId);
+export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch, chatId?: unknown) {
+  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === use.connectionId);
   if (!c?.api) throw Error("That AI connection was removed.");
   if (overLimit(c.api)) throw Error(`${c.name} has used this month's ${c.api.limit!.toLocaleString("en-US")} tokens. Raise the limit under What it may do.`);
   const grant = { owner, campaignId, connectionId: c.id, level: c.level, ...(c.perms ? { perms: c.perms } : {}) };
@@ -48,7 +47,7 @@ export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: stri
     "Look things up with the tools instead of guessing. When something waits for the GM's OK, say so in a few words: the GM approves it right under your reply.",
     ...(scene ? [`The GM has the Maptable scene "${scene.slice(0, 120)}" open.`] : []),
   ].join("\n\n");
-  const result = await runChat({ provider: c.api.provider, baseUrl: c.api.baseUrl, key: unlock(c.api.key), model: c.api.model }, system, history, tools, run, fetchImpl);
+  const result = await runChat(targetFor(c, use.apiKey), system, history, tools, run, fetchImpl);
   const after = await addUsage(bucket, owner, campaignId, c.id, result.tokens);
   const reply = result.reply || "(No answer.)";
   const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model: c.api.model, scene, question: history[history.length - 1]!.text, answer: reply, steps: result.steps });

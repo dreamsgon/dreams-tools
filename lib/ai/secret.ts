@@ -1,8 +1,8 @@
 /*
- * Locks a GM's AI API key before it is stored, with AES-256-GCM. The lock key comes from the server's
- * AI_KEY_SECRET, or, when that isn't set, from the S3 secret the server already has. If that secret
- * changes, stored keys can't be opened any more and the GM is asked to paste theirs again.
- * Server only: the browser never sees a stored key.
+ * Locks and opens short secrets with AES-256-GCM (invite links). The lock key comes from the server's AI_KEY_SECRET, or,
+ * when that isn't set, from the S3 secret the server already has. AI API keys are no longer stored: they stay in the
+ * browser (lib/ai/device-keys.ts). `unlock` still opens keys older versions saved, once, to hand them to the GM's browser
+ * (claimStoredKeys in lib/mcp/connections.ts). Server only.
  */
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 

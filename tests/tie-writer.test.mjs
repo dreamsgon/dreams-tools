@@ -92,7 +92,7 @@ test('a connection only reads ties between pages it can see, and no secrets when
 test('writing the notes calls the GM’s own key, returns them, and counts the tokens',async()=>{
  const {b,connection}=await setup();
  const f=fakeFetch([oaCall({notes:[{key:'s1',note:'Ostra has kept the Wardens’ books for ten years.'},{key:'s2',note:'Halden owes Ostra a life.'}]})]);
- const out=await writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse(request),f);
+ const out=await writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),f);
  assert.deepEqual(out.notes,{s1:'Ostra has kept the Wardens’ books for ten years.',s2:'Halden owes Ostra a life.'});
  assert.equal(out.by,'Sonnet');assert.equal(out.tokens,700);assert.equal(out.skipped,0);
  assert.equal(f.sent[0].model,'gpt-test');
@@ -108,25 +108,25 @@ test('a players-only connection leaves GM-only pages and ties out of what it rea
  const {b,connection}=await setup();
  await updateConnection(b,OWNER,C,connection.id,{perms:{...permsOf(connection),seeSecrets:'off'}});
  const f=fakeFetch([oaCall({notes:[{key:'s1',note:'Sworn in last spring.'}]})]);
- const out=await writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse(request),f);
+ const out=await writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),f);
  assert.equal(out.skipped,1);
  assert.deepEqual(Object.keys(out.notes),['s1']);
  assert.doesNotMatch(userText(f.sent[0]),/Halden|bell/);
- await assert.rejects(writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse({ties:[request.ties[1]]}),fakeFetch([])),/only sees what players see/);
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse({ties:[request.ties[1]]}),fakeFetch([])),/only sees what players see/);
 });
 
 test('no notes back, a provider error, or a used-up limit each say so, and spent tokens still count',async()=>{
  const {b,connection}=await setup();
- await assert.rejects(writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse(request),fakeFetch([oaCall({notes:[]})])),/didn't send any notes/);
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),fakeFetch([oaCall({notes:[]})])),/didn't send any notes/);
  assert.equal((await listConnections(b,OWNER,C))[0].api.used,700);
- await assert.rejects(writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse(request),fakeFetch([[401,{error:{message:'Bad key'}}]])));
- await assert.rejects(writeTieNotes(b,OWNER,C,'nope',tieWriteSchema.parse(request),fakeFetch([])),/was removed/);
- await assert.rejects(writeTieNotes(b,OWNER,C,connection.id,{ties:[]},fakeFetch([])),/nothing to write/);
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),fakeFetch([[401,{error:{message:'Bad key'}}]])));
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:'nope',apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),fakeFetch([])),/was removed/);
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},{ties:[]},fakeFetch([])),/nothing to write/);
  // Use up the month.
  let found=0;
  for(const [k,v] of b.data)if(k.includes('connections')){const j=JSON.parse(v.text);for(const c of Array.isArray(j)?j:j.connections)if(c.api){c.api.used=c.api.limit;found++;}b.data.set(k,{...v,text:JSON.stringify(j)});}
  assert.equal(found,1);
- await assert.rejects(writeTieNotes(b,OWNER,C,connection.id,tieWriteSchema.parse(request),fakeFetch([])),/used this month/);
+ await assert.rejects(writeTieNotes(b,OWNER,C,{connectionId:connection.id,apiKey:'sk-test-1234567890abcd'},tieWriteSchema.parse(request),fakeFetch([])),/used this month/);
 });
 
 test('the request is bounded: 40 ties, short briefs and names',()=>{

@@ -93,7 +93,7 @@ test('with an API key, RPG Tools writes it from the published recaps, counts the
  const c=await createApiConnection(b,OWNER,C,'Sonnet','helper',cleanApi({provider:'openai',model:'gpt-test',apiKey:'sk-test-1234567890abcd',limit:'2,000,000'}));
  const f=fakeFetch([{choices:[{message:{content:'  The party crossed the Salt Road and met Ostra Hale at the Greyfen landing.  '},finish_reason:'stop'}],usage:{total_tokens:1200}}]);
  const before=(await store.read(OWNER)).revision;
- const out=await writeStory(b,OWNER,C,c.id,f);
+ const out=await writeStory(b,OWNER,C,{connectionId:c.id,apiKey:'sk-test-1234567890abcd'},f);
  assert.equal(out.text,'The party crossed the Salt Road and met Ostra Hale at the Greyfen landing.');
  assert.equal(out.from,2);assert.equal(out.by,'Sonnet');assert.equal(out.tokens,1200);
  const sent=JSON.stringify(f.sent[0].body);
@@ -103,5 +103,5 @@ test('with an API key, RPG Tools writes it from the published recaps, counts the
  // With nothing published yet, it says what to do first.
  const empty=world();for(const e of empty.entries)if(e.recap)e.recap.status='draft';
  await store.save(OWNER,empty,before);
- await assert.rejects(writeStory(b,OWNER,C,c.id,fakeFetch([])),/Publish a session recap first/);
+ await assert.rejects(writeStory(b,OWNER,C,{connectionId:c.id,apiKey:'sk-test-1234567890abcd'},fakeFetch([])),/Publish a session recap first/);
 });

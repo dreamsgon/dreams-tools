@@ -87,7 +87,7 @@ test('the prompts are short lines: names, open objectives, what the GM asked, an
 test('RPG Tools writes the recap with the GM’s key: notes from the transcript, then the recap from the timeline',async()=>{
  const s=await setup();
  const f=fakeFetch([oaCall('save_notes',notes),oaSay('The ferry put in at Greyfen, where [[Ostra Hale]] waited under the toll lantern.')]);
- const r=await writeRecap(s.b,OWNER,C,s.connection.id,s.id,f);
+ const r=await writeRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,f);
  assert.equal(r.tokens,1200);assert.equal(r.toCheck,3);assert.equal(r.by,'Sonnet');assert.equal(r.api.used,1200);
  const first=f.sent[0].body;
  assert.deepEqual(first.tool_choice,{type:'function',function:{name:'save_notes'}},'the notes must come back through the tool');
@@ -108,10 +108,10 @@ test('RPG Tools writes the recap with the GM’s key: notes from the transcript,
 
 test('Write it again rewrites only the recap, from the timeline as the GM left it, with their note',async()=>{
  const s=await setup();
- await writeRecap(s.b,OWNER,C,s.connection.id,s.id,fakeFetch([oaCall('save_notes',notes),oaSay('A long recap about [[Ostra Hale]].')]));
+ await writeRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,fakeFetch([oaCall('save_notes',notes),oaSay('A long recap about [[Ostra Hale]].')]));
  const before=await s.page();
  const f=fakeFetch([oaSay('A short recap about [[Ostra Hale]] and [[Bram]].')]);
- const r=await writeRecapAgain(s.b,OWNER,C,s.connection.id,s.id,'Shorter, and more about Bram.',f);
+ const r=await writeRecapAgain(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,'Shorter, and more about Bram.',f);
  assert.equal(r.tokens,300);
  const sent=f.sent[0].body.messages[1].content;
  assert.match(sent,/asks: Shorter, and more about Bram\./);assert.match(sent,/The last draft:\nA long recap about \[\[Ostra Hale\]\]\./);assert.match(sent,/## Arrival at the Greyfen landing/);
@@ -121,30 +121,30 @@ test('Write it again rewrites only the recap, from the timeline as the GM left i
  assert.equal((await readActivity(s.b,OWNER,C)).entries[0].tool,'rewrite_recap');
  const {data,revision}=await s.store.read(OWNER);
  await s.store.save(OWNER,publishRecap(data,s.id,true,NOW),revision);
- await assert.rejects(writeRecapAgain(s.b,OWNER,C,s.connection.id,s.id,'',fakeFetch([])),/Unpublish the recap/);
+ await assert.rejects(writeRecapAgain(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,'',fakeFetch([])),/Unpublish the recap/);
 });
 
 test('a skipped recap is never asked for, and what the AI sends for skipped parts is dropped',async()=>{
  const s=await setup('helper',{length:'standard',depth:'balanced',skip:['recap','quotes'],at:NOW.toISOString()});
  const f=fakeFetch([oaCall('save_notes',notes)]);
- const r=await writeRecap(s.b,OWNER,C,s.connection.id,s.id,f);
+ const r=await writeRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,f);
  assert.equal(f.sent.length,1,'no second request');assert.equal(r.tokens,900);
  const page=await s.page();assert.equal(page.body,'');assert.deepEqual(page.recap.quotes,[]);
 });
 
 test('writing here needs a key that may write recaps and read transcripts, under its limit; spent tokens count even on failure',async()=>{
  const s=await setup('read');
- await assert.rejects(writeRecap(s.b,OWNER,C,s.connection.id,s.id,fakeFetch([])),/isn't allowed to write recaps/);
+ await assert.rejects(writeRecap(s.b,OWNER,C,{connectionId:s.connection.id,apiKey:'sk-test-1234567890abcd'},s.id,fakeFetch([])),/isn't allowed to write recaps/);
  const t=await setup('helper');
  const bad=fakeFetch([oaCall('save_notes',{timeline:'not a list'}),oaSay('A recap.')]);
- await assert.rejects(writeRecap(t.b,OWNER,C,t.connection.id,t.id,bad),/didn't fit: timeline must be a list/);
+ await assert.rejects(writeRecap(t.b,OWNER,C,{connectionId:t.connection.id,apiKey:'sk-test-1234567890abcd'},t.id,bad),/didn't fit: timeline must be a list/);
  assert.equal((await listConnections(t.b,OWNER,C))[0].api.used,1200,'the tokens were spent, so they count');
  assert.ok((await t.page()).recap.request,'the page still waits');
  const empty=fakeFetch([oaSay('I can’t.')]);
- await assert.rejects(writeRecap(t.b,OWNER,C,t.connection.id,t.id,empty),/didn't send its notes/);
+ await assert.rejects(writeRecap(t.b,OWNER,C,{connectionId:t.connection.id,apiKey:'sk-test-1234567890abcd'},t.id,empty),/didn't send its notes/);
  await t.store.saveTranscript(OWNER,t.id,'');
- await assert.rejects(writeRecap(t.b,OWNER,C,t.connection.id,t.id,fakeFetch([])),/has no transcript/);
- await assert.rejects(writeRecap(t.b,OWNER,C,'gone',t.id,fakeFetch([])),/was removed/);
+ await assert.rejects(writeRecap(t.b,OWNER,C,{connectionId:t.connection.id,apiKey:'sk-test-1234567890abcd'},t.id,fakeFetch([])),/has no transcript/);
+ await assert.rejects(writeRecap(t.b,OWNER,C,{connectionId:'gone',apiKey:'sk-test-1234567890abcd'},t.id,fakeFetch([])),/was removed/);
 });
 
 test('a model without tools answers in JSON instead',async()=>{

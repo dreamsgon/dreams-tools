@@ -46,13 +46,18 @@ export type Deps = {
   scenes?: (owner: string, maptableCampaignId: string) => Promise<Scene[]>;
   /** A scene of the paired Maptable campaign drawn as players see it, stored as a picture; its picture id. */
   mapPicture?: (owner: string, maptableCampaignId: string, sceneId: string) => Promise<string>;
-  /** The campaign's API-key AI connections, and one request to one of them (lib/ai/forum-ai.ts). */
+  /**
+   * The campaign's API-key AI connections, and one request (lib/ai/forum-ai.ts) with a key from the asker's device: the
+   * forum's connection with the GM's key, or the asker's own AI. Keys are never saved.
+   */
   ai?: {
     connections: (owner: string, campaignId: string) => Promise<AiConnection[]>;
-    run: (owner: string, campaignId: string, connectionId: string, ask: { system: string; prompt: string; tool: { name: string; description: string; inputSchema: Record<string, unknown> }; maxTokens: number }) => Promise<{ input?: Record<string, unknown>; tokens: number; name: string }>;
+    run: (owner: string, campaignId: string, use: AiUse, ask: { system: string; prompt: string; tool: { name: string; description: string; inputSchema: Record<string, unknown> }; maxTokens: number }) => Promise<{ input?: Record<string, unknown>; tokens: number; name: string }>;
   };
 };
 export type AiConnection = { id: string; name: string; model: string; used: number; limit: number | null };
+/** The AI one request uses: the forum's connection with its key from this device, or the asker's own AI from this device. */
+export type AiUse = { connectionId: string; apiKey: string } | { own: { provider: string; baseUrl?: string; model: string; apiKey: string } };
 
 export const FORUM_BODY = 64_000;
 export const keyPattern = /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/;
@@ -74,7 +79,9 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema }),
   z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional(), tags: z.array(id).max(10).optional() }),
   z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional() }),
-  z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional() }),
+  z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional(),
+    // The key from the asker's device, for the forum's connection; or their own AI. Used for this request only.
+    apiKey: z.string().max(500).optional(), own: z.object({ provider: z.string().max(20), baseUrl: z.string().max(400).optional(), model: z.string().max(200), apiKey: z.string().max(500) }).optional() }),
   z.object({ action: z.literal("aiSettings"), campaign: key, ai: z.unknown() }),
   z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000) }),
   z.object({ action: z.literal("report"), campaign: key, topicId: id, postId: id, reason: z.string().max(600) }),
@@ -420,7 +427,9 @@ async function aiHelp(deps: Deps, ctx: Context, found: Found, body: Extract<Body
   const posts: AiPost[] = page ? page.posts.map(p => ({ name: p.as ? page!.cards[p.as]?.name ?? "A character" : kind === "ic" ? "Game Master" : p.name, player: p.name, body: p.body, rolls: p.rolls, at: p.at })) : [];
   const cast = new Map(castOf(ctx).map(c => [c.id, c])), entries = entriesOf(ctx);
   const cardFor = (as: string | null | undefined) => { const e = as && cast.has(as) ? entries.get(as) : undefined; return e ? cardOf(ctx, e) : null; };
-  const ask = (a: Parameters<NonNullable<Deps["ai"]>["run"]>[3]) => deps.ai!.run(found.owner, found.campaignId, settings.connectionId, a);
+  if (!body.apiKey && !body.own) throw new ForumError("Add your AI to this device first, in Account settings › AI on this device. Its key stays on your device.");
+  const use: AiUse = body.apiKey ? { connectionId: settings.connectionId, apiKey: body.apiKey } : { own: body.own! };
+  const ask = (a: Parameters<NonNullable<Deps["ai"]>["run"]>[3]) => deps.ai!.run(found.owner, found.campaignId, use, a);
   switch (body.op) {
     case "summary": case "catchUp": {
       if (!page) throw new ForumError("Open a topic first.");
@@ -467,7 +476,8 @@ export async function handleForum(request: Request, deps: Deps) {
     ]);
     if (body.action === "view") return await view(deps, ctx, found, body.page);
     if (body.action === "ai") {
-      if (aiThrottle.hit(userId)) return json({ error: "The AI needs a minute between a few requests. Try again shortly." }, 429);
+      // A request without a key is refused before any AI is asked, so it doesn't use up the minute's requests.
+      if ((body.apiKey || body.own) && aiThrottle.hit(userId)) return json({ error: "The AI needs a minute between a few requests. Try again shortly." }, 429);
       return json(await aiHelp(deps, ctx, found, body));
     }
     const out = await change(deps, ctx, found, body, now);

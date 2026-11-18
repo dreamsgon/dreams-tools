@@ -3,7 +3,7 @@ import {json,ownerFrom,sameOrigin} from '@/lib/encyclopedia/workspace-server';
 import {EncyclopediaStore} from '@/lib/encyclopedia/store';
 import {getBucket} from '@/lib/storage';
 import {publicActivity,readActivity,undoChanges,updateActivity} from '@/lib/mcp/activity';
-import {listConnections} from '@/lib/mcp/connections';
+import {claimStoredKeys,listConnections} from '@/lib/mcp/connections';
 import {undoTable} from '@/lib/mcp/table';
 import {loadWorkspace,saveWorkspace} from '@/lib/workspace-storage';
 import {decideSuggestion} from '@/lib/mcp/suggestions';
@@ -19,11 +19,13 @@ export async function GET(request:Request){
  try{
   const bucket=getBucket(),id=await campaignFor(bucket,owner,{campaignId:params.get('campaignId'),maptableCampaignId:params.get('maptableCampaignId')});
   if(!id)return json({paused:false,entries:[],connected:[],hasConnections:false});
+  // A key an older version saved on the server goes to the GM's browser, once, and off the server (lib/mcp/connections.ts).
+  const moved=await claimStoredKeys(bucket,owner,id).catch(()=>[]);
   const [log,connections]=await Promise.all([readActivity(bucket,owner,id),listConnections(bucket,owner,id)]);
   const now=Date.now(),active=connections.filter(c=>c.lastUsedAt&&now-Date.parse(c.lastUsedAt)<ACTIVE_MS).sort((a,b)=>b.lastUsedAt!.localeCompare(a.lastUsedAt!));
   // Connections made with an API key can be asked from the panel.
   const chat=connections.flatMap(c=>c.api?[{id:c.id,name:c.name,provider:providerOf(c.api.provider).name,model:c.api.model}]:[]);
-  return json({...publicActivity(log),connected:active.map(c=>c.name),hasConnections:connections.length>0,chat});
+  return json({...publicActivity(log),connected:active.map(c=>c.name),hasConnections:connections.length>0,chat,...(moved.length?{moved}:{})});
  }catch{return json({error:'Could not load the AI activity.'},400);}
 }
 export async function POST(request:Request){

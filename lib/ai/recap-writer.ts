@@ -5,23 +5,22 @@
  * exactly as when the GM's AI app writes it. The tokens count against the connection's monthly limit.
  */
 import type { S3Bucket } from "../storage.ts";
-import { addUsage, listConnections, overLimit, permsOf, publicApi } from "../mcp/connections.ts";
+import { addUsage, listConnections, overLimit, permsOf, publicApi, targetFor, type KeyUse } from "../mcp/connections.ts";
 import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, type McpContext } from "../mcp/tools.ts";
 import { compactTranscript } from "../encyclopedia/recaps.ts";
 import { IN_APP_LIMIT, RECAP_SYSTEM, beatLines, checkPrompt, defaultRequest, namesBlock, notesKeys, notesPrompt, prosePrompt, publishedRecaps, questsBlock, quoteLines, storyNow, storyPrompt, unlinkNames } from "../encyclopedia/recap-prompts.ts";
 import { runOnce, ProviderError, type OnceTool } from "./chat.ts";
-import { unlock } from "./secret.ts";
 import { styleFor, writingStyleSchema, type WritingStyle } from "../encyclopedia/ai-styles.ts";
 
 /** The connection that writes it, checked: an API key, allowed to write session notes, under its limit. */
-async function writer(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string) {
-  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === connectionId);
+async function writer(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse) {
+  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === use.connectionId);
   if (!c?.api) throw Error("That AI connection was removed.");
   if (c.level === "read" || permsOf(c).notes === "off") throw Error(`${c.name} isn't allowed to write recaps. Turn on “Session notes and recaps” for it under What it may do.`);
   if (overLimit(c.api)) throw Error(`${c.name} has used this month's ${c.api.limit!.toLocaleString("en-US")} tokens. Raise the limit under What it may do.`);
   const ctx = await loadContext(bucket, { owner, campaignId, connectionId: c.id, level: c.level, ...(c.perms ? { perms: c.perms } : {}) });
-  return { c, ctx, target: { provider: c.api.provider, baseUrl: c.api.baseUrl, key: unlock(c.api.key), model: c.api.model } };
+  return { c, ctx, target: targetFor(c, use.apiKey) };
 }
 
 function sessionPage(ctx: McpContext, id: string) {
@@ -64,8 +63,8 @@ async function counted<T>(bucket: S3Bucket, owner: string, campaignId: string, i
 }
 
 /** Writes the recap the GM asked for in the New session recap dialog: notes from the transcript, then the recap from the timeline. */
-export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, fetchImpl: typeof fetch = fetch) {
-  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, entryId: string, fetchImpl: typeof fetch = fetch) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, use);
   const page = sessionPage(ctx, entryId);
   if (!ctx.transcript) throw Error(`${c.name} can't read transcripts, which are GM-only. Turn on “See GM-only things” for it, or hand the recap to your AI app.`);
   const raw = await ctx.transcript(page.id);
@@ -95,8 +94,8 @@ export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: st
 }
 
 /** Write it again: the recap players read, from the page's timeline as it is now, with the GM's note, in the style picked (or the recap's own). */
-export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, note: string, fetchImpl: typeof fetch = fetch, styleId?: string) {
-  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, entryId: string, note: string, fetchImpl: typeof fetch = fetch, styleId?: string) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, use);
   const page = sessionPage(ctx, entryId);
   if (!page.recap) throw Error("That page has no recap.");
   if (page.recap.status !== "draft") throw Error("Unpublish the recap before writing it again.");
@@ -121,8 +120,8 @@ export async function writeRecapAgain(bucket: S3Bucket, owner: string, campaignI
  * Check it with AI, on a recap the GM wrote: the AI reads the recap and lists what it mentions in the check
  * list (through add_recap_finds, so it shows in the AI activity log). The recap text is never changed.
  */
-export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, entryId: string, fetchImpl: typeof fetch = fetch) {
-  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, entryId: string, fetchImpl: typeof fetch = fetch) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, use);
   const page = ctx.book.entries.find(e => e.id === entryId && e.kind === "session" && e.campaignId === ctx.campaign.id);
   if (!page) throw Error(ctx.transcript ? "That session page is gone." : `${c.name} can't read draft recaps, which are GM-only. Turn on “See GM-only things” for it under What it may do.`);
   if (!page.recap) throw Error("That page has no recap.");
@@ -154,8 +153,8 @@ function findsTool(): OnceTool {
  * text goes back to the front page editor, where it waits beside the GM's own text until they pick.
  * `keep` starts from the current text; `note` is what the GM asks for.
  */
-export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, fetchImpl: typeof fetch = fetch, opts: { note?: string; keep?: boolean; before?: string; styleId?: string; length?: WritingStyle["length"] } = {}) {
-  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+export async function writeStory(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, fetchImpl: typeof fetch = fetch, opts: { note?: string; keep?: boolean; before?: string; styleId?: string; length?: WritingStyle["length"] } = {}) {
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, use);
   const { recaps, left } = publishedRecaps(ctx.book.entries, ctx.campaign.id);
   if (!recaps.length) throw Error("Publish a session recap first. The story so far is written only from recaps players can read.");
   const before = opts.keep === false ? "" : opts.before ?? storyNow(ctx.campaign);
@@ -174,9 +173,9 @@ export async function writeStory(bucket: S3Bucket, owner: string, campaignId: st
  * A sample in a style the GM is setting up, before they save or use it: a recap of one session (from its
  * timeline, or the recap text when there is none) or The story so far. Nothing is saved.
  */
-export async function writeSample(bucket: S3Bucket, owner: string, campaignId: string, connectionId: string, input: { kind: "recap" | "story"; style: unknown; entryId?: string }, fetchImpl: typeof fetch = fetch) {
+export async function writeSample(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, input: { kind: "recap" | "story"; style: unknown; entryId?: string }, fetchImpl: typeof fetch = fetch) {
   const style = writingStyleSchema.parse(input.style);
-  const { c, ctx, target } = await writer(bucket, owner, campaignId, connectionId);
+  const { c, ctx, target } = await writer(bucket, owner, campaignId, use);
   const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
   let prompt: string;
   if (input.kind === "story") {
