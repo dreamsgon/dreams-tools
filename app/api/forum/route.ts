@@ -6,6 +6,8 @@ import { readMapImage } from '@/lib/encyclopedia/map-images-server';
 import { sameOrigin } from '@/lib/encyclopedia/workspace-server';
 import { ForumStore } from '@/lib/forum/store';
 import { handleForum, handleForumImage, type Deps } from '@/lib/forum/request';
+import { loadWorkspace } from '@/lib/workspace-storage';
+import { campaignScenes } from '@/lib/agent-maps';
 export const dynamic = 'force-dynamic';
 
 /*
@@ -26,6 +28,11 @@ const deps = (): Deps => {
     workspace: async owner => (await new EncyclopediaStore(bucket).read(owner)).data,
     store: new ForumStore(bucket),
     image: readMapImage,
+    // The GM's Maptable scenes in the paired campaign, for starting a fight from its initiative tracker.
+    scenes: async (owner, maptableCampaignId) => {
+      const saved = await loadWorkspace(bucket, `users/${encodeURIComponent(owner)}/`);
+      try { return saved ? campaignScenes(saved.workspace, maptableCampaignId) : []; } catch { return []; }
+    },
   };
 };
 export const POST = (request: Request) => handleForum(request, deps());

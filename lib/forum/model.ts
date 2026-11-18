@@ -11,6 +11,8 @@
 import { z } from "zod";
 import { can, type MemberList } from "../members.ts";
 import { NARRATION } from "./reader.ts";
+import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMetaSchema, type Combat, type Slot } from "./combat.ts";
+import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
 
 export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50 } as const;
 /** Days a topic stays in the Trash before it goes for good. */
@@ -67,6 +69,8 @@ export const topicSummarySchema = z.object({
   trashed: z.object({ at, by: userId }).optional(),
   /** A private topic: only these members (and whoever started it), the GM and co-GMs see it. */
   private: z.array(userId).max(FORUM_LIMITS.privateMembers).optional(),
+  /** A fight in progress (combat.ts). */
+  combat: combatSchema.optional(),
 });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
@@ -83,7 +87,13 @@ export const forumSchema = z.object({
   /** The last few days of posts, newest last (`recentSchema`). Older forums have none. */
   recent: z.array(recentSchema).max(FORUM_LIMITS.recent).optional(),
 });
-export const postSchema = z.object({ id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional() });
+export const postSchema = z.object({
+  id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional(),
+  /** The dice for each [roll] tag, in order, rolled by the server (rolls.ts); null for a tag that isn't dice. */
+  rolls: z.array(rollSchema.nullable()).max(ROLL_LIMIT).optional(),
+  /** Where the post fell in a fight, when it was someone's turn. */
+  turn: turnMetaSchema.optional(),
+});
 export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts) });
 
 export type ForumSettings = z.infer<typeof forumSettingsSchema>;
@@ -188,7 +198,7 @@ const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) =
 };
 
 /** The topic's summary worked out again from its posts, keeping what moderators set (pinned, locked, title). */
-type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private">>;
+type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private" | "combat">>;
 export function summarize(topic: Topic, base: Kept): TopicSummary {
   const first = topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1]!;
   const cast: string[] = [], order: string[] = [];
@@ -199,7 +209,7 @@ export function summarize(topic: Topic, base: Kept): TopicSummary {
   }
   return {
     id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order,
-    ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}),
+    ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}), ...(base.combat ? { combat: base.combat } : {}),
   };
 }
 const putSummary = (f: Forum, s: TopicSummary): Forum => ({ ...f, topics: f.topics.some(t => t.id === s.id) ? f.topics.map(t => t.id === s.id ? s : t) : [...f.topics, s] });
@@ -217,38 +227,48 @@ const addCharacter = (f: Forum, as: string | null): Forum => !as || f.characters
 export type Change<T = undefined> = { topic?: Topic | null; forum: (f: Forum, latest?: Topic) => Forum; out?: T };
 /* `latest` is the topic file as stored when the forum file is saved: another reply may have landed after this one. */
 
-export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
+const withRolls = (rolls: readonly (Roll | null)[] | undefined) => rolls?.length ? { rolls: rolls.slice(0, ROLL_LIMIT) } : {};
+export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = cleanBody(input.body);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
-  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp }] };
+  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls) }] };
   const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}) });
   const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
   return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
 
-export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
+export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null; rolls?: (Roll | null)[] }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
   const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
   if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   if (topic.posts.length >= FORUM_LIMITS.posts) fail("This topic is full. Start a new one to carry on.");
   const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
-  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString() }] };
+  // In a fight, a post in the current turn is marked with it.
+  const turn = s.combat && countsFor(s.combat, as, who.rights.gm) ? turnMeta(s.combat) : undefined;
+  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}) }] };
   const log: Recent = { at: now.toISOString(), userId: who.userId, as, topicId: topic.id, postId };
-  return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return logPost(addCharacter(addCount(putSummary(g, summarize(latest ?? next, cur)), who.userId, 1), as), log); }, out: { postId } };
+  return {
+    topic: next, out: { postId },
+    forum: (g, latest) => {
+      const cur = g.topics.find(t => t.id === topic.id) ?? s, combat = cur.combat ? afterPost(cur.combat, as, who.rights.gm) : undefined;
+      return logPost(addCharacter(addCount(putSummary(g, summarize(latest ?? next, { ...cur, combat })), who.userId, 1), as), log);
+    },
+  };
 }
 
 const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === postId) ?? fail("That post was removed.");
 const mayChange = (p: Post, who: Poster) => p.by.userId === who.userId || who.rights.moderate;
 
-export function editPost(f: Forum, topic: Topic, input: { postId: string; body: unknown }, who: Poster, now: Date): Change {
+export function editPost(f: Forum, topic: Topic, input: { postId: string; body: unknown; reroll?: (old: (Roll | null)[] | undefined, body: string) => (Roll | null)[] }, who: Poster, now: Date): Change {
   const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only edit your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   const body = cleanBody(input.body);
-  const next: Topic = { ...topic, posts: topic.posts.map(x => x.id === p.id ? { ...x, body, editedAt: now.toISOString() } : x) };
+  const rolls = input.reroll ? input.reroll(p.rolls, body) : p.rolls;
+  const next: Topic = { ...topic, posts: topic.posts.map(x => { if (x.id !== p.id) return x; const y = { ...x, body, editedAt: now.toISOString() }; delete y.rolls; return { ...y, ...withRolls(rolls) }; }) };
   return { topic: next, forum: g => g };
 }
 
@@ -279,6 +299,35 @@ export function trashTopic(f: Forum, input: { topicId: string; restore?: boolean
   if (!input.restore && !canSee({ ...s, trashed: undefined }, who)) fail("That topic was removed.");
   const trashed = input.restore ? undefined : { at: now.toISOString(), by: who.userId };
   return { forum: g => ({ ...g, topics: g.topics.map(t => { if (t.id !== s.id) return t; const rest = { ...t }; delete rest.trashed; return trashed ? { ...rest, trashed } : rest; }) }) };
+}
+/** Moderators run a fight: start it (or change the order), move the turn on or back, or end it. */
+export function setCombat(f: Forum, input: { topicId: string; op: "start" | "order" | "next" | "back" | "end"; order?: Slot[]; round?: number; turn?: number; source?: Combat["source"] }, who: Poster, known: ReadonlySet<string>, now: Date): Change {
+  const s = seenBy(f, input.topicId, who);
+  if (!who.rights.moderate) fail("Only moderators can run combat.");
+  if (s.archived || s.trashed) fail(s.trashed ? "This topic is in the Trash." : "This topic is archived. A moderator can bring it back first.");
+  if (input.op === "start" && kindOf(f, boardOf(f, s.boardId)) !== "ic") fail("Combat runs in in-character topics.");
+  let combat: Combat | undefined;
+  if (input.op === "start" || input.op === "order") {
+    const order = cleanOrder(input.order ?? [], known);
+    if (!order.length) fail("Add at least one turn.");
+    const old = input.op === "order" ? s.combat : undefined;
+    const round = Math.max(1, Math.min(9999, Math.floor(input.round ?? old?.round ?? 1))), turn = Math.max(0, Math.min(order.length - 1, Math.floor(input.turn ?? old?.turn ?? 0)));
+    combat = { round, turn, order, done: [], at: now.toISOString(), ...(input.source ? { source: input.source } : old?.source && input.op === "order" ? { source: old.source } : {}) };
+  } else if (input.op === "next" || input.op === "back") {
+    if (!s.combat) fail("This topic isn't in combat.");
+  }
+  const op = input.op;
+  return {
+    forum: g => ({
+      ...g, topics: g.topics.map(t => {
+        if (t.id !== s.id) return t;
+        const rest = { ...t }; delete rest.combat;
+        if (op === "end") return rest;
+        const c = combat ?? (t.combat ? step(t.combat, op === "back" ? -1 : 1) : undefined);
+        return c ? { ...rest, combat: c } : rest;
+      }),
+    }),
+  };
 }
 /** Topics whose time in the Trash is up. */
 export const expiredTrash = (f: Forum, now: Date) => f.topics.filter(t => t.trashed && now.getTime() - new Date(t.trashed.at).getTime() > TRASH_DAYS * 86_400_000).map(t => t.id);

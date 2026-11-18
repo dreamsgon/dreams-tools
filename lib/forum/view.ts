@@ -11,6 +11,7 @@ import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, type Author, type Boar
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
 import { unseen, type Alerts } from "./alerts.ts";
+import { slotOf, type Combat } from "./combat.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
 
 export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string>; access?: Readonly<Record<string, BoardAccess>> };
@@ -105,6 +106,8 @@ export type TopicRow = {
   only: string[] | null;
   /** In the Trash: when, by whom and when it goes for good. */
   trashed: { at: string; by: string; until: string } | null;
+  /** In a fight: the round. */
+  combat: { round: number } | null;
 };
 /** Characters a member other than the GM may edit: the rest are the GM's to play. */
 const playerRunOf = (ctx: Context) => {
@@ -144,6 +147,11 @@ function turnOf(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): Tur
   if (t.locked || t.archived || t.trashed) return null;
   const board = ctx.forum.boards.find(b => b.id === t.boardId);
   if (!board || kindOf(ctx.forum, board) !== "ic") return null;
+  if (t.combat) {
+    // In a fight the turn is the combat's: the characters in it who haven't posted yet, or the GM's NPCs.
+    const slot = slotOf(t.combat), left = slot.as.filter(a => !t.combat!.done.includes(a)), first = left[0] ? entries.get(left[0]) : undefined;
+    return { name: slot.name, picture: pictureOf(first), mine: left.length ? left.some(a => controls(ctx, a)) : ctx.viewer.rights.gm };
+  }
   const who = nextUp(t);
   if (!who) return null;
   const e = who === NARRATION ? undefined : entries.get(who);
@@ -155,6 +163,7 @@ function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): T
     id: t.id, boardId: t.boardId, title: t.title, pinned: t.pinned, locked: t.locked, replies: t.replies, by: bylineOf(ctx, entries, t.by), at: t.at, last: lastOf(ctx, entries, t),
     cast: t.cast.flatMap(id => { const e = entries.get(id); return e ? [{ id, name: e.title, picture: pictureOf(e) }] : []; }).slice(0, 6),
     unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t), archived: !!t.archived, only: privateNames(ctx, t),
+    combat: t.combat ? { round: t.combat.round } : null,
     trashed: t.trashed ? { at: t.trashed.at, by: memberName(ctx, t.trashed.by), until: new Date(new Date(t.trashed.at).getTime() + TRASH_DAYS * 86_400_000).toISOString() } : null,
   };
 }
@@ -210,7 +219,7 @@ function colourOf(ctx: Context, userId: string) {
 function waitingOf(ctx: Context, entries: Map<string, Entry>) {
   const out: (TopicRow & { board: string })[] = [];
   for (const t of live(ctx)) {
-    if (t.locked || !orderOf(t).some(who => controls(ctx, who))) continue;
+    if (t.locked || !(orderOf(t).some(who => controls(ctx, who)) || t.combat?.order.some(x => x.as.length ? x.as.some(a => controls(ctx, a)) : ctx.viewer.rights.gm))) continue;
     const row = topicRow(ctx, entries, t);
     if (row.next) out.push({ ...row, board: ctx.forum.boards.find(b => b.id === t.boardId)?.name ?? "" });
   }
@@ -292,9 +301,10 @@ export function topicPage(ctx: Context, topic: Topic) {
     topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: accessOn(ctx.viewer, s.boardId).reply && (!s.locked || r.moderate) && !s.archived && !s.trashed },
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
+    combat: s.combat ? combatOf(ctx, entries, s.combat) : null,
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
+      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
     }),
     cards,
   };
@@ -357,13 +367,14 @@ function alertsOf(ctx: Context, entries: Map<string, Entry>) {
 export function namesOf(ctx: Context) {
   const out = new Map<string, Set<string>>(), add = (name: string, u: string) => { const k = name.trim(); if (k) out.set(k, (out.get(k) ?? new Set()).add(u)); };
   for (const u of [ctx.owner, ...ctx.list.members.map(m => m.userId)]) add(memberName(ctx, u), u);
-  for (const e of entriesOf(ctx).values()) {
-    if (e.kind !== "character") continue;
-    const a = ctx.list.pages?.[e.id], users = new Set(Object.entries(a?.people ?? {}).filter(([, p]) => p.edit).map(([u]) => u));
-    for (const [g, on] of Object.entries(a?.groups ?? {})) if (on) for (const m of ctx.list.members) if (m.groups.includes(g)) users.add(m.userId);
-    for (const u of users.size ? users : [ctx.owner]) add(e.title, u);
-  }
+  for (const e of entriesOf(ctx).values()) if (e.kind === "character") for (const u of playersOf(ctx, e.id)) add(e.title, u);
   return out;
+}
+/** Who plays a character: the members who may edit its page, else the GM. */
+export function playersOf(ctx: Context, entryId: string) {
+  const a = ctx.list.pages?.[entryId], users = new Set(Object.entries(a?.people ?? {}).filter(([, p]) => p.edit).map(([u]) => u));
+  for (const [g, on] of Object.entries(a?.groups ?? {})) if (on) for (const m of ctx.list.members) if (m.groups.includes(g)) users.add(m.userId);
+  return users.size ? users : new Set([ctx.owner]);
 }
 
 /** Search: the latest topics this viewer can read (and their posts), matching every word of the query. */
@@ -387,3 +398,17 @@ function snippetOf(body: string, words: readonly string[]) {
   const from = Number.isFinite(at) ? Math.max(0, at - 70) : 0, text = plain.slice(from, from + 180);
   return (from > 0 ? "…" : "") + text + (from + 180 < plain.length ? "…" : "");
 }
+
+/** A fight as the topic shows it: each turn with its characters, who has gone and whose turn it is. */
+function combatOf(ctx: Context, entries: Map<string, Entry>, c: Combat) {
+  return {
+    round: c.round, turn: c.turn, source: c.source ?? null,
+    order: c.order.map((x, i) => ({
+      name: x.name, init: x.init, now: i === c.turn, gone: i < c.turn,
+      as: x.as.flatMap(a => { const e = entries.get(a); return e ? [{ id: a, name: e.title, picture: pictureOf(e), done: i === c.turn && c.done.includes(a), mine: controls(ctx, a) }] : []; }),
+      mine: x.as.length ? x.as.some(a => controls(ctx, a)) : ctx.viewer.rights.gm,
+    })),
+  };
+}
+/** The characters of the campaign, for checking who a combat order names. */
+export const characterIds = (ctx: Context) => new Set([...entriesOf(ctx).values()].filter(e => e.kind === "character").map(e => e.id));

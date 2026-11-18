@@ -10,11 +10,14 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, ForumError, addBoard, boardAccess, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
-  type Change, type Forum, type Poster, type Topic,
+  FORUM_LIMITS, ForumError, addBoard, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { activePage, boardPage, castOf, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { activePage, boardPage, castOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
+import { rollPost, secureDie, withRollResults } from "./rolls.ts";
+import { orderFromScene, slotSchema } from "./combat.ts";
+import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
 import { freshReads, markAll, markTopic } from "./reader.ts";
 
@@ -31,6 +34,10 @@ export type Deps = {
   image?: (owner: string, imageId: string) => Promise<{ url: string } | null>;
   now?: () => Date;
   newId?: () => string;
+  /** Dice: a whole number from 1 to `sides` (tests pass their own). */
+  random?: (sides: number) => number;
+  /** The GM's Maptable scenes in a Maptable campaign, for starting combat from its initiative. */
+  scenes?: (owner: string, maptableCampaignId: string) => Promise<Scene[]>;
 };
 
 export const FORUM_BODY = 64_000;
@@ -61,6 +68,8 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("bulk"), campaign: key, topicIds: z.array(id).min(1).max(FORUM_LIMITS.bulk), op: z.enum(bulkOps), boardId: id.optional() }),
   z.object({ action: z.literal("export"), campaign: key, boardId: id }),
   z.object({ action: z.literal("alertsSeen"), campaign: key }),
+  z.object({ action: z.literal("combat"), campaign: key, topicId: id, op: z.enum(["start", "order", "next", "back", "end"]), order: z.array(slotSchema).max(40).optional(), round: z.number().int().min(1).max(9999).optional(), turn: z.number().int().min(0).max(39).optional(), sceneId: z.string().min(1).max(160).optional() }),
+  z.object({ action: z.literal("combatSources"), campaign: key }),
   z.object({ action: z.literal("settings"), campaign: key, settings: z.unknown() }),
   z.object({ action: z.literal("addCategory"), campaign: key, name: z.string().max(200), kind: z.enum(["ic", "ooc"]) }),
   z.object({ action: z.literal("editCategory"), campaign: key, id, name: z.string().max(200) }),
@@ -164,7 +173,7 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
     const batch = await Promise.all(topics.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t.id)));
     for (const [n, got] of batch.entries()) {
       if (!got) continue;
-      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: p.body })) });
+      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: withRollResults(p.body, p.rolls) })) });
     }
   }
   return { board: board.name, topics: out };
@@ -175,14 +184,17 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const who = posterOf(ctx);
   const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>) => deps.store.apply(found.owner, found.campaignId, topicId, make);
+  const random = deps.random ?? secureDie;
   const needTopic = (t: Topic | null) => t ?? (() => { throw new ForumError("That topic was removed."); })();
   switch (body.action) {
     case "start": {
       const ids = { topic: newId(), post: newId() }, only = body.private ? membersFromKeys(ctx, body.private) : undefined;
-      return run(null, f => startTopic(f, { ...body, private: only }, who, ids, now));
+      return run(null, f => startTopic(f, { ...body, private: only, rolls: rollPost(body.body, random) }, who, ids, now));
     }
-    case "reply": { const postId = newId(); return run(body.topicId, (f, t) => reply(f, needTopic(t), body, who, postId, now)); }
-    case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), body, who, now));
+    case "reply": { const postId = newId(), rolls = rollPost(body.body, random); return run(body.topicId, (f, t) => reply(f, needTopic(t), { ...body, rolls }, who, postId, now)); }
+    case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), { ...body, reroll: (old, text) => rollPost(text, random, old ?? [], now) }, who, now));
+    case "combat": return runCombat(deps, ctx, found, body, who, now);
+    case "combatSources": return combatSources(deps, ctx, found);
     case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who));
     case "deleteTopic": return run(body.topicId, (f, t) => deleteTopic(f, needTopic(t), who));
     case "topic": return run(body.boardId !== undefined ? body.topicId : null, (f, t) => setTopic(f, t, body, who));
@@ -223,6 +235,29 @@ async function bulk(deps: Deps, ctx: Context, found: Found, body: Extract<Body, 
   return { done, ...(problem ? { problem } : {}) };
 }
 
+/** The Maptable campaign paired with this one, if any. */
+const maptableOf = (ctx: Context) => ctx.workspace.campaigns.find(c => c.id === ctx.campaignId)?.maptableCampaignId ?? null;
+
+/** Scenes in the paired Maptable campaign whose initiative tracker has a fight in it (moderators). */
+async function combatSources(deps: Deps, ctx: Context, found: Found) {
+  if (!ctx.viewer.rights.moderate) throw new ForumError("Only moderators can run combat.");
+  const mt = maptableOf(ctx);
+  if (!mt || !deps.scenes) return { paired: false, scenes: [] };
+  const known = characterIds(ctx), scenes = (await deps.scenes(found.owner, mt).catch(() => [])).flatMap(sc => { const o = orderFromScene(sc, known); return o ? [o] : []; });
+  return { paired: true, scenes: scenes.slice(0, 30) };
+}
+async function runCombat(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "combat" }>, who: Poster, now: Date) {
+  let input: Parameters<typeof setCombat>[1] = { topicId: body.topicId, op: body.op, order: body.order, round: body.round, turn: body.turn };
+  if (body.sceneId) {
+    // The order comes from the scene as it is now, read on the server.
+    const mt = maptableOf(ctx), scene = mt && deps.scenes ? (await deps.scenes(found.owner, mt).catch(() => [])).find(sc => sc.id === body.sceneId) : undefined;
+    const o = scene ? orderFromScene(scene, characterIds(ctx)) : null;
+    if (!o) throw new ForumError("That Maptable scene has no fight in its initiative tracker.");
+    input = { ...input, order: body.order ?? o.order, round: body.round ?? o.round, turn: body.turn ?? o.turn, source: { sceneId: o.sceneId, name: o.name } };
+  }
+  return deps.store.apply(found.owner, found.campaignId, null, f => setCombat(f, input, who, characterIds(ctx), now));
+}
+
 /**
  * Alerts for a new post: members it @names (or whose characters it names), members it quotes, and members a new
  * private topic is for. Only those who can see the topic hear about it, never the writer. Best effort.
@@ -234,13 +269,23 @@ async function sendAlerts(deps: Deps, ctx: Context, found: Found, post: { topicI
   for (const n of mentioned(post.body, all)) for (const u of names.get(n)!) to.set(u, "mention");
   for (const n of quoted(post.body, all)) for (const u of names.get(n)!) if (!to.has(u)) to.set(u, "quote");
   for (const u of post.private) if (!to.has(u)) to.set(u, "private");
+  for (const u of turnTakers(ctx, found, s)) if (!to.has(u)) to.set(u, "turn");
   to.delete(ctx.viewer.userId);
   await Promise.all([...to].slice(0, 30).map(async ([u, kind]) => {
     const rights = forumRights(ctx.list, u, found.owner);
     if (!rights.read || !canSee(s, { userId: u, rights, access: boardAccess(forum, ctx.list, u, rights) })) return;
-    const item: Alert = { id: `${kind}:${post.topicId}:${post.postId ?? "first"}`, at: now.toISOString(), kind, topicId: post.topicId, ...(post.postId ? { postId: post.postId } : {}), by: ctx.viewer.userId, as: post.as };
+    const item: Alert = { id: kind === "turn" ? `turn:${post.topicId}:${s.combat!.round}:${s.combat!.turn}` : `${kind}:${post.topicId}:${post.postId ?? "first"}`, at: now.toISOString(), kind, topicId: post.topicId, ...(post.postId ? { postId: post.postId } : {}), by: ctx.viewer.userId, as: post.as };
     await deps.store.writeAlerts(found.owner, found.campaignId, u, a => addAlerts(a, [item], now)).catch(() => undefined);
   }));
+}
+
+/** Who to tell that a fight came round to them: the players of the new turn's characters, or the GM for NPCs. */
+function turnTakers(ctx: Context, found: Found, s: TopicSummary) {
+  const before = ctx.forum.topics.find(t => t.id === s.id)?.combat, after = s.combat;
+  if (!after || (before && before.round === after.round && before.turn === after.turn)) return [];
+  const slot = after.order[after.turn];
+  if (!slot) return [];
+  return slot.as.length ? [...new Set(slot.as.flatMap(a => [...playersOf(ctx, a)]))] : [found.owner];
 }
 
 export async function handleForum(request: Request, deps: Deps) {
@@ -266,6 +311,7 @@ export async function handleForum(request: Request, deps: Deps) {
       const topicId = body.action === "start" ? made?.topicId : body.topicId;
       if (topicId) await sendAlerts(deps, ctx, found, { topicId, postId: made?.postId, body: body.body, as: body.as, private: body.action === "start" && body.private ? membersFromKeys(ctx, body.private) : [] }, now).catch(() => undefined);
     }
+    if (body.action === "combat") await sendAlerts(deps, ctx, found, { topicId: body.topicId, body: "", as: null, private: [] }, now).catch(() => undefined);
     return json({ ok: true, ...(out ?? {}) });
   } catch (e) {
     if (e instanceof ForumError) return json({ error: e.message }, 400);

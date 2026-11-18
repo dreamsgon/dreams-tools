@@ -110,7 +110,7 @@ export function exportTopic(page: TopicPage): ExportTopic {
   return {
     title: t.title, posts: page.posts.map(p => {
       const card = p.as ? page.cards[p.as] : null;
-      return { name: card?.name ?? (t.kind === 'ic' ? 'Game Master' : p.name), by: p.name, at: p.at, body: p.body };
+      return { name: card?.name ?? (t.kind === 'ic' ? 'Game Master' : p.name), by: p.name, at: p.at, body: p.body, rolls: p.rolls };
     }),
   };
 }

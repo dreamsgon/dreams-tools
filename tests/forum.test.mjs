@@ -9,6 +9,9 @@ import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum
 import * as R from '../lib/forum/reader.ts';
 import * as K from '../lib/forum/markup.ts';
 import * as A from '../lib/forum/alerts.ts';
+import * as D from '../lib/forum/rolls.ts';
+import * as C from '../lib/forum/combat.ts';
+import { newScene, newToken } from '../lib/model.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -700,4 +703,145 @@ test('request: search finds titles and posts the reader can see; notices save wi
   assert.match((await refused.json()).error, /can't start topics on this board/);
   const board = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'board', id: 'ooc-chat' } })).json()).page;
   assert.equal(board.board.start, false);
+});
+
+// ---- Part 4: dice and combat -------------------------------------------------------------------
+/** A die that gives these numbers in turn, then the highest face. */
+const dice = (...seq) => sides => seq.length ? Math.min(seq.shift(), sides) : sides;
+
+test('rolls: dice expressions parse, roll, keep highest or lowest, and read "vs" for Hit or Miss', () => {
+  assert.ok(D.parseDice('1d20+5'));
+  assert.ok(D.parseDice('2d20kh1 - 1d4 + 3'));
+  for (const bad of ['', '5', 'd1', '51d6', '1d20+', '1d20 5', '2d6kh3', 'x', '1d20+1d4+1d4+1d4+1d4+1d4+1d4+1d4+1d4+1d4+1d4']) assert.equal(D.parseDice(bad), null, bad);
+  const r = D.roll('Attack vs 15', '1d20 + 5', dice(12));
+  assert.deepEqual([r.label, r.vs, r.expr, r.total, r.mod, r.dice[0].values], ['Attack', 15, '1d20+5', 17, 5, [12]]);
+  const adv = D.roll('', '2d20kh1', dice(3, 18));
+  assert.deepEqual([adv.total, adv.dice[0].keep], [18, [false, true]]);
+  const dis = D.roll('', '2d20kl1-1d4', dice(3, 18, 2));
+  assert.deepEqual([dis.total, dis.dice[1].sign], [1, -1]);
+  assert.equal(D.roll('x', 'not dice', dice()), null);
+  for (let i = 0; i < 200; i++) { const v = D.secureDie(6); assert.ok(v >= 1 && v <= 6 && Number.isInteger(v)); }
+  assert.match(D.rollLine(r), /Attack \(1d20\+5\): 17 — 12 \+ 5, Hit vs 15/);
+  assert.match(D.rollLine(dis), /\(18\)/, 'dropped dice in brackets');
+});
+test('rolls: a post rolls each tag once; an edit keeps unchanged tags and marks new rolls', () => {
+  const body = 'I swing. [roll=Attack vs 15]1d20+5[/roll] then [roll]2d6[/roll] and [roll]nope[/roll]';
+  const first = D.rollPost(body, dice(10, 3, 4));
+  assert.deepEqual(first.map(r => r?.total ?? null), [15, 7, null]);
+  const later = new Date('2026-01-02T00:00:00.000Z');
+  const edited = D.rollPost('I swing. [roll=attack VS 15]1d20 + 5[/roll] then [roll]3d6[/roll]', dice(1, 1, 1), first, later);
+  assert.equal(edited[0], first[0], 'same label and dice keep the old result');
+  assert.deepEqual([edited[1].total, edited[1].at, edited.length], [3, later.toISOString(), 2]);
+  assert.equal(D.rollPost('[roll]1d6[/roll]'.repeat(20), dice()).length, D.ROLL_LIMIT);
+  assert.equal(D.withRollResults('Hit: [roll]1d6[/roll]!', [D.roll('', '1d6', dice(4))]), 'Hit: 🎲 Roll (1d6): 4 — 4!');
+  assert.deepEqual(K.postInline('a [roll=Hide]1d20[/roll] *b*').map(p => p.type), ['text', 'roll', 'text', 'italic']);
+  assert.equal(K.wordCount('Go [roll=Attack]1d20+5[/roll] now'), 2);
+});
+test('rolls: start, reply and edit roll on the server; the post keeps them', () => {
+  const f0 = withBoards(), body = 'Swing [roll=Attack]1d20[/roll]';
+  const c = M.startTopic(f0, { boardId: 'tavern-board', title: 'Fight', body, as: 'hero', rolls: D.rollPost(body, dice(7)) }, poster(f0, 'p1'), ids('t1', 'a1'), NOW);
+  assert.equal(c.topic.posts[0].rolls[0].total, 7);
+  const f1 = apply(f0, c), later = new Date(NOW.getTime() + 60000);
+  const e = M.editPost(f1, c.topic, { postId: 'a1', body: body + ' and [roll]1d4[/roll]', reroll: (old, b) => D.rollPost(b, dice(2), old, later) }, poster(f1, 'p1'), later);
+  assert.deepEqual(e.topic.posts[0].rolls.map(r => [r.total, r.at ?? null]), [[7, null], [2, later.toISOString()]]);
+  const plain = M.reply(f1, c.topic, { body: 'No dice', as: 'hero' }, poster(f1, 'p1'), 'a2', NOW);
+  assert.equal(plain.topic.posts[1].rolls, undefined);
+});
+
+const fight = (order, over = {}) => ({ round: 1, turn: 0, order, done: [], at: NOW.toISOString(), ...over });
+test('combat: turns end with the right post; group turns need everyone; NPC turns end with the GM; rounds wrap', () => {
+  let c = fight([{ name: 'Hero', init: 18, as: ['hero'] }, { name: 'Goblins', init: 12, as: [] }, { name: 'Pair', init: 5, as: ['sidekick', 'villain'] }]);
+  assert.equal(C.afterPost(c, 'sidekick', false), c, 'not their turn: nothing moves');
+  assert.equal(C.afterPost(c, null, true), c, 'the GM narrating in a character turn moves nothing');
+  c = C.afterPost(c, 'hero', false);
+  assert.deepEqual([c.turn, c.round, C.turnMeta(c).name], [1, 1, 'Goblins']);
+  assert.equal(C.countsFor(c, 'hero', true), null, 'the GM as a character who has a turn of their own does not end an NPC turn');
+  assert.equal(C.countsFor(c, 'villain', true), null);
+  c = C.afterPost(c, null, true);
+  assert.equal(c.turn, 2);
+  c = C.afterPost(c, 'villain', true);
+  assert.deepEqual([c.turn, c.done], [2, ['villain']], 'a group turn waits for everyone');
+  c = C.afterPost(c, 'villain', true);
+  assert.deepEqual(c.done, ['villain'], 'posting twice counts once');
+  c = C.afterPost(c, 'sidekick', false);
+  assert.deepEqual([c.turn, c.round, c.done], [0, 2, []]);
+  assert.deepEqual([C.step(c, -1).turn, C.step(c, -1).round], [2, 1]);
+  const first = fight([{ name: 'A', init: null, as: [] }]);
+  assert.deepEqual([C.step(first, -1).turn, C.step(first, -1).round], [0, 1], 'back stops at the start');
+  // NPC turn: the GM posting as an NPC with no turn of their own counts.
+  assert.equal(C.countsFor(fight([{ name: 'Goblins', init: 1, as: [] }, { name: 'Hero', init: 0, as: ['hero'] }]), 'villain', true), '*');
+  assert.deepEqual(C.cleanOrder([{ name: ' A ', init: 1, as: ['hero', 'ghost', 'hero'] }, { name: 'B', init: null, as: ['hero', 'sidekick'] }], new Set(['hero', 'sidekick'])),
+    [{ name: 'A', init: 1, as: ['hero'] }, { name: 'B', init: null, as: ['sidekick'] }]);
+});
+test('combat: moderators run it; posts carry their turn; the fight moves on as people post', () => {
+  let { forum, topic } = seeded();
+  const known = new Set(['hero', 'sidekick', 'villain']), order = [{ name: 'Hero', init: 18, as: ['hero'] }, { name: 'Goblins', init: 12, as: [] }];
+  assert.throws(() => M.setCombat(forum, { topicId: 't1', op: 'start', order }, poster(forum, 'p1'), known, NOW), /Only moderators/);
+  assert.throws(() => M.setCombat(forum, { topicId: 't1', op: 'start', order: [] }, poster(forum, OWNER), known, NOW), /at least one/);
+  forum = apply(forum, M.setCombat(forum, { topicId: 't1', op: 'start', order }, poster(forum, OWNER), known, NOW));
+  assert.deepEqual([forum.topics[0].combat.round, forum.topics[0].combat.turn], [1, 0]);
+  let c = rep(forum, topic, 'p1', { body: 'I strike!' }); forum = apply(forum, c); topic = c.topic;
+  assert.deepEqual(topic.posts[1].turn, { round: 1, n: 1, of: 2, name: 'Hero' });
+  assert.equal(forum.topics[0].combat.turn, 1);
+  const page = topicPage(ctxFor(forum, 'p1'), topic);
+  assert.deepEqual(page.combat.order.map(s => [s.name, s.now, s.mine]), [['Hero', false, true], ['Goblins', true, false]]);
+  assert.equal(page.topic.next.name, 'Goblins');
+  c = rep(forum, topic, OWNER, { body: 'They snarl.', as: null }, 'a3'); forum = apply(forum, c); topic = c.topic;
+  assert.deepEqual([forum.topics[0].combat.round, forum.topics[0].combat.turn], [2, 0]);
+  forum = apply(forum, M.setCombat(forum, { topicId: 't1', op: 'back' }, poster(forum, OWNER), known, NOW));
+  assert.deepEqual([forum.topics[0].combat.round, forum.topics[0].combat.turn], [1, 1]);
+  forum = apply(forum, M.setCombat(forum, { topicId: 't1', op: 'end' }, poster(forum, OWNER), known, NOW));
+  assert.equal(forum.topics[0].combat, undefined);
+  assert.equal(topicPage(ctxFor(forum, 'p1'), topic).posts[1].turn.round, 1, 'posts keep their round after the fight');
+  const ooc = M.startTopic(forum, { boardId: 'ooc-chat', title: 'Chat', body: 'hi', as: null }, poster(forum, OWNER), ids('t2', 'b1'), NOW); forum = apply(forum, ooc);
+  assert.throws(() => M.setCombat(forum, { topicId: 't2', op: 'start', order }, poster(forum, OWNER), known, NOW), /in-character/);
+});
+test('combat: a Maptable scene gives the order, with linked characters and without hidden tokens', () => {
+  const s = newScene('Bridge');
+  s.tokens = [
+    { ...newToken('Hero'), id: 'a', initiative: 18, encyclopediaEntryId: 'hero' },
+    { ...newToken('Goblin'), id: 'b', initiative: 12, initiativeGroup: 'Goblins' }, { ...newToken('Goblin'), id: 'c', initiative: 9, initiativeGroup: 'Goblins' },
+    { ...newToken('Lurker'), id: 'd', initiative: 15, hidden: true },
+    { ...newToken('Unrolled'), id: 'e' },
+  ];
+  s.initiativeState = { round: 3, currentId: 'group:Goblins', order: [] };
+  const o = C.orderFromScene(s, new Set(['hero']));
+  assert.deepEqual(o.order, [{ name: 'Hero', init: 18, as: ['hero'] }, { name: 'Goblins ×2', init: 12, as: [] }]);
+  assert.deepEqual([o.round, o.turn, o.name], [3, 1, 'Bridge']);
+  assert.equal(C.orderFromScene(newScene(), new Set()), null);
+});
+test('request: combat start, turn alerts, rolls by the server and Maptable import', async () => {
+  const gm = harness({ user: OWNER });
+  gm.deps.random = dice(11, 4);
+  const scene = newScene('Bridge'); scene.tokens = [{ ...newToken('Sidekick'), id: 'x', initiative: 9, encyclopediaEntryId: 'sidekick' }];
+  gm.deps.scenes = async () => [scene];
+  const { id: board } = await (await gm.post({ action: 'addBoard', campaign: KEY, categoryId: 'locations', name: 'Bridge' })).json();
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: board, title: 'Ambush', body: 'Arrows! [roll=Volley vs 12]1d20[/roll]', as: null })).json();
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store; p1.deps.random = dice(20);
+  const refused = await p1.post({ action: 'combat', campaign: KEY, topicId, op: 'start', order: [{ name: 'Hero', init: 1, as: ['hero'] }] });
+  assert.match((await refused.json()).error, /Only moderators/);
+  const order = [{ name: 'Hero', init: 15, as: ['hero'] }, { name: 'Sidekick', init: 10, as: ['sidekick'] }];
+  assert.equal((await (await gm.post({ action: 'combat', campaign: KEY, topicId, op: 'start', order })).json()).ok, true);
+  const alertsOf = async u => { const h = harness({ user: u }); h.deps.store = gm.store; return (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.you.alerts.items; };
+  assert.deepEqual((await alertsOf('p1')).map(a => a.kind), ['turn'], 'starting the fight tells whoever goes first');
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'I dive in. [roll=Attack]1d20+2[/roll]', as: 'hero' });
+  assert.deepEqual((await alertsOf('p2')).map(a => a.kind), ['turn'], 'then the next turn hears');
+  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
+  assert.deepEqual(page.posts.map(p => p.rolls.map(r => r.total)), [[11], [22]]);
+  assert.deepEqual(page.posts[1].turn, { round: 1, n: 1, of: 2, name: 'Hero' });
+  assert.deepEqual([page.combat.round, page.combat.order[1].now], [1, true]);
+  // An edit that leaves the tag alone keeps the roll.
+  const pid = page.posts[1].id;
+  await p1.post({ action: 'edit', campaign: KEY, topicId, postId: pid, body: 'I leap in. [roll=Attack]1d20+2[/roll]' });
+  const again = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
+  assert.deepEqual([again.posts[1].rolls[0].total, again.posts[1].rolls[0].at], [22, undefined]);
+  // Maptable: the paired campaign's scenes with a fight in them, and an order taken from one.
+  const ws = structuredClone(workspace); ws.campaigns[0].maptableCampaignId = 'mt1'; gm.deps.workspace = async () => ws;
+  const sources = await (await gm.post({ action: 'combatSources', campaign: KEY })).json();
+  assert.deepEqual([sources.paired, sources.scenes.map(s => s.name)], [true, ['Bridge']]);
+  assert.equal((await (await gm.post({ action: 'combat', campaign: KEY, topicId, op: 'order', sceneId: scene.id })).json()).ok, true);
+  const third = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
+  assert.deepEqual([third.combat.source.name, third.combat.order.map(s => s.name)], ['Bridge', ['Sidekick']]);
+  assert.match((await (await gm.post({ action: 'combat', campaign: KEY, topicId, op: 'order', sceneId: 'nope' })).json()).error, /no fight/);
+  assert.equal((await p1.post({ action: 'combatSources', campaign: KEY })).status, 400);
 });

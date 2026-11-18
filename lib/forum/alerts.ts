@@ -1,5 +1,6 @@
 /*
- * Alerts: someone @named you or your character, quoted you, or added you to a private topic. Each member's alerts
+ * Alerts: someone @named you or your character, quoted you, added you to a private topic, or a fight came round to
+ * your turn. Each member's alerts
  * live in their own file beside the forum (store.ts), newest first, at most 50. Pure.
  */
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { z } from "zod";
 export const ALERT_LIMIT = 50;
 const at = z.string().datetime(), id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 export const alertSchema = z.object({
-  id: z.string().min(1).max(220), at, kind: z.enum(["mention", "quote", "private"]),
+  id: z.string().min(1).max(220), at, kind: z.enum(["mention", "quote", "private", "turn"]),
   topicId: id, postId: id.optional(),
   /** Who did it: their account and the character they wrote as. */
   by: z.string().min(1).max(100), as: id.nullable(),
