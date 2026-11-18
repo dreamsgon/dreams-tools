@@ -222,6 +222,15 @@ body { background: #ece5d6; }
 .post-text p { margin: 0 0 .8em; }
 .post-text h3, .post-text h4, .post-text h5, .post-text h6 { font-family: var(--font-display); color: var(--accent); letter-spacing: .05em; margin: .6em 0 .4em; }
 .post-text blockquote { margin: 0 0 .8em; padding: 6px 14px; border-left: 3px solid var(--accent); background: var(--raised); font-style: italic; }
+/* A post's own HTML (html.ts allows the tags and styles): kept inside the post, never over the page around it. */
+.post-html { max-width: 100%; margin: .4em -4px; padding: 4px 16px 16px 4px; overflow: auto; contain: content; isolation: isolate; }
+/* The writer's colours and fonts win over the forum's own heading and link looks. */
+.post-html :is(h3, h4, h5, h6) { color: inherit; font-family: inherit; letter-spacing: normal; text-transform: none; }
+.post-html a { color: inherit; }
+.post-html img { max-width: 100%; height: auto; }
+.post-html table { max-width: 100%; border-collapse: collapse; }
+.post-html td, .post-html th { padding: 4px 8px; vertical-align: top; }
+.post-html p { margin: .4em 0; }
 /* A quote of several lines (and its "— Name" line) reads as one block. */
 .post-text blockquote:has(+ blockquote) { margin-bottom: 0; padding-bottom: 2px; }
 .post-text blockquote + blockquote { padding-top: 2px; }
@@ -550,7 +559,7 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .f-btn.on { border-color: var(--accent-2); color: var(--accent-2) !important; }
 .mask-form { display: grid; gap: 8px; padding: 10px; width: 100%; background: var(--panel); border: 1px solid var(--line-strong); }
 .mask-table { display: grid; gap: 2px; }
-.mask-table > div { display: grid; grid-template-columns: minmax(110px, 1fr) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.mask-table > div { display: grid; grid-template-columns: minmax(110px, 1fr) repeat(4, minmax(0, 1fr)); gap: 6px; align-items: center; }
 .mask-head { font: 600 11px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .mask-table select { width: 100%; padding: 4px 6px; font-size: 12.5px; }
 .mask-table select.set { border-color: var(--accent-2); color: var(--accent-2); font-weight: 600; }
@@ -770,7 +779,7 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .search-box { order: -1; width: 100%; }
   .search-box input { width: 100%; }
   .notice { padding: 8px 12px; }
-  .mask-table > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mask-table > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mask-table > div > span[role="rowheader"] { grid-column: 1 / -1; margin-top: 6px; }
   .mask-head span:first-child { display: none; }
   .combat { padding: 10px 12px; }

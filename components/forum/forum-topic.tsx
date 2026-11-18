@@ -58,7 +58,7 @@ export function BoardView({ frame, page, k, go, done, startOpen }: { frame: Fram
       {page.archive && <p className="muted">Finished topics, kept to read. Nobody can reply until a moderator brings one back.</p>}
       {writing && <>
         <PrivatePicker frame={frame} value={only} onChange={setOnly} />
-        <Composer frame={frame} k={k} kind={b.kind} title after mode="full" label={only ? 'New private topic' : 'New topic'} draftKey={`${k}:new:${b.id}`} where={{ boardId: b.id }} onPost={start} onCancel={() => { setWriting(false); setOnly(null); }} />
+        <Composer frame={frame} k={k} kind={b.kind} title after mode="full" label={only ? 'New private topic' : 'New topic'} draftKey={`${k}:new:${b.id}`} where={{ boardId: b.id }} html={b.html} onPost={start} onCancel={() => { setWriting(false); setOnly(null); }} />
       </>}
       {r.moderate && page.topics.length > 0 && <div className="mod-pickall"><label className="check"><input type="checkbox" checked={all} onChange={e => setPicked(e.target.checked ? page.topics.map(t => t.id) : [])} />Select all</label></div>}
       <ModBar frame={frame} k={k} picked={chosen} kind={b.kind} archive={page.archive} clear={() => setPicked([])} done={() => done()} />
@@ -206,7 +206,7 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
     {t.canReply ? <section className="reply">
       {slot && t.next?.mine && <p className="your-turn"><Swords size={15} aria-hidden="true" /><span>It’s your turn in round {page.combat!.round}{yours.length ? <> as <b>{yours.join(' and ')}</b></> : <>: <b>{slot.name}</b></>}. {slot.as.length ? (slot.as.length > 1 ? `${slot.name} is a group turn: it moves on once each of them has posted.` : 'Posting as them moves the fight on.') : 'Narration, or a post as an NPC, moves the fight on.'}</span></p>}
       <div className="reply-head"><h2 className="category-title">Quick reply</h2>{addReply && <span className="reply-full">For more room, a preview of the topic and focus mode, use {addReply}</span>}</div>
-      <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} where={{ topicId: t.id }} quote={quote} preferred={preferred} onPost={send} after label="Quick reply" />
+      <Composer frame={frame} k={k} kind={t.kind} html={!!frame.boards.find(b => b.id === t.boardId)?.html} draftKey={`${k}:${t.id}`} where={{ topicId: t.id }} quote={quote} preferred={preferred} onPost={send} after label="Quick reply" />
     </section>
       : <p className="muted locked-note">{closedNote(t)}</p>}
   </>;
@@ -255,7 +255,7 @@ export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: To
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="page-head"><h2 className="topic-name">Reply to {t.title}</h2>{focus.button}</header>
     {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}</p>}
-    <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} where={{ topicId: t.id }} preferred={mine ? mine.as : undefined} onPost={send} after mode="full" big label="Full reply" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
+    <Composer frame={frame} k={k} kind={t.kind} html={!!frame.boards.find(b => b.id === t.boardId)?.html} draftKey={`${k}:${t.id}`} where={{ topicId: t.id }} preferred={mine ? mine.as : undefined} onPost={send} after mode="full" big label="Full reply" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
     {!focus.on && <TopicReview page={page} k={k} />}
   </div>;
 }
@@ -270,7 +270,7 @@ export function EditView({ frame, page, k, go, done, postId }: { frame: Frame; p
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="page-head"><h2 className="topic-name">Edit post #{p.number}</h2>{focus.button}</header>
     <p className="muted">Written as <b>{card?.name ?? (t.kind === 'ic' ? 'Game Master' : p.name)}</b> · {fullDate(p.at)}</p>
-    <Composer frame={frame} k={k} kind={t.kind} mode="edit" initial={p.body} draftKey={`${k}:edit:${p.id}`} onPost={save} big label="Edit" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
+    <Composer frame={frame} k={k} kind={t.kind} html={!!frame.boards.find(b => b.id === t.boardId)?.html} mode="edit" initial={p.body} draftKey={`${k}:edit:${p.id}`} onPost={save} big label="Edit" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
     {!focus.on && <TopicReview page={page} k={k} />}
   </div>;
 }

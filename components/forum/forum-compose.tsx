@@ -67,7 +67,7 @@ function AsPicker({ frame, k, kind, state }: { frame: Frame; k: string; kind: 'i
 }
 
 /** The toolbar: each button wraps the selection (or inserts a placeholder) in the post's markup. */
-function Toolbar({ frame, k, box, set, preview, setPreview, as }: { frame: Frame; k: string; box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void; as: string | null }) {
+function Toolbar({ frame, k, box, set, preview, setPreview, as, html }: { frame: Frame; k: string; box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void; as: string | null; html: boolean }) {
   const edit = (make: (sel: string) => { text: string; select?: [number, number] }) => {
     const t = box.current; if (!t) return;
     const { selectionStart: a, selectionEnd: b, value } = t, made = make(value.slice(a, b));
@@ -89,7 +89,7 @@ function Toolbar({ frame, k, box, set, preview, setPreview, as }: { frame: Frame
     {tool('Quote', <Quote size={15} />, () => bb ? wrap('[quote]', '[/quote]', 'Quoted text') : lines('> ', 'Quoted text'))}
     {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }))}
     <span className="sep" />
-    <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} as={as} insert={text => edit(() => ({ text }))} />
+    <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} as={as} html={html} insert={text => edit(() => ({ text }))} />
     <EmojiPicker frame={frame} k={k} disabled={preview} insert={text => edit(() => ({ text }))} />
     <TagPicker frame={frame} disabled={preview} insert={text => edit(() => ({ text }))} />
     <span className="sep" />
@@ -107,12 +107,14 @@ export const markupHint = (bb: boolean) => bb
  * Write a reply, a new topic (with `title`) or an edit (with `initial`). Unsent text stays in this browser under
  * `draftKey` until it's posted, so the Quick reply and the full reply page share one draft.
  */
-export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, label, foot, after: withAfter, big, where }: {
+export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, label, foot, after: withAfter, big, where, html }: {
   frame: Frame; k: string; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[] }) => Promise<void>;
   /** The topic or board, for the AI help (forum-ai.tsx). */
   where?: { topicId: string } | { boardId: string };
   title?: boolean; draftKey: string; quote?: { text: string; n: number }; preferred?: string | null; onCancel?: () => void;
   mode?: 'quick' | 'full' | 'edit'; initial?: string; label?: string; foot?: ReactNode; after?: boolean; big?: boolean;
+  /** Whether the writer may use HTML on this board (Insert › HTML). */
+  html?: boolean;
 }) {
   const storeKey = 'forum-draft:' + draftKey, editing = mode === 'edit';
   const state = useAs(frame, kind, preferred), [title, setTitle] = useState(''), [tags, setTags] = useState<string[]>([]);
@@ -140,7 +142,7 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
     </div>
     {withTitle && <input className="composer-title" placeholder="Topic title" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" />}
     {withTitle && frame.topicTags.length > 0 && <TagChoice frame={frame} tags={tags} set={setTags} />}
-    <Toolbar frame={frame} k={k} as={editing ? null : state.as} box={box} set={setBody} preview={preview} setPreview={setPreview} />
+    <Toolbar frame={frame} k={k} as={editing ? null : state.as} html={!!html} box={box} set={setBody} preview={preview} setPreview={setPreview} />
     {preview ? <div className="composer-preview" aria-label="Preview">{body.trim() ? <PostText text={body} /> : <p className="muted">Nothing to preview yet.</p>}</div>
       : <textarea ref={box} value={body} onChange={e => setBody(e.target.value)} rows={big ? 18 : withTitle ? 10 : 7} placeholder={kind === 'ic' ? 'Write your post…' : 'Write to the table…'} aria-label="Post text" onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send(); }} />}
     <div className="composer-foot">

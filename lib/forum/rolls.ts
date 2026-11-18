@@ -68,8 +68,8 @@ export function roll(label: string, expr: string, random: (sides: number) => num
   return { label: name, expr: expr.replace(/\s+/g, ""), vs, dice, mod, total };
 }
 
-/** Every roll tag in a post, in order: [label, expression]. */
-export const rollTags = (body: string) => [...body.matchAll(ROLL_TAG)].slice(0, ROLL_LIMIT).map(m => ({ label: (m[1] ?? "").trim(), expr: m[2]!.trim() }));
+/** Every roll tag in a post, in order: [label, expression]. Tags inside [html] aren't rolled: HTML is shown as written. */
+export const rollTags = (body: string) => [...body.replace(/\[html\][\s\S]*?(?:\[\/html\]|$)/gi, " ").matchAll(ROLL_TAG)].slice(0, ROLL_LIMIT).map(m => ({ label: (m[1] ?? "").trim(), expr: m[2]!.trim() }));
 
 /**
  * The rolls for a post's text, one per tag. When editing, a tag whose label and dice are unchanged keeps its old result (by
