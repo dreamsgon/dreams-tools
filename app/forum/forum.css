@@ -792,3 +792,74 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .ai-use { flex-direction: column; align-items: stretch; }
   .ai-use select { max-width: none; }
 }
+
+/* The GM's designed hover card (Forum settings › Hover card): rows in the card's own colours. */
+.card-rows { display: grid; gap: 7px; margin-top: 8px; text-align: center; }
+.mini-card:has(.card-rows) .mini-name, .mini-card:has(.card-rows) .mini-link { display: block; text-align: center; }
+.card-rows p { margin: 0; }
+.card-rows small { display: block; font: 700 9px var(--font-sans); letter-spacing: .11em; text-transform: uppercase; color: var(--card-head); }
+.card-rows .r-title { font: 900 21px/1.05 var(--font-display); letter-spacing: .05em; text-transform: uppercase; color: var(--card-head); }
+.card-rows .r-sub { font: 700 10.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
+.card-rows .r-rule { border-block: 1px solid var(--card-line); padding: 6px 0; font: 700 11.5px var(--font-display); letter-spacing: .07em; text-transform: uppercase; }
+.card-rows .r-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.card-rows .r-chips span { border: 1px solid var(--card-head); outline: 1px solid var(--card-line); outline-offset: 2px; margin: 3px; padding: 2px 9px; font: 700 10.5px var(--font-display); letter-spacing: .07em; text-transform: uppercase; color: var(--card-head); }
+.card-rows .r-boxes { display: grid; gap: 6px; }
+.card-rows .r-box, .card-rows .r-pair > div { background: rgba(255, 255, 255, .06); border: 1px solid var(--card-line); padding: 4px 6px; }
+.card-rows .r-box span, .card-rows .r-pair span { display: block; font: 600 15px/1.2 var(--font-reading); overflow-wrap: anywhere; }
+.card-rows .r-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.card-rows .r-quote { border-left: 2px solid var(--card-head); padding: 2px 8px; text-align: left; font: italic 15px/1.35 var(--font-reading); }
+.card-rows .r-gm { position: relative; outline: 1px dashed var(--card-head); outline-offset: 2px; }
+.card-rows .r-gm::after { content: "GM"; position: absolute; top: -2px; right: 2px; font: 700 8px var(--font-sans); color: var(--card-head); }
+.card-designer h2, .strip-settings h2 { display: flex; align-items: center; gap: 6px; }
+.design-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.design-rows li { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px; border: 1px solid var(--line); background: var(--bg); }
+.design-rows select { min-width: 0; max-width: 100%; padding: 4px 6px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; }
+.design-fields { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.design-field { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }
+.design-field select { max-width: 220px; }
+.mini-btns { display: inline-flex; gap: 2px; }
+.add-rows { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.add-rows .muted { display: inline-flex; align-items: center; gap: 4px; }
+.design-preview { display: grid; gap: 6px; justify-items: center; padding: 12px; border: 1px dashed var(--line-strong); }
+.preview-card { cursor: default; }
+.preview-card .mini-card.shown { opacity: 1; visibility: visible; }
+.strip-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.strip-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.strip-rows select { padding: 4px 6px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
+
+/* The player strip under posts written as a character: the player's forum profile answers. */
+.player-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); margin: 0; border-top: 1px solid var(--line-strong); background: var(--raised); }
+.player-strip > div { padding: 8px; border-right: 1px solid var(--line); text-align: center; font-size: 13px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.player-strip > div:last-child { border-right: 0; }
+.player-strip dt { font: 700 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.player-strip dd { margin: 2px 0 0; }
+.reveal { display: inline-grid; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: center; }
+.reveal > * { grid-area: 1 / 1; transition: opacity .15s; }
+.reveal .cover { justify-self: center; font-style: italic; border-bottom: 1px dotted var(--muted); }
+.reveal .secret { opacity: 0; }
+.reveal:hover .cover, .reveal:focus-visible .cover, .reveal.shown .cover { opacity: 0; }
+.reveal:hover .secret, .reveal:focus-visible .secret, .reveal.shown .secret { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .reveal > * { transition: none; } }
+
+/* Your forum profile and post styles. */
+.you { color: inherit; text-decoration: none; }
+.you:hover b { text-decoration: underline; }
+.profile-page { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
+.profile-page textarea, .post-styles textarea, .style-head input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); font: inherit; }
+.post-styles textarea { font: 13px/1.45 var(--font-mono, ui-monospace, monospace); }
+.style-row { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); background: var(--bg); }
+.style-head { display: flex; gap: 6px; align-items: center; }
+.style-preview { display: grid; gap: 4px; padding: 8px; border: 1px dashed var(--line-strong); background: var(--panel); }
+.style-preview .post-text { font-size: 16px; }
+.profile-foot { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; justify-content: flex-start; }
+@container page (max-width: 900px) { .profile-page { grid-template-columns: minmax(0, 1fr); } }
+@container page (max-width: 640px) {
+  .design-rows li { grid-template-columns: minmax(0, 1fr) auto; }
+  .design-fields { grid-column: 1 / -1; grid-row: 2; }
+  .design-field select { max-width: 100%; }
+  .player-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .player-strip > div { border-bottom: 1px solid var(--line); }
+  .player-strip > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .preview-card, .preview-card .portrait.big { width: 250px; height: 400px; max-width: 100%; }
+  .preview-card .mini-card { inset: 0; width: auto; min-height: 0; box-shadow: none; }
+}

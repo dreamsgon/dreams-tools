@@ -16,7 +16,7 @@ import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMet
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
 import { emojiCodes, htmlParts, pictureIds } from "./markup.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3, cardRows: 12, styles: 4, styleChars: 2000, profiles: 100 } as const;
 /** Largest picture in a post, and largest emoji, in bytes. */
 export const PICTURE_BYTES = 8 * 1024 * 1024, EMOJI_BYTES = 256 * 1024;
 /** Days a topic stays in the Trash before it goes for good. */
@@ -107,6 +107,24 @@ export const emojiSchema = z.object({ code: z.string().regex(EMOJI_CODE), imageI
 export const emojiSettingsSchema = z.object({ use: z.enum(["all", "staff", "off"]), list: z.array(emojiSchema).max(FORUM_LIMITS.emoji) });
 /** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
 export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
+/**
+ * The GM's hover card design: rows top to bottom, each a style and the fields it shows (a stat by id, a Profile fact
+ * by its label, the traits or the role). Left out, the card lists what players may read, as it always did.
+ */
+export const CARD_STYLES = ["title", "sub", "rule", "chips", "box", "pair", "quote"] as const;
+export const cardFieldSchema = z.string().max(80).regex(/^(?:stat:[A-Za-z0-9_-]{1,70}|fact:[^\n]{1,60}|traits|role)$/);
+export const cardDesignSchema = z.object({ rows: z.array(z.object({ style: z.enum(CARD_STYLES), fields: z.array(cardFieldSchema).min(1).max(4) })).max(FORUM_LIMITS.cardRows) });
+/** The strip under in-character posts: answers from the player's forum profile, some covered until hovered. */
+export const STRIP_FIELDS = ["pronouns", "timezone", "activity", "mature", "nogoes"] as const;
+export const stripSchema = z.object({ fields: z.array(z.enum(STRIP_FIELDS)).max(STRIP_FIELDS.length), hidden: z.array(z.enum(STRIP_FIELDS)).max(STRIP_FIELDS.length) });
+export const DEFAULT_STRIP: z.infer<typeof stripSchema> = { fields: [...STRIP_FIELDS], hidden: ["nogoes"] };
+const answer = (max: number) => z.string().trim().max(max).optional();
+/** A member's own forum profile: about the player, not a character. Post styles are their saved post layouts. */
+export const forumProfileSchema = z.object({
+  pronouns: answer(40), timezone: answer(60), activity: answer(120), mature: z.enum(["yes", "ask", "no"]).optional(), nogoes: answer(400),
+  styles: z.array(z.object({ id, name: nameOf(40), body: z.string().max(FORUM_LIMITS.styleChars) })).max(FORUM_LIMITS.styles).optional(),
+});
+
 export const forumSchema = z.object({
   schemaVersion: z.literal(1),
   settings: forumSettingsSchema,
@@ -127,6 +145,10 @@ export const forumSchema = z.object({
   emoji: emojiSettingsSchema.optional(),
   /** Preset tags for topics (`topicTagSchema`), set in Forum settings. */
   topicTags: z.array(topicTagSchema).max(FORUM_LIMITS.topicTags).optional(),
+  card: cardDesignSchema.optional(),
+  strip: stripSchema.optional(),
+  /** Members' forum profiles, by account. */
+  profiles: z.record(userId, forumProfileSchema).optional(),
 });
 export const postSchema = z.object({
   id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional(),
@@ -155,6 +177,9 @@ export type Recent = z.infer<typeof recentSchema>;
 export type Report = z.infer<typeof reportSchema>;
 export type Upload = z.infer<typeof uploadSchema>;
 export type TopicTag = z.infer<typeof topicTagSchema>;
+export type CardDesign = z.infer<typeof cardDesignSchema>;
+export type Strip = z.infer<typeof stripSchema>;
+export type ForumProfile = z.infer<typeof forumProfileSchema>;
 export type EmojiSettings = z.infer<typeof emojiSettingsSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
@@ -521,6 +546,34 @@ export function setEmoji(f: Forum, input: unknown, who: Poster): Change {
   }
   const list = e.list.map(x => x.set ? x : { code: x.code, imageId: x.imageId });
   return { forum: g => ({ ...g, emoji: { use: e.use, list } }) };
+}
+
+/** The hover card design; an empty list goes back to the plain card. */
+export function setCardDesign(_f: Forum, input: unknown, who: Poster): Change {
+  needBoards(who);
+  const parsed = cardDesignSchema.safeParse(input);
+  if (!parsed.success) fail(`A card has up to ${FORUM_LIMITS.cardRows} rows, each with one to four fields.`);
+  const rows = parsed.data!.rows;
+  return { forum: g => { const n = { ...g }; if (rows.length) n.card = { rows }; else delete n.card; return n; } };
+}
+/** Which forum profile answers show under in-character posts, and which are covered until hovered. */
+export function setStrip(_f: Forum, input: unknown, who: Poster): Change {
+  needBoards(who);
+  const parsed = stripSchema.safeParse(input);
+  if (!parsed.success) fail("Check the player strip settings.");
+  const strip = { fields: [...new Set(parsed.data!.fields)], hidden: [...new Set(parsed.data!.hidden)] };
+  return { forum: g => ({ ...g, strip }) };
+}
+/** Someone's own forum profile. Anyone who reads the forum keeps one; the GM too. */
+export function setProfile(f: Forum, input: unknown, who: Poster): Change {
+  if (!who.rights.read) fail("You can't read this forum.");
+  const parsed = forumProfileSchema.safeParse(input);
+  if (!parsed.success) fail(parsed.error.issues.some(i => i.path[0] === "styles") ? `Keep up to ${FORUM_LIMITS.styles} post styles, each with a name and up to ${FORUM_LIMITS.styleChars.toLocaleString("en")} characters.` : "Keep each answer short: no-goes up to 400 characters.");
+  const p = Object.fromEntries(Object.entries(parsed.data!).filter(([, v]) => v !== "" && v !== undefined && !(Array.isArray(v) && !v.length))) as ForumProfile;
+  if (p.styles && new Set(p.styles.map(x => x.id)).size !== p.styles.length) fail("Two post styles share an id.");
+  const others = Object.keys(f.profiles ?? {}).filter(u => u !== who.userId).length;
+  if (others >= FORUM_LIMITS.profiles) fail("This forum holds as many profiles as it can.");
+  return { forum: g => { const all = { ...g.profiles }; if (Object.keys(p).length) all[who.userId] = p; else delete all[who.userId]; return { ...g, profiles: all }; } };
 }
 
 /** The forum's preset topic tags. A tag taken away comes off the topics that had it. */

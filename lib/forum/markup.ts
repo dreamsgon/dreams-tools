@@ -147,3 +147,18 @@ export function linkTargets(text: string) {
 
 /** Words in a post, as people count them. */
 export const wordCount = (text: string) => (fromBbcode(withoutHtml(text)).replace(/\]\(https?:\/\/[^\s)]+\)/g, "]").replace(/\[roll[^\]]*\][^[\]]*\[\/roll\]/gi, " ").replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(PICTURE, " ").replace(EMOJI, " ").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
+
+/**
+ * A post style with `text` in its {text} slot, and where that text sits. Inside an [html] part the words go in as
+ * HTML text (escaped, blank lines as paragraphs), since an [html] part holds only HTML; elsewhere they go in as written.
+ * A style with no slot goes first, then the text.
+ */
+export function fillStyle(body: string, text: string): { text: string; select: [number, number] } {
+  const at = body.indexOf("{text}");
+  if (at < 0) { const head = body + "\n\n"; return { text: head + text, select: [head.length, head.length + text.length] }; }
+  const before = body.slice(0, at).toLowerCase(), inHtml = before.lastIndexOf("[html]") > before.lastIndexOf("[/html]");
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const paras = text.trim().split(/\n\s*\n/).map(p => esc(p.trim()).split("\n").join("<br>"));
+  const inner = !inHtml ? text : paras.length > 1 ? paras.map(p => `<p>${p}</p>`).join("") : paras[0] ?? "";
+  return { text: body.slice(0, at) + inner + body.slice(at + 6), select: [at, at + inner.length] };
+}

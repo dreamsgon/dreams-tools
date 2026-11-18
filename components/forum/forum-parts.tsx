@@ -179,7 +179,7 @@ export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
       {r.boards && <Link k={k} go={go} to={{ view: 'settings' }} className="f-btn ghost small">Forum settings</Link>}
       <Alerts frame={frame} k={k} go={go} />
       {(frame.you.cast.length > 0 || frame.you.waiting.length > 0) && <Waiting frame={frame} k={k} go={go} />}
-      <span className="you"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'}</small></span></span>
+      <Link k={k} go={go} to={{ view: 'profile' }} className="you" title="Your forum profile: pronouns, timezone, no-goes and post styles"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'} · Profile</small></span></Link>
     </div>
   </div>;
 }

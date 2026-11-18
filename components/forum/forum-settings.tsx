@@ -8,6 +8,7 @@ import { uploadForumPicture } from './forum-insert';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, type Frame, type Masks, type PageData, type Tri } from './forum-api';
 import { Crumbs, type Go } from './forum-parts';
+import { CardDesigner, StripSettings } from './forum-profile';
 
 type Settings = Extract<PageData, { kind: 'settings' }>;
 type Row = Frame['boards'][number];
@@ -272,6 +273,6 @@ export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page:
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
     <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
-    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} /><TopicTagSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
+    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} /><TopicTagSettings page={page} k={k} done={done} /><StripSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><div className="settings-col"><BoardsSettings frame={frame} page={page} k={k} done={done} /><CardDesigner page={page} k={k} done={done} /></div></div>
   </>;
 }
