@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle } from './forum-parts';
-import { BoardView, TopicView } from './forum-topic';
+import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
 
 export default function ForumApp() {
@@ -77,7 +77,9 @@ export default function ForumApp() {
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
         {page.kind === 'index' && <IndexPage frame={frame} k={k} go={go} />}
         {page.kind === 'board' && <BoardView key={page.board.id} frame={frame} page={page} k={k} go={go} done={done} />}
-        {page.kind === 'topic' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'topic' && place.view === 'reply' && <ReplyView key={'r' + page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'topic' && place.view === 'edit' && <EditView key={'e' + place.post} frame={frame} page={page} k={k} go={go} done={done} postId={place.post} />}
+        {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
         {page.kind === 'settings' && <SettingsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'active' && <>
           <Crumbs frame={frame} k={k} go={go} last="Active topics" />

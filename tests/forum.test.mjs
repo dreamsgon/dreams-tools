@@ -4,9 +4,10 @@ import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-mod
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
 import { ForumStore, forumKey } from '../lib/forum/store.ts';
-import { frameOf, topicPage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
+import { frameOf, topicPage, boardPage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
+import * as K from '../lib/forum/markup.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -465,4 +466,34 @@ test('request: opening a topic marks it read; Mark all as read; online after a v
   assert.equal((await index(gm)).frame.you.unread, 1);
   assert.equal((await (await gm.post({ action: 'readAll', campaign: KEY })).json()).ok, true);
   assert.equal((await index(gm)).frame.you.unread, 0);
+});
+
+// ---- 12. Writing: markup, page links ------------------------------------------------------------
+test('markup: collapsed sections, underline, italic, speech and page links', () => {
+  const blocks = K.postBlocks('Before\n[collapse=Her letter]\nDear S,\n> come home\n[/collapse]\nAfter\n[collapse]\nunclosed');
+  assert.deepEqual(blocks.map(b => b.type), ['paragraph', 'collapse', 'paragraph', 'collapse']);
+  assert.equal(blocks[1].title, 'Her letter');
+  assert.deepEqual(blocks[1].blocks.map(b => b.type), ['paragraph', 'quote']);
+  assert.equal(blocks[3].title, 'Show more', 'an unclosed section runs to the end');
+  const parts = K.postInline('She said “run”, **now**, *quietly* and __twice__ to [[Seren Vael|Seren]]. "Go."');
+  assert.deepEqual(parts.map(p => p.type), ['text', 'speech', 'text', 'bold', 'text', 'italic', 'text', 'underline', 'text', 'link', 'text', 'speech']);
+  assert.equal(parts.find(p => p.type === 'link').target, 'Seren Vael');
+  assert.deepEqual([...K.linkTargets('[[A]] and [[B|b]] and [[A]]')], ['A', 'B']);
+  assert.equal(K.wordCount('[collapse=x]\nIt’s three  words\n[/collapse]'), 3);
+});
+
+test('view: page links resolve only to pages the reader may open, and summaries leave out secrets', () => {
+  const ws = workspaceSchema.parse({
+    ...workspace,
+    entries: [...workspace.entries.map(e => e.id === 'tavern' ? { ...e, body: ':::secret\nThe cellar hides a body\n:::\nWarm and loud.' } : e)],
+  });
+  const f0 = withBoards(), c = M.startTopic(f0, { boardId: 'tavern-board', title: 'Hi', body: 'To [[Tavern]], [[Villain]] and [[Nowhere]].', as: 'hero' }, poster(f0, 'p1'), ids('t1', 'a1'), NOW);
+  const f = c.forum(f0, c.topic);
+  const player = topicPage(ctxFor(f, 'p1', ws), c.topic);
+  assert.deepEqual(Object.keys(player.links), ['Tavern'], 'the villain page is not readable by players');
+  assert.equal(player.links.Tavern.summary, 'Warm and loud.');
+  const gm = topicPage(ctxFor(f, OWNER, ws), c.topic);
+  assert.deepEqual(Object.keys(gm.links).sort(), ['Tavern', 'Villain']);
+  const board = boardPage(ctxFor(f, 'p1', ws), 'tavern-board');
+  assert.equal(board.place.summary, 'Warm and loud.', 'no secret line in the board summary');
 });

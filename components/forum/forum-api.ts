@@ -15,18 +15,20 @@ export type PageData =
   | ({ kind: 'members' } & ReturnType<typeof membersPage>)
   | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings };
 export type View = { frame: Frame; page: PageData };
-export type Place = { view: 'index' | 'active' | 'members' | 'settings' } | { view: 'board'; id: string } | { view: 'topic'; id: string };
+export type Place = { view: 'index' | 'active' | 'members' | 'settings' } | { view: 'board'; id: string } | { view: 'topic'; id: string } | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string };
 
-/** The forum keeps its campaign in the address hash: #<key>, then &board=<id>, &topic=<id> or &view=<page>. */
+/** The forum keeps its campaign in the address hash: #<key>, then &board=<id>, &topic=<id> (with &reply=1 or &edit=<post>) or &view=<page>. */
 export function parseForumHash(hash: string): { key: string; place: Place } {
   const text = hash.replace(/^#/, ''), at = text.indexOf('&'), key = at < 0 ? text : text.slice(0, at);
   const rest = new URLSearchParams(at < 0 ? '' : text.slice(at + 1)), ok = (v: string | null) => !!v && /^[A-Za-z0-9_-]{1,100}$/.test(v);
-  const board = rest.get('board'), topic = rest.get('topic'), view = rest.get('view');
-  const place: Place = ok(topic) ? { view: 'topic', id: topic! } : ok(board) ? { view: 'board', id: board! } : view === 'active' || view === 'members' || view === 'settings' ? { view } : { view: 'index' };
+  const board = rest.get('board'), topic = rest.get('topic'), view = rest.get('view'), edit = rest.get('edit');
+  const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : { view: 'topic', id: topic! }) : ok(board) ? { view: 'board', id: board! } : view === 'active' || view === 'members' || view === 'settings' ? { view } : { view: 'index' };
   return { key, place };
 }
 export function forumHash(key: string, place: Place) {
-  return `#${key}${place.view === 'board' ? `&board=${place.id}` : place.view === 'topic' ? `&topic=${place.id}` : place.view === 'index' ? '' : `&view=${place.view}`}`;
+  const at = place.view === 'board' ? `&board=${place.id}` : place.view === 'topic' ? `&topic=${place.id}` : place.view === 'reply' ? `&topic=${place.id}&reply=1`
+    : place.view === 'edit' ? `&topic=${place.id}&edit=${place.post}` : place.view === 'index' ? '' : `&view=${place.view}`;
+  return `#${key}${at}`;
 }
 export const validKey = (key: string) => /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/.test(key);
 
@@ -37,7 +39,8 @@ export async function forumCall<T = Record<string, unknown>>(body: Record<string
   if (!r.ok) throw new ForumRequestError(value.error ?? 'The forum is unavailable right now.', r.status);
   return value;
 }
-export const pageOf = (place: Place) => place.view === 'board' || place.view === 'topic' ? { kind: place.view, id: place.id } : { kind: place.view };
+/** The page the server builds for a place: the reply and edit pages read the topic. */
+export const pageOf = (place: Place) => place.view === 'board' ? { kind: 'board', id: place.id } : place.view === 'topic' || place.view === 'reply' || place.view === 'edit' ? { kind: 'topic', id: place.id } : { kind: place.view };
 
 /* Pictures load once per page visit and stay as object URLs, so a refresh doesn't fetch them again. */
 const pictures = new Map<string, Promise<string>>();

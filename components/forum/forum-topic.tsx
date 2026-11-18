@@ -1,61 +1,31 @@
 'use client';
-/* A board's topic list, a topic's posts with their 250×400 portraits and hover cards, and the composer. */
-import { useEffect, useRef, useState } from 'react';
-import { Hourglass, Lock, Pin, Pencil, Quote, Trash2, PenLine } from 'lucide-react';
+/*
+ * A board's topic list; a topic's posts with their 250×400 portraits and hover cards, the GM's narration and the
+ * Quick reply; the full reply page (with focus mode and the topic newest first under it) and the edit page.
+ */
+import { useEffect, useState } from 'react';
+import { Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Quote, Reply, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type TopicPage } from './forum-api';
+import { Composer, type AfterPost } from './forum-compose';
 import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go } from './forum-parts';
 
 type Done = (place?: { view: 'topic'; id: string }) => Promise<void>;
 
-/** Who to post as: in character, your own characters (a GM: any, or narration as themselves); out of character, yourself. */
-function useAs(frame: Frame, kind: 'ic' | 'ooc', preferred?: string | null) {
-  const cast = frame.you.cast, gm = frame.you.rights.gm, mine = new Set(frame.you.editable);
-  const first = cast.find(c => mine.has(c.id)) ?? (gm ? null : cast[0]) ?? null;
-  const [as, setAs] = useState<string | null>(kind === 'ic' ? (preferred !== undefined && (preferred === null ? gm : cast.some(c => c.id === preferred)) ? preferred : first?.id ?? null) : null);
-  const options = kind === 'ic' ? [...cast.map(c => ({ id: c.id, label: mine.has(c.id) ? c.name : `${c.name} · ${c.role}` })), ...(gm ? [{ id: '', label: `Yourself (${frame.you.name}), as narrator` }] : [])] : [];
-  return { as: kind === 'ic' ? as : null, setAs, options, blocked: kind === 'ic' && !cast.length && !gm };
-}
-
-function AsPicker({ frame, kind, state }: { frame: Frame; kind: 'ic' | 'ooc'; state: ReturnType<typeof useAs> }) {
-  if (kind === 'ooc') return <p className="as-line"><Circle name={frame.you.name} /> Posting as yourself, <b>{frame.you.name}</b></p>;
-  return <label className="as-line">Post as <select value={state.as ?? ''} onChange={e => state.setAs(e.target.value || null)}>{state.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select></label>;
-}
-
-const hint = 'Blank lines start new paragraphs. **bold**, *italic*, > quote, # heading.';
-
-/** Write a reply (or, with a title, a new topic). */
-export function Composer({ frame, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel }: {
-  frame: Frame; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null }) => Promise<void>; title?: boolean; draftKey: string; quote?: { text: string; n: number }; preferred?: string | null; onCancel?: () => void;
-}) {
-  const storeKey = 'forum-draft:' + draftKey;
-  // An unsent post is kept in this browser until it's posted (drafts are a convenience; storage may be off).
-  const state = useAs(frame, kind, preferred), [title, setTitle] = useState(''), [body, setBody] = useState(() => { try { return localStorage.getItem(storeKey) ?? ''; } catch { return ''; } }), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const box = useRef<HTMLTextAreaElement>(null), [quoted, setQuoted] = useState(0);
-  useEffect(() => { try { if (body) localStorage.setItem(storeKey, body); else localStorage.removeItem(storeKey); } catch { /* ignore */ } }, [body, storeKey]);
-  // A Quote click adds the quoted lines to the end of the post.
-  if (quote && quote.n !== quoted) { setQuoted(quote.n); setBody(b => (b ? b.replace(/\s*$/, '\n\n') : '') + quote.text + '\n\n'); }
-  useEffect(() => { if (quoted) { box.current?.focus(); box.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, [quoted]);
-  if (state.blocked) return <div className="composer composer-note"><p>To post in character you need a character. Ask your GM to add you to your character page’s <b>Who can edit</b>.</p></div>;
-  const send = async () => {
-    setBusy(true); setError('');
-    try { await onPost({ title, body, as: state.as }); setBody(''); setTitle(''); try { localStorage.removeItem(storeKey); } catch { /* ignore */ } }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not post.'); }
-    finally { setBusy(false); }
-  };
-  return <form className="composer" onSubmit={e => { e.preventDefault(); void send(); }}>
-    <AsPicker frame={frame} kind={kind} state={state} />
-    {withTitle && <input className="composer-title" placeholder="Topic title" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" />}
-    <textarea ref={box} value={body} onChange={e => setBody(e.target.value)} rows={withTitle ? 10 : 7} placeholder={kind === 'ic' ? 'Write your post…' : 'Write to the table…'} aria-label="Post text" onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send(); }} />
-    <div className="composer-foot"><small className="muted">{hint}</small><span>{onCancel && <button type="button" className="f-btn ghost" onClick={onCancel}>Cancel</button>}<button className="f-btn" disabled={busy || !body.trim() || (withTitle && !title.trim())}>{busy ? 'Posting…' : withTitle ? 'Start topic' : 'Post reply'}</button></span></div>
-    {error && <p className="form-error" role="alert">{error}</p>}
-  </form>;
+/** Pins or locks a topic after posting, when a moderator chose that. */
+async function afterPosting(k: string, topicId: string, after: AfterPost) {
+  if (!after) return;
+  await forumCall({ action: 'topic', campaign: k, topicId, ...(after !== 'lock' ? { pinned: true } : {}), ...(after !== 'pin' ? { locked: true } : {}) });
 }
 
 export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: BoardPage; k: string; go: Go; done: Done }) {
   const b = page.board, art = b.place?.picture ?? null, [writing, setWriting] = useState(false), r = frame.you.rights;
   const subs = frame.boards.filter(x => x.parentId === b.id), canStart = r.start && (!b.locked || r.moderate);
-  const start = async (v: { title: string; body: string; as: string | null }) => { const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, ...v }); setWriting(false); await done({ view: 'topic', id: out.topicId }); };
+  const start = async (v: { title: string; body: string; as: string | null; after: AfterPost }) => {
+    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as });
+    await afterPosting(k, out.topicId, v.after);
+    setWriting(false); await done({ view: 'topic', id: out.topicId });
+  };
   return <>
     <Crumbs frame={frame} boardId={b.id} k={k} go={go} />
     {b.kind === 'ic' ? <header className="location">
@@ -70,7 +40,7 @@ export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: Bo
     {subs.length > 0 && <section className="subforums"><h2 className="category-title">Subforums</h2>{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="forum sub"><span className="forum-name">{s.name}</span><small>{s.topics} topics · {s.replies} replies</small></Link>)}</section>}
     <section className="topics">
       <div className="topics-head"><h2 className="category-title">Topics</h2>{canStart && !writing && <button className="f-btn" onClick={() => setWriting(true)}><PenLine size={14} aria-hidden="true" />New topic</button>}</div>
-      {writing && <Composer frame={frame} kind={b.kind} title draftKey={`${k}:new:${b.id}`} onPost={start} onCancel={() => setWriting(false)} />}
+      {writing && <Composer frame={frame} k={k} kind={b.kind} title after mode="full" label="New topic" draftKey={`${k}:new:${b.id}`} onPost={start} onCancel={() => setWriting(false)} />}
       {page.topics.length ? page.topics.map(t => <TopicRow key={t.id} t={t} k={k} go={go} />) : <p className="muted empty">No topics yet.{canStart && ' Start the first one.'}</p>}
     </section>
   </>;
@@ -90,17 +60,27 @@ function HoverCard({ card }: { card: CardData }) {
   </div>;
 }
 
-function Post({ p, card, k, flip, fresh, topic, onQuote, done }: { p: PostData; card: CardData | null; k: string; flip: boolean; fresh: boolean; topic: TopicPage['topic']; onQuote: (text: string) => void; done: Done }) {
-  const [editing, setEditing] = useState(false), [text, setText] = useState(p.body), [busy, setBusy] = useState(false), [error, setError] = useState(''), [open, setOpen] = useState(false);
-  const save = async () => { setBusy(true); setError(''); try { await forumCall({ action: 'edit', campaign: k, topicId: topic.id, postId: p.id, body: text }); setEditing(false); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not save.'); } finally { setBusy(false); } };
+function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p: PostData; card: CardData | null; k: string; go: Go; flip: boolean; fresh: boolean; topic: TopicPage['topic']; links: TopicPage['links']; onQuote: (text: string) => void; done: Done }) {
+  const [error, setError] = useState(''), [open, setOpen] = useState(false);
   const remove = async () => {
     if (!await confirmDialog({ title: 'Delete this post?', message: 'It comes off the post count too. This can’t be undone.', confirm: 'Delete post', danger: true })) return;
     try { await forumCall({ action: 'delete', campaign: k, topicId: topic.id, postId: p.id }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete.'); }
   };
-  const name = card?.name ?? p.name;
+  // In character, a post written as nobody is the GM's narration.
+  const narration = !card && topic.kind === 'ic' && !p.as, name = card?.name ?? (narration ? 'Game Master' : p.name);
   const quote = () => onQuote(p.body.split('\n').filter(l => l.trim()).slice(0, 3).map(l => '> ' + l.replace(/^>\s?/, '')).join('\n') + `\n> — ${name}`);
+  const meta = <span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}</span>;
+  const actions = <footer className="post-actions">
+    {topic.canReply && <button type="button" onClick={quote}><Quote size={13} aria-hidden="true" />Quote</button>}
+    {p.canEdit && <button type="button" onClick={() => go({ view: 'edit', id: topic.id, post: p.id })}><Pencil size={13} aria-hidden="true" />Edit</button>}
+    {p.canDelete && <button type="button" onClick={() => void remove()}><Trash2 size={13} aria-hidden="true" />Delete</button>}
+  </footer>;
+  if (narration) return <article className={`post post-gm${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
+    <header className="gm-band"><span className="gm-seal" aria-hidden="true">✦</span><div><h3 className="post-name">Game Master</h3><small>Narration by {p.name}</small></div>{meta}</header>
+    <div className="gm-body"><PostText text={p.body} links={links} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>
+  </article>;
   return <article className={`post${flip ? ' flip' : ''}${card ? ' post-ic' : ' post-ooc'}${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
-    <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3><span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}</span></header>
+    <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3>{meta}</header>
     <div className="post-grid">
       <aside className="post-side">
         {card ? <div className={`mini${open ? ' open' : ''}`}>
@@ -113,13 +93,8 @@ function Post({ p, card, k, flip, fresh, topic, onQuote, done }: { p: PostData; 
         </div> : <div className="mini mini-self"><Circle name={p.name} /><small className="mini-player"><b>{p.name}</b><br />{p.posts} {p.posts === 1 ? 'post' : 'posts'}</small></div>}
       </aside>
       <div className="post-main">
-        {editing ? <div className="composer inline"><textarea value={text} onChange={e => setText(e.target.value)} rows={8} aria-label="Edit post" /><div className="composer-foot"><small className="muted">{hint}</small><span><button className="f-btn ghost" onClick={() => { setEditing(false); setText(p.body); }}>Cancel</button><button className="f-btn" disabled={busy || !text.trim()} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button></span></div></div>
-          : <div className="post-body"><PostText text={p.body} /></div>}
-        <footer className="post-actions">
-          {topic.canReply && <button type="button" onClick={quote}><Quote size={13} aria-hidden="true" />Quote</button>}
-          {p.canEdit && !editing && <button type="button" onClick={() => setEditing(true)}><Pencil size={13} aria-hidden="true" />Edit</button>}
-          {p.canDelete && <button type="button" onClick={() => void remove()}><Trash2 size={13} aria-hidden="true" />Delete</button>}
-        </footer>
+        <div className="post-body"><PostText text={p.body} links={links} /></div>
+        {actions}
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
     </div>
@@ -157,19 +132,86 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   }, []);
   // Reply as the character you last posted as here.
   const mine = [...page.posts].reverse().find(p => p.mine), preferred = mine ? mine.as : undefined;
-  const send = async (v: { body: string; as: string | null }) => { await forumCall({ action: 'reply', campaign: k, topicId: t.id, body: v.body, as: v.as }); await done(); };
+  const send = async (v: { body: string; as: string | null; after: AfterPost }) => { await sendReply(k, t.id, v); await done(); };
+  const addReply = t.canReply && <button type="button" className="f-btn" onClick={() => go({ view: 'reply', id: t.id })}><Reply size={14} aria-hidden="true" />Add reply</button>;
   return <>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="topic-head">
-      <h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.title}</h2>
+      <div className="topic-title-row"><h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.title}</h2>{addReply}</div>
       <p className="muted">{t.kind === 'ic' ? 'In character' : 'Out of character'} · started by {t.by.name} · {t.replies + 1} {t.replies ? 'posts' : 'post'}</p>
       {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}{firstNew && <> · <a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></>}</p>}
       {!t.next && firstNew && <p className="turn-line"><a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></p>}
       {t.cast.length > 0 && <p className="topic-cast">{t.cast.map(c => <span key={c.id} className="cast-chip"><Portrait k={k} picture={c.picture} name={c.name} className="portrait tiny" />{c.name}</span>)}</p>}
       <ModTools frame={frame} page={page} k={k} done={done} go={go} />
     </header>
-    <div className="posts">{page.posts.map((p, i) => <Post key={p.id} p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} />)}</div>
-    {t.canReply ? <section className="reply"><h2 className="category-title">Reply</h2><Composer frame={frame} kind={t.kind} draftKey={`${k}:${t.id}`} quote={quote} preferred={preferred} onPost={send} /></section>
+    <div className="posts">{page.posts.map((p, i) => <Post key={p.id} p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} go={go} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} links={page.links} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} />)}</div>
+    {t.canReply ? <section className="reply">
+      <div className="reply-head"><h2 className="category-title">Quick reply</h2>{addReply && <span className="reply-full">For more room, a preview of the topic and focus mode, use {addReply}</span>}</div>
+      <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} quote={quote} preferred={preferred} onPost={send} after label="Quick reply" />
+    </section>
       : <p className="muted locked-note">{t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.'}</p>}
   </>;
+}
+
+async function sendReply(k: string, topicId: string, v: { body: string; as: string | null; after: AfterPost }) {
+  await forumCall({ action: 'reply', campaign: k, topicId, body: v.body, as: v.as });
+  await afterPosting(k, topicId, v.after);
+}
+
+/** The latest posts, newest first, under the full reply and edit pages (Jcink's topic review). */
+function TopicReview({ page, k }: { page: TopicPage; k: string }) {
+  const posts = [...page.posts].reverse().slice(0, 15);
+  return <section className="review" aria-label="Topic review">
+    <h2 className="category-title">Topic review <small className="muted">newest first{page.posts.length > posts.length ? ` · the last ${posts.length} of ${page.posts.length}` : ''}</small></h2>
+    {posts.map(p => {
+      const card = p.as ? page.cards[p.as] : null, name = card?.name ?? (page.topic.kind === 'ic' ? 'Game Master' : p.name);
+      return <article key={p.id} className="review-post">
+        <header>{!card && page.topic.kind === 'ic' ? <span className="as-seal tiny" aria-hidden="true">✦</span> : <Portrait k={k} picture={card?.picture ?? null} name={name} className="portrait tiny" />}<b>{name}</b><small className="muted">#{p.number} · {when(p.at)}</small></header>
+        <PostText text={p.body} links={page.links} />
+      </article>;
+    })}
+  </section>;
+}
+
+/** Focus mode: the page's chrome fades away and the box fills the window. Escape leaves it. */
+function useFocusMode() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    document.documentElement.classList.toggle('forum-focus', on);
+    if (!on) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOn(false); };
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('keydown', esc); document.documentElement.classList.remove('forum-focus'); };
+  }, [on]);
+  const button = <button type="button" className="f-btn ghost small" aria-pressed={on} onClick={() => setOn(o => !o)}>{on ? <><Minimize2 size={13} aria-hidden="true" />Leave focus mode</> : <><Maximize2 size={13} aria-hidden="true" />Focus mode</>}</button>;
+  return { on, button };
+}
+
+/** The full reply page: a bigger box, focus mode and the topic's latest posts newest first underneath. */
+export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
+  const t = page.topic, focus = useFocusMode(), mine = [...page.posts].reverse().find(p => p.mine);
+  const send = async (v: { body: string; as: string | null; after: AfterPost }) => { await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id }); };
+  if (!t.canReply) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.'}</p></>;
+  return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
+    <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
+    <header className="page-head"><h2 className="topic-name">Reply to {t.title}</h2>{focus.button}</header>
+    {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}</p>}
+    <Composer frame={frame} k={k} kind={t.kind} draftKey={`${k}:${t.id}`} preferred={mine ? mine.as : undefined} onPost={send} after mode="full" big label="Full reply" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
+    {!focus.on && <TopicReview page={page} k={k} />}
+  </div>;
+}
+
+/** The full edit page for one post. */
+export function EditView({ frame, page, k, go, done, postId }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done; postId: string }) {
+  const t = page.topic, p = page.posts.find(x => x.id === postId), focus = useFocusMode();
+  if (!p || !p.canEdit) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{p ? 'You can’t edit this post.' : 'That post was removed.'}</p></>;
+  const save = async (v: { body: string }) => { await forumCall({ action: 'edit', campaign: k, topicId: t.id, postId: p.id, body: v.body }); await done({ view: 'topic', id: t.id }); };
+  const card = p.as ? page.cards[p.as] : null;
+  return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
+    <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
+    <header className="page-head"><h2 className="topic-name">Edit post #{p.number}</h2>{focus.button}</header>
+    <p className="muted">Written as <b>{card?.name ?? (t.kind === 'ic' ? 'Game Master' : p.name)}</b> · {fullDate(p.at)}</p>
+    <Composer frame={frame} k={k} kind={t.kind} mode="edit" initial={p.body} draftKey={`${k}:edit:${p.id}`} onPost={save} big label="Edit" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
+    {!focus.on && <TopicReview page={page} k={k} />}
+  </div>;
 }

@@ -3,10 +3,12 @@
  * Encyclopedia with only what players may read, and links to pages they can open. Server only; the browser never
  * gets account ids of other members.
  */
-import { visibleEntries, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
+import { playerText, visibleEntries, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { boardTree, kindOf, type Author, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { playerLink } from "../encyclopedia/player-prose.ts";
+import { linkTargets } from "./markup.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
 
 export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string> };
@@ -227,8 +229,10 @@ export function boardPage(ctx: Context, boardId: string) {
   if (!b) return null;
   const entries = entriesOf(ctx), place = b.placeId ? entries.get(b.placeId) : undefined;
   const topics = ctx.forum.topics.filter(t => t.boardId === b.id).sort((x, y) => Number(y.pinned) - Number(x.pinned) || y.lastAt.localeCompare(x.lastAt));
-  return { board: boardRow(ctx, entries, b), place: place ? { summary: firstLine(place.overviewVisibility === "players" || ctx.viewer.rights.gm ? place.body : "") } : null, topics: topics.map(t => topicRow(ctx, entries, t)) };
+  return { board: boardRow(ctx, entries, b), place: place ? { summary: summaryOf(ctx, place) } : null, topics: topics.map(t => topicRow(ctx, entries, t)) };
 }
+/** A page's first line, as this viewer may read it: players get the shared overview without its secrets. */
+const summaryOf = (ctx: Context, e: Entry) => ctx.viewer.rights.gm ? firstLine(e.body) : e.overviewVisibility === "players" ? firstLine(playerText(e.body)) : "";
 const firstLine = (text: string) => text.split("\n").map(l => l.replace(/[#>*`[\]]/g, "").trim()).find(l => l && !/^:::/.test(l))?.slice(0, 200) ?? "";
 
 /** A topic with its posts, the hover card of each character in it and what the viewer may do to each post. */
@@ -238,7 +242,15 @@ export function topicPage(ctx: Context, topic: Topic) {
   const entries = entriesOf(ctx), board = ctx.forum.boards.find(b => b.id === s.boardId), r = ctx.viewer.rights;
   const cards: Record<string, Card> = {};
   for (const p of topic.posts) if (p.by.as && !cards[p.by.as]) { const e = entries.get(p.by.as); if (e) cards[e.id] = cardOf(ctx, e); }
+  // [[Page]] links in the posts: the ones this reader may open, with a line to preview.
+  const pages = [...entries.values()].filter(e => !ctx.readable || ctx.readable.has(e.id)), links: Record<string, { title: string; url: string; summary: string }> = {};
+  for (const p of topic.posts) for (const target of linkTargets(p.body)) {
+    if (links[target] || Object.keys(links).length >= 200) continue;
+    const e = playerLink(pages, target), url = e && pageUrl(ctx, e.id);
+    if (e && url) links[target] = { title: e.title, url, summary: summaryOf(ctx, e) };
+  }
   return {
+    links,
     topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: r.reply && (!s.locked || r.moderate) },
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,

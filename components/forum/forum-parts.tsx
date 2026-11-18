@@ -5,7 +5,8 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowUp, Hourglass, Lock, Pin, MessageSquare, ScrollText, Users, X } from 'lucide-react';
-import { proseBlocks, proseParts } from '@/lib/encyclopedia/player-prose';
+import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
+import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
 
 export type Go = (place: Place) => void;
@@ -32,24 +33,38 @@ type Turn = NonNullable<TopicRowData['next']>;
 /** "Your turn as Hero", or "Villain’s turn". */
 export const turnText = (t: Turn) => t.mine ? `Your turn as ${t.name}` : `${t.name}’s turn`;
 
-/** Post text: paragraphs, headings, lists, quotes, **bold** and code, the way Encyclopedia pages read. */
-export function PostText({ text }: { text: string }) {
-  const inline = (t: string): ReactNode => proseParts(t).map((p, i) => p.type === 'bold' ? <strong key={i}>{p.text}</strong> : p.type === 'code' ? <code key={i}>{p.text}</code> : p.type === 'link' ? <span key={i} className="wiki">{p.label}</span> : <Italic key={i} text={p.text} />);
-  return <div className="prose post-text">{proseBlocks(text).map((b, i) => {
+type Links = Record<string, { title: string; url: string; summary: string }>;
+/** One line of post text: bold, italic, underline, code, “speech” and [[page links]] (a link when the reader may open the page). */
+function Inline({ text, links }: { text: string; links?: Links }) {
+  return <>{postInline(text).map((p, i) => {
+    switch (p.type) {
+      case 'bold': return <strong key={i}>{p.text}</strong>;
+      case 'italic': return <em key={i}>{p.text}</em>;
+      case 'underline': return <u key={i}>{p.text}</u>;
+      case 'code': return <code key={i}>{p.text}</code>;
+      case 'speech': return <span key={i} className="speech">{p.text}</span>;
+      case 'link': { const l = links?.[p.target]; return l ? <a key={i} className="wiki" href={l.url} title={l.summary ? `${l.title}: ${l.summary}` : l.title}>{p.label}</a> : <span key={i} className="wiki">{p.label}</span>; }
+      default: return <span key={i}>{p.text}</span>;
+    }
+  })}</>;
+}
+function Blocks({ blocks, links }: { blocks: ProseBlock[]; links?: Links }) {
+  return <>{blocks.map((b, i) => {
     switch (b.type) {
-      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}>{inline(b.text)}</H>; }
-      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• {inline(b.text)}</p>;
-      case 'quote': return <blockquote key={i}>{inline(b.text)}</blockquote>;
+      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}><Inline text={b.text} links={links} /></H>; }
+      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• <Inline text={b.text} links={links} /></p>;
+      case 'quote': return <blockquote key={i}><Inline text={b.text} links={links} /></blockquote>;
       case 'code': return <pre key={i}>{b.text || ' '}</pre>;
-      case 'paragraph': return <p key={i}>{inline(b.text)}</p>;
+      case 'paragraph': return <p key={i}><Inline text={b.text} links={links} /></p>;
       default: return null;
     }
-  })}</div>;
+  })}</>;
 }
-/** *Italics*, which roleplay posts use a lot (thoughts, emphasis). */
-function Italic({ text }: { text: string }) {
-  const parts = text.split(/(\*[^*\n]+\*|_[^_\n]+_)/g);
-  return <>{parts.map((p, i) => i % 2 ? <em key={i}>{p.slice(1, -1)}</em> : p)}</>;
+/** Post text (lib/forum/markup.ts): page text plus underline, speech and collapsed sections. */
+export function PostText({ text, links }: { text: string; links?: Links }) {
+  return <div className="prose post-text">{postBlocks(text).map((b, i) => b.type === 'collapse'
+    ? <details key={i} className="clps"><summary>{b.title}</summary><div className="clps-body"><Blocks blocks={b.blocks} links={links} /></div></details>
+    : <Blocks key={i} blocks={[b]} links={links} />)}</div>;
 }
 
 /** The top bar: the in-world date, the staff as circles, and who you are. */
