@@ -7,9 +7,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
-import { Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle } from './forum-parts';
-import { BoardView, TopicView } from './forum-topic';
+import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle } from './forum-parts';
+import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
+import { PrintView, TrashView } from './forum-moderate';
+import { Notices, SearchView } from './forum-find';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
@@ -69,15 +71,21 @@ export default function ForumApp() {
   </div></div></div>;
 
   const { frame, page } = view, k = key;
-  return <div className="forum-root">{appBar}
+  return <div className="forum-root" id="top">{appBar}
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} />
       <Banner frame={frame} k={k} go={go} />
+      <Notices frame={frame} />
       <main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
         {page.kind === 'index' && <IndexPage frame={frame} k={k} go={go} />}
-        {page.kind === 'board' && <BoardView key={page.board.id} frame={frame} page={page} k={k} go={go} done={done} />}
-        {page.kind === 'topic' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'board' && <BoardView key={page.board.id + (page.archive ? ':a' : '')} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'topic' && place.view === 'reply' && <ReplyView key={'r' + page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'topic' && place.view === 'edit' && <EditView key={'e' + place.post} frame={frame} page={page} k={k} go={go} done={done} postId={place.post} />}
+        {page.kind === 'topic' && place.view === 'print' && <PrintView key={'p' + page.topic.id} frame={frame} page={page} k={k} go={go} />}
+        {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && place.view !== 'print' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'search' && <SearchView key={forumHash(k, place)} frame={frame} page={page} k={k} go={go} />}
+        {page.kind === 'trash' && <TrashView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'settings' && <SettingsView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'active' && <>
           <Crumbs frame={frame} k={k} go={go} last="Active topics" />
@@ -87,10 +95,11 @@ export default function ForumApp() {
         {page.kind === 'members' && <>
           <Crumbs frame={frame} k={k} go={go} last="Members" />
           <section className="members"><h2 className="category-title">Members</h2><p className="muted">Posts in character count towards the member’s own total.</p>
-            <ol className="member-list">{page.members.map(m => <li key={m.name + m.role}><Circle name={m.name} /><span><b>{m.name}</b><small>{m.role}</small></span><span className="member-posts"><b>{m.posts}</b> {m.posts === 1 ? 'post' : 'posts'}</span></li>)}</ol></section>
+            <ol className="member-list">{page.members.map(m => { const w = whoStyle(m.color); return <li key={m.name + m.role}><Circle name={m.name} /><span><b className={w.className} style={w.style}>{m.name}</b><small>{m.role}{m.online && <> · <span className="online-dot" />online now</>}</small></span><span className="member-posts"><b>{m.posts}</b> {m.posts === 1 ? 'post' : 'posts'}</span></li>; })}</ol></section>
         </>}
       </main>
-      <Footer frame={frame} k={k} go={go} />
+      <Footer frame={frame} k={k} go={go} onReadAll={async () => { try { await forumCall({ action: 'readAll', campaign: k }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not mark the forum read.'); } }} />
+      <BackToTop />
     </div>
   </div>;
 }

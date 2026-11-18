@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-model.ts';
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
-import { ForumStore, forumKey, topicKey } from '../lib/forum/store.ts';
-import { frameOf, topicPage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
+import { ForumStore, forumKey } from '../lib/forum/store.ts';
+import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
+import * as R from '../lib/forum/reader.ts';
+import * as K from '../lib/forum/markup.ts';
+import * as A from '../lib/forum/alerts.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -354,4 +357,347 @@ test('request: images redirect only for pictures the forum may show', async () =
   assert.equal(ok.headers.get('Location'), 'https://img.test/' + IMG.tavern);
   assert.equal((await get(IMG.villain)).status, 404);
   assert.equal((await get('../x')).status, 404);
+});
+
+// ---- 11. Reading: unread marks, presence, turns, recent posts ----------------------------------
+test('reader: unread marks, mark all and pruning', () => {
+  const t = { id: 't1', lastAt: '2026-01-02T00:00:00.000Z', last: { userId: 'p2', as: null } };
+  const r0 = R.freshReads('2026-01-01T00:00:00.000Z');
+  assert.equal(R.isUnread(r0, t, 'p1'), true);
+  assert.equal(R.isUnread(r0, t, 'p2'), false, 'your own last post is read');
+  assert.equal(R.isUnread(undefined, t, 'p1'), false);
+  const r1 = R.markTopic(r0, 't1', t.lastAt);
+  assert.equal(R.isUnread(r1, t, 'p1'), false);
+  assert.equal(R.markTopic(r1, 't1', t.lastAt), null, 'nothing to write');
+  assert.equal(R.isUnread(r1, { ...t, lastAt: '2026-01-03T00:00:00.000Z' }, 'p1'), true, 'a newer post');
+  const r2 = R.markTopic({ ...r1, topics: { ...r1.topics, gone: '2026-01-02T00:00:00.000Z' } }, 't2', '2026-01-04T00:00:00.000Z', new Set(['t1', 't2']));
+  assert.deepEqual(Object.keys(r2.topics).sort(), ['t1', 't2'], 'removed topics are dropped');
+  const all = R.markAll(new Date('2026-01-05T00:00:00.000Z'));
+  assert.deepEqual(all.topics, {});
+  assert.equal(R.isUnread(all, { ...t, lastAt: '2026-01-04T00:00:00.000Z' }, 'p1'), false);
+});
+
+test('reader: presence writes at most once a minute and keeps the peak', () => {
+  const at = m => new Date(NOW.getTime() + m * 60_000);
+  const p1 = R.touch(null, 'a', at(0));
+  assert.deepEqual(R.onlineOf(p1, at(0)), ['a']);
+  assert.equal(R.touch(p1, 'a', at(0.5)), null, 'seen a moment ago');
+  const p2 = R.touch(p1, 'b', at(1));
+  assert.deepEqual(R.onlineOf(p2, at(1)), ['b', 'a']);
+  assert.equal(p2.peak.count, 2);
+  assert.deepEqual(R.onlineOf(p2, at(16)), ['b']);
+  const p3 = R.touch(p2, 'a', at(60));
+  assert.equal(p3.peak.count, 2, 'the peak stays');
+  assert.deepEqual(R.onlineOf(p3, at(60)), ['a']);
+});
+
+test('reader: turns go round in first-post order, with narration as one more', () => {
+  const s = (order, lastAs) => ({ cast: order.filter(x => x !== R.NARRATION), order, last: { userId: 'x', as: lastAs } });
+  assert.equal(R.nextUp(s(['hero'], 'hero')), null, 'one writer: nobody waits');
+  assert.equal(R.nextUp(s(['hero', 'villain'], 'hero')), 'villain');
+  assert.equal(R.nextUp(s(['hero', 'villain'], 'villain')), 'hero');
+  assert.equal(R.nextUp(s([R.NARRATION, 'hero', 'villain'], null)), 'hero');
+  assert.equal(R.nextUp(s([R.NARRATION, 'hero', 'villain'], 'villain')), R.NARRATION);
+  assert.equal(R.nextUp({ cast: ['hero', 'villain'], last: { userId: 'x', as: 'villain' } }), 'hero', 'older summaries use the cast');
+});
+
+test('model: summaries keep the turn order; posts are logged for a few days and unlogged on delete', () => {
+  const { forum, topic } = seeded();
+  const gm = M.reply(forum, topic, { body: 'The GM speaks', as: null }, poster(forum, OWNER), 'a2', NOW);
+  const f1 = gm.forum(forum, gm.topic);
+  assert.deepEqual(f1.topics[0].order, ['hero', R.NARRATION]);
+  assert.deepEqual(f1.recent.map(r => r.postId), ['a1', 'a2']);
+  const del = M.deletePost(f1, gm.topic, { postId: 'a2' }, poster(f1, OWNER));
+  assert.deepEqual(del.forum(f1, del.topic).recent.map(r => r.postId), ['a1']);
+  const later = new Date(NOW.getTime() + 4 * 86_400_000);
+  const again = M.reply(f1, gm.topic, { body: 'Days later', as: 'hero' }, poster(f1, 'p1'), 'a3', later);
+  assert.deepEqual(again.forum(f1, again.topic).recent.map(r => r.postId), ['a3'], 'old posts drop off');
+  assert.deepEqual(M.deleteTopic(f1, gm.topic, poster(f1, OWNER)).forum(f1).recent, []);
+});
+
+test('view: unread, whose turn, waiting on you, online and characters who posted today', () => {
+  const { forum, topic } = seeded();
+  const gm = M.reply(forum, topic, { body: 'The villain sneers', as: 'villain' }, poster(forum, OWNER), 'a2', NOW);
+  const f = gm.forum(forum, gm.topic);
+  const reads = R.freshReads('2025-12-31T00:00:00.000Z');
+  const presence = R.touch(R.touch(null, 'p1', NOW), OWNER, NOW);
+  const forPat = { ...ctxFor(f, 'p1'), reads, presence, now: NOW };
+  const frame = frameOf(forPat);
+  assert.equal(frame.you.unread, 1);
+  assert.equal(frame.boards.find(b => b.id === 'tavern-board').unread, true);
+  assert.equal(frame.footer.active[0].next.name, 'Hero');
+  assert.equal(frame.footer.active[0].next.mine, true, "Pat plays the Hero: it's their turn");
+  assert.equal(frame.you.waiting.length, 1);
+  assert.deepEqual(frame.footer.online.map(o => o.name).sort(), ['Gamemaster', 'Pat']);
+  assert.deepEqual(frame.footer.today.map(c => [c.name, c.at.length]), [['Hero', 1], ['Villain', 1]]);
+  assert.equal(JSON.stringify(frame).includes('"p1"'), false, 'no account ids reach the browser');
+  // The GM plays the villain (nobody else edits it): after the hero, it's the GM's turn there.
+  const rep2 = M.reply(f, gm.topic, { body: 'Hero answers', as: 'hero' }, poster(f, 'p1'), 'a3', NOW), f2 = rep2.forum(f, rep2.topic);
+  const gmFrame = frameOf({ ...ctxFor(f2, OWNER), reads, presence, now: NOW });
+  assert.equal(gmFrame.you.waiting[0].next.name, 'Villain');
+  assert.equal(gmFrame.you.waiting[0].next.mine, true);
+  assert.equal(frameOf({ ...ctxFor(f2, 'p1'), reads, now: NOW }).you.waiting[0].next.mine, false);
+  assert.equal(frameOf({ ...ctxFor(f2, 'p2'), reads, now: NOW }).you.waiting.length, 0, 'Quinn has nobody in it');
+  const page = topicPage({ ...forPat, reads }, gm.topic);
+  assert.equal(page.readBefore, reads.all);
+});
+
+test('request: opening a topic marks it read; Mark all as read; online after a view', async () => {
+  const p1 = harness({ user: 'p1' });
+  const { topicId } = await (await p1.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Hi', body: 'Hello', as: null })).json();
+  const gm = harness({ user: OWNER });
+  gm.deps.store = p1.store;
+  const later = new Date(NOW.getTime() + 60_000);
+  gm.deps.now = () => later;
+  const index = async h => (await h.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json();
+  // The GM's first visit marks everything before it read; a reply after that is new to them.
+  assert.equal((await index(gm)).frame.you.unread, 0);
+  const p1Later = { ...p1.deps, now: () => new Date(NOW.getTime() + 120_000) };
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Anyone?', as: null }, undefined, p1Later);
+  gm.deps.now = () => new Date(NOW.getTime() + 180_000);
+  const before = await index(gm);
+  assert.equal(before.frame.you.unread, 1);
+  assert.deepEqual(before.frame.footer.online.map(o => o.name).sort(), ['Gamemaster', 'Pat']);
+  const opened = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json();
+  assert.equal(opened.frame.you.unread, 0);
+  assert.ok(opened.page.readBefore < opened.page.posts[1].at, 'the reply shows as new on this visit');
+  assert.equal((await index(gm)).frame.you.unread, 0);
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Hello?', as: null }, undefined, { ...p1.deps, now: () => new Date(NOW.getTime() + 240_000) });
+  gm.deps.now = () => new Date(NOW.getTime() + 300_000);
+  assert.equal((await index(gm)).frame.you.unread, 1);
+  assert.equal((await (await gm.post({ action: 'readAll', campaign: KEY })).json()).ok, true);
+  assert.equal((await index(gm)).frame.you.unread, 0);
+});
+
+// ---- 12. Writing: markup, page links ------------------------------------------------------------
+test('markup: collapsed sections, underline, italic, speech and page links', () => {
+  const blocks = K.postBlocks('Before\n[collapse=Her letter]\nDear S,\n> come home\n[/collapse]\nAfter\n[collapse]\nunclosed');
+  assert.deepEqual(blocks.map(b => b.type), ['paragraph', 'collapse', 'paragraph', 'collapse']);
+  assert.equal(blocks[1].title, 'Her letter');
+  assert.deepEqual(blocks[1].blocks.map(b => b.type), ['paragraph', 'quote']);
+  assert.equal(blocks[3].title, 'Show more', 'an unclosed section runs to the end');
+  const parts = K.postInline('She said “run”, **now**, *quietly* and __twice__ to [[Seren Vael|Seren]]. "Go."');
+  assert.deepEqual(parts.map(p => p.type), ['text', 'speech', 'text', 'bold', 'text', 'italic', 'text', 'underline', 'text', 'link', 'text', 'speech']);
+  assert.equal(parts.find(p => p.type === 'link').target, 'Seren Vael');
+  assert.deepEqual([...K.linkTargets('[[A]] and [[B|b]] and [[A]]')], ['A', 'B']);
+  assert.equal(K.wordCount('[collapse=x]\nIt’s three  words\n[/collapse]'), 3);
+});
+
+test('view: page links resolve only to pages the reader may open, and summaries leave out secrets', () => {
+  const ws = workspaceSchema.parse({
+    ...workspace,
+    entries: [...workspace.entries.map(e => e.id === 'tavern' ? { ...e, body: ':::secret\nThe cellar hides a body\n:::\nWarm and loud.' } : e)],
+  });
+  const f0 = withBoards(), c = M.startTopic(f0, { boardId: 'tavern-board', title: 'Hi', body: 'To [[Tavern]], [[Villain]] and [[Nowhere]].', as: 'hero' }, poster(f0, 'p1'), ids('t1', 'a1'), NOW);
+  const f = c.forum(f0, c.topic);
+  const player = topicPage(ctxFor(f, 'p1', ws), c.topic);
+  assert.deepEqual(Object.keys(player.links), ['Tavern'], 'the villain page is not readable by players');
+  assert.equal(player.links.Tavern.summary, 'Warm and loud.');
+  const gm = topicPage(ctxFor(f, OWNER, ws), c.topic);
+  assert.deepEqual(Object.keys(gm.links).sort(), ['Tavern', 'Villain']);
+  const board = boardPage(ctxFor(f, 'p1', ws), 'tavern-board');
+  assert.equal(board.place.summary, 'Warm and loud.', 'no secret line in the board summary');
+});
+
+// ---- 13. Moderation ---------------------------------------------------------------------------
+test('private topics: only the starter, the people named and the GMs see them, anywhere', () => {
+  const f0 = withBoards();
+  const c = M.startTopic(f0, { boardId: 'ooc-chat', title: 'Secret plan', body: 'Shh', as: null, private: ['p2', 'p1', 'p2'] }, poster(f0, 'p1'), ids('t9', 'z1'), NOW);
+  const f = apply(f0, c);
+  assert.deepEqual(f.topics[0].private, ['p2'], 'the starter is left out and names are not repeated');
+  const sees = u => M.canSee(f.topics[0], ctxFor(f, u).viewer);
+  assert.deepEqual(['p1', 'p2', OWNER, 'co', 'g1'].map(sees), [true, true, true, true, false]);
+  const guest = ctxFor(f, 'g1');
+  assert.equal(boardPage(guest, 'ooc-chat').topics.length, 0);
+  assert.equal(frameOf(guest).footer.stats.topics, 0);
+  assert.equal(frameOf(guest).footer.active.length, 0);
+  assert.equal(topicPage(guest, c.topic), null);
+  assert.throws(() => M.reply(f, c.topic, { body: 'hi', as: null }, poster(f, 'g1'), 'z2', NOW), msg(/removed/));
+  assert.deepEqual(boardPage(ctxFor(f, 'p2'), 'ooc-chat').topics[0].only, ['Pat', 'Quinn']);
+});
+
+test('trash: moderators move a topic there and back; it leaves the lists; old ones expire', () => {
+  let { forum, topic } = seeded();
+  assert.throws(() => M.trashTopic(forum, { topicId: 't1' }, poster(forum, 'p1'), NOW), msg(/Only moderators/));
+  forum = apply(forum, M.trashTopic(forum, { topicId: 't1' }, poster(forum, OWNER), NOW));
+  assert.deepEqual(forum.topics[0].trashed, { at: NOW.toISOString(), by: OWNER });
+  assert.equal(forum.counts.p1, 1, 'posts count until it goes for good');
+  const player = ctxFor(forum, 'p1');
+  assert.equal(boardPage(player, 'tavern-board').topics.length, 0);
+  assert.equal(topicPage(player, topic), null);
+  assert.equal(frameOf(player).footer.stats.trash, 0, 'players are not told about the Trash');
+  assert.throws(() => M.reply(forum, topic, { body: 'x', as: 'hero' }, poster(forum, 'p1'), 'a9', NOW), msg(/removed/));
+  const gm = ctxFor(forum, OWNER);
+  assert.equal(frameOf(gm).footer.stats.trash, 1);
+  const trash = trashPage(gm);
+  assert.equal(trash.topics[0].board, 'Tavern');
+  assert.equal(trash.topics[0].trashed.by, 'Gamemaster');
+  const shown = topicPage(gm, topic);
+  assert.equal(shown.topic.canReply, false, 'moderators may look but not reply');
+  assert.deepEqual(M.expiredTrash(forum, new Date(NOW.getTime() + 29 * 86_400_000)), []);
+  assert.deepEqual(M.expiredTrash(forum, new Date(NOW.getTime() + 31 * 86_400_000)), ['t1']);
+  forum = apply(forum, M.trashTopic(forum, { topicId: 't1', restore: true }, poster(forum, OWNER), NOW));
+  assert.equal(forum.topics[0].trashed, undefined);
+  assert.equal(boardPage(ctxFor(forum, 'p1'), 'tavern-board').topics.length, 1);
+});
+
+test('archive: archived topics leave the board for its archive and take no replies', () => {
+  let { forum, topic } = seeded();
+  assert.throws(() => M.setTopic(forum, topic, { topicId: 't1', archived: true }, poster(forum, 'p1')), msg(/archive/));
+  forum = apply(forum, M.setTopic(forum, topic, { topicId: 't1', archived: true }, poster(forum, OWNER)));
+  assert.equal(forum.topics[0].archived, true);
+  assert.throws(() => M.reply(forum, topic, { body: 'x', as: 'hero' }, poster(forum, 'p1'), 'a9', NOW), msg(/archived/));
+  const player = ctxFor(forum, 'p1');
+  const board = boardPage(player, 'tavern-board');
+  assert.deepEqual([board.topics.length, board.archived], [0, 1]);
+  assert.equal(boardPage(player, 'tavern-board', { archive: true }).topics[0].archived, true);
+  assert.equal(activePage(player).topics.length, 0);
+  assert.equal(topicPage(player, topic).topic.canReply, false);
+  assert.equal(topicPage(player, topic).topic.next, null, 'nobody is waited on in an archived topic');
+  // A later summary (from a reply by a moderator after bringing it back) keeps the flags it should.
+  forum = apply(forum, M.setTopic(forum, topic, { topicId: 't1', archived: false }, poster(forum, OWNER)));
+  assert.equal(!!forum.topics[0].archived, false);
+});
+
+test('request: multi-moderation, private topics by member key, the Trash page and GM-only board download', async () => {
+  const gm = harness({ user: OWNER });
+  const start = async (h, title, extra = {}) => (await (await h.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title, body: 'Hello', as: null, ...extra })).json()).topicId;
+  const a = await start(gm, 'One'), b = await start(gm, 'Two');
+  const index = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json();
+  const quinn = index.frame.you.people.find(p => p.name === 'Quinn');
+  assert.match(quinn.key, /^[a-f0-9]{16}$/);
+  assert.equal(JSON.stringify(index.frame.you.people).includes('"p2"'), false, 'no account ids reach the browser');
+  const c = await start(gm, 'For Quinn', { private: [quinn.key] });
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  const p2 = harness({ user: 'p2' }); p2.deps.store = gm.store;
+  const board = async h => (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'board', id: 'ooc-chat' } })).json()).page;
+  assert.deepEqual((await board(p1)).topics.map(t => t.title).sort(), ['One', 'Two']);
+  assert.deepEqual((await board(p2)).topics.map(t => t.title).sort(), ['For Quinn', 'One', 'Two']);
+  // Players can't multi-moderate.
+  assert.equal((await p1.post({ action: 'bulk', campaign: KEY, topicIds: [a], op: 'lock' })).status, 400);
+  const out = await (await gm.post({ action: 'bulk', campaign: KEY, topicIds: [a, b], op: 'lock' })).json();
+  assert.equal(out.done, 2);
+  assert.ok((await board(p1)).topics.every(t => t.locked));
+  await gm.post({ action: 'bulk', campaign: KEY, topicIds: [a], op: 'archive' });
+  assert.equal((await board(p1)).archived, 1);
+  await gm.post({ action: 'bulk', campaign: KEY, topicIds: [b, c], op: 'trash' });
+  assert.deepEqual((await board(p2)).topics.map(t => t.title), []);
+  assert.equal((await p1.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).status, 403);
+  const trash = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).json();
+  assert.deepEqual(trash.page.topics.map(t => t.title).sort(), ['For Quinn', 'Two']);
+  assert.equal((await (await gm.post({ action: 'trash', campaign: KEY, topicId: b, restore: true })).json()).ok, true);
+  // After 30 days, opening the Trash clears what's left in it for good.
+  gm.deps.now = () => new Date(NOW.getTime() + 31 * 86_400_000);
+  const later = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'trash' } })).json();
+  assert.deepEqual(later.page.topics, []);
+  assert.equal(await gm.store.readTopic(OWNER, 'camp', c), null);
+  // Downloading a whole board is the GM's.
+  assert.equal((await p1.post({ action: 'export', campaign: KEY, boardId: 'ooc-chat' })).status, 400);
+  const file = await (await gm.post({ action: 'export', campaign: KEY, boardId: 'ooc-chat' })).json();
+  assert.deepEqual(file.topics.map(t => t.title).sort(), ['One', 'Two']);
+  assert.equal(file.topics[0].posts[0].name, 'Gamemaster');
+});
+
+// ---- 14. Permission masks, notices, alerts and search ------------------------------------------
+test('permission masks: a group told No or Never on a board loses it there; subforums follow; GMs are never masked', () => {
+  let f = withBoards();
+  f.boards.push({ id: 'cellar', categoryId: 'locations', parentId: 'tavern-board', name: 'Cellar', description: '' });
+  const l = list(), access = u => M.boardAccess(f, l, u, M.forumRights(l, u, OWNER));
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: true, reply: true });
+  assert.throws(() => M.setMasks(f, { id: 'tavern-board', masks: {} }, poster(f, 'p1'), ['players']), msg(/can't change the boards/));
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { reply: 'no', start: 'no' }, nobody: { read: 'no' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.deepEqual(f.boards[1].masks, { players: { reply: 'no', start: 'no' } }, 'unknown groups are dropped');
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: false, reply: false });
+  assert.deepEqual(access('p1').cellar, { read: true, start: false, reply: false }, 'the subforum follows its board');
+  assert.deepEqual(access('p1')['ooc-chat'], { read: true, start: true, reply: true });
+  // Guests may be let in to reply on one board; Never wins over Yes.
+  f = apply(f, M.setMasks(f, { id: 'ooc-chat', masks: { guests: { reply: 'yes' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.equal(access('g1')['ooc-chat'].reply, true);
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { read: 'never' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
+  assert.equal(access('p1')['tavern-board'].read, false);
+  assert.equal(access('p1').cellar.read, false, "a subforum can't be read when its board can't");
+  assert.equal(access('co')['tavern-board'].read, true, 'co-GMs see GM-only things, so they are not masked');
+  assert.equal(access(OWNER)['tavern-board'].read, true);
+  // Masked boards and their topics disappear from the player's views, and they can't post there.
+  const t = M.startTopic(f, { boardId: 'tavern-board', title: 'Hidden', body: 'x', as: 'villain' }, poster(f, OWNER), ids('th', 'h1'), NOW);
+  f = apply(f, t);
+  const ctx = ctxFor(f, 'p1'); ctx.viewer.access = access('p1');
+  const frame = frameOf(ctx);
+  assert.deepEqual(frame.boards.map(b => b.id), ['ooc-chat']);
+  assert.equal(frame.categories.some(c => c.id === 'locations'), false, 'a category with nothing to read is left out');
+  assert.equal(frame.footer.stats.topics, 0);
+  assert.equal(boardPage(ctx, 'tavern-board'), null);
+  assert.equal(topicPage(ctx, t.topic), null);
+  const p1 = { ...poster(f, 'p1'), access: access('p1') };
+  assert.throws(() => M.reply(f, t.topic, { body: 'x', as: 'hero' }, p1, 'h2', NOW), msg(/removed/));
+  // Editing the board keeps its masks.
+  f = apply(f, M.editBoard(f, { id: 'tavern-board', categoryId: 'locations', name: 'Tavern!' }, poster(f, OWNER)));
+  assert.ok(f.boards.find(b => b.id === 'tavern-board').masks);
+});
+
+test('alerts: @names and quotes find members and the players of characters', () => {
+  const names = ['Pat', 'Hero', 'Sea Witch', 'Quinn'];
+  assert.deepEqual([...A.mentioned('Hey @pat and @Sea Witch, also @Quinnly and email@Hero.x', names)].sort(), ['Pat', 'Sea Witch']);
+  assert.deepEqual([...A.quoted('> She said so\n> — Hero\n\nreply', names)], ['Hero']);
+  let a = A.addAlerts(null, [{ id: 'mention:t:1', at: NOW.toISOString(), kind: 'mention', topicId: 't', postId: 'p1', by: 'gm', as: null }], NOW);
+  a = A.addAlerts(a, [{ id: 'mention:t:1', at: NOW.toISOString(), kind: 'mention', topicId: 't', postId: 'p1', by: 'gm', as: null }], NOW);
+  assert.equal(a.items.length, 1, 'once each');
+  assert.equal(A.unseen(a), 1);
+  assert.equal(A.unseen({ ...a, seen: NOW.toISOString() }), 0);
+});
+
+test('request: alerts for mentions, quotes and private topics reach only people who can see the topic', async () => {
+  const gm = harness({ user: OWNER });
+  const people = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.you.people;
+  const key = name => people.find(p => p.name === name).key;
+  // A private topic for Quinn that names Pat: Pat isn't in it, so only Quinn hears.
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Quiet', body: 'Hi @Quinn and @Pat', as: null, private: [key('Quinn')] })).json();
+  const as = async (u, deps = {}) => { const h = harness({ user: u }); h.deps.store = gm.store; Object.assign(h.deps, deps); return h; };
+  const frameOfUser = async h => (await (await h.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
+  const quinn = await as('p2', { now: () => new Date(NOW.getTime() + 1000) }), pat = await as('p1');
+  const qa = (await frameOfUser(quinn)).you.alerts;
+  assert.equal(qa.unseen, 1);
+  assert.deepEqual([qa.items[0].kind, qa.items[0].title, qa.items[0].name], ['mention', 'Quiet', 'Gamemaster']);
+  assert.equal((await frameOfUser(pat)).you.alerts.items.length, 0, 'Pat cannot see the private topic');
+  // Writing as a character: naming the Hero alerts Pat, who plays it; quoting the Villain alerts the GM, who runs it.
+  const { id: tavern } = await (await gm.post({ action: 'addBoard', campaign: KEY, categoryId: 'locations', name: 'Tavern' })).json();
+  const made = await (await gm.post({ action: 'start', campaign: KEY, boardId: tavern, title: 'Tavern', body: 'The door opens.', as: null })).json(), open = made.topicId;
+  assert.ok(open, JSON.stringify(made));
+  const replied = await (await pat.post({ action: 'reply', campaign: KEY, topicId: open, body: '> Leave.\n> — Villain\n\nNo. @Hero stays.', as: 'hero' })).json();
+  assert.equal(replied.ok, true, JSON.stringify(replied));
+  assert.equal((await frameOfUser(pat)).you.alerts.items.length, 0, 'never for your own post');
+  const g = (await frameOfUser(gm)).you.alerts;
+  assert.deepEqual(g.items.map(x => [x.kind, x.name]), [['quote', 'Hero']]);
+  assert.equal((await (await gm.post({ action: 'alertsSeen', campaign: KEY })).json()).ok, true);
+  assert.equal((await frameOfUser(gm)).you.alerts.unseen, 0);
+  assert.ok(topicId);
+});
+
+test('request: search finds titles and posts the reader can see; notices save with the banner; masks via settings', async () => {
+  const gm = harness({ user: OWNER });
+  await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Lanterns', body: 'The green lantern burns.', as: null });
+  await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Secret', body: 'Another green lantern.', as: null, private: [] });
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  const search = async (h, q, extra = {}) => (await h.post({ action: 'view', campaign: KEY, page: { kind: 'search', q, ...extra } }));
+  const found = await (await search(p1, 'GREEN lantern')).json();
+  assert.deepEqual(found.page.results.map(r => r.title), ['Lanterns']);
+  assert.match(found.page.results[0].hits[0].snippet, /green lantern/);
+  assert.equal((await (await search(gm, 'green lantern')).json()).page.results.length, 2);
+  assert.equal((await (await search(p1, 'lanterns')).json()).page.results[0].hits.length, 0, 'a title match with no post match');
+  assert.equal((await (await search(p1, 'green', { boardId: 'tavern-board' })).json()).page.results.length, 0);
+  assert.equal((await search(p1, 'g')).status, 400);
+  // Notices.
+  const settings = { title: '', tagline: '', links: [], banner: true, notices: [{ id: 'n1', text: 'Session on Saturday' }] };
+  assert.equal((await p1.post({ action: 'settings', campaign: KEY, settings })).status, 400);
+  await gm.post({ action: 'settings', campaign: KEY, settings });
+  assert.deepEqual((await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.settings.notices, [{ id: 'n1', text: 'Session on Saturday' }]);
+  // Masks through the settings page and the masks action.
+  assert.equal((await (await gm.post({ action: 'masks', campaign: KEY, id: 'ooc-chat', masks: { players: { start: 'no' } } })).json()).ok, true);
+  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'settings' } })).json()).page;
+  assert.deepEqual(page.masks['ooc-chat'], { players: { start: 'no' } });
+  assert.deepEqual(page.groups.find(g => g.id === 'players'), { id: 'players', name: 'Players', read: 'yes', start: 'yes', reply: 'yes', gm: false });
+  const refused = await p1.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'x', body: 'y', as: null });
+  assert.match((await refused.json()).error, /can't start topics on this board/);
+  const board = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'board', id: 'ooc-chat' } })).json()).page;
+  assert.equal(board.board.start, false);
 });

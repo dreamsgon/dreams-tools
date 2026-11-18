@@ -3,10 +3,12 @@
  * The forum's pieces. Class names follow the campaign theme contract (the Campaign Skin Studio prototype), so a
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Lock, Pin, MessageSquare, ScrollText, Users } from 'lucide-react';
-import { proseBlocks, proseParts } from '@/lib/encyclopedia/player-prose';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Archive, ArrowUp, EyeOff, Hourglass, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
+import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
+import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
+import { Alerts, SearchBox } from './forum-find';
 
 export type Go = (place: Place) => void;
 type Row = Frame['boards'][number];
@@ -26,24 +28,44 @@ export function Portrait({ k, picture, name, className = 'portrait', style }: { 
 }
 export const Circle = ({ name, title }: { name: string; title?: string }) => <span className="circ" title={title ?? name} aria-hidden="true">{initials(name)}</span>;
 
-/** Post text: paragraphs, headings, lists, quotes, **bold** and code, the way Encyclopedia pages read. */
-export function PostText({ text }: { text: string }) {
-  const inline = (t: string): ReactNode => proseParts(t).map((p, i) => p.type === 'bold' ? <strong key={i}>{p.text}</strong> : p.type === 'code' ? <code key={i}>{p.text}</code> : p.type === 'link' ? <span key={i} className="wiki">{p.label}</span> : <Italic key={i} text={p.text} />);
-  return <div className="prose post-text">{proseBlocks(text).map((b, i) => {
+/** A group colour: one of the named colours as a class (each theme sets it), or a picked colour as is. */
+export const whoStyle = (color: string | null) => color?.startsWith('#') ? { className: 'who', style: { color } } : { className: `who who-${color ?? 'gm'}`, style: undefined };
+type Turn = NonNullable<TopicRowData['next']>;
+/** "Your turn as Hero", or "Villain’s turn". */
+export const turnText = (t: Turn) => t.mine ? `Your turn as ${t.name}` : `${t.name}’s turn`;
+
+type Links = Record<string, { title: string; url: string; summary: string }>;
+/** One line of post text: bold, italic, underline, code, “speech” and [[page links]] (a link when the reader may open the page). */
+function Inline({ text, links }: { text: string; links?: Links }) {
+  return <>{postInline(text).map((p, i) => {
+    switch (p.type) {
+      case 'bold': return <strong key={i}>{p.text}</strong>;
+      case 'italic': return <em key={i}>{p.text}</em>;
+      case 'underline': return <u key={i}>{p.text}</u>;
+      case 'code': return <code key={i}>{p.text}</code>;
+      case 'speech': return <span key={i} className="speech">{p.text}</span>;
+      case 'link': { const l = links?.[p.target]; return l ? <a key={i} className="wiki" href={l.url} title={l.summary ? `${l.title}: ${l.summary}` : l.title}>{p.label}</a> : <span key={i} className="wiki">{p.label}</span>; }
+      default: return <span key={i}>{p.text}</span>;
+    }
+  })}</>;
+}
+function Blocks({ blocks, links }: { blocks: ProseBlock[]; links?: Links }) {
+  return <>{blocks.map((b, i) => {
     switch (b.type) {
-      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}>{inline(b.text)}</H>; }
-      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• {inline(b.text)}</p>;
-      case 'quote': return <blockquote key={i}>{inline(b.text)}</blockquote>;
+      case 'heading': { const H = `h${Math.min(b.level + 1, 6)}` as 'h3'; return <H key={i}><Inline text={b.text} links={links} /></H>; }
+      case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• <Inline text={b.text} links={links} /></p>;
+      case 'quote': return <blockquote key={i}><Inline text={b.text} links={links} /></blockquote>;
       case 'code': return <pre key={i}>{b.text || ' '}</pre>;
-      case 'paragraph': return <p key={i}>{inline(b.text)}</p>;
+      case 'paragraph': return <p key={i}><Inline text={b.text} links={links} /></p>;
       default: return null;
     }
-  })}</div>;
+  })}</>;
 }
-/** *Italics*, which roleplay posts use a lot (thoughts, emphasis). */
-function Italic({ text }: { text: string }) {
-  const parts = text.split(/(\*[^*\n]+\*|_[^_\n]+_)/g);
-  return <>{parts.map((p, i) => i % 2 ? <em key={i}>{p.slice(1, -1)}</em> : p)}</>;
+/** Post text (lib/forum/markup.ts): page text plus underline, speech and collapsed sections. */
+export function PostText({ text, links }: { text: string; links?: Links }) {
+  return <div className="prose post-text">{postBlocks(text).map((b, i) => b.type === 'collapse'
+    ? <details key={i} className="clps"><summary>{b.title}</summary><div className="clps-body"><Blocks blocks={b.blocks} links={links} /></div></details>
+    : <Blocks key={i} blocks={[b]} links={links} />)}</div>;
 }
 
 /** The top bar: the in-world date, the staff as circles, and who you are. */
@@ -53,9 +75,38 @@ export function TopBar({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
     <p className="board-date">{frame.date ? <><b>{frame.date}</b></> : <span className="muted">No calendar date yet</span>}</p>
     <div className="board-staff" aria-label="Staff">{frame.staff.slice(0, 8).map(s => <Circle key={s.name + s.role} name={s.name} title={`${s.name} · ${s.role}`} />)}<span className="muted">Staff</span></div>
     <div className="board-you">
+      <SearchBox go={go} />
       {r.boards && <Link k={k} go={go} to={{ view: 'settings' }} className="f-btn ghost small">Forum settings</Link>}
+      <Alerts frame={frame} k={k} go={go} />
+      {(frame.you.cast.length > 0 || frame.you.waiting.length > 0) && <Waiting frame={frame} k={k} go={go} />}
       <span className="you"><Circle name={frame.you.name} /><span><b>{frame.you.name}</b><small>{frame.you.posts} {frame.you.posts === 1 ? 'post' : 'posts'}</small></span></span>
     </div>
+  </div>;
+}
+
+/** Waiting on you: every topic you write in and whose turn it is, yours first. */
+function Waiting({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  const [open, setOpen] = useState(false), box = useRef<HTMLDivElement>(null), list = frame.you.waiting, due = list.filter(t => t.next?.mine).length;
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', away); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  return <div className="wait-wrap" ref={box}>
+    <button type="button" className={`f-btn ghost small wait-btn${due ? ' due' : ''}`} aria-expanded={open} onClick={() => setOpen(o => !o)}>
+      <Hourglass size={13} aria-hidden="true" />Waiting on you<span className="wait-count" aria-label={`${due} ${due === 1 ? 'topic' : 'topics'}`}>{due}</span>
+    </button>
+    {open && <div className="wait-panel" role="dialog" aria-label="Waiting on you">
+      <header><b>Waiting on you</b><button type="button" className="icon-btn" aria-label="Close" onClick={() => setOpen(false)}><X size={15} /></button></header>
+      {list.length ? <ul>{list.map(t => <li key={t.id} className={t.next?.mine ? 'due' : ''}>
+        <Portrait k={k} picture={t.next?.picture ?? null} name={t.next?.name ?? '?'} className="portrait small" />
+        <div><Link k={k} go={(p) => { setOpen(false); go(p); }} to={{ view: 'topic', id: t.id }}>{t.title}</Link>
+          <small>{t.next ? turnText(t.next) : ''}{t.next && !t.next.mine ? ' · not waiting on you' : ` · waiting since ${when(t.last.at)}`}{t.board ? ` · ${t.board}` : ''}</small></div>
+      </li>)}</ul> : <p className="muted">Nothing yet. Topics show here once you and someone else have both posted in one.</p>}
+      <p className="muted small">Turns go round in the order people first posted, the GM’s narration included.</p>
+    </div>}
   </div>;
 }
 
@@ -77,10 +128,10 @@ export function Banner({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
 }
 
 function LastLine({ last, k, go }: { last: Row['last']; k: string; go: Go }) {
-  if (!last) return <div className="forum-last"><small className="muted">No topics yet</small></div>;
+  if (!last) return <div className="forum-last"><div><span className="last-label">Latest activity</span><small className="muted">No topics yet</small></div></div>;
   return <div className="forum-last">
     <Portrait k={k} picture={last.picture} name={last.name} className="portrait small" />
-    <div><Link k={k} go={go} to={{ view: 'topic', id: last.topicId }}>{last.title}</Link><small>by {last.name} · {when(last.at)}</small></div>
+    <div><span className="last-label">Latest activity</span><Link k={k} go={go} to={{ view: 'topic', id: last.topicId }}>{last.title}</Link><small>by {last.name} · {when(last.at)}</small></div>
   </div>;
 }
 
@@ -90,7 +141,7 @@ function BoardRow({ row, subs, k, go }: { row: Row; subs: Row[]; k: string; go: 
   return <article className={`forum${row.kind === 'ic' ? ' forum-ic' : ' forum-ooc'}`}>
     {row.kind === 'ic' && <div className="forum-art" style={art ? { backgroundImage: `url("${art}")`, backgroundPosition: `${(row.place!.picture!.x * 100).toFixed(1)}% ${(row.place!.picture!.y * 100).toFixed(1)}%` } : undefined} aria-hidden="true" />}
     <div className="forum-info">
-      <h3 className="forum-name"><Link k={k} go={go} to={{ view: 'board', id: row.id }}>{row.name}</Link>{row.locked && <Lock size={13} aria-label="Moderators start topics here" />}</h3>
+      <h3 className="forum-name">{row.unread && <span className="unread-dot" title="New posts" />}<Link k={k} go={go} to={{ view: 'board', id: row.id }}>{row.name}</Link>{row.unread && <span className="sr-only"> (new posts)</span>}{row.locked && <Lock size={13} aria-label="Moderators start topics here" />}</h3>
       {row.description && <p className="forum-desc">{row.description}</p>}
       {subs.length > 0 && <p className="forum-subs">{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="chip">{s.name}</Link>)}</p>}
       {row.place && <p className="forum-place">Location · {row.place.url ? <a href={row.place.url}>{row.place.name}</a> : row.place.name}</p>}
@@ -109,14 +160,28 @@ export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go })
         {top.length ? top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />) : <p className="muted empty">No boards here yet.{frame.you.rights.boards && <> <Link k={k} go={go} to={{ view: 'settings' }}>Add one in Forum settings</Link>.</>}</p>}
       </div>
     </section>;
-  })}</>;
+  })}
+    {frame.you.rights.moderate && <section className="category category-staff">
+      <h2 className="category-title">Staff only <span className="tag">Moderators</span></h2>
+      <div className="category-forums"><article className="forum forum-ooc trash-row">
+        <div className="forum-info">
+          <h3 className="forum-name"><Trash2 size={15} aria-hidden="true" /><Link k={k} go={go} to={{ view: 'trash' }}>Trash can</Link></h3>
+          <p className="forum-desc">Topics moved to the Trash wait 30 days, so they can be brought back, then go for good.</p>
+        </div>
+        <p className="forum-counts"><span><b>{frame.footer.stats.trash}</b> {frame.footer.stats.trash === 1 ? 'topic' : 'topics'}</span></p>
+      </article></div>
+    </section>}
+  </>;
 }
 
-export function TopicRow({ t, k, go, board }: { t: TopicRowData; k: string; go: Go; board?: string }) {
-  return <article className={`topic-row${t.pinned ? ' pinned' : ''}`}>
+/** A topic in a list. Moderators get a box to pick it for multi-moderation. */
+export function TopicRow({ t, k, go, board, pick }: { t: TopicRowData; k: string; go: Go; board?: string; pick?: { on: boolean; set: (on: boolean) => void } }) {
+  return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}${pick ? ' pickable' : ''}${pick?.on ? ' picked' : ''}`}>
+    {pick && <label className="topic-pick"><input type="checkbox" checked={pick.on} onChange={e => pick.set(e.target.checked)} aria-label={`Select ${t.title}`} /></label>}
     <div className="topic-main">
-      <h3 className="topic-title">{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link></h3>
+      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
       <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
+      {t.next && <span className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={12} aria-hidden="true" />{turnText(t.next)}</span>}
       {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}
     </div>
     <p className="topic-count"><b>{t.replies}</b> {t.replies === 1 ? 'reply' : 'replies'}</p>
@@ -127,9 +192,15 @@ export function TopicRow({ t, k, go, board }: { t: TopicRowData; k: string; go: 
   </article>;
 }
 
-/** The footer: moderating team, active topics and top posters, then the forum's totals. */
-export function Footer({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
-  const f = frame.footer;
+/** Today's posts by each character, in this browser's time zone. */
+function postedToday(list: Frame['footer']['today'], now = new Date()) {
+  const day = now.toDateString();
+  return list.map(c => ({ ...c, n: c.at.filter(a => new Date(a).toDateString() === day).length })).filter(c => c.n > 0);
+}
+
+/** The footer: moderating team, active topics and top posters, who's online, who posted today, then the forum's totals. */
+export function Footer({ frame, k, go, onReadAll }: { frame: Frame; k: string; go: Go; onReadAll?: () => Promise<void> }) {
+  const f = frame.footer, today = postedToday(f.today), [busy, setBusy] = useState(false);
   return <footer className="board-foot">
     <div className="foot-cols">
       <section><h3><Users size={14} aria-hidden="true" />Moderating team</h3><ul className="foot-staff">{frame.staff.map(s => <li key={s.name + s.role}><Circle name={s.name} /><span><b>{s.name}</b><small>{s.role}</small></span></li>)}</ul></section>
@@ -140,7 +211,29 @@ export function Footer({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
         {f.top.length ? <ol className="foot-list">{f.top.map(p => <li key={p.name}><span>{p.name}</span><small>{p.posts} {p.posts === 1 ? 'post' : 'posts'}</small></li>)}</ol> : <p className="muted">No posts yet.</p>}
         <Link k={k} go={go} to={{ view: 'members' }} className="foot-more">All members</Link></section>
     </div>
-    <p className="foot-stats">{frame.settings.title} · {f.stats.members} {f.stats.members === 1 ? 'member' : 'members'} · {f.stats.topics} {f.stats.topics === 1 ? 'topic' : 'topics'} · {f.stats.posts} {f.stats.posts === 1 ? 'post' : 'posts'}</p>
+    <div className="foot-line">
+      <h3>Currently online <small>{f.online.length} {f.online.length === 1 ? 'member' : 'members'} in the last 15 minutes</small></h3>
+      <p className="foot-names">{f.online.length ? f.online.map((o, i) => { const w = whoStyle(o.color); return <span key={o.name + i} className={w.className} style={w.style}>{o.name}{o.you ? ' (you)' : ''}</span>; }) : <span className="muted">Nobody right now.</span>}</p>
+      {f.groups.length > 1 && <p className="foot-legend"><span className="muted">Groups:</span>{f.groups.map(g => { const w = whoStyle(g.color); return <span key={g.name} className={w.className} style={w.style}>{g.name}</span>; })}</p>}
+    </div>
+    <div className="foot-line">
+      <h3>Characters who posted today <small>{today.length} {today.length === 1 ? 'character' : 'characters'}, {today.reduce((n, c) => n + c.n, 0)} posts</small></h3>
+      {today.length ? <p className="foot-today">{today.map(c => {
+        const inner = <><Portrait k={k} picture={c.picture} name={c.name} className="portrait tiny" />{c.name}<small>{c.n}</small></>;
+        return c.url ? <a key={c.id} href={c.url} className="today-chip">{inner}</a> : <span key={c.id} className="today-chip">{inner}</span>;
+      })}</p> : <p className="muted foot-names">No posts in character yet today.</p>}
+    </div>
+    <div className="foot-stats">
+      <span><b>{f.stats.members}</b> {f.stats.members === 1 ? 'member' : 'members'}</span>
+      <span><b>{f.stats.characters}</b> {f.stats.characters === 1 ? 'character' : 'characters'}</span>
+      <span><b>{f.stats.topics}</b> {f.stats.topics === 1 ? 'topic' : 'topics'}</span>
+      <span><b>{f.stats.posts}</b> {f.stats.posts === 1 ? 'post' : 'posts'}</span>
+      {f.stats.peak && <span title={new Date(f.stats.peak.at).toLocaleString()}>Most online at once: <b>{f.stats.peak.count}</b></span>}
+      {f.stats.newest && <span>Newest member: <b>{f.stats.newest}</b></span>}
+      <span className="foot-spacer" />
+      {onReadAll && frame.you.unread > 0 && <button type="button" className="link-btn" disabled={busy} onClick={() => { setBusy(true); void onReadAll().finally(() => setBusy(false)); }}>{busy ? 'Marking…' : 'Mark all as read'}</button>}
+      <a href="#top" className="link-btn" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><ArrowUp size={12} aria-hidden="true" />Back to top</a>
+    </div>
   </footer>;
 }
 
@@ -154,6 +247,17 @@ export function Crumbs({ frame, boardId, k, go, last }: { frame: Frame; boardId?
     {board && <><span aria-hidden="true">›</span>{last ? <Link k={k} go={go} to={{ view: 'board', id: board.id }}>{board.name}</Link> : <span aria-current="page">{board.name}</span>}</>}
     {last && <><span aria-hidden="true">›</span><span aria-current="page">{last}</span></>}
   </nav>;
+}
+
+/** A round Back to top button that shows once the page has been scrolled a long way. */
+export function BackToTop() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const on = () => setShow(window.scrollY > 900);
+    on(); window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
+  return <button type="button" className={`to-top${show ? ' show' : ''}`} aria-label="Back to top" tabIndex={show ? 0 : -1} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18} /></button>;
 }
 
 /** Shown while a hover card is open on a phone, where there's no hover: tap the portrait. */

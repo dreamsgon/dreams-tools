@@ -1,9 +1,9 @@
 'use client';
 /* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards. */
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
-import { forumCall, type Frame, type PageData } from './forum-api';
+import { forumCall, type Frame, type Masks, type PageData, type Tri } from './forum-api';
 import { Crumbs, type Go } from './forum-parts';
 
 type Settings = Extract<PageData, { kind: 'settings' }>;
@@ -25,7 +25,7 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
   const [s, setS] = useState(page.settings), { call, error, busy } = useCall(k, done);
   const link = (i: number, patch: Partial<{ label: string; url: string }>) => setS({ ...s, links: s.links.map((l, n) => n === i ? { ...l, ...patch } : l) });
   return <section className="settings-card">
-    <h2>Banner and links</h2>
+    <h2>Banner, links and notices</h2>
     <label className="f-field">Title<input value={s.title} maxLength={80} placeholder="The campaign’s name" onChange={e => setS({ ...s, title: e.target.value })} /></label>
     <label className="f-field">Tagline<input value={s.tagline} maxLength={160} placeholder="A line under the title" onChange={e => setS({ ...s, tagline: e.target.value })} /></label>
     <label className="f-check"><input type="checkbox" checked={s.banner} onChange={e => setS({ ...s, banner: e.target.checked })} /><span>Use the campaign’s banner picture behind the title <small>(set it in the campaign’s Look in the Encyclopedia)</small></span></label>
@@ -37,7 +37,14 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
       <button className="f-btn ghost small" aria-label="Remove link" onClick={() => setS({ ...s, links: s.links.filter((_, n) => n !== i) })}><Trash2 size={14} aria-hidden="true" /></button>
     </div>)}
     {s.links.length < 8 && <button className="f-btn ghost small" onClick={() => setS({ ...s, links: [...s.links, { label: '', url: '' }] })}><Plus size={14} aria-hidden="true" />Add a link</button>}
-    <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'settings', settings: s })}>{busy ? 'Saving…' : 'Save banner'}</button></div>
+    <h3><Megaphone size={14} aria-hidden="true" /> Notices</h3>
+    <p className="muted">Up to three short lines shown under the banner, like “Session on Saturday at 7” or “The Back Room scene closes Friday”. Each reader can hide one; an edited notice shows again.</p>
+    {(s.notices ?? []).map((n, i) => <div className="link-row notice-row" key={n.id}>
+      <input aria-label={`Notice ${i + 1}`} placeholder="Write the notice" value={n.text} maxLength={240} onChange={e => setS({ ...s, notices: (s.notices ?? []).map(x => x.id === n.id ? { ...x, text: e.target.value } : x) })} />
+      <button className="f-btn ghost small" aria-label="Remove notice" onClick={() => setS({ ...s, notices: (s.notices ?? []).filter(x => x.id !== n.id) })}><Trash2 size={14} aria-hidden="true" /></button>
+    </div>)}
+    {(s.notices ?? []).length < 3 && <button className="f-btn ghost small" onClick={() => setS({ ...s, notices: [...(s.notices ?? []), { id: 'n' + Date.now().toString(36), text: '' }] })}><Plus size={14} aria-hidden="true" />Add a notice</button>}
+    <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'settings', settings: { ...s, notices: (s.notices ?? []).filter(n => n.text.trim()) } })}>{busy ? 'Saving…' : 'Save banner and notices'}</button></div>
     {error && <p className="form-error" role="alert">{error}</p>}
   </section>;
 }
@@ -59,19 +66,47 @@ function BoardForm({ frame, page, k, done, categoryId, row, onClose }: { frame: 
   </form>;
 }
 
+const TRI_LABEL: Record<Tri, string> = { yes: 'Yes', no: 'No', never: 'Never' };
+const RIGHTS = [['read', 'Read'], ['start', 'Start topics'], ['reply', 'Reply']] as const;
+/** A board's permission masks: per group, Yes, No or Never here instead of what the group says for the forum. */
+function MaskForm({ page, k, done, row, onClose }: { page: Settings; k: string; done: Done; row: Row; onClose: () => void }) {
+  const [m, setM] = useState<Masks>(page.masks[row.id] ?? {}), { call, error, busy } = useCall(k, done);
+  const parent = row.parentId ? page.masks[row.parentId] : undefined;
+  const set = (g: string, r: 'read' | 'start' | 'reply', v: string) => setM(x => { const cur = { ...x[g] }; if (v) cur[r] = v as Tri; else delete cur[r]; return { ...x, [g]: cur }; });
+  return <form className="mask-form" onSubmit={e => { e.preventDefault(); void call({ action: 'masks', id: row.id, masks: m }).then(ok => { if (ok) onClose(); }); }}>
+    <p className="muted small">What each group may do on <b>{row.name}</b>{row.parentId ? ' (left as is, a subforum follows its board)' : ' and, unless they say otherwise, its subforums'}. A member can when any of their groups says Yes and none says Never. The GM, and groups that see GM-only things (like Co-GMs), can always.</p>
+    <div className="mask-table" role="table" aria-label={`Permissions on ${row.name}`}>
+      <div role="row" className="mask-head"><span role="columnheader">Group</span>{RIGHTS.map(([, label]) => <span role="columnheader" key={label}>{label}</span>)}</div>
+      {page.groups.filter(g => !g.gm).map(g => <div role="row" key={g.id}>
+        <span role="rowheader"><b>{g.name}</b></span>
+        {RIGHTS.map(([r, label]) => {
+          const inherited = parent?.[g.id]?.[r] ?? g[r];
+          return <span role="cell" key={r}><select aria-label={`${g.name}: ${label}`} value={m[g.id]?.[r] ?? ''} className={m[g.id]?.[r] ? 'set' : ''} onChange={e => set(g.id, r, e.target.value)}>
+            <option value="">As usual ({TRI_LABEL[inherited]})</option><option value="yes">Yes</option><option value="no">No</option><option value="never">Never</option>
+          </select></span>;
+        })}
+      </div>)}
+    </div>
+    <div className="settings-foot"><button type="button" className="f-btn ghost" onClick={() => setM({})}>Clear all</button><button type="button" className="f-btn ghost" onClick={onClose}>Cancel</button><button className="f-btn" disabled={busy}>{busy ? 'Saving…' : 'Save permissions'}</button></div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </form>;
+}
+
 function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings; k: string; done: Done }) {
-  const [editing, setEditing] = useState<string | null>(null), [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null), [adding, setAdding] = useState<string | null>(null), [catName, setCatName] = useState(''), [catKind, setCatKind] = useState<'ic' | 'ooc'>('ic');
+  const [editing, setEditing] = useState<string | null>(null), [masking, setMasking] = useState<string | null>(null), [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null), [adding, setAdding] = useState<string | null>(null), [catName, setCatName] = useState(''), [catKind, setCatKind] = useState<'ic' | 'ooc'>('ic');
   const { call, error, busy } = useCall(k, done);
   const remove = async (what: 'Board' | 'Category', id: string, name: string) => {
     if (await confirmDialog({ title: `Delete ${name}?`, message: what === 'Board' ? 'Only an empty board can be deleted: move or delete its topics first.' : 'Only an empty category can be deleted.', confirm: `Delete ${what.toLowerCase()}`, danger: true })) await call({ action: what === 'Board' ? 'deleteBoard' : 'deleteCategory', id });
   };
   const line = (b: Row) => <li key={b.id} className={b.parentId ? 'sub' : ''}>
-    {editing === b.id ? <BoardForm frame={frame} page={page} k={k} done={done} categoryId={b.categoryId} row={b} onClose={() => setEditing(null)} /> : <>
-      <span className="board-line"><b>{b.parentId ? '↳ ' : ''}{b.name}</b><small>{[b.place?.name, b.locked ? 'Moderators start topics' : '', `${b.topics} ${b.topics === 1 ? 'topic' : 'topics'}`].filter(Boolean).join(' · ')}</small></span>
+    {editing === b.id ? <BoardForm frame={frame} page={page} k={k} done={done} categoryId={b.categoryId} row={b} onClose={() => setEditing(null)} />
+      : masking === b.id ? <MaskForm page={page} k={k} done={done} row={b} onClose={() => setMasking(null)} /> : <>
+      <span className="board-line"><b>{b.parentId ? '↳ ' : ''}{b.name}</b><small>{[b.place?.name, b.locked ? 'Moderators start topics' : '', page.masks[b.id] ? 'Own permissions' : '', `${b.topics} ${b.topics === 1 ? 'topic' : 'topics'}`].filter(Boolean).join(' · ')}</small></span>
       <span className="line-tools">
         <button className="f-btn ghost small" aria-label={`Move ${b.name} up`} disabled={busy} onClick={() => void call({ action: 'move', what: 'board', id: b.id, by: -1 })}><ArrowUp size={14} aria-hidden="true" /></button>
         <button className="f-btn ghost small" aria-label={`Move ${b.name} down`} disabled={busy} onClick={() => void call({ action: 'move', what: 'board', id: b.id, by: 1 })}><ArrowDown size={14} aria-hidden="true" /></button>
         <button className="f-btn ghost small" onClick={() => setEditing(b.id)}>Edit</button>
+        <button className={`f-btn ghost small${page.masks[b.id] ? ' on' : ''}`} onClick={() => setMasking(b.id)}><ShieldCheck size={14} aria-hidden="true" />Permissions</button>
         <button className="f-btn ghost small danger" aria-label={`Delete ${b.name}`} onClick={() => void remove('Board', b.id, b.name)}><Trash2 size={14} aria-hidden="true" /></button>
       </span></>}
   </li>;
@@ -101,7 +136,7 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
 export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page: Settings; k: string; go: Go; done: Done }) {
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
-    <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab.</p></header>
+    <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
     <div className="settings-grid"><BannerSettings page={page} k={k} done={done} /><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
   </>;
 }
