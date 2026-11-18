@@ -109,7 +109,7 @@ Vercel keeps the Function bundles of every retained deployment, previews include
 - Usage changes the day after deleting deployments; amounts already recorded for earlier days stay.
 - Pushes to `claude/**` branches do not deploy (`git.deploymentEnabled` in `vercel.json`); main still deploys to production. To preview such a branch, deploy it by hand from the Vercel dashboard or remove that rule.
 - Roll-card avatars are fetched by Discord from `/api/discord/avatar` on the production domain (`VERCEL_PROJECT_PRODUCTION_URL`, or `APP_ORIGIN` if set), so only that function carries the image library.
-- Keep server code from pulling large native packages into many functions. `next.config.ts` drops sharp's musl build, which Vercel never uses. [Deployment Storage](https://vercel.com/docs/deployment-storage), [Optimize Deployment Storage](https://vercel.com/docs/deployment-storage/optimize)
+- Keep server code from pulling large native packages into many functions. `next.config.ts` drops sharp's musl build, which Vercel never uses. Only `/api/discord/avatar` and `/api/scene-picture` load sharp; other routes reach them by a signed link or call. [Deployment Storage](https://vercel.com/docs/deployment-storage), [Optimize Deployment Storage](https://vercel.com/docs/deployment-storage/optimize)
 
 ## RPG Encyclopedia
 
