@@ -860,4 +860,6 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .player-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .player-strip > div { border-bottom: 1px solid var(--line); }
   .player-strip > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .preview-card, .preview-card .portrait.big { width: 250px; height: 400px; max-width: 100%; }
+  .preview-card .mini-card { inset: 0; width: auto; min-height: 0; box-shadow: none; }
 }
