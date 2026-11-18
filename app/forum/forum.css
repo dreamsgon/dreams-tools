@@ -574,6 +574,18 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .forum-root .ai-draft input { flex: 1 1 320px; min-width: 0; }
 .ai-draft small { flex-basis: 100%; }
 
+/* Posts an AI connection suggested (lib/forum/mcp.ts), waiting for the GM. */
+.suggested { margin: 18px 0; }
+.suggested .category-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.suggested .category-title small { font: 400 13px var(--font-sans); font-variant: normal; letter-spacing: 0; text-transform: none; }
+.suggested-post { margin-top: 10px; padding: 12px 14px; border: 1px dashed color-mix(in srgb, var(--accent-2) 70%, var(--line-strong)); background: color-mix(in srgb, var(--accent-2) 5%, var(--panel)); }
+.suggested-post header { display: flex; align-items: center; gap: 10px; }
+.suggested-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.suggested-body { margin-top: 8px; font: 17px/1.55 var(--font-reading); }
+.forum-root .suggested-edit { display: block; width: 100%; margin-top: 8px; font: 16px/1.5 var(--font-reading); }
+.suggested-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.suggested-acts small { flex: 1 1 220px; }
+
 @container page (max-width: 900px) {
   .forum, .forum.half { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
   .forum.half .forum-last { grid-column: 1; }

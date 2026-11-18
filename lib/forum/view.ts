@@ -109,6 +109,8 @@ export type TopicRow = {
   trashed: { at: string; by: string; until: string } | null;
   /** In a fight: the round. */
   combat: { round: number } | null;
+  /** Posts an AI connection suggested, waiting for the GM (GMs only; 0 for everyone else). */
+  suggested: number;
 };
 /** Characters a member other than the GM may edit: the rest are the GM's to play. */
 const playerRunOf = (ctx: Context) => {
@@ -136,7 +138,7 @@ export function membersFromKeys(ctx: Context, keys: readonly string[]) {
 /** Who a private topic is for, by name. */
 const privateNames = (ctx: Context, t: TopicSummary) => t.private ? [...new Set([t.by.userId, ...t.private])].map(u => memberName(ctx, u)) : null;
 /** Whether the viewer writes for this participant of a topic. */
-function controls(ctx: Context, who: string) {
+export function controls(ctx: Context, who: string) {
   if (who === NARRATION) return ctx.viewer.rights.gm;
   if (ctx.viewer.editable.has(who)) return true;
   if (!ctx.viewer.rights.gm) return false;
@@ -164,7 +166,7 @@ function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): T
     id: t.id, boardId: t.boardId, title: t.title, pinned: t.pinned, locked: t.locked, replies: t.replies, by: bylineOf(ctx, entries, t.by), at: t.at, last: lastOf(ctx, entries, t),
     cast: t.cast.flatMap(id => { const e = entries.get(id); return e ? [{ id, name: e.title, picture: pictureOf(e) }] : []; }).slice(0, 6),
     unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t), archived: !!t.archived, only: privateNames(ctx, t),
-    combat: t.combat ? { round: t.combat.round } : null,
+    combat: t.combat ? { round: t.combat.round } : null, suggested: ctx.viewer.rights.gm ? t.suggested ?? 0 : 0,
     trashed: t.trashed ? { at: t.trashed.at, by: memberName(ctx, t.trashed.by), until: new Date(new Date(t.trashed.at).getTime() + TRASH_DAYS * 86_400_000).toISOString() } : null,
   };
 }
@@ -313,6 +315,8 @@ export function topicPage(ctx: Context, topic: Topic) {
       return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
     }),
     cards,
+    /** Posts an AI connection suggested, for the GM to approve, change or skip. */
+    suggested: r.gm ? (topic.suggested ?? []).map(x => { const e = x.as ? entries.get(x.as) : undefined; return { id: x.id, at: x.at, connection: x.connection, as: e ? e.id : null, name: e?.title ?? (x.as ? "A character no longer in the campaign" : board && kindOf(ctx.forum, board) === "ic" ? "Game Master" : memberName(ctx, ctx.owner)), picture: pictureOf(e), body: x.body }; }) : [],
   };
 }
 

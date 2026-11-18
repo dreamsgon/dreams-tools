@@ -7,11 +7,14 @@ import { campaignScenes } from "../agent-maps.ts";
 import { grantFor, listConnections, type KeyGrant } from "./connections.ts";
 import { logActivity, readActivity } from "./activity.ts";
 import { narrow } from "./players-only.ts";
-import { fromLevel } from "./permissions.ts";
+import { fillPerms, fromLevel } from "./permissions.ts";
 import { makeCommit } from "./commit.ts";
 import { sendEncyclopediaPost } from "../encyclopedia/discord-send.ts";
 import type { McpContext } from "./tools.ts";
 import { scenePicture } from "./scene-picture.ts";
+import { ForumStore } from "../forum/store.ts";
+import { forumMcp } from "../forum/mcp.ts";
+import { MemberStore } from "../members-server.ts";
 
 /**
  * Accepts a new rpg_ key, and the older single-purpose keys so existing setups keep working:
@@ -57,12 +60,18 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   }
   const prefix = `users/${encodeURIComponent(grant.owner)}/`;
   const picture: McpContext["picture"] = maps ? (s, mode) => scenePicture(prefix, maps!.workspace, s, mode) : undefined;
-  const perms = grant.perms ?? fromLevel(grant.level);
+  const perms = grant.perms ? fillPerms(grant.perms) : fromLevel(grant.level);
   // Transcripts are the GM's raw material: only a connection that may see GM-only things reads them.
   const store = new EncyclopediaStore(bucket);
   const transcript: McpContext["transcript"] = perms.seeSecrets === "off" ? undefined : id => store.readTranscript(grant.owner, id);
+  // The forum is read when a forum tool is used: as the GM, or as players see it when GM-only things are off.
+  const forumOf = (connection: string, connectionId: string | null) => forumMcp({
+    store: new ForumStore(bucket), members: async () => (await new MemberStore(bucket).read(grant.owner, campaign.id)).list,
+    owner: grant.owner, campaignId: campaign.id, workspace: data, gm: perms.seeSecrets !== "off", connection,
+    log: (tool, summary, detail) => logActivity(bucket, grant.owner, campaign.id, { id: crypto.randomUUID(), at: new Date().toISOString(), connection, connectionId, tool, summary, ...(detail ? { detail } : {}) }).then(() => undefined),
+  });
   const base = { maps, level: grant.level, perms, picture, transcript };
-  if (grant.level === "read") return narrow({ ...base, book, campaign: book.campaigns[0] });
+  if (grant.level === "read") return narrow({ ...base, book, campaign: book.campaigns[0], forum: forumOf("An AI", grant.connectionId) });
   const [activity, connections] = await Promise.all([readActivity(bucket, grant.owner, campaign.id), listConnections(bucket, grant.owner, campaign.id)]);
   const connection = connections.find(c => c.id === grant.connectionId)?.name ?? "An AI";
   const commit = makeCommit(bucket, { owner: grant.owner, campaignId: campaign.id, connectionId: grant.connectionId, connection }, { ...base, connection },
@@ -75,5 +84,5 @@ export async function loadContext(bucket: S3Bucket, grant: KeyGrant): Promise<Mc
   };
   const suggestions = activity.entries.filter(e => e.waiting && e.connectionId === grant.connectionId)
     .map(e => ({ id: e.id, at: e.at, summary: e.summary, state: e.decided ?? "waiting" as const, ...(e.result ? { result: e.result } : {}) }));
-  return narrow({ ...base, connection, book, campaign: book.campaigns[0], paused: activity.paused, commit, suggest, suggestions });
+  return narrow({ ...base, connection, book, campaign: book.campaigns[0], paused: activity.paused, commit, suggest, suggestions, forum: forumOf(connection, grant.connectionId) });
 }

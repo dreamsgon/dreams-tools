@@ -14,6 +14,7 @@ export const actions = [
   "rollOpen", "rollSecret", "postDiscord",
   "writePages", "quests", "notes",
   "moveTokens", "health", "reveal", "initiative",
+  "forumPosts",
 ] as const;
 export type Action = (typeof actions)[number];
 export type Perms = Record<Action, Choice>;
@@ -40,26 +41,38 @@ export const actionGroups: { id: string; name: string; actions: { id: Action; na
     { id: "reveal", name: "Reveal fog and show hidden tokens" },
     { id: "initiative", name: "Run initiative: start, next turn, end" },
   ] },
+  { id: "forum", name: "Forum", actions: [
+    { id: "forumPosts", name: "Post in the forum", hint: "Narration and NPC posts. Ask me leaves them in the topic for a moderator to approve" },
+  ] },
 ];
 export const actionName = (a: Action) => actionGroups.flatMap(g => g.actions).find(x => x.id === a)!.name;
 
 const all = (c: Choice): Perms => Object.fromEntries(actions.map(a => [a, c])) as Perms;
 export const presets: Record<Mode, Perms> = {
   // You stay the GM: prep and notes straight away, anything at the table or in the open waits for your OK.
-  helper: { ...all("do"), rollOpen: "ask", quests: "ask", moveTokens: "off", health: "ask", reveal: "ask", initiative: "ask" },
+  helper: { ...all("do"), rollOpen: "ask", quests: "ask", moveTokens: "off", health: "ask", reveal: "ask", initiative: "ask", forumPosts: "ask" },
   gm: all("do"),
   read: { ...all("off"), seePicture: "do", seeSecrets: "do" },
 };
 export const modeNames: Record<Mode | "custom", string> = { helper: "Help me run the game", gm: "Run the game", read: "Read only", custom: "Custom" };
 
 const table: Action[] = ["moveTokens", "health", "reveal", "initiative"];
-const writing: Action[] = ["rollOpen", "rollSecret", "postDiscord", "writePages", "quests", "notes"];
+const writing: Action[] = ["rollOpen", "rollSecret", "postDiscord", "writePages", "quests", "notes", "forumPosts"];
 
-/** The actions of a connection that only has a level. */
+/** The actions of a connection that only has a level. Forum posts wait for a moderator's OK at Assist. */
 export function fromLevel(level: Level): Perms {
   if (level === "read") return presets.read;
-  if (level === "assist") return { ...all("do"), ...Object.fromEntries(table.map(a => [a, "off"])) } as Perms;
+  if (level === "assist") return { ...all("do"), ...Object.fromEntries(table.map(a => [a, "off"])), forumPosts: "ask" } as Perms;
   return presets.gm;
+}
+/**
+ * Actions saved before the forum's was added: a connection that does everything posts too, one that writes
+ * nothing doesn't, and any other asks first.
+ */
+export function fillPerms(p: Perms): Perms {
+  if (p.forumPosts) return p;
+  const rest = actions.filter(a => a !== "forumPosts");
+  return { ...p, forumPosts: rest.every(a => p[a] === "do") ? "do" : rest.filter(a => a !== "seePicture" && a !== "seeSecrets").every(a => p[a] === "off") ? "off" : "ask" };
 }
 /** The level that holds every action that isn't off, so the older level checks still fit. */
 export function levelFor(p: Perms): Level {
@@ -96,6 +109,7 @@ export function toolAction(tool: string, args: Record<string, unknown> = {}): Ac
     case "damage": case "heal": case "set_condition": return "health";
     case "reveal_fog": case "show_token": return "reveal";
     case "start_combat": case "next_turn": case "end_combat": return "initiative";
+    case "post_to_forum": case "start_topic": return "forumPosts";
     default: return null;
   }
 }

@@ -30,7 +30,7 @@ const groups = (list: ChatMeta[]) => {
 };
 
 /** The approve button says what it does. */
-const verb = (tool: string) => ({ move_token: "Move", roll: "Roll it", set_condition: "Add", damage: "Apply", heal: "Heal", reveal_fog: "Reveal", show_token: "Show", start_combat: "Start", next_turn: "Next turn", end_combat: "End" } as Record<string, string>)[tool] ?? "Approve";
+const verb = (tool: string) => ({ move_token: "Move", roll: "Roll it", set_condition: "Add", damage: "Apply", heal: "Heal", reveal_fog: "Reveal", show_token: "Show", start_combat: "Start", next_turn: "Next turn", end_combat: "End", start_topic: "Post it" } as Record<string, string>)[tool] ?? "Approve";
 const icon = (tool: string) => tool === "roll" ? <Dices size={15}/> : ["move_token", "reveal_fog", "show_token"].includes(tool) ? <MapIcon size={15}/> : ["damage", "heal", "set_condition"].includes(tool) ? <User size={15}/> : <ScrollText size={15}/>;
 /** The fields the GM can change before approving: plain text, numbers and on/off. */
 const editable = (args: Record<string, unknown>) => Object.entries(args).filter(([, v]) => ["string", "number", "boolean"].includes(typeof v));

@@ -55,7 +55,7 @@ test('ready-made sets, older levels and the checks on a set from the browser',()
  const {notes,...missing}=presets.gm;assert.throws(()=>cleanPerms(missing));
  assert.deepEqual(cleanPerms({...presets.helper,extra:'do'}),presets.helper);
  assert.equal(toolAction('roll',{discord:false}),'rollSecret');assert.equal(toolAction('roll',{}),'rollOpen');assert.equal(toolAction('read_page'),null);
- assert.equal(actions.length,12);
+ assert.equal(actions.length,13);assert.equal(fromLevel('assist').forumPosts,'ask');assert.equal(toolAction('post_to_forum'),'forumPosts');
 });
 
 test('connections made as a helper list only what they may do, and older ones keep their level',async()=>{

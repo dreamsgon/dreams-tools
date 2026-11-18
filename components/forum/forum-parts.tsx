@@ -4,7 +4,7 @@
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, ArrowUp, Dices, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArrowUp, Bot, Dices, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
 import { postBlocks, postInline } from '@/lib/forum/markup';
 import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
@@ -211,7 +211,7 @@ export function TopicRow({ t, k, go, board, pick }: { t: TopicRowData; k: string
   return <article className={`topic-row${t.pinned ? ' pinned' : ''}${t.unread ? ' unread' : ''}${pick ? ' pickable' : ''}${pick?.on ? ' picked' : ''}`}>
     {pick && <label className="topic-pick"><input type="checkbox" checked={pick.on} onChange={e => pick.set(e.target.checked)} aria-label={`Select ${t.title}`} /></label>}
     <div className="topic-main">
-      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.combat && <span className="tag fight"><Swords size={11} aria-hidden="true" /> Combat · round {t.combat.round}</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
+      <h3 className="topic-title">{t.unread && <span className="unread-dot" title="New posts" />}{t.pinned && <span className="tag"><Pin size={11} aria-hidden="true" /> Pinned</span>}{t.locked && <span className="tag"><Lock size={11} aria-hidden="true" /> Locked</span>}{t.archived && <span className="tag"><Archive size={11} aria-hidden="true" /> Archived</span>}{t.combat && <span className="tag fight"><Swords size={11} aria-hidden="true" /> Combat · round {t.combat.round}</span>}{t.only && <span className="tag private" title={`Only for ${t.only.join(', ')} and the GMs`}><EyeOff size={11} aria-hidden="true" /> Private</span>}{t.suggested > 0 && <span className="tag ai-mark" title="Posts your AI suggested, waiting for you to approve, change or skip"><Bot size={11} aria-hidden="true" /> {t.suggested === 1 ? 'AI suggestion' : `${t.suggested} AI suggestions`}</span>}<Link k={k} go={go} to={{ view: 'topic', id: t.id }}>{t.title}</Link>{t.unread && <span className="tag new">New</span>}</h3>
       <small>Started by {t.by.name} · {when(t.at)}{board ? ` · ${board}` : ''}</small>
       {t.next && <span className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={12} aria-hidden="true" />{turnText(t.next)}</span>}
       {t.cast.length > 0 && <span className="topic-cast" aria-label="Characters in this topic">{t.cast.map(c => <Portrait key={c.id} k={k} picture={c.picture} name={c.name} className="portrait tiny" />)}</span>}

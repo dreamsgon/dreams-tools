@@ -999,6 +999,11 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .source-card{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:var(--radius);padding:14px;background:var(--panel)}
 .source-card:hover:not(:disabled){background:var(--hover)}.source-card.on{border:2px solid var(--accent);padding:13px;background:var(--accent-soft)}
 .source-card strong{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600}.source-card small{display:block;font-size:12px;line-height:1.5;color:var(--muted);margin-top:4px}
+/* A forum topic as a recap source (recap-forum-source.tsx). */
+.forum-source-find{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--radius);padding:0 10px;background:var(--panel);color:var(--muted)}.forum-source-find input{flex:1;min-width:0;border:0;background:none;padding:8px 0;font:inherit;color:var(--ink)}
+.forum-source-list{display:grid;gap:4px;max-height:min(320px,calc(50vh / var(--ui-zoom, 1)));overflow:auto;margin-top:6px}
+.forum-source-row{display:block;text-align:left;border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;background:var(--panel);font-weight:400}.forum-source-row:hover:not(:disabled){background:var(--hover)}.forum-source-row.on{border-color:var(--accent);background:var(--accent-soft)}
+.forum-source-row strong{display:flex;gap:6px;align-items:center;font-size:14px;font-weight:600}.forum-source-row small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .source-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:var(--radius);background:var(--raised);color:var(--accent);flex-shrink:0}
 .soon{display:inline-block!important;margin:0!important;font-size:10px!important;font-weight:500;padding:2px 6px;border-radius:var(--radius-sm);background:var(--raised);color:var(--muted)}.soon.on{background:var(--accent-soft);color:var(--accent)}
 .field-title{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:14px}
