@@ -52,7 +52,8 @@ export function forumMcp(d: ForumMcpDeps) {
 
   /** The forum as the GM sees it, and as this connection sees it (the same when it may see GM-only things). */
   async function load() {
-    const [list, { forum }] = await Promise.all([d.members(), d.store.read(d.owner, d.campaignId)]);
+    const [list, { forum, etag }] = await Promise.all([d.members(), d.store.read(d.owner, d.campaignId)]);
+    if (etag === null) fail("This campaign has no forum yet. The GM sets one up from the campaign's page in RPG Tools.");
     const base = { forum, list, owner: d.owner, workspace: d.workspace, campaignId: d.campaignId, readable: null, now: now() };
     const rights = forumRights(list, d.owner, d.owner);
     const gm: Context = { ...base, viewer: { userId: d.owner, rights, key: `c-${d.campaignId}`, editable: new Set(), access: boardAccess(forum, list, d.owner, rights) } };

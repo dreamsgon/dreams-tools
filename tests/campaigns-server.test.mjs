@@ -200,3 +200,21 @@ test('hub folders list by name until the first hand-made order, which saves what
   summary=await campaignAction(s,{action:'newFolder',name:'Aardvark'});
   assert.equal(top().at(-1),'Aardvark','once ordered by hand, new folders keep array order instead of re-sorting');
 });
+
+test('forum: a campaign starts without one; setting it up makes an empty forum once and marks the campaign', async () => {
+  const {b,s}=await setup();
+  const {ForumStore,forumKey}=await import('../lib/forum/store.ts');
+  let summary=summaryOf(await readBoth(s));
+  assert.equal(summary.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia.forum,false);
+  assert.equal(b.data.has(forumKey('owner-1','e1')),false);
+  summary=await campaignAction(s,{action:'forum',encyclopediaId:'e1'});
+  assert.equal(summary.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia.forum,true);
+  assert.equal((await s.book.read('owner-1')).data.campaigns[0].forum,true);
+  assert.equal(JSON.parse(b.data.get(forumKey('owner-1','e1')).text).topics.length,0);
+  // A forum already there (from before forums were opt-in) is kept as it is.
+  const store=new ForumStore(b);
+  b.data.set(forumKey('owner-1','e1'),{text:JSON.stringify({...JSON.parse(b.data.get(forumKey('owner-1','e1')).text),settings:{...JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings,title:'Kept'}}),etag:'x'});
+  await store.create('owner-1','e1');
+  assert.equal(JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings.title,'Kept');
+  await assert.rejects(()=>campaignAction(s,{action:'forum',encyclopediaId:'nope'}),/Encyclopedia notes/);
+});

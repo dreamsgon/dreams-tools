@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { hubHref } from "@/lib/campaign-switcher";
 import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
@@ -188,7 +188,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add maps</button>}</span>
             <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><span>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</span><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
-              <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Start notes</button>}</span>
+              <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Start a wiki</button>}</span>
             <span role="cell" className="campaigns-open">
               <button type="button" className="campaigns-mini campaigns-move" disabled={busy} onClick={() => setMoving(r)} aria-label={`Move ${r.name} to a folder`}>Move</button>
               <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
@@ -240,8 +240,10 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
     <TagRow className="campaigns-tags" targets={campaignTargets(row)} />
     {row.encyclopedia?.description && <p className="campaigns-muted">{row.encyclopedia.description}</p>}
     <div className="campaigns-details-open">
-      {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Open in Maptable</a>}
-      {row.encyclopedia && <a className="campaigns-secondary" href={notesHref(row.encyclopedia.id)}><BookOpen size={16} aria-hidden="true" />Notes</a>}
+      {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Maps</a>}
+      {row.encyclopedia && <a className="campaigns-secondary" href={notesHref(row.encyclopedia.id)}><BookOpen size={16} aria-hidden="true" />Wiki</a>}
+      {row.encyclopedia && (row.encyclopedia.forum ? <a className="campaigns-secondary" href={`/forum#c-${encodeURIComponent(row.encyclopedia.id)}`}><MessagesSquare size={16} aria-hidden="true" />Forum</a>
+        : <button type="button" className="campaigns-secondary" disabled={busy} title="A roleplay forum for this campaign. Forums start switched off." onClick={() => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id }, "Forum set up. Open it with Forum.")}><Plus size={16} aria-hidden="true" />Set up forum</button>)}
     </div>
     <dl className="campaigns-facts">
       <div><dt>World</dt><dd>{row.encyclopedia?.worldName || "None yet"}</dd></div>

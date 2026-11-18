@@ -128,11 +128,13 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true) 
   const readable = rights.gm ? null : new Set(playerCampaign(workspace, found.campaignId, editable).entries.map(e => e.id));
   // Pictures don't need read marks or presence.
   const none = { reads: null, presence: null, alerts: null, etag: null };
-  const [{ forum }, mine, presence, alerts] = await Promise.all([
+  const [{ forum, etag: stored }, mine, presence, alerts] = await Promise.all([
     deps.store.read(found.owner, found.campaignId),
     marks ? deps.store.readReads(found.owner, found.campaignId, userId) : none, marks ? deps.store.readPresence(found.owner, found.campaignId) : none,
     marks ? deps.store.readAlerts(found.owner, found.campaignId, userId).catch(() => none) : none,
   ]);
+  // Forums start switched off: the GM sets one up from the campaign's page.
+  if (stored === null) return { fail: json({ error: rights.owner ? "This campaign's forum isn't set up yet." : "The GM hasn't set up a forum for this campaign yet.", code: "no-forum" }, 404) };
   // A first visit starts with everything before the member joined (the GM: before now) marked read.
   const joined = found.list.members.find(m => m.userId === userId)?.joinedAt;
   const reads = mine.reads ?? freshReads(joined && joined < now.toISOString() ? joined : now.toISOString());

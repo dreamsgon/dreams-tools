@@ -304,9 +304,11 @@ test('forumImages: posting characters and location places, not hidden characters
 });
 
 // ---- 10. Requests -----------------------------------------------------------------------------
-function harness({ user = 'p1', campaign } = {}) {
+function harness({ user = 'p1', campaign, forum = true } = {}) {
   resetForumThrottles();
   const bucket = new Bucket(), store = new ForumStore(bucket); let n = 0;
+  // The GM has set up the forum (Campaigns): it starts empty.
+  if (forum) bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(M.emptyForum()), etag: 'f0' });
   const deps = {
     sameOrigin: r => r.headers.get('Origin') === new URL(r.url).origin,
     user: async () => user,
@@ -1364,4 +1366,18 @@ test('post styles: {text} takes the words as written, or as escaped HTML text in
   assert.equal(K.fillStyle('Header', 'x').text, 'Header\n\nx');
   const blocks = K.postBlocks(K.fillStyle('[html]<div>{text}</div>[/html]', 'one\n\ntwo').text);
   assert.deepEqual(blocks[0].nodes[0].children.map(c => c.tag), ['p', 'p']);
+});
+
+test('request: a campaign without a forum says so, to the GM and to members, and changes nothing', async () => {
+  for (const [user, re] of [[OWNER, /isn't set up yet/], ['p1', /hasn't set up a forum/]]) {
+    const { post, store } = harness({ user, forum: false });
+    const r = await post({ action: 'view', campaign: user === OWNER ? KEY : 'c-camp', page: { kind: 'index' } });
+    const body = await r.json();
+    assert.equal(r.status, 404); assert.equal(body.code, 'no-forum'); assert.match(body.error, re);
+    assert.equal((await post({ action: 'addCategory', campaign: KEY, name: 'X', kind: 'ooc' })).status, 404);
+    assert.equal(await store.exists(OWNER, 'camp'), false);
+  }
+  const { deps } = harness({ forum: false });
+  const mcp = forumMcp({ store: deps.store, members: async () => list(), owner: OWNER, campaignId: 'camp', workspace, gm: true, connection: 'Claude', newId: () => 'x', now: () => NOW });
+  await assert.rejects(() => mcp.boards(), /no forum yet/);
 });

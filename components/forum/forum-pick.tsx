@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Crown, MessagesSquare, Users } from 'lucide-react';
 
 type Forum = { href: string; name: string; sub: string; mine: boolean };
-type Rows = { rows?: { name: string; encyclopedia: { id: string; name: string; worldName: string; archived: boolean } | null }[] };
+type Rows = { rows?: { key: string; name: string; encyclopedia: { id: string; name: string; worldName: string; archived: boolean; forum?: boolean } | null }[] };
 type Joined = { campaigns?: { ref: string; campaign: string; ownerName: string; world: string; asking: boolean; forum?: boolean }[] };
 
 export function ForumPicker() {
@@ -19,7 +19,7 @@ export function ForumPicker() {
       if (own.status === 401 || joined.status === 401) { if (live) setSignIn(true); return; }
       const rows = own.ok ? await own.json() as Rows : {}, mem = joined.ok ? await joined.json() as Joined : {};
       const out: Forum[] = [
-        ...(rows.rows ?? []).flatMap(r => r.encyclopedia && !r.encyclopedia.archived ? [{ href: `/forum#c-${encodeURIComponent(r.encyclopedia.id)}`, name: r.encyclopedia.name || r.name, sub: `You run it${r.encyclopedia.worldName ? ` · ${r.encyclopedia.worldName}` : ''}`, mine: true }] : []),
+        ...(rows.rows ?? []).flatMap(r => r.encyclopedia?.forum && !r.encyclopedia.archived ? [{ href: `/forum#c-${encodeURIComponent(r.encyclopedia.id)}`, name: r.encyclopedia.name || r.name, sub: `You run it${r.encyclopedia.worldName ? ` · ${r.encyclopedia.worldName}` : ''}`, mine: true }] : []),
         ...(mem.campaigns ?? []).flatMap(c => c.forum && !c.asking ? [{ href: `/forum#m-${c.ref}`, name: c.campaign, sub: `Run by ${c.ownerName}${c.world ? ` · ${c.world}` : ''}`, mine: false }] : []),
       ];
       if (!live) return;
@@ -34,7 +34,7 @@ export function ForumPicker() {
     {signIn ? <><p>Sign in to open your campaigns’ forums.</p><p><a className="f-btn" href={`/account?mode=login&next=${encodeURIComponent('/forum')}`}>Sign in</a></p></>
       : error ? <p className="form-error">{error}</p>
       : !list ? <p className="muted">Looking for your forums…</p>
-      : !list.length ? <p>No forums yet. Each campaign with notes in the Encyclopedia has one, and campaigns you join show theirs when the GM lets your group read it. <a href="/campaigns">Go to Campaigns</a></p>
+      : !list.length ? <p>No forums yet. Forums start switched off: set one up with Set up forum on a campaign’s page. Campaigns you join show theirs once the GM sets one up and lets your group read it. <a href="/campaigns">Go to Campaigns</a></p>
       : <><p className="muted">Each campaign has its own forum. Pick one.</p><ul className="pick-list">{list.map(f => <li key={f.href}><a href={f.href}>{f.mine ? <Crown size={16} aria-hidden="true" /> : <Users size={16} aria-hidden="true" />}<span><b>{f.name}</b><small>{f.sub}</small></span></a></li>)}</ul></>}
   </div>;
   /* eslint-enable @next/next/no-html-link-for-pages */

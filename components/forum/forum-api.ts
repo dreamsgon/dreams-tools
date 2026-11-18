@@ -51,11 +51,11 @@ export function forumHash(key: string, place: Place) {
 }
 export const validKey = (key: string) => /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/.test(key);
 
-export class ForumRequestError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
+export class ForumRequestError extends Error { status: number; code: string; constructor(message: string, status: number, code = '') { super(message); this.status = status; this.code = code; } }
 export async function forumCall<T = Record<string, unknown>>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const r = await fetch('/api/forum', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
-  const value = await r.json().catch(() => ({})) as T & { error?: string };
-  if (!r.ok) throw new ForumRequestError(value.error ?? 'The forum is unavailable right now.', r.status);
+  const value = await r.json().catch(() => ({})) as T & { error?: string; code?: string };
+  if (!r.ok) throw new ForumRequestError(value.error ?? 'The forum is unavailable right now.', r.status, value.code);
   return value;
 }
 /** The page the server builds for a place: the reply and edit pages read the topic. */

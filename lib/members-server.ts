@@ -15,6 +15,7 @@
 import { createHmac, hkdfSync, randomBytes } from "node:crypto";
 import type { S3Bucket } from "./storage.ts";
 import { EncyclopediaStore, encyclopediaPrefix, hashToken } from "./encyclopedia/store.ts";
+import { forumKey } from "./forum/store.ts";
 import { lock, unlock } from "./ai/secret.ts";
 import {
   MembersError, emptyMemberList, pageRights, addMadePage, memberListSchema, join, liveLink, permissionInfo, permissionKeys, publicMembers, roleOf, bannedBy, can, removeMember,
@@ -205,7 +206,7 @@ export class MemberStore {
     for (const { owner, ...i } of await this.membershipItems(userId)) {
       const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
       if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
-      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps"), forum: can(list, userId, "forumRead") });
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps"), forum: can(list, userId, "forumRead") && !!(await this.bucket.head(forumKey(owner, i.campaignId)).catch(() => null)) });
     }
     return out;
   }

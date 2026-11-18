@@ -102,6 +102,16 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not add maps."); }
     finally { setAdding(false); }
   }
+  /** Set up forum: forums start switched off, so the GM makes this campaign's when they want one, then opens it. */
+  const [settingUp, setSettingUp] = useState(false);
+  async function setUpForum() {
+    const id = hub?.row.encyclopedia?.id;
+    if (!id) return;
+    setSettingUp(true); setSaveError("");
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- other tools open as full pages (AGENTS.md)
+    try { await post({ action: "forum", encyclopediaId: id }, "Could not set up the forum."); window.location.assign(`/forum#c-${encodeURIComponent(id)}`); }
+    catch (e) { setSaveError(e instanceof Error ? e.message : "Could not set up the forum."); setSettingUp(false); }
+  }
   async function saveFront(frontPage: FrontPage) {
     setSaveError("");
     try { setHub(await post({ action: "frontPage", key: campaignKey, frontPage }, "Could not save the next session.")); }
@@ -126,17 +136,19 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       <div className="hub-title">
         <p>Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>
-        <div className="hub-chips"><span className={`hub-chip${m ? " on" : ""}`}>{m ? "✓ Maps" : "No maps yet"}</span><span className={`hub-chip${e ? " on" : ""}`}>{e ? "✓ Notes" : "No notes yet"}</span></div>
+        <div className="hub-chips"><span className={`hub-chip${m ? " on" : ""}`}>{m ? "✓ Maps" : "No maps yet"}</span><span className={`hub-chip${e ? " on" : ""}`}>{e ? "✓ Wiki" : "No wiki yet"}</span>{e && <span className={`hub-chip${L.forum ? " on" : ""}`}>{L.forum ? "✓ Forum" : "No forum yet"}</span>}</div>
         <TagRow className="hub-tags" targets={campaignTargets(row)} />
       </div>
       <div className="hub-actions">
         {draft ? <button className="hub-button hub-button-primary" onClick={() => { void save(draft); setDraft(null); }}><Check size={15} aria-hidden="true" />Done</button> : <>
           {tab === "dashboard" && <button className="hub-button" onClick={() => setDraft(layout)}><Pencil size={14} aria-hidden="true" />Customize</button>}
           {tab === "front" && hub.frontConfig && !editing && <button className="hub-button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Customize</button>}
-          {e ? <a className="hub-button" href={L.notes()!}><BookOpen size={15} aria-hidden="true" />Open notes</a>
-            : <a className="hub-button" href={L.startNotes}><Plus size={15} aria-hidden="true" />Start notes</a>}
-          {m ? <a className="hub-button hub-button-primary" href={L.maptable!}><MapIcon size={15} aria-hidden="true" />Open in Maptable</a>
+          {e ? <a className="hub-button" href={L.notes()!}><BookOpen size={15} aria-hidden="true" />Wiki</a>
+            : <a className="hub-button" href={L.startNotes}><Plus size={15} aria-hidden="true" />Start a wiki</a>}
+          {m ? <a className="hub-button hub-button-primary" href={L.maptable!}><MapIcon size={15} aria-hidden="true" />Maps</a>
             : <button className="hub-button" disabled={adding} onClick={() => void addMaps()}><Plus size={15} aria-hidden="true" />{adding ? "Adding maps…" : "Add maps"}</button>}
+          {e && (L.forum ? <a className="hub-button" href={L.forum}><MessagesSquare size={15} aria-hidden="true" />Forum</a>
+            : <button className="hub-button" disabled={settingUp} title="A roleplay forum for this campaign, with boards for its places. Members read and post in it as their groups allow." onClick={() => void setUpForum()}><Plus size={15} aria-hidden="true" />{settingUp ? "Setting up…" : "Set up forum"}</button>)}
           {e && <BackupsButton campaignId={e.id} campaignName={row.name} />}
         </>}
       </div>
@@ -146,9 +158,9 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         <button role="tab" aria-selected={tab === "dashboard"} onClick={() => choose("dashboard")}><LayoutDashboard size={16} aria-hidden="true" />Dashboard</button>
         <button role="tab" aria-selected={tab === "front"} onClick={() => choose("front")}><House size={16} aria-hidden="true" />Front page</button>
         {e && <button role="tab" aria-selected={tab === "members"} onClick={() => choose("members")}><Users size={16} aria-hidden="true" />Members{members && <span className={`mem-count${members.requests.length ? " mem-count-warn" : ""}`} title={members.requests.length ? `${members.requests.length} asking to join` : undefined}>{members.requests.length ? members.requests.length : members.members.length + 1}</span>}</button>}
-        {e && <a href={L.forum!} title="The campaign's roleplay forum"><MessagesSquare size={16} aria-hidden="true" />Forum<ArrowUpRight size={13} aria-hidden="true" /></a>}
+        {L.forum && <a href={L.forum} title="The campaign's roleplay forum"><MessagesSquare size={16} aria-hidden="true" />Forum<ArrowUpRight size={13} aria-hidden="true" /></a>}
         {m && <a href={L.scenes!}>Maps<ArrowUpRight size={13} aria-hidden="true" /></a>}
-        {e && <a href={L.notes()!}>Notes<ArrowUpRight size={13} aria-hidden="true" /></a>}
+        {e && <a href={L.notes()!}>Wiki<ArrowUpRight size={13} aria-hidden="true" /></a>}
       </div>
     </div>
     {saveError && <p className="hub-error" role="alert">{saveError}</p>}
@@ -166,7 +178,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
 }
 
 function NoNotes({ href }: { href: string }) {
-  return <div className="hub-card hub-empty"><h2>No front page yet</h2><p>The front page lives in the Encyclopedia. <a href={href}>Start notes for this campaign</a> to give it one.</p></div>;
+  return <div className="hub-card hub-empty"><h2>No front page yet</h2><p>The front page lives in the Encyclopedia. <a href={href}>Start a wiki for this campaign</a> to give it one.</p></div>;
 }
 
 type Saver = (d: Dashboard) => Promise<void>;
@@ -234,10 +246,10 @@ const typeClass = (t: string) => `hub-flag type-${t}`;
 function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: { type: DashWidget; size: "s" | "m" | "l"; h?: number; hub: CampaignHub; layout: Dashboard; save: Saver; saveFront: (p: FrontPage) => Promise<void>; bare?: boolean }) {
   const { row } = hub, e = row.encyclopedia, m = row.maptable, name = dashInfo[type].name, L = hubLinks(row);
   const head = (link?: ReactNode) => bare ? null : <Head title={name}>{link}</Head>;
-  const noNotes = <p className="hub-muted">No notes yet. <a href={L.startNotes}>Start Encyclopedia notes for this campaign</a>.</p>;
+  const noNotes = <p className="hub-muted">No wiki yet. <a href={L.startNotes}>Start a wiki for this campaign</a>.</p>;
   // A widget that needs the half this campaign lacks says so, with the way to add it.
   const lacks = missingHalf(type, { maps: !!m, notes: !!e });
-  if (lacks) return <>{head()}<p className="hub-muted">{lacks === "maps" ? <>No maps yet. Use Add maps at the top of this page.</> : <>No notes yet. <a href={L.startNotes}>Start notes</a></>}</p></>;
+  if (lacks) return <>{head()}<p className="hub-muted">{lacks === "maps" ? <>No maps yet. Use Add maps at the top of this page.</> : <>No wiki yet. <a href={L.startNotes}>Start a wiki</a></>}</p></>;
   switch (type) {
     case "next": return <>{head()}<NextSession hub={hub} saveFront={saveFront} showDate={!layout.widgets.some(w => w.type === "date")} bare={bare} /></>;
     case "date": return <>{head()}{hub.gameDate ? <><strong className="hub-big">{hub.gameDate.date}</strong><p className="hub-muted">{hub.gameDate.name}</p></>
@@ -279,7 +291,7 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
     case "party": return <>{head(e && <a href={L.notes("characters")!}>Characters</a>)}
       {hub.party.length ? <ul className="hub-party">{hub.party.map(p => <PartyMember key={p.id} member={p} href={L.entry(p.id)} />)}</ul>
         : <p className="hub-muted">Mark characters as player characters or companions in the Encyclopedia and they show up here.</p>}</>;
-    case "recent": return <>{head(e && <a href={L.notes()!}>Notes</a>)}
+    case "recent": return <>{head(e && <a href={L.notes()!}>Wiki</a>)}
       {hub.recent.length ? <ul className="hub-list">{hub.recent.slice(0, [5, 8, 12][h - 1] ?? 5).map(p => <li key={p.id}><a href={L.entry(p.id)}>{p.kind === "character" ? <User size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />}<span><strong>{p.title}</strong>{p.parent && <small>{p.parent}</small>}</span><time dateTime={p.updatedAt}>{when(p.updatedAt)}</time></a></li>)}</ul>
         : <p className="hub-muted">{e ? "No pages yet." : "No Encyclopedia notes yet."}</p>}</>;
     case "codex": return <>{head(e && <a href={L.notes("codex")!}>Open codex</a>)}

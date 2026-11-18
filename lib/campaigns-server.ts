@@ -15,6 +15,7 @@ import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
 import { moveSibling, placeBeside, sortSiblings } from "./folder-order.ts";
+import { ForumStore } from "./forum/store.ts";
 import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey } from "./campaign-links.ts";
 
 /*
@@ -73,7 +74,8 @@ export type CampaignAction =
   | { action: "moveFolder"; folderId: string; parentId: string | null }
   | { action: "stepFolder"; folderId: string; delta: -1 | 1 }
   | { action: "placeFolder"; folderId: string; targetId: string; place: "before" | "after" }
-  | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string };
+  | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string }
+  | { action: "forum"; encyclopediaId: string };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
@@ -157,6 +159,12 @@ export async function campaignAction(s: Session, body: CampaignAction) {
       if (both.book.data.campaigns.some(c => c.maptableCampaignId === mid)) throw new Error("This campaign already has Encyclopedia notes.");
       await saveBook(s, both.book.revision, addBookCampaign(both.book.data, body, campaign.name, "", mid).next);
     } else throw new Error("Choose a campaign.");
+  } else if (body.action === "forum") {
+    // Sets up the campaign's forum: an empty one in storage, and the flag the campaign pages read.
+    const eid = str(body.encyclopediaId), campaign = both.book.data.campaigns.find(c => c.id === eid);
+    if (!campaign) throw new Error("That campaign has no Encyclopedia notes, which its forum lives with. Reload the page.");
+    await new ForumStore(s.bucket).create(s.owner, campaign.id);
+    if (!campaign.forum) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === campaign.id ? { ...c, forum: true } : c) });
   } else if (body.action === "newFolder") {
     const name = cleanName(body.name, "folder"), parentId = parentOf(mapNow, body.parentId);
     await saveMap(s, both.map, { ...mapNow, collections: [...mapNow.collections, { id: uid(), name, kind: "folder", parentId }] });

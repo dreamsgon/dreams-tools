@@ -13,6 +13,8 @@ import { sortSiblings } from "./folder-order.ts";
 
 export type MapCampaign = { id: string; name: string; scenes: number };
 export type BookCampaign = { id: string; name: string; description: string; worldId: string; worldName: string; archived: boolean; pages: number; characters: number; maptableCampaignId: string | null;
+  /** Whether the GM set up this campaign's forum. */
+  forum: boolean;
   /** When a page in this campaign last changed, or null when it has none. */
   lastEdited: string | null;
   /** How many of its pages are maps. */
@@ -66,7 +68,7 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
       id: c.id, name: c.name, description: c.description, worldId: c.worldId,
       worldName: worlds.get(c.worldId)?.name ?? "", archived: worlds.get(c.worldId)?.archived ?? false,
       pages: own.length, characters: own.filter(e => e.kind === "character").length,
-      maptableCampaignId: c.maptableCampaignId ?? null,
+      maptableCampaignId: c.maptableCampaignId ?? null, forum: c.forum === true,
       lastEdited: own.reduce<string | null>((last, e) => !last || e.updatedAt > last ? e.updatedAt : last, null),
       maps: own.filter(e => e.kind === "map").length, latest,
     };
