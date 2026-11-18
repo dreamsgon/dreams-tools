@@ -2,7 +2,8 @@ import { getBucket } from '@/lib/storage';
 import { getAppUser } from '@/lib/app-user';
 import { MemberStore } from '@/lib/members-server';
 import { EncyclopediaStore } from '@/lib/encyclopedia/store';
-import { readMapImage, saveStagedImage } from '@/lib/encyclopedia/map-images-server';
+import { readMapImage, saveMapImage, saveStagedImage } from '@/lib/encyclopedia/map-images-server';
+import { scenePicture } from '@/lib/mcp/scene-picture';
 import { sameOrigin } from '@/lib/encyclopedia/workspace-server';
 import { ForumStore } from '@/lib/forum/store';
 import { handleForum, handleForumImage, type Deps } from '@/lib/forum/request';
@@ -37,6 +38,17 @@ const deps = (): Deps => {
     scenes: async (owner, maptableCampaignId) => {
       const saved = await loadWorkspace(bucket, `users/${encodeURIComponent(owner)}/`);
       try { return saved ? campaignScenes(saved.workspace, maptableCampaignId) : []; } catch { return []; }
+    },
+    // A scene drawn as players see it (no GM-only tokens), stored with the GM's pictures for a post.
+    mapPicture: async (owner, maptableCampaignId, sceneId) => {
+      const prefix = `users/${encodeURIComponent(owner)}/`, saved = await loadWorkspace(bucket, prefix);
+      const scene = saved ? campaignScenes(saved.workspace, maptableCampaignId).find(s => s.id === sceneId) : undefined;
+      if (!saved || !scene) throw new Error('That scene isn’t in the paired Maptable campaign any more.');
+      // scenePicture's messages point AI apps to read_scene, so say it for the forum instead.
+      const picture = await scenePicture(prefix, saved.workspace, scene, 'players').catch((e: unknown) => {
+        throw new Error(e instanceof Error && /set up/.test(e.message) ? 'Map pictures aren’t set up on this site.' : 'The map picture couldn’t be drawn. Try again in a moment.');
+      });
+      return (await saveMapImage(owner, new Uint8Array(Buffer.from(picture.data, 'base64')))).id;
     },
   };
 };

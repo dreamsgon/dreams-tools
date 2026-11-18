@@ -1,7 +1,7 @@
 'use client';
 /* The forum's requests (app/api/forum) and the shapes they return (lib/forum/view.ts). */
 import { useEffect, useState } from 'react';
-import type { EmojiSettings, ForumSettings } from '@/lib/forum/model';
+import type { EmojiSettings, ForumSettings, TopicTag } from '@/lib/forum/model';
 import type { ForumAi } from '@/lib/forum/ai';
 import type { AiConnection } from '@/lib/forum/request';
 import type { Frame, Picture, picturesPage, activePage, boardPage, membersPage, reportsPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
@@ -19,7 +19,7 @@ export type PageData =
   | ({ kind: 'reports' } & ReturnType<typeof reportsPage>)
   | ({ kind: 'pictures' } & ReturnType<typeof picturesPage>)
   | ({ kind: 'search'; boardId: string | null } & ReturnType<typeof searchPage>)
-  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
+  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
 export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply', Tri>>>;

@@ -1109,3 +1109,109 @@ test('pictures and emoji: stored through the forum, by permission; posts show on
   await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'off', list: [{ code: 'gull', imageId: e1 }] } }));
   assert.deepEqual((await json(co.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame.emoji, { list: [], may: false });
 });
+
+// ---- Writing extras: BBCode, links, features and spells, topic tags, @tags, Maptable maps ----------------
+test('markup: BBCode turns into the forum markup, code stays as typed, and only https links become links', () => {
+  assert.equal(K.fromBbcode('[b]Bold[/b], [i]it[/i], [u]u[/u] and [s]gone[/s]'), '**Bold**, *it*, __u__ and ~~gone~~');
+  assert.equal(K.fromBbcode('[quote=Ann]Run.\nNow.[/quote]'), '\n> Run.\n> Now.\n> — Ann\n');
+  assert.equal(K.fromBbcode('[code][b]x[/b][/code]'), '\n```\n[b]x[/b]\n```\n');
+  assert.equal(K.fromBbcode('[url=https://a.test/x]A site[/url] [url=javascript:alert(1)]bad[/url]'), '[A site](https://a.test/x) [url=javascript:alert(1)]bad[/url]');
+  assert.equal(K.fromBbcode('[list][*]One[*]Two[/list]'), '\n- One\n- Two\n');
+  assert.equal(K.fromBbcode('[spoiler=Map]Here[/spoiler] [color=red]red[/color] [size=5]big[/size]'), '\n[collapse=Map]\nHere\n[/collapse]\n red big');
+  assert.equal(K.postBlocks('[spoiler=Map]Here[/spoiler]').find(b => b.type === 'collapse').title, 'Map');
+  const parts = K.postInline('~~gone~~ [site](https://a.test) [x](javascript:alert(1)) [feature=hero/song]Song[/feature] [spell=hero/fire]Firebolt[/spell] [feature=hero/a]Bad[/spell]');
+  assert.deepEqual(parts.filter(p => p.type !== 'text'), [
+    { type: 'strike', text: 'gone' }, { type: 'url', label: 'site', href: 'https://a.test' },
+    { type: 'feature', kind: 'feature', char: 'hero', id: 'song', name: 'Song' }, { type: 'feature', kind: 'spell', char: 'hero', id: 'fire', name: 'Firebolt' },
+  ]);
+  assert.ok(parts.some(p => p.type === 'text' && p.text.includes('javascript:')), 'a javascript: link stays text');
+  assert.deepEqual(K.featureRefs('[feature=hero/song]Song[/feature] [spell=hero/fire]Firebolt[/spell] [feature=hero/a]Bad[/spell]'), ['feature:hero:song', 'spell:hero:fire']);
+  assert.equal(K.wordCount('[b]Two words[/b] [url=https://a.test/long/path]link[/url]'), 3);
+  // Forum settings choose which one the toolbar writes; both always read.
+  let f = withBoards();
+  f = apply(f, M.setSettings(f, { ...f.settings, markup: 'bbcode' }, poster(f, OWNER)));
+  assert.equal(frameOf(ctxFor(f, 'p1')).settings.markup, 'bbcode');
+  assert.equal(frameOf(ctxFor(withBoards(), 'p1')).settings.markup, 'markdown');
+});
+
+const sheetWorkspace = () => {
+  const ws = structuredClone(workspace), hero = ws.entries.find(e => e.id === 'hero');
+  hero.character.features = [{ id: 'song', name: 'Song of Rest', group: 'Bard', text: 'Heal 1d6.' }, { id: 'spy', name: 'Spy training', gm: true }];
+  hero.character.featuresVisibility = 'gm';
+  hero.character.spells = [{ id: 'fire', name: 'Firebolt', details: { Level: '0' }, text: '1d10 fire.' }];
+  hero.character.spellsVisibility = 'players';
+  return workspaceSchema.parse(ws);
+};
+test('features and spells: a post shows only what each reader may see on the sheet', async () => {
+  const ws = sheetWorkspace(), gm = harness({ user: OWNER });
+  gm.store.bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: '0' });
+  const as = u => { const h = harness({ user: u }); h.deps.store = gm.store; h.deps.workspace = async () => ws; return h; };
+  gm.deps.workspace = async () => ws;
+  const p1 = as('p1'), p2 = as('p2'), json = async r => (await r).json();
+  // The sheet of a character you post as: your own features (not GM-only ones) and spells.
+  const sheet = (await json(p1.post({ action: 'view', campaign: KEY, page: { kind: 'sheet', id: 'hero' } }))).page;
+  assert.deepEqual([sheet.name, sheet.features.map(x => x.name), sheet.spells.map(x => [x.name, x.note])], ['Hero', ['Song of Rest'], [['Firebolt', 'Level: 0']]]);
+  assert.equal((await p2.post({ action: 'view', campaign: KEY, page: { kind: 'sheet', id: 'hero' } })).status, 403);
+  assert.deepEqual((await json(gm.post({ action: 'view', campaign: KEY, page: { kind: 'sheet', id: 'hero' } }))).page.features.map(x => x.id), ['song', 'spy']);
+  const body = 'I sing [feature=hero/song]Song of Rest[/feature], cast [spell=hero/fire]Firebolt[/spell] and hide [feature=hero/spy]Spy training[/feature].';
+  const { topicId } = await json(p1.post({ action: 'start', campaign: KEY, boardId: 'tavern-board', title: 'Rest', body, as: 'hero' }));
+  const page = u => json(u.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } }));
+  // The player who plays Hero sees the features; Quinn only the shared spells; the GM all of it.
+  assert.deepEqual(Object.keys((await page(p1)).page.features).sort(), ['feature:hero:song', 'spell:hero:fire']);
+  assert.deepEqual(Object.keys((await page(p2)).page.features), ['spell:hero:fire']);
+  assert.equal((await page(p2)).page.features['spell:hero:fire'].text, '1d10 fire.');
+  assert.deepEqual(Object.keys((await page(gm)).page.features).sort(), ['feature:hero:song', 'feature:hero:spy', 'spell:hero:fire']);
+});
+
+test('topic tags: the forum\'s preset tags, up to three on a topic, set by its starter or a moderator', () => {
+  let f = withBoards();
+  const tags = [{ id: 'open', label: 'Open', color: 'green' }, { id: 'mature', label: 'Mature', color: 'red' }, { id: 'plot', label: 'Main plot', color: 'gold' }, { id: 'side', label: 'Side', color: 'grey' }];
+  assert.throws(() => M.setTopicTags(f, tags, poster(f, 'p1')), /can't change the boards/);
+  assert.throws(() => M.setTopicTags(f, [...tags, { id: 'x', label: 'open', color: 'blue' }], poster(f, OWNER)), /same name/);
+  assert.throws(() => M.setTopicTags(f, [{ id: 'x', label: 'Pink', color: 'pink' }], poster(f, OWNER)), /24 characters/);
+  f = apply(f, M.setTopicTags(f, tags, poster(f, OWNER)));
+  assert.throws(() => M.startTopic(f, { boardId: 'tavern-board', title: 'Hi', body: 'Yo', as: 'hero', tags: ['nope'] }, poster(f, 'p1'), ids('t0', 'a0'), NOW), /tag was removed/);
+  assert.throws(() => M.startTopic(f, { boardId: 'tavern-board', title: 'Hi', body: 'Yo', as: 'hero', tags: ['open', 'mature', 'plot', 'side'] }, poster(f, 'p1'), ids('t0', 'a0'), NOW), /up to 3 tags/);
+  const c = M.startTopic(f, { boardId: 'tavern-board', title: 'Hi', body: 'Yo', as: 'hero', tags: ['mature', 'open'] }, poster(f, 'p1'), ids('t1', 'a1'), NOW);
+  f = apply(f, c);
+  // Rows and the topic show them in the forum's order, with their colours.
+  const row = () => activePage(ctxFor(f, 'p2')).topics[0].tags;
+  assert.deepEqual(row(), [{ id: 'open', label: 'Open', color: 'green' }, { id: 'mature', label: 'Mature', color: 'red' }]);
+  assert.deepEqual(frameOf(ctxFor(f, 'p2')).topicTags.map(t => t.label), ['Open', 'Mature', 'Main plot', 'Side']);
+  // Another player can't change them; the starter and moderators can.
+  assert.throws(() => M.setTopic(f, c.topic, { topicId: 't1', tags: [] }, poster(f, 'p2')), /started it or a moderator/);
+  f = apply(f, M.setTopic(f, c.topic, { topicId: 't1', tags: ['plot'] }, poster(f, 'p1')));
+  assert.deepEqual(row().map(t => t.id), ['plot']);
+  f = apply(f, M.setTopic(f, c.topic, { topicId: 't1', tags: ['plot', 'side'] }, poster(f, 'co')));
+  // Removing a tag takes it off every topic.
+  f = apply(f, M.setTopicTags(f, tags.filter(t => t.id !== 'plot'), poster(f, OWNER)));
+  assert.deepEqual([row().map(t => t.id), f.topics[0].tags], [['side'], ['side']]);
+  f = apply(f, M.setTopicTags(f, [], poster(f, OWNER)));
+  assert.deepEqual([row(), 'tags' in f.topics[0]], [[], false]);
+});
+
+test('@tags: the Tag picker lists characters players may read, then members who read the forum', () => {
+  const f = withBoards(), names = u => frameOf(ctxFor(f, u)).mentionable;
+  assert.deepEqual(names('p1'), [{ name: 'Hero', character: true }, { name: 'Sidekick', character: true }, { name: 'Gamemaster', character: false }, { name: 'Pat', character: false }, { name: 'Quinn', character: false }, { name: 'Gus', character: false }, { name: 'Casey', character: false }]);
+  assert.ok(!names(OWNER).some(m => m.name === 'Villain'), 'NPCs are not tagged');
+});
+
+test('maps from Maptable: the GM puts a scene in a post as a picture players may see', async () => {
+  const gm = harness({ user: OWNER }), drawn = [];
+  gm.store.bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: '0' });
+  const json = async r => (await r).json(), scene = newScene('Bridge');
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store;
+  assert.deepEqual(await json(gm.post({ action: 'mapScenes', campaign: KEY })), { ok: true, paired: false, scenes: [] });
+  const ws = structuredClone(workspace); ws.campaigns[0].maptableCampaignId = 'mt1';
+  Object.assign(gm.deps, { workspace: async () => ws, scenes: async () => [scene], mapPicture: async (owner, mt, id) => { drawn.push([owner, mt, id]); return '00000000-0000-4000-8000-0000000000aa'; } });
+  assert.deepEqual(await json(gm.post({ action: 'mapScenes', campaign: KEY })), { ok: true, paired: true, scenes: [{ id: scene.id, name: 'Bridge' }] });
+  const out = await json(gm.post({ action: 'map', campaign: KEY, sceneId: scene.id }));
+  assert.deepEqual([out.id, out.name, drawn], ['00000000-0000-4000-8000-0000000000aa', 'Bridge', [[OWNER, 'mt1', scene.id]]]);
+  assert.match((await json(gm.post({ action: 'map', campaign: KEY, sceneId: 'gone' }))).error, /isn't in the paired/);
+  // Players can't, and the stored map works in a post like any forum picture.
+  assert.match((await json(p1.post({ action: 'mapScenes', campaign: KEY }))).error, /Only the GM/);
+  assert.match((await json(p1.post({ action: 'map', campaign: KEY, sceneId: scene.id }))).error, /Only the GM/);
+  const { topicId } = await json(gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Map', body: `The bridge: [img=Map: Bridge]${out.id}[/img]`, as: null }));
+  assert.ok(topicId);
+  assert.equal((await handleForumImage(new Request(`https://x.test/api/forum?c=${KEY}&image=${out.id}`), p1.deps)).status, 303);
+});

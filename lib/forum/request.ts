@@ -10,10 +10,10 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, setTopicTags, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { picturesPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
 import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
@@ -44,6 +44,8 @@ export type Deps = {
   random?: (sides: number) => number;
   /** The GM's Maptable scenes in a Maptable campaign, for starting combat from its initiative. */
   scenes?: (owner: string, maptableCampaignId: string) => Promise<Scene[]>;
+  /** A scene of the paired Maptable campaign drawn as players see it, stored as a picture; its picture id. */
+  mapPicture?: (owner: string, maptableCampaignId: string, sceneId: string) => Promise<string>;
   /** The campaign's API-key AI connections, and one request to one of them (lib/ai/forum-ai.ts). */
   ai?: {
     connections: (owner: string, campaignId: string) => Promise<AiConnection[]>;
@@ -64,13 +66,13 @@ const as = id.nullable();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
-  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }),
+  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }), z.object({ kind: z.literal("sheet"), id }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema }),
-  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional() }),
+  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional(), tags: z.array(id).max(10).optional() }),
   z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional() }),
   z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional() }),
   z.object({ action: z.literal("aiSettings"), campaign: key, ai: z.unknown() }),
@@ -80,16 +82,19 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("suggestion"), campaign: key, topicId: id, suggestionId: id, op: z.enum(["approve", "skip"]), body: z.string().max(40_000).optional() }),
   z.object({ action: z.literal("delete"), campaign: key, topicId: id, postId: id }),
   z.object({ action: z.literal("deleteTopic"), campaign: key, topicId: id }),
-  z.object({ action: z.literal("topic"), campaign: key, topicId: id, pinned: z.boolean().optional(), locked: z.boolean().optional(), archived: z.boolean().optional(), title: z.string().max(500).optional(), boardId: id.optional() }),
+  z.object({ action: z.literal("topic"), campaign: key, topicId: id, pinned: z.boolean().optional(), locked: z.boolean().optional(), archived: z.boolean().optional(), title: z.string().max(500).optional(), boardId: id.optional(), tags: z.array(id).max(10).optional() }),
   z.object({ action: z.literal("trash"), campaign: key, topicId: id, restore: z.boolean().optional() }),
   z.object({ action: z.literal("bulk"), campaign: key, topicIds: z.array(id).min(1).max(FORUM_LIMITS.bulk), op: z.enum(bulkOps), boardId: id.optional() }),
   z.object({ action: z.literal("export"), campaign: key, boardId: id }),
   z.object({ action: z.literal("alertsSeen"), campaign: key }),
   z.object({ action: z.literal("combat"), campaign: key, topicId: id, op: z.enum(["start", "order", "next", "back", "end"]), order: z.array(slotSchema).max(40).optional(), round: z.number().int().min(1).max(9999).optional(), turn: z.number().int().min(0).max(39).optional(), sceneId: z.string().min(1).max(160).optional() }),
   z.object({ action: z.literal("combatSources"), campaign: key }),
+  z.object({ action: z.literal("mapScenes"), campaign: key }),
+  z.object({ action: z.literal("map"), campaign: key, sceneId: z.string().min(1).max(160) }),
   z.object({ action: z.literal("settings"), campaign: key, settings: z.unknown() }),
   z.object({ action: z.literal("upload"), campaign: key, transferId: z.string().uuid(), kind: z.enum(["post", "emoji"]) }),
   z.object({ action: z.literal("emoji"), campaign: key, emoji: z.unknown() }),
+  z.object({ action: z.literal("topicTags"), campaign: key, tags: z.unknown() }),
   z.object({ action: z.literal("addCategory"), campaign: key, name: z.string().max(200), kind: z.enum(["ic", "ooc"]) }),
   z.object({ action: z.literal("editCategory"), campaign: key, id, name: z.string().max(200) }),
   z.object({ action: z.literal("deleteCategory"), campaign: key, id }),
@@ -178,6 +183,10 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       }
       return json({ frame: frameOf(ctx), page: { kind: "reports", ...reportsPage(ctx, topics) } });
     }
+    case "sheet": {
+      const sheet = sheetPage(ctx, page.id);
+      return sheet ? json({ frame: frameOf(ctx), page: { kind: "sheet", ...sheet } }) : json({ error: "You can't post as that character." }, 403);
+    }
     case "pictures": {
       if (!ctx.viewer.rights.pictures) return json({ error: "Your group can't add pictures to posts." }, 403);
       return json({ frame: frameOf(ctx), page: { kind: "pictures", ...picturesPage(ctx) } });
@@ -188,7 +197,7 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       const masks = Object.fromEntries(ctx.forum.boards.flatMap(b => b.masks ? [[b.id, b.masks]] : []));
       // Only the campaign's owner chooses the forum's AI, as it spends their API key.
       const connections = ctx.viewer.rights.owner && deps.ai ? await deps.ai.connections(found.owner, found.campaignId).catch(() => []) : [];
-      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
+      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, topicTags: ctx.forum.topicTags ?? [], ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
     }
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
   }
@@ -238,6 +247,21 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), { ...body, reroll: (old, text) => rollPost(text, random, old ?? [], now) }, who, now));
     case "combat": return runCombat(deps, ctx, found, body, who, now);
     case "combatSources": return combatSources(deps, ctx, found);
+    case "mapScenes": return mapScenes(deps, ctx, found);
+    case "map": return (async () => {
+      // A picture of a Maptable scene as players see it: GM-only tokens and layers stay out.
+      if (!ctx.viewer.rights.gm) throw new ForumError("Only the GM can put Maptable scenes in posts.");
+      mayUpload(ctx.forum, who, "post");
+      const mt = maptableOf(ctx);
+      if (!mt || !deps.mapPicture || !deps.scenes) throw new ForumError("This campaign has no Maptable campaign paired with it.");
+      const scene = (await deps.scenes(found.owner, mt).catch(() => [])).find(sc => sc.id === body.sceneId);
+      if (!scene) throw new ForumError("That scene isn't in the paired Maptable campaign any more.");
+      let id: string;
+      try { id = await deps.mapPicture(found.owner, mt, scene.id); }
+      catch (e) { throw new ForumError(e instanceof Error && e.message ? e.message : "The map picture couldn't be drawn."); }
+      const out = await run(null, f => addUpload(f, { id, kind: "post" }, who, now));
+      return { ...out, name: scene.name };
+    })();
     case "aiSettings": return (async () => { const ids = deps.ai && ctx.viewer.rights.owner ? (await deps.ai.connections(found.owner, found.campaignId)).map(c => c.id) : []; return run(null, f => setAi(f, body.ai, who, ids)); })();
     case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who));
     case "deleteTopic": return run(body.topicId, (f, t) => deleteTopic(f, needTopic(t), who));
@@ -253,6 +277,7 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
       return run(null, f => addUpload(f, { id, kind: body.kind }, who, now));
     })();
     case "emoji": return run(null, f => setEmoji(f, body.emoji, who));
+    case "topicTags": return run(null, f => setTopicTags(f, body.tags, who));
     case "addCategory": { const n = newId(); return run(null, f => addCategory(f, body, who, n)); }
     case "editCategory": return run(null, f => editCategory(f, body, who));
     case "deleteCategory": return run(null, f => deleteCategory(f, body, who));
@@ -291,6 +316,15 @@ async function bulk(deps: Deps, ctx: Context, found: Found, body: Extract<Body, 
 
 /** The Maptable campaign paired with this one, if any. */
 const maptableOf = (ctx: Context) => ctx.workspace.campaigns.find(c => c.id === ctx.campaignId)?.maptableCampaignId ?? null;
+
+/** The paired Maptable campaign's scenes, to put one in a post as a picture (the GM). */
+async function mapScenes(deps: Deps, ctx: Context, found: Found) {
+  if (!ctx.viewer.rights.gm) throw new ForumError("Only the GM can put Maptable scenes in posts.");
+  const mt = maptableOf(ctx);
+  if (!mt || !deps.scenes || !deps.mapPicture) return { paired: false, scenes: [] };
+  const scenes = await deps.scenes(found.owner, mt).catch(() => []);
+  return { paired: true, scenes: scenes.slice(0, 200).map(sc => ({ id: sc.id, name: sc.name })) };
+}
 
 /** Scenes in the paired Maptable campaign whose initiative tracker has a fight in it (moderators). */
 async function combatSources(deps: Deps, ctx: Context, found: Found) {

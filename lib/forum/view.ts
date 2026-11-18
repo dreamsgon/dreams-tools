@@ -10,7 +10,9 @@ import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
 import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
-import { linkTargets } from "./markup.ts";
+import { featureRefs, linkTargets } from "./markup.ts";
+import { playerFeatures } from "../encyclopedia/features.ts";
+import { playerSpells } from "../encyclopedia/items.ts";
 import { unseen, type Alerts } from "./alerts.ts";
 import { slotOf, type Combat } from "./combat.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
@@ -111,6 +113,8 @@ export type TopicRow = {
   combat: { round: number } | null;
   /** Posts an AI connection suggested, waiting for the GM (GMs only; 0 for everyone else). */
   suggested: number;
+  /** The forum's preset tags on it. */
+  tags: { id: string; label: string; color: string }[];
 };
 /** Characters a member other than the GM may edit: the rest are the GM's to play. */
 const playerRunOf = (ctx: Context) => {
@@ -161,12 +165,17 @@ function turnOf(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): Tur
   if (who !== NARRATION && !e) return null;
   return { name: e ? e.title : "the Game Master", picture: pictureOf(e), mine: controls(ctx, who) };
 }
+/** A topic's preset tags, in the forum's order, with their names and colours. */
+function tagsOf(ctx: Context, t: TopicSummary) {
+  const on = new Set(t.tags ?? []);
+  return on.size ? (ctx.forum.topicTags ?? []).filter(x => on.has(x.id)).map(x => ({ id: x.id, label: x.label, color: x.color })) : [];
+}
 function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): TopicRow {
   return {
     id: t.id, boardId: t.boardId, title: t.title, pinned: t.pinned, locked: t.locked, replies: t.replies, by: bylineOf(ctx, entries, t.by), at: t.at, last: lastOf(ctx, entries, t),
     cast: t.cast.flatMap(id => { const e = entries.get(id); return e ? [{ id, name: e.title, picture: pictureOf(e) }] : []; }).slice(0, 6),
     unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t), archived: !!t.archived, only: privateNames(ctx, t),
-    combat: t.combat ? { round: t.combat.round } : null, suggested: ctx.viewer.rights.gm ? t.suggested ?? 0 : 0,
+    combat: t.combat ? { round: t.combat.round } : null, suggested: ctx.viewer.rights.gm ? t.suggested ?? 0 : 0, tags: tagsOf(ctx, t),
     trashed: t.trashed ? { at: t.trashed.at, by: memberName(ctx, t.trashed.by), until: new Date(new Date(t.trashed.at).getTime() + TRASH_DAYS * 86_400_000).toISOString() } : null,
   };
 }
@@ -249,9 +258,13 @@ export function frameOf(ctx: Context) {
   const banner = s.banner && c.look?.banner && (ctx.viewer.rights.gm || c.look.players !== false) ? { imageId: c.look.banner.imageId, y: c.look.banner.y } : null;
   return {
     campaign: { name: c.name },
-    settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner, notices: s.notices ?? [] },
+    settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner, notices: s.notices ?? [], markup: s.markup ?? "markdown" },
     /** The campaign's emoji (shown in posts unless the GM turned them off) and whether this viewer may put them in posts. */
     emoji: emojiOf(ctx),
+    /** Who a post can @tag: player characters this viewer may read, and the members who read the forum. */
+    mentionable: mentionableOf(ctx, entries),
+    /** The forum's preset topic tags. */
+    topicTags: (ctx.forum.topicTags ?? []).map(x => ({ id: x.id, label: x.label, color: x.color })),
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
@@ -279,11 +292,37 @@ export function frameOf(ctx: Context) {
 }
 export type Frame = ReturnType<typeof frameOf>;
 
+function mentionableOf(ctx: Context, entries: Map<string, Entry>) {
+  const chars = [...entries.values()].filter(e => e.kind === "character" && (e.character?.role === "pc" || e.character?.role === "companion") && (!ctx.readable || ctx.readable.has(e.id)))
+    .map(e => ({ name: e.title, character: true })).sort((a, b) => a.name.localeCompare(b.name));
+  const people = [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].map(u => ({ name: memberName(ctx, u), character: false }));
+  return [...chars, ...people].filter(x => x.name.trim()).slice(0, 200);
+}
 function emojiOf(ctx: Context) {
   const e = ctx.forum.emoji;
   if (!e || e.use === "off") return { list: [] as { code: string; imageId: string; set: string }[], may: false };
   return { list: e.list.map(x => ({ code: x.code, imageId: x.imageId, set: x.set ?? "" })), may: e.use === "all" || ctx.viewer.rights.moderate };
 }
+export type SheetLine = { id: string; name: string; group: string; note: string; text: string };
+/**
+ * A character's features or spells as this viewer may see them: the GM all of them; a player, those of a character
+ * they play, or of one whose features (or spells) are shared with players, never GM-only ones.
+ */
+export function sheetOf(ctx: Context, e: Entry | undefined, kind: "feature" | "spell"): SheetLine[] {
+  const ch = e?.kind === "character" ? e.character : undefined;
+  if (!e || !ch) return [];
+  const gm = ctx.viewer.rights.gm, own = ctx.viewer.editable.has(e.id);
+  if (!gm && !own && !(ctx.readable?.has(e.id) && (kind === "feature" ? ch.featuresVisibility : ch.spellsVisibility) === "players")) return [];
+  if (kind === "feature") return (gm ? ch.features ?? [] : playerFeatures(ch.features)).map(f => ({ id: f.id, name: f.name, group: f.group ?? "", note: f.note ?? "", text: f.text ?? "" }));
+  return (gm ? ch.spells ?? [] : playerSpells(ch.spells)).map(x => ({ id: x.id, name: x.name, group: x.group ?? "", note: Object.entries(x.details ?? {}).map(([k, v]) => `${k}: ${v}`).join(" · "), text: x.text ?? "" }));
+}
+/** The features and spells of a character this viewer posts as, for Insert › Feature or spell. */
+export function sheetPage(ctx: Context, charId: string) {
+  if (!castOf(ctx).some(c => c.id === charId)) return null;
+  const e = entriesOf(ctx).get(charId);
+  return { id: charId, name: e?.title ?? "", features: sheetOf(ctx, e, "feature"), spells: sheetOf(ctx, e, "spell") };
+}
+
 /** Pictures added to the forum for posts, newest first, for the Insert › Picture menu. */
 export function picturesPage(ctx: Context) {
   const all = (ctx.forum.uploads ?? []).filter(u => u.kind === "post");
@@ -317,8 +356,15 @@ export function topicPage(ctx: Context, topic: Topic) {
     const e = playerLink(pages, target), url = e && pageUrl(ctx, e.id);
     if (e && url) links[target] = { title: e.title, url, summary: summaryOf(ctx, e) };
   }
+  // [feature=…] and [spell=…] tags: the text of the ones this reader may see on that character's sheet.
+  const features: Record<string, SheetLine> = {};
+  for (const p of topic.posts) for (const ref of featureRefs(p.body)) {
+    if (ref in features || Object.keys(features).length >= 200) continue;
+    const [kind, char, fid] = ref.split(":") as ["feature" | "spell", string, string], line = sheetOf(ctx, entries.get(char), kind).find(x => x.id === fid);
+    if (line) features[ref] = line;
+  }
   return {
-    links,
+    links, features,
     topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: accessOn(ctx.viewer, s.boardId).reply && (!s.locked || r.moderate) && !s.archived && !s.trashed },
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
