@@ -68,6 +68,14 @@ Updated 2026-11-16. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - [ ] Live check after deploy: change display name, upload and remove a picture, change password, and change email end to end with real Supabase email delivery. Whether both old and new addresses get a link depends on the Supabase "Secure email change" setting.
 - [ ] Show members' pictures to other members of a shared campaign (needs a campaign-scoped avatar route).
 
+## Campaign backup, import and delete
+
+- [x] Campaigns page, a campaign's details: **Download backup** builds a ZIP in the browser (`campaign.json`, `files/` for the forum, AI chats and session transcripts, `images/` for every picture it uses) from small requests to `/api/campaigns/backup` (`lib/campaign-backup*.ts`). Never in it: player/agent links, Maptable agent keys, bridge keys, AI connections, Discord webhooks, AI API keys, members, invite links or bans.
+- [x] **Import** (Campaigns page head) adds a backup as a new campaign: pictures the account lacks are uploaded under their own ids, every id the campaign owns gets a new one (references, wiki links and transcript names follow), the world is reused when it is still in the account, and member groups/permissions come back without members.
+- [x] **Delete campaign…** asks for the campaign's name, offers a backup first, keeps a private copy at `encyclopedia/backups/deleted/<time>-<id>.json`, removes it from both tools (world lore and pictures used elsewhere stay; pictures' bytes stay in storage), drops tables used only in it, and revokes player/agent links, agent keys, bridge keys, AI connections, invite links and members' access before deleting its forum, chats and transcripts.
+- [ ] Live check after deploy: back up a real campaign with pictures and a forum, delete it, import the ZIP, and open the maps, wiki and forum.
+- [ ] Not yet: pictures in the optional extra S3 bucket (`/api/s3?key=…`) are left as links, not copied into the ZIP; page history is not included; there is no in-app restore of the private copy kept on delete.
+
 ## Star systems and space
 
 - [x] Part 1 (2026-11-16), galaxy pages (mockup approved by the owner): a new page kind, **Galaxy** (optional `galaxy` on a galaxy entry: preset, shape, arms, size, seed, facts and summary; `lib/encyclopedia/galaxies.ts`). Its Galaxy tab draws the galaxy from its seed, shape and arms (`components/encyclopedia/galaxy-art.tsx`), with an Invented or Real chip, a summary and five facts (type, across, stars, age, distance) typed in place. **Real galaxy or generate** picks the Milky Way, Andromeda, Triangulum, the Large Magellanic Cloud or Messier 87 (rounded published figures, optionally renaming the page), or generates one from shape, arms, size and seed with a live preview and Reroll for a new name. The Galaxy tab is GM only for now; players get only tabs the GM shares.
