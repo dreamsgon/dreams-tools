@@ -12,6 +12,7 @@ import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TR
 import {newId} from '@/lib/encyclopedia/world-model';
 import {confirmDialog} from '../confirm-dialog';
 import {AiWritingDialog,StylePicker} from './ai-writing';
+import {useWriters} from './use-writers';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
 const words=(n:number)=>`${n.toLocaleString('en')} word${n===1?'':'s'}`;
@@ -36,26 +37,7 @@ function useTranscript(entryId:string){
 
 // ---- Who can write a recap ---------------------------------------------------------------------
 
-export type KeyWriter={id:string;name:string;model:string;transcripts:boolean};
-/**
- * The campaign's AI connections that can write a recap: AI apps over MCP, and API-key connections that
- * RPG Tools runs itself (allowed to write session notes; `transcripts` when they may read GM-only things).
- */
-export function useWriters(campaignId:string|null|undefined){
- const [w,setW]=useState<{apps:string[];keys:KeyWriter[]}|null>(null);
- useEffect(()=>{
-  if(!campaignId)return;
-  let live=true;
-  type C={id:string;name:string;level:string;api?:{model:string};perms?:Record<string,string>};
-  fetch(`/api/encyclopedia/ai-connections?campaignId=${encodeURIComponent(campaignId)}`).then(r=>r.ok?r.json():{connections:[]}).then((b:{connections?:C[]})=>{
-   if(!live)return;
-   const list=(b.connections??[]).filter(c=>c.level!=='read'&&c.perms?.notes!=='off');
-   setW({apps:list.filter(c=>!c.api).map(c=>c.name),keys:list.filter(c=>c.api).map(c=>({id:c.id,name:c.name,model:c.api!.model,transcripts:c.perms?.seeSecrets!=='off'}))});
-  }).catch(()=>{if(live)setW({apps:[],keys:[]});});
-  return ()=>{live=false;};
- },[campaignId]);
- return w;
-}
+export {useWriters,type KeyWriter} from './use-writers';
 
 /** Asks RPG Tools to write with an API-key connection. Returns the server's answer, or throws its message. */
 export async function writeWithKey(body:{action:'write'|'again'|'check';entryId:string;campaignId:string;connectionId:string;note?:string;styleId?:string}){

@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowDownUp, Check, Download, FileArchive, FolderOpen, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
+import { Check, Download, FileArchive, FolderOpen, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
 import { importCopy, workspaceSchema, type Workspace } from "@/lib/encyclopedia/world-model";
 import { librarySchema, emptyLibrary, type TableLibrary } from "@/lib/encyclopedia/tables";
 import { rpExportFiles } from "@/lib/encyclopedia/rp-export";
 import { rpExportZip, readRestoreCopy } from "@/lib/encyclopedia/rp-zip";
 import { addImported, buildCampaign, previewRepo, readSources, type ImportPreview, type Source } from "@/lib/encyclopedia/rp-import";
 import { readZip, ZipError, ZIP_MAX_BYTES } from "@/lib/zip-read";
-import { classifyZip, defaultCommitMessage, exportedAt, folderRows, lastExportKey, lastPushKey, parseLastPush, restoreNotice, shortDate, zipName, type LastPush } from "@/lib/encyclopedia/rp-sheet";
+import { classifyZip, defaultCommitMessage, exportedAt, folderRows, lastExportKey, lastPushKey, restoreNotice, shortDate, zipName, type LastPush } from "@/lib/encyclopedia/rp-sheet";
+import { readLastPush } from "@/lib/encyclopedia/rp-last";
 import { readRepoChanges, readRepoFiles, readRepoRestore, type PushResult } from "@/lib/github-push";
 import { isThisCampaign, planBringBack, readBringSources, saveBringBack, type BringBackPlan, type FilesMap, type PlanInput, type Selection } from "@/lib/encyclopedia/rp-bring-back";
 import { forgetKey, readKey } from "@/lib/github-key";
@@ -20,30 +21,9 @@ const WORKSPACE_LIMIT = 2_000_000;
 const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 const WORKSPACE_URL = "/api/encyclopedia/workspace";
 
-/** The date of the last Download ZIP on this device, kept per campaign. Only a convenience: it can be missing. */
-export function readLastExport(campaignId: string): string | null {
-  try { return window.localStorage.getItem(lastExportKey(campaignId)); } catch { return null; }
-}
 function saveLastExport(campaignId: string, iso: string) { try { window.localStorage.setItem(lastExportKey(campaignId), iso); } catch { /* Not remembered. */ } }
-/** The last push from this device, kept per campaign. Only a convenience: it can be missing. */
-export function readLastPush(campaignId: string): LastPush | null {
-  try { return parseLastPush(window.localStorage.getItem(lastPushKey(campaignId))); } catch { return null; }
-}
 function saveLastPush(campaignId: string, push: LastPush) { try { window.localStorage.setItem(lastPushKey(campaignId), JSON.stringify(push)); } catch { /* Not remembered. */ } }
 type Github = { repository: string; branch: string };
-
-/** The "GitHub & backups" button (with the last export under it) and the sheet it opens. */
-export function BackupsButton({ campaignId, campaignName }: { campaignId: string; campaignName: string }) {
-  const [open, setOpen] = useState(false), [last, setLast] = useState<string | null>(() => readLastExport(campaignId)), [pushed, setPushed] = useState<LastPush | null>(() => readLastPush(campaignId));
-  const button = useRef<HTMLButtonElement>(null);
-  const when = last ? shortDate(last) : "", pushedWhen = pushed ? shortDate(pushed.at) : "";
-  return <div className="rpb-entry">
-    <button type="button" ref={button} className="hub-button rpb-open" onClick={() => setOpen(true)} aria-haspopup="dialog"><ArrowDownUp size={15} aria-hidden="true" />GitHub &amp; backups</button>
-    {when && <small className="rpb-last">Last exported {when}</small>}
-    {pushedWhen && pushed && <small className="rpb-last">Last pushed to {pushed.repository} · {pushedWhen}</small>}
-    {open && <BackupsSheet campaignId={campaignId} campaignName={campaignName} close={() => setOpen(false)} returnFocus={button} onExported={iso => setLast(iso)} onPushed={p => setPushed(p)} />}
-  </div>;
-}
 
 type Loaded = { workspace: Workspace; tables: TableLibrary };
 /** The changes in a repository that came from this campaign, read and compared, ready to review. */

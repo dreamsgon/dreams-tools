@@ -1,23 +1,18 @@
 "use client";
-import EncyclopediaAgentAccess from "./agent-access";
-import BridgeAccess from "./bridge-access";
 import { readRemembered, remember } from "@/lib/navigation-state";
 import SaveChip from "../save-chip";
 import { altStep } from "../folder-reorder";
 import { useAutosave } from "../use-autosave";
-import { AiConnectionDialog } from "./ai-connection";
-import { AiWritingDialog } from "./ai-writing";
 import { writingKinds, type WritingKind } from "@/lib/encyclopedia/ai-styles";
-import { AiActivity } from "./ai-activity";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { withoutDeletedStats } from "@/lib/encyclopedia/stat-arrange";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
-import { Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Cloud, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Link as LinkIcon, Trash2, Pencil, Globe, ArrowLeft, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette , Sparkles } from "lucide-react";
+import { Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Pencil, Globe, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette, Sparkles } from "lucide-react";
 import type { CampaignRow } from "@/lib/campaign-links";
-import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, canParent, resolveLink, visibleEntries, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
+import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, resolveLink, visibleEntries, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
 import {newMap} from "@/lib/encyclopedia/map-model";
 import {FogImageSync} from "./fog-image-sync";
@@ -43,7 +38,6 @@ import {usePageTitle} from "../use-page-title";
 import {useDiceTarget} from "../use-dice-target";
 import {encyclopediaDiceTarget,NO_CAMPAIGN} from "@/lib/dice-target";
 import { confirmDialog } from "../confirm-dialog";
-import {TemplatesSection,TemplateChoice} from "./templates";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
 import {defaultOrg} from "@/lib/encyclopedia/org-profile";
 import {defaultProfile} from "@/lib/encyclopedia/character-profile";
@@ -53,16 +47,14 @@ import {newSector} from "@/lib/encyclopedia/sectors";
 import {newStarSystem} from "@/lib/encyclopedia/star-systems";
 import {GalaxyIcon} from "./galaxy-art";
 import {newStore} from "@/lib/encyclopedia/stores";
-import {ItemSettingsDialog} from "./item-settings";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
-import { BackupsSheet } from "../rp-backups";
 import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,uploaded,workspaceUrl} from "./member-view";
 import Link from "next/link";
 import {endPageDrag,startPageDrag} from "./page-drag";
 import {orgListItems} from "@/lib/encyclopedia/org-holdings";
 
-// Sections and the article editor load as separate chunks so the dashboard appears sooner;
-// they are fetched while the browser is idle, so opening one is still instant.
+// Sections, the article editor, the dialogs (AI, backups, item settings, templates) and the AI activity
+// button load as separate chunks so the dashboard appears sooner; they are fetched while the browser is idle, so opening one is still instant.
 const lazyParts = {
   CalendarSection: () => import("./calendar-section").then(m => ({ default: m.CalendarSection })),
   MapsSection: () => import("./maps-section").then(m => ({ default: m.MapsSection })),
@@ -75,6 +67,15 @@ const lazyParts = {
   CharactersSection: () => import("./character-tools").then(m => ({ default: m.CharactersSection })),
   StatFormBuilder: () => import("./character-tools").then(m => ({ default: m.StatFormBuilder })),
   PlayerSharing: () => import("./character-tools").then(m => ({ default: m.PlayerSharing })),
+  AiConnectionDialog: () => import("./ai-connection").then(m => ({ default: m.AiConnectionDialog })),
+  AiWritingDialog: () => import("./ai-writing").then(m => ({ default: m.AiWritingDialog })),
+  TemplatesSection: () => import("./templates").then(m => ({ default: m.TemplatesSection })),
+  TemplateChoice: () => import("./templates").then(m => ({ default: m.TemplateChoice })),
+  ItemSettingsDialog: () => import("./item-settings").then(m => ({ default: m.ItemSettingsDialog })),
+  BackupsSheet: () => import("../rp-backups").then(m => ({ default: m.BackupsSheet })),
+  BridgeAccess: () => import("./bridge-access"),
+  EncyclopediaAgentAccess: () => import("./agent-access"),
+  AiActivity: () => import("./ai-activity").then(m => ({ default: m.AiActivity })),
 };
 const CalendarSection = dynamic(lazyParts.CalendarSection);
 const MapsSection = dynamic(lazyParts.MapsSection);
@@ -87,6 +88,15 @@ const RelationshipsSection = dynamic(lazyParts.RelationshipsSection);
 const CharactersSection = dynamic(lazyParts.CharactersSection);
 const StatFormBuilder = dynamic(lazyParts.StatFormBuilder);
 const PlayerSharing = dynamic(lazyParts.PlayerSharing);
+const AiConnectionDialog = dynamic(lazyParts.AiConnectionDialog);
+const AiWritingDialog = dynamic(lazyParts.AiWritingDialog);
+const TemplatesSection = dynamic(lazyParts.TemplatesSection);
+const TemplateChoice = dynamic(lazyParts.TemplateChoice);
+const ItemSettingsDialog = dynamic(lazyParts.ItemSettingsDialog);
+const BackupsSheet = dynamic(lazyParts.BackupsSheet);
+const BridgeAccess = dynamic(lazyParts.BridgeAccess);
+const EncyclopediaAgentAccess = dynamic(lazyParts.EncyclopediaAgentAccess);
+const AiActivity = dynamic(lazyParts.AiActivity);
 const preloadParts = Object.values(lazyParts);
 const PLACE_KEY = "encyclopedia:place";
 const icons = { map:MapIcon, folder: Folder, note: FileText, character: Users, place: MapPin, faction: Flag, lore: BookOpen, session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store, galaxy: GalaxyIcon, sector: Hexagon, system: Orbit };

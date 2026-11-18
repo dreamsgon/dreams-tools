@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import type { Notice } from "@/lib/members-server";
-import { Avatar, ago } from "./campaign-members";
+import { Avatar, ago } from "./member-avatar";
 import "./campaign-hub.css";
 import "./campaign-members.css";
 
