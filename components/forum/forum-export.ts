@@ -16,6 +16,8 @@ const inline = (text: string) => postInline(text).map(p => {
     case 'speech': return `<span class="speech">${esc(p.text)}</span>`;
     case 'link': return esc(p.label);
     case 'roll': return `<code>${esc(p.expr)}</code>`;
+    case 'emoji': return esc(`:${p.code}:`);
+    case 'picture': return `<i>[picture${p.alt ? `: ${esc(p.alt)}` : ''}]</i>`;
     default: return esc(p.text);
   }
 }).join('');

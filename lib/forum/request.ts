@@ -10,10 +10,10 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, ForumError, accessOn, addBoard, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { picturesPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
 import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
@@ -31,6 +31,11 @@ export type Deps = {
   campaign: (userId: string, key: string) => Promise<Found | null>;
   workspace: (owner: string) => Promise<Workspace>;
   store: Pick<ForumStore, "read" | "readTopic" | "apply" | "readReads" | "writeReads" | "readPresence" | "touchPresence" | "readAlerts" | "writeAlerts">;
+  /**
+   * Stores a picture someone staged in their own storage (/api/transfers) with the owner's pictures, refusing
+   * anything over `maxBytes` or that isn't a PNG, JPEG or WebP. Returns its id.
+   */
+  savePicture?: (owner: string, uploader: string, transferId: string, maxBytes: number) => Promise<string>;
   /** A signed address for one of the owner's pictures. */
   image?: (owner: string, imageId: string) => Promise<{ url: string } | null>;
   now?: () => Date;
@@ -49,7 +54,7 @@ export type AiConnection = { id: string; name: string; model: string; used: numb
 
 export const FORUM_BODY = 64_000;
 export const keyPattern = /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/;
-const readThrottle = createThrottle(30, 10_000), writeThrottle = createThrottle(12, 10_000), imageThrottle = createThrottle(120, 10_000), aiThrottle = createThrottle(6, 60_000);
+const readThrottle = createThrottle(30, 10_000), writeThrottle = createThrottle(12, 10_000), imageThrottle = createThrottle(240, 10_000), aiThrottle = createThrottle(6, 60_000);
 export const resetForumThrottles = () => { readThrottle.reset(); writeThrottle.reset(); imageThrottle.reset(); aiThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
@@ -59,7 +64,7 @@ const as = id.nullable();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
-  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }),
+  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
@@ -83,6 +88,8 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("combat"), campaign: key, topicId: id, op: z.enum(["start", "order", "next", "back", "end"]), order: z.array(slotSchema).max(40).optional(), round: z.number().int().min(1).max(9999).optional(), turn: z.number().int().min(0).max(39).optional(), sceneId: z.string().min(1).max(160).optional() }),
   z.object({ action: z.literal("combatSources"), campaign: key }),
   z.object({ action: z.literal("settings"), campaign: key, settings: z.unknown() }),
+  z.object({ action: z.literal("upload"), campaign: key, transferId: z.string().uuid(), kind: z.enum(["post", "emoji"]) }),
+  z.object({ action: z.literal("emoji"), campaign: key, emoji: z.unknown() }),
   z.object({ action: z.literal("addCategory"), campaign: key, name: z.string().max(200), kind: z.enum(["ic", "ooc"]) }),
   z.object({ action: z.literal("editCategory"), campaign: key, id, name: z.string().max(200) }),
   z.object({ action: z.literal("deleteCategory"), campaign: key, id }),
@@ -171,13 +178,17 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       }
       return json({ frame: frameOf(ctx), page: { kind: "reports", ...reportsPage(ctx, topics) } });
     }
+    case "pictures": {
+      if (!ctx.viewer.rights.pictures) return json({ error: "Your group can't add pictures to posts." }, 403);
+      return json({ frame: frameOf(ctx), page: { kind: "pictures", ...picturesPage(ctx) } });
+    }
     case "settings": {
       if (!ctx.viewer.rights.boards) return json({ error: "Your group can't change the boards." }, 403);
       const groups = ctx.list.groups.map(g => ({ id: g.id, name: g.name, read: g.perms.forumRead ?? "no", start: g.perms.forumStart ?? "no", reply: g.perms.forumReply ?? "no", gm: g.perms.seeGm === "yes" }));
       const masks = Object.fromEntries(ctx.forum.boards.flatMap(b => b.masks ? [[b.id, b.masks]] : []));
       // Only the campaign's owner chooses the forum's AI, as it spends their API key.
       const connections = ctx.viewer.rights.owner && deps.ai ? await deps.ai.connections(found.owner, found.campaignId).catch(() => []) : [];
-      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
+      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
     }
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
   }
@@ -232,6 +243,16 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     case "deleteTopic": return run(body.topicId, (f, t) => deleteTopic(f, needTopic(t), who));
     case "topic": return run(body.boardId !== undefined ? body.topicId : null, (f, t) => setTopic(f, t, body, who));
     case "settings": return run(null, f => setSettings(f, body.settings, who));
+    case "upload": return (async () => {
+      // Checked before storing, so a refused picture never lands in the GM's storage; checked again when noted.
+      mayUpload(ctx.forum, who, body.kind);
+      if (!deps.savePicture) throw new ForumError("Pictures can't be added right now.");
+      let id: string;
+      try { id = await deps.savePicture(found.owner, ctx.viewer.userId, body.transferId, body.kind === "emoji" ? EMOJI_BYTES : PICTURE_BYTES); }
+      catch (e) { throw new ForumError(e instanceof Error && e.message ? e.message : "That picture couldn't be added."); }
+      return run(null, f => addUpload(f, { id, kind: body.kind }, who, now));
+    })();
+    case "emoji": return run(null, f => setEmoji(f, body.emoji, who));
     case "addCategory": { const n = newId(); return run(null, f => addCategory(f, body, who, n)); }
     case "editCategory": return run(null, f => editCategory(f, body, who));
     case "deleteCategory": return run(null, f => deleteCategory(f, body, who));

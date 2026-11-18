@@ -2,16 +2,17 @@
 /*
  * A campaign's forum: /forum#c-<campaign id> for the GM, /forum#m-<ref> for a member. The page in the hash after the
  * key (&board=, &topic=, &view=) so links can be shared and the back button works. Refreshes every 20 seconds while
- * the tab is visible.
+ * the tab is visible. With no key, /forum lists the forums you can open (forum-pick.tsx).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
-import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle } from './forum-parts';
+import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, emojiMap } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
 import { PrintView, ReportsView, TrashView } from './forum-moderate';
 import { Notices, SearchView } from './forum-find';
+import { ForumPicker } from './forum-pick';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
@@ -45,7 +46,7 @@ export default function ForumApp() {
   }, []);
 
   useEffect(() => {
-    const read = () => { const { key: k, place: p } = parseForumHash(location.hash); setKey(k); setPlace(p); if (validKey(k)) void load(k, p); else { setError('This forum link is incomplete. Open the forum from the campaign.'); setLoading(false); } };
+    const read = () => { const { key: k, place: p } = parseForumHash(location.hash); setKey(k); setPlace(p); if (validKey(k)) void load(k, p); else { setError(k ? 'This forum link is incomplete. Open the forum from the campaign.' : ''); setLoading(false); } };
     read();
     window.addEventListener('hashchange', read);
     return () => window.removeEventListener('hashchange', read);
@@ -64,13 +65,14 @@ export default function ForumApp() {
 
   /* eslint-disable @next/next/no-html-link-for-pages -- other tools open as full pages (AGENTS.md) */
   const appBar = <div className="forum-appbar">
-    <a href="/campaigns" className="appbar-home">RPG Tools</a><span className="muted">·</span><a href="/campaigns">Campaigns</a>
+    <a href="/campaigns" className="appbar-home">RPG Tools</a><span className="muted">·</span><a href="/campaigns">Campaigns</a><span className="muted">·</span><a href="/forum">Forums</a>
     {view && <span className="appbar-campaign">{view.frame.campaign.name}</span>}
     <span className="appbar-spacer" />{loading && view && <span className="muted small">Loading…</span>}<ThemeToggle />
   </div>;
   const backLink = <a href="/campaigns">Back to Campaigns</a>;
   /* eslint-enable @next/next/no-html-link-for-pages */
 
+  if (!view && !key && !loading) return <div className="forum-root">{appBar}<div className="forum-page"><ForumPicker /></div></div>;
   if (!view) return <div className="forum-root">{appBar}<div className="forum-page"><div className="forum-message">
     <h1>{loading ? 'Opening the forum…' : status === 401 ? 'Sign in first' : 'Forum unavailable'}</h1>
     {!loading && <p>{error}</p>}
@@ -79,7 +81,7 @@ export default function ForumApp() {
   </div></div></div>;
 
   const { frame, page } = view, k = key;
-  return <div className="forum-root" id="top">{appBar}
+  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><div className="forum-root" id="top">{appBar}
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} />
       <Banner frame={frame} k={k} go={go} />
@@ -110,5 +112,5 @@ export default function ForumApp() {
       <Footer frame={frame} k={k} go={go} onReadAll={async () => { try { await forumCall({ action: 'readAll', campaign: k }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not mark the forum read.'); } }} />
       <BackToTop />
     </div>
-  </div>;
+  </div></PostContext.Provider>;
 }

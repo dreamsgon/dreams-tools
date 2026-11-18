@@ -2,7 +2,7 @@ import { getBucket } from '@/lib/storage';
 import { getAppUser } from '@/lib/app-user';
 import { MemberStore } from '@/lib/members-server';
 import { EncyclopediaStore } from '@/lib/encyclopedia/store';
-import { readMapImage } from '@/lib/encyclopedia/map-images-server';
+import { readMapImage, saveStagedImage } from '@/lib/encyclopedia/map-images-server';
 import { sameOrigin } from '@/lib/encyclopedia/workspace-server';
 import { ForumStore } from '@/lib/forum/store';
 import { handleForum, handleForumImage, type Deps } from '@/lib/forum/request';
@@ -31,6 +31,7 @@ const deps = (): Deps => {
     workspace: async owner => (await new EncyclopediaStore(bucket).read(owner)).data,
     store: new ForumStore(bucket),
     image: readMapImage,
+    savePicture: saveStagedImage,
     ai: forumAi(bucket),
     // The GM's Maptable scenes in the paired campaign, for starting a fight from its initiative tracker.
     scenes: async (owner, maptableCampaignId) => {

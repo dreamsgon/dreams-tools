@@ -1055,3 +1055,57 @@ test('reports: readers report other people\'s posts; moderators see the reasons,
   assert.deepEqual((await view(gm, { kind: 'reports' })).posts, []);
   assert.match((await json(co.post({ action: 'dismissReports', campaign: KEY, postId }))).error, /already dismissed/);
 });
+
+test('markup: pictures by id and the campaign\'s :emoji:, not times or words', () => {
+  const id = '0b3c2f1e-1111-4222-8333-444455556666';
+  assert.deepEqual(K.postInline(`Hi :gull: at 10:30:45 [img=A gull]${id}[/img] x:no:`).filter(p => p.type !== 'text'), [{ type: 'emoji', code: 'gull' }, { type: 'picture', id, alt: 'A gull' }]);
+  assert.deepEqual(K.pictureIds(`[img]${id.toUpperCase()}[/img] [img]nope[/img]`), [id]);
+  assert.deepEqual(K.emojiCodes(':a: :gull: :ok_1: :9lives:'), ['gull', 'ok_1']);
+  assert.equal(K.wordCount(`two :gull: words [img]${id}[/img]`), 2);
+});
+
+test('pictures and emoji: stored through the forum, by permission; posts show only the forum\'s pictures', async () => {
+  const gm = harness({ user: OWNER }), saved = [];
+  gm.store.bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: '0' });
+  let n = 0;
+  const savePicture = async (owner, uploader, transferId, max) => { saved.push([owner, uploader, max]); return `00000000-0000-4000-8000-00000000000${++n}`; };
+  const as = u => { const h = harness({ user: u }); h.deps.store = gm.store; h.deps.savePicture = savePicture; return h; };
+  gm.deps.savePicture = savePicture;
+  const p1 = as('p1'), g1 = as('g1'), co = as('co');
+  const json = async r => (await r).json();
+  const T = '11111111-2222-4333-8444-555555555555';
+  const { topicId } = await json(gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Pics', body: 'Show me.', as: null }));
+  // Guests can't add pictures; players can, stored with the GM's pictures.
+  assert.match((await json(g1.post({ action: 'upload', campaign: KEY, transferId: T, kind: 'post' }))).error, /can't add pictures/);
+  assert.match((await json(p1.post({ action: 'upload', campaign: KEY, transferId: T, kind: 'emoji' }))).error, /arrange the forum can add emoji/);
+  const pic = (await json(p1.post({ action: 'upload', campaign: KEY, transferId: T, kind: 'post' }))).id;
+  assert.deepEqual(saved, [[OWNER, 'p1', M.PICTURE_BYTES]]);
+  // A post may show it; a made-up id is refused.
+  assert.equal((await json(p1.post({ action: 'reply', campaign: KEY, topicId, body: `Look [img=The harbour]${pic}[/img]`, as: null }))).ok, true);
+  assert.match((await json(p1.post({ action: 'reply', campaign: KEY, topicId, body: `[img]${T}[/img]`, as: null }))).error, /isn't in this forum/);
+  const pics = (await json(p1.post({ action: 'view', campaign: KEY, page: { kind: 'pictures' } }))).page;
+  assert.deepEqual(pics.pictures.map(p => [p.id, p.mine]), [[pic, true]]);
+  assert.equal((await g1.post({ action: 'view', campaign: KEY, page: { kind: 'pictures' } })).status, 403);
+  // Everyone who reads the forum may load it.
+  const load = (h, id) => handleForumImage(new Request(`https://x.test/api/forum?c=${KEY}&image=${id}`), h.deps);
+  assert.equal((await load(g1, pic)).status, 303);
+  assert.equal((await load(g1, T)).status, 404);
+  // Emoji: those who arrange boards add them (256 KB at most) and say who may use them.
+  const e1 = (await json(co.post({ action: 'upload', campaign: KEY, transferId: T, kind: 'emoji' }))).id;
+  assert.equal(saved.at(-1)[2], M.EMOJI_BYTES);
+  assert.match((await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'all', list: [{ code: 'Gull', imageId: e1 }] } }))).error, /lowercase/);
+  assert.match((await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'all', list: [{ code: 'gull', imageId: pic }] } }))).error, /removed/);
+  assert.match((await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'all', list: [{ code: 'gull', imageId: e1 }, { code: 'gull', imageId: e1 }] } }))).error, /Two emoji/);
+  assert.match((await json(p1.post({ action: 'emoji', campaign: KEY, emoji: { use: 'all', list: [] } }))).error, /can't change the boards/);
+  assert.equal((await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'staff', list: [{ code: 'gull', imageId: e1, set: 'Birds' }] } }))).ok, true);
+  const frame = (await json(p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame;
+  assert.deepEqual(frame.emoji, { list: [{ code: 'gull', imageId: e1, set: 'Birds' }], may: false });
+  assert.equal((await load(g1, e1)).status, 303);
+  assert.match((await json(p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Hi :gull:', as: null }))).error, /Only moderators can use the campaign's emoji/);
+  assert.equal((await json(p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Hi :wave: (not ours)', as: null }))).ok, true);
+  assert.equal((await json(co.post({ action: 'reply', campaign: KEY, topicId, body: 'Hi :gull:', as: null }))).ok, true);
+  assert.equal((await json(co.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame.emoji.may, true);
+  // Turned off, nobody gets them, and posts show the codes as text.
+  await json(co.post({ action: 'emoji', campaign: KEY, emoji: { use: 'off', list: [{ code: 'gull', imageId: e1 }] } }));
+  assert.deepEqual((await json(co.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame.emoji, { list: [], may: false });
+});

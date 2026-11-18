@@ -37,6 +37,13 @@ body { background: #ece5d6; }
 .forum-page { container: page / inline-size; max-width: 1180px; margin: 0 auto; padding: 14px 16px 48px; }
 .forum-message { max-width: 520px; margin: 80px auto; text-align: center; }
 .forum-message h1 { font-family: var(--font-display); color: var(--accent); }
+.forum-pick h1 { display: inline-flex; align-items: center; gap: 10px; }
+.pick-list { display: grid; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; text-align: left; }
+.pick-list a { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); text-decoration: none; }
+.pick-list a:hover { border-color: var(--accent); }
+.pick-list svg { color: var(--accent); flex: none; }
+.pick-list b { display: block; font-family: var(--font-display); font-size: 17px; }
+.pick-list small { color: var(--muted); }
 
 /* Buttons and fields. */
 .f-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent); color: var(--on-accent) !important; font: 600 12px var(--font-sans); letter-spacing: .04em; text-decoration: none; cursor: pointer; }
@@ -369,9 +376,38 @@ ol.foot-list li { flex-direction: row; justify-content: space-between; gap: 8px;
 .tools button:hover:not(:disabled), .tools button.on { background: var(--accent-soft); color: var(--accent); }
 .tools button:disabled { opacity: .45; cursor: default; }
 .tools .sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line-strong); }
-.emoji-wrap { position: relative; display: inline-flex; }
-.emoji-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; display: grid; grid-template-columns: repeat(8, 34px); gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
-.emoji-pop button { justify-content: center; padding: 4px 0; font-size: 18px; }
+.pop-wrap { display: inline-flex; }
+/* Insert and emoji popovers hang under the toolbar. */
+.tool-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; display: grid; gap: 6px; width: min(420px, calc(100vw / var(--ui-zoom, 1) - 32px)); max-height: 420px; overflow: auto; padding: 10px; background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.tool-pop .pop-title { font: 700 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.insert-pop button { display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; text-align: left; }
+.insert-pop button b { display: block; font-size: 13px; }
+.insert-pop button small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+.ins-ic { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border: 1px solid var(--line); background: var(--raised); color: var(--accent); }
+.pic-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.tools .pic-thumb { padding: 0; aspect-ratio: 1; overflow: hidden; border: 2px solid transparent; background: var(--raised); border-radius: 0; }
+.tools .pic-thumb.on { border-color: var(--accent); }
+.pic-thumb img, .pic-thumb span { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tool-pop .f-field { display: grid; gap: 4px; font-size: 12.5px; }
+.tool-pop .f-field input { padding: 6px 8px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); font: inherit; }
+.pop-foot { display: flex; justify-content: flex-end; gap: 6px; }
+.tools .tool-pop .f-btn { padding: 4px 9px; border: 1px solid var(--accent); background: var(--accent); font: 600 11.5px var(--font-sans); }
+.tools .tool-pop .f-btn.ghost { background: transparent; border-color: var(--line-strong); }
+.emo-set { display: grid; gap: 6px; }
+.emo-grid { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 2px; }
+.emo-grid button { justify-content: center; padding: 4px 0; font-size: 18px; }
+.emo { display: inline-block; width: auto; height: 1.4em; max-width: 3em; vertical-align: -0.3em; object-fit: contain; }
+.emo-wait { width: 1.4em; background: var(--raised); }
+.post-pic { display: block; max-width: 100%; max-height: 640px; margin: .4em 0; border: 1px solid var(--line); }
+.post-pic-wait { width: min(100%, 320px); aspect-ratio: 4 / 3; background: var(--raised); }
+.emoji-settings .emoji-add { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.emoji-set { display: grid; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
+.emoji-set li { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.emoji-set .emo { height: 28px; max-width: 34px; vertical-align: middle; }
+.emoji-code { display: flex; align-items: center; gap: 2px; font-family: var(--font-mono, monospace); color: var(--muted); }
+.emoji-code input, .emoji-group { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); font: inherit; }
+.f-radios { display: grid; gap: 4px; }
 .composer-preview { min-height: 140px; padding: 10px 14px; border: 1px dashed var(--line-strong); background: var(--bg); }
 .composer.big textarea { min-height: calc(46vh / var(--ui-zoom, 1)); }
 .composer-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -625,7 +661,9 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .tools button { flex-direction: column; justify-content: center; gap: 2px; min-height: 44px; padding: 4px 0; border: 1px solid var(--line); background: var(--panel); }
   .tools .tl { font-size: 10px; color: var(--muted); }
   .emoji-wrap { display: contents; }
-  .emoji-pop { left: 10px; right: 10px; top: auto; grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .tool-pop { left: 0; right: 0; width: auto; }
+  .emoji-set li { grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .emoji-group { grid-column: 2; }
   .composer-foot .hint { display: none; }
   .composer-acts { width: 100%; }
   .composer-acts .f-btn:last-child { flex: 1; justify-content: center; }

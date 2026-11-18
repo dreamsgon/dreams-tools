@@ -1,7 +1,9 @@
 'use client';
 /* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards, and (the GM) the AI. */
-import { useState } from 'react';
-import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Smile, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Emoji } from './forum-parts';
+import { uploadForumPicture } from './forum-insert';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, type Frame, type Masks, type PageData, type Tri } from './forum-api';
 import { Crumbs, type Go } from './forum-parts';
@@ -176,10 +178,67 @@ function AiSettings({ page, k, done }: { page: Settings; k: string; done: Done }
   </section>;
 }
 
+type EmojiRow = Settings['emoji']['list'][number];
+/** A code from a file name: lowercase letters, digits and _, starting with a letter, not one already taken. */
+function codeFrom(name: string, taken: Set<string>) {
+  let base = name.replace(/\.[a-z0-9]+$/i, '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^[^a-z]+/, '').replace(/_+$/, '').slice(0, 28);
+  if (base.length < 2) base = 'emoji';
+  let code = base, n = 2;
+  while (taken.has(code)) code = `${base}${n++}`;
+  taken.add(code);
+  return code;
+}
+const CODE = /^[a-z][a-z0-9_]{1,31}$/;
+
+/** The campaign's own emoji: upload pictures, give each a :code: and a set, and say who may use them. */
+function EmojiSettings({ page, k, done }: { page: Settings; k: string; done: Done }) {
+  const [use, setUse] = useState(page.emoji.use), [list, setList] = useState<EmojiRow[]>(page.emoji.list), [adding, setAdding] = useState(''), { call, error, busy } = useCall(k, done);
+  const [problem, setProblem] = useState(''), file = useRef<HTMLInputElement>(null);
+  const save = (next: EmojiRow[], u = use) => call({ action: 'emoji', emoji: { use: u, list: next.map(e => ({ code: e.code, imageId: e.imageId, ...(e.set?.trim() ? { set: e.set.trim() } : {}) })) } });
+  const add = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setProblem('');
+    const taken = new Set(list.map(e => e.code)), added: EmojiRow[] = [], room = 200 - list.length;
+    const picked = [...files].slice(0, room);
+    for (const [i, f] of picked.entries()) {
+      setAdding(`Adding ${i + 1} of ${picked.length}…`);
+      try { added.push({ code: codeFrom(f.name, taken), imageId: await uploadForumPicture(k, f, 'emoji') }); }
+      catch (e) { setProblem(`${f.name}: ${e instanceof Error ? e.message : 'couldn’t be added'}`); }
+    }
+    setAdding(''); if (file.current) file.current.value = '';
+    if (files.length > room) setProblem(`A forum holds 200 emoji, so ${files.length - room} weren’t added.`);
+    if (added.length) { const next = [...list, ...added]; setList(next); await save(next); }
+  };
+  const bad = list.find(e => !CODE.test(e.code)), twice = list.find((e, i) => list.findIndex(x => x.code === e.code) !== i);
+  return <section className="settings-card emoji-settings">
+    <h2><Smile size={16} aria-hidden="true" /> Emoji</h2>
+    <p className="muted">The campaign’s own emoji. Members type <code>:code:</code> or pick one from the Emoji button when they write. Pictures are PNG, JPEG or WebP up to 256 KB, shown about as tall as the text; the file name becomes the code, and you can change it.</p>
+    <div className="emoji-add">
+      <button type="button" className="f-btn small" disabled={!!adding || busy || list.length >= 200} onClick={() => file.current?.click()}><Upload size={13} aria-hidden="true" />{adding || 'Add emoji'}</button>
+      <small className="muted">{list.length} of 200</small>
+      <input ref={file} type="file" multiple accept="image/png,image/jpeg,image/webp" hidden onChange={e => void add(e.target.files)} />
+    </div>
+    {list.length > 0 && <ul className="emoji-set">{list.map((e, i) => <li key={e.imageId + i}>
+      <Emoji k={k} imageId={e.imageId} code={e.code} />
+      <label className="emoji-code"><span aria-hidden="true">:</span><input aria-label="Code" value={e.code} maxLength={32} onChange={x => setList(list.map((y, n) => n === i ? { ...y, code: x.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') } : y))} /><span aria-hidden="true">:</span></label>
+      <input className="emoji-group" aria-label="Set" placeholder="Set (optional)" value={e.set ?? ''} maxLength={30} onChange={x => setList(list.map((y, n) => n === i ? { ...y, set: x.target.value } : y))} />
+      <button type="button" className="icon-btn" aria-label={`Remove :${e.code}:`} onClick={() => setList(list.filter((_, n) => n !== i))}><Trash2 size={14} /></button>
+    </li>)}</ul>}
+    <h3>Who may use them</h3>
+    <div className="f-radios" role="radiogroup" aria-label="Who may use the campaign's emoji">
+      {([['all', 'Everyone who can post'], ['staff', 'Moderators only'], ['off', 'No custom emoji']] as const).map(([v, l]) => <label key={v} className="f-check"><input type="radio" name="emoji-use" checked={use === v} onChange={() => setUse(v)} /><span>{l}</span></label>)}
+    </div>
+    <p className="muted small">Sets keep the picker tidy: emoji with the same set sit together. With no custom emoji, posts show the :codes: as text.</p>
+    {(bad || twice) && <p className="form-error">{bad ? `:${bad.code}: needs 2 to 32 lowercase letters, digits or _, starting with a letter.` : `Two emoji use :${twice!.code}:.`}</p>}
+    <div className="settings-foot"><button className="f-btn" disabled={busy || !!adding || !!bad || !!twice} onClick={() => void save(list)}>{busy ? 'Saving…' : 'Save emoji'}</button></div>
+    {(problem || error) && <p className="form-error" role="alert">{problem || error}</p>}
+  </section>;
+}
+
 export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page: Settings; k: string; go: Go; done: Done }) {
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
     <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
-    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
+    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
   </>;
 }

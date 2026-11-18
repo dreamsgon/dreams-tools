@@ -3,10 +3,10 @@
  * The forum's pieces. Class names follow the campaign theme contract (the Campaign Skin Studio prototype), so a
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Archive, ArrowUp, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
-import { postBlocks, postInline } from '@/lib/forum/markup';
+import { postBlocks, postInline, withEmoji } from '@/lib/forum/markup';
 import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
 import { ROLL_TAG, type Roll } from '@/lib/forum/rolls';
 import { Alerts, SearchBox } from './forum-find';
@@ -17,6 +17,32 @@ type TopicRowData = Frame['footer']['active'][number];
 
 export function Link({ k, to, go, className, children, title }: { k: string; to: Place; go: Go; className?: string; children: ReactNode; title?: string }) {
   return <a className={className} title={title} href={forumHash(k, to)} onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); go(to); }}>{children}</a>;
+}
+
+/**
+ * What post text needs from the forum around it: the campaign key (pictures load through it) and the campaign's
+ * emoji by code. Outside a forum, emoji show as their :code: and pictures don't load.
+ */
+export const PostContext = createContext<{ k: string; emoji: ReadonlyMap<string, string> } | null>(null);
+export const emojiMap = (frame: Frame) => new Map(frame.emoji.list.map(e => [e.code, e.imageId]));
+
+/** One of the campaign's emoji, about as tall as the text. */
+export function Emoji({ k, imageId, code }: { k: string; imageId: string; code: string }) {
+  const src = usePicture(k, imageId);
+  // eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image can't optimise it
+  return src ? <img className="emo" src={src} alt={`:${code}:`} title={`:${code}:`} /> : <span className="emo emo-wait" title={`:${code}:`} aria-label={`:${code}:`} />;
+}
+/** Text with the campaign's :emoji: in it (inside bold, italic, underline and speech). */
+function Emojified({ text }: { text: string }) {
+  const c = useContext(PostContext);
+  if (!c?.emoji.size) return <>{text}</>;
+  return <>{withEmoji(text).map((p, i) => p.type === 'emoji' && c.emoji.has(p.code) ? <Emoji key={i} k={c.k} imageId={c.emoji.get(p.code)!} code={p.code} /> : p.type === 'emoji' ? `:${p.code}:` : 'text' in p ? p.text : null)}</>;
+}
+/** A picture in a post; the words the writer gave it for readers who can't see it. */
+function PostPicture({ k, id, alt }: { k: string; id: string; alt: string }) {
+  const src = usePicture(k, id);
+  // eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image can't optimise it
+  return src ? <img className="post-pic" src={src} alt={alt} loading="lazy" /> : <span className="post-pic post-pic-wait" role="img" aria-label={alt || 'A picture'} />;
 }
 
 /** A picture from the campaign, framed the way the Encyclopedia frames it; initials when there is none. */
@@ -57,16 +83,19 @@ function RollCard({ r, label, expr, preview }: { r: Roll | null | undefined; lab
 }
 /** One line of post text: bold, italic, underline, code, “speech” and [[page links]] (a link when the reader may open the page) and roll cards. */
 function Inline({ text, links, rolls }: { text: string; links?: Links; rolls?: RollList }) {
+  const c = useContext(PostContext);
   const parts = postInline(text), nth = parts.map((p, i) => parts.slice(0, i).filter(q => q.type === 'roll').length);
   return <>{parts.map((p, i) => {
     switch (p.type) {
-      case 'bold': return <strong key={i}>{p.text}</strong>;
-      case 'italic': return <em key={i}>{p.text}</em>;
-      case 'underline': return <u key={i}>{p.text}</u>;
+      case 'bold': return <strong key={i}><Emojified text={p.text} /></strong>;
+      case 'italic': return <em key={i}><Emojified text={p.text} /></em>;
+      case 'underline': return <u key={i}><Emojified text={p.text} /></u>;
       case 'code': return <code key={i}>{p.text}</code>;
-      case 'speech': return <span key={i} className="speech">{p.text}</span>;
+      case 'speech': return <span key={i} className="speech"><Emojified text={p.text} /></span>;
       case 'link': { const l = links?.[p.target]; return l ? <a key={i} className="wiki" href={l.url} title={l.summary ? `${l.title}: ${l.summary}` : l.title}>{p.label}</a> : <span key={i} className="wiki">{p.label}</span>; }
       case 'roll': { return <RollCard key={i} r={rolls?.list?.[(rolls?.first ?? 0) + nth[i]!]} label={p.label} expr={p.expr} preview={!rolls?.list} />; }
+      case 'emoji': { const id = c?.emoji.get(p.code); return id ? <Emoji key={i} k={c!.k} imageId={id} code={p.code} /> : <span key={i}>:{p.code}:</span>; }
+      case 'picture': return c ? <PostPicture key={i} k={c.k} id={p.id} alt={p.alt} /> : <span key={i} className="muted">[picture{p.alt ? `: ${p.alt}` : ''}]</span>;
       default: return <span key={i}>{p.text}</span>;
     }
   })}</>;
