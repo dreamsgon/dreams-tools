@@ -16,6 +16,8 @@ import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
 import { moveSibling, placeBeside, sortSiblings } from "./folder-order.ts";
 import { ForumStore } from "./forum/store.ts";
+import { applyForumAccess, defaultForumSetup, forumFromSetup, forumSetupSchema } from "./forum/setup.ts";
+import { MemberStore } from "./members-server.ts";
 import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey } from "./campaign-links.ts";
 
 /*
@@ -75,7 +77,7 @@ export type CampaignAction =
   | { action: "stepFolder"; folderId: string; delta: -1 | 1 }
   | { action: "placeFolder"; folderId: string; targetId: string; place: "before" | "after" }
   | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string }
-  | { action: "forum"; encyclopediaId: string };
+  | { action: "forum"; encyclopediaId: string; setup?: unknown };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
@@ -163,7 +165,15 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     // Sets up the campaign's forum: an empty one in storage, and the flag the campaign pages read.
     const eid = str(body.encyclopediaId), campaign = both.book.data.campaigns.find(c => c.id === eid);
     if (!campaign) throw new Error("That campaign has no Encyclopedia notes, which its forum lives with. Reload the page.");
-    await new ForumStore(s.bucket).create(s.owner, campaign.id);
+    // `setup` is what the GM confirmed (lib/forum/setup.ts); left out, the forum starts as it always did. A forum that is
+    // already there (used before forums were opt-in) keeps its boards, settings and the groups' permissions.
+    const parsed = body.setup === undefined ? { success: true as const, data: defaultForumSetup() } : forumSetupSchema.safeParse(body.setup);
+    if (!parsed.success) throw new Error("Check the forum's settings: a name up to 80 letters and a tagline up to 160.");
+    if (await new ForumStore(s.bucket).create(s.owner, campaign.id, forumFromSetup(parsed.data))) {
+      const members = new MemberStore(s.bucket as ConstructorParameters<typeof MemberStore>[0]), { list, etag } = await members.read(s.owner, campaign.id), next = applyForumAccess(list, parsed.data);
+      // A campaign that has never had members has no list yet: only write one when the choices differ from the defaults.
+      if (etag || JSON.stringify(next.groups) !== JSON.stringify(list.groups)) await members.change(s.owner, campaign.id, l => applyForumAccess(l, parsed.data));
+    }
     if (!campaign.forum) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === campaign.id ? { ...c, forum: true } : c) });
   } else if (body.action === "newFolder") {
     const name = cleanName(body.name, "folder"), parentId = parentOf(mapNow, body.parentId);

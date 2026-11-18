@@ -211,3 +211,7 @@ button.campaigns-folder-more { display:none; }
   .campaigns-folder-row:has(.campaigns-folder-rename), .campaigns-folder-row:has(.campaigns-folder-confirm) { flex-wrap:wrap; }
 }
 .campaigns-sheet:focus { outline:none; }
+
+/* Set up forum: the confirm step's summary (components/forum-setup-dialog.tsx). */
+.forum-setup-summary { display:flex; flex-direction:column; gap:8px; margin:18px 0 0; padding:0 0 0 18px; font-size:14px; line-height:1.5; }
+.forum-setup-summary li::marker { color:var(--accent); }

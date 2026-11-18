@@ -41,10 +41,10 @@ export class ForumStore {
     return !!(await this.bucket.head(forumKey(owner, campaignId)));
   }
 
-  /** Sets up an empty forum, leaving one that is already there as it is. */
-  async create(owner: string, campaignId: string) {
-    if (await this.exists(owner, campaignId)) return;
-    await put(this.bucket, forumKey(owner, campaignId), emptyForum(), null);
+  /** Sets up the forum (empty, or as `forum` says), leaving one that is already there as it is. True when this made it. */
+  async create(owner: string, campaignId: string, forum: Forum = emptyForum()) {
+    if (await this.exists(owner, campaignId)) return false;
+    return !!(await put(this.bucket, forumKey(owner, campaignId), forumSchema.parse(forum), null));
   }
 
   async readTopic(owner: string, campaignId: string, topicId: string): Promise<{ topic: Topic; etag: string } | null> {

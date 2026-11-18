@@ -10,6 +10,8 @@ import { TagList, TagRow, TagsManager, useTags } from "./tags";
 import { campaignTargets, tagsOn } from "@/lib/tags";
 import CampaignsJoined from "./campaigns-joined";
 import "./campaigns.css";
+import { Modal } from "./campaigns-modal";
+import { ForumSetupDialog } from "./forum-setup-dialog";
 import { usePageTitle } from "./use-page-title";
 import { campaignTitle } from "@/lib/page-title";
 
@@ -206,7 +208,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
       <CampaignsJoined />
     </div>
     {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
-    {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} close={() => setSelectedKey(null)} send={send} />}
+    {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} error={error} close={() => setSelectedKey(null)} send={send} />}
     {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
@@ -218,7 +220,8 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
 
 type Send = (body: object, done?: string, after?: (next: CampaignSummary) => void) => Promise<boolean>;
 
-function Details({ row, summary, busy, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; close: () => void; send: Send }) {
+function Details({ row, summary, busy, error, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close: () => void; send: Send }) {
+  const [forumSetup, setForumSetup] = useState(false);
   const [name, setName] = useState(row.name), [description, setDescription] = useState(row.encyclopedia?.description ?? "");
   const ref = useRef<HTMLElement>(null);
   useEffect(() => { ref.current?.scrollIntoView?.({ block: "nearest" }); }, []);
@@ -243,7 +246,7 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
       {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Maps</a>}
       {row.encyclopedia && <a className="campaigns-secondary" href={notesHref(row.encyclopedia.id)}><BookOpen size={16} aria-hidden="true" />Wiki</a>}
       {row.encyclopedia && (row.encyclopedia.forum ? <a className="campaigns-secondary" href={`/forum#c-${encodeURIComponent(row.encyclopedia.id)}`}><MessagesSquare size={16} aria-hidden="true" />Forum</a>
-        : <button type="button" className="campaigns-secondary" disabled={busy} title="A roleplay forum for this campaign. Forums start switched off." onClick={() => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id }, "Forum set up. Open it with Forum.")}><Plus size={16} aria-hidden="true" />Set up forum</button>)}
+        : <button type="button" className="campaigns-secondary" disabled={busy} title="A roleplay forum for this campaign. Forums start switched off." onClick={() => setForumSetup(true)}><Plus size={16} aria-hidden="true" />Set up forum</button>)}
     </div>
     <dl className="campaigns-facts">
       <div><dt>World</dt><dd>{row.encyclopedia?.worldName || "None yet"}</dd></div>
@@ -268,6 +271,8 @@ function Details({ row, summary, busy, close, send }: { row: CampaignRow; summar
       <p className="campaigns-muted">{row.maptable && row.encyclopedia ? "Renaming here renames it in both tools. Maps and notes stay where they are." : "Maps and notes stay where they are."}</p>
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
+    {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
+      onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum set up. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;
 }
 
@@ -394,17 +399,6 @@ function NewFolder({ summary, busy, close, send }: { summary: CampaignSummary; b
       </select></label>
     </form>
   </Modal>;
-}
-
-function Modal({ title, intro, children, footer, close, wide }: { title: string; intro?: string; children: React.ReactNode; footer: React.ReactNode; close: () => void; wide?: boolean }) {
-  useEffect(() => { const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, [close]);
-  return <div className="campaigns-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-    <div className={`campaigns-modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="campaigns-modal-head"><h2>{title}</h2>{intro && <p>{intro}</p>}</div>
-      <div className="campaigns-modal-body">{children}</div>
-      <div className="campaigns-modal-foot">{footer}</div>
-    </div>
-  </div>;
 }
 
 function WorldPicker({ summary, worldId, setWorldId, newWorld, setNewWorld }: { summary: CampaignSummary; worldId: string; setWorldId: (v: string) => void; newWorld: string; setNewWorld: (v: string) => void }) {

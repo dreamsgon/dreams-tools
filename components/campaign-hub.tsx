@@ -28,6 +28,8 @@ import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 import { hubLinks } from "@/lib/campaign-hub-links";
 import SiteHeader from "./site-header";
+import { ForumSetupDialog } from "./forum-setup-dialog";
+import type { ForumSetup } from "@/lib/forum/setup";
 
 // The Members tab (owners only) loads when it is opened.
 const CampaignMembers = dynamic(() => import("./campaign-members"));
@@ -102,16 +104,27 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     } catch (e) { setSaveError(e instanceof Error ? e.message : "Could not add maps."); }
     finally { setAdding(false); }
   }
-  /** Set up forum: forums start switched off, so the GM makes this campaign's when they want one, then opens it. */
-  const [settingUp, setSettingUp] = useState(false);
-  async function setUpForum() {
+  /** Set up forum: forums start switched off, so the GM chooses how this campaign's starts, confirms, then it opens. */
+  const [forumDialog, setForumDialog] = useState(false), [settingUp, setSettingUp] = useState(false), [forumError, setForumError] = useState("");
+  async function setUpForum(setup: ForumSetup) {
     const id = hub?.row.encyclopedia?.id;
     if (!id) return;
-    setSettingUp(true); setSaveError("");
+    setSettingUp(true); setForumError("");
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- other tools open as full pages (AGENTS.md)
-    try { await post({ action: "forum", encyclopediaId: id }, "Could not set up the forum."); window.location.assign(`/forum#c-${encodeURIComponent(id)}`); }
-    catch (e) { setSaveError(e instanceof Error ? e.message : "Could not set up the forum."); setSettingUp(false); }
+    try { await post({ action: "forum", encyclopediaId: id, setup }, "Could not set up the forum."); window.location.assign(`/forum#c-${encodeURIComponent(id)}`); }
+    catch (e) { setForumError(e instanceof Error ? e.message : "Could not set up the forum."); setSettingUp(false); }
   }
+  // The forum links here with ?forum=setup when its GM opens a campaign that has none yet.
+  const askedSetup = useRef(false);
+  useEffect(() => {
+    if (!hub || askedSetup.current || new URLSearchParams(window.location.search).get("forum") !== "setup") return;
+    askedSetup.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("forum");
+    window.history.replaceState(window.history.state, "", url);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens once, after the campaign loads
+    if (hub.row.encyclopedia && !hub.row.encyclopedia.forum) setForumDialog(true);
+  }, [hub]);
   async function saveFront(frontPage: FrontPage) {
     setSaveError("");
     try { setHub(await post({ action: "frontPage", key: campaignKey, frontPage }, "Could not save the next session.")); }
@@ -148,7 +161,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
           {m ? <a className="hub-button hub-button-primary" href={L.maptable!}><MapIcon size={15} aria-hidden="true" />Maps</a>
             : <button className="hub-button" disabled={adding} onClick={() => void addMaps()}><Plus size={15} aria-hidden="true" />{adding ? "Adding maps…" : "Add maps"}</button>}
           {e && (L.forum ? <a className="hub-button" href={L.forum}><MessagesSquare size={15} aria-hidden="true" />Forum</a>
-            : <button className="hub-button" disabled={settingUp} title="A roleplay forum for this campaign, with boards for its places. Members read and post in it as their groups allow." onClick={() => void setUpForum()}><Plus size={15} aria-hidden="true" />{settingUp ? "Setting up…" : "Set up forum"}</button>)}
+            : <button className="hub-button" title="A roleplay forum for this campaign, with boards for its places. Members read and post in it as their groups allow." onClick={() => { setForumError(""); setForumDialog(true); }}><Plus size={15} aria-hidden="true" />Set up forum</button>)}
           {e && <BackupsButton campaignId={e.id} campaignName={row.name} />}
         </>}
       </div>
@@ -174,6 +187,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         ? <FrontEditor hub={hub} campaignKey={campaignKey} done={next => { if (next) setHub(next); setEditing(false); }} />
         : <><p className="hub-note"><Eye size={15} aria-hidden="true" />This is what players see first with their player link.</p><FrontPageView page={hub.front} href={L.entry} /></>}
     </div>
+    {forumDialog && <ForumSetupDialog campaignName={row.name} busy={settingUp} error={forumError} close={() => setForumDialog(false)} onConfirm={setup => void setUpForum(setup)} />}
   </div></>;
 }
 
