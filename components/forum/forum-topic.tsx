@@ -1,10 +1,10 @@
 'use client';
 /* A board's topic list, a topic's posts with their 250×400 portraits and hover cards, and the composer. */
 import { useEffect, useRef, useState } from 'react';
-import { Lock, Pin, Pencil, Quote, Trash2, PenLine } from 'lucide-react';
+import { Hourglass, Lock, Pin, Pencil, Quote, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type TopicPage } from './forum-api';
-import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, type Go } from './forum-parts';
+import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, turnText, type Go } from './forum-parts';
 
 type Done = (place?: { view: 'topic'; id: string }) => Promise<void>;
 
@@ -90,7 +90,7 @@ function HoverCard({ card }: { card: CardData }) {
   </div>;
 }
 
-function Post({ p, card, k, flip, topic, onQuote, done }: { p: PostData; card: CardData | null; k: string; flip: boolean; topic: TopicPage['topic']; onQuote: (text: string) => void; done: Done }) {
+function Post({ p, card, k, flip, fresh, topic, onQuote, done }: { p: PostData; card: CardData | null; k: string; flip: boolean; fresh: boolean; topic: TopicPage['topic']; onQuote: (text: string) => void; done: Done }) {
   const [editing, setEditing] = useState(false), [text, setText] = useState(p.body), [busy, setBusy] = useState(false), [error, setError] = useState(''), [open, setOpen] = useState(false);
   const save = async () => { setBusy(true); setError(''); try { await forumCall({ action: 'edit', campaign: k, topicId: topic.id, postId: p.id, body: text }); setEditing(false); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not save.'); } finally { setBusy(false); } };
   const remove = async () => {
@@ -99,8 +99,8 @@ function Post({ p, card, k, flip, topic, onQuote, done }: { p: PostData; card: C
   };
   const name = card?.name ?? p.name;
   const quote = () => onQuote(p.body.split('\n').filter(l => l.trim()).slice(0, 3).map(l => '> ' + l.replace(/^>\s?/, '')).join('\n') + `\n> — ${name}`);
-  return <article className={`post${flip ? ' flip' : ''}${card ? ' post-ic' : ' post-ooc'}`} id={`post-${p.id}`}>
-    <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3><span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}</span></header>
+  return <article className={`post${flip ? ' flip' : ''}${card ? ' post-ic' : ' post-ooc'}${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
+    <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3><span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}</span></header>
     <div className="post-grid">
       <aside className="post-side">
         {card ? <div className={`mini${open ? ' open' : ''}`}>
@@ -146,6 +146,15 @@ function ModTools({ frame, page, k, done, go }: { frame: Frame; page: TopicPage;
 
 export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
   const t = page.topic, [quote, setQuote] = useState<{ text: string; n: number }>();
+  // What was new when the topic was opened stays marked while you read, though the server now has it read.
+  const [readBefore] = useState(page.readBefore);
+  const isFresh = (p: TopicPage['posts'][number]) => !!readBefore && !p.mine && p.at > readBefore;
+  const firstNew = page.posts.find(isFresh);
+  useEffect(() => {
+    if (firstNew && firstNew.number > 1 && !location.hash.includes('post-')) document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ block: 'start' });
+    // Only when the topic opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Reply as the character you last posted as here.
   const mine = [...page.posts].reverse().find(p => p.mine), preferred = mine ? mine.as : undefined;
   const send = async (v: { body: string; as: string | null }) => { await forumCall({ action: 'reply', campaign: k, topicId: t.id, body: v.body, as: v.as }); await done(); };
@@ -154,10 +163,12 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
     <header className="topic-head">
       <h2 className="topic-name">{t.pinned && <Pin size={16} aria-label="Pinned" />}{t.locked && <Lock size={16} aria-label="Locked" />}{t.title}</h2>
       <p className="muted">{t.kind === 'ic' ? 'In character' : 'Out of character'} · started by {t.by.name} · {t.replies + 1} {t.replies ? 'posts' : 'post'}</p>
+      {t.next && <p className={`turn-line${t.next.mine ? ' mine' : ''}`}><Hourglass size={13} aria-hidden="true" />{turnText(t.next)}{firstNew && <> · <a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></>}</p>}
+      {!t.next && firstNew && <p className="turn-line"><a href={`#post-${firstNew.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>First new post</a></p>}
       {t.cast.length > 0 && <p className="topic-cast">{t.cast.map(c => <span key={c.id} className="cast-chip"><Portrait k={k} picture={c.picture} name={c.name} className="portrait tiny" />{c.name}</span>)}</p>}
       <ModTools frame={frame} page={page} k={k} done={done} go={go} />
     </header>
-    <div className="posts">{page.posts.map((p, i) => <Post key={p.id} p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} flip={i % 2 === 1} topic={t} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} />)}</div>
+    <div className="posts">{page.posts.map((p, i) => <Post key={p.id} p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} />)}</div>
     {t.canReply ? <section className="reply"><h2 className="category-title">Reply</h2><Composer frame={frame} kind={t.kind} draftKey={`${k}:${t.id}`} quote={quote} preferred={preferred} onPost={send} /></section>
       : <p className="muted locked-note">{t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.'}</p>}
   </>;

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
-import { Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle } from './forum-parts';
+import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle } from './forum-parts';
 import { BoardView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
 
@@ -69,7 +69,7 @@ export default function ForumApp() {
   </div></div></div>;
 
   const { frame, page } = view, k = key;
-  return <div className="forum-root">{appBar}
+  return <div className="forum-root" id="top">{appBar}
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} />
       <Banner frame={frame} k={k} go={go} />
@@ -87,10 +87,11 @@ export default function ForumApp() {
         {page.kind === 'members' && <>
           <Crumbs frame={frame} k={k} go={go} last="Members" />
           <section className="members"><h2 className="category-title">Members</h2><p className="muted">Posts in character count towards the member’s own total.</p>
-            <ol className="member-list">{page.members.map(m => <li key={m.name + m.role}><Circle name={m.name} /><span><b>{m.name}</b><small>{m.role}</small></span><span className="member-posts"><b>{m.posts}</b> {m.posts === 1 ? 'post' : 'posts'}</span></li>)}</ol></section>
+            <ol className="member-list">{page.members.map(m => { const w = whoStyle(m.color); return <li key={m.name + m.role}><Circle name={m.name} /><span><b className={w.className} style={w.style}>{m.name}</b><small>{m.role}{m.online && <> · <span className="online-dot" />online now</>}</small></span><span className="member-posts"><b>{m.posts}</b> {m.posts === 1 ? 'post' : 'posts'}</span></li>; })}</ol></section>
         </>}
       </main>
-      <Footer frame={frame} k={k} go={go} />
+      <Footer frame={frame} k={k} go={go} onReadAll={async () => { try { await forumCall({ action: 'readAll', campaign: k }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not mark the forum read.'); } }} />
+      <BackToTop />
     </div>
   </div>;
 }

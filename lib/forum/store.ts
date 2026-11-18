@@ -3,9 +3,11 @@
  * topics/<topic>.json beside it. Every write is conditional on the revision that was read (If-Match, or
  * If-None-Match for a new file), and a change is read again and re-applied when someone else saved in between.
  */
+import { createHash } from "node:crypto";
 import type { Bucket } from "../storage-types.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import { ForumError, emptyForum, forumSchema, topicSchema, type Change, type Forum, type Topic } from "./model.ts";
+import { presenceSchema, readsSchema, touch, type Presence, type Reads } from "./reader.ts";
 
 type Store = Bucket & { delete?(key: string): Promise<unknown> };
 const base = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `forum/${encodeURIComponent(campaignId)}/`;
@@ -14,6 +16,9 @@ export const topicKey = (owner: string, campaignId: string, topicId: string) => 
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(topicId)) throw new ForumError("That topic was removed.");
   return base(owner, campaignId) + `topics/${topicId}.json`;
 };
+/** A reader's marks, under a hash of their account so the key never shows it. */
+export const readsKey = (owner: string, campaignId: string, userId: string) => base(owner, campaignId) + `reads/${createHash("sha256").update(userId).digest("hex").slice(0, 40)}.json`;
+export const presenceKey = (owner: string, campaignId: string) => base(owner, campaignId) + "presence.json";
 const put = (bucket: Store, key: string, value: unknown, etag: string | null) =>
   bucket.put(key, JSON.stringify(value), { onlyIf: etag ? { etagMatches: etag } : { etagDoesNotMatch: "*" }, httpMetadata: { contentType: "application/json" } });
 
@@ -60,6 +65,39 @@ export class ForumStore {
       return change.out;
     }
     throw new ForumError("Someone else posted at the same moment. Try again.");
+  }
+
+  /** One reader's read marks, or null before their first visit. A damaged file counts as none. */
+  async readReads(owner: string, campaignId: string, userId: string): Promise<{ reads: Reads | null; etag: string | null }> {
+    const object = await this.bucket.get(readsKey(owner, campaignId, userId));
+    if (!object) return { reads: null, etag: null };
+    const parsed = readsSchema.safeParse(await object.json().catch(() => null));
+    return { reads: parsed.success ? parsed.data : null, etag: object.etag };
+  }
+  /** Changes a reader's marks; `edit` returns null when there's nothing to write. Returns the marks as saved. */
+  async writeReads(owner: string, campaignId: string, userId: string, edit: (r: Reads | null) => Reads | null): Promise<Reads | null> {
+    for (let tries = 0; tries < 3; tries++) {
+      const { reads, etag } = await this.readReads(owner, campaignId, userId), next = edit(reads);
+      if (!next) return reads;
+      if (await put(this.bucket, readsKey(owner, campaignId, userId), readsSchema.parse(next), etag)) return next;
+    }
+    throw new ForumError("Your read marks were busy. Try again.");
+  }
+
+  async readPresence(owner: string, campaignId: string): Promise<{ presence: Presence | null; etag: string | null }> {
+    const object = await this.bucket.get(presenceKey(owner, campaignId));
+    if (!object) return { presence: null, etag: null };
+    const parsed = presenceSchema.safeParse(await object.json().catch(() => null));
+    return { presence: parsed.success ? parsed.data : null, etag: object.etag };
+  }
+  /** Notes that someone is reading. Best effort: a busy file is left for the next page they open. */
+  async touchPresence(owner: string, campaignId: string, userId: string, now: Date, known?: { presence: Presence | null; etag: string | null }) {
+    let got = known ?? await this.readPresence(owner, campaignId);
+    for (let tries = 0; tries < 2; tries++) {
+      const next = touch(got.presence, userId, now);
+      if (!next || await put(this.bucket, presenceKey(owner, campaignId), next, got.etag)) return;
+      got = await this.readPresence(owner, campaignId);
+    }
   }
 
   /** Saves the forum file. The topic just written is read again each time, so its summary includes replies that landed since. */

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-model.ts';
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
-import { ForumStore, forumKey, topicKey } from '../lib/forum/store.ts';
+import { ForumStore, forumKey } from '../lib/forum/store.ts';
 import { frameOf, topicPage, cardOf, castOf, forumImages, membersPage } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
+import * as R from '../lib/forum/reader.ts';
 
 // ---- Fixtures ---------------------------------------------------------------------------------
 class Bucket {
@@ -354,4 +355,114 @@ test('request: images redirect only for pictures the forum may show', async () =
   assert.equal(ok.headers.get('Location'), 'https://img.test/' + IMG.tavern);
   assert.equal((await get(IMG.villain)).status, 404);
   assert.equal((await get('../x')).status, 404);
+});
+
+// ---- 11. Reading: unread marks, presence, turns, recent posts ----------------------------------
+test('reader: unread marks, mark all and pruning', () => {
+  const t = { id: 't1', lastAt: '2026-01-02T00:00:00.000Z', last: { userId: 'p2', as: null } };
+  const r0 = R.freshReads('2026-01-01T00:00:00.000Z');
+  assert.equal(R.isUnread(r0, t, 'p1'), true);
+  assert.equal(R.isUnread(r0, t, 'p2'), false, 'your own last post is read');
+  assert.equal(R.isUnread(undefined, t, 'p1'), false);
+  const r1 = R.markTopic(r0, 't1', t.lastAt);
+  assert.equal(R.isUnread(r1, t, 'p1'), false);
+  assert.equal(R.markTopic(r1, 't1', t.lastAt), null, 'nothing to write');
+  assert.equal(R.isUnread(r1, { ...t, lastAt: '2026-01-03T00:00:00.000Z' }, 'p1'), true, 'a newer post');
+  const r2 = R.markTopic({ ...r1, topics: { ...r1.topics, gone: '2026-01-02T00:00:00.000Z' } }, 't2', '2026-01-04T00:00:00.000Z', new Set(['t1', 't2']));
+  assert.deepEqual(Object.keys(r2.topics).sort(), ['t1', 't2'], 'removed topics are dropped');
+  const all = R.markAll(new Date('2026-01-05T00:00:00.000Z'));
+  assert.deepEqual(all.topics, {});
+  assert.equal(R.isUnread(all, { ...t, lastAt: '2026-01-04T00:00:00.000Z' }, 'p1'), false);
+});
+
+test('reader: presence writes at most once a minute and keeps the peak', () => {
+  const at = m => new Date(NOW.getTime() + m * 60_000);
+  const p1 = R.touch(null, 'a', at(0));
+  assert.deepEqual(R.onlineOf(p1, at(0)), ['a']);
+  assert.equal(R.touch(p1, 'a', at(0.5)), null, 'seen a moment ago');
+  const p2 = R.touch(p1, 'b', at(1));
+  assert.deepEqual(R.onlineOf(p2, at(1)), ['b', 'a']);
+  assert.equal(p2.peak.count, 2);
+  assert.deepEqual(R.onlineOf(p2, at(16)), ['b']);
+  const p3 = R.touch(p2, 'a', at(60));
+  assert.equal(p3.peak.count, 2, 'the peak stays');
+  assert.deepEqual(R.onlineOf(p3, at(60)), ['a']);
+});
+
+test('reader: turns go round in first-post order, with narration as one more', () => {
+  const s = (order, lastAs) => ({ cast: order.filter(x => x !== R.NARRATION), order, last: { userId: 'x', as: lastAs } });
+  assert.equal(R.nextUp(s(['hero'], 'hero')), null, 'one writer: nobody waits');
+  assert.equal(R.nextUp(s(['hero', 'villain'], 'hero')), 'villain');
+  assert.equal(R.nextUp(s(['hero', 'villain'], 'villain')), 'hero');
+  assert.equal(R.nextUp(s([R.NARRATION, 'hero', 'villain'], null)), 'hero');
+  assert.equal(R.nextUp(s([R.NARRATION, 'hero', 'villain'], 'villain')), R.NARRATION);
+  assert.equal(R.nextUp({ cast: ['hero', 'villain'], last: { userId: 'x', as: 'villain' } }), 'hero', 'older summaries use the cast');
+});
+
+test('model: summaries keep the turn order; posts are logged for a few days and unlogged on delete', () => {
+  const { forum, topic } = seeded();
+  const gm = M.reply(forum, topic, { body: 'The GM speaks', as: null }, poster(forum, OWNER), 'a2', NOW);
+  const f1 = gm.forum(forum, gm.topic);
+  assert.deepEqual(f1.topics[0].order, ['hero', R.NARRATION]);
+  assert.deepEqual(f1.recent.map(r => r.postId), ['a1', 'a2']);
+  const del = M.deletePost(f1, gm.topic, { postId: 'a2' }, poster(f1, OWNER));
+  assert.deepEqual(del.forum(f1, del.topic).recent.map(r => r.postId), ['a1']);
+  const later = new Date(NOW.getTime() + 4 * 86_400_000);
+  const again = M.reply(f1, gm.topic, { body: 'Days later', as: 'hero' }, poster(f1, 'p1'), 'a3', later);
+  assert.deepEqual(again.forum(f1, again.topic).recent.map(r => r.postId), ['a3'], 'old posts drop off');
+  assert.deepEqual(M.deleteTopic(f1, gm.topic, poster(f1, OWNER)).forum(f1).recent, []);
+});
+
+test('view: unread, whose turn, waiting on you, online and characters who posted today', () => {
+  const { forum, topic } = seeded();
+  const gm = M.reply(forum, topic, { body: 'The villain sneers', as: 'villain' }, poster(forum, OWNER), 'a2', NOW);
+  const f = gm.forum(forum, gm.topic);
+  const reads = R.freshReads('2025-12-31T00:00:00.000Z');
+  const presence = R.touch(R.touch(null, 'p1', NOW), OWNER, NOW);
+  const forPat = { ...ctxFor(f, 'p1'), reads, presence, now: NOW };
+  const frame = frameOf(forPat);
+  assert.equal(frame.you.unread, 1);
+  assert.equal(frame.boards.find(b => b.id === 'tavern-board').unread, true);
+  assert.equal(frame.footer.active[0].next.name, 'Hero');
+  assert.equal(frame.footer.active[0].next.mine, true, "Pat plays the Hero: it's their turn");
+  assert.equal(frame.you.waiting.length, 1);
+  assert.deepEqual(frame.footer.online.map(o => o.name).sort(), ['Gamemaster', 'Pat']);
+  assert.deepEqual(frame.footer.today.map(c => [c.name, c.at.length]), [['Hero', 1], ['Villain', 1]]);
+  assert.equal(JSON.stringify(frame).includes('"p1"'), false, 'no account ids reach the browser');
+  // The GM plays the villain (nobody else edits it): after the hero, it's the GM's turn there.
+  const rep2 = M.reply(f, gm.topic, { body: 'Hero answers', as: 'hero' }, poster(f, 'p1'), 'a3', NOW), f2 = rep2.forum(f, rep2.topic);
+  const gmFrame = frameOf({ ...ctxFor(f2, OWNER), reads, presence, now: NOW });
+  assert.equal(gmFrame.you.waiting[0].next.name, 'Villain');
+  assert.equal(gmFrame.you.waiting[0].next.mine, true);
+  assert.equal(frameOf({ ...ctxFor(f2, 'p1'), reads, now: NOW }).you.waiting[0].next.mine, false);
+  assert.equal(frameOf({ ...ctxFor(f2, 'p2'), reads, now: NOW }).you.waiting.length, 0, 'Quinn has nobody in it');
+  const page = topicPage({ ...forPat, reads }, gm.topic);
+  assert.equal(page.readBefore, reads.all);
+});
+
+test('request: opening a topic marks it read; Mark all as read; online after a view', async () => {
+  const p1 = harness({ user: 'p1' });
+  const { topicId } = await (await p1.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Hi', body: 'Hello', as: null })).json();
+  const gm = harness({ user: OWNER });
+  gm.deps.store = p1.store;
+  const later = new Date(NOW.getTime() + 60_000);
+  gm.deps.now = () => later;
+  const index = async h => (await h.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json();
+  // The GM's first visit marks everything before it read; a reply after that is new to them.
+  assert.equal((await index(gm)).frame.you.unread, 0);
+  const p1Later = { ...p1.deps, now: () => new Date(NOW.getTime() + 120_000) };
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Anyone?', as: null }, undefined, p1Later);
+  gm.deps.now = () => new Date(NOW.getTime() + 180_000);
+  const before = await index(gm);
+  assert.equal(before.frame.you.unread, 1);
+  assert.deepEqual(before.frame.footer.online.map(o => o.name).sort(), ['Gamemaster', 'Pat']);
+  const opened = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json();
+  assert.equal(opened.frame.you.unread, 0);
+  assert.ok(opened.page.readBefore < opened.page.posts[1].at, 'the reply shows as new on this visit');
+  assert.equal((await index(gm)).frame.you.unread, 0);
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Hello?', as: null }, undefined, { ...p1.deps, now: () => new Date(NOW.getTime() + 240_000) });
+  gm.deps.now = () => new Date(NOW.getTime() + 300_000);
+  assert.equal((await index(gm)).frame.you.unread, 1);
+  assert.equal((await (await gm.post({ action: 'readAll', campaign: KEY })).json()).ok, true);
+  assert.equal((await index(gm)).frame.you.unread, 0);
 });

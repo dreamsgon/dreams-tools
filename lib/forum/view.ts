@@ -7,12 +7,18 @@ import { visibleEntries, type Entry, type Workspace } from "../encyclopedia/worl
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { boardTree, kindOf, type Author, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
 
 export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string> };
 export type Context = {
   forum: Forum; list: MemberList; owner: string; workspace: Workspace; campaignId: string; viewer: Viewer;
   /** Pages this viewer may open on the player pages; null when they see every page (the GM). */
   readable: ReadonlySet<string> | null;
+  /** The viewer's read marks (reader.ts); without them nothing shows as unread. */
+  reads?: Reads;
+  /** Who has been reading lately. */
+  presence?: Presence | null;
+  now?: Date;
 };
 
 export type Picture = { imageId: string; x: number; y: number };
@@ -83,21 +89,51 @@ function bylineOf(ctx: Context, entries: Map<string, Entry>, a: Author): Byline 
 }
 const lastOf = (ctx: Context, entries: Map<string, Entry>, t: TopicSummary): LastPost => ({ ...bylineOf(ctx, entries, t.last), topicId: t.id, title: t.title, at: t.lastAt });
 
+/** Whose turn it is in a topic, and whether that's the viewer (one of their characters, or for a GM, an NPC or narration). */
+export type Turn = { name: string; picture: Picture | null; mine: boolean };
 export type TopicRow = {
   id: string; boardId: string; title: string; pinned: boolean; locked: boolean; replies: number;
   by: Byline; at: string; last: LastPost; cast: { id: string; name: string; picture: Picture | null }[];
+  unread: boolean; next: Turn | null;
 };
+/** Characters a member other than the GM may edit: the rest are the GM's to play. */
+const playerRunOf = (ctx: Context) => {
+  const out = new Set<string>();
+  for (const [page, a] of Object.entries(ctx.list.pages ?? {})) if (Object.values(a.people).some(p => p.edit) || Object.values(a.groups).some(Boolean)) out.add(page);
+  return out;
+};
+const memo = new WeakMap<Context, Set<string>>();
+/** Whether the viewer writes for this participant of a topic. */
+function controls(ctx: Context, who: string) {
+  if (who === NARRATION) return ctx.viewer.rights.gm;
+  if (ctx.viewer.editable.has(who)) return true;
+  if (!ctx.viewer.rights.gm) return false;
+  let run = memo.get(ctx);
+  if (!run) memo.set(ctx, run = playerRunOf(ctx));
+  return !run.has(who);
+}
+function turnOf(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): Turn | null {
+  if (t.locked) return null;
+  const board = ctx.forum.boards.find(b => b.id === t.boardId);
+  if (!board || kindOf(ctx.forum, board) !== "ic") return null;
+  const who = nextUp(t);
+  if (!who) return null;
+  const e = who === NARRATION ? undefined : entries.get(who);
+  if (who !== NARRATION && !e) return null;
+  return { name: e ? e.title : "the Game Master", picture: pictureOf(e), mine: controls(ctx, who) };
+}
 function topicRow(ctx: Context, entries: Map<string, Entry>, t: TopicSummary): TopicRow {
   return {
     id: t.id, boardId: t.boardId, title: t.title, pinned: t.pinned, locked: t.locked, replies: t.replies, by: bylineOf(ctx, entries, t.by), at: t.at, last: lastOf(ctx, entries, t),
     cast: t.cast.flatMap(id => { const e = entries.get(id); return e ? [{ id, name: e.title, picture: pictureOf(e) }] : []; }).slice(0, 6),
+    unread: isUnread(ctx.reads, t, ctx.viewer.userId), next: turnOf(ctx, entries, t),
   };
 }
 
 export type BoardRow = {
   id: string; categoryId: string; parentId: string | null; name: string; description: string; kind: "ic" | "ooc"; locked: boolean;
   place: { id: string; name: string; picture: Picture | null; url: string | null } | null;
-  topics: number; replies: number; last: LastPost | null;
+  topics: number; replies: number; last: LastPost | null; unread: boolean;
 };
 function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow {
   const ids = new Set([b.id, ...ctx.forum.boards.filter(x => x.parentId === b.id).map(x => x.id)]);
@@ -107,6 +143,7 @@ function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow
     id: b.id, categoryId: b.categoryId, parentId: b.parentId, name: b.name, description: b.description, kind: kindOf(ctx.forum, b), locked: !!b.locked,
     place: place ? { id: place.id, name: place.title, picture: pictureOf(place), url: pageUrl(ctx, place.id) } : null,
     topics: topics.length, replies: topics.reduce((n, t) => n + t.replies, 0), last: latest ? lastOf(ctx, entries, latest) : null,
+    unread: topics.some(t => isUnread(ctx.reads, t, ctx.viewer.userId)),
   };
 }
 
@@ -126,22 +163,60 @@ function staffOf(ctx: Context) {
   return out;
 }
 
+/** A member's colour in the online list: their first group's, or null for the GM (the theme's accent). */
+function colourOf(ctx: Context, userId: string) {
+  if (userId === ctx.owner) return null;
+  const m = ctx.list.members.find(x => x.userId === userId), g = m && ctx.list.groups.find(x => m.groups.includes(x.id));
+  return g?.color ?? "gray";
+}
+/**
+ * The topics the viewer writes in, and whose turn it is in each: theirs first (oldest waiting first), then the
+ * ones waiting on someone else.
+ */
+function waitingOf(ctx: Context, entries: Map<string, Entry>) {
+  const out: (TopicRow & { board: string })[] = [];
+  for (const t of ctx.forum.topics) {
+    if (t.locked || !orderOf(t).some(who => controls(ctx, who))) continue;
+    const row = topicRow(ctx, entries, t);
+    if (row.next) out.push({ ...row, board: ctx.forum.boards.find(b => b.id === t.boardId)?.name ?? "" });
+  }
+  out.sort((a, b) => Number(b.next!.mine) - Number(a.next!.mine) || (a.next!.mine ? a.last.at.localeCompare(b.last.at) : b.last.at.localeCompare(a.last.at)));
+  return out.slice(0, 30);
+}
+/** Characters who posted in the last day and a half, with the times of their posts; the browser keeps today's. */
+function recentCharacters(ctx: Context, entries: Map<string, Entry>, now: Date) {
+  const since = new Date(now.getTime() - 36 * 3_600_000).toISOString(), by = new Map<string, string[]>();
+  for (const r of ctx.forum.recent ?? []) if (r.as && r.at >= since && entries.has(r.as)) by.set(r.as, [...(by.get(r.as) ?? []), r.at]);
+  return [...by].map(([id, at]) => { const e = entries.get(id)!; return { id, name: e.title, picture: pictureOf(e), url: pageUrl(ctx, id), at }; }).sort((a, b) => b.at.length - a.at.length || a.name.localeCompare(b.name));
+}
+
 /** What every forum page shows: the banner, top bar, board list and footer, and who the viewer is. */
 export function frameOf(ctx: Context) {
-  const c = campaignOf(ctx), entries = entriesOf(ctx), s = ctx.forum.settings, f = ctx.forum;
+  const c = campaignOf(ctx), entries = entriesOf(ctx), s = ctx.forum.settings, f = ctx.forum, now = ctx.now ?? new Date();
+  const waiting = waitingOf(ctx, entries), online = onlineOf(ctx.presence, now).filter(id => id === ctx.owner || ctx.list.members.some(m => m.userId === id));
+  const newest = [...ctx.list.members].sort((a, b) => b.joinedAt.localeCompare(a.joinedAt))[0];
   const counts = Object.entries(f.counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
   const banner = s.banner && c.look?.banner && (ctx.viewer.rights.gm || c.look.players !== false) ? { imageId: c.look.banner.imageId, y: c.look.banner.y } : null;
   return {
     campaign: { name: c.name },
     settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner },
     banner, date: dateOf(ctx), staff: staffOf(ctx),
-    you: { name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable] },
+    you: {
+      name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
+      unread: f.topics.filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting,
+    },
     categories: f.categories,
     boards: boardTree(f).flatMap(({ boards }) => boards.flatMap(({ board, subs }) => [board, ...subs])).map(b => boardRow(ctx, entries, b)),
     footer: {
       active: [...f.topics].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 5).map(t => topicRow(ctx, entries, t)),
       top: counts.slice(0, 5).map(([userId, posts]) => ({ name: memberName(ctx, userId), posts })),
-      stats: { topics: f.topics.length, posts: f.topics.reduce((n, t) => n + t.replies + 1, 0), members: ctx.list.members.length + 1 },
+      stats: {
+        topics: f.topics.length, posts: f.topics.reduce((n, t) => n + t.replies + 1, 0), members: ctx.list.members.length + 1, characters: f.characters.length,
+        peak: ctx.presence?.peak ?? null, newest: newest ? newest.name : null,
+      },
+      online: online.map(id => ({ name: memberName(ctx, id), color: colourOf(ctx, id), you: id === ctx.viewer.userId })),
+      groups: [{ name: "Game Master", color: null as string | null }, ...ctx.list.groups.filter(g => ctx.list.members.some(m => m.groups[0] === g.id)).map(g => ({ name: g.name, color: g.color as string | null }))],
+      today: recentCharacters(ctx, entries, now),
     },
   };
 }
@@ -165,6 +240,8 @@ export function topicPage(ctx: Context, topic: Topic) {
   for (const p of topic.posts) if (p.by.as && !cards[p.by.as]) { const e = entries.get(p.by.as); if (e) cards[e.id] = cardOf(ctx, e); }
   return {
     topic: { ...topicRow(ctx, entries, s), kind: board ? kindOf(ctx.forum, board) : "ooc" as const, canRename: r.moderate || s.by.userId === ctx.viewer.userId, canReply: r.reply && (!s.locked || r.moderate) },
+    /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
+    readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = !s.locked || r.moderate;
       return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
@@ -183,7 +260,8 @@ export function activePage(ctx: Context, limit = 50) {
 export function membersPage(ctx: Context) {
   const staff = new Map(staffOf(ctx).map(s => [s.name, s.role]));
   const people = [{ userId: ctx.owner, name: memberName(ctx, ctx.owner) }, ...ctx.list.members.map(m => ({ userId: m.userId, name: m.name }))];
-  return { members: people.map(p => ({ name: p.name, role: staff.get(p.name) ?? (can(ctx.list, p.userId, "forumReply") ? "Player" : "Guest"), posts: ctx.forum.counts[p.userId] ?? 0 })).sort((a, b) => b.posts - a.posts || a.name.localeCompare(b.name)) };
+  const online = new Set(onlineOf(ctx.presence, ctx.now ?? new Date()));
+  return { members: people.map(p => ({ name: p.name, role: staff.get(p.name) ?? (can(ctx.list, p.userId, "forumReply") ? "Player" : "Guest"), posts: ctx.forum.counts[p.userId] ?? 0, online: online.has(p.userId), color: colourOf(ctx, p.userId) })).sort((a, b) => b.posts - a.posts || a.name.localeCompare(b.name)) };
 }
 
 /** Places the GM can link a location board to. */

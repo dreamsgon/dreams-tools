@@ -10,8 +10,9 @@
  */
 import { z } from "zod";
 import { can, type MemberList } from "../members.ts";
+import { NARRATION } from "./reader.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000 } as const;
+export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400 } as const;
 
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const userId = z.string().min(1).max(100);
@@ -48,7 +49,11 @@ export const topicSummarySchema = z.object({
   pinned: z.boolean(), locked: z.boolean(),
   /** The characters who have posted in it, in order of their first post. */
   cast: z.array(id).max(40),
+  /** Who takes turns, in order of their first post: characters, and "*" for the GM's narration (reader.ts). */
+  order: z.array(z.string().min(1).max(100)).max(41).optional(),
 });
+/** One recent post, kept a few days for "Characters who posted today". Never sent to the browser as is. */
+export const recentSchema = z.object({ at, userId, as: id.nullable(), topicId: id, postId: id });
 export const forumSchema = z.object({
   schemaVersion: z.literal(1),
   settings: forumSettingsSchema,
@@ -59,6 +64,8 @@ export const forumSchema = z.object({
   counts: z.record(userId, z.number().int().min(0)),
   /** Every character that has posted here. Their pictures may be shown to everyone who reads the forum. */
   characters: z.array(id).max(FORUM_LIMITS.characters),
+  /** The last few days of posts, newest last (`recentSchema`). Older forums have none. */
+  recent: z.array(recentSchema).max(FORUM_LIMITS.recent).optional(),
 });
 export const postSchema = z.object({ id, by: authorSchema, body: z.string().min(1).max(FORUM_LIMITS.body), at, editedAt: at.optional() });
 export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts) });
@@ -71,6 +78,7 @@ export type TopicSummary = z.infer<typeof topicSummarySchema>;
 export type Forum = z.infer<typeof forumSchema>;
 export type Post = z.infer<typeof postSchema>;
 export type Topic = z.infer<typeof topicSchema>;
+export type Recent = z.infer<typeof recentSchema>;
 
 export class ForumError extends Error { name = "ForumError"; }
 const fail = (message: string): never => { throw new ForumError(message); };
@@ -124,12 +132,23 @@ const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) =
 /** The topic's summary worked out again from its posts, keeping what moderators set (pinned, locked, title). */
 export function summarize(topic: Topic, base: Pick<TopicSummary, "title" | "pinned" | "locked">): TopicSummary {
   const first = topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1]!;
-  const cast: string[] = [];
-  for (const p of topic.posts) if (p.by.as && !cast.includes(p.by.as) && cast.length < 40) cast.push(p.by.as);
-  return { id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast };
+  const cast: string[] = [], order: string[] = [];
+  for (const p of topic.posts) {
+    if (p.by.as && !cast.includes(p.by.as) && cast.length < 40) cast.push(p.by.as);
+    const who = p.by.as ?? NARRATION;
+    if (!order.includes(who) && order.length < 41) order.push(who);
+  }
+  return { id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order };
 }
 const putSummary = (f: Forum, s: TopicSummary): Forum => ({ ...f, topics: f.topics.some(t => t.id === s.id) ? f.topics.map(t => t.id === s.id ? s : t) : [...f.topics, s] });
 const addCount = (f: Forum, userId: string, n: number): Forum => ({ ...f, counts: { ...f.counts, [userId]: Math.max(0, (f.counts[userId] ?? 0) + n) } });
+const RECENT_MS = 3 * 86_400_000;
+/** Notes a post in the recent list, dropping posts older than three days. */
+const logPost = (f: Forum, r: Recent): Forum => {
+  const since = new Date(new Date(r.at).getTime() - RECENT_MS).toISOString();
+  return { ...f, recent: [...(f.recent ?? []).filter(x => x.at >= since && x.postId !== r.postId), r].slice(-FORUM_LIMITS.recent) };
+};
+const unlog = (f: Forum, drop: (r: Recent) => boolean): Forum => f.recent ? { ...f, recent: f.recent.filter(r => !drop(r)) } : f;
 const addCharacter = (f: Forum, as: string | null): Forum => !as || f.characters.includes(as) ? f : { ...f, characters: [...f.characters, as].slice(-FORUM_LIMITS.characters) };
 
 /** A change: the topic file to write (null deletes it, undefined leaves it), and the change to make to the forum file. */
@@ -143,7 +162,8 @@ export function startTopic(f: Forum, input: { boardId: string; title: unknown; b
   const by = { userId: who.userId, as }, stamp = now.toISOString();
   const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp }] };
   const summary = summarize(topic, { title, pinned: false, locked: false });
-  return { topic, forum: g => addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), out: { topicId: topic.id } };
+  const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
+  return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
 
 export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
@@ -152,7 +172,8 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
   if (topic.posts.length >= FORUM_LIMITS.posts) fail("This topic is full. Start a new one to carry on.");
   const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
   const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString() }] };
-  return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return addCharacter(addCount(putSummary(g, summarize(latest ?? next, cur)), who.userId, 1), as); }, out: { postId } };
+  const log: Recent = { at: now.toISOString(), userId: who.userId, as, topicId: topic.id, postId };
+  return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return logPost(addCharacter(addCount(putSummary(g, summarize(latest ?? next, cur)), who.userId, 1), as), log); }, out: { postId } };
 }
 
 const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === postId) ?? fail("That post was removed.");
@@ -174,12 +195,12 @@ export function deletePost(f: Forum, topic: Topic, input: { postId: string }, wh
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   if (topic.posts[0]!.id === p.id) return topic.posts.length === 1 ? removeTopic(topic) : fail("The first post starts the topic. Delete the topic instead.");
   const next: Topic = { ...topic, posts: topic.posts.filter(x => x.id !== p.id) };
-  return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return addCount(putSummary(g, summarize(latest ?? next, cur)), p.by.userId, -1); } };
+  return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return unlog(addCount(putSummary(g, summarize(latest ?? next, cur)), p.by.userId, -1), r => r.postId === p.id); } };
 }
 
 const removeTopic = (topic: Topic): Change => ({
   topic: null,
-  forum: g => topic.posts.reduce((x, p) => addCount(x, p.by.userId, -1), { ...g, topics: g.topics.filter(t => t.id !== topic.id) }),
+  forum: g => unlog(topic.posts.reduce((x, p) => addCount(x, p.by.userId, -1), { ...g, topics: g.topics.filter(t => t.id !== topic.id) }), r => r.topicId === topic.id),
 });
 /** Moderators delete a whole topic; its posts come off their writers' counts. */
 export function deleteTopic(f: Forum, topic: Topic, who: Poster): Change {
