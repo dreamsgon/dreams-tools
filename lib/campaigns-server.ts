@@ -68,7 +68,7 @@ export function backupFile(both: Awaited<ReturnType<typeof readBoth>>) {
 export type CampaignAction =
   | { action: "pair"; pairs: { encyclopediaId: string; maptableId: string | null }[] }
   | { action: "rename"; encyclopediaId?: string; maptableId?: string; name: string; description?: string }
-  | { action: "create"; name: string; description?: string; maptable: boolean; encyclopedia: boolean; worldId?: string; newWorld?: string }
+  | { action: "create"; name: string; description?: string; maptable: boolean; encyclopedia: boolean; worldId?: string; newWorld?: string; solo?: boolean }
   | { action: "newFolder"; name: string; parentId?: string | null }
   | { action: "renameFolder"; folderId: string; name: string }
   | { action: "removeFolder"; folderId: string }
@@ -77,7 +77,8 @@ export type CampaignAction =
   | { action: "stepFolder"; folderId: string; delta: -1 | 1 }
   | { action: "placeFolder"; folderId: string; targetId: string; place: "before" | "after" }
   | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string }
-  | { action: "forum"; encyclopediaId: string; setup?: unknown };
+  | { action: "forum"; encyclopediaId: string; setup?: unknown }
+  | { action: "solo"; encyclopediaId: string; on: boolean };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
@@ -106,7 +107,7 @@ function addMapCampaign(map: MapWorkspace, name: string) {
   const id = uid();
   return { id, next: { ...map, collections: [...map.collections, { id, name, kind: "campaign" as const, parentId: null }] } };
 }
-function addBookCampaign(book: BookWorkspace, body: { worldId?: unknown; newWorld?: unknown }, name: string, description: string, maptableId?: string) {
+function addBookCampaign(book: BookWorkspace, body: { worldId?: unknown; newWorld?: unknown; solo?: unknown }, name: string, description: string, maptableId?: string) {
   let worlds = book.worlds, worldId = str(body.worldId);
   if (!worldId || !worlds.some(w => w.id === worldId && !w.isTemplate)) {
     if (typeof body.newWorld !== "string" || !body.newWorld.trim()) throw new Error("Choose a world for the Encyclopedia notes.");
@@ -114,7 +115,7 @@ function addBookCampaign(book: BookWorkspace, body: { worldId?: unknown; newWorl
     worlds = [...worlds, { id: worldId, name: cleanName(body.newWorld), description: "", archived: false }];
   }
   const id = newId();
-  return { id, next: { ...book, worlds, campaigns: [...book.campaigns, { id, worldId, name, description, github: { repository: "", branch: "main" }, ...(maptableId ? { maptableCampaignId: maptableId } : {}) }] } };
+  return { id, next: { ...book, worlds, campaigns: [...book.campaigns, { id, worldId, name, description, github: { repository: "", branch: "main" }, ...(maptableId ? { maptableCampaignId: maptableId } : {}), ...(body.solo === true ? { solo: true } : {}) }] } };
 }
 
 /** Runs one change from the Campaigns page and returns the new list. */
@@ -141,6 +142,8 @@ export async function campaignAction(s: Session, body: CampaignAction) {
   } else if (body.action === "create") {
     const name = cleanName(body.name), description = describe(body.description);
     if (!body.maptable && !body.encyclopedia) throw new Error("Choose at least one tool.");
+    // Solo play is kept with the Encyclopedia notes, where the characters are.
+    if (body.solo === true && !body.encyclopedia) throw new Error("A solo campaign needs Encyclopedia notes: they hold your characters.");
     let mapId: string | undefined;
     // Encyclopedia problems (such as no world chosen) are found before Maptable is changed.
     const book = body.encyclopedia ? addBookCampaign(both.book.data, body, name, description) : null;
@@ -175,6 +178,17 @@ export async function campaignAction(s: Session, body: CampaignAction) {
       if (etag || JSON.stringify(next.groups) !== JSON.stringify(list.groups)) await members.change(s.owner, campaign.id, l => applyForumAccess(l, parsed.data));
     }
     if (!campaign.forum) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === campaign.id ? { ...c, forum: true } : c) });
+  } else if (body.action === "solo") {
+    // Solo play: just the GM, with an oracle or an AI. Nothing else changes, so it can be switched back at any time.
+    const eid = str(body.encyclopediaId), campaign = both.book.data.campaigns.find(c => c.id === eid);
+    if (!campaign) throw new Error("That campaign has no Encyclopedia notes, which solo play lives with. Reload the page.");
+    if (typeof body.on !== "boolean") throw new Error("Choose solo play on or off.");
+    if ((campaign.solo === true) !== body.on) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => {
+      if (c.id !== campaign.id) return c;
+      const next = { ...c };
+      delete next.solo;
+      return body.on ? { ...next, solo: true } : next;
+    }) });
   } else if (body.action === "newFolder") {
     const name = cleanName(body.name, "folder"), parentId = parentOf(mapNow, body.parentId);
     await saveMap(s, both.map, { ...mapNow, collections: [...mapNow.collections, { id: uid(), name, kind: "folder", parentId }] });

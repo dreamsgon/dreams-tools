@@ -126,6 +126,18 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- opens once, after the campaign loads
     if (hub.row.encyclopedia && !hub.row.encyclopedia.forum) setForumDialog(true);
   }, [hub]);
+  /** Solo play: just the GM, with an oracle or an AI (lib/solo.ts). */
+  const [soloBusy, setSoloBusy] = useState(false);
+  async function setSolo(on: boolean) {
+    const id = hub?.row.encyclopedia?.id;
+    if (!id) return;
+    setSoloBusy(true); setSaveError("");
+    try {
+      await post({ action: "solo", encyclopediaId: id, on }, "Could not change solo play.");
+      setHub(h => h && h.row.encyclopedia ? { ...h, row: { ...h.row, encyclopedia: { ...h.row.encyclopedia, solo: on } } } : h);
+    } catch (err) { setSaveError(err instanceof Error ? err.message : "Could not change solo play."); }
+    finally { setSoloBusy(false); }
+  }
   async function saveFront(frontPage: FrontPage) {
     setSaveError("");
     try { setHub(await post({ action: "frontPage", key: campaignKey, frontPage }, "Could not save the next session.")); }
@@ -150,7 +162,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       <div className="hub-title">
         <p>Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>
-        <div className="hub-chips"><span className={`hub-chip${m ? " on" : ""}`}>{m ? "✓ Maps" : "No maps yet"}</span><span className={`hub-chip${e ? " on" : ""}`}>{e ? "✓ Wiki" : "No wiki yet"}</span>{e && <span className={`hub-chip${L.forum ? " on" : ""}`}>{L.forum ? "✓ Forum" : "No forum yet"}</span>}</div>
+        <div className="hub-chips"><span className={`hub-chip${m ? " on" : ""}`}>{m ? "✓ Maps" : "No maps yet"}</span><span className={`hub-chip${e ? " on" : ""}`}>{e ? "✓ Wiki" : "No wiki yet"}</span>{e && <span className={`hub-chip${L.forum ? " on" : ""}`}>{L.forum ? "✓ Forum" : "No forum yet"}</span>}{e?.solo && <span className="hub-chip on" title="Solo play: just you, with an oracle or an AI. You keep every GM power and play the player characters.">✓ Solo</span>}</div>
         <TagRow className="hub-tags" targets={campaignTargets(row)} />
       </div>
       <div className="hub-actions">
@@ -179,7 +191,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     </div>
     {saveError && <p className="hub-error" role="alert">{saveError}</p>}
     <div className="hub-body" role="tabpanel">
-      {tab === "members" ? !e ? <NoNotes href={L.startNotes} /> : members ? <CampaignMembers campaignId={e.id} view={members} setView={setMembers} />
+      {tab === "members" ? !e ? <NoNotes href={L.startNotes} /> : members ? <><SoloCard on={e.solo} busy={soloBusy} setOn={on => void setSolo(on)} /><CampaignMembers campaignId={e.id} view={members} setView={setMembers} /></>
         : <p className={membersError ? "hub-error" : "hub-muted"}>{membersError || "Loading members…"}</p>
         : tab === "dashboard" ? draft
         ? <Customize hub={hub} draft={draft} setDraft={setDraft} halves={halves} />
@@ -190,6 +202,16 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     </div>
     {forumDialog && <ForumSetupDialog campaignName={row.name} busy={settingUp} error={forumError} close={() => setForumDialog(false)} onConfirm={setup => void setUpForum(setup)} />}
   </div></>;
+}
+
+/** Members tab: solo play on or off. */
+function SoloCard({ on, busy, setOn }: { on: boolean; busy: boolean; setOn: (on: boolean) => void }) {
+  return <div className={`hub-card hub-solo${on ? " on" : ""}`}>
+    <label><input type="checkbox" checked={on} disabled={busy} onChange={ev => setOn(ev.target.checked)} /><b>Solo play</b></label>
+    <p>{on
+      ? "Just you, with an oracle or an AI. You keep every GM power, the player characters and companions are yours to play, and the forum has a Player view for writing your character posts."
+      : "Playing alone, with an oracle or an AI? Turn this on to play the player characters yourself while keeping every GM power. The forum then gets a Player view for your character posts."}</p>
+  </div>;
 }
 
 function NoNotes({ href }: { href: string }) {

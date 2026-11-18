@@ -4,7 +4,7 @@ import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-mod
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
 import { ForumStore, forumKey } from '../lib/forum/store.ts';
-import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage, cardFields, cardSample, stripOf, profilePage } from '../lib/forum/view.ts';
+import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage, cardFields, cardSample, stripOf, profilePage, controls } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
 import * as K from '../lib/forum/markup.ts';
@@ -1385,4 +1385,59 @@ test('request: a campaign without a forum says so, to the GM and to members, and
   const { deps } = harness({ forum: false });
   const mcp = forumMcp({ store: deps.store, members: async () => list(), owner: OWNER, campaignId: 'camp', workspace, gm: true, connection: 'Claude', newId: () => 'x', now: () => NOW });
   await assert.rejects(() => mcp.boards(), /no forum yet/);
+});
+
+// ---- Solo campaigns -----------------------------------------------------------------------------
+test('solo: the owner keeps the GM view, plays the PCs and companions, and may switch to the player view', async () => {
+  resetForumThrottles();
+  const solo = { ...workspace, campaigns: workspace.campaigns.map(c => ({ ...c, solo: true })) };
+  const bucket = new Bucket(), store = new ForumStore(bucket); let n = 0;
+  bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: 'f0' });
+  const deps = (user, ws = solo, members = emptyMemberList('camp', 'Gamemaster')) => ({
+    sameOrigin: () => true, user: async () => user, campaign: async () => ({ owner: OWNER, campaignId: 'camp', list: members }),
+    workspace: async () => ws, store, now: () => NOW, newId: () => 's' + ++n,
+  });
+  const post = (body, d = deps(OWNER)) => handleForum(new Request('https://x.test/api/forum', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), d);
+  const index = { action: 'view', campaign: KEY, page: { kind: 'index' } };
+
+  const gm = (await (await post(index)).json()).frame;
+  assert.deepEqual(gm.solo, { player: false });
+  assert.equal(gm.you.rights.gm, true);
+  assert.deepEqual(gm.you.editable.sort(), ['hero', 'sidekick'], 'the player characters and companions are theirs');
+  assert.deepEqual(gm.you.cast.map(c => c.id), ['hero', 'sidekick', 'villain'], 'their own characters come first, then NPCs');
+
+  const pv = (await (await post({ ...index, playerView: true })).json()).frame;
+  assert.deepEqual(pv.solo, { player: true });
+  assert.deepEqual([pv.you.rights.gm, pv.you.rights.moderate, pv.you.rights.boards, pv.you.rights.read, pv.you.rights.start], [false, false, false, true, true]);
+  assert.deepEqual(pv.you.cast.map(c => c.id).sort(), ['hero', 'sidekick'], 'no NPCs in the player view');
+  assert.equal(pv.you.name, 'Gamemaster');
+  assert.equal((await post({ action: 'view', campaign: KEY, page: { kind: 'settings' }, playerView: true })).status, 403);
+
+  // In the player view they post as their characters, never narration or an NPC.
+  const startIc = { action: 'start', campaign: KEY, boardId: 'tavern-board', title: 'Into the tavern', body: 'Hero walks in.', playerView: true };
+  assert.equal((await post({ ...startIc, as: null })).status, 400);
+  assert.equal((await post({ ...startIc, as: 'villain' })).status, 400);
+  const made = await post({ ...startIc, as: 'hero' });
+  assert.equal(made.status, 200);
+  const { topicId } = await made.json();
+  const topic = (await (await post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId }, playerView: true })).json()).page;
+  assert.equal(topic.posts[0].as, 'hero');
+  assert.equal(topic.cards.hero.fields.some(f => f.label === 'Secret'), false, 'GM-only stats stay hidden in the player view');
+  // Back in the GM view the turn is the narration's, and theirs to take.
+  const back = (await (await post({ action: 'reply', campaign: KEY, topicId, body: 'The barkeep looks up.', as: null })).json());
+  assert.equal(back.ok, true);
+
+  // Anyone else, or a campaign that isn't solo, gets no player view.
+  const plain = (await (await post({ ...index, playerView: true }, deps(OWNER, workspace))).json()).frame;
+  assert.equal(plain.solo, null);
+  assert.equal(plain.you.rights.gm, true);
+  const member = (await (await post({ ...index, campaign: 'm-' + 'a'.repeat(64), playerView: true }, deps('p1', solo, list()))).json()).frame;
+  assert.equal(member.solo, null);
+});
+test('solo: an AI never plays the solo player’s characters', () => {
+  const solo = { ...workspace, campaigns: workspace.campaigns.map(c => ({ ...c, solo: true })) };
+  const ctx = { ...ctxFor(withBoards(), OWNER, solo), list: emptyMemberList('camp', 'Gamemaster') };
+  assert.equal(controls(ctx, 'hero'), false);
+  assert.equal(controls(ctx, 'villain'), true);
+  assert.equal(controls({ ...ctx, viewer: { ...ctx.viewer, editable: new Set(['hero']) } }, 'hero'), true);
 });

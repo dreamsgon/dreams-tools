@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
 import { CARD_STYLES, DEFAULT_STRIP, STRIP_FIELDS, TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
+import { soloCharacters } from "../solo.ts";
 import { featureRefs, linkTargets, withoutHtml } from "./markup.ts";
 import { playerFeatures } from "../encyclopedia/features.ts";
 import { playerSpells } from "../encyclopedia/items.ts";
@@ -29,6 +30,11 @@ export type Context = {
   /** The viewer's alerts (alerts.ts). */
   alerts?: Alerts | null;
   now?: Date;
+  /**
+   * A solo campaign's owner (lib/solo.ts): `player` while they use the player view, reading and posting as a member of
+   * the Players group would, with their player characters and companions as their cast. Left out for everyone else.
+   */
+  solo?: { player: boolean };
 };
 
 export type Picture = { imageId: string; x: number; y: number };
@@ -59,7 +65,7 @@ export function memberName(ctx: Pick<Context, "list" | "owner">, userId: string)
 
 /** Where a character or place page opens for this viewer, or null when they can't read it. */
 export function pageUrl(ctx: Context, entryId: string) {
-  if (ctx.viewer.rights.owner) return `/encyclopedia?entry=${encodeURIComponent(entryId)}&campaign=${encodeURIComponent(ctx.campaignId)}`;
+  if (ctx.viewer.rights.owner || (ctx.solo && ctx.readable?.has(entryId))) return `/encyclopedia?entry=${encodeURIComponent(entryId)}&campaign=${encodeURIComponent(ctx.campaignId)}`;
   if (ctx.readable?.has(entryId) && ctx.viewer.key.startsWith("m-")) return `/encyclopedia/player#${ctx.viewer.key}&entry=${encodeURIComponent(entryId)}`;
   return null;
 }
@@ -194,7 +200,8 @@ export type TopicRow = {
 };
 /** Characters a member other than the GM may edit: the rest are the GM's to play. */
 const playerRunOf = (ctx: Context) => {
-  const out = new Set<string>();
+  // A solo campaign's player characters and companions are the solo player's, never the AI's or an NPC.
+  const out = soloCharacters(ctx.workspace, ctx.campaignId);
   for (const [page, a] of Object.entries(ctx.list.pages ?? {})) if (Object.values(a.people).some(p => p.edit) || Object.values(a.groups).some(Boolean)) out.add(page);
   return out;
 };
@@ -345,6 +352,8 @@ export function frameOf(ctx: Context) {
     /** The forum's preset topic tags. */
     topicTags: (ctx.forum.topicTags ?? []).map(x => ({ id: x.id, label: x.label, color: x.color })),
     banner, date: dateOf(ctx), staff: staffOf(ctx),
+    /** For a solo campaign's owner: whether they're in the player view, which the forum's GM view / Player view switch shows. */
+    solo: ctx.solo ?? null,
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
       /** Their saved post styles (forum profile), for Insert. */
