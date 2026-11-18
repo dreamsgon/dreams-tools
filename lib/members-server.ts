@@ -22,7 +22,7 @@ import {
   type JoinOutcome, type MemberList,
 } from "./members.ts";
 
-const listKey = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `members/${encodeURIComponent(campaignId)}.json`;
+export const listKey = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `members/${encodeURIComponent(campaignId)}.json`;
 const inviteKey = (hash: string) => `encyclopedia-invite-keys/${hash}.json`;
 const membershipsKey = (user: string) => `users/${encodeURIComponent(user)}/memberships.json`;
 const notificationsKey = (user: string) => `users/${encodeURIComponent(user)}/notifications.json`;

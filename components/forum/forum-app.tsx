@@ -17,7 +17,7 @@ import { ProfileView } from './forum-profile';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
-  const [error, setError] = useState(''), [status, setStatus] = useState(0), [loading, setLoading] = useState(true), [noForum, setNoForum] = useState(false), [settingUp, setSettingUp] = useState(false);
+  const [error, setError] = useState(''), [status, setStatus] = useState(0), [loading, setLoading] = useState(true), [noForum, setNoForum] = useState(false);
   const request = useRef<AbortController | null>(null), shown = useRef('');
 
   const load = useCallback(async (k: string, p: Place, quiet = false) => {
@@ -61,16 +61,6 @@ export default function ForumApp() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [key, place, load]);
 
-  /** The GM sets up this campaign's forum (Campaigns), then it opens. */
-  const setUp = async () => {
-    setSettingUp(true);
-    try {
-      const r = await fetch('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'forum', encyclopediaId: decodeURIComponent(key.slice(2)) }) });
-      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || 'Could not set up the forum.');
-      await load(key, place);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not set up the forum.'); }
-    finally { setSettingUp(false); }
-  };
   const go = useCallback((p: Place) => { const h = forumHash(key, p); if (location.hash !== h) location.hash = h; else void load(key, p); }, [key, load]);
   const done = useCallback(async (next?: Place) => { if (next) go(next); else await load(key, place, true); }, [go, load, key, place]);
 
@@ -87,7 +77,7 @@ export default function ForumApp() {
   if (!view) return <div className="forum-root">{appBar}<div className="forum-page"><div className="forum-message">
     <h1>{loading ? 'Opening the forum…' : status === 401 ? 'Sign in first' : noForum ? 'No forum yet' : 'Forum unavailable'}</h1>
     {!loading && <p>{error}</p>}
-    {!loading && noForum && key.startsWith('c-') && <p><button type="button" className="f-btn" disabled={settingUp} onClick={() => void setUp()}>{settingUp ? 'Setting up…' : 'Set up the forum'}</button></p>}
+    {!loading && noForum && key.startsWith('c-') && <p><a className="f-btn" href={`/campaigns/${encodeURIComponent('e:' + decodeURIComponent(key.slice(2)))}?forum=setup`}>Set up the forum</a></p>}
     {status === 401 && <p><a className="f-btn" href={`/account?mode=login&next=${encodeURIComponent('/forum' + location.hash)}`}>Sign in</a></p>}
     {!loading && <p>{backLink}</p>}
   </div></div></div>;

@@ -218,3 +218,52 @@ test('forum: a campaign starts without one; setting it up makes an empty forum o
   assert.equal(JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings.title,'Kept');
   await assert.rejects(()=>campaignAction(s,{action:'forum',encyclopediaId:'nope'}),/Encyclopedia notes/);
 });
+
+test('forum: the GM chooses how it starts; the choices make the forum and set the groups, and a bad choice changes nothing', async () => {
+  const {b,s}=await setup();
+  const {forumKey}=await import('../lib/forum/store.ts');
+  const {listKey}=await import('../lib/members-server.ts');
+  const {defaultForumSetup}=await import('../lib/forum/setup.ts');
+  const {can}=await import('../lib/members.ts');
+  await assert.rejects(()=>campaignAction(s,{action:'forum',encyclopediaId:'e1',setup:{...defaultForumSetup(),title:'x'.repeat(81)}}),/forum's settings/);
+  assert.equal(b.data.has(forumKey('owner-1','e1')),false);
+  assert.equal((await s.book.read('owner-1')).data.campaigns[0].forum,undefined);
+  // The defaults match the groups every campaign starts with, so no member list is written for them.
+  const {b:b2,s:s2}=await setup();
+  await campaignAction(s2,{action:'forum',encyclopediaId:'e1',setup:defaultForumSetup()});
+  assert.equal([...b2.data.keys()].some(k=>k===listKey('owner-1','e1')),false);
+  // Chosen: a name, BBCode, Announcements and Introductions, players only read, guests can't see it, co-GMs don't moderate.
+  await campaignAction(s,{action:'forum',encyclopediaId:'e1',setup:{...defaultForumSetup(),title:' The Lantern Board ',tagline:'Tales',banner:false,markup:'bbcode',announcements:true,chat:false,introductions:true,players:'read',guests:'none',cogms:false}});
+  const forum=JSON.parse(b.data.get(forumKey('owner-1','e1')).text);
+  assert.deepEqual(forum.settings,{title:'The Lantern Board',tagline:'Tales',links:[],banner:false,markup:'bbcode'});
+  assert.deepEqual(forum.boards.map(x=>[x.id,x.locked??false]),[['announcements',true],['introductions',false]]);
+  assert.deepEqual(forum.categories.map(c=>c.id),['locations','ooc']);
+  const list=JSON.parse(b.data.get(listKey('owner-1','e1')).text);
+  const perms=id=>list.groups.find(g=>g.id===id).perms;
+  assert.deepEqual([perms('players').forumRead,perms('players').forumStart,perms('players').forumReply,perms('players').forumPictures],['yes','no','no','no']);
+  assert.deepEqual([perms('guests').forumRead,perms('guests').forumStart],['no','no']);
+  assert.deepEqual([perms('cogms').forumModerate,perms('cogms').forumBoards,perms('cogms').forumReply],['no','no','yes']);
+  // Other permissions stay as they were.
+  assert.equal(perms('players').editOwnCharacter,'yes');
+  assert.equal(perms('guests').editPages,'never');
+  const withMember={...list,members:[{userId:'p1',name:'P',groups:['players'],at:new Date().toISOString()}]};
+  assert.equal(can(withMember,'p1','forumRead'),true);
+  assert.equal(can(withMember,'p1','forumStart'),false);
+  // Setting up again (the forum is there) changes neither the forum nor the groups.
+  await campaignAction(s,{action:'forum',encyclopediaId:'e1',setup:{...defaultForumSetup(),title:'Other'}});
+  assert.equal(JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings.title,'The Lantern Board');
+  assert.equal(JSON.parse(b.data.get(listKey('owner-1','e1')).text).groups.find(g=>g.id==='players').perms.forumStart,'no');
+});
+
+test('forum setup: the confirm step says what will happen in plain words', async () => {
+  const {defaultForumSetup,describeForumSetup}=await import('../lib/forum/setup.ts');
+  const lines=describeForumSetup(defaultForumSetup(),'Ashes');
+  assert.match(lines[0],/Named “Ashes”, over the campaign's banner picture/);
+  assert.match(lines[1],/Starts with General chat, plus an empty Locations category/);
+  assert.match(lines[3],/Players read and post\. They may add pictures\./);
+  assert.match(lines[4],/Guests only read\./);
+  const none=describeForumSetup({...defaultForumSetup(),chat:false,guests:'none',announcements:true,introductions:true,cogms:false},'Ashes');
+  assert.match(none[1],/Announcements and Introductions/);
+  assert.match(none[4],/Guests can't see the forum\./);
+  assert.match(none[5],/Only you moderate/);
+});
