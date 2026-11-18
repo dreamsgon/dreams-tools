@@ -542,6 +542,38 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .your-turn { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--accent-2); background: color-mix(in srgb, var(--accent-2) 10%, var(--panel)); color: var(--ink); font-size: 14px; }
 .your-turn > svg { flex: none; color: var(--accent-2); }
 
+/* AI help (lib/forum/ai.ts): the settings card, Summarize and Catch me up, Check my post and Draft with AI. */
+.settings-col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.ai-settings h2 { display: flex; align-items: center; gap: 6px; }
+.ai-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.ai-choice { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
+.ai-choice.on { border-color: var(--accent-2); box-shadow: inset 3px 0 0 var(--accent-2); }
+.ai-choice > span, .ai-use > span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.ai-choice small, .ai-use small { color: var(--muted); font-size: 12px; }
+.ai-use { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.ai-use select { flex: none; max-width: 48%; }
+.ai-help { margin-top: 8px; }
+.ai-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.f-btn.ai-btn { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--line-strong)); color: var(--accent-2); }
+.f-btn.ai-btn svg { color: var(--accent-2); }
+.ai-panel { margin-top: 8px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--accent-2) 50%, var(--line)); border-left: 3px solid var(--accent-2); background: color-mix(in srgb, var(--accent-2) 6%, var(--panel)); }
+.ai-panel header { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ai-panel header > svg { color: var(--accent-2); }
+.ai-panel header .icon-btn { margin-left: auto; }
+.ai-panel p { margin: 6px 0 0; font: 17px/1.5 var(--font-reading); }
+.ai-panel ul { margin: 6px 0 0; padding-left: 20px; }
+.ai-panel li { margin: 3px 0; }
+.ai-notes li q { font-style: italic; color: var(--muted); margin-left: 6px; }
+.tag.ai-kind { margin-right: 4px; }
+.tag.ai-kind.continuity { border-color: var(--accent); color: var(--accent); }
+.tag.ai-kind.spelling { border-color: var(--accent-2); color: var(--accent-2); }
+.tag.ai-mark { border-color: var(--accent-2); color: var(--accent-2); }
+.post-meta .tag.ai-mark { margin-left: 8px; }
+.ai-compose { display: grid; gap: 6px; }
+.ai-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.forum-root .ai-draft input { flex: 1 1 320px; min-width: 0; }
+.ai-draft small { flex-basis: 100%; }
+
 @container page (max-width: 900px) {
   .forum, .forum.half { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
   .forum.half .forum-last { grid-column: 1; }
@@ -635,4 +667,6 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .combat-rows li { grid-template-columns: 52px minmax(0, 1fr); }
   .combat-row-acts { grid-column: 1 / -1; justify-content: flex-end; }
   .roll-card { display: flex; }
+  .ai-use { flex-direction: column; align-items: stretch; }
+  .ai-use select { max-width: none; }
 }

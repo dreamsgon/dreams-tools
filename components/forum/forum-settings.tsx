@@ -1,7 +1,7 @@
 'use client';
-/* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards. */
+/* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards, and (the GM) the AI. */
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, type Frame, type Masks, type PageData, type Tri } from './forum-api';
 import { Crumbs, type Go } from './forum-parts';
@@ -148,10 +148,38 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
   </section>;
 }
 
+const USE_LABEL = { all: 'Everyone who can post', staff: 'Moderators only', off: 'Off' } as const;
+/** The forum's AI: which of the campaign's API-key connections it uses, and who may use what. The GM only. */
+function AiSettings({ page, k, done }: { page: Settings; k: string; done: Done }) {
+  const cur = page.ai.settings, list = page.ai.connections, { call, error, busy } = useCall(k, done);
+  const [v, setV] = useState({ connectionId: cur?.connectionId ?? '', catchUp: cur?.catchUp ?? 'all', check: cur?.check ?? 'all', draft: cur?.draft ?? 'staff' });
+  const use = (key: 'catchUp' | 'check', label: string, note: string) => <label className="ai-use"><span><b>{label}</b><small>{note}</small></span>
+    <select value={v[key]} onChange={e => setV({ ...v, [key]: e.target.value })}>{(['all', 'staff', 'off'] as const).map(u => <option key={u} value={u}>{USE_LABEL[u]}</option>)}</select></label>;
+  return <section className="settings-card ai-settings">
+    <h2><Sparkles size={15} aria-hidden="true" /> AI</h2>
+    <p className="muted">The forum uses one of this campaign’s API-key connections (Connect an AI, on the campaign’s page in the Encyclopedia). Every request counts toward that connection’s monthly limit. The AI only gets forum text the person asking can read, with characters as players see them, never GM-only pages.</p>
+    <div className="ai-pick" role="radiogroup" aria-label="Connection the forum uses">
+      {list.map(c => <label key={c.id} className={`ai-choice${v.connectionId === c.id ? ' on' : ''}`}><input type="radio" name="ai-conn" checked={v.connectionId === c.id} onChange={() => setV({ ...v, connectionId: c.id })} />
+        <span><b>{c.name}</b><small>{c.model} · {c.used.toLocaleString()}{c.limit ? ` of ${c.limit.toLocaleString()}` : ''} tokens this month</small></span></label>)}
+      <label className={`ai-choice${!v.connectionId ? ' on' : ''}`}><input type="radio" name="ai-conn" checked={!v.connectionId} onChange={() => setV({ ...v, connectionId: '' })} /><span><b>No AI in the forum</b><small>Nothing goes to an AI</small></span></label>
+    </div>
+    {!list.length && <p className="muted small">This campaign has no API-key connection yet. Add one under Connect an AI on the campaign’s page in the Encyclopedia, then come back.</p>}
+    {v.connectionId && <>
+      <h3>What members may use</h3>
+      {use('catchUp', 'Summarize and Catch me up', 'A short summary of a topic, or of what’s new since you last read it.')}
+      {use('check', 'Check my post', 'Continuity and spelling notes on a draft before posting, against the topic and the character’s card.')}
+      <label className="ai-use"><span><b>Draft with AI</b><small>A post written by the AI into the box, as narration or an NPC, for a moderator to read, change and post. It carries an AI mark.</small></span>
+        <select value={v.draft} onChange={e => setV({ ...v, draft: e.target.value as 'staff' | 'off' })}><option value="staff">Moderators only</option><option value="off">Off</option></select></label>
+    </>}
+    <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'aiSettings', ai: v.connectionId ? v : null })}>{busy ? 'Saving…' : 'Save AI settings'}</button></div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </section>;
+}
+
 export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page: Settings; k: string; go: Go; done: Done }) {
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
     <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
-    <div className="settings-grid"><BannerSettings page={page} k={k} done={done} /><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
+    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><BoardsSettings frame={frame} page={page} k={k} done={done} /></div>
   </>;
 }

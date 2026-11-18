@@ -8,7 +8,10 @@ import { ForumStore } from '@/lib/forum/store';
 import { handleForum, handleForumImage, type Deps } from '@/lib/forum/request';
 import { loadWorkspace } from '@/lib/workspace-storage';
 import { campaignScenes } from '@/lib/agent-maps';
+import { forumAi } from '@/lib/ai/forum-ai';
 export const dynamic = 'force-dynamic';
+// The AI help can wait on the provider for a while.
+export const maxDuration = 120;
 
 /*
  * A campaign's forum (lib/forum): POST reads a page or makes one change; GET ?c=<key>&image=<id> loads a picture the
@@ -28,6 +31,7 @@ const deps = (): Deps => {
     workspace: async owner => (await new EncyclopediaStore(bucket).read(owner)).data,
     store: new ForumStore(bucket),
     image: readMapImage,
+    ai: forumAi(bucket),
     // The GM's Maptable scenes in the paired campaign, for starting a fight from its initiative tracker.
     scenes: async (owner, maptableCampaignId) => {
       const saved = await loadWorkspace(bucket, `users/${encodeURIComponent(owner)}/`);

@@ -7,6 +7,7 @@ import { playerText, visibleEntries, type Entry, type Workspace } from "../encyc
 import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
+import { aiFor } from "./ai.ts";
 import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
@@ -41,7 +42,7 @@ function campaignOf(ctx: Context) {
   if (!c) throw Error("Campaign not found");
   return c;
 }
-function entriesOf(ctx: Context) {
+export function entriesOf(ctx: Context) {
   const c = campaignOf(ctx);
   return new Map(visibleEntries(ctx.workspace, c.worldId, c.id).map(e => [e.id, e]));
 }
@@ -251,6 +252,8 @@ export function frameOf(ctx: Context) {
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
       unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting, alerts: alertsOf(ctx, entries),
+      /** The AI help this viewer may use (ai.ts). */
+      ai: aiFor(f.settings.ai, ctx.viewer.rights),
       /** Members by key and name, for choosing who a private topic is for. */
       people: ctx.viewer.rights.start ? [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].filter(u => u !== ctx.viewer.userId).map(u => ({ key: memberKey(ctx, u), name: memberName(ctx, u), gm: u === ctx.owner || can(ctx.list, u, "seeGm") })) : [],
     },
@@ -307,7 +310,7 @@ export function topicPage(ctx: Context, topic: Topic) {
     combat: s.combat ? combatOf(ctx, entries, s.combat) : null,
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
+      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
     }),
     cards,
   };

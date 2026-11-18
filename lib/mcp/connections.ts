@@ -41,7 +41,7 @@ export function cleanName(v: unknown) {
   if (!name) throw Error("Give the connection a name.");
   return name;
 }
-const usedNow = (a: ApiSettings, now = new Date()) => a.month === thisMonth(now) ? a.used : 0;
+export const usedNow = (a: ApiSettings, now = new Date()) => a.month === thisMonth(now) ? a.used : 0;
 export const publicApi = (a: ApiSettings, now = new Date()): PublicApi => ({ provider: a.provider, ...(a.baseUrl ? { baseUrl: a.baseUrl } : {}), model: a.model, last4: a.last4, limit: a.limit, used: usedNow(a, now) });
 export const publicConnection = (c: Connection): PublicConnection => ({ id: c.id, name: c.name, level: c.level, perms: permsOf(c), mode: modeOf(permsOf(c)), createdAt: c.createdAt, ...(c.lastUsedAt ? { lastUsedAt: c.lastUsedAt } : {}), ...(c.api ? { api: publicApi(c.api) } : {}) });
 

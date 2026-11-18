@@ -9,6 +9,8 @@ import { Bold, ChevronDown, Dices, Eye, Italic, Link2, MessageSquareQuote, Panel
 import { wordCount } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
 import { Circle, Portrait, PostText } from './forum-parts';
+import { AiComposerHelp } from './forum-ai';
+import { confirmDialog } from '../confirm-dialog';
 
 type CastMember = Frame['you']['cast'][number];
 export type AfterPost = '' | 'pin' | 'lock' | 'both';
@@ -110,15 +112,17 @@ export const MARKUP_HINT = 'Blank lines start paragraphs. **bold**, *italic*, __
  * Write a reply, a new topic (with `title`) or an edit (with `initial`). Unsent text stays in this browser under
  * `draftKey` until it's posted, so the Quick reply and the full reply page share one draft.
  */
-export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, label, foot, after: withAfter, big }: {
-  frame: Frame; k: string; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null; after: AfterPost }) => Promise<void>;
+export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, label, foot, after: withAfter, big, where }: {
+  frame: Frame; k: string; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean }) => Promise<void>;
+  /** The topic or board, for the AI help (forum-ai.tsx). */
+  where?: { topicId: string } | { boardId: string };
   title?: boolean; draftKey: string; quote?: { text: string; n: number }; preferred?: string | null; onCancel?: () => void;
   mode?: 'quick' | 'full' | 'edit'; initial?: string; label?: string; foot?: ReactNode; after?: boolean; big?: boolean;
 }) {
   const storeKey = 'forum-draft:' + draftKey, editing = mode === 'edit';
   const state = useAs(frame, kind, preferred), [title, setTitle] = useState('');
   const [body, setBody] = useState(() => { if (editing) return initial ?? ''; try { return localStorage.getItem(storeKey) ?? ''; } catch { return ''; } });
-  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false), [after, setAfter] = useState<AfterPost>('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false), [after, setAfter] = useState<AfterPost>(''), [drafted, setDrafted] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null), [quoted, setQuoted] = useState(0);
   useEffect(() => { if (editing) return; try { if (body) localStorage.setItem(storeKey, body); else localStorage.removeItem(storeKey); } catch { /* storage may be off */ } }, [body, storeKey, editing]);
   // A Quote click adds the quoted lines to the end of the post.
@@ -128,8 +132,8 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
   const send = async () => {
     setBusy(true); setError('');
     try {
-      await onPost({ title, body, as: state.as, after });
-      if (!editing) { setBody(''); setTitle(''); setAfter(''); setPreview(false); try { localStorage.removeItem(storeKey); } catch { /* ignore */ } }
+      await onPost({ title, body, as: state.as, after, ai: drafted });
+      if (!editing) { setBody(''); setTitle(''); setAfter(''); setDrafted(false); setPreview(false); try { localStorage.removeItem(storeKey); } catch { /* ignore */ } }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not post.'); }
     finally { setBusy(false); }
   };
@@ -154,6 +158,11 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
         <button className="f-btn" disabled={busy || !body.trim() || (withTitle && !title.trim())}>{busy ? (editing ? 'Saving…' : 'Posting…') : editing ? 'Save changes' : withTitle ? 'Start topic' : 'Post reply'}</button>
       </span>
     </div>
+    {drafted && <p className="muted small ai-note">Drafted with AI: read it through and change what you like. The post will show it was drafted with AI.</p>}
+    {where && !editing && <AiComposerHelp frame={frame} k={k} where={where} body={body} as={state.as} title={withTitle ? title : undefined} onDraft={text => { void (async () => {
+      if (body.trim() && !await confirmDialog({ title: 'Replace what you wrote?', message: 'The AI’s draft takes the place of the text in the box.', confirm: 'Replace it' })) return;
+      setBody(text); setDrafted(true); setPreview(false);
+    })(); }} />}
     {error && <p className="form-error" role="alert">{error}</p>}
   </form>;
 }

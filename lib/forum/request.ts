@@ -10,12 +10,13 @@ import { pageRights, type MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
-  FORUM_LIMITS, ForumError, addBoard, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
+  FORUM_LIMITS, ForumError, accessOn, addBoard, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
   type Change, type Forum, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
-import { activePage, boardPage, castOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { activePage, boardPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
+import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
 import { orderFromScene, slotSchema } from "./combat.ts";
 import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
@@ -38,12 +39,18 @@ export type Deps = {
   random?: (sides: number) => number;
   /** The GM's Maptable scenes in a Maptable campaign, for starting combat from its initiative. */
   scenes?: (owner: string, maptableCampaignId: string) => Promise<Scene[]>;
+  /** The campaign's API-key AI connections, and one request to one of them (lib/ai/forum-ai.ts). */
+  ai?: {
+    connections: (owner: string, campaignId: string) => Promise<AiConnection[]>;
+    run: (owner: string, campaignId: string, connectionId: string, ask: { system: string; prompt: string; tool: { name: string; description: string; inputSchema: Record<string, unknown> }; maxTokens: number }) => Promise<{ input?: Record<string, unknown>; tokens: number; name: string }>;
+  };
 };
+export type AiConnection = { id: string; name: string; model: string; used: number; limit: number | null };
 
 export const FORUM_BODY = 64_000;
 export const keyPattern = /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/;
-const readThrottle = createThrottle(30, 10_000), writeThrottle = createThrottle(12, 10_000), imageThrottle = createThrottle(120, 10_000);
-export const resetForumThrottles = () => { readThrottle.reset(); writeThrottle.reset(); imageThrottle.reset(); };
+const readThrottle = createThrottle(30, 10_000), writeThrottle = createThrottle(12, 10_000), imageThrottle = createThrottle(120, 10_000), aiThrottle = createThrottle(6, 60_000);
+export const resetForumThrottles = () => { readThrottle.reset(); writeThrottle.reset(); imageThrottle.reset(); aiThrottle.reset(); };
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
@@ -58,8 +65,10 @@ const pageSchema = z.discriminatedUnion("kind", [
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema }),
-  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional() }),
-  z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as }),
+  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional() }),
+  z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional() }),
+  z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional() }),
+  z.object({ action: z.literal("aiSettings"), campaign: key, ai: z.unknown() }),
   z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000) }),
   z.object({ action: z.literal("delete"), campaign: key, topicId: id, postId: id }),
   z.object({ action: z.literal("deleteTopic"), campaign: key, topicId: id }),
@@ -154,7 +163,9 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       if (!ctx.viewer.rights.boards) return json({ error: "Your group can't change the boards." }, 403);
       const groups = ctx.list.groups.map(g => ({ id: g.id, name: g.name, read: g.perms.forumRead ?? "no", start: g.perms.forumStart ?? "no", reply: g.perms.forumReply ?? "no", gm: g.perms.seeGm === "yes" }));
       const masks = Object.fromEntries(ctx.forum.boards.flatMap(b => b.masks ? [[b.id, b.masks]] : []));
-      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks } });
+      // Only the campaign's owner chooses the forum's AI, as it spends their API key.
+      const connections = ctx.viewer.rights.owner && deps.ai ? await deps.ai.connections(found.owner, found.campaignId).catch(() => []) : [];
+      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
     }
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
   }
@@ -180,7 +191,7 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
 }
 
 /** Runs one change through the store. Changes that touch a topic read it there first. */
-function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" }>, now: Date) {
+function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" | "ai" }>, now: Date) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const who = posterOf(ctx);
   const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>) => deps.store.apply(found.owner, found.campaignId, topicId, make);
@@ -195,6 +206,7 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), { ...body, reroll: (old, text) => rollPost(text, random, old ?? [], now) }, who, now));
     case "combat": return runCombat(deps, ctx, found, body, who, now);
     case "combatSources": return combatSources(deps, ctx, found);
+    case "aiSettings": return (async () => { const ids = deps.ai && ctx.viewer.rights.owner ? (await deps.ai.connections(found.owner, found.campaignId)).map(c => c.id) : []; return run(null, f => setAi(f, body.ai, who, ids)); })();
     case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who));
     case "deleteTopic": return run(body.topicId, (f, t) => deleteTopic(f, needTopic(t), who));
     case "topic": return run(body.boardId !== undefined ? body.topicId : null, (f, t) => setTopic(f, t, body, who));
@@ -288,6 +300,57 @@ function turnTakers(ctx: Context, found: Found, s: TopicSummary) {
   return slot.as.length ? [...new Set(slot.as.flatMap(a => [...playersOf(ctx, a)]))] : [found.owner];
 }
 
+/**
+ * The forum's AI help: Summarize or Catch me up on a topic, Check my post, Draft with AI. Only text the asker can read
+ * goes to the AI, and characters as players see them. Nothing is saved.
+ */
+async function aiHelp(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "ai" }>) {
+  const settings = ctx.forum.settings.ai, may = aiFor(settings, ctx.viewer.rights);
+  if (!settings || !deps.ai) throw new ForumError("The AI is off in this forum.");
+  const allowed = body.op === "summary" || body.op === "catchUp" ? may.catchUp : may[body.op];
+  if (!allowed) throw new ForumError("Your group can't use that here.");
+  // The topic, when there is one, as this reader sees it.
+  let page: ReturnType<typeof topicPage> = null;
+  if (body.topicId) {
+    const s = shownTopics(ctx).find(t => t.id === body.topicId), got = s ? await deps.store.readTopic(found.owner, found.campaignId, s.id) : null;
+    page = got ? topicPage(ctx, got.topic) : null;
+    if (!page) throw new ForumError("That topic was removed.");
+  }
+  const boardId = page?.topic.boardId ?? body.boardId, board = ctx.forum.boards.find(b => b.id === boardId && accessOn(ctx.viewer, b.id).read);
+  if (!board) throw new ForumError(body.topicId ? "That topic was removed." : "Choose a board first.");
+  const kind = kindOf(ctx.forum, board), about = { title: page?.topic.title ?? (body.title?.trim() || "A new topic"), board: board.name };
+  const posts: AiPost[] = page ? page.posts.map(p => ({ name: p.as ? page!.cards[p.as]?.name ?? "A character" : kind === "ic" ? "Game Master" : p.name, player: p.name, body: p.body, rolls: p.rolls, at: p.at })) : [];
+  const cast = new Map(castOf(ctx).map(c => [c.id, c])), entries = entriesOf(ctx);
+  const cardFor = (as: string | null | undefined) => { const e = as && cast.has(as) ? entries.get(as) : undefined; return e ? cardOf(ctx, e) : null; };
+  const ask = (a: Parameters<NonNullable<Deps["ai"]>["run"]>[3]) => deps.ai!.run(found.owner, found.campaignId, settings.connectionId, a);
+  switch (body.op) {
+    case "summary": case "catchUp": {
+      if (!page) throw new ForumError("Open a topic first.");
+      const since = body.op === "catchUp" && body.since ? body.since : null, fresh = since ? posts.filter(p => p.at > since) : posts;
+      if (!fresh.length) return { summary: since ? "Nothing new since you last read it." : "Nothing to summarize yet.", points: [], posts: 0 };
+      const out = await ask({ system: SUMMARY_SYSTEM, prompt: summaryPrompt(about, posts, since), tool: summaryTool, maxTokens: 1500 });
+      const got = readSummary(out.input);
+      if (!got) throw new ForumError("The AI didn't send a summary. Try again.");
+      return { ...got, posts: fresh.length, by: out.name };
+    }
+    case "check": {
+      if (!body.body?.trim()) throw new ForumError("Write something first.");
+      const card = cardFor(body.as);
+      const out = await ask({ system: CHECK_SYSTEM, prompt: checkPrompt(page ? about : null, posts.slice(-20), { body: body.body, as: card, narration: !card && kind === "ic" }), tool: checkTool, maxTokens: 1500 });
+      const notes = readCheck(out.input);
+      if (!notes) throw new ForumError("The AI didn't send its notes. Try again.");
+      return { notes, by: out.name };
+    }
+    case "draft": {
+      const card = kind === "ic" ? cardFor(body.as) : null;
+      const out = await ask({ system: DRAFT_SYSTEM, prompt: draftPrompt({ ...about, about: board.description }, posts.slice(-30), card, body.hint?.trim() ?? "", kind), tool: draftTool, maxTokens: 2500 });
+      const text = readDraft(out.input);
+      if (!text) throw new ForumError("The AI didn't send a draft. Try again.");
+      return { body: text, by: out.name };
+    }
+  }
+}
+
 export async function handleForum(request: Request, deps: Deps) {
   try {
     if (!deps.sameOrigin(request)) return json({ error: "A same-origin request is required." }, 403);
@@ -305,6 +368,10 @@ export async function handleForum(request: Request, deps: Deps) {
       got.fresh && ctx.reads ? deps.store.writeReads(found.owner, found.campaignId, userId, r => r ? null : ctx.reads!).catch(() => undefined) : undefined,
     ]);
     if (body.action === "view") return await view(deps, ctx, found, body.page);
+    if (body.action === "ai") {
+      if (aiThrottle.hit(userId)) return json({ error: "The AI needs a minute between a few requests. Try again shortly." }, 429);
+      return json(await aiHelp(deps, ctx, found, body));
+    }
     const out = await change(deps, ctx, found, body, now);
     if (body.action === "start" || body.action === "reply") {
       const made = out as { topicId?: string; postId?: string } | undefined;
