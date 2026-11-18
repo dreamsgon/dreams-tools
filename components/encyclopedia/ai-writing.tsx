@@ -10,7 +10,7 @@ import {Check,Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
 import {allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
 import {ToolDialog} from './tool-dialog';
-import {useWriters} from './recap-panel';
+import {useWriters} from './use-writers';
 import {confirmDialog} from '../confirm-dialog';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;

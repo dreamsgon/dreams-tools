@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, MessagesSquare, Users, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
@@ -9,17 +10,17 @@ import { stateNames, questStates } from "@/lib/encyclopedia/quests";
 import { isNewFind } from "@/lib/encyclopedia/codex";
 import { lookAttributes } from "@/lib/encyclopedia/look";
 import { FrontPageView, sessionTime } from "./front-page-view";
-import { useWriters } from "./encyclopedia/recap-panel";
+import { useWriters } from "./encyclopedia/use-writers";
 import { allStyles, isBuiltIn, styleFor, styleSummary } from "@/lib/encyclopedia/ai-styles";
-import { when } from "./home-campaigns";
+import { when } from "./home-shared";
 import { RollPanel } from "./roll-widget";
 import { TagRow } from "./tags";
 import { LookBanner, LookFont } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
 import { tokenPicture } from "@/lib/encyclopedia/picture";
 import { campaignTargets } from "@/lib/tags";
-import CampaignMembers, { type MembersView } from "./campaign-members";
-import { BackupsButton } from "./rp-backups";
+import type { MembersView } from "./campaign-members";
+import { BackupsButton } from "./rp-backups-button";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
 import { useDiceTarget } from "./use-dice-target";
@@ -27,6 +28,9 @@ import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 import { hubLinks } from "@/lib/campaign-hub-links";
 import SiteHeader from "./site-header";
+
+// The Members tab (owners only) loads when it is opened.
+const CampaignMembers = dynamic(() => import("./campaign-members"));
 
 type Tab = "dashboard" | "front" | "members";
 const tabParam = (): Tab => { const t = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"); return t === "front" || t === "members" ? t : "dashboard"; };

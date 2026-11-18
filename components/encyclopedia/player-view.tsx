@@ -1,18 +1,12 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
+import dynamic from 'next/dynamic';
+import {useIdlePreload} from '@/lib/idle-preload';
 import {parsePlayerHash,playerHash} from '@/lib/encyclopedia/player-place';
 import {playerTitle} from '@/lib/page-title';
 import {usePageTitle} from '../use-page-title';
 import {colourStyle} from '@/lib/colour';
 import {BookOpen,Users,Search,Eye,CalendarDays,House,Goal,Check,Gift,Library,Ship,Store,X} from 'lucide-react';
-import {VehicleReadOnly} from './vehicle-sheet';
-import {VehicleCrewReadOnly} from './vehicle-crew';
-import {HoldReadOnly,SystemsReadOnly} from './vehicle-hold';
-import {LogReadOnly} from './vehicle-log';
-import {PlayerTrackers} from './character-trackers';
-import {PlayerInventoryTab,PlayerSpellsTab} from './player-items';
-import {FeaturesPanel} from './features';
-import {PlayerStoreView} from './store-page';
 import {storeTabTitle} from '@/lib/encyclopedia/stores';
 import {usePictureSrc} from './character-picture';
 import {CategoryIcon} from './codex-icon';
@@ -20,11 +14,7 @@ import {LookBanner,LookFont} from './look-section';
 import {lookAttributes} from '@/lib/encyclopedia/look';
 import type {CSSProperties} from 'react';
 import {FrontPageView} from '../front-page-view';
-import {CalendarView} from './calendar-view';
-import {ReadOnlyMap} from './map-canvas';
-import {OrgReadOnly} from './org-parts';
 import {CharacterReadOnly} from './character-parts';
-import {PlayerTies} from './player-ties';
 import {PlayerQuestLog} from './quest-log';
 import {PlayerProse} from './player-prose';
 import {playerHoldersByPlace,playerOrgListItems} from '@/lib/encyclopedia/org-holdings';
@@ -32,10 +22,46 @@ import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
 import {PlayerEditor,PlayerPageBar,PlayerSubPages} from './player-edit';
 import {PlayerSheetSection} from './player-sheet';
-import {PlayerStatSheet} from './player-stat-sheet';
 import {RollResults} from './rolls';
 import type {SheetState} from '@/lib/encyclopedia/player-sheet';
+
+// Tabs a player opens one at a time load as separate chunks, so a shared page appears sooner;
+// they are fetched while the browser is idle, so opening one is still instant.
+const lazyParts={
+ VehicleReadOnly:()=>import('./vehicle-sheet').then(x=>({default:x.VehicleReadOnly})),
+ VehicleCrewReadOnly:()=>import('./vehicle-crew').then(x=>({default:x.VehicleCrewReadOnly})),
+ HoldReadOnly:()=>import('./vehicle-hold').then(x=>({default:x.HoldReadOnly})),
+ SystemsReadOnly:()=>import('./vehicle-hold').then(x=>({default:x.SystemsReadOnly})),
+ LogReadOnly:()=>import('./vehicle-log').then(x=>({default:x.LogReadOnly})),
+ PlayerTrackers:()=>import('./character-trackers').then(x=>({default:x.PlayerTrackers})),
+ PlayerInventoryTab:()=>import('./player-items').then(x=>({default:x.PlayerInventoryTab})),
+ PlayerSpellsTab:()=>import('./player-items').then(x=>({default:x.PlayerSpellsTab})),
+ FeaturesPanel:()=>import('./features').then(x=>({default:x.FeaturesPanel})),
+ PlayerStoreView:()=>import('./store-page').then(x=>({default:x.PlayerStoreView})),
+ CalendarView:()=>import('./calendar-view').then(x=>({default:x.CalendarView})),
+ ReadOnlyMap:()=>import('./map-canvas').then(x=>({default:x.ReadOnlyMap})),
+ OrgReadOnly:()=>import('./org-parts').then(x=>({default:x.OrgReadOnly})),
+ PlayerTies:()=>import('./player-ties').then(x=>({default:x.PlayerTies})),
+ PlayerStatSheet:()=>import('./player-stat-sheet').then(x=>({default:x.PlayerStatSheet})),
+};
+const VehicleReadOnly=dynamic(lazyParts.VehicleReadOnly);
+const VehicleCrewReadOnly=dynamic(lazyParts.VehicleCrewReadOnly);
+const HoldReadOnly=dynamic(lazyParts.HoldReadOnly);
+const SystemsReadOnly=dynamic(lazyParts.SystemsReadOnly);
+const LogReadOnly=dynamic(lazyParts.LogReadOnly);
+const PlayerTrackers=dynamic(lazyParts.PlayerTrackers);
+const PlayerInventoryTab=dynamic(lazyParts.PlayerInventoryTab);
+const PlayerSpellsTab=dynamic(lazyParts.PlayerSpellsTab);
+const FeaturesPanel=dynamic(lazyParts.FeaturesPanel);
+const PlayerStoreView=dynamic(lazyParts.PlayerStoreView);
+const CalendarView=dynamic(lazyParts.CalendarView);
+const ReadOnlyMap=dynamic(lazyParts.ReadOnlyMap);
+const OrgReadOnly=dynamic(lazyParts.OrgReadOnly);
+const PlayerTies=dynamic(lazyParts.PlayerTies);
+const PlayerStatSheet=dynamic(lazyParts.PlayerStatSheet);
+const preloadParts=Object.values(lazyParts);
 export function PlayerView({data,playerToken,you,onChanged}:{data:PlayerCampaign;playerToken?:string;you?:{name:string;pages:MyPages;sheets?:Record<string,SheetState>};onChanged?:()=>void}){
+ useIdlePreload(preloadParts);
  const [calendarId,setCalendarId]=useState(''),[codexOpen,setCodexOpen]=useState(false);
  const found=data.entries.filter(e=>e.codex);
  const activeCalendar=(data.calendars??[]).find(c=>c.id===calendarId);

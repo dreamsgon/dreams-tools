@@ -49,25 +49,7 @@ export function exportedAt(log: string | undefined): string | null {
   return best;
 }
 
-/** "Nov 14", or "Nov 14, 2025" when it is not this year. Empty when the date is unreadable. */
-export function shortDate(iso: string, now: Date = new Date()): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
-}
-
-export const lastExportKey = (campaignId: string) => `rpg-tools:rp-last-export:${campaignId}`;
-
-export const lastPushKey = (campaignId: string) => `rpg-tools:rp-last-push:${campaignId}`;
-export type LastPush = { at: string; repository: string; branch: string; url?: string };
-/** Reads a stored last-push note; anything unreadable is ignored. */
-export function parseLastPush(raw: string | null): LastPush | null {
-  try {
-    const v = raw ? JSON.parse(raw) as Partial<LastPush> : null;
-    if (!v || typeof v.at !== "string" || Number.isNaN(Date.parse(v.at)) || typeof v.repository !== "string" || typeof v.branch !== "string") return null;
-    return { at: v.at, repository: v.repository, branch: v.branch, ...(typeof v.url === "string" && v.url.startsWith("https://github.com/") ? { url: v.url } : {}) };
-  } catch { return null; }
-}
+export { shortDate, lastExportKey, lastPushKey, parseLastPush, type LastPush } from "./rp-last.ts";
 
 /** "Session N: <latest session title>" when the campaign has sessions, else "Update <campaign name>". */
 export function defaultCommitMessage(workspace: Workspace, campaignId: string): string {

@@ -4,7 +4,7 @@ import { Ban, Bell, Check, Copy, Link2, MoreHorizontal, Plus, RefreshCw, Trash2,
 import { colourStyle } from "@/lib/colour";
 import { choices, groupColors, permissionInfo, permissionKeys, type Choice, type GroupColor, type Permission } from "@/lib/members";
 import type { MemberStore } from "@/lib/members-server";
-import { when } from "./home-campaigns";
+import { ago, Avatar, initial } from "./member-avatar";
 import { CustomColourSwatch } from "./custom-colour-swatch";
 import "./campaign-members.css";
 
@@ -20,9 +20,6 @@ export async function membersAction(body: object): Promise<MembersView> {
   if (!r.ok) throw new Error(out.error || "That didn't save. Try again.");
   return out;
 }
-/** "2h ago", "yesterday" or "Nov 12", to sit mid-sentence. */
-export const ago = (iso: string) => { const w = when(iso); return /^[A-Z][a-z]{2} \d/.test(w) ? w : w.toLowerCase(); };
-export const initial = (name: string) => (name.trim()[0] ?? "?").toUpperCase();
 const date = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
 const choiceNames: Record<Choice, string> = { yes: "Yes", no: "No", never: "Never" };
 const builtinAbout: Record<string, string> = { cogms: "Run the game with you", players: "Play and read player pages", guests: "Read along, no posting" };
@@ -32,10 +29,7 @@ export function Chip({ group }: { group: Pick<Group, "name" | "color"> }) {
   const c = colourStyle("mem", group.color);
   return <span className={`mem-chip ${c.className}`} style={c.style}>{group.name}</span>;
 }
-export function Avatar({ name, seed }: { name: string; seed?: string }) {
-  const n = [...(seed ?? name)].reduce((a, c) => a + c.charCodeAt(0), 0) % 6;
-  return <span className={`mem-avatar mem-av${n}`} aria-hidden="true">{initial(name)}</span>;
-}
+export { ago, Avatar, initial };
 
 /** The Members tab: People, Groups and permissions, Invite links and Banned. Only the campaign's owner sees it. */
 export default function CampaignMembers({ campaignId, view, setView }: { campaignId: string; view: MembersView; setView: (v: MembersView) => void }) {

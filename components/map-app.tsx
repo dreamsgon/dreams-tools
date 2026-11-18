@@ -16,7 +16,7 @@ import { ArmedPlacement } from "./token-placement";
 import TokenOptions from "./token-options";
 import SaveGalleryStats from "./save-gallery-stats";
 import {syncConditionRounds,conditionAge,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
-import { AiActivity, type SuggestedMove } from "./encyclopedia/ai-activity";
+import type { SuggestedMove } from "./encyclopedia/ai-activity";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
 import { navigationStorageKey, parseNavigationState, phoneWidth, readRemembered, remember, type NavigationPanel } from "@/lib/navigation-state";
@@ -163,6 +163,7 @@ const lazyParts = {
   ImportDialog: () => import("./import-dialog").then(m => ({ default: m.ImportDialog })),
   ExportDialog: () => import("./export-dialog").then(m => ({ default: m.ExportDialog })),
   ConnectionsDialog: () => import("./connections-dialog").then(m => ({ default: m.ConnectionsDialog })),
+  AiActivity: () => import("./encyclopedia/ai-activity").then(m => ({ default: m.AiActivity })),
 };
 const HelpGuides = dynamic(lazyParts.HelpGuides);
 const ExplorationPanel = dynamic(lazyParts.ExplorationPanel);
@@ -176,6 +177,8 @@ const MapCreator = dynamic(lazyParts.MapCreator);
 const ImportDialog = dynamic(lazyParts.ImportDialog);
 const ExportDialog = dynamic(lazyParts.ExportDialog);
 const ConnectionsDialog = dynamic(lazyParts.ConnectionsDialog);
+// Shows nothing until the campaign has an AI connection, so it can arrive a moment after the map.
+const AiActivity = dynamic(lazyParts.AiActivity);
 const preloadParts = Object.values(lazyParts);
 
 type Panel = NavigationPanel;

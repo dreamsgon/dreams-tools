@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Clock, Map, MessagesSquare } from "lucide-react";
 import type { Joined } from "@/lib/members-server";
-import { Avatar } from "./campaign-members";
+import { Avatar } from "./member-avatar";
 import "./campaign-hub.css";
 import "./campaign-members.css";
 
