@@ -216,3 +216,19 @@ button.campaigns-folder-more { display:none; }
 /* Set up forum: the confirm step's summary (components/forum-setup-dialog.tsx). */
 .forum-setup-summary { display:flex; flex-direction:column; gap:8px; margin:18px 0 0; padding:0 0 0 18px; font-size:14px; line-height:1.5; }
 .forum-setup-summary li::marker { color:var(--accent); }
+
+/* A campaign's Backup and Delete (components/campaign-backup.tsx). */
+.campaigns-backup { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
+.campaigns-backup h3 { margin:0; font-size:15px; }
+.campaigns-backup p { margin:0; font-size:13px; }
+.campaigns-backup .campaigns-error { margin:0; }
+button.campaigns-delete-open { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:6px 0; border:0; background:none; color:var(--danger); font-size:13px; font-weight:600; }
+button.campaigns-delete-open:hover:not(:disabled) { text-decoration:underline; }
+.campaigns-danger-big { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:8px 14px; font-size:14px; white-space:nowrap; }
+.campaigns-danger:disabled { opacity:.5; }
+.campaigns-form p { margin:0; font-size:14px; }
+.campaigns-delete-list { margin:0; padding-left:20px; font-size:14px; display:flex; flex-direction:column; gap:4px; }
+.campaigns-delete-backup { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--accent-soft); font-size:13px; }
+.campaigns-delete-backup > span { flex:1 1 220px; }
+.campaigns-delete-backup small { flex:1 1 100%; }
+.campaigns-form strong { font-weight:700; }

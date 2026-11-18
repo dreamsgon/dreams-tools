@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, UserRound, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, Upload, UserRound, X } from "lucide-react";
 import { hubHref } from "@/lib/campaign-switcher";
 import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
 import { colourStyle } from "@/lib/colour";
@@ -12,10 +12,11 @@ import CampaignsJoined from "./campaigns-joined";
 import "./campaigns.css";
 import { Modal } from "./campaigns-modal";
 import { ForumSetupDialog } from "./forum-setup-dialog";
+import { CampaignBackupSection, ImportCampaign } from "./campaign-backup";
 import { usePageTitle } from "./use-page-title";
 import { campaignTitle } from "@/lib/page-title";
 
-type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "notes"; row: CampaignRow; fromHub?: boolean };
+type Dialog = null | { kind: "new" } | { kind: "folder" } | { kind: "match" } | { kind: "import" } | { kind: "notes"; row: CampaignRow; fromHub?: boolean };
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const mapsHref = (id: string) => `/maptable?campaign=${encodeURIComponent(id)}`;
 const COLLAPSED_KEY = "campaigns-collapsed-folders";
@@ -151,6 +152,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     <div className="campaigns-main">
       <div className="campaigns-head">
         <div><h1>Campaigns</h1><p>Each campaign has its maps in Maptable and its notes in the Encyclopedia. Manage both here.</p></div>
+        <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "import" })} disabled={!summary}><Upload size={16} aria-hidden="true" />Import</button>
         <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "folder" })} disabled={!summary}><FolderPlus size={16} aria-hidden="true" />New folder</button>
         <button type="button" className="campaigns-primary" onClick={() => setDialog({ kind: "new" })} disabled={!summary}><Plus size={16} aria-hidden="true" />New campaign</button>
       </div>
@@ -208,19 +210,21 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
       <CampaignsJoined />
     </div>
     {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
-    {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} error={error} close={() => setSelectedKey(null)} send={send} />}
+    {selected && summary && <Details key={selected.key} row={selected} summary={summary} busy={busy} error={error} close={() => setSelectedKey(null)} send={send}
+      onDeleted={(next, name) => { setSelectedKey(null); setSummary(next); setNotice(`Deleted “${name}”.`); }} />}
     {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "notes" && summary && <StartNotes row={dialog.row} summary={summary} busy={busy} close={dialog.fromHub ? () => window.location.assign(hubHref(dialog.row)) : () => setDialog(null)} send={send} fromHub={dialog.fromHub} />}
     {dialog?.kind === "match" && summary && <Match summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
+    {dialog?.kind === "import" && <ImportCampaign close={() => setDialog(null)} onImported={(next, key, name) => { setDialog(null); setSummary(next); setSelectedKey(key); setNotice(`Imported “${name}”.`); }} />}
     {notice && !moving && <div className="campaigns-toast" role="status"><Check size={16} aria-hidden="true" />{notice}</div>}
   </div>;
 }
 
 type Send = (body: object, done?: string, after?: (next: CampaignSummary) => void) => Promise<boolean>;
 
-function Details({ row, summary, busy, error, close, send }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close: () => void; send: Send }) {
+function Details({ row, summary, busy, error, close, send, onDeleted }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close: () => void; send: Send; onDeleted: (summary: CampaignSummary, name: string) => void }) {
   const [forumSetup, setForumSetup] = useState(false);
   const [name, setName] = useState(row.name), [description, setDescription] = useState(row.encyclopedia?.description ?? "");
   const ref = useRef<HTMLElement>(null);
@@ -277,6 +281,7 @@ function Details({ row, summary, busy, error, close, send }: { row: CampaignRow;
       <p className="campaigns-muted">{row.maptable && row.encyclopedia ? "Renaming here renames it in both tools. Maps and notes stay where they are." : "Maps and notes stay where they are."}</p>
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
+    <CampaignBackupSection row={row} busy={busy} onDeleted={onDeleted} />
     {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
       onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum set up. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;

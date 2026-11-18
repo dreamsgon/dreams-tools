@@ -36,7 +36,9 @@ function safeName(raw: string): string {
   return name;
 }
 
-export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
+/** `limits` raises the file count and unpacked size for RPG Tools' own larger archives (a campaign backup with its pictures). */
+export async function readZip(bytes: Uint8Array, limits: { files?: number; bytes?: number } = {}): Promise<ZipEntry[]> {
+  const maxFiles = limits.files ?? ZIP_MAX_FILES, maxBytes = limits.bytes ?? ZIP_MAX_BYTES;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), dec = new TextDecoder("utf-8");
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
@@ -44,7 +46,7 @@ export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
   if (eocd >= 20 && view.getUint32(eocd - 20, true) === 0x07064b50) throw new ZipError("ZIP64 files are not supported.");
   const count = view.getUint16(eocd + 10, true), cdSize = view.getUint32(eocd + 12, true), cdOffset = view.getUint32(eocd + 16, true);
   if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw new ZipError("ZIP64 files are not supported.");
-  if (count > ZIP_MAX_FILES) throw new ZipError(`The ZIP has more than ${ZIP_MAX_FILES} files.`);
+  if (count > maxFiles) throw new ZipError(`The ZIP has more than ${maxFiles} files.`);
   if (cdOffset + cdSize > eocd) throw new ZipError("The ZIP directory is damaged.");
 
   type Head = { name: string; method: number; crc: number; csize: number; usize: number; offset: number };
@@ -61,7 +63,7 @@ export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
     if (raw.endsWith("/")) continue; // a folder
     if (method !== 0 && method !== 8) throw new ZipError(`Unsupported compression in the ZIP (method ${method}).`);
     total += usize;
-    if (total > ZIP_MAX_BYTES) throw new ZipError("The ZIP is larger than 50 MB when unpacked.");
+    if (total > maxBytes) throw new ZipError(`The ZIP is larger than ${Math.round(maxBytes / 1024 / 1024)} MB when unpacked.`);
     heads.push({ name: safeName(raw), method, crc, csize, usize, offset });
   }
 
