@@ -574,6 +574,22 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .forum-root .ai-draft input { flex: 1 1 320px; min-width: 0; }
 .ai-draft small { flex-basis: 100%; }
 
+/* Reports (lib/forum/model.ts reportPost): the post's Report form, the moderators' tag and the Reported posts page. */
+.report-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.forum-root .report-form input { flex: 1 1 260px; min-width: 0; }
+.post-actions .report-btn:disabled { cursor: default; color: var(--accent); }
+.tag.reported { margin-left: 8px; border-color: var(--danger, #b4442e); color: var(--danger, #b4442e); }
+.trash-row.reported .forum-counts b { color: var(--danger, #b4442e); }
+.report-item { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--danger, #b4442e); background: var(--panel); }
+.report-item header { display: flex; align-items: center; gap: 10px; }
+.report-where { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.report-snippet { margin: 8px 0 0; padding: 6px 12px; border-left: 2px solid var(--line-strong); color: var(--muted); font: 16px/1.5 var(--font-reading); }
+.report-reasons { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
+.report-reasons li { display: grid; grid-template-columns: auto 1fr; column-gap: 6px; align-items: baseline; }
+.report-reasons li small { grid-column: 2; }
+.report-reasons svg { color: var(--danger, #b4442e); align-self: center; }
+.report-item footer { margin-top: 10px; }
+
 /* Posts an AI connection suggested (lib/forum/mcp.ts), waiting for the GM. */
 .suggested { margin: 18px 0; }
 .suggested .category-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

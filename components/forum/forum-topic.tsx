@@ -4,7 +4,7 @@
  * Quick reply; the full reply page (with focus mode and the topic newest first under it) and the edit page.
  */
 import { Fragment, useEffect, useState } from 'react';
-import { Archive, ArchiveRestore, EyeOff, Sparkles, Swords, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, EyeOff, Flag, Sparkles, Swords, Hourglass, Lock, Maximize2, Minimize2, Pin, Pencil, Printer, Quote, Reply, Trash2, PenLine } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type Place, type TopicPage } from './forum-api';
 import { Composer, type AfterPost } from './forum-compose';
@@ -22,8 +22,8 @@ async function afterPosting(k: string, topicId: string, after: AfterPost) {
   await forumCall({ action: 'topic', campaign: k, topicId, ...(after !== 'lock' ? { pinned: true } : {}), ...(after !== 'pin' ? { locked: true } : {}) });
 }
 
-export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: BoardPage; k: string; go: Go; done: Done }) {
-  const b = page.board, art = b.place?.picture ?? null, [writing, setWriting] = useState(false), r = frame.you.rights;
+export function BoardView({ frame, page, k, go, done, startOpen }: { frame: Frame; page: BoardPage; k: string; go: Go; done: Done; startOpen?: boolean }) {
+  const b = page.board, art = b.place?.picture ?? null, [writing, setWriting] = useState(!!startOpen && b.start && !page.archive), r = frame.you.rights;
   const subs = frame.boards.filter(x => x.parentId === b.id), canStart = b.start && !page.archive;
   const [only, setOnly] = useState<string[] | null>(null), [picked, setPicked] = useState<string[]>([]);
   const shown = new Set(page.topics.map(t => t.id)), chosen = picked.filter(id => shown.has(id));
@@ -83,7 +83,12 @@ function HoverCard({ card }: { card: CardData }) {
 }
 
 function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p: PostData; card: CardData | null; k: string; go: Go; flip: boolean; fresh: boolean; topic: TopicPage['topic']; links: TopicPage['links']; onQuote: (text: string) => void; done: Done }) {
-  const [error, setError] = useState(''), [open, setOpen] = useState(false);
+  const [error, setError] = useState(''), [open, setOpen] = useState(false), [reporting, setReporting] = useState(false), [reason, setReason] = useState(''), [sent, setSent] = useState(false);
+  const report = async () => {
+    setError('');
+    try { await forumCall({ action: 'report', campaign: k, topicId: topic.id, postId: p.id, reason }); setReporting(false); setReason(''); setSent(true); } catch (e) { setError(e instanceof Error ? e.message : 'Could not report it.'); }
+  };
+  const dismiss = async () => { try { await forumCall({ action: 'dismissReports', campaign: k, postId: p.id }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not dismiss them.'); } };
   const remove = async () => {
     if (!await confirmDialog({ title: 'Delete this post?', message: 'It comes off the post count too. This can’t be undone.', confirm: 'Delete post', danger: true })) return;
     try { await forumCall({ action: 'delete', campaign: k, topicId: topic.id, postId: p.id }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete.'); }
@@ -91,12 +96,20 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
   // In character, a post written as nobody is the GM's narration.
   const narration = !card && topic.kind === 'ic' && !p.as, name = card?.name ?? (narration ? 'Game Master' : p.name);
   const quote = () => onQuote(p.body.split('\n').filter(l => l.trim()).slice(0, 3).map(l => '> ' + l.replace(/^>\s?/, '')).join('\n') + `\n> — ${name}`);
-  const meta = <span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}{p.ai && <span className="tag ai-mark" title={`Drafted with the forum’s AI and posted by ${p.name}`}><Sparkles size={10} aria-hidden="true" />AI draft</span>}{p.turn && <span className="tag turn-meta" title={`Written in round ${p.turn.round}, turn ${p.turn.n} of ${p.turn.of}: ${p.turn.name}`}><Swords size={10} aria-hidden="true" />R{p.turn.round} · {p.turn.name}</span>}</span>;
-  const actions = <footer className="post-actions">
+  const meta = <span className="post-meta"><a href={`#post-${p.id}`} onClick={e => { e.preventDefault(); document.getElementById(`post-${p.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}>#{p.number}</a> · <time dateTime={p.at} title={fullDate(p.at)}>{when(p.at)}</time>{fresh && <span className="tag new">New</span>}{p.editedAt && <span className="muted" title={fullDate(p.editedAt)}> · edited</span>}{p.ai && <span className="tag ai-mark" title={`Drafted with the forum’s AI and posted by ${p.name}`}><Sparkles size={10} aria-hidden="true" />AI draft</span>}{p.turn && <span className="tag turn-meta" title={`Written in round ${p.turn.round}, turn ${p.turn.n} of ${p.turn.of}: ${p.turn.name}`}><Swords size={10} aria-hidden="true" />R{p.turn.round} · {p.turn.name}</span>}{p.reports.length > 0 && <span className="tag reported" title={p.reports.map(r => `${r.by}: ${r.reason}`).join('\n')}><Flag size={10} aria-hidden="true" />Reported{p.reports.length > 1 ? ` ×${p.reports.length}` : ''}</span>}</span>;
+  const actions = <><footer className="post-actions">
     {topic.canReply && <button type="button" onClick={quote}><Quote size={13} aria-hidden="true" />Quote</button>}
     {p.canEdit && <button type="button" onClick={() => go({ view: 'edit', id: topic.id, post: p.id })}><Pencil size={13} aria-hidden="true" />Edit</button>}
     {p.canDelete && <button type="button" onClick={() => void remove()}><Trash2 size={13} aria-hidden="true" />Delete</button>}
-  </footer>;
+    {p.reports.length > 0 && <button type="button" onClick={() => void dismiss()}><Check size={13} aria-hidden="true" />Dismiss reports</button>}
+    {p.canReport && !reporting && <button type="button" className="report-btn" disabled={sent} onClick={() => setReporting(true)}><Flag size={13} aria-hidden="true" />{sent || p.reported ? 'Reported' : 'Report'}</button>}
+  </footer>
+    {reporting && <form className="report-form" onSubmit={e => { e.preventDefault(); void report(); }}>
+      <input autoFocus value={reason} maxLength={300} onChange={e => setReason(e.target.value)} placeholder="What’s wrong? The moderators see this and your name." aria-label="Why you’re reporting this post" />
+      <button type="submit" className="f-btn small" disabled={!reason.trim()}>Send report</button>
+      <button type="button" className="f-btn ghost small" onClick={() => { setReporting(false); setReason(''); }}>Cancel</button>
+    </form>}
+  </>;
   if (narration) return <article className={`post post-gm${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
     <header className="gm-band"><span className="gm-seal" aria-hidden="true">✦</span><div><h3 className="post-name">Game Master</h3><small>Narration by {p.name}</small></div>{meta}</header>
     <div className="gm-body"><PostText text={p.body} links={links} rolls={p.rolls} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>

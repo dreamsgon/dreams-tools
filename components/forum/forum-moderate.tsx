@@ -4,11 +4,11 @@
  * whole board.
  */
 import { useMemo, useRef, useState } from 'react';
-import { Archive, ArchiveRestore, Download, EyeOff, Lock, LockOpen, Pin, PinOff, Printer, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, Download, EyeOff, Flag, Lock, LockOpen, Pin, PinOff, Printer, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type Frame, type PageData, type TopicPage } from './forum-api';
 import { download, topicsHtml, topicsText, type ExportTopic } from './forum-export';
-import { Crumbs, Link, TopicRow, type Go } from './forum-parts';
+import { Crumbs, Link, Portrait, TopicRow, type Go } from './forum-parts';
 
 type Done = () => Promise<void>;
 type Op = 'pin' | 'unpin' | 'lock' | 'unlock' | 'archive' | 'unarchive' | 'trash' | 'move';
@@ -100,6 +100,32 @@ export function TrashView({ frame, page, k, go, done }: { frame: Frame; page: Ex
             <button type="button" className="f-btn ghost small danger" onClick={() => void deleteForGood(k, t, setError).then(async ok => { if (ok) await done(); })}>Delete for good</button>
           </span></p>
       </div>) : <p className="muted empty">The Trash is empty.</p>}
+    </section>
+  </>;
+}
+
+/** Reported posts (moderators): each post with its topic, a snippet and the reasons, with Open and Dismiss. */
+export function ReportsView({ frame, page, k, go, done }: { frame: Frame; page: Extract<PageData, { kind: 'reports' }>; k: string; go: Go; done: Done }) {
+  const [error, setError] = useState(''), [busy, setBusy] = useState('');
+  const dismiss = async (postId: string) => { setError(''); setBusy(postId); try { await forumCall({ action: 'dismissReports', campaign: k, postId }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not dismiss them.'); } finally { setBusy(''); } };
+  return <>
+    <Crumbs frame={frame} k={k} go={go} last="Reported posts" />
+    <section className="topics reports">
+      <h2 className="category-title">Reported posts</h2>
+      <p className="muted">What readers reported to the moderating team, latest first. Open the post to edit, delete or move it, then dismiss the reports. Only moderators see this.</p>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {page.posts.length ? page.posts.map(p => <article key={p.postId} className="report-item">
+        <header>
+          <Portrait k={k} picture={p.picture} name={p.name || 'Removed'} className="portrait small" />
+          <span className="report-where"><b>{p.gone ? 'A removed post' : `${p.name}${p.player && p.player !== p.name ? ` · ${p.player}` : ''}`}</b><small className="muted">{p.gone ? '' : `#${p.number} in `}<Link k={k} go={go} to={{ view: 'topic', id: p.topicId }}>{p.title}</Link>{p.board ? ` · ${p.board}` : ''}{p.at ? ` · ${when(p.at)}` : ''}</small></span>
+        </header>
+        {p.snippet && <blockquote className="report-snippet">{p.snippet}{p.snippet.length >= 280 ? '…' : ''}</blockquote>}
+        <ul className="report-reasons">{p.reports.map((r, i) => <li key={i}><Flag size={12} aria-hidden="true" /><span><b>{r.by}</b>: {r.reason}</span><small className="muted">{when(r.at)}</small></li>)}</ul>
+        <footer className="trash-acts">
+          {!p.gone && <a className="f-btn small" href={`#post-${p.postId}`} onClick={e => { e.preventDefault(); go({ view: 'topic', id: p.topicId }); setTimeout(() => document.getElementById(`post-${p.postId}`)?.scrollIntoView({ block: 'start' }), 600); }}>Open the post</a>}
+          <button type="button" className="f-btn ghost small" disabled={busy === p.postId} onClick={() => void dismiss(p.postId)}><Check size={13} aria-hidden="true" />{busy === p.postId ? 'Dismissing…' : 'Dismiss'}</button>
+        </footer>
+      </article>) : <p className="muted empty">Nothing is reported.</p>}
     </section>
   </>;
 }

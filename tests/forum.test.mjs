@@ -1024,3 +1024,34 @@ test('mcp: forum tools follow the connection\'s Post in the forum setting', asyn
   assert.match(text(await callTool({ ...c, level: 'read', perms: presets.read }, 'read_topic', { topic: 'Night' })), /"title":"Night"/);
   assert.match(text(await callTool({ ...c, forum: undefined }, 'whose_turn', {})), /can't reach the campaign's forum/);
 });
+
+test('reports: readers report other people\'s posts; moderators see the reasons, hear about it and dismiss them', async () => {
+  const gm = harness({ user: OWNER });
+  gm.store.bucket.data.set(forumKey(OWNER, 'camp'), { text: JSON.stringify(withBoards()), etag: '0' });
+  const as = u => { const h = harness({ user: u }); h.deps.store = gm.store; return h; };
+  const p1 = as('p1'), p2 = as('p2'), co = as('co');
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'tavern-board', title: 'Night', body: 'The fire crackles.', as: null })).json();
+  const { postId } = await (await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Something rude.', as: 'hero' })).json();
+  const json = async r => (await r).json();
+  assert.match((await json(p1.post({ action: 'report', campaign: KEY, topicId, postId, reason: 'Oops' }))).error, /your own post/);
+  assert.match((await json(p2.post({ action: 'report', campaign: KEY, topicId, postId, reason: '   ' }))).error, /Say what's wrong/);
+  assert.equal((await json(p2.post({ action: 'report', campaign: KEY, topicId, postId, reason: 'Out of line\nfor this table' }))).ok, true);
+  assert.equal((await json(p2.post({ action: 'report', campaign: KEY, topicId, postId, reason: 'Out of line for this table' }))).ok, true, 'reporting again replaces the reason');
+  const view = async (h, page) => (await json(h.post({ action: 'view', campaign: KEY, page }))).page;
+  const theirs = (await view(p2, { kind: 'topic', id: topicId })).posts[1];
+  assert.deepEqual([theirs.reported, theirs.reports, theirs.canReport], [true, [], true]);
+  assert.equal((await view(p1, { kind: 'topic', id: topicId })).posts[1].canReport, false);
+  const mod = (await view(gm, { kind: 'topic', id: topicId })).posts[1];
+  assert.deepEqual(mod.reports.map(r => [r.by, r.reason]), [['Quinn', 'Out of line for this table']]);
+  const frame = (await json(co.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame;
+  assert.equal(frame.footer.stats.reported, 1);
+  assert.deepEqual(frame.you.alerts.items.map(a => [a.kind, a.name, a.title]), [['report', 'Quinn', 'Night']]);
+  assert.equal((await json(p2.post({ action: 'view', campaign: KEY, page: { kind: 'index' } }))).frame.footer.stats.reported, 0);
+  assert.equal((await p1.post({ action: 'view', campaign: KEY, page: { kind: 'reports' } })).status, 403);
+  const page = await view(gm, { kind: 'reports' });
+  assert.deepEqual(page.posts.map(p => [p.name, p.player, p.number, p.snippet, p.reports.length]), [['Hero', 'Pat', 2, 'Something rude.', 1]]);
+  assert.match((await json(p2.post({ action: 'dismissReports', campaign: KEY, postId }))).error, /Only moderators/);
+  assert.equal((await json(co.post({ action: 'dismissReports', campaign: KEY, postId }))).ok, true);
+  assert.deepEqual((await view(gm, { kind: 'reports' })).posts, []);
+  assert.match((await json(co.post({ action: 'dismissReports', campaign: KEY, postId }))).error, /already dismissed/);
+});

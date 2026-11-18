@@ -8,7 +8,7 @@ import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
-import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Topic, type TopicSummary } from "./model.ts";
+import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { linkTargets } from "./markup.ts";
 import { unseen, type Alerts } from "./alerts.ts";
@@ -266,7 +266,7 @@ export function frameOf(ctx: Context) {
       active: live(ctx).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 5).map(t => topicRow(ctx, entries, t)),
       top: counts.slice(0, 5).map(([userId, posts]) => ({ name: memberName(ctx, userId), posts })),
       stats: {
-        topics: shownTopics(ctx).length, posts: shownTopics(ctx).reduce((n, t) => n + t.replies + 1, 0), trash: ctx.viewer.rights.moderate ? f.topics.filter(t => t.trashed).length : 0, members: ctx.list.members.length + 1, characters: f.characters.length,
+        topics: shownTopics(ctx).length, posts: shownTopics(ctx).reduce((n, t) => n + t.replies + 1, 0), trash: ctx.viewer.rights.moderate ? f.topics.filter(t => t.trashed).length : 0, reported: reportedPosts(ctx).size, members: ctx.list.members.length + 1, characters: f.characters.length,
         peak: ctx.presence?.peak ?? null, newest: newest ? newest.name : null,
       },
       online: online.map(id => ({ name: memberName(ctx, id), color: colourOf(ctx, id), you: id === ctx.viewer.userId })),
@@ -312,7 +312,10 @@ export function topicPage(ctx: Context, topic: Topic) {
     combat: s.combat ? combatOf(ctx, entries, s.combat) : null,
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1) };
+      const reports = (ctx.forum.reports ?? []).filter(x => x.postId === p.id);
+      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null, name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1),
+        /** Reports about it (moderators), and whether the viewer reported it. */
+        reports: r.moderate ? reports.map(x => ({ by: memberName(ctx, x.by), reason: x.reason, at: x.at })) : [], reported: reports.some(x => x.by === ctx.viewer.userId), canReport: !mine && !s.trashed && !r.moderate };
     }),
     cards,
     /** Posts an AI connection suggested, for the GM to approve, change or skip. */
@@ -324,6 +327,30 @@ export function topicPage(ctx: Context, topic: Topic) {
 export function activePage(ctx: Context, limit = 50) {
   const entries = entriesOf(ctx);
   return { topics: live(ctx).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, limit).map(t => topicRow(ctx, entries, t)) };
+}
+
+/** Reports on topics this moderator can see, by post (nothing for anyone else). */
+export function reportedPosts(ctx: Context) {
+  const out = new Map<string, Report[]>();
+  if (!ctx.viewer.rights.moderate) return out;
+  const shown = new Set(shownTopics(ctx).map(t => t.id));
+  for (const r of ctx.forum.reports ?? []) if (shown.has(r.topicId)) out.set(r.postId, [...(out.get(r.postId) ?? []), r]);
+  return out;
+}
+/** Reported posts (moderators), latest report first, each with its topic, author, a snippet and the reasons. */
+export function reportsPage(ctx: Context, topics: ReadonlyMap<string, Topic | null>) {
+  const entries = entriesOf(ctx), list = [];
+  for (const [postId, reports] of reportedPosts(ctx)) {
+    const s = ctx.forum.topics.find(t => t.id === reports[0]!.topicId)!, topic = topics.get(s.id), i = topic?.posts.findIndex(p => p.id === postId) ?? -1, p = i >= 0 ? topic!.posts[i]! : null;
+    const board = ctx.forum.boards.find(b => b.id === s.boardId), e = p?.by.as ? entries.get(p.by.as) : undefined;
+    list.push({
+      postId, topicId: s.id, title: s.title, board: board?.name ?? "", number: i + 1, gone: !p,
+      name: e?.title ?? (p && !p.by.as && board && kindOf(ctx.forum, board) === "ic" ? "Game Master" : p ? memberName(ctx, p.by.userId) : ""), player: p ? memberName(ctx, p.by.userId) : "", picture: pictureOf(e),
+      snippet: p ? snippetOf(p.body, []).slice(0, 280) : "", at: p?.at ?? null,
+      reports: reports.map(r => ({ by: memberName(ctx, r.by), reason: r.reason, at: r.at })), last: reports.reduce((a, r) => r.at > a ? r.at : a, ""),
+    });
+  }
+  return { posts: list.sort((a, b) => b.last.localeCompare(a.last)) };
 }
 
 /** The Trash (moderators): topics waiting to go for good, newest first. */

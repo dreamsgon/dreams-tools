@@ -1268,6 +1268,7 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 /* Vehicles a character owns, commands or crews, on the player pages. */
 .player-rides{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 12px;font-size:13px;color:var(--muted)}
 .player-rides span{display:inline-flex;align-items:baseline;gap:5px}
+.player-forum-link{margin:0 0 12px}.player-forum-link .button{display:inline-flex;align-items:center;gap:6px}
 /* The page kind (Player characters, Quest, Map) and the campaign above the title open their lists */
 .article-meta button.kind-link,.article-meta button.article-place-link{cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;transition:text-decoration-color .15s,color .15s}
 .article-meta button.kind-link{color:var(--accent)}
