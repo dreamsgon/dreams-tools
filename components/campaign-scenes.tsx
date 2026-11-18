@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Map as MapIcon, Plus, Search } from "lucide-react";
+import type { MouseEvent } from "react";
 import { countLabel } from "@/lib/plural";
 import { scenesInOrder } from "@/lib/scene-order";
 import type { Scene, Workspace } from "@/lib/model";
@@ -9,10 +10,16 @@ import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 type Kind = Scene["mapType"] | "all";
 const KINDS: [Kind, string][] = [["all", "All"], ["encounter", "Encounters"], ["area", "Areas"], ["world", "World"]];
 
-/** A campaign's scenes as a picture grid, grouped by folder, with Continue at the top. */
-export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, back }: {
+/**
+ * The Scene Picker: a campaign's scenes as a picture grid, grouped by folder, with Continue at the top.
+ * It is where Maptable opens. Its way back goes to the campaign's dashboard, the home page of each campaign.
+ */
+export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, back, unfiled }: {
   workspace: Workspace; campaignId: string | null; lastSceneId: string | null;
-  open: (sceneId: string) => void; addScenes: () => void; back: () => void;
+  open: (sceneId: string) => void; addScenes: () => void;
+  back: { href: string; label: string; go: (e: MouseEvent) => void };
+  /** Maps not in a campaign, offered at the bottom of a campaign's picker when there are any. */
+  unfiled?: { count: number; open: () => void } | null;
 }) {
   const [query, setQuery] = useState(""), [kind, setKind] = useState<Kind>("all");
   const all = useMemo(() => scenesInOrder(w, campaignId), [w, campaignId]);
@@ -28,7 +35,7 @@ export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, 
   const image = (s: Scene) => s.mapId ? w.assets.find(a => a.id === s.mapId)?.src : undefined;
   const name = w.collections.find(c => c.id === campaignId)?.name ?? "Maps not in a campaign";
   return <div className="campaign-scenes">
-    <button className="campaign-scenes-back" onClick={back}><ChevronLeft size={15} aria-hidden="true" />All campaigns</button>
+    <a className="campaign-scenes-back" href={back.href} onClick={back.go}><ChevronLeft size={15} aria-hidden="true" />{back.label}</a>
     <div className="campaign-scenes-head">
       <div><small>{campaignId ? "Campaign" : "Not in a campaign"}</small><h1>{name}</h1></div>
       <button className="primary" onClick={addScenes}><Plus size={16} aria-hidden="true" />Add scenes</button>
@@ -58,5 +65,8 @@ export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, 
       })}</div>
     </section>)}
     {!all.length ? <p className="muted">No scenes in this campaign yet. Add scenes to start its table.</p> : !shown.length && <p className="muted">No scenes match.</p>}
+    {unfiled && <button className="dashboard-unfiled" onClick={unfiled.open}>
+      <MapIcon size={22} aria-hidden="true" /><span><strong>Maps not in a campaign</strong><small>{countLabel(unfiled.count, "scene")}</small></span>
+    </button>}
   </div>;
 }

@@ -15,7 +15,7 @@ import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { codexIn } from "./encyclopedia/codex.ts";
 import { formatDate } from "./encyclopedia/calendar-model.ts";
 import { moveSibling, placeBeside, sortSiblings } from "./folder-order.ts";
-import { applyPairs, campaignFolders, campaignSummary, cleanName } from "./campaign-links.ts";
+import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey } from "./campaign-links.ts";
 
 /*
  * The Campaigns page: one list of campaigns across Maptable and the Encyclopedia.
@@ -174,7 +174,7 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     if (both.book.data.campaigns.some(c => c.folderId === id)) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.folderId === id ? withFolder(c, up) : c) });
   } else if (body.action === "moveCampaign") {
     const key = str(body.key) ?? "", folderId = parentOf(mapNow, body.folderId);
-    const row = summaryOf(both).rows.find(r => r.key === key);
+    const row = rowByKey(summaryOf(both).rows, key);
     if (!row) throw new Error("That campaign no longer exists. Reload the page.");
     if (row.maptable) await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === row.maptable!.id ? { ...c, parentId: folderId } : c) });
     if (row.encyclopedia) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? withFolder(c, folderId) : c) });
@@ -227,7 +227,7 @@ export type HubExtras = {
 
 /** One campaign for the campaign hub: its dashboard and its front page. */
 export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { data: BookWorkspace } }, key: string, extras: HubExtras = {}) {
-  const summary = summaryOf(both), row = summary.rows.find(r => r.key === key);
+  const summary = summaryOf(both), row = rowByKey(summary.rows, key);
   if (!row) throw new Error("Campaign not found");
   const map = both.map?.workspace ?? null, book = both.book.data;
   const campaign = row.encyclopedia ? book.campaigns.find(c => c.id === row.encyclopedia!.id) ?? null : null;
@@ -272,7 +272,7 @@ export type CampaignHub = ReturnType<typeof hubOf>;
 
 /** The hub with everything its dashboard needs, including saved Maptable-only dashboards and the campaign's starred tables. */
 export async function loadHub(s: Session, key: string) {
-  const both = await readBoth(s), row = summaryOf(both).rows.find(r => r.key === key);
+  const both = await readBoth(s), row = rowByKey(summaryOf(both).rows, key);
   if (!row) throw new Error("Campaign not found");
   const eid = row.encyclopedia?.id ?? null;
   const [home, tables] = await Promise.all([
@@ -288,7 +288,7 @@ export async function loadHub(s: Session, key: string) {
  */
 export async function saveDashboard(s: Session, key: string, input: unknown) {
   const both = await readBoth(s);
-  const row = summaryOf(both).rows.find(r => r.key === key);
+  const row = rowByKey(summaryOf(both).rows, key);
   if (!row) throw new Error("Campaign not found");
   const parsed = dashboardSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That dashboard could not be saved.");
@@ -301,7 +301,7 @@ export async function saveDashboard(s: Session, key: string, input: unknown) {
 /** Saves the front page of an Encyclopedia campaign and returns the updated hub. */
 export async function saveFrontPage(s: Session, key: string, input: unknown) {
   const both = await readBoth(s);
-  const row = summaryOf(both).rows.find(r => r.key === key);
+  const row = rowByKey(summaryOf(both).rows, key);
   if (!row?.encyclopedia) throw new Error("Start Encyclopedia notes for this campaign to give it a front page.");
   const parsed = frontPageSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That front page could not be saved.");

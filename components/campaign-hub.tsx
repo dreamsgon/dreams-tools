@@ -51,7 +51,11 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     fetch(`/api/campaigns?hub=${encodeURIComponent(campaignKey)}`, { cache: "no-store" }).then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error === "Campaign not found" ? "This campaign no longer exists. It may have been renamed or removed." : body.error || "Could not load this campaign.");
-      if (live) setHub(body);
+      if (!live) return;
+      setHub(body);
+      // Maptable links here by its own campaign id (m:<id>); the address then shows the campaign's usual key.
+      const canonical = `/campaigns/${encodeURIComponent(body.row.key)}`;
+      if (body.row.key !== campaignKey && window.location.pathname !== canonical) window.history.replaceState(window.history.state, "", canonical + window.location.search + window.location.hash);
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load this campaign."));
     return () => { live = false; };
   }, [campaignKey]);

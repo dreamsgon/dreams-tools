@@ -190,3 +190,15 @@ test('folder pickers follow the folders\' saved order, as the list does, not the
   const folders=[{id:'b',name:'One-shots',parentId:null},{id:'a',name:'Finished',parentId:null},{id:'c',name:'Old',parentId:'b'}];
   assert.deepEqual(folderChoices(folders).map(f=>f.path),['One-shots','One-shots / Old','Finished']);
 });
+
+import {rowByKey,maptableHubHref} from '../lib/campaign-links.ts';
+test('Maptable links a campaign dashboard by its own campaign id, even when the campaign also has notes',()=>{
+  const rows=[{key:'e:book1',maptable:{id:'map1'},encyclopedia:{id:'book1'}},{key:'m:map2',maptable:{id:'map2'},encyclopedia:null}];
+  assert.equal(rowByKey(rows,'e:book1')?.key,'e:book1');
+  assert.equal(rowByKey(rows,'m:map1')?.key,'e:book1','a paired campaign is found by its Maptable id');
+  assert.equal(rowByKey(rows,'m:map2')?.key,'m:map2');
+  assert.equal(rowByKey(rows,'m:gone'),undefined);
+  assert.equal(rowByKey(rows,'x'),undefined);
+  assert.equal(maptableHubHref('map1'),'/campaigns/m%3Amap1');
+  assert.equal(maptableHubHref(null),'/campaigns');
+});
