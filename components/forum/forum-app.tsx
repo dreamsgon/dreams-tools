@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
-import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, validKey, type Place, type View } from './forum-api';
+import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
@@ -63,6 +63,11 @@ export default function ForumApp() {
 
   const go = useCallback((p: Place) => { const h = forumHash(key, p); if (location.hash !== h) location.hash = h; else void load(key, p); }, [key, load]);
   const done = useCallback(async (next?: Place) => { if (next) go(next); else await load(key, place, true); }, [go, load, key, place]);
+  /** A solo campaign's GM view / Player view: pages only moderators open go back to the index in the player view. */
+  const setPlayer = useCallback((on: boolean) => {
+    setPlayerView(key, on);
+    if (on && (place.view === 'settings' || place.view === 'trash' || place.view === 'reports')) go({ view: 'index' }); else void load(key, place);
+  }, [key, place, go, load]);
 
   /* eslint-disable @next/next/no-html-link-for-pages -- other tools open as full pages (AGENTS.md) */
   const appBar = <div className="forum-appbar">
@@ -83,9 +88,9 @@ export default function ForumApp() {
   </div></div></div>;
 
   const { frame, page } = view, k = key;
-  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><div className="forum-root" id="top">{appBar}
+  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">{appBar}
     <div className="forum-page">
-      <TopBar frame={frame} k={k} go={go} />
+      <TopBar frame={frame} k={k} go={go} setPlayer={setPlayer} />
       <Banner frame={frame} k={k} go={go} />
       <Notices frame={frame} />
       <SheetContext.Provider value={page.kind === 'topic' ? page.features : {}}><main className="board-main">

@@ -863,3 +863,15 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .preview-card, .preview-card .portrait.big { width: 250px; height: 400px; max-width: 100%; }
   .preview-card .mini-card { inset: 0; width: auto; min-height: 0; box-shadow: none; }
 }
+
+/* Solo campaigns: the owner's GM view / Player view switch, above the board bar. */
+.solo-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; margin-bottom: 10px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); }
+.solo-bar.player { border-left-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 8%, var(--panel)); }
+.solo-tag { font: 700 11px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.solo-bar.player .solo-tag { color: var(--accent-2); }
+.solo-switch { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.solo-switch button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border: 0; background: transparent; color: var(--ink); font: 600 12px var(--font-sans); cursor: pointer; }
+.solo-switch button + button { border-left: 1px solid var(--line-strong); }
+.solo-switch button.on { background: var(--accent); color: var(--on-accent); }
+.solo-bar.player .solo-switch button.on { background: var(--accent-2); color: var(--on-accent); }
+.solo-bar .muted.small { flex: 1 1 260px; }

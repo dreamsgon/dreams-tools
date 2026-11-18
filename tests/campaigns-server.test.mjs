@@ -267,3 +267,16 @@ test('forum setup: the confirm step says what will happen in plain words', async
   assert.match(none[4],/Guests can't see the forum\./);
   assert.match(none[5],/Only you moderate/);
 });
+
+test('solo play is set when creating a campaign, switched on the campaign and needs Encyclopedia notes', async () => {
+  const {s}=await setup();
+  await assert.rejects(campaignAction(s,{action:'create',name:'Alone',maptable:true,encyclopedia:false,solo:true}),/needs Encyclopedia notes/);
+  const made=await campaignAction(s,{action:'create',name:'Alone',maptable:false,encyclopedia:true,worldId:'w1',solo:true});
+  assert.equal(made.rows.find(r=>r.name==='Alone').encyclopedia.solo,true);
+  let summary=await campaignAction(s,{action:'solo',encyclopediaId:'e1',on:true});
+  assert.equal(summary.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia.solo,true);
+  summary=await campaignAction(s,{action:'solo',encyclopediaId:'e1',on:false});
+  assert.equal(summary.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia.solo,false);
+  assert.equal('solo' in (await s.book.read('owner-1')).data.campaigns.find(c=>c.id==='e1'),false,'switching off leaves nothing behind');
+  await assert.rejects(campaignAction(s,{action:'solo',encyclopediaId:'nope',on:true}),/no Encyclopedia notes/);
+});
