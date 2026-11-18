@@ -6,7 +6,8 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Archive, ArrowUp, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
-import { postBlocks, postInline, withEmoji } from '@/lib/forum/markup';
+import { postBlocks, postInline, withEmoji, type HtmlBlock } from '@/lib/forum/markup';
+import type { HtmlNode } from '@/lib/forum/html';
 import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
 import { ROLL_TAG, type Roll } from '@/lib/forum/rolls';
 import { Alerts, SearchBox } from './forum-find';
@@ -53,6 +54,33 @@ function PostPicture({ k, id, alt }: { k: string; id: string; alt: string }) {
   const src = usePicture(k, id);
   // eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image can't optimise it
   return src ? <img className="post-pic" src={src} alt={alt} loading="lazy" /> : <span className="post-pic post-pic-wait" role="img" aria-label={alt || 'A picture'} />;
+}
+
+/** A forum picture inside a post's HTML, with the writer's styles. */
+function HtmlPicture({ id, alt, style }: { id: string; alt: string; style: CSSProperties }) {
+  const k = useContext(PostContext)?.k, src = usePicture(k ?? '', k ? id : undefined);
+  // eslint-disable-next-line @next/next/no-img-element -- a private object URL; next/image can't optimise it
+  return src ? <img src={src} alt={alt} style={style} loading="lazy" /> : <span className="post-pic-wait" role="img" aria-label={alt || 'A picture'} style={{ display: 'inline-block', width: 120, height: 80, ...style }} />;
+}
+const camel = (k: string) => k.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase());
+/**
+ * A post's HTML, from the tree html.ts left (allowed tags, attributes and styles only): built as elements, never set
+ * as HTML. Links open in a new tab.
+ */
+export function HtmlTree({ nodes }: { nodes: readonly HtmlNode[] }): ReactNode {
+  return <>{nodes.map((n, i) => {
+    if (typeof n === 'string') return n;
+    const style = Object.fromEntries(Object.entries(n.style).map(([k, v]) => [camel(k), v])) as CSSProperties;
+    if (n.tag === 'img') return <HtmlPicture key={i} id={n.attrs.src!} alt={n.attrs.alt ?? ''} style={style} />;
+    if (n.tag === 'br' || n.tag === 'hr') { const T = n.tag; return <T key={i} style={style} />; }
+    const props: Record<string, unknown> = { key: i, style, ...(n.attrs.title ? { title: n.attrs.title } : {}) };
+    if (n.tag === 'a') return n.attrs.href ? <a {...props} key={i} href={n.attrs.href} className="ext" target="_blank" rel="nofollow noopener noreferrer ugc"><HtmlTree nodes={n.children} /></a> : <span {...props} key={i}><HtmlTree nodes={n.children} /></span>;
+    if (n.tag === 'td' || n.tag === 'th') { props.colSpan = n.attrs.colspan ? Number(n.attrs.colspan) : undefined; props.rowSpan = n.attrs.rowspan ? Number(n.attrs.rowspan) : undefined; }
+    if (n.tag === 'ol' && n.attrs.start) props.start = Number(n.attrs.start);
+    if (n.tag === 'details' && 'open' in n.attrs) props.open = true;
+    const T = n.tag as 'div';
+    return <T {...props} key={i}><HtmlTree nodes={n.children} /></T>;
+  })}</>;
 }
 
 /** A picture from the campaign, framed the way the Encyclopedia frames it; initials when there is none. */
@@ -113,7 +141,7 @@ function Inline({ text, links, rolls }: { text: string; links?: Links; rolls?: R
     }
   })}</>;
 }
-function Blocks({ blocks, links, rolls }: { blocks: ProseBlock[]; links?: Links; rolls?: RollList }) {
+function Blocks({ blocks, links, rolls }: { blocks: (ProseBlock | HtmlBlock)[]; links?: Links; rolls?: RollList }) {
   const starts = blocks.map((_, i) => (rolls?.first ?? 0) + blocks.slice(0, i).reduce((n, b) => n + ('text' in b ? tagCount(b.text) : 0), 0));
   return <>{blocks.map((b, i) => {
     const r = rolls && { list: rolls.list, first: starts[i]! };
@@ -122,6 +150,7 @@ function Blocks({ blocks, links, rolls }: { blocks: ProseBlock[]; links?: Links;
       case 'bullet': case 'task': return <p className="post-li" key={i} style={{ marginLeft: b.indent * 8 }}>• <Inline text={b.text} links={links} rolls={r} /></p>;
       case 'quote': return <blockquote key={i}><Inline text={b.text} links={links} rolls={r} /></blockquote>;
       case 'code': return <pre key={i}>{b.text || ' '}</pre>;
+      case 'html': return <div key={i} className="post-html"><HtmlTree nodes={b.nodes} /></div>;
       case 'paragraph': return <p key={i}><Inline text={b.text} links={links} rolls={r} /></p>;
       default: return null;
     }

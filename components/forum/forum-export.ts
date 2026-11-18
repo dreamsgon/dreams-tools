@@ -1,6 +1,7 @@
 'use client';
 /* Print and download: a topic or a whole board as a plain HTML page or text file, made in the browser. */
-import { postBlocks, postInline } from '@/lib/forum/markup';
+import { htmlString } from '@/lib/forum/html';
+import { postBlocks, postInline, withoutHtml } from '@/lib/forum/markup';
 import { withRollResults, type Roll } from '@/lib/forum/rolls';
 
 export type ExportPost = { name: string; by?: string; at: string; body: string; rolls?: readonly (Roll | null)[] };
@@ -33,6 +34,7 @@ const blockHtml = (b: Block): string => {
     case 'task': return `<p>${b.done ? '☑' : '☐'} ${inline(b.text)}</p>`;
     case 'quote': return `<blockquote>${inline(b.text)}</blockquote>`;
     case 'code': return `<pre>${esc(b.text)}</pre>`;
+    case 'html': return `<div class="post-html">${htmlString(b.nodes)}</div>`;
     case 'paragraph': return `<p>${inline(b.text)}</p>`;
     default: return '';
   }
@@ -44,7 +46,7 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyl
 /** A whole file: one or more topics, each post with who wrote it and when. */
 export function topicsHtml(heading: string, topics: ExportTopic[]) {
   const one = topics.length === 1 && topics[0]!.title === heading;
-  const body = topics.map(t => `<section>${one ? '' : `<h2>${esc(t.title)}</h2>`}${t.posts.map(p => `<article><header><b>${esc(p.name)}</b>${p.by && p.by !== p.name ? ` <span>played by ${esc(p.by)}</span>` : ''} <time>${esc(when(p.at))}</time></header>${postHtml(withRollResults(p.body, p.rolls))}</article>`).join('\n')}</section>`).join('\n');
+  const body = topics.map(t => `<section>${one ? '' : `<h2>${esc(t.title)}</h2>`}${t.posts.map(p => `<article><header><b>${esc(p.name)}</b>${p.by && p.by !== p.name ? ` <span>played by ${esc(p.by)}</span>` : ''} <time>${esc(when(p.at))}</time></header>${postHtml(withoutHtml(withRollResults(p.body, p.rolls)))}</article>`).join('\n')}</section>`).join('\n');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(heading)}</title>
 <style>body{max-width:760px;margin:2em auto;padding:0 16px;font:18px/1.6 Georgia,serif;color:#222}h1{font-size:28px}h2{margin-top:2em;border-bottom:2px solid #999}article{margin:1.2em 0;padding-bottom:.8em;border-bottom:1px solid #ddd}header{font:14px system-ui,sans-serif;color:#555}header b{color:#222;font-size:16px}blockquote{margin:0 0 .8em;padding:4px 12px;border-left:3px solid #999;font-style:italic}.speech{color:#1b6c60}details summary{font:600 13px system-ui,sans-serif}</style></head>
 <body><h1>${esc(heading)}</h1>${body}</body></html>`;

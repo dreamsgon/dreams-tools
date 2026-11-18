@@ -609,13 +609,13 @@ test('permission masks: a group told No or Never on a board loses it there; subf
   let f = withBoards();
   f.boards.push({ id: 'cellar', categoryId: 'locations', parentId: 'tavern-board', name: 'Cellar', description: '' });
   const l = list(), access = u => M.boardAccess(f, l, u, M.forumRights(l, u, OWNER));
-  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: true, reply: true });
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: true, reply: true, html: false });
   assert.throws(() => M.setMasks(f, { id: 'tavern-board', masks: {} }, poster(f, 'p1'), ['players']), msg(/can't change the boards/));
   f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { reply: 'no', start: 'no' }, nobody: { read: 'no' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
   assert.deepEqual(f.boards[1].masks, { players: { reply: 'no', start: 'no' } }, 'unknown groups are dropped');
-  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: false, reply: false });
-  assert.deepEqual(access('p1').cellar, { read: true, start: false, reply: false }, 'the subforum follows its board');
-  assert.deepEqual(access('p1')['ooc-chat'], { read: true, start: true, reply: true });
+  assert.deepEqual(access('p1')['tavern-board'], { read: true, start: false, reply: false, html: false });
+  assert.deepEqual(access('p1').cellar, { read: true, start: false, reply: false, html: false }, 'the subforum follows its board');
+  assert.deepEqual(access('p1')['ooc-chat'], { read: true, start: true, reply: true, html: false });
   // Guests may be let in to reply on one board; Never wins over Yes.
   f = apply(f, M.setMasks(f, { id: 'ooc-chat', masks: { guests: { reply: 'yes' } } }, poster(f, OWNER), l.groups.map(g => g.id)));
   assert.equal(access('g1')['ooc-chat'].reply, true);
@@ -1214,4 +1214,58 @@ test('maps from Maptable: the GM puts a scene in a post as a picture players may
   const { topicId } = await json(gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Map', body: `The bridge: [img=Map: Bridge]${out.id}[/img]`, as: null }));
   assert.ok(topicId);
   assert.equal((await handleForumImage(new Request(`https://x.test/api/forum?c=${KEY}&image=${out.id}`), p1.deps)).status, 303);
+});
+
+// ---- HTML in posts ---------------------------------------------------------------------------
+test('html: only allowed tags, attributes and styles survive; scripts, handlers, frames and outside pictures go', async () => {
+  const H = await import('../lib/forum/html.ts');
+  const PIC = '00000000-0000-4000-8000-000000000001';
+  const nodes = H.htmlNodes(`<div style="color:#a33;position:fixed;top:0;background:url(https://x.test/a.png);margin:-40px;padding:4px 8px;font-size:200px" onclick="steal()">Hi <b>there</b>
+<script>alert(1)</script><iframe src="https://x.test">inside</iframe><img src="https://x.test/track.png" onerror="x()"><img src="${PIC}" alt="Map" style="width:50%">
+<a href="javascript:alert(1)">bad</a> <a href="https://a.test/" target="_top">good</a><!-- note --><center>mid</center><font color="red" face="Georgia">f</font>
+<style>body{display:none}</style><p>&lt;b&gt; &amp; &#x2014; unclosed`);
+  const div = nodes[0];
+  assert.deepEqual([div.tag, div.attrs, div.style], ['div', {}, { color: '#a33', padding: '4px 8px' }]);
+  const flat = JSON.stringify(nodes);
+  for (const gone of ['script', 'alert', 'iframe', 'inside', 'onclick', 'onerror', 'x.test', 'javascript', 'position', 'note', 'display:none', 'url(']) assert.ok(!flat.includes(gone), gone);
+  assert.ok(flat.includes('"href":"https://a.test/"') && !flat.includes('_top'));
+  assert.deepEqual(H.htmlPictures(nodes), [PIC]);
+  assert.ok(flat.includes('"text-align":"center"') && flat.includes('"color":"red"') && flat.includes('"font-family":"Georgia"'));
+  assert.ok(H.htmlText(nodes).includes('<b> & — unclosed'), 'entities become text, which is escaped again when shown');
+  assert.equal(H.htmlString(H.htmlNodes('<p style="color:red">a <b>&lt;i&gt;</b> "q"</p><br>')), '<p style="color:red">a <b>&lt;i&gt;</b> &quot;q&quot;</p><br>');
+  assert.equal(H.htmlString(H.htmlNodes('<a href="https://a.test">x</a>')), '<a href="https://a.test" rel="nofollow noopener noreferrer ugc" target="_blank">x</a>');
+  assert.deepEqual(H.cleanStyle('font-size: 14px; font-size: 90px; font-family: Wingdings; background: linear-gradient(90deg, #000, rgba(0,0,0,.4)); width: expression(1); color: var(--x); border: 1px solid #ccc'),
+    { 'font-size': '14px', background: 'linear-gradient(90deg, #000, rgba(0,0,0,.4))', border: '1px solid #ccc' });
+  // Deep nesting and huge inputs are cut short instead of hanging.
+  assert.ok(JSON.stringify(H.htmlNodes('<div>'.repeat(500) + 'x')).length < 5000);
+});
+
+test('html: [html] parts are left alone by BBCode and Markdown, can sit in collapsed text, and roll no dice', () => {
+  const blocks = K.postBlocks('Before **bold**\n[html]<p>**not bold** [b]x[/b] [roll]1d20[/roll]</p>[/html]\nAfter\n[collapse=More]\n[html]<span>in</span>[/html]\n[/collapse]');
+  assert.deepEqual(blocks.map(b => b.type), ['paragraph', 'html', 'paragraph', 'collapse']);
+  assert.deepEqual(blocks[1].nodes, [{ tag: 'p', attrs: {}, style: {}, children: ['**not bold** [b]x[/b] [roll]1d20[/roll]'] }]);
+  assert.deepEqual(blocks[3].blocks.map(b => b.type), ['html']);
+  assert.deepEqual(D.rollTags('[roll]1d4[/roll] [html][roll]1d20[/roll][/html] [roll]1d6[/roll]').map(r => r.expr), ['1d4', '1d6']);
+  assert.equal(K.wordCount('[html]<b>Two words</b>[/html] three'), 3);
+});
+
+test('html: a board\'s permissions decide which groups may use it; the GM always can', () => {
+  let f = withBoards();
+  const gm = poster(f, OWNER), groups = list().groups.map(g => g.id), body = 'Look: [html]<div style="color:red">red</div>[/html]';
+  const who = (u, forum = f) => { const ctx = ctxFor(forum, u); return { ...poster(forum, u), access: M.boardAccess(forum, ctx.list, u, ctx.viewer.rights) }; };
+  const startAs = (u, b = body) => M.startTopic(f, { boardId: 'tavern-board', title: 'Hi', body: b, as: u === OWNER ? null : 'hero' }, who(u), ids('t1', 'a1'), NOW);
+  assert.throws(() => startAs('p1'), /can't use HTML on this board/);
+  assert.ok(startAs(OWNER));
+  assert.equal(frameOf({ ...ctxFor(f, 'p1'), viewer: { ...ctxFor(f, 'p1').viewer, access: who('p1').access } }).boards.find(b => b.id === 'tavern-board').html, false);
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { html: 'yes' } } }, gm, groups));
+  assert.equal(f.boards.find(b => b.id === 'tavern-board').masks.players.html, 'yes');
+  const c = startAs('p1'); f = apply(f, c);
+  assert.equal(who('p1').access['tavern-board'].html, true);
+  // Turned off again: an edit may keep the HTML already there, but not add more.
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: {} }, gm, groups));
+  assert.ok(M.editPost(f, c.topic, { postId: 'a1', body: body + ' And more words.' }, who('p1'), NOW));
+  assert.throws(() => M.editPost(f, c.topic, { postId: 'a1', body: body + '[html]<b>new</b>[/html]' }, who('p1'), NOW), /can't use HTML/);
+  // A picture in HTML must be one of the forum's.
+  f = apply(f, M.setMasks(f, { id: 'tavern-board', masks: { players: { html: 'yes' } } }, gm, groups));
+  assert.throws(() => M.editPost(f, c.topic, { postId: 'a1', body: '[html]<img src="00000000-0000-4000-8000-000000000009">[/html]' }, who('p1'), NOW), /isn't in this forum/);
 });

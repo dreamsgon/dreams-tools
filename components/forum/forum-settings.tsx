@@ -89,20 +89,21 @@ function BoardForm({ frame, page, k, done, categoryId, row, onClose }: { frame: 
 }
 
 const TRI_LABEL: Record<Tri, string> = { yes: 'Yes', no: 'No', never: 'Never' };
-const RIGHTS = [['read', 'Read'], ['start', 'Start topics'], ['reply', 'Reply']] as const;
+const RIGHTS = [['read', 'Read'], ['start', 'Start topics'], ['reply', 'Reply'], ['html', 'Use HTML']] as const;
 /** A board's permission masks: per group, Yes, No or Never here instead of what the group says for the forum. */
 function MaskForm({ page, k, done, row, onClose }: { page: Settings; k: string; done: Done; row: Row; onClose: () => void }) {
   const [m, setM] = useState<Masks>(page.masks[row.id] ?? {}), { call, error, busy } = useCall(k, done);
   const parent = row.parentId ? page.masks[row.parentId] : undefined;
-  const set = (g: string, r: 'read' | 'start' | 'reply', v: string) => setM(x => { const cur = { ...x[g] }; if (v) cur[r] = v as Tri; else delete cur[r]; return { ...x, [g]: cur }; });
+  const set = (g: string, r: (typeof RIGHTS)[number][0], v: string) => setM(x => { const cur = { ...x[g] }; if (v) cur[r] = v as Tri; else delete cur[r]; return { ...x, [g]: cur }; });
   return <form className="mask-form" onSubmit={e => { e.preventDefault(); void call({ action: 'masks', id: row.id, masks: m }).then(ok => { if (ok) onClose(); }); }}>
-    <p className="muted small">What each group may do on <b>{row.name}</b>{row.parentId ? ' (left as is, a subforum follows its board)' : ' and, unless they say otherwise, its subforums'}. A member can when any of their groups says Yes and none says Never. The GM, and groups that see GM-only things (like Co-GMs), can always.</p>
+    <p className="muted small">What each group may do on <b>{row.name}</b>{row.parentId ? ' (left as is, a subforum follows its board)' : ' and, unless they say otherwise, its subforums'}. A member can when any of their groups says Yes and none says Never. The GM, and groups that see GM-only things (like Co-GMs), can always. <b>Use HTML</b> lets a group write an [html] part in posts here, with styles; scripts and outside pictures are always taken out.</p>
     <div className="mask-table" role="table" aria-label={`Permissions on ${row.name}`}>
       <div role="row" className="mask-head"><span role="columnheader">Group</span>{RIGHTS.map(([, label]) => <span role="columnheader" key={label}>{label}</span>)}</div>
       {page.groups.filter(g => !g.gm).map(g => <div role="row" key={g.id}>
         <span role="rowheader"><b>{g.name}</b></span>
         {RIGHTS.map(([r, label]) => {
-          const inherited = parent?.[g.id]?.[r] ?? g[r];
+          // HTML has no forum-wide setting: off unless a board turns it on.
+          const inherited = parent?.[g.id]?.[r] ?? (r === 'html' ? 'no' : g[r]);
           return <span role="cell" key={r}><select aria-label={`${g.name}: ${label}`} value={m[g.id]?.[r] ?? ''} className={m[g.id]?.[r] ? 'set' : ''} onChange={e => set(g.id, r, e.target.value)}>
             <option value="">As usual ({TRI_LABEL[inherited]})</option><option value="yes">Yes</option><option value="no">No</option><option value="never">Never</option>
           </select></span>;

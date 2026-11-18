@@ -5,7 +5,7 @@
  * emoji are stored with the GM's pictures through the forum (lib/forum/request.ts, action `upload`).
  */
 import { useEffect, useRef, useState } from 'react';
-import { AtSign, Dices, Gem, ImagePlus, Link2, Map as MapIcon, PanelTopClose, Search, Smile, Upload } from 'lucide-react';
+import { AtSign, Code2, Dices, Gem, ImagePlus, Link2, Map as MapIcon, PanelTopClose, Search, Smile, Upload } from 'lucide-react';
 import { stageTransfer } from '@/lib/transfer-client';
 import { forumCall, usePicture, when, type Frame } from './forum-api';
 import { Emoji } from './forum-parts';
@@ -37,7 +37,7 @@ type Insert = (text: string, select?: [number, number]) => void;
 type Wrap = (before: string, after: string, placeholder: string) => void;
 
 /** Insert: a picture, a feature or spell of the character you post as, a roll, a page link or collapsible text. */
-export function InsertMenu({ frame, k, insert, wrap, disabled, as }: { frame: Frame; k: string; insert: Insert; wrap: Wrap; disabled: boolean; as: string | null }) {
+export function InsertMenu({ frame, k, insert, wrap, disabled, as, html }: { frame: Frame; k: string; insert: Insert; wrap: Wrap; disabled: boolean; as: string | null; html: boolean }) {
   const [open, setOpen] = useState<'' | 'menu' | 'picture' | 'feature' | 'map'>(''), box = useAway(!!open, () => setOpen(''));
   const item = (icon: React.ReactNode, name: string, about: string, run: () => void) =>
     <button type="button" role="menuitem" onClick={run}><span className="ins-ic" aria-hidden="true">{icon}</span><span><b>{name}</b><small>{about}</small></span></button>;
@@ -51,6 +51,7 @@ export function InsertMenu({ frame, k, insert, wrap, disabled, as }: { frame: Fr
       {as && item(<Gem size={16} />, 'Feature or spell', 'From your character’s sheet. Readers who may see it get its text on hover', () => setOpen('feature'))}
       {item(<Dices size={16} />, 'Roll', 'Rolled by the forum when you post, so nobody can change it', done(() => wrap('[roll=Attack]', '[/roll]', '1d20+5')))}
       {item(<Link2 size={16} />, 'Encyclopedia page', 'A link that opens the page for readers who may read it. Or type [[ ]]', done(() => wrap('[[', ']]', 'Page name')))}
+      {html && item(<Code2 size={16} />, 'HTML', 'Your own layout: tags and styles. Scripts and outside pictures are taken out', done(() => wrap('[html]\n<div style="padding: 14px 18px; border: 1px solid #b8891c; background: #fbf3dc; color: #2b261d; font-family: Georgia, serif">\n', '\n</div>\n[/html]', 'Your text')))}
       {item(<PanelTopClose size={16} />, 'Collapsible text', 'A title that opens to show more: handouts, long notes', done(() => wrap('[collapse=Read more]\n', '\n[/collapse]', 'Text readers open when they want it')))}
     </span>}
     {open === 'feature' && as && <FeaturePicker k={k} as={as} onBack={() => setOpen('menu')} onPick={(kind, id, name) => { setOpen(''); insert(`[${kind}=${as}/${id}]${name.replace(/[[\]\n]/g, ' ').slice(0, 80)}[/${kind}]`); }} />}

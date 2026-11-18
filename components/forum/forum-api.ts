@@ -22,7 +22,7 @@ export type PageData =
   | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
-export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply', Tri>>>;
+export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply' | 'html', Tri>>>;
 export type View = { frame: Frame; page: PageData };
 export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' | 'reports' } | { view: 'board'; id: string; archive?: boolean; start?: boolean } | { view: 'topic'; id: string } | { view: 'place'; id: string }
   | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string } | { view: 'print'; id: string } | { view: 'search'; q: string; board?: string };

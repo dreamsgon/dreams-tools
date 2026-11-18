@@ -100,7 +100,7 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("deleteCategory"), campaign: key, id }),
   z.object({ action: z.literal("addBoard"), campaign: key, ...boardFields }),
   z.object({ action: z.literal("editBoard"), campaign: key, id, ...boardFields }),
-  z.object({ action: z.literal("masks"), campaign: key, id, masks: z.record(id, z.object({ read: z.enum(["yes", "no", "never"]).optional(), start: z.enum(["yes", "no", "never"]).optional(), reply: z.enum(["yes", "no", "never"]).optional() })) }),
+  z.object({ action: z.literal("masks"), campaign: key, id, masks: z.record(id, z.object({ read: z.enum(["yes", "no", "never"]).optional(), start: z.enum(["yes", "no", "never"]).optional(), reply: z.enum(["yes", "no", "never"]).optional(), html: z.enum(["yes", "no", "never"]).optional() })) }),
   z.object({ action: z.literal("deleteBoard"), campaign: key, id }),
   z.object({ action: z.literal("move"), campaign: key, id, what: z.enum(["board", "category"]), by: z.union([z.literal(-1), z.literal(1)]) }),
   z.object({ action: z.literal("readAll"), campaign: key }),

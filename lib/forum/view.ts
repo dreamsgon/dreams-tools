@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
 import { TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
-import { featureRefs, linkTargets } from "./markup.ts";
+import { featureRefs, linkTargets, withoutHtml } from "./markup.ts";
 import { playerFeatures } from "../encyclopedia/features.ts";
 import { playerSpells } from "../encyclopedia/items.ts";
 import { unseen, type Alerts } from "./alerts.ts";
@@ -188,6 +188,8 @@ export type BoardRow = {
   topics: number; replies: number; last: LastPost | null; unread: boolean;
   /** Whether the viewer may start a topic here (their group, the board's masks and its lock). */
   start: boolean;
+  /** Whether the viewer may write HTML in posts here (the board's masks; GMs always). */
+  html: boolean;
 };
 function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow {
   const ids = new Set([b.id, ...ctx.forum.boards.filter(x => x.parentId === b.id).map(x => x.id)]);
@@ -200,6 +202,7 @@ function boardRow(ctx: Context, entries: Map<string, Entry>, b: Board): BoardRow
     topics: topics.length, replies: topics.reduce((n, t) => n + t.replies, 0), last: latest ? lastOf(ctx, entries, latest) : null,
     unread: topics.some(t => isUnread(ctx.reads, t, ctx.viewer.userId)),
     start: accessOn(ctx.viewer, b.id).start && (!b.locked || ctx.viewer.rights.moderate),
+    html: accessOn(ctx.viewer, b.id).html,
   };
 }
 /** Boards this viewer may read. */
@@ -491,7 +494,7 @@ export function searchPage(ctx: Context, q: string, topics: readonly { summary: 
 }
 /** A line around the first word found, with the markup taken out. */
 function snippetOf(body: string, words: readonly string[]) {
-  const plain = body.replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(/\[img(?:=([^\]\n]*))?\][a-f0-9-]{36}\[\/img\]/gi, (_m, alt?: string) => ` (picture${alt?.trim() ? `: ${alt.trim()}` : ""}) `).replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_m, t: string, l?: string) => l || t).replace(/[*_`>#]+/g, "").replace(/\s+/g, " ").trim();
+  const plain = withoutHtml(body).replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(/\[img(?:=([^\]\n]*))?\][a-f0-9-]{36}\[\/img\]/gi, (_m, alt?: string) => ` (picture${alt?.trim() ? `: ${alt.trim()}` : ""}) `).replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_m, t: string, l?: string) => l || t).replace(/[*_`>#]+/g, "").replace(/\s+/g, " ").trim();
   const low = plain.toLocaleLowerCase(), at = Math.min(...words.map(w => { const i = low.indexOf(w); return i < 0 ? Infinity : i; }));
   const from = Number.isFinite(at) ? Math.max(0, at - 70) : 0, text = plain.slice(from, from + 180);
   return (from > 0 ? "…" : "") + text + (from + 180 < plain.length ? "…" : "");
