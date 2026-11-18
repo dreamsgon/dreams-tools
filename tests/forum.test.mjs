@@ -867,3 +867,76 @@ test('boards: a kind (location, campaign, out of character) and a width, default
   const rows = frameOf(ctxFor(f, 'p1')).boards;
   assert.deepEqual(rows.filter(r => r.id.startsWith('b')).map(r => [r.id, r.type, r.width]), [['b1', 'campaign', 'half'], ['b2', 'campaign', 'half'], ['b3', 'ooc', 'half'], ['b4', 'campaign', 'full']]);
 });
+
+// ---- Part 5: AI help ------------------------------------------------------------------------------
+import * as AI from '../lib/forum/ai.ts';
+test('ai: who may use what, and prompts carry only forum text with roll results', () => {
+  const ai = { connectionId: 'c1', catchUp: 'all', check: 'staff', draft: 'staff' };
+  assert.deepEqual(AI.aiFor(ai, { reply: true, moderate: false }), { catchUp: true, check: false, draft: false });
+  assert.deepEqual(AI.aiFor(ai, { reply: false, moderate: true }), { catchUp: true, check: true, draft: true });
+  assert.deepEqual(AI.aiFor(undefined, { reply: true, moderate: true }), { catchUp: false, check: false, draft: false });
+  assert.deepEqual(AI.aiFor({ ...ai, catchUp: 'off', draft: 'off' }, { reply: true, moderate: true }), { catchUp: false, check: true, draft: false });
+  const posts = [{ name: 'Hero', player: 'Pat', body: 'I swing [roll=Attack]1d20[/roll] at [[Villain|the lich]].', rolls: [D.roll('Attack', '1d20', dice(7))], at: '2026-01-01T10:00:00.000Z' }];
+  const p = AI.summaryPrompt({ title: 'Fight', board: 'Tavern' }, posts, null);
+  assert.match(p, /Hero \(played by Pat\)/);
+  assert.match(p, /Attack \(1d20\): 7/);
+  assert.match(p, /at the lich\./);
+  assert.match(AI.summaryPrompt({ title: 'Fight', board: 'Tavern' }, posts, '2026-01-01T09:00:00.000Z'), /only the posts after 2026-01-01 09:00/);
+  const long = Array.from({ length: 80 }, (_, i) => ({ name: 'N', body: 'x'.repeat(1000), at: `2026-01-01T10:${String(i % 60).padStart(2, '0')}:00.000Z` }));
+  assert.ok(AI.postsText(long).shown < 80 && AI.postsText(long).text.length <= 25_000, 'long topics keep the newest posts');
+  assert.deepEqual(AI.readSummary({ summary: ' Things. ', points: ['a', ' ', 'b'] }), { summary: 'Things.', points: ['a', 'b'] });
+  assert.equal(AI.readSummary({}), null);
+  assert.deepEqual(AI.readCheck({ notes: [{ kind: 'weird', note: 'Hm', quote: '' }] }), [{ kind: 'unclear', note: 'Hm' }]);
+  assert.equal(AI.readDraft({ body: '  Rain.  ' }), 'Rain.');
+});
+test('ai: the campaign owner turns it on with a connection; the banner keeps it; moderators mark AI drafts', () => {
+  let f = withBoards();
+  const ai = { connectionId: 'c1', catchUp: 'all', check: 'all', draft: 'staff' };
+  for (const u of ['co', 'p1']) assert.throws(() => M.setAi(f, ai, poster(f, u), ['c1']), /Only the campaign's GM/, u);
+  assert.throws(() => M.setAi(f, ai, poster(f, OWNER), ['c2']), /connection was removed/);
+  f = apply(f, M.setAi(f, ai, poster(f, OWNER), ['c1']));
+  assert.deepEqual(f.settings.ai, ai);
+  f = apply(f, M.setSettings(f, { title: 'T', tagline: '', links: [], banner: false, ai: { connectionId: 'evil', catchUp: 'all', check: 'all', draft: 'staff' } }, poster(f, OWNER)));
+  assert.deepEqual([f.settings.title, f.settings.ai], ['T', ai], 'saving the banner keeps the AI settings and ignores any sent with it');
+  const mod = M.startTopic(f, { boardId: 'tavern-board', title: 'Rain', body: 'Rain falls.', as: null, ai: true }, poster(f, OWNER), ids('t1', 'a1'), NOW);
+  assert.equal(mod.topic.posts[0].ai, true);
+  const pl = M.startTopic(f, { boardId: 'tavern-board', title: 'Rain', body: 'Rain falls.', as: 'hero', ai: true }, poster(f, 'p1'), ids('t2', 'a2'), NOW);
+  assert.equal(pl.topic.posts[0].ai, undefined, 'only moderators post AI drafts');
+  f = apply(f, M.setAi(f, null, poster(f, OWNER), []));
+  assert.equal(f.settings.ai, undefined);
+});
+test('request: AI help sends only what the asker can read, by permission, and counts nothing when off', async () => {
+  const gm = harness({ user: OWNER }), asks = [];
+  const fakeAi = { connections: async () => [{ id: 'c1', name: 'Claude', model: 'm', used: 0, limit: null }], run: async (_o, _c, conn, a) => { asks.push({ conn, ...a }); return a.tool.name === 'summary' ? { input: { summary: 'They talked.', points: ['Pat owes Quinn'] }, tokens: 10, name: 'Claude' } : a.tool.name === 'check' ? { input: { notes: [{ kind: 'spelling', quote: 'teh', note: 'the' }] }, tokens: 10, name: 'Claude' } : { input: { body: 'Thunder.' }, tokens: 10, name: 'Claude' }; } };
+  gm.deps.ai = fakeAi;
+  const { topicId } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Plans', body: 'Saturday?', as: null })).json();
+  const p1 = harness({ user: 'p1' }); p1.deps.store = gm.store; p1.deps.ai = fakeAi;
+  await p1.post({ action: 'reply', campaign: KEY, topicId, body: 'Yes, Saturday.', as: null });
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId })).json()).error, /off in this forum/);
+  assert.match((await (await p1.post({ action: 'aiSettings', campaign: KEY, ai: { connectionId: 'c1', catchUp: 'all', check: 'all', draft: 'staff' } })).json()).error, /Only the campaign's GM/);
+  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'settings' } })).json()).page;
+  assert.deepEqual([page.ai.settings, page.ai.connections.map(c => c.name), page.ai.may], [null, ['Claude'], true]);
+  assert.equal((await (await gm.post({ action: 'aiSettings', campaign: KEY, ai: { connectionId: 'c1', catchUp: 'all', check: 'all', draft: 'staff' } })).json()).ok, true);
+  const frame = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
+  assert.deepEqual(frame.you.ai, { catchUp: true, check: true, draft: false });
+  const sum = await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId })).json();
+  assert.deepEqual([sum.summary, sum.points, sum.posts, sum.by], ['They talked.', ['Pat owes Quinn'], 2, 'Claude']);
+  assert.match(asks[0].prompt, /Saturday\?[\s\S]*Yes, Saturday\./);
+  assert.equal(asks[0].conn, 'c1');
+  const caught = await (await p1.post({ action: 'ai', campaign: KEY, op: 'catchUp', topicId, since: new Date(NOW.getTime() + 60_000).toISOString() })).json();
+  assert.equal(caught.summary, 'Nothing new since you last read it.', 'no AI call when nothing is new');
+  assert.equal(asks.length, 1);
+  const check = await (await p1.post({ action: 'ai', campaign: KEY, op: 'check', topicId, body: 'See you at teh tavern', as: null })).json();
+  assert.deepEqual(check.notes, [{ kind: 'spelling', quote: 'teh', note: 'the' }]);
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'draft', topicId, as: null })).json()).error, /can't use that/);
+  const drafted = await (await gm.post({ action: 'ai', campaign: KEY, op: 'draft', boardId: 'ooc-chat', title: 'New', hint: 'storm' })).json();
+  assert.equal(drafted.body, 'Thunder.');
+  assert.match(asks.at(-1).prompt, /What the GM wants: storm/);
+  // A private topic Pat isn't in can't be summarized by Pat.
+  const { topicId: secret } = await (await gm.post({ action: 'start', campaign: KEY, boardId: 'ooc-chat', title: 'Secret', body: 'Shh.', as: null, private: [] })).json();
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId: secret })).json()).error, /removed/);
+  const posted = await (await gm.post({ action: 'reply', campaign: KEY, topicId, body: 'Thunder.', as: null, ai: true })).json();
+  assert.equal(posted.ok, true);
+  const t = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'topic', id: topicId } })).json()).page;
+  assert.deepEqual(t.posts.map(p => p.ai), [false, false, true]);
+});

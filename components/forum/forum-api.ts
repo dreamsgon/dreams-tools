@@ -2,6 +2,8 @@
 /* The forum's requests (app/api/forum) and the shapes they return (lib/forum/view.ts). */
 import { useEffect, useState } from 'react';
 import type { ForumSettings } from '@/lib/forum/model';
+import type { ForumAi } from '@/lib/forum/ai';
+import type { AiConnection } from '@/lib/forum/request';
 import type { Frame, Picture, activePage, boardPage, membersPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
 
 export type { Frame, Picture };
@@ -15,7 +17,7 @@ export type PageData =
   | ({ kind: 'members' } & ReturnType<typeof membersPage>)
   | ({ kind: 'trash' } & ReturnType<typeof trashPage>)
   | ({ kind: 'search'; boardId: string | null } & ReturnType<typeof searchPage>)
-  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks> };
+  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
 export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply', Tri>>>;

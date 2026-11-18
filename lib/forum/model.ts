@@ -9,6 +9,7 @@
  * read the forum file again and re-apply it when someone else saved in between.
  */
 import { z } from "zod";
+import { forumAiSchema } from "./ai.ts";
 import { can, type MemberList } from "../members.ts";
 import { NARRATION } from "./reader.ts";
 import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMetaSchema, type Combat, type Slot } from "./combat.ts";
@@ -35,6 +36,8 @@ export const forumSettingsSchema = z.object({
   banner: z.boolean(),
   /** The notices strip under the banner: short lines from the GM, each dismissible by a reader. */
   notices: z.array(z.object({ id, text: z.string().trim().min(1).max(240) })).max(3).optional(),
+  /** The forum's AI help (ai.ts); left out: no AI in the forum. Set with `setAi`, never with the banner. */
+  ai: forumAiSchema.optional(),
 });
 /** `ic`: in character, where players post as their characters. `ooc`: out of character, where they post as themselves. */
 export const categorySchema = z.object({ id, name: nameOf(60), kind: z.enum(["ic", "ooc"]) });
@@ -100,6 +103,8 @@ export const postSchema = z.object({
   rolls: z.array(rollSchema.nullable()).max(ROLL_LIMIT).optional(),
   /** Where the post fell in a fight, when it was someone's turn. */
   turn: turnMetaSchema.optional(),
+  /** Drafted with the forum's AI and posted, after a read, by a moderator (`by`). */
+  ai: z.literal(true).optional(),
 });
 export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts) });
 
@@ -238,19 +243,21 @@ export type Change<T = undefined> = { topic?: Topic | null; forum: (f: Forum, la
 /* `latest` is the topic file as stored when the forum file is saved: another reply may have landed after this one. */
 
 const withRolls = (rolls: readonly (Roll | null)[] | undefined) => rolls?.length ? { rolls: rolls.slice(0, ROLL_LIMIT) } : {};
-export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
+/** The AI mark, for moderators who post a draft from Draft with AI. */
+const withAi = (ai: boolean | undefined, who: Poster) => ai && who.rights.moderate ? { ai: true as const } : {};
+export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = cleanBody(input.body);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
-  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls) }] };
+  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who) }] };
   const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}) });
   const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
   return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
 
-export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null; rolls?: (Roll | null)[] }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
+export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null; rolls?: (Roll | null)[]; ai?: boolean }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
   const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
   if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
@@ -258,7 +265,7 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
   const as = checkAs(f, board, input.as, who), body = cleanBody(input.body);
   // In a fight, a post in the current turn is marked with it.
   const turn = s.combat && countsFor(s.combat, as, who.rights.gm) ? turnMeta(s.combat) : undefined;
-  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}) }] };
+  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}), ...withAi(input.ai, who) }] };
   const log: Recent = { at: now.toISOString(), userId: who.userId, as, topicId: topic.id, postId };
   return {
     topic: next, out: { postId },
@@ -371,8 +378,20 @@ export function setSettings(_f: Forum, input: unknown, who: Poster): Change {
   needBoards(who);
   const parsed = forumSettingsSchema.safeParse(input);
   if (!parsed.success) fail(parsed.error.issues.some(i => i.path[0] === "links") ? "Links need a name and an address starting with / or https://." : "Check the banner settings.");
-  const settings = parsed.data!;
-  return { forum: g => ({ ...g, settings }) };
+  // The AI settings have their own change (setAi), so saving the banner keeps them.
+  const settings = { ...parsed.data! };
+  delete settings.ai;
+  return { forum: g => ({ ...g, settings: g.settings.ai ? { ...settings, ai: g.settings.ai } : settings }) };
+}
+/** Turns the forum's AI on with a connection and who may use what, or off (null). The campaign's owner only: it spends their API key. */
+export function setAi(_f: Forum, input: unknown, who: Poster, connections: readonly string[]): Change {
+  if (!who.rights.owner) fail("Only the campaign's GM can set up the forum's AI: it uses their API key.");
+  if (input === null) return { forum: g => { const settings = { ...g.settings }; delete settings.ai; return { ...g, settings }; } };
+  const parsed = forumAiSchema.safeParse(input);
+  if (!parsed.success) fail("Check the AI settings.");
+  if (!connections.includes(parsed.data!.connectionId)) fail("That AI connection was removed. Choose another one.");
+  const ai = parsed.data!;
+  return { forum: g => ({ ...g, settings: { ...g.settings, ai } }) };
 }
 
 export function addCategory(f: Forum, input: { name: unknown; kind: "ic" | "ooc" }, who: Poster, newId: string): Change<{ id: string }> {
