@@ -49,16 +49,31 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
   </section>;
 }
 
+type BoardType = 'location' | 'campaign' | 'ooc';
+const BOARD_TYPES: [BoardType, string][] = [['location', 'Location: tied to a place'], ['campaign', 'Campaign: a story with no single place'], ['ooc', 'Out of character']];
+const TYPE_NAME: Record<BoardType, string> = { location: 'Location', campaign: 'Campaign', ooc: 'Out of character' };
+
 function BoardForm({ frame, page, k, done, categoryId, row, onClose }: { frame: Frame; page: Settings; k: string; done: Done; categoryId: string; row?: Row; onClose: () => void }) {
   const cat = frame.categories.find(c => c.id === categoryId)!, tops = frame.boards.filter(b => b.categoryId === categoryId && !b.parentId && b.id !== row?.id);
-  const [v, setV] = useState({ name: row?.name ?? '', description: row?.description ?? '', parentId: row?.parentId ?? '', placeId: row?.place?.id ?? '', locked: row?.locked ?? false });
+  const [v, setV] = useState({ name: row?.name ?? '', description: row?.description ?? '', parentId: row?.parentId ?? '', placeId: row?.place?.id ?? '', locked: row?.locked ?? false, type: row?.type ?? (cat.kind === 'ic' ? 'location' : 'ooc') as BoardType, width: row?.width ?? (cat.kind === 'ic' ? 'full' : 'half') as 'full' | 'half' });
+  // A board with topics stays in character or out of character, so the other side's kinds are left out.
+  const fixed = !!row && row.topics > 0 ? row.kind : null;
   const { call, error, busy } = useCall(k, done);
   const hasSubs = !!row && frame.boards.some(b => b.parentId === row.id);
-  const save = async () => { if (await call({ action: row ? 'editBoard' : 'addBoard', ...(row ? { id: row.id } : {}), categoryId, name: v.name, description: v.description, parentId: v.parentId || null, placeId: v.placeId || null, locked: v.locked })) onClose(); };
+  const save = async () => { if (await call({ action: row ? 'editBoard' : 'addBoard', ...(row ? { id: row.id } : {}), categoryId, name: v.name, description: v.description, parentId: v.parentId || null, placeId: v.type === 'location' ? v.placeId || null : null, locked: v.locked, type: v.type, width: v.width })) onClose(); };
   return <form className="board-form" onSubmit={e => { e.preventDefault(); void save(); }}>
     <label className="f-field">Name<input value={v.name} maxLength={60} required onChange={e => setV({ ...v, name: e.target.value })} /></label>
     <label className="f-field">Description<input value={v.description} maxLength={300} onChange={e => setV({ ...v, description: e.target.value })} /></label>
-    {cat.kind === 'ic' && <label className="f-field">Place in the Encyclopedia <small>(its picture becomes the board’s art)</small><select value={v.placeId} onChange={e => setV({ ...v, placeId: e.target.value })}><option value="">None</option>{page.places.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+    <div className="board-form-row">
+      <label className="f-field">Kind of board<select value={v.type} onChange={e => setV({ ...v, type: e.target.value as BoardType, width: row?.width ?? (e.target.value === 'ooc' ? 'half' : 'full') })}>
+        {BOARD_TYPES.filter(([t]) => !fixed || (t === 'ooc') === (fixed === 'ooc')).map(([t, label]) => <option key={t} value={t}>{label}</option>)}
+      </select></label>
+      {!v.parentId && <label className="f-field">Width on the forum page<select value={v.width} onChange={e => setV({ ...v, width: e.target.value as 'full' | 'half' })}>
+        <option value="full">Full width</option><option value="half">Half width (side by side)</option>
+      </select></label>}
+    </div>
+    {fixed && <p className="muted small">This board has topics, so it stays {fixed === 'ic' ? 'in character' : 'out of character'}.</p>}
+    {v.type === 'location' && <label className="f-field">Place in the Encyclopedia <small>(its picture becomes the board’s art)</small><select value={v.placeId} onChange={e => setV({ ...v, placeId: e.target.value })}><option value="">None</option>{page.places.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {!hasSubs && <label className="f-field">Sits inside<select value={v.parentId} onChange={e => setV({ ...v, parentId: e.target.value })}><option value="">Nothing (a board of its own)</option>{tops.map(b => <option key={b.id} value={b.id}>{b.name} (as a subforum)</option>)}</select></label>}
     <label className="f-check"><input type="checkbox" checked={v.locked} onChange={e => setV({ ...v, locked: e.target.checked })} /><span>Only moderators start topics here</span></label>
     <div className="settings-foot"><button type="button" className="f-btn ghost" onClick={onClose}>Cancel</button><button className="f-btn" disabled={busy || !v.name.trim()}>{busy ? 'Saving…' : row ? 'Save board' : 'Add board'}</button></div>
@@ -101,7 +116,7 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
   const line = (b: Row) => <li key={b.id} className={b.parentId ? 'sub' : ''}>
     {editing === b.id ? <BoardForm frame={frame} page={page} k={k} done={done} categoryId={b.categoryId} row={b} onClose={() => setEditing(null)} />
       : masking === b.id ? <MaskForm page={page} k={k} done={done} row={b} onClose={() => setMasking(null)} /> : <>
-      <span className="board-line"><b>{b.parentId ? '↳ ' : ''}{b.name}</b><small>{[b.place?.name, b.locked ? 'Moderators start topics' : '', page.masks[b.id] ? 'Own permissions' : '', `${b.topics} ${b.topics === 1 ? 'topic' : 'topics'}`].filter(Boolean).join(' · ')}</small></span>
+      <span className="board-line"><b>{b.parentId ? '↳ ' : ''}{b.name}</b><small>{[TYPE_NAME[b.type] + (b.place ? `: ${b.place.name}` : ''), b.parentId ? '' : b.width === 'half' ? 'Half width' : 'Full width', b.locked ? 'Moderators start topics' : '', page.masks[b.id] ? 'Own permissions' : '', `${b.topics} ${b.topics === 1 ? 'topic' : 'topics'}`].filter(Boolean).join(' · ')}</small></span>
       <span className="line-tools">
         <button className="f-btn ghost small" aria-label={`Move ${b.name} up`} disabled={busy} onClick={() => void call({ action: 'move', what: 'board', id: b.id, by: -1 })}><ArrowUp size={14} aria-hidden="true" /></button>
         <button className="f-btn ghost small" aria-label={`Move ${b.name} down`} disabled={busy} onClick={() => void call({ action: 'move', what: 'board', id: b.id, by: 1 })}><ArrowDown size={14} aria-hidden="true" /></button>
@@ -112,7 +127,7 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
   </li>;
   return <section className="settings-card">
     <h2>Categories and boards</h2>
-    <p className="muted">In-character categories hold location boards, where players post as their characters. Out-of-character ones are for talking as yourselves. Every post counts towards the member’s own post count.</p>
+    <p className="muted">Each board is a location (tied to a place in the Encyclopedia, with its picture), a campaign board (in character, for a story with no single place) or out of character, for talking as yourselves. A new board takes its category’s kind. Half-width boards sit side by side on the forum page. Every post counts towards the member’s own post count.</p>
     {frame.categories.map(c => <div key={c.id} className="cat-block">
       <div className="cat-line">{renaming?.id === c.id ? <form className="cat-rename" onSubmit={e => { e.preventDefault(); void call({ action: 'editCategory', id: c.id, name: renaming.name }).then(ok => { if (ok) setRenaming(null); }); }}><input aria-label="Category name" value={renaming.name} maxLength={60} autoFocus onChange={e => setRenaming({ id: c.id, name: e.target.value })} /><button className="f-btn small" disabled={busy || !renaming.name.trim()}>Save</button><button type="button" className="f-btn ghost small" onClick={() => setRenaming(null)}>Cancel</button></form>
         : <h3>{c.name} <span className="tag">{c.kind === 'ic' ? 'In character' : 'Out of character'}</span></h3>}<span className="line-tools">
@@ -122,7 +137,7 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
         <button className="f-btn ghost small danger" aria-label={`Delete ${c.name}`} onClick={() => void remove('Category', c.id, c.name)}><Trash2 size={14} aria-hidden="true" /></button>
       </span></div>
       <ul className="board-lines">{frame.boards.filter(b => b.categoryId === c.id && !b.parentId).flatMap(b => [line(b), ...frame.boards.filter(x => x.parentId === b.id).map(line)])}</ul>
-      {adding === c.id ? <BoardForm frame={frame} page={page} k={k} done={done} categoryId={c.id} onClose={() => setAdding(null)} /> : <button className="f-btn ghost small" onClick={() => setAdding(c.id)}><Plus size={14} aria-hidden="true" />Add a {c.kind === 'ic' ? 'location board' : 'board'}</button>}
+      {adding === c.id ? <BoardForm frame={frame} page={page} k={k} done={done} categoryId={c.id} onClose={() => setAdding(null)} /> : <button className="f-btn ghost small" onClick={() => setAdding(c.id)}><Plus size={14} aria-hidden="true" />Add a board</button>}
     </div>)}
     <form className="cat-add" onSubmit={e => { e.preventDefault(); void call({ action: 'addCategory', name: catName, kind: catKind }).then(ok => { if (ok) setCatName(''); }); }}>
       <input aria-label="New category name" placeholder="New category, like The Northern Reaches" value={catName} maxLength={60} onChange={e => setCatName(e.target.value)} />

@@ -164,16 +164,17 @@ function LastLine({ last, k, go }: { last: Row['last']; k: string; go: Go }) {
   </div>;
 }
 
-/** One board in the index: location boards with their place art, out-of-character boards as cards. */
+/** One board in the index: location boards with their place art, campaign boards plain, out-of-character boards as cards. Half-width boards sit two to a row. */
 function BoardRow({ row, subs, k, go }: { row: Row; subs: Row[]; k: string; go: Go }) {
-  const art = usePicture(k, row.place?.picture?.imageId);
-  return <article className={`forum${row.kind === 'ic' ? ' forum-ic' : ' forum-ooc'}`}>
-    {row.kind === 'ic' && <div className="forum-art" style={art ? { backgroundImage: `url("${art}")`, backgroundPosition: `${(row.place!.picture!.x * 100).toFixed(1)}% ${(row.place!.picture!.y * 100).toFixed(1)}%` } : undefined} aria-hidden="true" />}
+  const art = usePicture(k, row.place?.picture?.imageId), located = row.type === 'location';
+  return <article className={`forum forum-${row.type}${row.kind === 'ic' ? ' forum-ic' : ' forum-ooc'}${row.width === 'half' ? ' half' : ''}`}>
+    {located && <div className="forum-art" style={art ? { backgroundImage: `url("${art}")`, backgroundPosition: `${(row.place!.picture!.x * 100).toFixed(1)}% ${(row.place!.picture!.y * 100).toFixed(1)}%` } : undefined} aria-hidden="true" />}
     <div className="forum-info">
       <h3 className="forum-name">{row.unread && <span className="unread-dot" title="New posts" />}<Link k={k} go={go} to={{ view: 'board', id: row.id }}>{row.name}</Link>{row.unread && <span className="sr-only"> (new posts)</span>}{row.locked && <Lock size={13} aria-label="Moderators start topics here" />}</h3>
       {row.description && <p className="forum-desc">{row.description}</p>}
       {subs.length > 0 && <p className="forum-subs">{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="chip">{s.name}</Link>)}</p>}
       {row.place && <p className="forum-place">Location · {row.place.url ? <a href={row.place.url}>{row.place.name}</a> : row.place.name}</p>}
+      {row.type === 'campaign' && <p className="forum-place">Campaign · in character</p>}
     </div>
     <p className="forum-counts"><span><b>{row.topics}</b> {row.topics === 1 ? 'topic' : 'topics'}</span><span><b>{row.replies}</b> {row.replies === 1 ? 'reply' : 'replies'}</span></p>
     <LastLine last={row.last} k={k} go={go} />
@@ -182,9 +183,11 @@ function BoardRow({ row, subs, k, go }: { row: Row; subs: Row[]; k: string; go: 
 
 export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
   return <>{frame.categories.map(c => {
-    const top = frame.boards.filter(b => b.categoryId === c.id && !b.parentId);
+    const top = frame.boards.filter(b => b.categoryId === c.id && !b.parentId), kinds = new Set(top.map(b => b.kind));
+    // The category's tag says in or out of character only while its boards agree.
+    const kind = kinds.size > 1 ? null : top[0]?.kind ?? c.kind;
     return <section key={c.id} className={`category category-${c.kind}`}>
-      <h2 className="category-title">{c.name} <span className="tag">{c.kind === 'ic' ? 'In character' : 'Out of character'}</span></h2>
+      <h2 className="category-title">{c.name}{kind && <span className="tag">{kind === 'ic' ? 'In character' : 'Out of character'}</span>}</h2>
       <div className="category-forums">
         {top.length ? top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />) : <p className="muted empty">No boards here yet.{frame.you.rights.boards && <> <Link k={k} go={go} to={{ view: 'settings' }}>Add one in Forum settings</Link>.</>}</p>}
       </div>

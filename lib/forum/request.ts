@@ -49,7 +49,7 @@ const json = (value: unknown, status = 200) => Response.json(value, { status, he
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const key = z.string().regex(keyPattern);
 const as = id.nullable();
-const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional() };
+const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }),
   z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }),

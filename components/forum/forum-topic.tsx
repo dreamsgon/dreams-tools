@@ -33,7 +33,7 @@ export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: Bo
   const all = page.topics.length > 0 && chosen.length === page.topics.length;
   return <>
     <Crumbs frame={frame} boardId={b.id} k={k} go={go} last={page.archive ? 'Archive' : undefined} />
-    {b.kind === 'ic' ? <header className="location">
+    {b.type === 'location' ? <header className="location">
       <Portrait k={k} picture={art} name={b.place?.name ?? b.name} className="portrait location-art" />
       <div className="location-info">
         <p className="location-kind">Location{b.place ? ` · ${b.place.name}` : ''}</p>
@@ -41,7 +41,7 @@ export function BoardView({ frame, page, k, go, done }: { frame: Frame; page: Bo
         {(b.description || page.place?.summary) && <p className="location-summary">{b.description || page.place?.summary}</p>}
         <p className="location-now">{frame.date && <><b>{frame.date}</b> · </>}{b.topics} {b.topics === 1 ? 'topic' : 'topics'} · {b.replies} {b.replies === 1 ? 'reply' : 'replies'}{b.place?.url && <> · <a href={b.place.url}>Read about it in the Encyclopedia</a></>}</p>
       </div>
-    </header> : <header className="topic-head board-plain"><h2 className="location-name">{b.name}</h2>{b.description && <p className="location-summary">{b.description}</p>}</header>}
+    </header> : <header className="topic-head board-plain">{b.kind === 'ic' && <p className="location-kind">Campaign · in character</p>}<h2 className="location-name">{b.name}</h2>{b.description && <p className="location-summary">{b.description}</p>}</header>}
     {subs.length > 0 && !page.archive && <section className="subforums"><h2 className="category-title">Subforums</h2>{subs.map(s => <Link key={s.id} k={k} go={go} to={{ view: 'board', id: s.id }} className="forum sub"><span className="forum-name">{s.name}</span><small>{s.topics} topics · {s.replies} replies</small></Link>)}</section>}
     <section className="topics">
       <div className="topics-head">
