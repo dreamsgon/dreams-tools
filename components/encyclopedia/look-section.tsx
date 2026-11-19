@@ -1,6 +1,7 @@
 "use client";
 import {useRef,useState,type CSSProperties} from 'react';
-import {ImagePlus,Trash2,Goal,Library,Users,Map as MapIcon,House,Plus} from 'lucide-react';
+import {ImagePlus,Trash2,Goal,Library,Users,Map as MapIcon,House,Plus,Palette} from 'lucide-react';
+import {openThemeEditor} from '../campaign-theme-dock';
 import {ACCENTS} from '@/lib/appearance';
 import {lookAttributes,lookFontUrl,lookFontLabel,lookFonts,surfaces,surfaceNames,type Look} from '@/lib/encyclopedia/look';
 import {fontOption,fontStylesheetUrl} from '@/lib/appearance';
@@ -33,6 +34,10 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
    <span className="eyebrow">Campaign settings</span>
    <h1>Look</h1>
    <p className="muted">How {campaign.name} looks for you and your players. Light or dark still follows each person’s own setting.</p>
+   <div className="look-group look-theme"><h2>Campaign theme</h2>
+    <p className="muted small">A theme dresses the whole campaign at once: the Encyclopedia, Maptable, the campaign’s dashboard and its forum, with colours, fonts and a stylesheet for each part. While a theme is live, it takes the place of the look below.</p>
+    <div className="button-row"><button className="button small" onClick={openThemeEditor}><Palette size={14}/> Open the Admin CP</button></div>
+   </div>
    <div className="look-group"><h2>Banner</h2>
     {look.banner?<><div className="look-banner-edit" onClick={e=>{const r=e.currentTarget.getBoundingClientRect();set({banner:{...look.banner!,y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}});}}><LookBanner look={look}/><span className="look-banner-dot" style={{top:`${look.banner.y*100}%`}}/></div>
      <p className="muted small">Click the picture to choose what stays in view when it is cropped.</p>

@@ -61,3 +61,16 @@ export function placeFromQuery(query: URLSearchParams, data: Workspace): Place |
     : campaign ? "overview" : "dashboard";
   return { worldId: world.id, campaignId: campaign?.id ?? null, view, entryId: null };
 }
+
+/**
+ * The campaign whose theme the Encyclopedia wears (lib/campaign-theme). Inside a campaign, that campaign's, and world
+ * pages opened from it wear it too. On a world's own pages (no campaign open) a world with one campaign wears that
+ * campaign's; a world shared by several campaigns has no one theme, so its own pages keep the Encyclopedia's look. The
+ * Dashboard, which spans every world, keeps it as well.
+ */
+export function themeCampaignId(data: Pick<Workspace, "campaigns">, place: Pick<Place, "worldId" | "campaignId" | "view">): string | null {
+  if (place.campaignId) return place.campaignId;
+  if (place.view === "dashboard" || !place.worldId) return null;
+  const inWorld = data.campaigns.filter(c => c.worldId === place.worldId);
+  return inWorld.length === 1 ? inWorld[0].id : null;
+}

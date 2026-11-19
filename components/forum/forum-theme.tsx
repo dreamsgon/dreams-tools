@@ -1,28 +1,34 @@
 'use client';
 /*
- * The Admin CP: the campaign's themes, docked left or right of the real forum, which shows every change as you make
- * it. Themes (saved ones, starting points, pasting theme code), Basics (colours for a light and a dark version,
- * fonts, corners, banner), a stylesheet tab for each part of the campaign (Forum, Encyclopedia, Maptable, Dashboard,
- * each with the safety checks' notes by line and that part's class names; the other parts open in a new tab to
- * preview) and Help. For those who may arrange the forum. Nothing reaches members until a theme is saved and made live.
+ * The Admin CP: the campaign's themes, docked left or right of the part of the campaign it was opened from (`host`),
+ * which shows every change as you make it. In the forum it sits beside the page; in the Encyclopedia, Maptable and the
+ * dashboard it floats over one side (components/campaign-theme-dock.tsx). Themes (saved ones, starting points,
+ * pasting theme code), Basics (colours for a light and a dark version, fonts, corners, banner), a stylesheet tab for
+ * each part of the campaign (Forum, Encyclopedia, Maptable, Dashboard, each with the safety checks' notes by line and
+ * that part's class names; the other parts open in a new tab to preview) and Help. Themes belong to the campaign, not
+ * its forum, so this works before a forum is set up. For those who may arrange the forum: the GM, and the groups the GM
+ * lets. Nothing reaches members until a theme is saved and made live.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, PanelLeft, PanelRight, Palette, X } from 'lucide-react';
 import { COLOUR_ROLES, PRESET_NOTES, THEME_AREAS, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, areaCss, contrastChecks, cssSize, importTheme, themeColours, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme, type ThemeArea } from '@/lib/campaign-theme/model';
-import { leavePreview } from '../campaign-skin';
+import { leavePreview, refreshSkins } from '../campaign-skin';
+import { SKIN_SCOPE } from '@/lib/campaign-theme/css';
+import './admin-cp.css';
 import { cleanCss } from '@/lib/campaign-theme/css';
 import { resolveTheme, parseThemeMode, THEME_STORAGE_KEY } from '@/lib/appearance';
 import { confirmDialog } from '../confirm-dialog';
-import { forumCall, type PageData } from './forum-api';
+import { forumCall } from './forum-api';
 
 type Themes = { live: Theme | null; saved: Theme[] };
-export type Preview = { css: string; fonts: string; banner: Theme['banner'] } | null;
+/** The theme being edited, compiled for the part beside the Admin CP. */
+export type Preview = { name: string; css: string; fonts: string; banner: Theme['banner'] } | null;
 type Tab = 'themes' | 'basics' | 'help' | ThemeArea;
-/** Where the campaign's other parts open, for the Preview links. */
-type Where = { campaignId: string; maptableId: string | null; owner: boolean };
+/** Where the campaign's parts open, for the Preview links: `key` is the campaign's key as the forum's (`c-` or `m-`). */
+type Where = { key: string; campaignId: string; maptableId: string | null; owner: boolean };
 
 const OPEN_EVENT = 'forum:open-cp';
-/** Opens the Admin CP from anywhere in the forum (Forum settings has the button). */
+/** Opens the Admin CP from anywhere on the page: Forum settings, the Encyclopedia's Look, Maptable's header, the dashboard. */
 export const openAdminCp = () => window.dispatchEvent(new Event(OPEN_EVENT));
 export function useAdminCp(k: string) {
   const store = `forum:cp:${k}`;
@@ -57,39 +63,44 @@ function ownScheme() {
 const setScheme = (s: 'light' | 'dark') => { document.documentElement.dataset.theme = s; };
 /** What a theme's code looks like when copied: the JSON the theme prompt asks Claude for. */
 const codeOf = (t: Theme) => JSON.stringify({ name: t.name, mode: t.mode, radius: t.radius, banner: t.banner, fonts: t.fonts, colors: t.colors, css: t.css, ...(t.areas && Object.values(t.areas).some(Boolean) ? { areas: t.areas } : {}) }, null, 2);
-/** A part of the campaign with the theme being edited, in a new tab (components/campaign-skin.tsx). */
+/**
+ * A part of the campaign with the theme being edited, in a new tab (components/campaign-skin.tsx). The forum shows the
+ * live theme only: to edit beside it, the Admin CP opens from Forum settings.
+ */
 function previewHref(k: string, where: Where | null, area: ThemeArea): string | null {
   const enc = encodeURIComponent, member = k.startsWith('m-');
+  if (area === 'forum') return where ? `/forum#${where.key}` : null;
   if (area === 'encyclopedia') return member ? `/encyclopedia?skin-preview=1#${k}` : where ? `/encyclopedia?campaign=${enc(where.campaignId)}&skin-preview=1` : null;
   if (area === 'maptable') return member ? `/maptable?skin-preview=1#${k}` : where?.maptableId ? `/maptable?campaign=${enc(where.maptableId)}&skin-preview=1` : null;
   if (area === 'dashboard') return !member && where?.owner ? `/campaigns/${enc(`e:${where.campaignId}`)}?skin-preview=1` : null;
   return null;
 }
 
-export function AdminCp({ k, dock, setDock, onClose, onPreview, onSaved }: {
-  k: string; dock: 'left' | 'right'; setDock: (d: 'left' | 'right') => void; onClose: () => void;
+export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, onClose, onPreview, onSaved }: {
+  k: string; host?: ThemeArea; floating?: boolean; dock: 'left' | 'right'; setDock: (d: 'left' | 'right') => void; onClose: () => void;
   onPreview: (p: Preview) => void; onSaved: () => void;
 }) {
+  const hostLabel = THEME_AREAS.find(a => a.id === host)?.label ?? 'Forum';
   const [themes, setThemes] = useState<Themes | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [note, setNote] = useState('');
   const [where, setWhere] = useState<Where | null>(null);
   const [draft, setDraft] = useState<Theme | null>(null), [base, setBase] = useState<Theme | null>(null), [tab, setTab] = useState<Tab>('themes');
-  // The Admin CP only renders in the browser, once the forum has loaded.
+  // The Admin CP only renders in the browser, once the page beside it has loaded.
   const [scheme, setSchemeState] = useState<'light' | 'dark'>(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 
   useEffect(() => {
     let live = true;
-    forumCall<{ page: PageData }>({ action: 'view', campaign: k, page: { kind: 'themes' } })
-      .then(v => { if (live && v.page.kind === 'themes') { setThemes({ live: v.page.live, saved: v.page.saved }); setWhere({ campaignId: v.page.campaignId, maptableId: v.page.maptableId, owner: v.page.owner }); } }, e => { if (live) setError(e instanceof Error ? e.message : 'The themes could not be read.'); });
+    forumCall<{ themes: Themes; where: Where }>({ action: 'themes', campaign: k })
+      .then(v => { if (live) { setThemes(v.themes); setWhere(v.where); } }, e => { if (live) setError(e instanceof Error ? e.message : 'The themes could not be read.'); });
     // Closing puts back the member's own light or dark setting, which Basics may have switched to preview a version.
     return () => { live = false; setScheme(ownScheme()); };
   }, [k]);
 
-  // The forum beside the Admin CP shows the theme being edited, as it would look live.
+  // The part beside the Admin CP shows the theme being edited, as it would look live.
   useEffect(() => {
     if (!draft) { onPreview(null); return; }
-    const timer = setTimeout(() => onPreview({ css: themeCss(draft).css, fonts: themeFontsUrl(draft), banner: draft.banner }), 120);
+    const timer = setTimeout(() => onPreview({ name: draft.name, css: (host === 'forum' ? themeCss(draft) : themeCss(draft, SKIN_SCOPE, host)).css, fonts: themeFontsUrl(draft), banner: draft.banner }), 120);
     return () => clearTimeout(timer);
-  }, [draft, onPreview]);
+  }, [draft, onPreview, host]);
   useEffect(() => () => onPreview(null), [onPreview]);
 
   const dirty = !!draft && !sameTheme(draft, base);
@@ -103,7 +114,7 @@ export function AdminCp({ k, dock, setDock, onClose, onPreview, onSaved }: {
     setBusy(true); setError('');
     try {
       const out = await forumCall<{ themes: Themes }>({ campaign: k, ...body });
-      setThemes(out.themes); after?.(out.themes); onSaved(); return true;
+      setThemes(out.themes); after?.(out.themes); onSaved(); refreshSkins(); return true;
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save.'); return false; }
     finally { setBusy(false); }
   };
@@ -117,7 +128,7 @@ export function AdminCp({ k, dock, setDock, onClose, onPreview, onSaved }: {
   const shown = draft ?? themes?.live ?? null;
   const colours = useMemo(() => shown ? themeColours(shown, '.admin-cp') : '', [shown]);
 
-  return <aside className={`admin-cp dock-${dock}`} aria-label="Admin CP">
+  return <aside className={`admin-cp dock-${dock}${floating ? ' floating' : ''}`} aria-label="Admin CP">
     {colours && <style data-cp-colours="">{colours}</style>}
     <div className="cp-head">
       <Palette size={16} aria-hidden="true" /><b>Admin CP</b><span className="cp-sub">Campaign theme</span>
@@ -143,11 +154,11 @@ export function AdminCp({ k, dock, setDock, onClose, onPreview, onSaved }: {
       {!themes && !error && <p className="muted">Reading the campaign’s themes…</p>}
       {themes && tab === 'themes' && <ThemesTab themes={themes} draft={draft} busy={busy}
         edit={async (t, saved) => { if (await leave()) edit(t, saved); }}
-        live={id => run({ action: 'liveTheme', id }, () => setNote(id ? 'Members see that theme now.' : 'The forum is back to its own look.'))}
+        live={id => run({ action: 'liveTheme', id }, () => setNote(id ? 'Members see that theme now.' : 'The campaign is back to the app’s own look.'))}
         remove={async t => { if (await confirmDialog({ title: `Delete ${t.name}?`, message: themes.live?.id === t.id ? 'It stays live until you pick another theme, but you won’t be able to edit it.' : 'This can’t be undone.', confirm: 'Delete', danger: true })) await run({ action: 'deleteTheme', id: t.id }, () => { if (draft?.id === t.id) { setDraft(null); setBase(null); } }); }} />}
-      {draft && tab === 'basics' && <BasicsTab t={draft} set={setDraft} scheme={scheme} pick={pick} />}
-      {draft && THEME_AREAS.some(a => a.id === tab) && <CssTab key={tab} t={draft} set={setDraft} area={tab as ThemeArea} href={previewHref(k, where, tab as ThemeArea)} />}
-      {tab === 'help' && <HelpTab />}
+      {draft && tab === 'basics' && <BasicsTab t={draft} set={setDraft} scheme={scheme} pick={pick} beside={hostLabel} />}
+      {draft && THEME_AREAS.some(a => a.id === tab) && <CssTab key={tab} t={draft} set={setDraft} area={tab as ThemeArea} beside={tab === host} href={tab === host ? null : previewHref(k, where, tab as ThemeArea)} />}
+      {tab === 'help' && <HelpTab beside={hostLabel} />}
       {note && <p className="cp-note" role="status"><Check size={14} aria-hidden="true" /> {note}</p>}
     </div>
     {draft && <div className="cp-foot">
@@ -181,8 +192,8 @@ function ThemesTab({ themes, draft, busy, edit, live, remove }: {
     <h3>On the campaign now</h3>
     <div className="cp-live">
       {themes.live ? <><b>{themes.live.name}</b><span className="muted small">{modeLabel(themes.live.mode)}</span>
-        <button className="f-btn ghost small" disabled={busy} onClick={() => live(null)}>Use the forum’s own look</button></>
-        : <><b>The forum’s own look</b><span className="muted small">Parchment and gold, light and dark</span></>}
+        <button className="f-btn ghost small" disabled={busy} onClick={() => live(null)}>Use the app’s own look</button></>
+        : <><b>The app’s own look</b><span className="muted small">No theme: each part looks as it does everywhere else</span></>}
     </div>
     <h3>Saved themes <span className="muted small">{themes.saved.length} of {THEME_LIMITS.saved}</span></h3>
     {!themes.saved.length && <p className="muted small">None yet. Start one from below, or paste theme code.</p>}
@@ -222,8 +233,8 @@ function Swatches({ t }: { t: Theme }) {
   return <span className="cp-swatches" aria-hidden="true">{sets.map((c, i) => <span key={i} style={{ background: c.bg, borderColor: c.line }}><i style={{ background: c.accent }} /><i style={{ background: c.accent2 }} /><i style={{ background: c.ink }} /></span>)}</span>;
 }
 
-function BasicsTab({ t, set, scheme, pick }: { t: Theme; set: (t: Theme) => void; scheme: 'light' | 'dark'; pick: (s: 'light' | 'dark') => void }) {
-  // The colour set being edited follows the version the forum shows.
+function BasicsTab({ t, set, scheme, pick, beside }: { t: Theme; set: (t: Theme) => void; scheme: 'light' | 'dark'; pick: (s: 'light' | 'dark') => void; beside: string }) {
+  // The colour set being edited follows the version the page beside it shows.
   const which: 'light' | 'dark' = t.mode === 'both' ? scheme : t.mode, colours = t.colors[which];
   const colour = (role: ColourRole, value: string) => set({ ...t, colors: { ...t.colors, [which]: { ...colours, [role]: value.toLowerCase() } } });
   const font = (role: keyof Theme['fonts'], id: string) => set({ ...t, fonts: { ...t.fonts, [role]: id as FontId } });
@@ -245,7 +256,7 @@ function BasicsTab({ t, set, scheme, pick }: { t: Theme; set: (t: Theme) => void
       <input className="cp-hex" value={colours[role]} maxLength={7} aria-label={`${label}, hex`} onChange={e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) colour(role, e.target.value); }} />
     </label>)}</div>
     <p className="cp-chips">{contrastChecks(colours).map(c => <span key={c.label} className={`cp-chip${c.ratio < c.need ? ' low' : ''}`} title={`Needs ${c.need} or more`}>{c.label} {(Math.floor(c.ratio * 10) / 10).toFixed(1)}</span>)}</p>
-    <p className="muted small">The forum beside this shows the version you’re editing. In the stylesheet, aim a rule at one version with <code>:root[data-theme=&quot;dark&quot;]</code>.</p>
+    <p className="muted small">The {beside} beside this shows the version you’re editing. In the stylesheet, aim a rule at one version with <code>:root[data-theme=&quot;dark&quot;]</code>.</p>
     <h3>Fonts</h3>
     <div className="cp-fonts">{([['display', 'Headings'], ['reading', 'Posts'], ['ui', 'Labels']] as const).map(([role, label]) =>
       <label key={role} className="f-field">{label}<select value={t.fonts[role]} onChange={e => font(role, e.target.value)}>
@@ -296,15 +307,19 @@ const CLASSES: Record<ThemeArea, [string, string][]> = {
     ['.hub-button, .hub-button-primary', 'Buttons'],
   ],
 };
-function CssTab({ t, set, area, href }: { t: Theme; set: (t: Theme) => void; area: ThemeArea; href: string | null }) {
+function CssTab({ t, set, area, beside, href }: { t: Theme; set: (t: Theme) => void; area: ThemeArea; beside: boolean; href: string | null }) {
   const css = areaCss(t, area), checked = useMemo(() => cleanCss(css), [css]);
   const label = THEME_AREAS.find(a => a.id === area)!.label, total = cssSize(t);
   const write = (value: string) => set(area === 'forum' ? { ...t, css: value } : { ...t, areas: { ...t.areas, [area]: value } });
   return <div className="cp-section">
     {area === 'forum'
       ? <p className="muted small">The forum’s stylesheet. It applies to the campaign’s part of the page: never the app bar or this Admin CP. Use the theme’s colours through variables (<code>var(--accent)</code>) so both versions work.</p>
-      : <><p className="muted small">The {label}’s stylesheet. Colours, fonts and corners from Basics already apply there; this is for the rest. Use the theme’s colours through variables (<code>var(--accent)</code>) so both versions work.</p>
-        {href ? <a className="f-btn ghost small cp-preview" href={href} target="_blank" rel="noopener" onClick={() => leavePreview(t)}>Preview in the {label}<span className="sr-only"> (opens a new tab)</span></a>
+      : <p className="muted small">The {label}’s stylesheet. Colours, fonts and corners from Basics already apply there; this is for the rest. Use the theme’s colours through variables (<code>var(--accent)</code>) so both versions work.</p>}
+    {beside ? <p className="muted small">The {label} beside this shows it as you type.</p>
+      : area === 'forum' ? <>
+        {href && <a className="f-btn ghost small cp-preview" href={href} target="_blank" rel="noopener">Open the forum<span className="sr-only"> (opens a new tab)</span></a>}
+        <p className="muted small">The forum shows this stylesheet once the theme is live. To see it as you type, open the Admin CP from the forum’s settings.</p></>
+      : <>{href ? <a className="f-btn ghost small cp-preview" href={href} target="_blank" rel="noopener" onClick={() => leavePreview(t)}>Preview in the {label}<span className="sr-only"> (opens a new tab)</span></a>
           : <p className="muted small">{area === 'maptable' ? 'This campaign has no Maptable campaign paired with it, so there’s nothing to preview yet.' : 'Only the GM can preview the dashboard.'}</p>}
         {href && <p className="muted small">The preview opens in a new tab and shows this theme as it is now, saved or not. Only you see it.</p>}</>}
     <textarea className="cp-code tall" value={css} maxLength={THEME_LIMITS.css} onChange={e => write(e.target.value)} spellCheck={false} aria-label={`${label} stylesheet`} placeholder={area === 'forum' ? '.post-name {\n  color: var(--accent-2);\n}' : area === 'encyclopedia' ? '.topbar {\n  border-bottom: 2px solid var(--accent);\n}' : area === 'maptable' ? '.app-header {\n  border-bottom: 2px solid var(--accent);\n}' : '.hub-card {\n  border-top: 2px solid var(--accent);\n}'} />
@@ -316,12 +331,14 @@ function CssTab({ t, set, area, href }: { t: Theme; set: (t: Theme) => void; are
   </div>;
 }
 
-function HelpTab() {
+function HelpTab({ beside }: { beside: string }) {
   return <div className="cp-section cp-help">
     <h3>How themes work</h3>
     <p>A theme is colours, fonts, corners, the banner and stylesheets. Save as many as {THEME_LIMITS.saved}; one is live, and members see it across the campaign: the forum, the Encyclopedia, Maptable and the campaign’s dashboard. Saving a theme that’s live doesn’t change what members see until you press Save and make live.</p>
     <h3>A stylesheet for each part</h3>
-    <p>Colours, fonts and corners apply everywhere. Each part is built differently, so each has its own stylesheet tab with its class names. The forum beside this shows the forum’s; Preview opens the others in a new tab with the theme you’re editing.</p>
+    <p>Colours, fonts and corners apply everywhere. Each part is built differently, so each has its own stylesheet tab with its class names. The {beside} beside this shows its own as you type; Preview opens the others in a new tab with the theme you’re editing.</p>
+    <h3>Open it from anywhere</h3>
+    <p>This Admin CP opens from every part of the campaign: Forum settings, the Encyclopedia’s Look, the palette button in Maptable’s header and Theme on the campaign’s dashboard. A campaign doesn’t need a forum to have a theme.</p>
     <h3>Variables</h3>
     <p><code>--bg --panel --raised --line --line-strong --ink --muted --accent --accent-2 --on-accent --accent-soft --font-display --font-reading --font-sans --radius</code></p>
     <h3>What the safety checks do</h3>

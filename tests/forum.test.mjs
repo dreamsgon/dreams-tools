@@ -1501,10 +1501,10 @@ test('request: campaign themes are saved, made live and sent with every page', a
   const view = { action: 'view', campaign: KEY, page: { kind: 'index' } };
   assert.equal((await (await gm.post(view)).json()).frame.theme, null, 'the forum’s own look to start');
   // Only those who arrange the forum open the Admin CP's themes or change them.
-  assert.equal((await player.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).status, 403);
+  assert.equal((await player.post({ action: 'themes', campaign: KEY })).status, 403);
   const theme = { ...THEME_PRESETS[2], id: 'neon', css: '.post { color: red } body { --x: 1px } .a { background: url(https://evil.test/x.png) }' };
   const refused = await player.post({ action: 'saveTheme', campaign: KEY, theme });
-  assert.equal(refused.status, 400);
+  assert.equal(refused.status, 403);
   assert.match((await refused.json()).error, /can't change the campaign's theme/);
   const saved = await (await gm.post({ action: 'saveTheme', campaign: KEY, theme })).json();
   assert.equal(saved.themes.saved.length, 1);
@@ -1528,8 +1528,8 @@ test('request: campaign themes are saved, made live and sent with every page', a
   assert.equal((await gm.post({ action: 'saveTheme', campaign: KEY, theme: { ...theme, colors: { ...theme.colors, dark: { ...theme.colors.dark, bg: 'red' } } } })).status, 400);
   await gm.post({ action: 'deleteTheme', campaign: KEY, id: 'neon' });
   await gm.post({ action: 'liveTheme', campaign: KEY, id: null });
-  const last = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).json();
-  assert.deepEqual([last.page.live, last.page.saved], [null, []]);
+  const last = await (await gm.post({ action: 'themes', campaign: KEY })).json();
+  assert.deepEqual([last.themes.live, last.themes.saved], [null, []]);
 });
 
 test('request: the live theme reaches the campaign’s other parts, each with its own stylesheet', async () => {
@@ -1557,6 +1557,26 @@ test('request: the live theme reaches the campaign’s other parts, each with it
   assert.equal((await (await skin(gm, 'maptable', 'mt-maps1')).json()).theme.name, THEME_PRESETS[0].name);
   assert.deepEqual(await (await skin(gm, 'maptable', 'mt-other')).json(), { theme: null });
   // The Admin CP learns where the other parts open.
-  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).json()).page;
-  assert.deepEqual([page.campaignId, page.owner], ['camp', true]);
+  const where = (await (await gm.post({ action: 'themes', campaign: KEY })).json()).where;
+  assert.deepEqual([where.key, where.campaignId, where.owner], [KEY, 'camp', true]);
+  // From Maptable, through the paired campaign; an unpaired one has no theme to change.
+  const fromMaps = await (await gm.post({ action: 'themes', campaign: 'mt-maps1' })).json();
+  assert.deepEqual([fromMaps.where.key, fromMaps.where.maptableId, fromMaps.themes.live.name], [KEY, 'maps1', THEME_PRESETS[0].name]);
+  const unpaired = await gm.post({ action: 'saveTheme', campaign: 'mt-other', theme });
+  assert.equal(unpaired.status, 404);
+  assert.equal((await unpaired.json()).code, 'unpaired');
+  assert.equal((await stranger.post({ action: 'themes', campaign: KEY })).status, 404);
+});
+
+test('request: a campaign without a forum still has themes, from any part of it', async () => {
+  const gm = harness({ user: OWNER, forum: false }), player = harness({ user: 'p1', forum: false });
+  player.deps.themes = gm.deps.themes;
+  // No forum file yet: the forum's pages say so, but the campaign's themes work.
+  assert.equal((await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).code, 'no-forum');
+  const theme = { ...THEME_PRESETS[1], id: 'early', areas: { encyclopedia: '.topbar { color: blue }' } };
+  const saved = await (await gm.post({ action: 'saveTheme', campaign: KEY, theme, live: true })).json();
+  assert.equal(saved.themes.live.name, THEME_PRESETS[1].name);
+  assert.match((await (await player.post({ action: 'skin', campaign: KEY, area: 'encyclopedia' })).json()).theme.css, /\.topbar \{ color: blue \}/);
+  assert.equal((await player.post({ action: 'liveTheme', campaign: KEY, id: null })).status, 403, 'players still can’t change it');
+  assert.equal((await (await gm.post({ action: 'themes', campaign: KEY })).json()).themes.saved.length, 1);
 });
