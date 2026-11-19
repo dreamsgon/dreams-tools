@@ -13,6 +13,7 @@ import { CASTLE_IN_THE_MISTS } from "./skins/castle-in-the-mists.ts";
 import { BLIGHT_AND_BLOOD } from "./skins/blight-and-blood.ts";
 import { CHAMPION } from "./skins/champion.ts";
 import { NORTHERN_HOLD } from "./skins/northern-hold.ts";
+import { STARSHIP_CONSOLE } from "./skins/starship-console.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -98,37 +99,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .topic-row.pinned { border-left: 1px solid var(--line); }
 `),
 
-  skin("console", "Starship Console", "Star Trek (LCARS)", 16, { display: "antonio", reading: "inter", ui: "inter" },
-    set("#f3ede4", "#fffaf2", "#f5ecdf", "#d8c7b0", "#1b1524", "#5b4f6b", "#b55400", "#6a3fb0"),
-    set("#000000", "#0b0b0f", "#15151c", "#3a3350", "#f3ead9", "#b9a9cf", "#ff9c33", "#c59bff"), `
-/* A starship's display: one thick elbow of colour, pill buttons and bars with rounded ends. */
-.board-head:not(.has-art) { background: var(--bg); --head-ink: var(--ink); --head-title: var(--accent); --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
-.board-head { border: 0; border-left: 76px solid var(--accent); border-top: 22px solid var(--accent); border-radius: 60px 0 0 0; text-align: right; min-height: 170px; }
-.board-head-text { padding: 20px 22px 8px; }
-.board-title { font-weight: 700; letter-spacing: .04em; font-size: 54px; }
-.board-tagline { font-style: normal; font-family: var(--font-display); text-transform: uppercase; letter-spacing: .12em; font-size: 17px; color: var(--accent-2); }
-.board-nav { justify-content: flex-end; gap: 6px; padding: 8px 14px 12px; }
-.board-nav a { padding: 6px 22px; border-radius: 999px; background: var(--accent-2); color: var(--bg); border: 0; font-size: 14px; letter-spacing: .08em; }
-.board-nav a:nth-child(2n) { background: var(--accent); }
-.board-nav a:nth-child(3n) { background: color-mix(in srgb, var(--accent) 55%, var(--accent-2)); }
-.board-nav a:hover { color: var(--bg); filter: brightness(1.15); }
-.board-bar { border: 0; border-radius: 0 999px 999px 0; background: var(--raised); margin-bottom: 8px; }
-.category-title { padding: 5px 20px; border-radius: 999px; background: var(--accent-2); color: var(--bg); font-size: 17px; letter-spacing: .1em; }
-.category:nth-of-type(2n) .category-title { background: var(--accent); }
-.category-title .tag { border-color: var(--bg); color: var(--bg); }
-.forum, .topic-row, .topic-head { border: 0; border-left: 14px solid var(--accent); border-radius: 22px 0 0 22px; background: var(--panel); }
-.forum:nth-child(2n), .topic-row:nth-child(2n) { border-left-color: var(--accent-2); }
-.forum-art { border-radius: 8px 0 0 8px; }
-.forum-name, .topic-title, .topic-name, .post-name { text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
-.forum-desc, .topic-main small { font-style: normal; font-size: 14px; }
-.post { border: 0; border-left: 14px solid var(--accent-2); border-radius: 26px 0 0 26px; overflow: hidden; }
-.post-band, .post.flip .post-band { background: var(--accent-2); border: 0; }
-.post-name { color: var(--bg); }
-.post-band .post-meta, .post-band .post-meta a { color: var(--bg); }
-.post-text { font-size: 16px; font-weight: 400; }
-.f-btn { border-radius: 999px; text-transform: uppercase; font-family: var(--font-display); font-size: 14px; letter-spacing: .08em; }
-.tag { border-radius: 999px; }
-`),
+  { inspired: "Star Trek (LCARS)", theme: STARSHIP_CONSOLE },
 
   skin("issue-one", "Issue One", "Superhero comics", 4, { display: "bangers", reading: "comic", ui: "comic" },
     set("#fff3c4", "#ffffff", "#fff0b3", "#1a1a1a", "#141414", "#4a4a4a", "#d81e2c", "#1456c8"),
