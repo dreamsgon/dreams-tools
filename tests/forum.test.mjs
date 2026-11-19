@@ -4,6 +4,8 @@ import { workspaceSchema, defaultCharacter } from '../lib/encyclopedia/world-mod
 import { emptyMemberList } from '../lib/members.ts';
 import * as M from '../lib/forum/model.ts';
 import { ForumStore, forumKey } from '../lib/forum/store.ts';
+import { ThemeStore } from '../lib/campaign-theme/store.ts';
+import { THEME_PRESETS } from '../lib/campaign-theme/model.ts';
 import { frameOf, topicPage, boardPage, trashPage, activePage, cardOf, castOf, forumImages, membersPage, cardFields, cardSample, stripOf, profilePage, controls } from '../lib/forum/view.ts';
 import { handleForum, handleForumImage, resetForumThrottles } from '../lib/forum/request.ts';
 import * as R from '../lib/forum/reader.ts';
@@ -313,7 +315,7 @@ function harness({ user = 'p1', campaign, forum = true } = {}) {
     sameOrigin: r => r.headers.get('Origin') === new URL(r.url).origin,
     user: async () => user,
     campaign: campaign ?? (async (u) => (u === 'stranger' ? null : { owner: OWNER, campaignId: 'camp', list: list() })),
-    workspace: async () => workspace, store, now: () => NOW, newId: () => 'id' + ++n,
+    workspace: async () => workspace, store, themes: new ThemeStore(bucket), now: () => NOW, newId: () => 'id' + ++n,
     image: async (_o, id) => ({ url: 'https://img.test/' + id }),
   };
   const post = (body, headers = { Origin: 'https://x.test' }, d = deps) =>
@@ -1440,4 +1442,41 @@ test('solo: an AI never plays the solo player’s characters', () => {
   assert.equal(controls(ctx, 'hero'), false);
   assert.equal(controls(ctx, 'villain'), true);
   assert.equal(controls({ ...ctx, viewer: { ...ctx.viewer, editable: new Set(['hero']) } }, 'hero'), true);
+});
+
+test('request: campaign themes are saved, made live and sent with every page', async () => {
+  const gm = harness({ user: OWNER }), player = harness({ user: 'p1' });
+  player.deps.themes = gm.deps.themes;
+  const view = { action: 'view', campaign: KEY, page: { kind: 'index' } };
+  assert.equal((await (await gm.post(view)).json()).frame.theme, null, 'the forum’s own look to start');
+  // Only those who arrange the forum open the Admin CP's themes or change them.
+  assert.equal((await player.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).status, 403);
+  const theme = { ...THEME_PRESETS[2], id: 'neon', css: '.post { color: red } body { --x: 1px } .a { background: url(https://evil.test/x.png) }' };
+  const refused = await player.post({ action: 'saveTheme', campaign: KEY, theme });
+  assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /can't change the campaign's theme/);
+  const saved = await (await gm.post({ action: 'saveTheme', campaign: KEY, theme })).json();
+  assert.equal(saved.themes.saved.length, 1);
+  assert.equal(saved.themes.live, null, 'saving alone doesn’t change what members see');
+  await gm.post({ action: 'liveTheme', campaign: KEY, id: 'neon' });
+  const frame = (await (await player.post(view)).json()).frame;
+  assert.equal(frame.theme.name, 'Neon Wire');
+  assert.match(frame.theme.css, /\.campaign-skin \.post \{ color: red \}/);
+  assert.match(frame.theme.css, /:root\[data-theme="dark"\] \.campaign-skin \{ --bg: #07080d/);
+  assert.doesNotMatch(frame.theme.css, /evil\.test|url\(/);
+  assert.match(frame.theme.fonts, /^https:\/\/fonts\.googleapis\.com\/css2\?family=Chakra\+Petch/);
+  // A refresh from a browser that has this version doesn't send the stylesheet again.
+  const again = (await (await player.post({ ...view, theme: frame.theme.key })).json()).frame.theme;
+  assert.equal(again.same, true);
+  assert.equal(again.css, undefined);
+  // Editing the saved theme leaves the live copy until it's made live again.
+  await gm.post({ action: 'saveTheme', campaign: KEY, theme: { ...theme, name: 'Neon Two' } });
+  assert.equal((await (await player.post(view)).json()).frame.theme.name, 'Neon Wire');
+  const both = await (await gm.post({ action: 'saveTheme', campaign: KEY, theme: { ...theme, name: 'Neon Three' }, live: true })).json();
+  assert.equal(both.themes.live.name, 'Neon Three');
+  assert.equal((await gm.post({ action: 'saveTheme', campaign: KEY, theme: { ...theme, colors: { ...theme.colors, dark: { ...theme.colors.dark, bg: 'red' } } } })).status, 400);
+  await gm.post({ action: 'deleteTheme', campaign: KEY, id: 'neon' });
+  await gm.post({ action: 'liveTheme', campaign: KEY, id: null });
+  const last = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).json();
+  assert.deepEqual([last.page.live, last.page.saved], [null, []]);
 });

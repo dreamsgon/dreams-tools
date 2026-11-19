@@ -17,6 +17,7 @@ import { playerSpells } from "../encyclopedia/items.ts";
 import { unseen, type Alerts } from "./alerts.ts";
 import { slotOf, type Combat } from "./combat.ts";
 import { NARRATION, isUnread, nextUp, onlineOf, orderOf, readUpTo, type Presence, type Reads } from "./reader.ts";
+import type { LiveTheme } from "../campaign-theme/model.ts";
 
 export type Viewer = { userId: string; rights: ForumRights; key: string; editable: ReadonlySet<string>; access?: Readonly<Record<string, BoardAccess>> };
 export type Context = {
@@ -29,6 +30,11 @@ export type Context = {
   presence?: Presence | null;
   /** The viewer's alerts (alerts.ts). */
   alerts?: Alerts | null;
+  /**
+   * The campaign's live theme (lib/campaign-theme), ready for the page; `same` when the browser said it already has
+   * this version, so a refresh doesn't send the stylesheet again.
+   */
+  theme?: (Omit<LiveTheme, "css" | "fonts"> & { css?: string; fonts?: string; same?: true }) | null;
   now?: Date;
   /**
    * A solo campaign's owner (lib/solo.ts): `player` while they use the player view, reading and posting as a member of
@@ -378,6 +384,8 @@ export function frameOf(ctx: Context) {
       groups: [{ name: "Game Master", color: null as string | null }, ...ctx.list.groups.filter(g => ctx.list.members.some(m => m.groups[0] === g.id)).map(g => ({ name: g.name, color: g.color as string | null }))],
       today: recentCharacters(ctx, entries, now),
     },
+    /** The campaign's live theme, or null for the forum's own look. */
+    theme: ctx.theme ?? null,
   };
 }
 export type Frame = ReturnType<typeof frameOf>;

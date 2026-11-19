@@ -225,8 +225,9 @@ function Waiting({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
 }
 
 /** The banner the GM sets: title, tagline, campaign picture and links. */
-export function Banner({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
-  const src = usePicture(k, frame.banner?.imageId);
+/** The banner. `plain`: the campaign theme draws it in its own colours, without the picture. */
+export function Banner({ frame, k, go, plain = false }: { frame: Frame; k: string; go: Go; plain?: boolean }) {
+  const src = usePicture(k, plain ? null : frame.banner?.imageId);
   return <header className={`board-head${src ? ' has-art' : ''}`} style={src ? { '--banner': `url("${src}")`, '--banner-y': `${(frame.banner!.y * 100).toFixed(1)}%` } as CSSProperties : undefined}>
     <div className="board-head-text">
       <h1 className="board-title"><Link k={k} go={go} to={{ view: 'index' }}>{frame.settings.title}</Link></h1>

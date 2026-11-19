@@ -1,7 +1,7 @@
 'use client';
 /* Forum settings, for the GM and groups that may add and arrange boards: the banner, its links, categories and boards, and (the GM) the AI. */
 import { useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Megaphone, Plus, ShieldCheck, Smile, Sparkles, Tag, Trash2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, Megaphone, Palette, Plus, ShieldCheck, Smile, Sparkles, Tag, Trash2, Upload } from 'lucide-react';
 import type { TopicTag } from '@/lib/forum/model';
 import { Emoji } from './forum-parts';
 import { uploadForumPicture } from './forum-insert';
@@ -9,6 +9,7 @@ import { confirmDialog } from '../confirm-dialog';
 import { forumCall, type Frame, type Masks, type PageData, type Tri } from './forum-api';
 import { Crumbs, type Go } from './forum-parts';
 import { CardDesigner, StripSettings } from './forum-profile';
+import { openAdminCp } from './forum-theme';
 
 type Settings = Extract<PageData, { kind: 'settings' }>;
 type Row = Frame['boards'][number];
@@ -269,10 +270,20 @@ function TopicTagSettings({ page, k, done }: { page: Settings; k: string; done: 
   </section>;
 }
 
+/** The campaign theme lives in the Admin CP, which docks beside the forum so every change shows as you make it. */
+function ThemeCard({ frame }: { frame: Frame }) {
+  return <section className="settings-card">
+    <h2><Palette size={15} aria-hidden="true" /> Campaign theme</h2>
+    <p className="muted">Colours for a light and a dark version, fonts, the banner and your own stylesheet, like a Jcink skin. Save several and choose which one members see.</p>
+    <p>Now: <b>{frame.theme ? frame.theme.name : 'the forum’s own look'}</b></p>
+    <button className="f-btn" onClick={openAdminCp}>Open the Admin CP</button>
+  </section>;
+}
+
 export function SettingsView({ frame, page, k, go, done }: { frame: Frame; page: Settings; k: string; go: Go; done: Done }) {
   return <>
     <Crumbs frame={frame} k={k} go={go} last="Forum settings" />
     <header className="topic-head"><h2 className="topic-name">Forum settings</h2><p className="muted">Who can read, post and moderate is set per group on the campaign’s Members tab. Permissions on a board change that for the board alone.</p></header>
-    <div className="settings-grid"><div className="settings-col"><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} /><TopicTagSettings page={page} k={k} done={done} /><StripSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><div className="settings-col"><BoardsSettings frame={frame} page={page} k={k} done={done} /><CardDesigner page={page} k={k} done={done} /></div></div>
+    <div className="settings-grid"><div className="settings-col"><ThemeCard frame={frame} /><BannerSettings page={page} k={k} done={done} /><EmojiSettings page={page} k={k} done={done} /><TopicTagSettings page={page} k={k} done={done} /><StripSettings page={page} k={k} done={done} />{page.ai.may && <AiSettings page={page} k={k} done={done} />}</div><div className="settings-col"><BoardsSettings frame={frame} page={page} k={k} done={done} /><CardDesigner page={page} k={k} done={done} /></div></div>
   </>;
 }
