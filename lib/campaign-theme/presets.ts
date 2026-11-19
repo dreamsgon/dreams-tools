@@ -17,6 +17,7 @@ import { STARSHIP_CONSOLE } from "./skins/starship-console.ts";
 import { AGORA } from "./skins/agora.ts";
 import { MORPH_SKIN } from "./skins/morph.ts";
 import { TWO_BANNERS } from "./skins/two-banners.ts";
+import { INQUISITORS_TAROT } from "./skins/inquisitors-tarot.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -79,28 +80,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Dragon Age II", theme: CHAMPION },
 
-  skin("tarot", "Inquisitor’s Tarot", "Dragon Age: Inquisition", 0, { display: "cinzel", reading: "cormorant", ui: "inter" },
-    set("#e6ebe3", "#f5f8f2", "#eaf0e6", "#bfcdbd", "#13211c", "#4f6359", "#7d6110", "#14705a"),
-    set("#08110f", "#0f1b18", "#152420", "#274038", "#e4eee6", "#94aa9f", "#d9b65c", "#4fc3a1"), `
-/* Every panel a tarot card: a gold line inside a dark frame, and a green tear in the sky. */
-.board-head:not(.has-art) {
-  background:
-    radial-gradient(ellipse 9% 70% at 50% 0%, rgba(120, 255, 200, .85), rgba(60, 200, 150, .35) 55%, transparent 100%),
-    radial-gradient(ellipse at 50% 0%, rgba(40, 150, 110, .45), transparent 62%),
-    linear-gradient(180deg, #0b1a16, #060d0b);
-  --head-ink: #e4eee6; --head-title: #e2c477; --head-line: #6d5a24; --head-nav: rgba(0, 0, 0, .4); --head-shadow: 0 2px 12px rgba(0, 0, 0, .8);
-}
-.board-head, .forum, .topic-row, .post, .topic-head, .board-foot { box-shadow: inset 0 0 0 4px var(--panel), inset 0 0 0 5px var(--accent); }
-.board-head { box-shadow: inset 0 0 0 5px #060d0b, inset 0 0 0 6px #b8973f; }
-.forum, .topic-row { padding: 16px 18px; }
-.category-title { justify-content: center; }
-.category-title::before, .category-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--accent)); }
-.category-title::after { background: linear-gradient(270deg, transparent, var(--accent)); }
-.portrait.big { box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px var(--panel), 0 0 0 6px var(--accent); border: 0; margin: 6px; }
-.post-band { background: none; border-bottom-color: var(--accent); margin: 0 5px; }
-.post-name { letter-spacing: .14em; }
-.topic-row.pinned { border-left: 1px solid var(--line); }
-`),
+  { inspired: "Dragon Age: Inquisition", theme: INQUISITORS_TAROT },
 
   { inspired: "Star Trek (LCARS)", theme: STARSHIP_CONSOLE },
 
