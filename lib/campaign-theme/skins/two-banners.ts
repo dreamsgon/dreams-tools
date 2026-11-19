@@ -610,6 +610,9 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
   .portrait.big::after { left: 4px; right: 4px; bottom: 4px; height: 12px; background-size: 100% 5px, 76% 5px, 100% 2px, auto; }
   .mini-card { box-sizing: border-box; }
   .location-art { border-right: 0; border-bottom: 2px solid transparent; }
+  /* A place's row stacks beside its picture on phones: room above the name and below the latest post, clear of the rivets. */
+  .forum-location > :nth-child(2) { padding-top: 14px; }
+  .forum-location > :last-child { padding-bottom: 16px; }
 }
 `,
   areas: { encyclopedia: ENCYCLOPEDIA, maptable: MAPTABLE, dashboard: DASHBOARD },
