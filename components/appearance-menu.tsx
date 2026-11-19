@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
-import { Palette } from "lucide-react";
+import { Palette, Brush } from "lucide-react";
+import { openAdminCp, useCampaignThemeOffered } from "./campaign-theme-entry";
 import {
   ACCENTS,
   ACCENT_STORAGE_KEY,
@@ -100,6 +101,8 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
   const wrapper = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  // On a page of a campaign you may restyle, the campaign's theme is here too, beside your own appearance.
+  const campaignTheme = useCampaignThemeOffered();
 
   useEffect(() => {
     if (settings.mode !== "system") return;
@@ -142,6 +145,11 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
       <span className="appearance-dot" aria-hidden="true" />
     </button>
     {open && <div className="appearance-panel" id={panelId} role="dialog" aria-label="Appearance">
+      {campaignTheme && <div className="appearance-campaign">
+        <h2>Campaign theme</h2>
+        <p className="appearance-note">Colours, fonts and a stylesheet for every part of this campaign, for everyone in it.</p>
+        <button type="button" className="appearance-campaign-open" onClick={() => { setOpen(false); openAdminCp(); }}><Brush size={15} aria-hidden="true" />Open the Admin CP</button>
+      </div>}
       <h2>Appearance</h2>
       <fieldset className="appearance-group">
         <legend>Theme</legend>

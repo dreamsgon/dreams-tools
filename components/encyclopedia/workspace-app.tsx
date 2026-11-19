@@ -137,9 +137,9 @@ export default function WorkspaceApp() {
     // The campaign's live theme (lib/campaign-theme), in place of its look: the open campaign's, or on a world's own pages
     // the world's only campaign's (themeCampaignId). A co-GM asks through their member ref.
     const themed = themeCampaignId(data, { worldId, campaignId, view });
-    const skinKey = !loaded || signedOut ? null : memberRef() ? `m-${memberRef()}` : themed ? `c-${themed}` : null;
+    const skinKey = signedOut ? null : !loaded ? undefined : memberRef() ? `m-${memberRef()}` : themed ? `c-${themed}` : null;
     // The Admin CP floats beside the Encyclopedia when it's opened (the Look section has the button).
-    const themeDock = useThemeDock(skinKey, "encyclopedia");
+    const themeDock = useThemeDock(skinKey, "encyclopedia", !memberRef());
     const skin = useCampaignSkin(skinKey, "encyclopedia", undefined, themeDock.editing);
     usePageTitle(loaded && !signedOut ? encyclopediaTitle({ entry: view === "overview" ? entry?.title : null, view, campaign: campaign?.name, world: world?.name }) : "");
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");

@@ -19,6 +19,7 @@ import { cleanCss } from '@/lib/campaign-theme/css';
 import { resolveTheme, parseThemeMode, THEME_STORAGE_KEY } from '@/lib/appearance';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall } from './forum-api';
+import { OPEN_ADMIN_CP as OPEN_EVENT, openAdminCp } from '../campaign-theme-entry';
 
 type Themes = { live: Theme | null; saved: Theme[] };
 /** The theme being edited, compiled for the part beside the Admin CP. */
@@ -27,9 +28,8 @@ type Tab = 'themes' | 'basics' | 'help' | ThemeArea;
 /** Where the campaign's parts open, for the Preview links: `key` is the campaign's key as the forum's (`c-` or `m-`). */
 type Where = { key: string; campaignId: string; maptableId: string | null; owner: boolean };
 
-const OPEN_EVENT = 'forum:open-cp';
-/** Opens the Admin CP from anywhere on the page: Forum settings, the Encyclopedia's Look, Maptable's header, the dashboard. */
-export const openAdminCp = () => window.dispatchEvent(new Event(OPEN_EVENT));
+/** Opens the Admin CP from anywhere on the page: Forum settings, the Appearance menu, the Encyclopedia's Look, the dashboard. */
+export { openAdminCp };
 export function useAdminCp(k: string) {
   const store = `forum:cp:${k}`;
   const [open, setOpen] = useState(false);
