@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { contrastRatio, relativeLuminance } from "../contrast.ts";
 import { SKIN_SCOPE, cleanCss, type CssProblem } from "./css.ts";
+import { SKIN_PRESETS } from "./presets.ts";
 
 export const THEME_LIMITS = { saved: 20, name: 60, css: 100_000 } as const;
 
@@ -29,6 +30,13 @@ export const THEME_FONTS = {
   space: { label: "Space Grotesk", stack: '"Space Grotesk", "Inter", sans-serif', query: "Space+Grotesk:wght@400;500;600;700" },
   chakra: { label: "Chakra Petch", stack: '"Chakra Petch", "Inter", sans-serif', query: "Chakra+Petch:wght@400;500;600;700" },
   mono: { label: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, Menlo, monospace', query: "JetBrains+Mono:ital,wght@0,400;0,600;1,400" },
+  jost: { label: "Jost", stack: '"Jost", "Inter", sans-serif', query: "Jost:ital,wght@0,300;0,400;0,500;0,700;1,400" },
+  rajdhani: { label: "Rajdhani", stack: '"Rajdhani", "Inter", sans-serif', query: "Rajdhani:wght@500;600;700" },
+  antonio: { label: "Antonio", stack: '"Antonio", "Arial Narrow", sans-serif', query: "Antonio:wght@400;600;700" },
+  bangers: { label: "Bangers", stack: '"Bangers", "Impact", sans-serif', query: "Bangers" },
+  comic: { label: "Comic Neue", stack: '"Comic Neue", "Comic Sans MS", sans-serif', query: "Comic+Neue:ital,wght@0,400;0,700;1,400" },
+  pirata: { label: "Pirata One", stack: '"Pirata One", Georgia, serif', query: "Pirata+One" },
+  uncial: { label: "Uncial Antiqua", stack: '"Uncial Antiqua", Georgia, serif', query: "Uncial+Antiqua" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);
@@ -73,7 +81,7 @@ const FORUM_LIGHT: ColourSet = { bg: "#ece5d6", panel: "#f9f5ea", raised: "#f1eb
 const FORUM_DARK: ColourSet = { bg: "#111110", panel: "#1a1a18", raised: "#21211e", line: "#302e27", ink: "#ece5d3", muted: "#a59d88", accent: "#dfbe6a", accent2: "#49b8a0" };
 
 /** Themes to start from. Their CSS is short on purpose: a starting point, not a finished skin. */
-export const THEME_PRESETS: Theme[] = [
+const BASE_PRESETS: Theme[] = [
   { id: "preset-forum", name: "Parchment and gold", mode: "both", radius: 3, banner: "picture", fonts: { display: "cinzel", reading: "cormorant", ui: "inter" }, colors: { light: FORUM_LIGHT, dark: FORUM_DARK }, css: "" },
   {
     id: "preset-ledger", name: "Parchment Ledger", mode: "light", radius: 0, banner: "plain", fonts: { display: "fell", reading: "spectral", ui: "inter" },
@@ -113,6 +121,11 @@ export const THEME_PRESETS: Theme[] = [
     css: "",
   },
 ];
+
+/** Every starting point: the app's own four, then the skins inspired by games and worlds (presets.ts). */
+export const THEME_PRESETS: Theme[] = [...BASE_PRESETS, ...SKIN_PRESETS.map(p => p.theme)];
+/** What a preset skin is inspired by, by its id, for the Admin CP's list. */
+export const PRESET_NOTES: Record<string, string> = Object.fromEntries(SKIN_PRESETS.map(p => [p.theme.id, p.inspired]));
 
 /** The colour a theme's text on its accent should be: near-black or white, whichever reads better. */
 export const onAccent = (accent: string) => contrastRatio(accent, "#111111") >= contrastRatio(accent, "#ffffff") ? "#111111" : "#ffffff";

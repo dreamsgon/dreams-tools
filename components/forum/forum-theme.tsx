@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, PanelLeft, PanelRight, Palette, X } from 'lucide-react';
-import { COLOUR_ROLES, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, contrastChecks, importTheme, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme } from '@/lib/campaign-theme/model';
+import { COLOUR_ROLES, PRESET_NOTES, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, contrastChecks, importTheme, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme } from '@/lib/campaign-theme/model';
 import { cleanCss } from '@/lib/campaign-theme/css';
 import { resolveTheme, parseThemeMode, THEME_STORAGE_KEY } from '@/lib/appearance';
 import { confirmDialog } from '../confirm-dialog';
@@ -144,7 +144,9 @@ function ThemesTab({ themes, draft, busy, edit, live, remove }: {
   edit: (t: Theme, saved: boolean) => void; live: (id: string | null) => void; remove: (t: Theme) => void;
 }) {
   const [paste, setPaste] = useState(''), [pasteError, setPasteError] = useState(''), [copied, setCopied] = useState('');
-  const full = themes.saved.length >= THEME_LIMITS.saved;
+  const full = themes.saved.length >= THEME_LIMITS.saved, [find, setFind] = useState('');
+  const words = find.toLowerCase().split(/\s+/).filter(Boolean);
+  const presets = THEME_PRESETS.filter(p => { const text = `${p.name} ${PRESET_NOTES[p.id] ?? ''} ${THEME_FONTS[p.fonts.display].label}`.toLowerCase(); return words.every(w => text.includes(w)); });
   const copy = async (t: Theme) => { try { await navigator.clipboard.writeText(codeOf(t)); setCopied(t.id); setTimeout(() => setCopied(''), 1800); } catch { setPaste(codeOf(t)); } };
   const fromPaste = () => {
     setPasteError('');
@@ -178,12 +180,14 @@ function ThemesTab({ themes, draft, busy, edit, live, remove }: {
         </span>
       </li>;
     })}</ul>
-    <h3>Start a new theme from</h3>
-    <ul className="cp-list">{THEME_PRESETS.map(p => <li key={p.id}>
+    <h3>Start a new theme from <span className="muted small">{THEME_PRESETS.length} skins</span></h3>
+    <input className="cp-find" type="search" value={find} onChange={e => setFind(e.target.value)} placeholder="Find a skin by its name or what inspired it" aria-label="Find a skin" />
+    <ul className="cp-list presets">{presets.map(p => <li key={p.id}>
       <Swatches t={p} />
-      <span className="cp-list-name"><b>{p.name}</b><small>{modeLabel(p.mode)} · {THEME_FONTS[p.fonts.display].label}</small></span>
-      <span className="cp-list-actions"><button className="f-btn ghost small" disabled={full} onClick={() => edit({ ...p, id: newId() }, false)}>Start from this</button></span>
+      <span className="cp-list-name"><b>{p.name}</b><small>{PRESET_NOTES[p.id] ? `Inspired by ${PRESET_NOTES[p.id]}` : `${modeLabel(p.mode)} · ${THEME_FONTS[p.fonts.display].label}`}</small></span>
+      <button className="f-btn ghost small" disabled={full} onClick={() => edit({ ...p, id: newId() }, false)}>Start<span className="sr-only"> from {p.name}</span></button>
     </li>)}</ul>
+    {!presets.length && <p className="muted small">No skin matches that.</p>}
     <h3>Paste theme code</h3>
     <p className="muted small">Theme code is a theme as JSON: copy it from another campaign’s saved theme, or have Claude write one. It opens here to look over before you save it.</p>
     <textarea className="cp-code" rows={5} value={paste} onChange={e => setPaste(e.target.value)} placeholder='{ "name": "…", "mode": "both", "colors": { … } }' spellCheck={false} />
