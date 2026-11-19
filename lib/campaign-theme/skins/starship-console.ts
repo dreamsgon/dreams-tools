@@ -613,7 +613,7 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
   .post-band, .post.flip .post-band { align-items: flex-start; margin-left: -12px; padding-left: 26px; }
   .post-name { font-size: 19px; }
   .portrait.big.portrait-empty span { font-size: 64px; }
-  .mini-card { border-left-width: 14px; border-radius: 26px 0 0 0; }
+  .mini-card { box-sizing: border-box; border-left-width: 14px; border-radius: 26px 0 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .forum, .topic-row, .board-nav a, .f-btn, .mini-link { transition: none; }
