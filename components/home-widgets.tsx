@@ -53,36 +53,41 @@ const shortName = (n: string) => n.replace(/ \(.*/, "");
 
 /** The folders on the Campaigns page as folder cards: a tab and coloured top edge, a stack of campaign tiles, opening in place to the campaigns inside. */
 export function Folders({ layout, data }: Part) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // One folder open at a time. The open folder's card stays where it is; its campaigns
+  // show in a full-width panel on the next row (the grid is dense, so the other cards keep their places).
+  const [openId, setOpenId] = useState<string | null>(null);
   const summary = data.summary, which = layout.options?.folders?.which;
   const choices = summary ? folderChoices(summary.folders).filter(f => !which || which.includes(f.id)) : [];
   const rows = summary ? homeCampaigns(summary) : [];
   return <>
     <Head title="Campaign folders" id="home-folders-title"><Link href="/campaigns"><ChevronRight size={14} aria-hidden="true" />Campaigns page</Link></Head>
-    {choices.length ? <div className="home-folders home-grow">{choices.map(f => {
-      const inside = rows.filter(r => r.folderId === f.id), isOpen = open.has(f.id), last = inside.map(r => r.encyclopedia?.lastEdited ?? "").sort().pop();
-      const names = inside.slice(0, 2).map(r => shortName(r.name)).join(", ");
-      return <div key={f.id} className={`home-fcard${isOpen ? " home-fcard-open" : ""}`} style={{ "--fc": folderColor(f.id) } as CSSProperties}>
-        <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => { const n = new Set(s); if (!n.delete(f.id)) n.add(f.id); return n; })}>
+    {choices.length ? <div className="home-folders home-grow">{choices.flatMap(f => {
+      const inside = rows.filter(r => r.folderId === f.id), isOpen = openId === f.id, last = inside.map(r => r.encyclopedia?.lastEdited ?? "").sort().pop();
+      const names = inside.slice(0, 2).map(r => shortName(r.name)).join(", "), color = { "--fc": folderColor(f.id) } as CSSProperties, panelId = `home-fpanel-${f.id}`;
+      const card = <div key={f.id} className={`home-fcard${isOpen ? " home-fcard-open" : ""}`} style={color}>
+        <button type="button" aria-expanded={isOpen} aria-controls={isOpen ? panelId : undefined} onClick={() => setOpenId(isOpen ? null : f.id)}>
           <span className="home-fhead">
             <span className="home-fi" aria-hidden="true">{isOpen ? <FolderOpen size={18} /> : <Folder size={18} />}</span>
             <span className="home-ftext"><strong>{f.path}</strong><small>{plural(inside.length, "campaign")}{last ? ` · active ${when(last).toLowerCase()}` : ""}</small></span>
             <ChevronRight size={15} className="home-chev" aria-hidden="true" />
           </span>
-          {!isOpen && inside.length > 0 && <span className="home-fstack">
+          {inside.length > 0 && <span className="home-fstack">
             {inside.slice(0, 4).map(r => <span key={r.key} className="home-ftile" style={tint(folderColor(r.key))} title={r.name} aria-hidden="true">{[...r.name][0]?.toUpperCase()}</span>)}
             <em>{names}{inside.length > 2 ? ` +${inside.length - 2}` : ""}</em>
           </span>}
         </button>
-        {isOpen && (inside.length ? <ul>{inside.map(r => {
+      </div>;
+      if (!isOpen) return [card];
+      return [card, <div key={`${f.id}-panel`} id={panelId} className="home-fpanel" style={color} role="region" aria-label={f.path}>
+        {inside.length ? <ul>{inside.map(r => {
           const notes = notesHref(r), maps = mapsHref(r), forum = forumHref(r);
           return <li key={r.key}>
             <Link href={openHref(r)} className="home-frow"><span className="home-fmini" style={tint(folderColor(r.key))} aria-hidden="true" />
               <span><strong>{r.name}</strong><small>{[r.encyclopedia && plural(r.encyclopedia.pages, "page"), r.maptable && plural(r.maptable.scenes, "scene"), r.encyclopedia?.lastEdited && when(r.encyclopedia.lastEdited)].filter(Boolean).join(" · ")}</small></span></Link>
             <span className="home-fgo">{notes && <a href={notes}>Wiki</a>}{maps && <a href={maps}>Maps</a>}{forum && <a href={forum}>Forum</a>}</span>
           </li>;
-        })}</ul> : <p className="home-muted home-folder-empty">No campaigns in this folder.</p>)}
-      </div>;
+        })}</ul> : <p className="home-muted home-folder-empty">No campaigns in this folder.</p>}
+      </div>];
     })}</div> : <p className="home-muted">{summary?.folders.length ? "No folders chosen. Use the section's settings in Customize." : <>No folders yet. Make them on the <Link href="/campaigns">Campaigns page</Link>.</>}</p>}
   </>;
 }
