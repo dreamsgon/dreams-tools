@@ -11,6 +11,7 @@ import { CITADEL_STATION } from "./skins/citadel-station.ts";
 import { SWORD_COAST } from "./skins/sword-coast.ts";
 import { CASTLE_IN_THE_MISTS } from "./skins/castle-in-the-mists.ts";
 import { BLIGHT_AND_BLOOD } from "./skins/blight-and-blood.ts";
+import { CHAMPION } from "./skins/champion.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -91,30 +92,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Dragon Age: Origins", theme: BLIGHT_AND_BLOOD },
 
-  skin("champion", "Champion", "Dragon Age II", 0, { display: "schibsted", reading: "source", ui: "inter" },
-    set("#f2f0ed", "#ffffff", "#f0eeeb", "#cfcac4", "#111111", "#555555", "#b3190f", "#1a1a1a"),
-    set("#080808", "#121212", "#1a1a1a", "#333333", "#f2f2f2", "#a3a3a3", "#e8493d", "#d9d9d9"), `
-/* Three inks only: black, white and one red, cut on a hard diagonal. */
-.board-head:not(.has-art) {
-  background: linear-gradient(112deg, #b3190f 0 34%, #0a0a0a 34% 36%, #f2f0ed 36% 37.5%, #0a0a0a 37.5% 100%);
-  --head-ink: #f2f2f2; --head-title: #ffffff; --head-line: #b3190f; --head-nav: #000000; --head-shadow: none;
-  text-align: right;
-}
-.board-head { border: 0; }
-.board-head-text { padding-right: 34px; }
-.board-title { font-weight: 800; letter-spacing: -.01em; font-size: 56px; text-transform: uppercase; }
-.board-tagline { font-style: normal; font-family: var(--font-sans); font-size: 14px; letter-spacing: .2em; text-transform: uppercase; }
-.board-nav { justify-content: flex-end; border-top: 3px solid var(--head-line); }
-.category-title { color: var(--ink); font-weight: 800; letter-spacing: .02em; font-size: 20px; padding-left: 12px; border-left: 10px solid var(--accent); }
-.forum, .topic-row, .post, .topic-head, .board-foot { border: 0; border-left: 3px solid var(--ink); box-shadow: 0 1px 0 var(--line); }
-.forum:hover, .topic-row:hover { border-left-color: var(--accent); }
-.forum-name, .topic-title, .topic-name { font-weight: 800; letter-spacing: 0; }
-.forum-desc, .topic-main small { font-style: normal; }
-.post-band, .post.flip .post-band { background: var(--ink); border: 0; }
-.post-name { color: var(--panel); font-weight: 800; letter-spacing: .02em; }
-.post-band .post-meta, .post-band .post-meta a { color: color-mix(in srgb, var(--panel) 70%, var(--ink)); }
-.f-btn { font-weight: 800; text-transform: uppercase; }
-`),
+  { inspired: "Dragon Age II", theme: CHAMPION },
 
   skin("tarot", "Inquisitor’s Tarot", "Dragon Age: Inquisition", 0, { display: "cinzel", reading: "cormorant", ui: "inter" },
     set("#e6ebe3", "#f5f8f2", "#eaf0e6", "#bfcdbd", "#13211c", "#4f6359", "#7d6110", "#14705a"),
