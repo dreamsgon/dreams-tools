@@ -18,6 +18,7 @@ import { AGORA } from "./skins/agora.ts";
 import { MORPH_SKIN } from "./skins/morph.ts";
 import { TWO_BANNERS } from "./skins/two-banners.ts";
 import { INQUISITORS_TAROT } from "./skins/inquisitors-tarot.ts";
+import { LANCE_AND_MOONS } from "./skins/lance-and-moons.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -173,33 +174,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .f-btn { letter-spacing: .14em; text-transform: uppercase; }
 `),
 
-  skin("lance", "Lance and Moons", "Dragonlance", 3, { display: "marcellus", reading: "cormorant", ui: "inter" },
-    set("#e9e1cf", "#f6f0e2", "#ede5d2", "#c8bb9c", "#1e2233", "#5a5a5f", "#8a5416", "#9a2529"),
-    set("#0b0f1c", "#131a2c", "#1a233a", "#2f3c5c", "#ecdfc6", "#aaa594", "#d39a4a", "#e0686a"), `
-/* A night sky over the mountains with three moons: silver, red and the one you can't see. Bronze frames below. */
-.board-head:not(.has-art) {
-  background:
-    radial-gradient(circle at 79% 30%, #f1f3f8 0 22px, rgba(220, 228, 245, .28) 24px, transparent 62px),
-    radial-gradient(circle at 87% 46%, #c8423f 0 13px, rgba(200, 66, 63, .25) 15px, transparent 42px),
-    radial-gradient(circle at 71% 50%, #05070d 0 10px, rgba(60, 70, 110, .5) 11px, transparent 13px),
-    conic-gradient(from 125deg at 58% 58%, #0a0e1a 0 110deg, transparent 110deg),
-    conic-gradient(from 120deg at 76% 70%, #0d1322 0 120deg, transparent 120deg),
-    conic-gradient(from 122deg at 93% 62%, #0a0e1a 0 116deg, transparent 116deg),
-    linear-gradient(180deg, #0c1226, #1c2a4f 70%, #33406b);
-  --head-ink: #ecdfc6; --head-title: #e2ae62; --head-nav: rgba(5, 7, 13, .55); --head-line: #8a6431; --head-shadow: 0 2px 12px #05070d;
-}
-.board-head { border: 2px solid #a87a3a; box-shadow: inset 0 0 0 3px #0c1226, inset 0 0 0 4px #a87a3a; text-align: left; }
-.board-head-text { padding-left: 34px; }
-.board-nav { justify-content: flex-start; padding-left: 20px; }
-.board-title { letter-spacing: .12em; font-weight: 400; }
-.category-title { letter-spacing: .2em; font-weight: 400; }
-.category-title::before { content: "❖"; color: var(--accent-2); font-size: 13px; }
-.forum, .topic-row, .post, .topic-head, .board-foot { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); }
-.forum-name, .topic-title, .topic-name { font-weight: 400; letter-spacing: .08em; }
-.post-band { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%); }
-.post-name { font-weight: 400; letter-spacing: .14em; }
-.topic-row.pinned { border-left-color: var(--accent-2); }
-`),
+  { inspired: "Dragonlance", theme: LANCE_AND_MOONS },
 
   { inspired: "World of Warcraft", theme: TWO_BANNERS },
 ];

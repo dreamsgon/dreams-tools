@@ -55,6 +55,7 @@ export const THEME_FONTS = {
   caudex: { label: "Caudex", stack: '"Caudex", "Friz Quadrata", Georgia, serif', query: "Caudex:ital,wght@0,400;0,700;1,400;1,700" },
   archivo: { label: "Archivo Narrow", stack: '"Archivo Narrow", "Arial Narrow", "Inter", sans-serif', query: "Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400" },
   garamond: { label: "EB Garamond", stack: '"EB Garamond", Garamond, Georgia, serif', query: "EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500" },
+  almendra: { label: "Almendra", stack: '"Almendra", "IM Fell English", Georgia, serif', query: "Almendra:ital,wght@0,400;0,700;1,400;1,700" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);

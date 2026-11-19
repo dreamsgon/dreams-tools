@@ -469,17 +469,17 @@ ${ruled(".category-title")}
 .forum:hover, .topic-row:hover { ${FRAME_ON} }
 /* Pinned and picked topics, and a fresh post, keep a mark inside the gold. */
 .topic-row.pinned { box-shadow: inset 4px 0 0 var(--tb-red), var(--tb-shadow); }
-.topic-row.picked { background: ${STUDS}, linear-gradient(color-mix(in srgb, var(--accent2) 14%, transparent), color-mix(in srgb, var(--accent2) 14%, transparent)), var(--tb-panel); box-shadow: inset 4px 0 0 var(--accent2), var(--tb-shadow); }
+.topic-row.picked { background: ${STUDS}, linear-gradient(color-mix(in srgb, var(--accent-2) 14%, transparent), color-mix(in srgb, var(--accent-2) 14%, transparent)), var(--tb-panel); box-shadow: inset 4px 0 0 var(--accent-2), var(--tb-shadow); }
 .forum-name { ${TITLE_TYPE} font-size: 23px; line-height: 1.15; }
 .forum-name a, .topic-title a { color: var(--tb-name); }
-.forum-name a:hover, .topic-title a:hover { color: var(--accent2); }
+.forum-name a:hover, .topic-title a:hover { color: var(--accent-2); }
 .forum-desc { font: 400 16px/1.45 var(--font-reading); font-style: normal; }
 .forum-place { ${SMALL} font-size: 10.5px; }
-.forum-place a { color: var(--accent2); }
+.forum-place a { color: var(--accent-2); }
 .forum-counts b { font: 700 18px var(--font-reading); color: var(--ink); }
 .last-label { ${SMALL} font-size: 10px; color: var(--tb-heading); }
 .forum-last a, .foot-list a { color: var(--ink); font: 700 15px/1.3 var(--font-reading); }
-.forum-last a:hover, .foot-list a:hover { color: var(--accent2); }
+.forum-last a:hover, .foot-list a:hover { color: var(--accent-2); }
 .topic-title { font: 700 18px/1.25 var(--font-reading); letter-spacing: 0; text-transform: none; }
 .topic-main small { font-style: normal; }
 .topic-count b { font: 700 17px var(--font-reading); color: var(--ink); }
@@ -503,7 +503,7 @@ ${ruled(".category-title")}
 
 /* Topic pages. */
 .crumbs { ${SMALL} font-size: 11.5px; }
-.crumbs a { color: var(--accent2); }
+.crumbs a { color: var(--accent-2); }
 .topic-head { ${FRAME} }
 .topic-name { ${TITLE_TYPE} font-size: 38px; line-height: 1.1; color: var(--tb-name); }
 .cast-chip, .today-chip { border-radius: 2px; border-color: var(--line); }
