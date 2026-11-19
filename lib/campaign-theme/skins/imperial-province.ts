@@ -14,6 +14,8 @@ import type { Theme } from "../model.ts";
 
 /* Shared by every part: each part's stylesheet starts with these. Everything a version changes is a variable here. */
 const VARS = `:root {
+  /* The page behind the journal is the province's grey-green stone, so the parchment stands apart from it. */
+  --ip-page: #c2c7b3;
   --ip-frame: #6b4a22; --ip-red: #7a2e12; --ip-marker: #a3231a; --ip-heading: #6a240c;
   --ip-paper: radial-gradient(ellipse 60% 80% at 12% 0, rgba(255, 247, 220, .55), transparent 70%), radial-gradient(ellipse 50% 70% at 100% 100%, rgba(140, 100, 40, .14), transparent 70%), linear-gradient(180deg, #efe1bc, #e4d2a6);
   --ip-burn: inset 0 0 26px rgba(120, 82, 30, .2);
@@ -27,6 +29,7 @@ const VARS = `:root {
   --card-bg: #f1e3be; --card-ink: #33240f; --card-head: #6a240c; --card-line: #b39a68;
 }
 :root[data-theme="dark"] {
+  --ip-page: #0f1612;
   --ip-frame: #8a6a36; --ip-red: #d9a24a; --ip-marker: #c8362a; --ip-heading: #e2b866;
   --ip-paper: radial-gradient(ellipse 60% 80% at 12% 0, rgba(120, 90, 45, .2), transparent 70%), radial-gradient(ellipse 50% 70% at 100% 100%, rgba(0, 0, 0, .28), transparent 70%), linear-gradient(180deg, #2a2013, #221a0f);
   --ip-burn: inset 0 0 26px rgba(0, 0, 0, .4);
@@ -168,7 +171,7 @@ const MAP_ROOM = "calc(500px * var(--ip-s))";
 /* The Encyclopedia: the journal's pages, with the map over the overview. */
 const ENCYCLOPEDIA = `/* Imperial Province for the Encyclopedia. The colours and fonts come from the theme. */
 ${VARS}
-body { background: var(--bg); scrollbar-color: var(--ip-frame) var(--panel); }
+body { background: var(--ip-page); scrollbar-color: var(--ip-frame) var(--panel); }
 ::selection { background: var(--ip-marker); color: #ffffff; }
 
 /* The side. */
@@ -250,7 +253,7 @@ ${ruled(".section-heading h2")}
 /* Maptable: parchment round the table, and the map over the Scene Picker. */
 const MAPTABLE = `/* Imperial Province for Maptable. The map you play on keeps its own colours. */
 ${VARS}
-body { background: var(--bg); scrollbar-color: var(--ip-frame) var(--panel); }
+body { background: var(--ip-page); scrollbar-color: var(--ip-frame) var(--panel); }
 ::selection { background: var(--ip-marker); color: #ffffff; }
 
 /* The bar along the top. */
@@ -328,7 +331,7 @@ ${ruled(".campaign-scenes-group h2")}
 /* The campaign's dashboard: the map behind its name, and parchment panels. */
 const DASHBOARD = `/* Imperial Province for the campaign's dashboard. */
 ${VARS}
-body { background: var(--bg); }
+body { background: var(--ip-page); }
 ::selection { background: var(--ip-marker); color: #ffffff; }
 .hub-crumbs { ${SMALL} font-size: 14px; }
 .hub-crumbs a { color: var(--accent); }
@@ -382,7 +385,7 @@ export const IMPERIAL_PROVINCE: Theme = {
 
 ${VARS}
 
-body { background: var(--bg); scrollbar-color: var(--ip-frame) var(--panel); }
+body { background: var(--ip-page); scrollbar-color: var(--ip-frame) var(--panel); }
 ::selection { background: var(--ip-marker); color: #ffffff; }
 a { text-underline-offset: 3px; }
 
