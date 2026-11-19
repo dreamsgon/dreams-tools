@@ -470,7 +470,7 @@ export function topicPage(ctx: Context, topic: Topic) {
     posts: topic.posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
       const reports = (ctx.forum.reports ?? []).filter(x => x.postId === p.id);
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, as: p.by.as && cards[p.by.as] ? p.by.as : null,
+      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, format: p.format ?? null, as: p.by.as && cards[p.by.as] ? p.by.as : null,
         /** The player strip, under posts written as a character. */
         strip: p.by.as && cards[p.by.as] ? stripOf(ctx, p.by.userId) : [], name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1),
         /** Reports about it (moderators), and whether the viewer reported it. */

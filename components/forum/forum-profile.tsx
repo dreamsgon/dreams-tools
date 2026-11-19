@@ -173,7 +173,7 @@ export function ProfileView({ frame, page, k, go, done }: { frame: Frame; page: 
       </section>
       <section className="settings-card post-styles">
         <h2>Your post styles</h2>
-        <p className="muted">Layouts you use again and again, like a coloured box or a header with your character’s name. Write <code>{'{text}'}</code> where your words go; in a post, Insert › My post styles wraps what you’ve written in it. BBCode and Markdown work, and HTML too on boards where the GM lets your group use it: put <code>{'{text}'}</code> inside the HTML, as in <code>{'[html]<div style="…">{text}</div>[/html]'}</code>, and your words go in as plain text.</p>
+        <p className="muted">Layouts you use again and again, like a coloured box or a header with your character’s name. Write <code>{'{text}'}</code> where your words go; in a post, Insert › My post styles wraps what you’ve written in it. BBCode and Markdown work, and HTML too on boards where the GM lets your group use it: put <code>{'{text}'}</code> inside the HTML, as in <code>{'[dohtml]<div style="…">{text}</div>[/dohtml]'}</code>, and your words go in as plain text.</p>
         {styles.map((s, i) => <div key={s.id} className="style-row">
           <div className="style-head">
             <input aria-label={`Post style ${i + 1} name`} placeholder="Name" value={s.name} maxLength={40} onChange={e => setStyles(styles.map(x => x.id === s.id ? { ...x, name: e.target.value } : x))} />

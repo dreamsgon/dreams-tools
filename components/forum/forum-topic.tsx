@@ -8,6 +8,7 @@ import { Archive, ArchiveRestore, Check, EyeOff, Flag, Sparkles, Swords, Hourgla
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall, fullDate, when, type BoardPage, type Frame, type Place, type TopicPage } from './forum-api';
 import { Composer, TagChoice, type AfterPost } from './forum-compose';
+import type { PostFormat } from '@/lib/forum/markup';
 import { Circle, Crumbs, Link, Portrait, PostText, TopicRow, TopicTagChip, turnText, type Go } from './forum-parts';
 import { BoardDownload, ModBar, PrivatePicker, TrashedBanner } from './forum-moderate';
 import { CombatPanel, CombatSetup } from './forum-combat';
@@ -28,8 +29,8 @@ export function BoardView({ frame, page, k, go, done, startOpen }: { frame: Fram
   const subs = frame.boards.filter(x => x.parentId === b.id), canStart = b.start && !page.archive;
   const [only, setOnly] = useState<string[] | null>(null), [picked, setPicked] = useState<string[]>([]);
   const shown = new Set(page.topics.map(t => t.id)), chosen = picked.filter(id => shown.has(id));
-  const start = async (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[] }) => {
-    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as, ...(only ? { private: only } : {}), ...(v.ai ? { ai: true } : {}), ...(v.tags.length ? { tags: v.tags } : {}) });
+  const start = async (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[]; format: PostFormat | null }) => {
+    const out = await forumCall<{ topicId: string }>({ action: 'start', campaign: k, boardId: b.id, title: v.title, body: v.body, as: v.as, ...(v.format ? { format: v.format } : {}), ...(only ? { private: only } : {}), ...(v.ai ? { ai: true } : {}), ...(v.tags.length ? { tags: v.tags } : {}) });
     await afterPosting(k, out.topicId, v.after);
     setWriting(false); setOnly(null); await done({ view: 'topic', id: out.topicId });
   };
@@ -114,7 +115,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
   </>;
   if (narration) return <article className={`post post-gm${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
     <header className="gm-band"><span className="gm-seal" aria-hidden="true">✦</span><div><h3 className="post-name">Game Master</h3><small>Narration by {p.name}</small></div>{meta}</header>
-    <div className="gm-body"><PostText text={p.body} links={links} rolls={p.rolls} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>
+    <div className="gm-body"><PostText text={p.body} links={links} rolls={p.rolls} format={p.format} />{actions}{error && <p className="form-error" role="alert">{error}</p>}</div>
   </article>;
   return <article className={`post${flip ? ' flip' : ''}${card ? ' post-ic' : ' post-ooc'}${fresh ? ' fresh' : ''}`} id={`post-${p.id}`}>
     <header className="post-band"><h3 className="post-name">{card?.url ? <a href={card.url}>{name}</a> : name}</h3>{meta}</header>
@@ -130,7 +131,7 @@ function Post({ p, card, k, go, flip, fresh, topic, links, onQuote, done }: { p:
         </div> : <div className="mini mini-self"><Circle name={p.name} /><small className="mini-player"><b>{p.name}</b><br />{p.posts} {p.posts === 1 ? 'post' : 'posts'}</small></div>}
       </aside>
       <div className="post-main">
-        <div className="post-body"><PostText text={p.body} links={links} rolls={p.rolls} /></div>
+        <div className="post-body"><PostText text={p.body} links={links} rolls={p.rolls} format={p.format} /></div>
         {actions}
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
@@ -186,7 +187,7 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   }, []);
   // Reply as the character you last posted as here.
   const mine = [...page.posts].reverse().find(p => p.mine), preferred = mine ? mine.as : undefined;
-  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean }) => { await sendReply(k, t.id, v); await done(); };
+  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { await sendReply(k, t.id, v); await done(); };
   const addReply = t.canReply && <button type="button" className="f-btn" onClick={() => go({ view: 'reply', id: t.id })}><Reply size={14} aria-hidden="true" />Add reply</button>;
   return <>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
@@ -215,8 +216,8 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   </>;
 }
 
-async function sendReply(k: string, topicId: string, v: { body: string; as: string | null; after: AfterPost; ai: boolean }) {
-  await forumCall({ action: 'reply', campaign: k, topicId, body: v.body, as: v.as, ...(v.ai ? { ai: true } : {}) });
+async function sendReply(k: string, topicId: string, v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) {
+  await forumCall({ action: 'reply', campaign: k, topicId, body: v.body, as: v.as, ...(v.ai ? { ai: true } : {}), ...(v.format ? { format: v.format } : {}) });
   await afterPosting(k, topicId, v.after);
 }
 
@@ -229,7 +230,7 @@ function TopicReview({ page, k }: { page: TopicPage; k: string }) {
       const card = p.as ? page.cards[p.as] : null, name = card?.name ?? (page.topic.kind === 'ic' ? 'Game Master' : p.name);
       return <article key={p.id} className="review-post">
         <header>{!card && page.topic.kind === 'ic' ? <span className="as-seal tiny" aria-hidden="true">✦</span> : <Portrait k={k} picture={card?.picture ?? null} name={name} className="portrait tiny" />}<b>{name}</b><small className="muted">#{p.number} · {when(p.at)}</small></header>
-        <PostText text={p.body} links={page.links} rolls={p.rolls} />
+        <PostText text={p.body} links={page.links} rolls={p.rolls} format={p.format} />
       </article>;
     })}
   </section>;
@@ -252,7 +253,7 @@ function useFocusMode() {
 /** The full reply page: a bigger box, focus mode and the topic's latest posts newest first underneath. */
 export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
   const t = page.topic, focus = useFocusMode(), mine = [...page.posts].reverse().find(p => p.mine);
-  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean }) => { await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id }); };
+  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id }); };
   if (!t.canReply) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{closedNote(t)}</p></>;
   return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
@@ -267,13 +268,13 @@ export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: To
 export function EditView({ frame, page, k, go, done, postId }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done; postId: string }) {
   const t = page.topic, p = page.posts.find(x => x.id === postId), focus = useFocusMode();
   if (!p || !p.canEdit) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{p ? 'You can’t edit this post.' : 'That post was removed.'}</p></>;
-  const save = async (v: { body: string }) => { await forumCall({ action: 'edit', campaign: k, topicId: t.id, postId: p.id, body: v.body }); await done({ view: 'topic', id: t.id }); };
+  const save = async (v: { body: string; format: PostFormat | null }) => { await forumCall({ action: 'edit', campaign: k, topicId: t.id, postId: p.id, body: v.body, ...(v.format ? { format: v.format } : {}) }); await done({ view: 'topic', id: t.id }); };
   const card = p.as ? page.cards[p.as] : null;
   return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
     <header className="page-head"><h2 className="topic-name">Edit post #{p.number}</h2>{focus.button}</header>
     <p className="muted">Written as <b>{card?.name ?? (t.kind === 'ic' ? 'Game Master' : p.name)}</b> · {fullDate(p.at)}</p>
-    <Composer frame={frame} k={k} kind={t.kind} html={!!frame.boards.find(b => b.id === t.boardId)?.html} mode="edit" initial={p.body} draftKey={`${k}:edit:${p.id}`} onPost={save} big label="Edit" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
+    <Composer frame={frame} k={k} kind={t.kind} html={!!frame.boards.find(b => b.id === t.boardId)?.html} mode="edit" initial={p.body} initialFormat={p.format} draftKey={`${k}:edit:${p.id}`} onPost={save} big label="Edit" onCancel={() => go({ view: 'topic', id: t.id })} foot={focus.on ? focus.button : undefined} />
     {!focus.on && <TopicReview page={page} k={k} />}
   </div>;
 }

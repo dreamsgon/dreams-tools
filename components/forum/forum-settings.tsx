@@ -50,9 +50,9 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
     </div>)}
     {(s.notices ?? []).length < 3 && <button className="f-btn ghost small" onClick={() => setS({ ...s, notices: [...(s.notices ?? []), { id: 'n' + Date.now().toString(36), text: '' }] })}><Plus size={14} aria-hidden="true" />Add a notice</button>}
     <h3>Writing posts</h3>
-    <label className="f-field">The toolbar writes<select value={s.markup ?? 'markdown'} onChange={e => setS({ ...s, markup: e.target.value as 'markdown' | 'bbcode' })}>
+    <label className="f-field">New posts start in<select value={s.markup ?? 'markdown'} onChange={e => setS({ ...s, markup: e.target.value as 'markdown' | 'bbcode' })}>
       <option value="markdown">Markdown: **bold**, *italic*, &gt; quote</option><option value="bbcode">BBCode: [b]bold[/b], [i]italic[/i], [quote]</option>
-    </select><small>Posts read both either way, so members can type whichever they know.</small></label>
+    </select><small>Each poster can switch a post to the other in the post box, and their browser remembers it. [dohtml]…[/dohtml] is HTML in either, where a group may use HTML.</small></label>
     <div className="settings-foot"><button className="f-btn" disabled={busy} onClick={() => void call({ action: 'settings', settings: { ...s, notices: (s.notices ?? []).filter(n => n.text.trim()) } })}>{busy ? 'Saving…' : 'Save these settings'}</button></div>
     {error && <p className="form-error" role="alert">{error}</p>}
   </section>;
@@ -98,7 +98,7 @@ function MaskForm({ page, k, done, row, onClose }: { page: Settings; k: string; 
   const parent = row.parentId ? page.masks[row.parentId] : undefined;
   const set = (g: string, r: (typeof RIGHTS)[number][0], v: string) => setM(x => { const cur = { ...x[g] }; if (v) cur[r] = v as Tri; else delete cur[r]; return { ...x, [g]: cur }; });
   return <form className="mask-form" onSubmit={e => { e.preventDefault(); void call({ action: 'masks', id: row.id, masks: m }).then(ok => { if (ok) onClose(); }); }}>
-    <p className="muted small">What each group may do on <b>{row.name}</b>{row.parentId ? ' (left as is, a subforum follows its board)' : ' and, unless they say otherwise, its subforums'}. A member can when any of their groups says Yes and none says Never. The GM, and groups that see GM-only things (like Co-GMs), can always. <b>Use HTML</b> lets a group write an [html] part in posts here, with styles; scripts and outside pictures are always taken out.</p>
+    <p className="muted small">What each group may do on <b>{row.name}</b>{row.parentId ? ' (left as is, a subforum follows its board)' : ' and, unless they say otherwise, its subforums'}. A member can when any of their groups says Yes and none says Never. The GM, and groups that see GM-only things (like Co-GMs), can always. <b>Use HTML</b> lets a group write a [dohtml] part in posts here, with styles; scripts and outside pictures are always taken out.</p>
     <div className="mask-table" role="table" aria-label={`Permissions on ${row.name}`}>
       <div role="row" className="mask-head"><span role="columnheader">Group</span>{RIGHTS.map(([, label]) => <span role="columnheader" key={label}>{label}</span>)}</div>
       {page.groups.filter(g => !g.gm).map(g => <div role="row" key={g.id}>

@@ -16,6 +16,7 @@ import {
 import { cardFields, cardSample, profilePage, picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
+import { POST_FORMATS } from "./markup.ts";
 import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTool, draftPrompt, draftTool, readCheck, readDraft, readSummary, summaryPrompt, summaryTool, type AiPost } from "./ai.ts";
 import { orderFromScene, slotSchema } from "./combat.ts";
 import type { Scene } from "../model.ts";
@@ -94,6 +95,8 @@ const json = (value: unknown, status = 200) => Response.json(value, { status, he
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const key = z.string().regex(keyPattern);
 const as = id.nullable();
+/** What a post is written in (markup.ts `PostFormat`). */
+const format = z.enum(POST_FORMATS).optional();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }), z.object({ kind: z.literal("profile") }),
@@ -132,13 +135,13 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("saveTheme"), campaign: key, theme: z.unknown(), live: z.boolean().optional() }),
   z.object({ action: z.literal("liveTheme"), campaign: key, id: z.string().max(40).nullable() }),
   z.object({ action: z.literal("deleteTheme"), campaign: key, id: z.string().max(40) }),
-  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional(), tags: z.array(id).max(10).optional() }),
-  z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional() }),
+  z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional(), tags: z.array(id).max(10).optional(), format }),
+  z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional(), format }),
   z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional(),
     // The key from the asker's device, for the forum's connection; or their own AI. Used for this request only.
     apiKey: z.string().max(500).optional(), own: z.object({ provider: z.string().max(20), baseUrl: z.string().max(400).optional(), model: z.string().max(200), apiKey: z.string().max(500) }).optional() }),
   z.object({ action: z.literal("aiSettings"), campaign: key, ai: z.unknown() }),
-  z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000) }),
+  z.object({ action: z.literal("edit"), campaign: key, topicId: id, postId: id, body: z.string().max(40_000), format }),
   z.object({ action: z.literal("report"), campaign: key, topicId: id, postId: id, reason: z.string().max(600) }),
   z.object({ action: z.literal("dismissReports"), campaign: key, postId: id }),
   z.object({ action: z.literal("suggestion"), campaign: key, topicId: id, suggestionId: id, op: z.enum(["approve", "skip"]), body: z.string().max(40_000).optional() }),
@@ -298,7 +301,7 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
     const batch = await Promise.all(topics.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t.id)));
     for (const [n, got] of batch.entries()) {
       if (!got) continue;
-      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: withRollResults(p.body, p.rolls) })) });
+      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: withRollResults(p.body, p.rolls), ...(p.format ? { format: p.format } : {}) })) });
     }
   }
   return { board: board.name, topics: out };

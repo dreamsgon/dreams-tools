@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Bold, ChevronDown, Eye, Italic, MessageSquareQuote, PanelTopClose, Quote, Search, Underline } from 'lucide-react';
 import { EmojiPicker, InsertMenu, TagPicker } from './forum-insert';
-import { fillStyle, wordCount } from '@/lib/forum/markup';
+import { fillStyle, wordCount, type PostFormat } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
 import { Circle, Portrait, PostText } from './forum-parts';
 import { AiComposerHelp } from './forum-ai';
@@ -67,7 +67,7 @@ function AsPicker({ frame, k, kind, state }: { frame: Frame; k: string; kind: 'i
 }
 
 /** The toolbar: each button wraps the selection (or inserts a placeholder) in the post's markup. */
-function Toolbar({ frame, k, box, set, preview, setPreview, as, html }: { frame: Frame; k: string; box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void; as: string | null; html: boolean }) {
+function Toolbar({ frame, k, box, set, preview, setPreview, as, html, format, setFormat }: { frame: Frame; k: string; box: RefObject<HTMLTextAreaElement | null>; set: (v: string) => void; preview: boolean; setPreview: (v: boolean) => void; as: string | null; html: boolean; format: PostFormat; setFormat: (f: PostFormat) => void }) {
   const edit = (make: (sel: string) => { text: string; select?: [number, number] }) => {
     const t = box.current; if (!t) return;
     const { selectionStart: a, selectionEnd: b, value } = t, made = make(value.slice(a, b));
@@ -77,8 +77,8 @@ function Toolbar({ frame, k, box, set, preview, setPreview, as, html }: { frame:
   };
   const wrap = (before: string, after: string, placeholder: string) => edit(sel => { const inner = sel || placeholder; return { text: before + inner + after, select: [before.length, before.length + inner.length] }; });
   const lines = (prefix: string, placeholder: string) => edit(sel => { const text = (sel || placeholder).split('\n').map(l => prefix + l.replace(/^> ?/, '')).join('\n'); return { text, select: sel ? undefined : [prefix.length, text.length] }; });
-  // The forum's choice of markup (Forum settings): both read the same, the toolbar writes one.
-  const bb = frame.settings.markup === 'bbcode';
+  // What this post is written in (the poster's choice): the toolbar writes it.
+  const bb = format === 'bbcode';
   const tool = (label: string, icon: ReactNode, run: () => void, extra?: string) => <button type="button" title={label} aria-label={label} className={extra} disabled={preview} onClick={run}>{icon}<span className="tl">{label}</span></button>;
   return <div className="tools" role="toolbar" aria-label="Formatting">
     {tool('Bold', <Bold size={15} />, () => bb ? wrap('[b]', '[/b]', 'bold text') : wrap('**', '**', 'bold text'))}
@@ -93,26 +93,40 @@ function Toolbar({ frame, k, box, set, preview, setPreview, as, html }: { frame:
     <EmojiPicker frame={frame} k={k} disabled={preview} insert={text => edit(() => ({ text }))} />
     <TagPicker frame={frame} disabled={preview} insert={text => edit(() => ({ text }))} />
     <span className="sep" />
+    <span className="fmt-switch" role="group" aria-label="Write in">
+      {(['markdown', 'bbcode'] as const).map(f => <button type="button" key={f} aria-pressed={format === f} className={format === f ? 'on' : ''} disabled={preview} title={f === 'bbcode' ? 'Write this post in BBCode: [b]bold[/b]. Markdown marks show as typed.' : 'Write this post in Markdown: **bold**. BBCode tags show as typed.'} onClick={() => setFormat(f)}>{f === 'bbcode' ? 'BBCode' : 'Markdown'}</button>)}
+    </span>
     <button type="button" title="Preview" aria-label="Preview" aria-pressed={preview} className={preview ? 'on' : ''} onClick={() => setPreview(!preview)}><Eye size={15} /><span className="tl">Preview</span></button>
   </div>;
 }
 
 const COMMON = '“speech”, [[page link]], [collapse=Title]…[/collapse], [roll=Attack vs 15]1d20+5[/roll] (the forum rolls it when you post), :emoji:';
-/** What can be typed, in the forum's markup (Markdown and BBCode both work). */
-export const markupHint = (bb: boolean) => bb
-  ? `Blank lines start paragraphs. [b]bold[/b], [i]italic[/i], [u]underline[/u], [s]strike[/s], [quote=Name]…[/quote], [url=https://…]link[/url], [spoiler=Title]…[/spoiler], [list][*]…[/list], ${COMMON}. Markdown works too.`
-  : `Blank lines start paragraphs. **bold**, *italic*, __underline__, ~~strike~~, > quote, [link](https://…), - list, ${COMMON}. BBCode works too.`;
+/** What can be typed in a post written in BBCode (`bb`) or Markdown. */
+export const markupHint = (bb: boolean, html = false) => (bb
+  ? `Blank lines start paragraphs. [b]bold[/b], [i]italic[/i], [u]underline[/u], [s]strike[/s], [quote=Name]…[/quote], [url=https://…]link[/url], [spoiler=Title]…[/spoiler], [list][*]…[/list], ${COMMON}.`
+  : `Blank lines start paragraphs. **bold**, *italic*, __underline__, ~~strike~~, > quote, [link](https://…), - list, ${COMMON}.`) + (html ? ' [dohtml]…[/dohtml] is HTML either way.' : '');
+
+const FORMAT_KEY = 'forum-format';
+/** The format a new post starts in: what this browser last wrote in, else the forum's default (Forum settings). */
+const startFormat = (frame: Frame): PostFormat => { try { const v = localStorage.getItem(FORMAT_KEY); if (v === 'markdown' || v === 'bbcode') return v; } catch { /* storage may be off */ } return frame.settings.markup === 'bbcode' ? 'bbcode' : 'markdown'; };
+/** A Quote (Markdown "> " lines ending "> — Name") as BBCode, for a post written in BBCode. */
+const quoteAsBbcode = (text: string) => {
+  const lines = text.split('\n').map(l => l.replace(/^> ?/, '')), last = lines.at(-1) ?? '', who = last.startsWith('— ') ? last.slice(2).replace(/[\]"]/g, '').trim() : '';
+  return `[quote${who ? `="${who}"` : ''}]${(who ? lines.slice(0, -1) : lines).join('\n')}[/quote]`;
+};
 
 /**
  * Write a reply, a new topic (with `title`) or an edit (with `initial`). Unsent text stays in this browser under
  * `draftKey` until it's posted, so the Quick reply and the full reply page share one draft.
  */
-export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, label, foot, after: withAfter, big, where, html }: {
-  frame: Frame; k: string; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[] }) => Promise<void>;
+export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, quote, preferred, onCancel, mode = 'quick', initial, initialFormat, label, foot, after: withAfter, big, where, html }: {
+  frame: Frame; k: string; kind: 'ic' | 'ooc'; onPost: (v: { title: string; body: string; as: string | null; after: AfterPost; ai: boolean; tags: string[]; format: PostFormat | null }) => Promise<void>;
   /** The topic or board, for the AI help (forum-ai.tsx). */
   where?: { topicId: string } | { boardId: string };
   title?: boolean; draftKey: string; quote?: { text: string; n: number }; preferred?: string | null; onCancel?: () => void;
   mode?: 'quick' | 'full' | 'edit'; initial?: string; label?: string; foot?: ReactNode; after?: boolean; big?: boolean;
+  /** Editing: what the post was written in (null: from before the choice, read as both until the poster picks one). */
+  initialFormat?: PostFormat | null;
   /** Whether the writer may use HTML on this board (Insert › HTML). */
   html?: boolean;
 }) {
@@ -121,15 +135,19 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
   const [body, setBody] = useState(() => { if (editing) return initial ?? ''; try { return localStorage.getItem(storeKey) ?? ''; } catch { return ''; } });
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false), [after, setAfter] = useState<AfterPost>(''), [drafted, setDrafted] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null), [quoted, setQuoted] = useState(0);
+  // What this post is written in: chosen per post. An edit keeps the post's own (or none, for an older post, until changed).
+  const [format, setFormatState] = useState<PostFormat | null>(() => editing ? initialFormat ?? null : startFormat(frame));
+  const shown: PostFormat = format ?? (frame.settings.markup === 'bbcode' ? 'bbcode' : 'markdown');
+  const setFormat = (f: PostFormat) => { setFormatState(f); if (!editing) try { localStorage.setItem(FORMAT_KEY, f); } catch { /* storage may be off */ } };
   useEffect(() => { if (editing) return; try { if (body) localStorage.setItem(storeKey, body); else localStorage.removeItem(storeKey); } catch { /* storage may be off */ } }, [body, storeKey, editing]);
   // A Quote click adds the quoted lines to the end of the post.
-  if (quote && quote.n !== quoted) { setQuoted(quote.n); setBody(b => (b ? b.replace(/\s*$/, '\n\n') : '') + quote.text + '\n\n'); }
+  if (quote && quote.n !== quoted) { setQuoted(quote.n); setBody(b => (b ? b.replace(/\s*$/, '\n\n') : '') + (shown === 'bbcode' ? quoteAsBbcode(quote.text) : quote.text) + '\n\n'); }
   useEffect(() => { if (quoted) { box.current?.focus(); box.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, [quoted]);
   if (state.blocked) return <div className="composer composer-note"><p>To post in character you need a character. Ask your GM to add you to your character page’s <b>Who can edit</b>.</p></div>;
   const send = async () => {
     setBusy(true); setError('');
     try {
-      await onPost({ title, body, as: state.as, after, ai: drafted, tags });
+      await onPost({ title, body, as: state.as, after, ai: drafted, tags, format });
       if (!editing) { setBody(''); setTitle(''); setTags([]); setAfter(''); setDrafted(false); setPreview(false); try { localStorage.removeItem(storeKey); } catch { /* ignore */ } }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not post.'); }
     finally { setBusy(false); }
@@ -142,11 +160,11 @@ export function Composer({ frame, k, kind, onPost, title: withTitle, draftKey, q
     </div>
     {withTitle && <input className="composer-title" placeholder="Topic title" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} aria-label="Topic title" />}
     {withTitle && frame.topicTags.length > 0 && <TagChoice frame={frame} tags={tags} set={setTags} />}
-    <Toolbar frame={frame} k={k} as={editing ? null : state.as} html={!!html} box={box} set={setBody} preview={preview} setPreview={setPreview} />
-    {preview ? <div className="composer-preview" aria-label="Preview">{body.trim() ? <PostText text={body} /> : <p className="muted">Nothing to preview yet.</p>}</div>
+    <Toolbar frame={frame} k={k} as={editing ? null : state.as} html={!!html} box={box} set={setBody} preview={preview} setPreview={setPreview} format={shown} setFormat={setFormat} />
+    {preview ? <div className="composer-preview" aria-label="Preview">{body.trim() ? <PostText text={body} format={format} /> : <p className="muted">Nothing to preview yet.</p>}</div>
       : <textarea ref={box} value={body} onChange={e => setBody(e.target.value)} rows={big ? 18 : withTitle ? 10 : 7} placeholder={kind === 'ic' ? 'Write your post…' : 'Write to the table…'} aria-label="Post text" onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send(); }} />}
     <div className="composer-foot">
-      <small className="muted">{words} {words === 1 ? 'word' : 'words'}<span className="hint"> · {markupHint(frame.settings.markup === 'bbcode')}</span></small>
+      <small className="muted">{words} {words === 1 ? 'word' : 'words'}<span className="hint"> · {markupHint(shown === 'bbcode', !!html)}</span></small>
       <span className="composer-acts">
         {mod && <label className="f-select small">After posting <select value={after} onChange={e => setAfter(e.target.value as AfterPost)}>
           <option value="">Leave the topic as it is</option><option value="pin">Pin this topic</option><option value="lock">Lock this topic</option><option value="both">Pin and lock it</option>

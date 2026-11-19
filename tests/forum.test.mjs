@@ -1143,6 +1143,57 @@ test('markup: BBCode turns into the forum markup, code stays as typed, and only 
   assert.equal(frameOf(ctxFor(withBoards(), 'p1')).settings.markup, 'markdown');
 });
 
+test('markup: each post is Markdown or BBCode, the other shows as typed, and [dohtml] is HTML in both', () => {
+  const kinds = (text, format) => K.postBlocks(text, format).flatMap(b => b.type === 'collapse' ? [b.type] : 'text' in b ? K.postInline(b.text).map(p => p.type) : [b.type]);
+  const words = (text, format) => K.postBlocks(text, format).map(b => 'text' in b ? K.postInline(b.text).map(p => p.text ?? p.label ?? p.code ?? '').join('') : b.type).join('|');
+  // Older posts (no format) read both, as before.
+  assert.deepEqual(kinds('**a** [b]b[/b]').filter(k => k !== 'text'), ['bold', 'bold']);
+  // A Markdown post: BBCode stays as typed.
+  assert.deepEqual(kinds('**a** [b]b[/b]', 'markdown').filter(k => k !== 'text'), ['bold']);
+  assert.equal(words('[b]b[/b] [quote]q[/quote]', 'markdown'), '[b]b[/b] [quote]q[/quote]');
+  // A BBCode post: Markdown marks stay as typed, line starts too, and nothing else is changed.
+  assert.deepEqual(kinds('**a** *sighs* __u__ ~~s~~ `c` [b]b[/b] [i]i[/i]', 'bbcode').filter(k => k !== 'text'), ['bold', 'italic']);
+  assert.equal(words('**a** *sighs* snake_case_name ~~s~~ `c`', 'bbcode'), '**a** *sighs* snake_case_name ~~s~~ `c`');
+  assert.deepEqual(K.postBlocks('# Not a heading\n> not a quote\n- not a list\n* nor this', 'bbcode').map(b => b.type), ['paragraph', 'paragraph', 'paragraph', 'paragraph']);
+  assert.equal(words('# Not a heading\n> not a quote\n- not a list', 'bbcode'), '# Not a heading|> not a quote|- not a list');
+  assert.equal(words('[site](https://a.test)', 'bbcode'), '[site](https://a.test)');
+  // …while its BBCode, the forum's own tags and emoji work.
+  const bb = K.postBlocks('[quote=Ann]Hi_there[/quote]\n[url=https://a.test/x_y_z]site[/url] :big_smile: [[The_Inn]] [roll=Hit]1d20*2[/roll]\n[code]x **y**[/code]\n[spoiler=A_b]in *it*[/spoiler]', 'bbcode');
+  assert.equal(K.postInline(bb.find(b => b.type === 'quote').text).map(p => p.text).join(''), 'Hi_there');
+  const line = K.postInline(bb.find(b => b.type === 'paragraph').text);
+  assert.deepEqual(line.filter(p => p.type !== 'text').map(p => p.type), ['url', 'emoji', 'link', 'roll']);
+  assert.equal(line.find(p => p.type === 'url').href, 'https://a.test/x_y_z');
+  assert.equal(line.find(p => p.type === 'emoji').code, 'big_smile');
+  assert.equal(line.find(p => p.type === 'link').target, 'The_Inn');
+  assert.equal(line.find(p => p.type === 'roll').expr, '1d20*2');
+  assert.equal(bb.find(b => b.type === 'code').text, 'x **y**');
+  const sp = bb.find(b => b.type === 'collapse');
+  assert.equal(sp.title, 'A_b');
+  assert.equal(K.postInline(sp.blocks[0].text).map(p => p.text).join(''), 'in *it*');
+  // [dohtml] (and [html], from before) is HTML in either format.
+  for (const format of [undefined, 'markdown', 'bbcode']) for (const tag of ['dohtml', 'html']) {
+    const blocks = K.postBlocks(`Before\n[${tag}]<b>Bold</b>[/${tag}]\nAfter`, format);
+    assert.deepEqual(blocks.map(b => b.type), ['paragraph', 'html', 'paragraph'], `${tag} in ${format}`);
+  }
+  assert.deepEqual(K.htmlParts('[dohtml]<i>a</i>[/dohtml] [html]<b>b</b>[/html] [dohtml]<u>c</u>[/html]'), ['<i>a</i>', '<b>b</b>', '<u>c</u>[/html]']);
+  assert.equal(K.fillStyle('[dohtml]<div>{text}</div>[/dohtml]', 'a<b').text, '[dohtml]<div>a&lt;b</div>[/dohtml]');
+});
+
+test('posts keep what they were written in; an edit keeps it unless changed', () => {
+  let f = withBoards();
+  const o = start(f, 'p1', { format: 'bbcode' }); f = apply(f, o);
+  assert.equal(o.topic.posts[0].format, 'bbcode');
+  const r = rep(f, o.topic, 'p1', { format: 'markdown' });
+  assert.equal(r.topic.posts[1].format, 'markdown');
+  assert.equal(rep(f, o.topic, 'p1', { format: 'html' }).topic.posts[1].format, undefined);
+  assert.equal(rep(f, o.topic, 'p1').topic.posts[1].format, undefined);
+  const kept = M.editPost(f, r.topic, { postId: 'a2', body: 'Changed' }, poster(f, 'p1'), NOW).topic;
+  assert.equal(kept.posts[1].format, 'markdown');
+  const switched = M.editPost(f, r.topic, { postId: 'a2', body: 'Changed', format: 'bbcode' }, poster(f, 'p1'), NOW).topic;
+  assert.equal(switched.posts[1].format, 'bbcode');
+  assert.ok(M.topicSchema.safeParse(switched).success);
+});
+
 const sheetWorkspace = () => {
   const ws = structuredClone(workspace), hero = ws.entries.find(e => e.id === 'hero');
   hero.character.features = [{ id: 'song', name: 'Song of Rest', group: 'Bard', text: 'Heal 1d6.' }, { id: 'spy', name: 'Spy training', gm: true }];

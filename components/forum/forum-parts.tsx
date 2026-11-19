@@ -6,7 +6,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Archive, ArrowUp, Crown, UserRound, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
-import { postBlocks, postInline, withEmoji, type HtmlBlock } from '@/lib/forum/markup';
+import { postBlocks, postInline, withEmoji, type HtmlBlock, type PostFormat } from '@/lib/forum/markup';
 import type { HtmlNode } from '@/lib/forum/html';
 import { forumHash, fullDate, initials, usePicture, when, type Frame, type Picture, type Place } from './forum-api';
 import { ROLL_TAG, type Roll } from '@/lib/forum/rolls';
@@ -158,11 +158,12 @@ function Blocks({ blocks, links, rolls }: { blocks: (ProseBlock | HtmlBlock)[]; 
 }
 /**
  * Post text (lib/forum/markup.ts): page text plus underline, speech, collapsed sections and roll cards. `rolls` are
- * the post's dice in tag order; left out (a preview), roll tags show as still to roll.
+ * the post's dice in tag order; left out (a preview), roll tags show as still to roll. `format`: what the post is
+ * written in (left out: both).
  */
-export function PostText({ text, links, rolls }: { text: string; links?: Links; rolls?: readonly (Roll | null)[] }) {
+export function PostText({ text, links, rolls, format }: { text: string; links?: Links; rolls?: readonly (Roll | null)[]; format?: PostFormat | null }) {
   // Roll tags take their results in the order they appear in the whole post, code blocks included.
-  const blocks = postBlocks(text), at = (i: number) => blocks.slice(0, i).reduce((n, b) => n + (b.type === 'collapse' ? b.blocks.reduce((m, x) => m + ('text' in x ? tagCount(x.text) : 0), 0) : 'text' in b ? tagCount(b.text) : 0), 0);
+  const blocks = postBlocks(text, format ?? undefined), at = (i: number) => blocks.slice(0, i).reduce((n, b) => n + (b.type === 'collapse' ? b.blocks.reduce((m, x) => m + ('text' in x ? tagCount(x.text) : 0), 0) : 'text' in b ? tagCount(b.text) : 0), 0);
   return <div className="prose post-text">{blocks.map((b, i) => b.type === 'collapse'
     ? <details key={i} className="clps"><summary>{b.title}</summary><div className="clps-body"><Blocks blocks={b.blocks} links={links} rolls={{ list: rolls, first: at(i) }} /></div></details>
     : <Blocks key={i} blocks={[b]} links={links} rolls={{ list: rolls, first: at(i) }} />)}</div>;
