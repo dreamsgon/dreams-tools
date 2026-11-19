@@ -8,6 +8,7 @@
  */
 import type { ColourSet, Theme } from "./model.ts";
 import { CITADEL_STATION } from "./skins/citadel-station.ts";
+import { SWORD_COAST } from "./skins/sword-coast.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -16,22 +17,8 @@ const skin = (id: string, name: string, inspired: string, radius: number, fonts:
   ({ inspired, theme: { id: `preset-${id}`, name, mode: "both", radius, banner: "plain", fonts, colors: { light, dark }, css: css.trim() + "\n" } satisfies Theme });
 
 export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
-  skin("sword-coast", "Sword Coast", "Baldur’s Gate 3", 2, { display: "cinzel", reading: "spectral", ui: "inter" },
-    set("#e8dfcf", "#f5eee1", "#ece3d2", "#c9b99c", "#2a1f18", "#6a5a4c", "#8a5a14", "#8f2a20"),
-    set("#0e0b0a", "#17120f", "#1f1814", "#3a2c20", "#e9dfcd", "#a8998a", "#c9a25a", "#d0584a"), `
-/* Gilded frames, a blood-red banner and a diamond under every heading. */
-.board-head:not(.has-art) {
-  background: radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--accent-2) 55%, transparent), transparent 65%), linear-gradient(180deg, #1a0d0b, #0c0707);
-  --head-ink: #eadfcd; --head-title: #d8b36a; --head-line: #6b4f2a; --head-nav: rgba(0, 0, 0, .4); --head-shadow: 0 2px 12px rgba(0, 0, 0, .8);
-}
-.board-head { border: 1px solid var(--accent); outline: 1px solid var(--line); outline-offset: 3px; margin: 4px; }
-.category-title { justify-content: center; text-align: center; padding-bottom: 10px; border-bottom: 1px solid var(--line-strong); position: relative; }
-.category-title::after { content: "◆"; position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); padding: 0 8px; background: var(--bg); color: var(--accent); font-size: 11px; }
-.forum, .topic-row, .post, .topic-head { box-shadow: inset 0 0 0 1px var(--panel), inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-.post-band { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 75%); }
-.post-name { letter-spacing: .12em; }
-.f-btn:not(.ghost) { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, #fff), var(--accent)); }
-`),
+  /* Fully custom skins, each with its own stylesheet for every part of the campaign (skins/). */
+  { inspired: "Baldur’s Gate 3 and D&D rulebooks", theme: SWORD_COAST },
 
   skin("imperial", "Imperial Province", "The Elder Scrolls IV: Oblivion", 0, { display: "uncial", reading: "fell", ui: "inter" },
     set("#d9c9a3", "#eadbb8", "#e0cfa8", "#b39a68", "#33240f", "#5f4b2c", "#7a2e12", "#3d5a2a"),
@@ -74,7 +61,6 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .f-btn:hover { border-color: var(--accent); }
 `),
 
-  /* A fully custom skin, with its own stylesheet for each part of the campaign (skins/citadel-station.ts). */
   { inspired: "Mass Effect (orange and blue)", theme: CITADEL_STATION },
 
   skin("four-houses", "Four Houses", "Hogwarts", 2, { display: "fell", reading: "spectral", ui: "inter" },
