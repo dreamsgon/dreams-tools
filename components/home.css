@@ -163,12 +163,12 @@
 .home-date span { display:block; font-size:17px; font-weight:700; padding:2px 0; }
 .home-soon { font-size:11px; font-weight:600; color:var(--warn, #8a5a1c); background:var(--warn-soft, var(--accent-soft)); padding:2px 7px; border-radius:20px; white-space:nowrap; }
 
-.home-folders { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); grid-auto-flow:row dense; gap:18px 12px; padding-top:10px; } /* dense: an open folder takes a full row, so the folders after it fill the gap it would leave beside the card before it */
+.home-folders { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); grid-auto-flow:row dense; gap:18px 12px; padding-top:10px; } /* dense: the open folder's panel takes a full row, so the folders after it fill the rest of its row and no card moves */
 /* A folder card: a coloured tab joined to a coloured top edge, then a stack of its campaigns. */
 .home-fcard { position:relative; min-width:0; border:1px solid var(--line); border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg); background:var(--chrome-hover); }
 .home-fcard::before { content:""; position:absolute; left:-1px; top:-7px; width:min(42%,96px); height:7px; border-radius:var(--radius) var(--radius) 0 0; background:var(--fc,var(--accent)); pointer-events:none; }
 .home-fcard::after { content:""; position:absolute; left:-1px; right:-1px; top:-1px; height:3px; background:var(--fc,var(--accent)); border-radius:0 var(--radius-lg) 0 0; pointer-events:none; }
-.home-fcard-open { grid-column:1/-1; }
+.home-fcard-open { border-color:color-mix(in srgb,var(--fc,var(--accent)) 60%,var(--line)); background:color-mix(in srgb,var(--fc,var(--accent)) 8%,var(--chrome-hover)); }
 .home-fcard > button { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 14px 12px; cursor:pointer; border-radius:inherit; }
 .home-fcard > button:hover { background:color-mix(in srgb,var(--fc,var(--accent)) 7%,transparent); }
 .home-fcard > button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
@@ -182,17 +182,22 @@
 .home-fstack { display:flex; align-items:center; margin-top:12px; }
 .home-ftile { display:grid; place-items:center; width:30px; height:30px; margin-left:-6px; flex:none; border:2px solid var(--chrome-hover); border-radius:var(--radius); background:repeating-linear-gradient(135deg,#0002 0 4px,transparent 4px 8px),var(--c); color:#fff; font-size:11px; font-weight:700; }
 .home-ftile:first-child { margin-left:0; }
+.home-fcard-open .home-ftile { border-color:color-mix(in srgb,var(--fc,var(--accent)) 8%,var(--chrome-hover)); }
 .home-fstack em { min-width:0; margin-left:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-style:normal; font-size:12px; color:var(--muted); }
-.home-fcard ul { list-style:none; margin:0; padding:0 10px 10px; border-top:1px solid var(--line); }
-.home-fcard li { display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); }
-.home-fcard li:last-child { border-bottom:0; }
+/* The open folder's campaigns: a full-width panel on the row under its card, edged in the folder colour. */
+.home-fpanel { grid-column:1/-1; min-width:0; margin-top:-8px; border:1px solid color-mix(in srgb,var(--fc,var(--accent)) 60%,var(--line)); border-top:3px solid var(--fc,var(--accent)); border-radius:var(--radius-lg); background:var(--chrome-hover); }
+.home-fpanel ul { list-style:none; margin:0; padding:2px 10px; }
+.home-fpanel li { display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); }
+.home-fpanel li:last-child { border-bottom:0; }
+.home-fpanel strong { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.home-fpanel small { color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .home-frow { display:flex; align-items:center; gap:10px; flex:1; min-width:0; padding:8px 4px; color:var(--ink); font-size:13px; }
 .home-frow:hover strong { color:var(--accent); }
 .home-frow > span:last-child { display:flex; flex-direction:column; min-width:0; }
 .home-fmini { width:24px; height:24px; flex:none; border-radius:3px; background:repeating-linear-gradient(135deg,#0002 0 4px,transparent 4px 8px),var(--c); }
 .home-fgo { display:flex; gap:10px; flex:none; font-size:12px; }
 .home-fgo a { color:var(--accent); }
-.home-folder-empty { padding:0 14px 12px; }
+.home-folder-empty { margin:0; padding:12px 14px; }
 
 .home-qlinks { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
 .home-qlinks-s { grid-template-columns:1fr 1fr; }
