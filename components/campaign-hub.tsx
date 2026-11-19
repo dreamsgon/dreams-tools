@@ -53,7 +53,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   usePageTitle(hub ? campaignTitle(hub.row.name) : "");
   // The campaign's live theme (lib/campaign-theme) themes the dashboard below the site header, in place of its look.
   // A theme belongs to the campaign's Encyclopedia campaign; Theme opens the Admin CP beside the dashboard.
-  const skinKey = hub?.row.encyclopedia ? `c-${hub.row.encyclopedia.id}` : null, themeDock = useThemeDock(skinKey, "dashboard");
+  const skinKey = hub ? (hub.row.encyclopedia ? `c-${hub.row.encyclopedia.id}` : null) : error ? null : undefined, themeDock = useThemeDock(skinKey, "dashboard", true);
   const skin = useCampaignSkin(skinKey, "dashboard", undefined, themeDock.editing);
   useDiceTarget(hub ? hubDiceTarget(hub.row) : NO_CAMPAIGN);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");

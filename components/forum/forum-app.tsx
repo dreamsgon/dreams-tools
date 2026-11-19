@@ -4,7 +4,9 @@
  * key (&board=, &topic=, &view=) so links can be shared and the back button works. Refreshes every 20 seconds while
  * the tab is visible. With no key, /forum lists the forums you can open (forum-pick.tsx).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { offerCampaignTheme } from '../campaign-theme-entry';
+import { release } from '../campaign-skin';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
@@ -68,6 +70,10 @@ export default function ForumApp() {
   }, [key, place, load]);
 
   const cp = useAdminCp(key), [dock, setDock] = useDock();
+  // Who may change the theme finds it in the Appearance menu too; the page the boot script held back shows once the theme is known.
+  const mayTheme = !!view?.frame.you.rights.boards, themed = !!view?.frame.theme;
+  useEffect(() => mayTheme ? offerCampaignTheme() : undefined, [mayTheme]);
+  useLayoutEffect(() => { if (!loading) release('forum', themed); }, [loading, themed]);
   const go = useCallback((p: Place) => { const h = forumHash(key, p); if (location.hash !== h) location.hash = h; else void load(key, p); }, [key, load]);
   const done = useCallback(async (next?: Place) => { if (next) go(next); else await load(key, place, true); }, [go, load, key, place]);
   /** A solo campaign's GM view / Player view: pages only moderators open go back to the index in the player view. */
