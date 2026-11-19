@@ -23,7 +23,7 @@ import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
 import { freshReads, markAll, markTopic } from "./reader.ts";
 import { isSolo, soloCharacters } from "../solo.ts";
-import { ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeFile } from "../campaign-theme/model.ts";
+import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea, type ThemeFile } from "../campaign-theme/model.ts";
 import type { ThemeStore } from "../campaign-theme/store.ts";
 
 /** The made-up member a solo player's view is worked out for: one of the built-in Players group. */
@@ -86,7 +86,7 @@ export type AiConnection = { id: string; name: string; model: string; used: numb
 export type AiUse = { connectionId: string; apiKey: string } | { own: { provider: string; baseUrl?: string; model: string; apiKey: string } };
 
 // Big enough for a theme with a 100 KB stylesheet; posts have their own, smaller limit.
-export const FORUM_BODY = 160_000;
+export const FORUM_BODY = 220_000;
 export const keyPattern = /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100})$/;
 const readThrottle = createThrottle(30, 10_000), writeThrottle = createThrottle(12, 10_000), imageThrottle = createThrottle(240, 10_000), aiThrottle = createThrottle(6, 60_000);
 export const resetForumThrottles = () => { readThrottle.reset(); writeThrottle.reset(); imageThrottle.reset(); aiThrottle.reset(); };
@@ -105,6 +105,30 @@ const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("themes") }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
+/**
+ * `skin`: the live theme for one part of the campaign (the Encyclopedia, Maptable or the dashboard), for anyone who may
+ * open the campaign, whether or not they read the forum. Besides the forum's keys it takes `mt-<Maptable campaign id>`,
+ * the signed-in GM's Maptable campaign, which finds the Encyclopedia campaign paired with it.
+ */
+const skinSchema = z.object({ action: z.literal("skin"), campaign: z.string().regex(/^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100}|mt-[A-Za-z0-9_-]{1,100})$/),
+  area: z.enum(THEME_AREAS.map(a => a.id) as [ThemeArea, ...ThemeArea[]]), theme: z.string().max(200).optional() });
+async function skinOf(deps: Deps, body: z.infer<typeof skinSchema>) {
+  const userId = await deps.user();
+  if (!userId) return json({ error: signIn }, 401);
+  if (readThrottle.hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
+  let key = body.campaign;
+  if (key.startsWith("mt-")) {
+    const paired = (await deps.workspace(userId)).campaigns.find(c => c.maptableCampaignId === key.slice(3));
+    if (!paired) return json({ theme: null });
+    key = `c-${paired.id}`;
+  }
+  const found = await deps.campaign(userId, key);
+  if (!found) return json({ error: notMember }, 404);
+  const file = deps.themes ? (await deps.themes.read(found.owner, found.campaignId)).file : null;
+  const theme = liveTheme(file?.live ?? null, body.area);
+  return json({ theme: theme && body.theme === theme.key ? { key: theme.key, name: theme.name, mode: theme.mode, banner: theme.banner, same: true } : theme });
+}
+
 const bodySchema = z.discriminatedUnion("action", [
   // `theme`: the live theme's key the browser already has, so the stylesheet isn't sent again.
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema, theme: z.string().max(200).optional() }),
@@ -195,7 +219,9 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       // The Admin CP's themes: the live one and the saved ones, for those who arrange the forum.
       if (!ctx.viewer.rights.boards) return json({ error: "Your group can't change the campaign's theme." }, 403);
       if (!deps.themes) return json({ error: "Themes aren't available on this site." }, 404);
-      return json({ frame: frameOf(ctx), page: { kind: "themes", live: themes?.live ?? null, saved: themes?.saved ?? [] } });
+      // Where the Admin CP's Preview links open the campaign's other parts.
+      const paired = ctx.workspace.campaigns.find(c => c.id === ctx.campaignId)?.maptableCampaignId ?? null;
+      return json({ frame: frameOf(ctx), page: { kind: "themes", live: themes?.live ?? null, saved: themes?.saved ?? [], campaignId: ctx.campaignId, maptableId: paired, owner: ctx.viewer.rights.owner } });
     }
     case "board": { const p = boardPage(ctx, page.id, { archive: page.archive }); return p ? json({ frame: frameOf(ctx), page: { kind: "board", ...p } }) : json({ error: "That board was removed." }, 404); }
     case "topic": {
@@ -522,7 +548,9 @@ export async function handleForum(request: Request, deps: Deps) {
     if (Number(request.headers.get("content-length") ?? 0) > FORUM_BODY) return json({ error: "That post is too long." }, 413);
     const text = await request.text();
     if (text.length > FORUM_BODY) return json({ error: "That post is too long." }, 413);
-    const raw: unknown = JSON.parse(text), body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
+    const raw: unknown = JSON.parse(text);
+    if (typeof raw === "object" && raw !== null && (raw as { action?: unknown }).action === "skin") return await skinOf(deps, skinSchema.parse(raw));
+    const body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
     // The player view of a solo campaign's owner (contextOf); ignored for anyone else.
     const playerView = typeof raw === "object" && raw !== null && (raw as { playerView?: unknown }).playerView === true;
     const got = await contextOf(deps, body.campaign, now, true, playerView);

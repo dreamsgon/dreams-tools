@@ -972,3 +972,11 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 }
 .cp-find { width: 100%; }
 .cp-list.presets li { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* The Admin CP's tabs: the theme on one row, a stylesheet for each part of the campaign on the next. */
+.cp-tabs { flex-direction: column; }
+.cp-tab-row { display: flex; align-items: stretch; }
+.cp-tab-row.parts { flex-wrap: wrap; border-top: 1px solid var(--line); background: var(--raised); }
+.cp-tab-label { flex-basis: 100%; padding: 8px 12px 0; font: 700 9.5px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.cp-tab-row.parts button { font-size: 12px; }
+.cp-dot { display: inline-block; width: 5px; height: 5px; margin-left: 5px; vertical-align: 7px; border-radius: 50%; background: var(--accent); }
+.cp-preview { justify-self: start; }

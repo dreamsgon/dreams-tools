@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanCss, scopeSelector } from '../lib/campaign-theme/css.ts';
-import { THEME_PRESETS, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
+import { THEME_PRESETS, areaCss, themeSchema, themeColours, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
 
 const NOW = new Date('2026-01-01T12:00:00.000Z');
 
@@ -51,13 +51,13 @@ test('the stylesheet: nothing loads from elsewhere, nothing escapes, and each ch
 });
 
 test('a theme’s variables: both versions follow the member’s setting, a one-version theme shows it to everyone', () => {
-  const salt = THEME_PRESETS[0], neon = THEME_PRESETS.find(t => t.mode === 'dark'), ledger = THEME_PRESETS.find(t => t.mode === 'light');
+  const salt = THEME_PRESETS[0], neon = { ...THEME_PRESETS.find(t => t.id === 'preset-neon'), mode: 'dark' }, ledger = THEME_PRESETS.find(t => t.mode === 'light');
   const both = themeCss(salt).css;
   assert.match(both, /^\.campaign-skin \{ --bg: #ece5d6;/);
   assert.match(both, /\n:root\[data-theme="dark"\] \.campaign-skin \{ --bg: #111110;/);
   assert.match(both, /--font-display: "Cinzel"/);
   const dark = themeCss(neon).css;
-  assert.equal(dark.match(/--bg: #07080d/g).length, 2, 'dark everywhere');
+  assert.equal(dark.match(/--bg: #07060f/g).length, 2, 'dark everywhere');
   assert.equal(themeCss(ledger).css.match(/--bg: #e7dcc0/g).length, 2, 'light everywhere');
   assert.match(themeCss({ ...ledger, banner: 'plain' }).css, /--head-title: #7c2a1c/);
   assert.equal(onAccent('#ffeb3b'), '#111111');
@@ -93,7 +93,7 @@ test('the theme file: save, make live (a copy), delete, and the limit', () => {
 
 test('preset skins: a light and a dark version each, readable, and their CSS passes the safety checks untouched', () => {
   const skins = THEME_PRESETS.filter(t => PRESET_NOTES[t.id]);
-  assert.equal(skins.length, 17);
+  assert.equal(skins.length, 18);
   assert.equal(new Set(THEME_PRESETS.map(t => t.id)).size, THEME_PRESETS.length, 'ids are unique');
   for (const t of skins) {
     assert.equal(t.mode, 'both', t.name);
@@ -102,8 +102,38 @@ test('preset skins: a light and a dark version each, readable, and their CSS pas
     const cleaned = cleanCss(t.css);
     assert.deepEqual(cleaned.problems, [], t.name);
     assert.ok(cleaned.rules >= 8, `${t.name} has a stylesheet`);
+    // A fully custom skin's other stylesheets pass the same checks.
+    for (const [part, css] of Object.entries(t.areas ?? {})) assert.deepEqual(cleanCss(css).problems, [], `${t.name}: ${part}`);
     // The banner's own art stands aside for a campaign's picture.
     assert.match(t.css, /\.board-head:not\(\.has-art\)/, t.name);
     assert.notDeepEqual(t.colors.light, t.colors.dark, t.name);
   }
+});
+
+test('theme stylesheets for each part of the campaign', () => {
+  const t = { ...THEME_PRESETS[0], id: 'x', css: '.post { color: red }', areas: { maptable: '.app-header { color: blue } .a { background: url(x.png) }' } };
+  assert.equal(areaCss(t, 'forum'), '.post { color: red }');
+  assert.equal(areaCss(t, 'encyclopedia'), '');
+  const maps = themeCss(t, '.campaign-skin', 'maptable');
+  assert.match(maps.css, /\.campaign-skin \.app-header \{ color: blue \}/);
+  assert.doesNotMatch(maps.css, /\.post|url\(/);
+  assert.equal(maps.problems.length, 1);
+  assert.match(themeCss(t).css, /--paper: #ece5d6; --white: /, 'the Encyclopedia’s own names too');
+  // Each part up to 100 KB, and 160 KB together.
+  const big = 'a { color: red }\n'.repeat(5500);
+  assert.ok(themeSchema.safeParse({ ...t, areas: { encyclopedia: big } }).success);
+  assert.equal(themeSchema.safeParse({ ...t, css: big, areas: { encyclopedia: big } }).success, false);
+  assert.throws(() => saveTheme(emptyThemeFile(), { ...t, css: big, areas: { encyclopedia: big } }, { now: NOW }), /160 KB together/);
+  // Theme code carries the parts' stylesheets.
+  const { theme } = importTheme({ ...t, areas: { encyclopedia: '.topbar { color: red }', nonsense: 'x' } }, 'y');
+  assert.deepEqual(theme.areas, { encyclopedia: '.topbar { color: red }' });
+});
+
+test('a theme’s colours alone, for the Admin CP', () => {
+  const both = themeColours(THEME_PRESETS.find(t => t.id === 'preset-neon'), '.admin-cp');
+  assert.match(both, /^\.admin-cp \{ --bg: #efe6f5; /);
+  assert.match(both, /\n:root\[data-theme="dark"\] \.admin-cp \{ --bg: #07060f; /);
+  assert.doesNotMatch(both, /--font-|--radius|--head-|nw-/, 'no fonts, corners, banner or stylesheet');
+  const dark = themeColours({ ...THEME_PRESETS[0], mode: 'dark' }, '.admin-cp');
+  assert.equal(dark.split('\n')[0].replace('.admin-cp', ''), dark.split('\n')[1].replace(':root[data-theme="dark"] .admin-cp', ''), 'a one-version theme shows that version to everyone');
 });

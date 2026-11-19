@@ -1513,7 +1513,7 @@ test('request: campaign themes are saved, made live and sent with every page', a
   const frame = (await (await player.post(view)).json()).frame;
   assert.equal(frame.theme.name, 'Neon Wire');
   assert.match(frame.theme.css, /\.campaign-skin \.post \{ color: red \}/);
-  assert.match(frame.theme.css, /:root\[data-theme="dark"\] \.campaign-skin \{ --bg: #07080d/);
+  assert.match(frame.theme.css, /:root\[data-theme="dark"\] \.campaign-skin \{ --bg: #07060f/);
   assert.doesNotMatch(frame.theme.css, /evil\.test|url\(/);
   assert.match(frame.theme.fonts, /^https:\/\/fonts\.googleapis\.com\/css2\?family=Chakra\+Petch/);
   // A refresh from a browser that has this version doesn't send the stylesheet again.
@@ -1530,4 +1530,33 @@ test('request: campaign themes are saved, made live and sent with every page', a
   await gm.post({ action: 'liveTheme', campaign: KEY, id: null });
   const last = await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).json();
   assert.deepEqual([last.page.live, last.page.saved], [null, []]);
+});
+
+test('request: the live theme reaches the campaign’s other parts, each with its own stylesheet', async () => {
+  const gm = harness({ user: OWNER }), player = harness({ user: 'p1' }), stranger = harness({ user: 'stranger' });
+  player.deps.themes = stranger.deps.themes = gm.deps.themes;
+  const skin = (h, area, campaign = KEY, theme) => h.post({ action: 'skin', campaign, area, ...(theme ? { theme } : {}) });
+  assert.deepEqual(await (await skin(player, 'encyclopedia')).json(), { theme: null }, 'the app’s own look to start');
+  const theme = { ...THEME_PRESETS[0], id: 'mine', css: '.post { color: red }', areas: { encyclopedia: '.topbar { color: blue }', dashboard: '.hub-card { color: green }' } };
+  await gm.post({ action: 'saveTheme', campaign: KEY, theme, live: true });
+  const enc = (await (await skin(player, 'encyclopedia')).json()).theme;
+  assert.match(enc.css, /\.campaign-skin \.topbar \{ color: blue \}/);
+  assert.doesNotMatch(enc.css, /\.post|\.hub-card/, 'only that part’s stylesheet');
+  assert.match(enc.css, /--chrome: /, 'the app’s own tokens follow the theme');
+  assert.match((await (await skin(player, 'dashboard')).json()).theme.css, /\.hub-card \{ color: green \}/);
+  const maps = (await (await skin(player, 'maptable')).json()).theme;
+  assert.doesNotMatch(maps.css, /color: (red|blue|green)/, 'no stylesheet: colours and fonts only');
+  assert.notEqual(maps.key, enc.key);
+  assert.equal((await (await skin(player, 'encyclopedia', KEY, enc.key)).json()).theme.same, true);
+  // Someone who isn't in the campaign gets nothing; a bad part or key is refused.
+  assert.equal((await skin(stranger, 'encyclopedia')).status, 404);
+  assert.equal((await skin(player, 'everything')).status, 400);
+  assert.equal((await skin(player, 'forum', 'x-camp')).status, 400);
+  // The GM's Maptable campaign finds the Encyclopedia campaign paired with it.
+  gm.deps.workspace = async () => ({ ...workspace, campaigns: workspace.campaigns.map(c => c.id === 'camp' ? { ...c, maptableCampaignId: 'maps1' } : c) });
+  assert.equal((await (await skin(gm, 'maptable', 'mt-maps1')).json()).theme.name, THEME_PRESETS[0].name);
+  assert.deepEqual(await (await skin(gm, 'maptable', 'mt-other')).json(), { theme: null });
+  // The Admin CP learns where the other parts open.
+  const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'themes' } })).json()).page;
+  assert.deepEqual([page.campaignId, page.owner], ['camp', true]);
 });
