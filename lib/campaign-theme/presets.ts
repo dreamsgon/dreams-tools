@@ -22,6 +22,7 @@ import { LANCE_AND_MOONS } from "./skins/lance-and-moons.ts";
 import { IMPERIAL_PROVINCE } from "./skins/imperial-province.ts";
 import { GALACTIC_CRAWL } from "./skins/galactic-crawl.ts";
 import { ISSUE_ONE } from "./skins/issue-one.ts";
+import { FOUR_HOUSES } from "./skins/four-houses.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -39,27 +40,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Mass Effect (orange and blue)", theme: CITADEL_STATION },
 
-  skin("four-houses", "Four Houses", "Hogwarts", 2, { display: "fell", reading: "spectral", ui: "inter" },
-    set("#ebdfc6", "#f6eeda", "#efe4cb", "#cbb88e", "#2c1c1a", "#6a5547", "#7a1f2b", "#1f5a3d"),
-    set("#120d10", "#1c1418", "#251a1f", "#44303a", "#efe4d2", "#b3a391", "#d4a93f", "#c9544f"), `
-/* Candlelight on old stone, and four house colours along the banner. */
-.board-head:not(.has-art) {
-  background: radial-gradient(circle at 18% 20%, rgba(255, 196, 96, .28), transparent 34%), radial-gradient(circle at 82% 16%, rgba(255, 196, 96, .22), transparent 30%), linear-gradient(180deg, #2a1418, #140b0e);
-  --head-ink: #efe4d2; --head-title: #e3bd5f; --head-line: #6b5330; --head-nav: rgba(0, 0, 0, .35); --head-shadow: 0 2px 10px rgba(0, 0, 0, .7);
-}
-.board-head { border-bottom: 0; }
-.board-head::after { content: ""; display: block; height: 7px; background: linear-gradient(90deg, #8f1d28 0 25%, #d9a521 25% 50%, #1f4e8c 50% 75%, #1f6b45 75% 100%); }
-.board-title { text-transform: none; letter-spacing: .03em; font-weight: 400; font-size: 48px; }
-.category-title { text-transform: none; font-size: 21px; letter-spacing: .02em; font-weight: 400; border-bottom: 1px solid var(--line-strong); padding-bottom: 4px; }
-.category:nth-of-type(4n + 1) .category-title { border-bottom-color: #8f1d28; }
-.category:nth-of-type(4n + 2) .category-title { border-bottom-color: #d9a521; }
-.category:nth-of-type(4n + 3) .category-title { border-bottom-color: #1f4e8c; }
-.category:nth-of-type(4n + 4) .category-title { border-bottom-color: #1f6b45; }
-.forum-name, .topic-title, .topic-name { text-transform: none; letter-spacing: .01em; font-weight: 400; }
-.post { border-top: 3px double var(--line-strong); }
-.post-name { text-transform: none; font-weight: 400; font-size: 24px; letter-spacing: .02em; }
-.post-text > p:first-child::first-letter { font-family: var(--font-display); font-size: 1.9em; line-height: 1; color: var(--accent); }
-`),
+  { inspired: "Hogwarts", theme: FOUR_HOUSES },
 
   { inspired: "Ravenloft and Curse of Strahd", theme: CASTLE_IN_THE_MISTS },
 
