@@ -1,7 +1,7 @@
 /*
  * Agora: a fully custom skin, inspired by ancient Greece. White marble, Aegean blue and a little gold, with the Greek
- * key (the meander) running along every band, fluted columns down the side of every row and a temple on a headland
- * above the sea in the banner: by day under a pale sun, by night under the moon. Portraits stand as grave stelae with
+ * key (the meander) running along every band, fluted columns down the side of every row and, in the banner, the
+ * Aegean with its islands and the sun setting into it: by day a pale sun, by night the moon and stars. Portraits stand as grave stelae with
  * a pediment on top, small portraits are coins, and the character card is painted like black-figure pottery: black on
  * terracotta. All gradients, no pictures. Nothing glows and nothing moves. Like every skin, its stylesheets go through
  * the safety checks in css.ts.
@@ -78,28 +78,6 @@ const peak = (colour: string, x: number, w: number, h: number, apex: number, y =
 };
 const rect = (colour: string, x: number, y: number, w: number, h: number) => `linear-gradient(${colour}, ${colour}) left ${x}px bottom ${y}px / ${w}px ${h}px no-repeat`;
 
-/**
- * The temple on its headland, in a box 420 by 300 that stands on the sea: limestone with its strata, three steps, six
- * fluted columns in front of the dark cella, the architrave, a frieze of triglyphs, the cornice and the pediment.
- */
-const M = "var(--ag-marble)", SH = "var(--ag-shade)";
-const TEMPLE = inParts("ag-temple", [
-  peak("var(--ag-shade)", 104, 254, 32, .5, 257),
-  peak(M, 74, 314, 46, .5, 255),
-  rect(SH, 74, 249, 314, 2), rect(M, 74, 249, 314, 7),
-  `repeating-linear-gradient(90deg, ${SH} 0 5px, ${M} 5px 16px) left 84px bottom 236px / 294px 13px no-repeat`,
-  rect(SH, 84, 222, 294, 2), rect(M, 84, 222, 294, 14),
-  `repeating-linear-gradient(90deg, ${M} 0 32px, transparent 32px 49px) left 92px bottom 215px / 277px 7px no-repeat`,
-  `repeating-linear-gradient(90deg, ${SH} 0 4px, ${M} 4px 9px, var(--ag-flute) 9px 10px, ${M} 10px 14px, var(--ag-flute) 14px 15px, ${M} 15px 20px, ${SH} 20px 24px, transparent 24px 49px) left 96px bottom 108px / 269px 107px no-repeat`,
-  rect("var(--ag-cella)", 100, 108, 262, 114),
-  rect(M, 86, 102, 290, 6), rect("var(--ag-flute)", 78, 96, 306, 6), rect(SH, 70, 90, 322, 6),
-  `repeating-linear-gradient(180deg, transparent 0 15px, var(--ag-rock-2) 15px 17px) left 80px bottom 0 / 340px 90px no-repeat`,
-  peak("var(--ag-rock-2)", -10, 120, 92, 1), peak("var(--ag-rock)", 0, 96, 90, 1),
-  rect("var(--ag-rock)", 80, 0, 340, 90),
-]);
-/** The word carved on the architrave, placed over the temple's own: ΑΓΟΡΑ, the market and meeting place. */
-const CARVED = (right: string) => `content: "ΑΓΟΡΑ"; position: absolute; z-index: 1; right: calc(${right} + 42px); bottom: 222px; width: 294px; height: 14px; pointer-events: none;
-  font: 700 10px/14px var(--font-display); letter-spacing: .6em; text-indent: .6em; text-align: center; color: var(--ag-shade);`;
 /** A few stars, which only the night version shows. */
 const STARS = [[6, 12, 1], [15, 30, 1.5], [24, 8, 1], [33, 22, 1], [45, 14, 1.5], [52, 34, 1], [71, 9, 1], [83, 18, 1.5], [93, 28, 1]]
   .map(([x, y, r]) => `radial-gradient(${r}px ${r}px at ${x}% ${y}%, var(--ag-star) 50%, transparent 100%)`).join(", ");
@@ -109,9 +87,10 @@ const sea = (h: number, y = 0) => [
   `repeating-linear-gradient(180deg, transparent 0 9px, var(--ag-wave) 9px 10px) left 0 bottom ${y}px / 100% ${h - 6}px no-repeat`,
   `var(--ag-sea) left 0 bottom ${y}px / 100% ${h}px no-repeat`,
 ];
-/** The sun (the moon at night). Where it sits and how big are variables, so a phone can move it out of the way. */
-const SUN = "var(--ag-sun) var(--ag-sun-at, 64% 18%) / var(--ag-sun-size, 130px) var(--ag-sun-size, 130px) no-repeat";
+/** The sun (the moon at night), half set behind the sea at the right. Where it sits and how big are variables, as each banner's sea sits at its own height. */
+const SUN = "var(--ag-sun) var(--ag-sun-at, right 12% bottom 54px) / var(--ag-sun-size, 120px) var(--ag-sun-size, 120px) no-repeat";
 
+const M = "var(--ag-marble)", SH = "var(--ag-shade)";
 /** For a location with no picture: a small temple front under the sky, standing on the shore at the foot of the box. */
 const at = (x: number, y: number, w: number, h: number) => `calc(50% + ${x - 32 + w / 2}px) calc(100% - ${64 - y - h + 8}px) / ${w}px ${h}px no-repeat`;
 const MINI = [
@@ -145,8 +124,8 @@ const STELE = "polygon(0 9%, 50% 0, 100% 9%, 100% 100%, 0 100%)";
 const TITLE = "font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ag-title); text-shadow: var(--ag-title-shadow); overflow-wrap: break-word;";
 
 /**
- * The view, drawn behind `host`'s own content: the sky with the sun (or moon and stars), the sea with its islands, a
- * band of the Greek key along the bottom, and the temple on its headland at the right, with its inscription.
+ * The view, drawn behind `host`'s own content: the sky with the sun (or moon and stars) setting into the sea, islands
+ * on the horizon and a band of the Greek key along the bottom.
  */
 function view(host: string, name: string) {
   const back = inParts(name, [
@@ -155,27 +134,14 @@ function view(host: string, name: string) {
   ]);
   return `${host} {
   position: relative; overflow: hidden; isolation: isolate; border: 0; border-radius: 0;
-  --ag-sun-at: right 380px top 18px; --ag-sun-size: 110px;
   ${back.declare}
   background: ${back.use};
   color: var(--ag-banner-ink);
 }
-${host} > * { position: relative; z-index: 2; }
-${host}::before {
-  content: ""; position: absolute; z-index: 0; right: 3%; bottom: 18px; width: 420px; height: 300px; pointer-events: none;
-  ${TEMPLE.declare}
-  background: ${TEMPLE.use};
+${host} > * { position: relative; z-index: 2; }`;
 }
-${host}::after { ${CARVED("3%")} bottom: 240px; }`;
-}
-/** Narrower pages: the temple at three quarters, and less room kept beside it. */
-const midView = (host: string, pad: string) => `${host} { ${pad} }
-  ${host}::before { scale: .72; transform-origin: bottom right; }
-  ${host}::after { scale: .72; transform-origin: calc(100% + 42px) calc(100% + 222px); }`;
-/** The same view, smaller, for a phone: the temple at half size, its inscription with it, and no sun, which would sit behind the title or the buttons. */
-const smallView = (host: string) => `${host} { --ag-sun-size: 0px; }
-  ${host}::before { right: -20px; scale: .5; transform-origin: bottom right; }
-  ${host}::after { right: 22px; scale: .5; transform-origin: calc(100% + 42px) calc(100% + 222px); }`;
+/** The same view on a phone: a smaller sun on the same horizon. */
+const smallView = (host: string) => `${host} { --ag-sun-size: 70px; --ag-sun-at: right 8% bottom 79px; }`;
 
 /* The Encyclopedia: the campaign's overview gets the view, pages are marble with the key along their bands. */
 const ENCYCLOPEDIA = `/* Agora for the Encyclopedia. The colours and fonts come from the theme; this adds the view, the columns and the Greek key. */
@@ -214,8 +180,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 
 /* The campaign's overview: the view. */
 ${view(".dashboard-intro", "ag-enc")}
-.dashboard-intro { min-height: 390px; align-items: flex-start; margin-bottom: 26px; padding: 40px 40px 150px; }
-.dashboard-intro > div:first-child { min-width: 0; max-width: calc(100% - 440px); }
+.dashboard-intro { min-height: 330px; align-items: flex-start; margin-bottom: 26px; padding: 40px 40px 150px; }
 .dashboard-intro .eyebrow { ${LABEL} font-size: 12px; color: var(--ag-banner-ink); }
 .dashboard-intro h1 { margin-top: 8px; font-size: 50px; line-height: 1.05; ${TITLE} }
 .dashboard-intro .subtitle { max-width: 36ch; font: italic 400 18px/1.5 var(--font-reading); color: var(--ag-banner-ink); }
@@ -252,13 +217,8 @@ ${keyed(".section-heading h2", 2)}
 .article-aside .aside-section { border-top: 3px double var(--ag-rule); }
 .article-aside .eyebrow { color: var(--accent); }
 
-@media (max-width: 1100px) {
-  ${midView(".dashboard-intro", "")}
-  .dashboard-intro > div:first-child { max-width: calc(100% - 300px); }
-}
 @media (max-width: 640px) {
-  .dashboard-intro { min-height: 280px; padding: 26px 20px 180px; }
-  .dashboard-intro > div:first-child { max-width: none; }
+  .dashboard-intro { min-height: 260px; padding: 26px 20px 140px; }
   .dashboard-intro h1 { font-size: 32px; }
   .dashboard-intro .subtitle { max-width: 24ch; font-size: 16px; }
   .section-heading h2 { font-size: 15px; letter-spacing: .14em; gap: 10px; }
@@ -320,9 +280,8 @@ input[type="range"] { accent-color: var(--ag-key); }
 
 /* The Scene Picker: the view. */
 ${view(".campaign-scenes-head", "ag-map")}
-.campaign-scenes-head { min-height: 400px; align-items: flex-start; padding: 34px 34px 150px; }
+.campaign-scenes-head { min-height: 320px; align-items: flex-start; padding: 34px 34px 150px; }
 .campaign-scenes-head small { ${LABEL} font-size: 12px; color: var(--ag-banner-ink); }
-.campaign-scenes-head > div { flex: 1; min-width: 0; padding-right: 400px; }
 .campaign-scenes-head > button { flex: none; }
 .campaign-scenes-head h1 { margin-top: 6px; font-size: 46px; line-height: 1.05; ${TITLE} }
 .dashboard-continue { ${ROW} padding: 18px 26px; }
@@ -343,14 +302,9 @@ ${keyed(".campaign-scenes-group h2", 2)}
 .campaign-scene-card small { font-size: 13px; }
 .campaign-scene-picture { border-bottom: 1px solid var(--ag-line); }
 
-@media (max-width: 900px) {
-  ${midView(".campaign-scenes-head", "min-height: 340px;")}
-  .campaign-scenes-head > div { padding-right: 280px; }
-}
 @media (max-width: 640px) {
-  .campaign-scenes-head { min-height: 260px; padding: 24px 20px 180px; }
+  .campaign-scenes-head { min-height: 240px; padding: 24px 20px 140px; }
   .dashboard-continue strong { font-size: 17px; letter-spacing: .02em; overflow-wrap: anywhere; }
-  .campaign-scenes-head > div { padding-right: 0; }
   .campaign-scenes-head h1 { font-size: 30px; }
   ${smallView(".campaign-scenes-head")}
 }
@@ -369,7 +323,7 @@ body { ${PAGE} }
 
 /* The top: the view. */
 ${view(".hub-head", "ag-hub")}
-.hub-head { min-height: 380px; padding: 36px 470px 150px 36px; }
+.hub-head { min-height: 340px; padding: 36px 36px 150px; }
 .hub-title p { ${LABEL} font-size: 12px; color: var(--ag-banner-ink); }
 .hub-title h1 { margin-top: 6px; font-size: 52px; line-height: 1.05; ${TITLE} }
 .hub-chip { border-radius: 0; border-color: var(--ag-line); background: var(--ag-panel); color: var(--ink); ${LABEL} font-size: 10.5px; }
@@ -395,11 +349,8 @@ ${view(".hub-head", "ag-hub")}
 .hub-card-head a, .hub-card-head .hub-text-button { ${LABEL} font-size: 11.5px; }
 .hub-scene-grid li { border-radius: 0; }
 
-@media (max-width: 900px) {
-  ${midView(".hub-head", "padding-right: 330px;")}
-}
 @media (max-width: 640px) {
-  .hub-head { min-height: 0; padding: 24px 20px 180px; }
+  .hub-head { min-height: 0; padding: 24px 20px 140px; }
   .hub-title h1 { font-size: 32px; }
   ${smallView(".hub-head")}
 }
@@ -417,7 +368,7 @@ export const AGORA: Theme = {
     light: { bg: "#f3efe6", panel: "#fbf9f4", raised: "#efe9dd", line: "#d8cdb9", ink: "#1b2433", muted: "#5a6170", accent: "#1f5aa0", accent2: "#8a6210" },
     dark: { bg: "#08111f", panel: "#0f1b2e", raised: "#16253d", line: "#2a3d5c", ink: "#eef0ea", muted: "#9fb0c4", accent: "#e3bb55", accent2: "#79b6ee" },
   },
-  css: `/* Agora: white marble, Aegean blue and a little gold, the Greek key along every band and a fluted column down every row. The banner is a temple on a headland above the sea, drawn with gradients.
+  css: `/* Agora: white marble, Aegean blue and a little gold, the Greek key along every band and a fluted column down every row. The banner is the Aegean with its islands and the sun setting into it, drawn with gradients.
    Light is midday under a pale sun; dark is the same coast under the moon. Everything a version changes is a variable in the first two rules. */
 
 ${VARS}
@@ -435,23 +386,17 @@ a { text-underline-offset: 3px; }
 .search-box:focus-within { border-color: var(--ag-key); }
 .search-box input:not([type="checkbox"]), .search-box input:not([type="checkbox"]):focus { border: 0; background: transparent; box-shadow: none; }
 
-/* The banner: the sky with the sun (or the moon and stars), the sea with its islands, and the temple on its headland. */
-.board-head { min-height: 360px; border: 0; text-align: left; }
+/* The banner: the sky with the sun (or the moon and stars) setting into the sea, and islands on the horizon. */
+.board-head { min-height: 330px; border: 0; text-align: left; }
 .board-head:not(.has-art) {
-  --ag-sun-at: right 400px top 26px; --ag-sun-size: 120px;
+  --ag-sun-at: right 12% bottom 98px;
   ${SKY.declare}
   background: ${SKY.use};
   --head-ink: var(--ag-banner-ink); --head-title: var(--ag-title); --head-shadow: var(--ag-title-shadow); --head-nav: var(--ag-nav); --head-line: transparent;
 }
 .board-head-text { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: flex-start; padding: 58px 44px 140px; overflow: hidden; }
-.board-head:not(.has-art) .board-head-text { padding-right: 480px; ${SEA.declare} background: ${SEA.use}; }
+.board-head:not(.has-art) .board-head-text { ${SEA.declare} background: ${SEA.use}; }
 .board-title, .board-tagline { position: relative; z-index: 2; }
-.board-head:not(.has-art) .board-head-text::before {
-  content: ""; position: absolute; z-index: 0; right: 3%; bottom: 0; width: 420px; height: 300px;
-  ${TEMPLE.declare}
-  background: ${TEMPLE.use};
-}
-.board-head:not(.has-art) .board-head-text::after { ${CARVED("3%")} }
 .board-title { font: 700 58px/1.05 var(--font-display); letter-spacing: .12em; text-transform: uppercase; }
 .board-tagline { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-top: 12px; font: italic 400 21px/1.35 var(--font-reading); color: var(--head-ink); text-shadow: none; }
 .board-tagline::after { content: ""; width: 168px; height: 12px; background: ${meander("var(--head-title)", 2)}; }
@@ -584,21 +529,14 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
 .foot-stats b { font: 700 16px var(--font-display); color: var(--accent); }
 .to-top { border-radius: 0; border-color: var(--ag-rule); color: var(--accent); }
 
-@container page (max-width: 900px) {
-  .board-head:not(.has-art) .board-head-text { padding-right: 330px; }
-  .board-head:not(.has-art) .board-head-text::before { scale: .72; transform-origin: bottom right; }
-  .board-head:not(.has-art) .board-head-text::after { scale: .72; transform-origin: calc(100% + 42px) calc(100% + 222px); }
-}
 @container page (max-width: 640px) {
-  .board-head:not(.has-art) { --ag-sun-at: 92% 8%; --ag-sun-size: 76px; }
+  .board-head:not(.has-art) { --ag-sun-at: right 8% bottom 119px; --ag-sun-size: 70px; }
   .board-head { min-height: 290px; }
-  .board-head-text, .board-head:not(.has-art) .board-head-text { padding: 30px 22px 160px; }
+  .board-head-text, .board-head:not(.has-art) .board-head-text { padding: 30px 22px 130px; }
   .board-head.has-art .board-head-text { padding: 36px 22px 40px; }
   .board-title { font-size: 32px; letter-spacing: .08em; }
   .board-tagline { max-width: 80%; font-size: 16px; }
   .board-tagline::after { width: 120px; }
-  .board-head:not(.has-art) .board-head-text::before { right: -20px; scale: .5; transform-origin: bottom right; }
-  .board-head:not(.has-art) .board-head-text::after { right: 22px; scale: .5; transform-origin: calc(100% + 42px) calc(100% + 222px); }
   .board-nav { padding: 18px 8px 0; }
   .board-nav a { padding: 10px 10px; font-size: 11px; letter-spacing: .14em; }
   .category-title { font-size: 15px; letter-spacing: .16em; gap: 12px; }
