@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanCss, scopeSelector } from '../lib/campaign-theme/css.ts';
-import { THEME_PRESETS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
+import { THEME_PRESETS, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
 
 const NOW = new Date('2026-01-01T12:00:00.000Z');
 
@@ -89,4 +89,21 @@ test('the theme file: save, make live (a copy), delete, and the limit', () => {
   assert.throws(() => makeLive(f, 'a'), ThemeError);
   for (let i = 0; i < 20; i++) f = saveTheme(f, { ...THEME_PRESETS[3], id: 'p' + i }, { now: NOW });
   assert.throws(() => saveTheme(f, { ...THEME_PRESETS[3], id: 'one-more' }, { now: NOW }), /up to 20/);
+});
+
+test('preset skins: a light and a dark version each, readable, and their CSS passes the safety checks untouched', () => {
+  const skins = THEME_PRESETS.filter(t => PRESET_NOTES[t.id]);
+  assert.equal(skins.length, 17);
+  assert.equal(new Set(THEME_PRESETS.map(t => t.id)).size, THEME_PRESETS.length, 'ids are unique');
+  for (const t of skins) {
+    assert.equal(t.mode, 'both', t.name);
+    for (const mode of ['light', 'dark']) for (const c of contrastChecks(t.colors[mode])) assert.ok(c.ratio >= c.need, `${t.name} ${mode}: ${c.label} ${c.ratio.toFixed(2)}`);
+    for (const f of Object.values(t.fonts)) assert.ok(THEME_FONTS[f], `${t.name}: ${f}`);
+    const cleaned = cleanCss(t.css);
+    assert.deepEqual(cleaned.problems, [], t.name);
+    assert.ok(cleaned.rules >= 8, `${t.name} has a stylesheet`);
+    // The banner's own art stands aside for a campaign's picture.
+    assert.match(t.css, /\.board-head:not\(\.has-art\)/, t.name);
+    assert.notDeepEqual(t.colors.light, t.colors.dark, t.name);
+  }
 });

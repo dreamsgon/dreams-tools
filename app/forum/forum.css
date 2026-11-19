@@ -958,3 +958,5 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .forum-body.cp-open.cp-right .admin-cp { order: 0; }
   .admin-cp { position: relative; height: auto; max-height: calc(70vh / var(--ui-zoom, 1)); border: 0; border-bottom: 1px solid var(--line-strong); box-shadow: none; }
 }
+.cp-find { width: 100%; }
+.cp-list.presets li { grid-template-columns: auto minmax(0, 1fr) auto; }
