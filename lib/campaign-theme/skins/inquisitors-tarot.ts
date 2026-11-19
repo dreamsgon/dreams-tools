@@ -321,6 +321,8 @@ a { text-underline-offset: 3px; }
 /* Boards and topics: card frames. Under the pointer, the menu's band of light. */
 .category-forums, .topics { gap: 10px; }
 .forum, .topic-row { ${FRAME} }
+/* Room inside the inner hairline, so a topic's tick box and labels never touch it. */
+.topic-row { padding: 16px 20px; }
 .forum:hover, .topic-row:hover { ${FRAME_ON} }
 .topic-row.pinned { border-left: 1px solid var(--it-bronze); box-shadow: inset 3px 0 0 var(--it-gold), var(--it-shadow); }
 .topic-row.picked { border-color: var(--it-bronze); background: ${BRACKETS}, linear-gradient(color-mix(in srgb, var(--it-fade) 12%, transparent), color-mix(in srgb, var(--it-fade) 12%, transparent)), var(--it-panel); box-shadow: inset 3px 0 0 var(--it-fade), var(--it-shadow); }
@@ -417,6 +419,12 @@ a { text-underline-offset: 3px; }
 .post-actions button { ${CAPS} font-size: 9.5px; }
 .post-actions button:hover { color: var(--it-gold); }
 
+/* A topic's tools: spaced out, with the line above them as a fading hairline. */
+.mod-tools { gap: 10px; margin-top: 14px; padding-top: 16px; border-top: 0; background: var(--it-line) left top / 100% 1px no-repeat; }
+.mod-tools .f-btn.small { padding: 7px 12px; }
+.mod-tools .f-select { ${CAPS} font-size: 10px; }
+.mod-tools .f-select select { padding: 5px 8px; border: 1px solid var(--it-bronze); }
+
 /* Buttons and boxes to type in. */
 .f-btn.ghost { ${BTN} color: var(--it-gold) !important; }
 .f-btn:not(.small) { font-size: 11px; }
@@ -453,6 +461,18 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
   .forum-location > :last-child { padding-bottom: 16px; }
   .location-art { border-right: 0; border-bottom: 1px solid var(--it-bronze); }
   .mini-card { box-sizing: border-box; }
+  /* The tarot card opens centred in the post, level with the top of the portrait: it is placed against the
+     portrait's column, which spans the post on phones, rather than against the narrow portrait. */
+  .post-side { position: relative; }
+  .mini-portrait { position: static; }
+  .mini-card { inset: 0 0 auto 0; width: 100%; min-height: 212px; }
+  /* A topic's tools in two even columns, the board to move it to across both. */
+  .mod-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mod-tools .f-btn.small { justify-content: center; padding: 9px 8px; }
+  .mod-tools .f-select { grid-column: 1 / -1; justify-content: space-between; }
+  .mod-tools .f-select select { flex: 1; }
+  .mod-tools .rename-form, .mod-tools .form-error { grid-column: 1 / -1; }
+  .topic-row { padding: 18px 20px 16px; }
   .mini-name { font-size: 16px; overflow-wrap: anywhere; }
   .mini-fields dd { font-size: 14.5px; }
   .post-text { font-size: 18px; }
