@@ -9,6 +9,7 @@ import { offerCampaignTheme } from '../campaign-theme-entry';
 import { release } from '../campaign-skin';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
+import { useCampaignOpened } from '@/lib/opened-campaign';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
@@ -69,6 +70,7 @@ export default function ForumApp() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [key, place, load]);
 
+  useCampaignOpened(view && key.startsWith('c-') ? `e:${decodeURIComponent(key.slice(2))}` : null);
   const cp = useAdminCp(key), [dock, setDock] = useDock();
   // Who may change the theme finds it in the Appearance menu too; the page the boot script held back shows once the theme is known.
   const mayTheme = !!view?.frame.you.rights.boards, themed = !!view?.frame.theme;

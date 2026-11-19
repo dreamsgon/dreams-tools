@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {campaignSummary,homeCampaigns,suggestPairs,applyPairs,cleanName} from '../lib/campaign-links.ts';
+import {campaignSummary,homeCampaigns,lastOpened,suggestPairs,applyPairs,cleanName} from '../lib/campaign-links.ts';
 import {workspaceSchema,importCopy,emptyWorkspace} from '../lib/encyclopedia/world-model.ts';
 
 const gh={repository:'',branch:'main'};
@@ -97,6 +97,18 @@ test('home campaigns are most recently edited first, then by name, without archi
   assert.deepEqual(homeCampaigns(s).map(r=>r.name),['Curse of the Ashen Crown','Sunless Citadel','Ashen Crown','One-shots','The Sunless Citadel']);
   assert.equal(homeCampaigns(s).some(r=>r.encyclopedia?.archived),false);
   assert.equal(s.rows.length,6,'the summary itself is not changed');
+});
+
+test('home campaigns put the ones you opened first, newest first, under either key of a paired campaign', () => {
+  const b=dated([entry('a','w1','e1',at(2)),entry('b','w1','e2',at(6)),entry('x','w2','e3',at(20))]);
+  const s=campaignSummary(map,b), names=o=>homeCampaigns(s,o).map(r=>r.name);
+  assert.equal(names({'e:e1':at(1)})[0],'Sunless Citadel','opened beats a newer edit somewhere else');
+  assert.deepEqual(names({'e:e1':at(1),'m:m2':at(3)}).slice(0,3),['Ashen Crown','Sunless Citadel','Curse of the Ashen Crown']);
+  b.campaigns[0].maptableCampaignId='m1';
+  const paired=campaignSummary(map,b), row=paired.rows.find(r=>r.encyclopedia?.id==='e1');
+  assert.equal(homeCampaigns(paired,{'m:m1':at(9),'e:e2':at(3)})[0],row,'a Maptable key counts for its paired campaign');
+  assert.equal(lastOpened(row,{'e:e1':at(1),'m:m1':at(4)}),at(4));
+  assert.deepEqual(names({}),names(undefined),'nothing opened yet: most recently edited first, as before');
 });
 
 test('pages carry the folders they sit in, and each campaign lists its three newest pages and its maps', () => {

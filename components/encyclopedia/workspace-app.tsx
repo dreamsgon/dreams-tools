@@ -25,6 +25,7 @@ import {BottomBar,MoreSheet,type MoreGroup} from "./bottom-bar";
 import {openDiceTray} from "@/lib/dice-open";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
 import CampaignSwitcher,{useCampaignSwitcherShortcut} from "@/components/campaign-switcher";
+import { useCampaignOpened } from "@/lib/opened-campaign";
 import {TagsManager} from "@/components/tags";
 import type {Tag} from "@/lib/tags";
 import {RollResults} from "./rolls";
@@ -132,6 +133,7 @@ export default function WorkspaceApp() {
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
+    useCampaignOpened(loaded && !signedOut && !memberRef() && campaign ? `e:${campaign.id}` : null);
     // The campaign's live theme (lib/campaign-theme), in place of its look: the open campaign's, or on a world's own pages
     // the world's only campaign's (themeCampaignId). A co-GM asks through their member ref.
     const themed = themeCampaignId(data, { worldId, campaignId, view });

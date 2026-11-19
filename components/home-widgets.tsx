@@ -58,7 +58,7 @@ export function Folders({ layout, data }: Part) {
   const [openId, setOpenId] = useState<string | null>(null);
   const summary = data.summary, which = layout.options?.folders?.which;
   const choices = summary ? folderChoices(summary.folders).filter(f => !which || which.includes(f.id)) : [];
-  const rows = summary ? homeCampaigns(summary) : [];
+  const rows = summary ? homeCampaigns(summary, layout.opened) : [];
   return <>
     <Head title="Campaign folders" id="home-folders-title"><Link href="/campaigns"><ChevronRight size={14} aria-hidden="true" />Campaigns page</Link></Head>
     {choices.length ? <div className="home-folders home-grow">{choices.flatMap(f => {

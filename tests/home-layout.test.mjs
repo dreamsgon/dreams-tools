@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {homeLayoutSchema,defaultHomeLayout,presetLayout,toggleWidget,moveWidget,resizeWidget,setWidgetHeight,setOption,isPinnedCampaign,isLinkUrl,applyHomeAction,homeWidgets,needsWorkspaces,MAX_CAMPAIGN_DASHBOARDS} from '../lib/home-layout.ts';
+import {homeLayoutSchema,defaultHomeLayout,presetLayout,toggleWidget,moveWidget,resizeWidget,setWidgetHeight,setOption,isPinnedCampaign,isLinkUrl,applyHomeAction,homeWidgets,needsWorkspaces,MAX_CAMPAIGN_DASHBOARDS,MAX_OPENED} from '../lib/home-layout.ts';
 
 const row=(key,m,e)=>({key,name:'x',maptable:m?{id:m,name:'x',scenes:0}:null,encyclopedia:e?{id:e}:null,folderId:null});
 
@@ -156,4 +156,21 @@ test('a folder always gets the same colour from a small palette', async () => {
   assert.ok(seen.size>=4,'ids spread over the palette');
   for(const c of seen) assert.ok(folderColors.includes(c));
   assert.ok(folderColors.every(c=>/^#[0-9a-f]{6}$/.test(c)));
+});
+
+test('opening a campaign is remembered, newest kept, repeats within a few minutes not saved again', () => {
+  const t=m=>new Date(Date.UTC(2026,10,19,12,m)).toISOString();
+  let l=applyHomeAction(defaultHomeLayout(),{action:'opened',key:'e:poppy',at:t(0)});
+  assert.deepEqual(l.opened,{'e:poppy':t(0)});
+  l=applyHomeAction(l,{action:'opened',key:'e:odyssey',at:t(1)});
+  assert.deepEqual(l.opened,{'e:odyssey':t(1),'e:poppy':t(0)});
+  assert.equal(applyHomeAction(l,{action:'opened',key:'e:odyssey',at:t(5)}),l,'the newest again soon after is no change, so nothing is written');
+  assert.equal(applyHomeAction(l,{action:'opened',key:'e:odyssey',at:t(20)}).opened['e:odyssey'],t(20));
+  assert.equal(applyHomeAction(l,{action:'opened',key:'e:poppy',at:t(2)}).opened['e:poppy'],t(2),'switching back is saved at once');
+  assert.throws(()=>applyHomeAction(l,{action:'opened',key:'odyssey'}),/Choose a campaign/);
+  for(let i=0;i<MAX_OPENED+5;i++) l=applyHomeAction(l,{action:'opened',key:`m:c${i}`,at:t(30+i)});
+  assert.equal(Object.keys(l.opened).length,MAX_OPENED,'only the newest are kept');
+  assert.equal(l.opened['e:poppy'],undefined);
+  assert.deepEqual(applyHomeAction(l,{action:'layout',layout:{widgets:[],opened:{}}}).opened,l.opened,'a saved layout never replaces them');
+  assert.deepEqual(presetLayout('gm',l).opened,l.opened,'presets keep them');
 });

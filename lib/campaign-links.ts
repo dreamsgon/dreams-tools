@@ -177,10 +177,24 @@ function recentPages(s: BookWorkspace, limit = 6): RecentPage[] {
     .slice(0, limit).map(e => recentPage(s, e));
 }
 
-/** Campaigns for the home page: not archived, most recently edited first, then by name. */
-export function homeCampaigns(summary: CampaignSummary): CampaignRow[] {
-  const edited = (r: CampaignRow) => r.encyclopedia?.lastEdited ?? "";
-  return summary.rows.filter(r => !r.encyclopedia?.archived).sort((a, b) => edited(b).localeCompare(edited(a)) || byName(a, b));
+/** When you last opened a campaign, from the home layout's `opened` times, under any of its keys (a campaign paired later has two). */
+export function lastOpened(row: CampaignRow, opened: Record<string, string> | undefined): string | null {
+  if (!opened) return null;
+  let last: string | null = null;
+  for (const key of [row.key, row.maptable && `m:${row.maptable.id}`, row.encyclopedia && `e:${row.encyclopedia.id}`]) {
+    const at = key ? opened[key] : undefined;
+    if (at && (!last || at > last)) last = at;
+  }
+  return last;
+}
+
+/**
+ * Campaigns for the home page, not archived: the ones you opened, most recently opened first, then the rest by when
+ * their pages were last edited, then by name. Edits alone (by an agent or a player) never put a campaign ahead of one you opened.
+ */
+export function homeCampaigns(summary: CampaignSummary, opened?: Record<string, string>): CampaignRow[] {
+  const ranked = summary.rows.filter(r => !r.encyclopedia?.archived).map(r => ({ r, open: lastOpened(r, opened) ?? "", edit: r.encyclopedia?.lastEdited ?? "" }));
+  return ranked.sort((a, b) => b.open.localeCompare(a.open) || b.edit.localeCompare(a.edit) || byName(a.r, b.r)).map(x => x.r);
 }
 
 const plain = (name: string) => name.trim().toLocaleLowerCase().replace(/^the\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();

@@ -144,6 +144,7 @@ import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
 import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
 import { campaignTableScene, maptableSearch, readMaptablePlace } from "@/lib/maptable-place";
+import { useCampaignOpened } from "@/lib/opened-campaign";
 import { maptableTitle } from "@/lib/page-title";
 import { usePageTitle } from "./use-page-title";
 import { useCampaignSkin } from "./campaign-skin";
@@ -368,6 +369,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // through their member ref. The map itself keeps its own colours; the theme dresses the header, panels and Scene Picker.
   const skinCampaign = dashboard ? pickerCampaignId : campaignId;
   const skinKey = !workspace ? undefined : mapMemberRef() ? `m-${mapMemberRef()}` : skinCampaign ? `mt-${skinCampaign}` : null;
+  // Your own campaign on screen is the one the home page offers to continue.
+  useCampaignOpened(navigationReady && !member && !mapMemberRef() && skinCampaign ? `m:${skinCampaign}` : null);
   // Campaign theme in the Appearance menu opens the Admin CP beside Maptable, for the campaign's theme.
   const themeDock = useThemeDock(skinKey, "maptable", !member);
   const skin = useCampaignSkin(skinKey, "maptable", undefined, themeDock.editing);
