@@ -107,6 +107,13 @@ html:root[data-theme="dark"] {
 .appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-light); }
 :root[data-theme="dark"] .appearance-swatches button[aria-checked="true"] .appearance-swatch { box-shadow:0 0 0 2px var(--panel, var(--white, #fff)), 0 0 0 4px var(--swatch-dark); }
 .appearance-note { margin:0; font-size:12px; line-height:1.5; color:var(--muted, #56616a); }
+/* Campaign theme, on a campaign's pages for those who may restyle it: opens the Admin CP. */
+.appearance-campaign { display:flex; flex-direction:column; gap:8px; padding-bottom:16px; border-bottom:1px solid var(--line, #d4dbe0); }
+.appearance-campaign-open { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; padding:6px 12px; border:1px solid var(--line, #d4dbe0); border-radius:var(--radius); background:var(--control, var(--panel, var(--white, #fff))); color:var(--ink, #1c2329); font-size:13px; font-weight:600; cursor:pointer; }
+.appearance-campaign-open:hover { border-color:var(--accent); }
+/* A campaign's page held back for a moment while its theme goes on (lib/campaign-theme/boot.ts), so the app's own look
+   never shows first. */
+html[data-skin-boot] body { visibility:hidden; }
 @media (max-width:480px) { .appearance-panel { position:fixed; top:auto; bottom:12px; left:12px; right:12px; width:auto; max-width:none; max-height:calc(calc(100vh / var(--ui-zoom, 1)) - 96px); } }
 .appearance-font { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted, #56616a); }
 .appearance-font select { width:100%; min-height:36px; padding:6px 8px; border:1px solid var(--line, #d4dbe0); border-radius:var(--radius); background:var(--control, var(--panel, var(--white, #fff))); color:var(--ink, #1c2329); font:inherit; font-size:13px; }
