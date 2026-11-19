@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from '../encyclopedia/theme';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
+import { useCampaignOpened } from '@/lib/opened-campaign';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
 import { BoardView, EditView, ReplyView, TopicView } from './forum-topic';
 import { SettingsView } from './forum-settings';
@@ -67,6 +68,7 @@ export default function ForumApp() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [key, place, load]);
 
+  useCampaignOpened(view && key.startsWith('c-') ? `e:${decodeURIComponent(key.slice(2))}` : null);
   const cp = useAdminCp(key), [dock, setDock] = useDock();
   const go = useCallback((p: Place) => { const h = forumHash(key, p); if (location.hash !== h) location.hash = h; else void load(key, p); }, [key, load]);
   const done = useCallback(async (next?: Place) => { if (next) go(next); else await load(key, place, true); }, [go, load, key, place]);

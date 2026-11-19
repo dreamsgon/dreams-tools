@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, MessagesSquare, Users, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
+import { useCampaignOpened } from "@/lib/opened-campaign";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
 import { dashHeights, dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, missingHalf, moveWidget, resizeWidget, setHeight, toggleWidget, type Dashboard, type DashWidget, type Halves } from "@/lib/encyclopedia/dashboard";
 import { stateNames, questStates } from "@/lib/encyclopedia/quests";
@@ -56,6 +57,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const skinKey = hub?.row.encyclopedia ? `c-${hub.row.encyclopedia.id}` : null, themeDock = useThemeDock(skinKey, "dashboard");
   const skin = useCampaignSkin(skinKey, "dashboard", undefined, themeDock.editing);
   useDiceTarget(hub ? hubDiceTarget(hub.row) : NO_CAMPAIGN);
+  useCampaignOpened(hub?.row.key ?? null);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
   const [draft, setDraft] = useState<Dashboard | null>(null), [saveError, setSaveError] = useState("");
   const saves = useRef(0);

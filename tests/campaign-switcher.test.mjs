@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {pinsFromHome,pinPosition,isPinned,hasHalf,hubHref,rowDetail,matchesQuery,switcherItems,navigable,moveIndex,folderChain,isSwitcherShortcut} from '../lib/campaign-switcher.ts';
+import {pinsFromHome,openedFromHome,pinPosition,isPinned,hasHalf,hubHref,rowDetail,matchesQuery,switcherItems,navigable,moveIndex,folderChain,isSwitcherShortcut} from '../lib/campaign-switcher.ts';
 
 const book=(id,name,world,over={})=>({id,name,description:'',worldId:'w-'+world,worldName:world,archived:false,pages:3,characters:0,maptableCampaignId:null,lastEdited:null,maps:0,latest:[],...over});
 const row=(key,name,{e=null,m=null,folderId=null}={})=>({key,name,maptable:m,encyclopedia:e,folderId});
@@ -71,6 +71,14 @@ test('pinned, recent (up to 4, not pinned) and folders in the Campaigns page ord
   assert.equal(items.find(i=>i.type==='row'&&i.row.key==='e:d').pinned,true);
   const recent=items.slice(items.findIndex(i=>i.id==='h-recent')+1,items.findIndex(i=>i.id==='h-folders')).filter(i=>i.type==='row');
   assert.ok(recent.length<=4&&recent.every(i=>!i.pinned));
+});
+
+test('Recent lists the campaigns you opened last first; opened times come from the home layout',()=>{
+  const s=summary(), at='2026-11-19T12:00:00.000Z';
+  const recent=switcherItems(s,{opened:{'e:e':at}}).filter(i=>i.id.startsWith('r:'));
+  assert.equal(recent[0].row.key,'e:e');
+  assert.deepEqual(openedFromHome({layout:{opened:{'e:a':at,'m:b':7}}}),{'e:a':at});
+  for(const bad of [null,{},{layout:{}},{layout:{opened:[]}},{layout:{opened:{}}}])assert.equal(openedFromHome(bad),undefined);
 });
 
 test('without pins the Pinned section is left out; folders expand and nest',()=>{

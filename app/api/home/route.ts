@@ -31,7 +31,9 @@ export async function POST(request: Request) {
     const u = await user(request);
     const text = await request.text();
     if (text.length > 150_000) throw new Error("Request is too large.");
-    const layout = await homeAction(getBucket(), u.userId, JSON.parse(text) as HomeAction);
+    const body = JSON.parse(text) as HomeAction;
+    if (body?.action === "opened") delete body.at; // the server's clock says when, not the browser's
+    const layout = await homeAction(getBucket(), u.userId, body);
     return Response.json({ layout: forHomePage(layout) }, { headers: privateHeaders });
   } catch (e) { return failure(e); }
 }

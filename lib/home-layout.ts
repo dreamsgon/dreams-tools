@@ -18,7 +18,7 @@ export type HomeSize = typeof homeSizes[number];
 export const homeSpan: Record<HomeSize, number> = { s: 4, m: 8, l: 12 };
 
 export const homeInfo: Record<HomeWidget, { name: string; hint: string; size: HomeSize }> = {
-  continue: { name: "Continue where you left off", hint: "The campaign you worked on last", size: "l" },
+  continue: { name: "Continue where you left off", hint: "The campaign you opened last", size: "l" },
   attention: { name: "Needs your attention", hint: "Join requests and player activity", size: "s" },
   sessions: { name: "Upcoming sessions", hint: "Next session of every campaign", size: "s" },
   campaigns: { name: "Your campaigns", hint: "Recent or pinned, with counts", size: "l" },
@@ -59,6 +59,10 @@ export const homeLinkSchema = z.object({ label, url });
 export const homeTodoSchema = z.object({ id, text: z.string().trim().min(1).max(200), done: z.boolean(), campaignKey: campaignKey.optional() });
 
 export const MAX_CAMPAIGN_DASHBOARDS = 200;
+/** How many campaigns the layout remembers opening; older ones are dropped. */
+export const MAX_OPENED = 40;
+/** Opening the campaign that is already the newest is not saved again within this time, so page loads don't each write. */
+export const OPENED_REFRESH_MS = 10 * 60_000;
 export const homeLayoutSchema = z.object({
   widgets: z.array(z.object({ type: z.enum(homeWidgets), size: z.enum(homeSizes), h: heightSchema.optional() })).max(homeWidgets.length)
     .refine(w => new Set(w.map(x => x.type)).size === w.length, "Each section can only be on the page once"),
@@ -68,6 +72,9 @@ export const homeLayoutSchema = z.object({
   notes: z.string().max(8000).optional(),
   /** Campaign keys as the Campaigns page uses them: "e:<Encyclopedia campaign id>" or "m:<Maptable campaign id>". */
   pinnedCampaigns: z.array(campaignKey).max(100).optional(),
+  /** When you last opened each campaign (in the hub, Encyclopedia, Maptable or forum), keyed like pinnedCampaigns. Continue where you left off shows the newest. */
+  opened: z.record(campaignKey, z.string().datetime()).optional()
+    .refine(r => !r || Object.keys(r).length <= MAX_OPENED, "Too many opened campaigns."),
   /** Encyclopedia entry ids. */
   pinnedPages: z.array(z.string().min(1).max(100)).max(50).optional(),
   /** Dashboards of Maptable-only campaigns, which have no Encyclopedia campaign to keep one in. Keyed "m:<Maptable campaign id>". */
@@ -89,7 +96,7 @@ const presetWidgets: Record<HomePreset, string[]> = {
 };
 const presetOptions: Partial<Record<HomePreset, HomeOptions>> = { gm: { campaigns: { show: "recent", count: 8 }, recent: { count: 6 }, roll: { tables: true } } };
 
-type Kept = Pick<HomeLayout, "links" | "todo" | "notes" | "pinnedCampaigns" | "pinnedPages" | "campaignDashboards">;
+type Kept = Pick<HomeLayout, "links" | "todo" | "notes" | "pinnedCampaigns" | "pinnedPages" | "campaignDashboards" | "opened">;
 /** What a preset never replaces: the account's own things. */
 export function kept(l: Partial<HomeLayout> = {}): Kept {
   const out: Kept = {};
@@ -99,6 +106,7 @@ export function kept(l: Partial<HomeLayout> = {}): Kept {
   if (l.pinnedCampaigns) out.pinnedCampaigns = l.pinnedCampaigns;
   if (l.pinnedPages) out.pinnedPages = l.pinnedPages;
   if (l.campaignDashboards) out.campaignDashboards = l.campaignDashboards;
+  if (l.opened) out.opened = l.opened;
   return out;
 }
 
@@ -154,6 +162,14 @@ const withMember = (list: readonly string[] | undefined, value: string, on: bool
   return on ? [...(list ?? []), value] : (list ?? []).filter(x => x !== value);
 };
 
+/** The opened times with `key` opened at `at`: the newest MAX_OPENED kept. Unchanged (the same object) when `key` is already the newest and was noted within OPENED_REFRESH_MS. */
+export function withOpened(opened: Record<string, string> | undefined, key: string, at: string): Record<string, string> | undefined {
+  const entries = Object.entries(opened ?? {}), newest = entries.reduce<[string, string] | null>((a, e) => !a || e[1] > a[1] ? e : a, null);
+  if (newest?.[0] === key && Date.parse(at) - Date.parse(newest[1]) < OPENED_REFRESH_MS) return opened;
+  const kept = entries.filter(([k]) => k !== key).sort((a, b) => b[1].localeCompare(a[1])).slice(0, MAX_OPENED - 1);
+  return Object.fromEntries([[key, at], ...kept]);
+}
+
 /** Quick changes that touch one part of the layout, so two tabs editing different things don't overwrite each other. */
 export type HomeAction =
   | { action: "layout"; layout: HomeLayout }
@@ -162,6 +178,8 @@ export type HomeAction =
   | { action: "todo"; todo: HomeTodo[] }
   | { action: "notes"; notes: string }
   | { action: "links"; links: HomeLink[] }
+  /** Notes that you opened a campaign, by its key ("e:<id>" or "m:<id>"). `at` is set by the server. */
+  | { action: "opened"; key: string; at?: string }
   /** Saves (or, with null, clears) the dashboard of a Maptable-only campaign, by its key "m:<id>". */
   | { action: "campaignDashboard"; key: string; dashboard: Dashboard | null };
 
@@ -173,10 +191,16 @@ export function applyHomeAction(l: HomeLayout, body: HomeAction): HomeLayout {
     return parsed.data;
   };
   switch (body?.action) {
-    // A layout from the page never changes the campaign dashboards, which are saved on their own.
+    // A layout from the page never changes the campaign dashboards or opened times, which are saved on their own.
     case "layout": {
-      const { campaignDashboards: _ignored, ...next } = (body.layout ?? {}) as Partial<HomeLayout>;
-      return check(l.campaignDashboards ? { ...next, campaignDashboards: l.campaignDashboards } : next);
+      const { campaignDashboards: _ignored, opened: _opened, ...next } = (body.layout ?? {}) as Partial<HomeLayout>;
+      return check({ ...next, ...(l.campaignDashboards && { campaignDashboards: l.campaignDashboards }), ...(l.opened && { opened: l.opened }) });
+    }
+    case "opened": {
+      if (typeof body.key !== "string" || !/^[em]:.{1,118}$/.test(body.key)) throw new Error("Choose a campaign.");
+      const at = typeof body.at === "string" && !Number.isNaN(Date.parse(body.at)) ? new Date(body.at).toISOString() : new Date().toISOString();
+      const opened = withOpened(l.opened, body.key, at);
+      return opened === l.opened ? l : check({ ...l, opened });
     }
     case "pinCampaign": {
       if (typeof body.key !== "string") throw new Error("Choose a campaign.");

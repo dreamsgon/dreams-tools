@@ -24,6 +24,14 @@ export function pinsFromHome(body: unknown): string[] | null {
   return list.length ? list : null;
 }
 
+/** When each campaign was last opened, from the same GET /api/home body (`layout.opened`), or undefined. */
+export function openedFromHome(body: unknown): Record<string, string> | undefined {
+  const opened = (body as { layout?: { opened?: unknown } } | null | undefined)?.layout?.opened;
+  if (!opened || typeof opened !== "object" || Array.isArray(opened)) return undefined;
+  const out = Object.fromEntries(Object.entries(opened).filter((e): e is [string, string] => typeof e[1] === "string"));
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Where a row sits in the pin list (its first matching pin), or -1 when it is not pinned. A pin names the row key, `m:<maptable id>` or `e:<encyclopedia id>`. */
 export function pinPosition(row: CampaignRow, pins: readonly string[] | null | undefined): number {
   if (!pins?.length) return -1;
@@ -63,6 +71,8 @@ export type SwitcherOptions = {
   query?: string;
   /** Pinned campaign keys, or null when the pins could not be read (the Pinned section is then left out). */
   pins?: readonly string[] | null;
+  /** When each campaign was last opened (the home layout's `opened`), which orders Recent. */
+  opened?: Record<string, string>;
   /** Folder ids that are expanded. */
   expanded?: ReadonlySet<string>;
   recentLimit?: number;
@@ -74,7 +84,7 @@ export type SwitcherOptions = {
  * the same order, then campaigns that sit in no folder. Archived campaigns stay out of the groups, as on the Campaigns page.
  */
 export function switcherItems(summary: CampaignSummary, options: SwitcherOptions = {}): SwitcherItem[] {
-  const { query = "", pins = null, expanded = new Set<string>(), recentLimit = RECENT_LIMIT } = options;
+  const { query = "", pins = null, opened, expanded = new Set<string>(), recentLimit = RECENT_LIMIT } = options;
   const flag = (row: CampaignRow) => isPinned(row, pins);
   if (query.trim()) {
     const hits = summary.rows.filter(r => matchesQuery(r, query));
@@ -85,7 +95,7 @@ export function switcherItems(summary: CampaignSummary, options: SwitcherOptions
   const out: SwitcherItem[] = [];
   const pinned = live.map(row => ({ row, at: pinPosition(row, pins) })).filter(x => x.at >= 0).sort((a, b) => a.at - b.at).map(x => x.row);
   if (pinned.length) out.push({ type: "heading", id: "h-pinned", label: "Pinned", icon: "star" }, ...pinned.map((row): SwitcherItem => ({ type: "row", id: `p:${row.key}`, row, depth: 0, pinned: true })));
-  const recent = homeCampaigns({ ...summary, rows: live }).filter(r => !flag(r)).slice(0, Math.max(0, recentLimit));
+  const recent = homeCampaigns({ ...summary, rows: live }, opened).filter(r => !flag(r)).slice(0, Math.max(0, recentLimit));
   if (recent.length) out.push({ type: "heading", id: "h-recent", label: "Recent" }, ...recent.map((row): SwitcherItem => ({ type: "row", id: `r:${row.key}`, row, depth: 0, pinned: false })));
   const collapsed = new Set(summary.folders.map(f => f.id).filter(id => !expanded.has(id)));
   const layout = campaignLayout(summary.folders, live, collapsed);

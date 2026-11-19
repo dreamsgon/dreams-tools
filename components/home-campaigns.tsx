@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Bell, CalendarDays, Check, ChevronRight, Dices, FileText, Flag, Folder, GripVertical, LayoutGrid, Link2, ListChecks, Map as MapIcon, MessagesSquare, PenLine, Pin, Plus, Settings, SlidersHorizontal, Star, X, Goal } from "lucide-react";
-import { folderChoices, homeCampaigns, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
+import { folderChoices, homeCampaigns, lastOpened, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
 import {
   applyHomeAction, campaignShowNames, campaignShows, hasWidget, homeHeights, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, setWidgetHeight, toggleWidget,
   type HomeAction, type HomeHeight, type HomeLayout, type HomePreset, type HomeSize, type HomeWidget,
@@ -28,7 +28,7 @@ const noop: Act = () => {};
 /** The campaigns the Your campaigns section shows, by its settings. */
 function campaignChoice(summary: CampaignSummary, layout: HomeLayout) {
   const o = layout.options?.campaigns, show = o?.show ?? "recent", count = o?.count ?? 8, pins = layout.pinnedCampaigns;
-  const all = homeCampaigns(summary), lead = hasWidget(layout, "continue") ? all[0] : undefined, pinned = (r: CampaignRow) => isPinnedCampaign(pins, r);
+  const all = homeCampaigns(summary, layout.opened), lead = hasWidget(layout, "continue") ? all[0] : undefined, pinned = (r: CampaignRow) => isPinnedCampaign(pins, r);
   let list: CampaignRow[], title = "Your campaigns";
   if (show === "pinned") { list = all.filter(pinned); title = "Pinned campaigns"; }
   else if (show === "pinfirst") list = [...all.filter(pinned), ...all.filter(r => !pinned(r) && r !== lead)];
@@ -105,7 +105,7 @@ function Panel({ type, size, h, children, className, ...rest }: { type: HomeWidg
 function Section({ type, size, h, layout, data, act }: { type: HomeWidget; size: HomeSize; h: number; layout: HomeLayout; data: HomeData; act: Act }) {
   const part = { layout, data, act, h };
   switch (type) {
-    case "continue": return <Continue summary={data.summary} />;
+    case "continue": return <Continue summary={data.summary} opened={layout.opened} />;
     case "campaigns": return <Campaigns {...part} />;
     case "recent": return <Recent {...part} />;
     case "attention": return <Attention {...part} />;
@@ -120,11 +120,11 @@ function Section({ type, size, h, layout, data, act }: { type: HomeWidget; size:
   }
 }
 
-function Continue({ summary }: { summary?: CampaignSummary }) {
-  const row = summary ? homeCampaigns(summary)[0] : undefined;
+function Continue({ summary, opened }: { summary?: CampaignSummary; opened?: Record<string, string> }) {
+  const row = summary ? homeCampaigns(summary, opened)[0] : undefined;
   if (!row) return <section className="home-continue"><div className="home-continue-main"><h2>Continue where you left off</h2><p className="home-continue-text">You have no campaigns yet.</p>
     <div className="home-continue-actions"><Link className="home-button home-button-primary" href="/campaigns?new=1"><Plus size={15} aria-hidden="true" />New campaign</Link></div></div></section>;
-  return <ContinueCard row={row} />;
+  return <ContinueCard row={row} opened={lastOpened(row, opened)} />;
 }
 
 function Campaigns({ layout, data, act }: { layout: HomeLayout; data: HomeData; act: Act }) {
@@ -160,13 +160,16 @@ function Recent({ layout, data }: { layout: HomeLayout; data: HomeData }) {
   </div>;
 }
 
-/** The campaign you worked on last, with the pages you changed in it. */
-function ContinueCard({ row }: { row: CampaignRow }) {
+const continueLabel = (opened: string | null, edited: string | null) =>
+  opened ? `Continue where you left off · opened ${when(opened).toLowerCase()}` : edited ? `Continue where you left off · edited ${when(edited).toLowerCase()}` : "Continue where you left off";
+
+/** The campaign you opened last (or, before any was opened, edited last), with the pages changed in it. */
+function ContinueCard({ row, opened }: { row: CampaignRow; opened: string | null }) {
   const e = row.encyclopedia, notes = notesHref(row), maps = mapsHref(row), forum = forumHref(row);
   const latest = e?.latest ?? [];
   return <section className="home-continue" aria-labelledby="home-continue-title">
     <div className="home-continue-main">
-      <p className="home-continue-label">{e?.lastEdited ? `Continue where you left off · edited ${when(e.lastEdited).toLowerCase()}` : "Continue where you left off"}</p>
+      <p className="home-continue-label">{continueLabel(opened, e?.lastEdited ?? null)}</p>
       <h2 id="home-continue-title"><Link href={openHref(row)}>{row.name}</Link></h2>
       {e?.description && <p className="home-continue-text">{e.description}</p>}
       <p className="home-continue-facts">{[e?.worldName, ...facts(row).map(([n, l]) => `${n} ${l}`)].filter(Boolean).join(" · ")}</p>

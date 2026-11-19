@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Check, ChevronDown, ChevronRight, Folder, Globe, LayoutGrid, Plus, Search, Star } from "lucide-react";
 import type { CampaignRow, CampaignSummary } from "@/lib/campaign-links";
-import { folderChain, hasHalf, hubHref, isSwitcherShortcut, moveIndex, navigable, pinsFromHome, rowDetail, switcherItems, type SwitcherTool } from "@/lib/campaign-switcher";
+import { folderChain, hasHalf, hubHref, isSwitcherShortcut, moveIndex, navigable, openedFromHome, pinsFromHome, rowDetail, switcherItems, type SwitcherTool } from "@/lib/campaign-switcher";
 import "./campaign-switcher.css";
 
 /** Ctrl/Cmd+Shift+O opens the switcher anywhere in a tool. The tool decides what "open" needs (a visible sidebar, no dialog on top). */
@@ -43,7 +43,7 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
   const wrap = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLInputElement>(null), seeded = useRef(false);
   const current = useRef(isCurrent);
   useEffect(() => { current.current = isCurrent; });
-  const [summary, setSummary] = useState<CampaignSummary | null>(null), [pins, setPins] = useState<string[] | null>(null), [failed, setFailed] = useState(false);
+  const [summary, setSummary] = useState<CampaignSummary | null>(null), [pins, setPins] = useState<string[] | null>(null), [opened, setOpened] = useState<Record<string, string> | undefined>(), [failed, setFailed] = useState(false);
   const [query, setQuery] = useState(""), [activeId, setActiveId] = useState<string | null>(null), [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [mac, setMac] = useState(false), [tries, setTries] = useState(0);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- read after mount so the server and first client render agree
@@ -61,9 +61,9 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
       .then(r => r.ok ? r.json() as Promise<CampaignSummary> : Promise.reject(new Error(String(r.status))))
       .then(setSummary, () => { if (!ctl.signal.aborted) setFailed(true); });
     // Pins belong to the home page's layout. Not there yet, or failing, just means no Pinned section.
-    fetch("/api/home", { cache: "no-store", signal: ctl.signal })
-      .then(r => r.ok ? r.json() : null).then(pinsFromHome, () => null)
-      .then(p => { if (!ctl.signal.aborted) setPins(p); });
+    fetch("/api/home?layout=1", { cache: "no-store", signal: ctl.signal })
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+      .then(body => { if (!ctl.signal.aborted) { setPins(pinsFromHome(body)); setOpened(openedFromHome(body)); } });
     return () => ctl.abort();
   }, [open, tries]);
   // The folder holding the open campaign starts expanded; the rest start closed.
@@ -82,7 +82,7 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
     return () => document.removeEventListener("pointerdown", down, true);
   }, [open, onOpenChange]);
 
-  const items = useMemo(() => summary ? switcherItems(summary, { query, pins, expanded }) : [], [summary, query, pins, expanded]);
+  const items = useMemo(() => summary ? switcherItems(summary, { query, pins, opened, expanded }) : [], [summary, query, pins, opened, expanded]);
   const nav = useMemo(() => navigable(items), [items]);
   const found = nav.findIndex(i => items[i].id === activeId);
   // With a search typed, Enter picks the first match until the arrows say otherwise.
