@@ -1,5 +1,5 @@
 /*
- * HTML in forum posts, for boards whose permissions let a group use it ([html]…[/html] in a post). Nothing typed is
+ * HTML in forum posts, for boards whose permissions let a group use it ([dohtml]…[/dohtml], or [html]…[/html], in a post). Nothing typed is
  * ever put into the page as HTML: `htmlNodes` reads the text into a small tree of allowed tags, attributes and
  * styles, and the forum builds elements from that tree (forum-parts.tsx) or writes it out escaped (forum-export.ts).
  * Scripts, event handlers, frames, forms, outside pictures and positioning are dropped; links must be https, and
