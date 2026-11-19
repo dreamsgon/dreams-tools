@@ -15,7 +15,7 @@ import TokenFace from "./token-face";
 import { ArmedPlacement } from "./token-placement";
 import TokenOptions from "./token-options";
 import SaveGalleryStats from "./save-gallery-stats";
-import {syncConditionRounds,conditionAge,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
+import {syncConditionRounds,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
 import type { SuggestedMove } from "./encyclopedia/ai-activity";
 import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
@@ -34,7 +34,6 @@ import {
   Layers,
   Plus,
   Upload,
-  Settings2,
   Share2,
   MousePointer2,
   Scan,
@@ -45,7 +44,6 @@ import {
   Undo2,
   Redo2,
   Circle,
-  Square,
   X,
   ChevronRight,
   ChevronLeft,
@@ -230,7 +228,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const [unsaved, setUnsaved] = useState(0), [lastSaved, setLastSaved] = useState<Date | null>(null);
   const history = useRef<Workspace[]>([]),
     future = useRef<Workspace[]>([]),
-    [historyVersion, setHistoryVersion] = useState(0);
+    [, setHistoryVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>("scenes"),
     [dialog, setDialog] = useState<Dialog>(null),
     [newMapType,setNewMapType] = useState<Scene["mapType"]>("encounter"),
@@ -1188,7 +1186,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         )}
       </main>
     );
-  const visibleLibrary = workspace.tokenLibrary.filter((t) => !workspace.libraryCampaigns[t.id] || workspace.libraryCampaigns[t.id] === campaignId);
   const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null).length : 0;
   /** A campaign's dashboard is its home page: Maptable's way back out goes there (saving first). Co-GMs and maps not in a campaign go to the Campaigns page. */
   const dashboardHref = (id: string | null) => member ? "/campaigns" : maptableHubHref(id);

@@ -23,7 +23,6 @@ import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } 
 import { WHEEL_IDLE_MS, accumulateWheel, wheelAmount, wheelResizeEffect, wheelResizeToken } from "@/lib/wheel-resize";
 import { effectContains, effectHandles, effectPolygon, resolveEffect } from "@/lib/effects";
 import {
-  address,
   sceneRenderBounds,
   mapCrop,
   pathDistance,

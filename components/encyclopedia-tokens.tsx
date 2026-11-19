@@ -4,7 +4,6 @@ import Link from "next/link";
 import {Plus,Search} from "lucide-react";
 import TokenFace from "./token-face";
 import {TokenTile,usePlacementGesture} from "./token-placement";
-import {tokenSideLook} from "@/lib/token-defaults";
 import {newToken,type Workspace} from "@/lib/model";
 import {tokenInitials} from "@/lib/token-initials";
 import {roleSide} from "@/lib/token-gallery";
