@@ -135,11 +135,11 @@ const FRAME = `border: 1.5px solid var(--ip-frame); border-radius: 0; background
 const FRAME_ON = `background: ${CURLS}, var(--ip-band), var(--ip-paper);`;
 /** Headings and names: the game's hand. Small labels are the same hand, small, never capitals. */
 const HEAD = "font-family: var(--font-display); font-weight: 400; letter-spacing: .01em; text-transform: none;";
-const SMALL = "font-family: var(--font-ui); font-weight: 400; letter-spacing: .02em; text-transform: none;";
+const SMALL = "font-family: var(--font-sans); font-weight: 400; letter-spacing: .02em; text-transform: none;";
 /** Buttons: the main ones are worn brown leather with parchment lettering, the others an ink line on the page. */
-const LEATHER = "border: 1px solid #24150a; border-radius: 3px; background: linear-gradient(180deg, #74502a, #50331a 55%, #3a230f); color: #f3e3b8; box-shadow: inset 0 1px 0 rgba(255, 225, 170, .3); font-family: var(--font-ui); font-weight: 400; letter-spacing: .02em; text-transform: none;";
+const LEATHER = "border: 1px solid #24150a; border-radius: 3px; background: linear-gradient(180deg, #74502a, #50331a 55%, #3a230f); color: #f3e3b8; box-shadow: inset 0 1px 0 rgba(255, 225, 170, .3); font-family: var(--font-sans); font-weight: 400; letter-spacing: .02em; text-transform: none;";
 const LEATHER_ON = "background: linear-gradient(180deg, #84602f, #5c3c1f 55%, #452a12); color: #fff3d0;";
-const INK_BTN = "border: 1px solid var(--ip-frame); border-radius: 3px; background: transparent; color: var(--ink); box-shadow: none; font-family: var(--font-ui); font-weight: 400; letter-spacing: .02em; text-transform: none;";
+const INK_BTN = "border: 1px solid var(--ip-frame); border-radius: 3px; background: transparent; color: var(--ink); box-shadow: none; font-family: var(--font-sans); font-weight: 400; letter-spacing: .02em; text-transform: none;";
 const INK_ON = "border-color: var(--accent); background: var(--ip-band); color: var(--ink);";
 /** The red marker that leads to a quest: a small triangle, point down. */
 const MARKER = "conic-gradient(from -30deg at 50% 100%, var(--ip-marker) 0 60deg, transparent 60.5deg)";
@@ -150,7 +150,7 @@ ${h}::after { content: ""; flex: 1; min-width: 24px; height: 1px; background: va
 /** The title on the map: the journal's red-brown ink. */
 const TITLE = `display: block; width: fit-content; max-width: 100%; overflow-wrap: break-word; ${HEAD} color: var(--ip-map-title); text-shadow: 0 1px 0 var(--ip-map-lift);`;
 /** Small round portraits: bronze medallions. */
-const MEDAL = "border-radius: 50%; border: 2px solid var(--ip-frame); background: radial-gradient(circle at 35% 30%, #f3e6c2, #d9c592 60%, #b89e62); color: #33240f; font-family: var(--font-ui); font-weight: 400; box-shadow: none;";
+const MEDAL = "border-radius: 50%; border: 2px solid var(--ip-frame); background: radial-gradient(circle at 35% 30%, #f3e6c2, #d9c592 60%, #b89e62); color: #33240f; font-family: var(--font-sans); font-weight: 400; box-shadow: none;";
 
 /** The cover for the other parts: the map behind the host's own content. */
 function cover(host: string, name: string) {
@@ -280,7 +280,7 @@ input[type="range"] { accent-color: var(--ip-marker); }
 .organizer-scene { border-radius: 0; white-space: normal; }
 .organizer-scene:hover { background: var(--ip-band); }
 .organizer-scene.active { background: var(--ip-band); }
-.organizer-scene strong { font: 400 16.5px/1.25 var(--font-ui); }
+.organizer-scene strong { font: 400 16.5px/1.25 var(--font-sans); }
 .organizer-scene.active strong { color: var(--accent); }
 @media (max-width: 1000px) {
   .rail { border-right: 0; border-top: 1.5px solid var(--ip-frame); }
@@ -291,7 +291,7 @@ input[type="range"] { accent-color: var(--ip-marker); }
 .map-topbar { border-bottom: 1.5px solid var(--ip-frame); background: var(--ip-paper); }
 .map-title, .board-info { ${SMALL} font-size: 14px; color: var(--muted); }
 .toolbar { border-radius: 3px; border: 1.5px solid var(--ip-frame); background: var(--ip-paper); box-shadow: none; }
-.toolbar button { border-radius: 3px; font: 400 14px var(--font-ui); }
+.toolbar button { border-radius: 3px; font: 400 14px var(--font-sans); }
 .toolbar button:hover { color: var(--accent); }
 .toolbar button.active { background: var(--ip-band); color: var(--accent); }
 
@@ -306,14 +306,14 @@ ${cover(".campaign-scenes-head", "ip-map")}
 .dashboard-continue:hover { ${FRAME} ${FRAME_ON} padding: 18px 24px; }
 .dashboard-continue small { ${SMALL} font-size: 14px; color: var(--accent); }
 .dashboard-continue strong { ${HEAD} font-size: 25px; }
-.campaign-scenes-kinds button { border-radius: 3px; font: 400 14px var(--font-ui); }
+.campaign-scenes-kinds button { border-radius: 3px; font: 400 14px var(--font-sans); }
 .campaign-scenes-group h2 { ${HEAD} font-size: 23px; color: var(--ip-heading); }
 ${ruled(".campaign-scenes-group h2")}
 .campaign-scenes-group h2 span { ${SMALL} font-size: 13.5px; }
 .campaign-scene-card { border: 1.5px solid var(--ip-frame); border-radius: 0; background: var(--ip-paper); box-shadow: none; overflow: hidden; }
 .campaign-scene-card:hover, .campaign-scene-card:focus-visible { background: var(--ip-band), var(--ip-paper); }
 .campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); }
-.campaign-scene-card strong { font: 400 17px/1.25 var(--font-ui); }
+.campaign-scene-card strong { font: 400 17px/1.25 var(--font-sans); }
 .campaign-scene-card em { ${SMALL} font-style: normal; font-size: 13px; color: var(--accent); }
 
 @media (max-width: 1100px) {
@@ -451,7 +451,7 @@ ${ruled(".category-title")}
 .forum-place a { color: var(--accent); }
 .forum-counts b { ${HEAD} font-size: 20px; color: var(--ink); }
 .last-label { ${SMALL} font-size: 13px; color: var(--accent); }
-.forum-last a, .foot-list a { color: var(--ink); font: 400 17px/1.3 var(--font-ui); }
+.forum-last a, .foot-list a { color: var(--ink); font: 400 15.5px/1.3 var(--font-sans); }
 .forum-last a:hover, .foot-list a:hover { color: var(--accent); }
 .topic-title { ${HEAD} font-size: 21px; line-height: 1.25; }
 .topic-main small { font-style: normal; }

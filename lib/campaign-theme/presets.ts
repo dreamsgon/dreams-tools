@@ -20,6 +20,7 @@ import { TWO_BANNERS } from "./skins/two-banners.ts";
 import { INQUISITORS_TAROT } from "./skins/inquisitors-tarot.ts";
 import { LANCE_AND_MOONS } from "./skins/lance-and-moons.ts";
 import { IMPERIAL_PROVINCE } from "./skins/imperial-province.ts";
+import { GALACTIC_CRAWL } from "./skins/galactic-crawl.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -104,35 +105,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Animorphs", theme: MORPH_SKIN },
 
-  skin("crawl", "Galactic Crawl", "Star Wars", 0, { display: "jost", reading: "source", ui: "inter" },
-    set("#ece6d8", "#f8f4ea", "#efe8d8", "#cdc2a8", "#1b1a17", "#5c5648", "#a04a00", "#0b5fa5"),
-    set("#000000", "#0a0c10", "#12151b", "#262b36", "#e8eaf0", "#98a0b0", "#ffd83d", "#4fc3ff"), `
-/* Deep space: a field of stars, a hollow yellow title and words that lean away into the distance. */
-.board-head:not(.has-art) {
-  background:
-    radial-gradient(1.5px 1.5px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 28% 64%, #fff, transparent),
-    radial-gradient(1.5px 1.5px at 41% 14%, #cfe6ff, transparent), radial-gradient(1px 1px at 57% 48%, #fff, transparent),
-    radial-gradient(1.5px 1.5px at 69% 20%, #fff, transparent), radial-gradient(1px 1px at 83% 58%, #ffe9b0, transparent),
-    radial-gradient(1px 1px at 92% 12%, #fff, transparent), radial-gradient(1px 1px at 7% 78%, #fff, transparent),
-    radial-gradient(1px 1px at 48% 82%, #fff, transparent), radial-gradient(1.5px 1.5px at 76% 86%, #cfe6ff, transparent), #000;
-  --head-ink: #ffd83d; --head-title: transparent; --head-nav: transparent; --head-line: #262b36; --head-shadow: none;
-}
-.board-head { border-color: #262b36; }
-.board-title { font-weight: 700; letter-spacing: .06em; font-size: 64px; line-height: .95; }
-.board-title a { -webkit-text-stroke: 2px #ffd83d; }
-.board-tagline { font-style: normal; font-family: var(--font-display); font-weight: 500; text-transform: uppercase; letter-spacing: .2em; font-size: 17px; transform: perspective(240px) rotateX(24deg); transform-origin: 50% 100%; }
-.board-nav a { color: #4fc3ff; letter-spacing: .3em; font-weight: 500; }
-.board-nav a:hover { color: #ffffff; border-bottom-color: #4fc3ff; }
-.category-title { letter-spacing: .34em; font-weight: 500; }
-.category-title::before { content: ""; width: 34px; height: 2px; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
-.forum, .topic-row, .post, .topic-head { border-color: var(--line); }
-:root[data-theme="dark"] .forum:hover, :root[data-theme="dark"] .topic-row:hover { border-color: var(--accent-2); box-shadow: 0 0 14px color-mix(in srgb, var(--accent-2) 35%, transparent); }
-.forum-name, .topic-title, .topic-name, .post-name { text-transform: uppercase; letter-spacing: .16em; font-weight: 500; }
-.post { border-left: 2px solid var(--accent-2); }
-:root[data-theme="dark"] .post { box-shadow: -6px 0 16px -8px var(--accent-2); }
-.post-band { background: none; }
-.f-btn { text-transform: uppercase; letter-spacing: .2em; font-family: var(--font-display); font-weight: 500; }
-`),
+  { inspired: "Star Wars", theme: GALACTIC_CRAWL },
 
   skin("nile", "Nile Kingdom", "Ancient Egypt", 0, { display: "marcellus", reading: "spectral", ui: "inter" },
     set("#ead9b0", "#f6ead0", "#eedfbb", "#c9ae74", "#2b1d0e", "#665235", "#1d4f9c", "#0b6b62"),

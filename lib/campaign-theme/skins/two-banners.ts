@@ -139,7 +139,7 @@ const FRAME = `border: 2px solid transparent; border-image: var(--tb-trim) 1; bo
 const FRAME_ON = `background: ${STUDS}, linear-gradient(color-mix(in srgb, var(--tb-gold) 7%, transparent), color-mix(in srgb, var(--tb-gold) 7%, transparent)), var(--tb-panel);`;
 /** Text type. */
 const TITLE_TYPE = "font-family: var(--font-display); font-weight: 400; letter-spacing: .01em;";
-const SMALL = "font-family: var(--font-ui); font-weight: 600; text-transform: uppercase; letter-spacing: .06em;";
+const SMALL = "font-family: var(--font-sans); font-weight: 600; text-transform: uppercase; letter-spacing: .06em;";
 /** The game's red buttons: deep red with a light top edge, a thin gold ring and gold lettering. */
 const RED_BTN = "border: 1px solid #2a0805; border-radius: 4px; background: linear-gradient(180deg, #c42d22 0%, #8f1b14 52%, #6a110c 100%); color: #ffd100; box-shadow: inset 0 1px 0 rgba(255, 220, 150, .45), inset 0 -1px 0 rgba(0, 0, 0, .4), 0 0 0 1px rgba(212, 168, 38, .7); font-family: var(--font-reading); font-weight: 700; text-shadow: 0 1px 0 #000;";
 const RED_ON = "background: linear-gradient(180deg, #d4392d 0%, #a0221a 52%, #771510 100%); color: #ffe066;";
@@ -514,7 +514,7 @@ ${ruled(".category-title")}
 .post.fresh { box-shadow: inset 0 0 0 1px var(--tb-gold), var(--tb-shadow); }
 .post-band, .post.flip .post-band { padding: 12px 22px 10px; border-bottom: 2px solid transparent; border-image: var(--tb-trim) 1; background: var(--tb-band); }
 .post-name { ${TITLE_TYPE} font-size: 24px; line-height: 1.1; color: var(--tb-name); }
-.post-meta { font: 500 13px var(--font-ui); }
+.post-meta { font: 500 13px var(--font-sans); }
 .post-meta a { color: var(--muted); }
 /* The GM's posts read like a quest giver's words: parchment by day and by night. */
 .post.post-gm { background: ${STUDS}, radial-gradient(ellipse at 50% 35%, #fbf3dc 50%, #ecdcb0 100%); color: #2b1a08; }
@@ -552,7 +552,7 @@ ${ruled(".category-title")}
 .mini-card > .mini-link { align-self: flex-start; margin-top: auto; padding: 6px 14px; ${RED_BTN} color: #ffd100 !important; font-size: 13px; text-decoration: none; }
 .mini-link:hover { ${RED_ON} }
 .mini-card > :nth-last-child(2) { margin-bottom: 12px; }
-.mini-player { font: 500 12.5px/1.6 var(--font-ui); }
+.mini-player { font: 500 12.5px/1.6 var(--font-sans); }
 .mini-player b { color: var(--tb-heading); }
 .post-text { font: 400 17.5px/1.65 var(--font-reading); }
 .post-text blockquote { border-left: 3px solid var(--tb-gold); background: color-mix(in srgb, var(--tb-gold) 8%, transparent); }
@@ -561,7 +561,7 @@ ${ruled(".category-title")}
 .roll-card { border-radius: 2px; border: 1px solid var(--line); border-left: 3px solid var(--tb-gold); }
 .roll-total { border-radius: 3px; border: 1px solid #000; background: linear-gradient(180deg, #2c2f3a, #181a21); color: #ffd100; font: 700 16px/26px var(--font-reading); box-shadow: inset 0 0 0 1px var(--tb-gold); }
 .post-actions { border-top: 1px solid var(--line); }
-.post-actions button { font: 600 13px var(--font-ui); }
+.post-actions button { font: 600 13px var(--font-sans); }
 .post-actions button:hover { color: var(--tb-heading); }
 
 /* Buttons and boxes to type in. */
