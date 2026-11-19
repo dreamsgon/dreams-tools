@@ -19,6 +19,7 @@ import { MORPH_SKIN } from "./skins/morph.ts";
 import { TWO_BANNERS } from "./skins/two-banners.ts";
 import { INQUISITORS_TAROT } from "./skins/inquisitors-tarot.ts";
 import { LANCE_AND_MOONS } from "./skins/lance-and-moons.ts";
+import { IMPERIAL_PROVINCE } from "./skins/imperial-province.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -30,24 +31,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
   /* Fully custom skins, each with its own stylesheet for every part of the campaign (skins/). */
   { inspired: "Baldur’s Gate 3 and D&D rulebooks", theme: SWORD_COAST },
 
-  skin("imperial", "Imperial Province", "The Elder Scrolls IV: Oblivion", 0, { display: "uncial", reading: "fell", ui: "inter" },
-    set("#d9c9a3", "#eadbb8", "#e0cfa8", "#b39a68", "#33240f", "#5f4b2c", "#7a2e12", "#3d5a2a"),
-    set("#1a140c", "#251c11", "#2e2315", "#4f3d22", "#e8d9b5", "#b09c74", "#d9a24a", "#9cb86a"), `
-/* Worn parchment: soft burnt edges, ruled headings and a journal's hand. */
-.board-head:not(.has-art) {
-  background: radial-gradient(ellipse at 50% 40%, transparent 40%, color-mix(in srgb, var(--ink) 28%, transparent) 130%), var(--raised);
-}
-.board-title { text-transform: none; letter-spacing: .02em; font-weight: 400; }
-.forum, .topic-row, .post, .topic-head, .board-foot {
-  border-color: var(--line-strong);
-  box-shadow: inset 0 0 28px color-mix(in srgb, var(--accent) 12%, transparent), 0 1px 0 color-mix(in srgb, var(--ink) 18%, transparent);
-}
-.category-title { text-transform: none; letter-spacing: .03em; font-size: 19px; padding-bottom: 5px; border-bottom: 2px solid var(--line-strong); box-shadow: 0 3px 0 -2px var(--line-strong); }
-.forum-name, .topic-title, .post-name, .topic-name { text-transform: none; letter-spacing: .02em; font-weight: 400; }
-.post-text > p:first-child::first-letter { font-family: var(--font-display); font-size: 2.1em; line-height: .9; color: var(--accent); padding-right: 3px; }
-.post-band { background: none; border-bottom: 1px solid var(--line-strong); }
-.f-btn { border-radius: 0; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--on-accent) 25%, transparent); }
-`),
+  { inspired: "The Elder Scrolls IV: Oblivion", theme: IMPERIAL_PROVINCE },
 
   { inspired: "The Elder Scrolls V: Skyrim", theme: NORTHERN_HOLD },
 
