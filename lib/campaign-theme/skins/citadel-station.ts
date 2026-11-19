@@ -116,7 +116,7 @@ body { ${PAGE} scrollbar-color: var(--accent-2) var(--panel); }
 /* Buttons and boxes to type in. */
 .button { border-radius: 0; font: 600 14px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
 .button.primary { border-color: var(--accent); ${CUT_BUTTON} transition: filter .15s; }
-.button.primary:hover { filter: brightness(1.12); }
+.button.primary:hover { filter: brightness(1.08); }
 .button:not(.primary) { border-color: var(--cs-wire); }
 .button:not(.primary):hover { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 14%, transparent); color: var(--ink); }
 .icon-button { border-radius: 0; }
@@ -142,7 +142,7 @@ ${orbit(".dashboard-intro", { cap: 84, chart: 460 })}
 
 /* Cards: a blue bar that turns orange under the pointer. */
 .note-card { padding: 18px 18px 16px 20px; border: 0; border-left: 3px solid var(--accent-2); background: linear-gradient(100deg, color-mix(in srgb, var(--accent-2) 10%, var(--panel)), var(--panel) 48%); ${NOTCH} transition: border-color .15s, background .15s; }
-.note-card:hover { border-left-color: var(--accent); background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel) 62%); }
+.note-card:hover { border-left-color: var(--accent); background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 62%); }
 .note-card h3 { font-family: var(--font-display); font-size: 21px; letter-spacing: .1em; text-transform: uppercase; }
 .note-card:hover h3 { color: var(--accent); }
 .note-card .eyebrow, .card-footer { color: var(--accent-2); }
@@ -189,7 +189,7 @@ body { ${PAGE} scrollbar-color: var(--accent-2) var(--panel); }
 
 /* Buttons and boxes to type in. */
 button.primary, .primary { border-radius: 0; font: 600 14px var(--font-display); letter-spacing: .14em; text-transform: uppercase; ${CUT_BUTTON} transition: filter .15s; }
-.primary:hover { filter: brightness(1.12); }
+.primary:hover { filter: brightness(1.08); }
 .icon-button { border-radius: 0; }
 .icon-button:hover { color: var(--accent); }
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { border-radius: 0; caret-color: var(--accent); }
@@ -240,7 +240,7 @@ ${orbit(".campaign-scenes-head", { cap: 66, chart: 400 })}
 .campaign-scene-card { border-radius: 0; border-color: var(--cs-wire); transition: border-color .15s, box-shadow .15s, transform .15s; }
 .campaign-scene-card.last { border-color: var(--accent-2); }
 /* Hover: the card comes forward and its top edge lights orange. */
-.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent); background: var(--panel); transform: translateY(-3px); box-shadow: 0 -2px 0 var(--accent), 0 18px 30px -18px var(--accent-2), var(--cs-glow); }
+.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent); background: var(--panel); transform: translateY(-2px); box-shadow: 0 -2px 0 var(--accent), 0 12px 22px -18px rgba(0, 0, 0, .55); }
 .campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); }
 .campaign-scene-card strong { flex-wrap: wrap; gap: 2px 8px; font-family: var(--font-display); font-size: 16.5px; letter-spacing: .08em; text-transform: uppercase; }
 .campaign-scene-card em { font: 600 11px var(--font-display); letter-spacing: .16em; color: var(--accent-2); }
@@ -279,7 +279,7 @@ ${orbit(".hub-head", { cap: 92, chart: 480 })}
 /* Buttons. */
 .hub-button { border-radius: 0; font: 600 14px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
 .hub-button-primary { ${CUT_BUTTON} box-shadow: none; transition: filter .15s; }
-.hub-button-primary:hover { filter: brightness(1.12); }
+.hub-button-primary:hover { filter: brightness(1.08); }
 .hub-button:not(.hub-button-primary):hover { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 16%, var(--panel)); color: var(--ink); }
 
 /* Dashboard, Front page and Members. */
@@ -372,7 +372,7 @@ ${KEYFRAMES}
   ${NOTCH}
   transition: border-color .15s, background .15s;
 }
-.forum:hover, .topic-row:hover { border-left-color: var(--accent); background: linear-gradient(90deg, var(--accent), transparent 70%) top / 100% 1px no-repeat, linear-gradient(100deg, color-mix(in srgb, var(--accent) 15%, var(--panel)), var(--panel) 60%); }
+.forum:hover, .topic-row:hover { border-left-color: var(--accent); background: linear-gradient(90deg, var(--accent), transparent 70%) top / 100% 1px no-repeat, linear-gradient(100deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 60%); }
 .topic-row.pinned { border-left: 3px solid var(--accent); }
 .forum-name { font-size: 22px; letter-spacing: .12em; text-transform: uppercase; }
 .forum-name a:hover, .topic-title a:hover { color: var(--accent); }
@@ -459,7 +459,7 @@ ${KEYFRAMES}
 /* Buttons and boxes to type in. */
 .f-btn { border-radius: 0; font: 600 14px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
 .f-btn:not(.ghost) { border-color: var(--accent); background: var(--accent); ${CUT_BUTTON} transition: filter .15s; }
-.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.12); }
+.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.08); }
 .f-btn.ghost { border-color: var(--cs-wire); }
 .f-btn.ghost:hover:not(:disabled) { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 14%, transparent); color: var(--ink) !important; }
 .f-btn.small { font-size: 12.5px; }

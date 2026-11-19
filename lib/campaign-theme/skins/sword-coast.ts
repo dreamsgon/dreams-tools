@@ -80,7 +80,7 @@ const VARS = `:root {
   --sc-arcane: #b48cf0;
   --sc-on-arcane: #1a1024;
   --sc-page: radial-gradient(90% 520px at 50% 0%, #1c1210, transparent 72%);
-  --sc-candle: inset 0 0 44px rgba(220, 160, 80, .13), inset 0 0 0 1px rgba(201, 162, 90, .3);
+  --sc-candle: inset 0 0 30px rgba(220, 160, 80, .05), inset 0 0 0 1px rgba(201, 162, 90, .16);
   --sc-shadow: 0 18px 40px -16px rgba(0, 0, 0, .85);
 }`;
 
@@ -191,7 +191,7 @@ body { ${PAGE} scrollbar-color: var(--sc-gold) var(--panel); }
 /* Buttons and boxes to type in. */
 .button { border-radius: 0; font: 700 12.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; }
 .button.primary { ${PLAQUE} padding-inline: 20px; color: var(--sc-btn-ink); transition: filter .15s; }
-.button.primary:hover { filter: brightness(1.18); }
+.button.primary:hover { filter: brightness(1.08); }
 .button:not(.primary) { border-color: var(--sc-gold); }
 .button:not(.primary):hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
 .icon-button { border-radius: 2px; }
@@ -260,7 +260,7 @@ body { ${PAGE} scrollbar-color: var(--sc-gold) var(--panel); }
 /* Buttons and boxes to type in. */
 /* Three times over, to outrank the app's own rule for the dark version. */
 .primary.primary.primary, .dashboard-continue-action { ${PLAQUE} padding-inline: 20px; color: var(--sc-btn-ink); font: 700 12.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; transition: filter .15s; }
-.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--sc-btn); filter: brightness(1.18); }
+.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--sc-btn); filter: brightness(1.08); }
 .icon-button { border-radius: 2px; }
 .icon-button:hover { color: var(--sc-head); }
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { border-radius: 2px; caret-color: var(--accent-2); }
@@ -311,7 +311,7 @@ ${city(".campaign-scenes-head", { far: 92 })}
 .campaign-scene-card { ${FRAME} transition: transform .18s, box-shadow .18s; }
 .campaign-scene-card.last { border-color: var(--accent-2); }
 /* Hover: the card lifts and catches the candlelight. */
-.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent); transform: translateY(-3px); box-shadow: var(--sc-candle); }
+.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--sc-candle); }
 .campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--sc-head); }
 .campaign-scene-card:active { transform: none; }
 .campaign-scene-card strong { font-family: var(--font-display); font-size: 14.5px; letter-spacing: .05em; }
@@ -349,7 +349,7 @@ ${city(".hub-head", { far: 110 })}
 /* Buttons. */
 .hub-button { border-radius: 0; font: 700 12.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; }
 .hub-button-primary { ${PLAQUE} padding-inline: 20px; color: var(--sc-btn-ink); transition: filter .15s; }
-.hub-button-primary:hover { filter: brightness(1.18); }
+.hub-button-primary:hover { filter: brightness(1.08); }
 .hub-button:not(.hub-button-primary):hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--panel)); color: var(--ink); }
 
 /* Dashboard, Front page and Members. */
@@ -518,7 +518,7 @@ ${KEYFRAMES}
 .mini-fields dt { font: 700 11px var(--font-display); letter-spacing: .12em; color: var(--sc-sheet-head); }
 .mini-fields dd { font: 400 15.5px/1.4 var(--font-reading); }
 .mini-link { align-self: flex-start; margin-top: auto; padding: 7px 18px; ${PLAQUE} color: #fbf1d9 !important; background: linear-gradient(180deg, #a03226, #6e1c14); font: 700 11.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; text-decoration: none; transition: filter .15s; }
-.mini-link:hover { filter: brightness(1.18); }
+.mini-link:hover { filter: brightness(1.08); }
 .mini-card > :nth-last-child(2) { margin-bottom: 14px; }
 .mini-player { font: 700 10.5px/1.6 var(--font-display); letter-spacing: .12em; text-transform: uppercase; }
 .mini-player b { color: var(--accent-2); }
@@ -541,7 +541,7 @@ ${KEYFRAMES}
 /* Buttons and boxes to type in. */
 .f-btn { border-radius: 0; font: 700 12px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
 .f-btn:not(.ghost) { ${PLAQUE} padding-inline: 20px; color: var(--sc-btn-ink) !important; transition: filter .15s; }
-.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.18); }
+.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.08); }
 .f-btn.ghost { border-color: var(--sc-gold); background: transparent; }
 .f-btn.ghost:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink) !important; }
 .f-btn.small { font-size: 11px; }

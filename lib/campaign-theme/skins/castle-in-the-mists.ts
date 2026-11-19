@@ -167,7 +167,7 @@ body { ${PAGE} scrollbar-color: var(--cm-iron) var(--panel); }
 /* Buttons and boxes to type in. */
 .button { border-radius: 0; ${LABEL} font-size: 16px; }
 .button.primary { ${SEAL} transition: filter .15s; }
-.button.primary:hover { filter: brightness(1.15); }
+.button.primary:hover { filter: brightness(1.08); }
 .button:not(.primary) { border-color: var(--cm-iron); }
 .button:not(.primary):hover { border-color: var(--accent); color: var(--ink); }
 .icon-button { border-radius: 0; }
@@ -240,7 +240,7 @@ body { ${PAGE} scrollbar-color: var(--cm-iron) var(--panel); }
 
 /* Buttons and boxes to type in. Three times over, to outrank the app's own rule for the dark version. */
 .primary.primary.primary, .dashboard-continue-action { ${SEAL} ${LABEL} font-size: 16px; transition: filter .15s; }
-.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--accent); filter: brightness(1.15); }
+.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--accent); filter: brightness(1.08); }
 .icon-button { border-radius: 0; }
 .icon-button:hover { color: var(--accent); }
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { border-radius: 0; caret-color: var(--accent); }
@@ -292,7 +292,7 @@ ${mists(".campaign-scenes-head")}
 .campaign-scene-card { border: 1px solid var(--cm-iron); border-radius: 0; ${BLEED} }
 .campaign-scene-card.last { border-color: var(--accent-2); }
 /* Hover: the card rises out of the fog and a red line bleeds across its foot. */
-.campaign-scene-card:hover, .campaign-scene-card:focus-visible { ${BLED} transform: translateY(-3px); box-shadow: var(--cm-shadow); }
+.campaign-scene-card:hover, .campaign-scene-card:focus-visible { ${BLED} transform: translateY(-2px); box-shadow: 0 12px 22px -18px rgba(0, 0, 0, .55); }
 .campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); }
 .campaign-scene-card:active { transform: none; }
 .campaign-scene-card { transition: background-size .45s ease, border-color .2s, transform .18s, box-shadow .18s; }
@@ -333,7 +333,7 @@ ${mists(".hub-head")}
 /* Buttons. */
 .hub-button { border-radius: 0; ${LABEL} font-size: 16px; }
 .hub-button-primary { ${SEAL} transition: filter .15s; }
-.hub-button-primary:hover { filter: brightness(1.15); }
+.hub-button-primary:hover { filter: brightness(1.08); }
 .hub-button:not(.hub-button-primary):hover { border-color: var(--accent); color: var(--ink); }
 
 /* Dashboard, Front page and Members. */
@@ -518,7 +518,7 @@ ${KEYFRAMES}
 /* Buttons and boxes to type in. */
 .f-btn { border-radius: 0; ${LABEL} font-size: 16px; }
 .f-btn:not(.ghost) { ${SEAL} color: var(--on-accent) !important; transition: filter .15s; }
-.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.15); }
+.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.08); }
 .f-btn.ghost { border-color: var(--cm-iron); background: transparent; }
 .f-btn.ghost:hover:not(:disabled) { border-color: var(--accent); background: transparent; color: var(--accent) !important; }
 .f-btn.small { font-size: 14.5px; }

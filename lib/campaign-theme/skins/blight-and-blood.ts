@@ -1,10 +1,10 @@
 /*
  * Blight and Blood: a fully custom skin, inspired by Dragon Age: Origins. Dark fantasy in bone, old leather and
- * spilled blood. The banner is a battlefield: blood struck across it and still flying, a horde of spears and
- * standards along the horizon with its fires behind it, and embers rising, all drawn with gradients and shadows (no
+ * spilled blood. The banner is a battlefield: a horde of spears and standards along the horizon with its fires
+ * behind it, a dry spatter of blood in one corner and embers rising, all drawn with gradients and shadows (no
  * picture, nothing from the game). Dark is the night before the battle; light is a page of bone-white vellum.
  * Panels are iron-bound with a stud in each corner, portraits sit on shields, buttons are cut like blades and blood
- * wells into a row under the pointer. Like every skin, its stylesheets go through the safety checks in css.ts.
+ * wells a little way into a row under the pointer. Like every skin, its stylesheets go through the safety checks in css.ts.
  */
 import type { Theme } from "../model.ts";
 
@@ -61,7 +61,6 @@ const VARS = `:root {
 }`;
 
 const KEYFRAMES = `@keyframes bb-rise { to { transform: translateY(-50%); } }
-@keyframes bb-strike { from { scale: .2; opacity: 0; } }
 @keyframes bb-pulse { 50% { opacity: .35; } }`;
 
 const HORDE_INK = "var(--bb-horde)";
@@ -109,29 +108,20 @@ const HORDE = inParts("bb-rank", [
   "var(--bb-fire)",
 ]);
 /**
- * Blood, struck and still flying: one small drop repeated as shadows. The pool where it landed, then drops thrown out
- * along the stroke, smaller and wider apart the further they go. The numbers come from a fixed seed, so it is the same
- * splash every time.
+ * A spatter of blood, long dry: one small drop repeated as shadows. A few blots where it landed, then a thin line of
+ * drops thrown out from them, smaller and wider apart the further they go. The numbers come from a fixed seed, so it
+ * is the same spatter every time. It does not move.
  */
 const SPRAY = (() => {
   let seed = 41;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const tone = (dark: boolean) => `var(--bb-blood${dark ? "-2" : ""})`;
   const drops: string[] = [];
-  /* The pool: a dozen blots run together, longer along the stroke than across it. */
-  for (let i = 0; i < 13; i++) {
-    const x = (rnd() - .4) * 96, y = (rnd() - .5) * 30;
-    drops.push(`${Math.round(x)}px ${Math.round(y)}px 0 ${Math.round(Math.max(5, 25 - Math.abs(x) / 3 + rnd() * 5))}px ${tone(i % 4 === 1)}`);
-  }
-  for (let i = 0; i < 104; i++) {
-    const far = rnd() ** 1.6, distance = 74 + 590 * far, angle = (rnd() - .5) * (0.34 + far * 0.6);
-    const size = Math.max(-2, 5 - far * 9 + (rnd() - .5) * 4);
+  for (let i = 0; i < 5; i++) drops.push(`${Math.round((rnd() - .4) * 44)}px ${Math.round((rnd() - .5) * 16)}px 0 ${Math.round(3 + rnd() * 5)}px ${tone(i % 3 === 1)}`);
+  for (let i = 0; i < 46; i++) {
+    const far = rnd() ** 1.5, distance = 34 + 360 * far, angle = (rnd() - .5) * (0.3 + far * 0.5);
+    const size = Math.max(-2, 2.5 - far * 5 + (rnd() - .5) * 2.5);
     drops.push(`${Math.round(distance * Math.cos(angle))}px ${Math.round(distance * Math.sin(angle))}px 0 ${size.toFixed(1)}px ${tone(rnd() < .3)}`);
-  }
-  /* A little thrown back the other way. */
-  for (let i = 0; i < 12; i++) {
-    const distance = 60 + 110 * rnd(), angle = Math.PI + (rnd() - .5) * 1.3;
-    drops.push(`${Math.round(distance * Math.cos(angle))}px ${Math.round(distance * Math.sin(angle))}px 0 ${(rnd() * 3 - 2).toFixed(1)}px ${tone(false)}`);
   }
   return inParts("bb-drops", drops);
 })();
@@ -164,9 +154,9 @@ const STROKE = `content: ""; flex: 1; height: 3px; background: linear-gradient(9
 const LABEL = "font-family: var(--font-display); font-weight: 400; text-transform: uppercase; letter-spacing: .14em;";
 /** Buttons that matter: cut like a blade, in blood. Under the keyboard's focus the cut goes so the ring shows. */
 const BLADE = "border: 0; border-radius: 0; padding-inline: 22px; background: var(--bb-band); color: var(--bb-band-ink); clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%);";
-/** Blood wells into a row from its edge under the pointer. */
-const WELL = "background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent), transparent) left / 0 100% no-repeat, var(--bb-hide); transition: background-size .45s ease, border-color .2s;";
-const WELLED = "border-left-color: var(--accent); background-size: 62% 100%, auto;";
+/** A little blood wells into a row from its edge under the pointer. */
+const WELL = "background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent) left / 0 100% no-repeat, var(--bb-hide); transition: background-size .45s ease, border-color .2s;";
+const WELLED = "border-left-color: var(--accent); background-size: 36% 100%, auto;";
 /** The shield a portrait sits on. Percentages of its box, which is five wide by eight tall. */
 const SHIELD = (() => {
   const radius = 78, from = 46, end = Math.acos((radius - 50) / radius), points: [number, number][] = [];
@@ -177,8 +167,8 @@ const SHIELD = (() => {
 const SMALL_SHIELD = "polygon(0 0, 100% 0, 100% 56%, 50% 100%, 0 56%)";
 
 /**
- * The battlefield, drawn behind `host`'s own content: the sky, the horde along the bottom with its fires, blood
- * struck across the right of it, and embers rising in front.
+ * The battlefield, drawn behind `host`'s own content: the sky, the horde along the bottom with its fires, a spatter
+ * of blood at the top right, and embers rising in front.
  */
 function field(host: string) {
   return `${host} {
@@ -189,17 +179,17 @@ function field(host: string) {
 }
 ${host} > * { position: relative; z-index: 2; }
 ${host}::before {
-  content: ""; position: absolute; z-index: 0; right: 320px; top: 58%; width: 16px; height: 5px; border-radius: 50%; pointer-events: none;
+  content: ""; position: absolute; z-index: 0; right: 300px; top: 64px; width: 16px; height: 5px; border-radius: 50%; pointer-events: none;
   ${SPRAY.declare}
-  background: var(--bb-blood); box-shadow: ${SPRAY.use}; rotate: -22deg; animation: bb-strike .7s cubic-bezier(.1, .9, .2, 1) both;
+  background: var(--bb-blood); box-shadow: ${SPRAY.use}; rotate: -22deg; opacity: .8;
 }
 ${host}::after {
   content: ""; position: absolute; z-index: 1; left: 0; top: 0; width: 100%; height: 200%; pointer-events: none;
   background: ${EMBERS}; animation: bb-rise 46s linear infinite;
 }`;
 }
-/** The same banner on a phone: the blood smaller and further in. */
-const smallField = (host: string) => `${host}::before { right: 170px; top: auto; bottom: 132px; scale: .5; }`;
+/** The same banner on a phone: the spatter smaller. */
+const smallField = (host: string) => `${host}::before { right: 150px; top: 30px; scale: .6; }`;
 const TITLE = "font-family: var(--font-display); font-weight: 400; text-transform: uppercase; color: var(--bb-title); text-shadow: var(--bb-title-shadow);";
 const STILL = (hosts: string) => `@media (prefers-reduced-motion: reduce) {\n  ${hosts} { animation: none; }\n}`;
 
@@ -231,7 +221,7 @@ body { ${PAGE} scrollbar-color: var(--bb-iron) var(--panel); }
 /* Buttons and boxes to type in. */
 .button { border-radius: 0; ${LABEL} font-size: 12.5px; }
 .button.primary { ${BLADE} transition: filter .15s; }
-.button.primary:hover { filter: brightness(1.18); }
+.button.primary:hover { filter: brightness(1.08); }
 .button.primary:focus-visible { clip-path: none; }
 .button:not(.primary) { border-color: var(--bb-edge); }
 .button:not(.primary):hover { border-color: var(--accent); color: var(--ink); }
@@ -287,7 +277,7 @@ ${KEYFRAMES}
   .dashboard-intro .subtitle { max-width: 26ch; font-size: 16px; }
   ${smallField(".dashboard-intro")}
 }
-${STILL(".dashboard-intro::before, .dashboard-intro::after")}
+${STILL(".dashboard-intro::after")}
 `;
 
 /* Maptable: hide and iron around the table, and the Scene Picker gets the battlefield. */
@@ -304,7 +294,7 @@ body { ${PAGE} scrollbar-color: var(--bb-iron) var(--panel); }
 
 /* Buttons and boxes to type in. Three times over, to outrank the app's own rule for the dark version. */
 .primary.primary.primary, .dashboard-continue-action { ${BLADE} ${LABEL} font-size: 12.5px; transition: filter .15s; }
-.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--bb-band); filter: brightness(1.18); }
+.primary.primary.primary:hover, .dashboard-continue:hover .dashboard-continue-action { background: var(--bb-band); filter: brightness(1.08); }
 .primary.primary.primary:focus-visible { clip-path: none; }
 .icon-button { border-radius: 0; }
 .icon-button:hover { color: var(--accent); }
@@ -356,8 +346,8 @@ ${field(".campaign-scenes-head")}
 .campaign-scenes-group h2 span { ${LABEL} font-size: 11.5px; }
 .campaign-scene-card { border: 1px solid var(--bb-edge); border-top: 3px solid var(--bb-iron); border-radius: 0; background: var(--bb-hide); }
 .campaign-scene-card.last { border-top-color: var(--accent-2); }
-/* Hover: the card lifts and its iron edge runs with blood. */
-.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 5px 0 -2px var(--bb-blood-2), var(--bb-shadow); }
+/* Hover: the card lifts a little and its iron edge turns to blood. */
+.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-top-color: var(--accent); transform: translateY(-2px); box-shadow: 0 12px 22px -18px rgba(0, 0, 0, .55); }
 .campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); }
 .campaign-scene-card:active { transform: none; }
 .campaign-scene-card { transition: border-color .2s, transform .18s, box-shadow .18s; }
@@ -373,7 +363,7 @@ ${KEYFRAMES}
   ${smallField(".campaign-scenes-head")}
 }
 @media (prefers-reduced-motion: reduce) {
-  .campaign-scenes-head::before, .campaign-scenes-head::after { animation: none; }
+  .campaign-scenes-head::after { animation: none; }
   .campaign-scene-card, .campaign-scene-card:hover { transform: none; transition: none; }
 }
 `;
@@ -398,7 +388,7 @@ ${field(".hub-head")}
 /* Buttons. */
 .hub-button { border-radius: 0; ${LABEL} font-size: 12.5px; }
 .hub-button-primary { ${BLADE} transition: filter .15s; }
-.hub-button-primary:hover { filter: brightness(1.18); }
+.hub-button-primary:hover { filter: brightness(1.08); }
 .hub-button-primary:focus-visible { clip-path: none; }
 .hub-button:not(.hub-button-primary):hover { border-color: var(--accent); color: var(--ink); }
 
@@ -421,7 +411,7 @@ ${KEYFRAMES}
   .hub-title h1 { font-size: 30px; }
   ${smallField(".hub-head")}
 }
-${STILL(".hub-head::before, .hub-head::after")}
+${STILL(".hub-head::after")}
 `;
 
 export const BLIGHT_AND_BLOOD: Theme = {
@@ -430,7 +420,7 @@ export const BLIGHT_AND_BLOOD: Theme = {
     light: { bg: "#e3d9cb", panel: "#f2eadf", raised: "#e9dfd1", line: "#c4b29c", ink: "#261a15", muted: "#655549", accent: "#8c1c13", accent2: "#6b5220" },
     dark: { bg: "#0d0a09", panel: "#171210", raised: "#201916", line: "#3d2d27", ink: "#e6dbd0", muted: "#a39489", accent: "#d8483b", accent2: "#b99b6b" },
   },
-  css: `/* Blight and Blood: dark fantasy in bone, old leather and spilled blood. The banner is a battlefield: blood struck across it, a horde of spears and standards along the horizon with its fires behind it, and embers rising, all drawn with gradients and shadows.
+  css: `/* Blight and Blood: dark fantasy in bone, old leather and spilled blood. The banner is a battlefield: a horde of spears and standards along the horizon with its fires behind it, a dry spatter of blood in one corner and embers rising, all drawn with gradients and shadows.
    Dark is the night before the battle; light is a page of bone-white vellum. Everything a version changes is a variable in the first two rules. */
 
 ${VARS}
@@ -450,7 +440,7 @@ a { text-underline-offset: 3px; }
 .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .search-box input:not([type="checkbox"]), .search-box input:not([type="checkbox"]):focus { border: 0; background: transparent; box-shadow: none; }
 
-/* The banner: blood struck across the sky, the horde and its fires along the bottom, and embers rising. */
+/* The banner: the horde and its fires along the bottom, a spatter of blood in one corner and embers rising. */
 .board-head { min-height: 360px; border: 1px solid var(--bb-edge); border-top: 4px solid var(--accent); }
 .board-head:not(.has-art) {
   background: var(--bb-stain), var(--bb-sky);
@@ -460,9 +450,9 @@ a { text-underline-offset: 3px; }
 .board-head:not(.has-art) .board-head-text { ${HORDE.declare} background: ${HORDE.use}; }
 .board-title, .board-tagline { position: relative; z-index: 2; }
 .board-head:not(.has-art) .board-head-text::before {
-  content: ""; position: absolute; z-index: 0; left: max(56px, calc(50% - 545px)); top: 30%; width: 16px; height: 5px; border-radius: 50%;
+  content: ""; position: absolute; z-index: 0; left: 64px; top: 46px; width: 16px; height: 5px; border-radius: 50%;
   ${SPRAY.declare}
-  background: var(--bb-blood); box-shadow: ${SPRAY.use}; rotate: -7deg; animation: bb-strike .7s cubic-bezier(.1, .9, .2, 1) both;
+  background: var(--bb-blood); box-shadow: ${SPRAY.use}; rotate: -7deg; opacity: .8;
 }
 .board-head:not(.has-art) .board-head-text::after {
   content: ""; position: absolute; z-index: 1; left: 0; top: 0; width: 100%; height: 200%;
@@ -563,7 +553,7 @@ ${KEYFRAMES}
 .mini-fields dt { ${LABEL} font-size: 11px; color: var(--bb-writ-mark); }
 .mini-fields dd { font: 400 15.5px/1.4 var(--font-reading); }
 .mini-card > .mini-link { align-self: flex-start; margin-top: auto; padding: 7px 22px; ${BLADE} color: var(--bb-band-ink) !important; ${LABEL} font-size: 12px; text-decoration: none; transition: filter .15s; }
-.mini-link:hover { filter: brightness(1.18); }
+.mini-link:hover { filter: brightness(1.08); }
 .mini-card > :nth-last-child(2) { margin-bottom: 14px; }
 .mini-player { ${LABEL} font-size: 11.5px; line-height: 1.6; }
 .mini-player b { color: var(--accent); }
@@ -584,7 +574,7 @@ ${KEYFRAMES}
 /* Buttons and boxes to type in. */
 .f-btn { border-radius: 0; ${LABEL} font-size: 12.5px; }
 .f-btn:not(.ghost) { ${BLADE} color: var(--bb-band-ink) !important; transition: filter .15s; }
-.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.18); }
+.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.08); }
 .f-btn:not(.ghost):focus-visible { clip-path: none; }
 .f-btn.ghost { border-color: var(--bb-edge); background: transparent; }
 .f-btn.ghost:hover:not(:disabled) { border-color: var(--accent); background: transparent; color: var(--accent) !important; }
@@ -609,7 +599,7 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
   .board-head-text { padding: 34px 18px 130px; }
   .board-title { font-size: 31px; letter-spacing: .12em; }
   .board-tagline { font-size: 17px; }
-  .board-head:not(.has-art) .board-head-text::before { left: -34px; top: 16px; scale: .5; }
+  .board-head:not(.has-art) .board-head-text::before { left: 16px; top: 9px; scale: .55; }
   .board-nav a { padding: 10px 11px; font-size: 12px; }
   .category-title { font-size: 18px; }
   .forum-name { font-size: 21px; }
@@ -619,7 +609,7 @@ input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color:
   .mini-card { box-shadow: 0 0 0 1px var(--bg), 0 22px 50px -8px rgba(0, 0, 0, .85); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .board-head-text::before, .board-head-text::after, .unread-dot { animation: none; }
+  .board-head-text::after, .unread-dot { animation: none; }
   .mini-card { transform: none; transition: none; }
   .forum, .topic-row { transition: none; }
 }

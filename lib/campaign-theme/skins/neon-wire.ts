@@ -112,8 +112,8 @@ body { background: repeating-linear-gradient(0deg, var(--nw-scan) 0 1px, transpa
 /* Buttons and boxes to type in. */
 .button { border-radius: 0; font: 600 12px var(--font-reading); letter-spacing: .1em; text-transform: uppercase; }
 .button.primary { border-color: var(--accent); ${CUT_BUTTON} transition: filter .15s; }
-.button.primary:hover { filter: brightness(1.15) saturate(1.2); }
-.button:not(.primary):hover { border-color: var(--accent-2); color: var(--accent-2); box-shadow: var(--nw-box); }
+.button.primary:hover { filter: brightness(1.08); }
+.button:not(.primary):hover { border-color: var(--accent-2); color: var(--accent-2); }
 .icon-button { border-radius: 0; }
 .icon-button:hover { color: var(--accent-2); }
 input:not([type="checkbox"]):not([type="radio"]), select, textarea { border-radius: 0; font-family: var(--font-reading); caret-color: var(--accent); }
@@ -140,7 +140,7 @@ ${sunset(".dashboard-intro", { floor: 58, sun: 170 })}
 .note-card { padding: 18px 18px 16px 20px; border: 0; border-left: 3px solid var(--accent); background: linear-gradient(90deg, var(--raised), var(--panel) 60%); ${CUT} transition: border-color .15s, background-color .15s; }
 .note-card:hover { border-left-color: var(--accent-2); background: var(--raised); }
 .note-card h3 { font-family: var(--font-display); letter-spacing: .08em; text-transform: uppercase; }
-.note-card:hover h3 { color: var(--accent); text-shadow: var(--nw-glow); }
+.note-card:hover h3 { color: var(--accent); }
 .note-card p { font: 400 13px/1.55 var(--font-reading); }
 .note-card .eyebrow, .card-footer { font-family: var(--font-reading); color: var(--accent-2); }
 .note-card.add-card { border: 1px dashed var(--accent-2); background: transparent; clip-path: none; }
@@ -160,7 +160,6 @@ ${sunset(".dashboard-intro", { floor: 58, sun: 170 })}
 .prose h1, .prose h2, .prose h3 { font-family: var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-2); text-shadow: var(--nw-glow-2); }
 .prose h1::before, .prose h2::before, .prose h3::before { content: "// "; color: var(--accent); }
 .prose a { color: var(--accent); text-underline-offset: 3px; }
-.prose a:hover { text-shadow: var(--nw-glow); }
 .prose blockquote { border-left: 2px solid var(--accent-2); background: color-mix(in srgb, var(--accent-2) 8%, var(--raised)); }
 .prose code, .prose pre { border-radius: 0; color: var(--accent-2); }
 .article-aside .aside-section { border-top: 1px solid transparent; border-image: linear-gradient(90deg, var(--accent-2), transparent) 1; }
@@ -195,7 +194,7 @@ body { background: repeating-linear-gradient(0deg, var(--nw-scan) 0 1px, transpa
 
 /* Buttons and boxes to type in. */
 button.primary, .primary { border-radius: 0; font: 600 12px var(--font-reading); letter-spacing: .1em; text-transform: uppercase; ${CUT_BUTTON} transition: filter .15s; }
-.primary:hover { filter: brightness(1.15) saturate(1.2); }
+.primary:hover { filter: brightness(1.08); }
 .icon-button { border-radius: 0; }
 .icon-button:hover { color: var(--accent-2); }
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { border-radius: 0; caret-color: var(--accent); }
@@ -250,8 +249,8 @@ ${sunset(".campaign-scenes-head", { floor: 48, sun: 150 })}
 .campaign-scene-card { border-radius: 0; border-color: var(--line-strong); transition: border-color .15s, box-shadow .15s, transform .15s; }
 .campaign-scene-card.last { border-color: var(--accent-2); }
 /* Hover: the card lifts off a hard pink shadow, the way a cabinet button lights. */
-.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent-2); background: var(--panel); transform: translate(-3px, -3px); box-shadow: 0 0 0 1px var(--accent-2), 6px 6px 0 0 var(--accent); }
-.campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); text-shadow: var(--nw-glow); }
+.campaign-scene-card:hover, .campaign-scene-card:focus-visible { border-color: var(--accent-2); background: var(--panel); transform: translate(-2px, -2px); box-shadow: 3px 3px 0 0 var(--accent); }
+.campaign-scene-card:hover strong, .campaign-scene-card:focus-visible strong { color: var(--accent); }
 .campaign-scene-card:active { transform: none; box-shadow: 0 0 0 1px var(--accent-2); }
 .campaign-scene-card strong { font-family: var(--font-display); letter-spacing: .04em; }
 .campaign-scene-card small, .campaign-scene-card span { font-family: var(--font-reading); }
@@ -286,13 +285,13 @@ ${sunset(".hub-head", { floor: 58, sun: 180 })}
 .hub-chip { border-radius: 0; border-color: #8ff5ea; background: rgba(7, 4, 20, .45); color: #8ff5ea; font-family: var(--font-reading); }
 .hub-head .tag-add { border-radius: 0; border-color: rgba(255, 255, 255, .5); background: rgba(7, 4, 20, .45); color: #fff; font-family: var(--font-reading); }
 .hub-head .hub-button:not(.hub-button-primary) { border-color: rgba(255, 255, 255, .45); background: rgba(7, 4, 20, .55); color: #fff; backdrop-filter: blur(4px); }
-.hub-head .hub-button:not(.hub-button-primary):hover { border-color: #8ff5ea; color: #8ff5ea; box-shadow: 0 0 14px rgba(46, 230, 214, .5); }
+.hub-head .hub-button:not(.hub-button-primary):hover { border-color: #8ff5ea; color: #8ff5ea; }
 
 /* Buttons. */
 .hub-button { border-radius: 0; font: 600 12px var(--font-reading); letter-spacing: .08em; text-transform: uppercase; }
 .hub-button-primary { ${CUT_BUTTON} box-shadow: none; transition: filter .15s; }
-.hub-button-primary:hover { filter: brightness(1.15) saturate(1.2); }
-.hub-button:not(.hub-button-primary):hover { border-color: var(--accent-2); color: var(--accent-2); box-shadow: var(--nw-box); }
+.hub-button-primary:hover { filter: brightness(1.08); }
+.hub-button:not(.hub-button-primary):hover { border-color: var(--accent-2); color: var(--accent-2); }
 .hub-text-button { font-family: var(--font-reading); }
 
 /* Dashboard, Front page and Members. */
@@ -306,7 +305,7 @@ ${sunset(".hub-head", { floor: 58, sun: 180 })}
 .hub-card-head h2 { display: flex; align-items: center; gap: 8px; font: 600 13px var(--font-display); letter-spacing: .2em; text-transform: uppercase; color: var(--accent-2); text-shadow: var(--nw-glow-2); }
 .hub-card-head h2::before { content: "//"; letter-spacing: 0; color: var(--accent); text-shadow: var(--nw-glow); }
 .hub-card-head a, .hub-card-head .hub-text-button { font-family: var(--font-reading); }
-.hub-card-head a:hover { text-shadow: var(--nw-glow); }
+.hub-card-head a:hover { color: var(--accent); }
 .hub-muted { font: 400 13px/1.6 var(--font-reading); }
 .hub-scene-grid li { border-radius: 0; }
 
@@ -379,7 +378,7 @@ a { text-underline-offset: 3px; }
 .board-nav { justify-content: flex-start; padding: 0 14px; border-top: 0; background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 3px), var(--head-nav); }
 .board-nav a { padding: 12px 16px; font: 600 12px var(--font-reading); letter-spacing: .12em; }
 .board-nav a::before { content: "/"; margin-right: 3px; color: var(--nw-horizon); }
-.board-nav a:hover { color: #8ff5ea; border-bottom-color: #8ff5ea; text-shadow: 0 0 10px rgba(46, 230, 214, .8); }
+.board-nav a:hover { color: #8ff5ea; border-bottom-color: #8ff5ea; }
 
 ${KEYFRAMES}
 
@@ -401,7 +400,7 @@ ${KEYFRAMES}
 .forum:hover, .topic-row:hover { border-left-color: var(--accent-2); background: var(--raised); }
 .topic-row.pinned { border-left: 3px solid var(--accent-2); }
 .forum-name { font-size: 19px; letter-spacing: .1em; text-transform: uppercase; }
-.forum-name a:hover, .topic-title a:hover { color: var(--accent); text-shadow: var(--nw-glow); }
+.forum-name a:hover, .topic-title a:hover { color: var(--accent); }
 .forum-desc { margin-top: 5px; font: 400 13px/1.5 var(--font-reading); }
 .forum-place { font: 11px var(--font-reading); letter-spacing: .06em; text-transform: uppercase; }
 .forum-place a { color: var(--accent-2); }
@@ -409,7 +408,7 @@ ${KEYFRAMES}
 .forum-counts b { color: var(--accent-2); text-shadow: var(--nw-glow-2); }
 .last-label { font-family: var(--font-reading); color: var(--accent-2); }
 .forum-last a, .foot-list a { color: var(--ink); font: 600 14px/1.3 var(--font-reading); }
-.forum-last a:hover, .foot-list a:hover { color: var(--accent); text-shadow: var(--nw-glow); }
+.forum-last a:hover, .foot-list a:hover { color: var(--accent); }
 .forum-last small, .topic-last small, .foot-list small { font-family: var(--font-reading); font-size: 11px; }
 .topic-title { font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }
 .topic-last b { font: 600 13px var(--font-reading); }
@@ -501,14 +500,14 @@ ${KEYFRAMES}
 .roll-group i, .roll-total, .roll-stamp { border-radius: 0; font-family: var(--font-reading); }
 .post-actions { border-top: 1px dashed var(--line-strong); }
 .post-actions button { font: 600 11px var(--font-reading); letter-spacing: .1em; }
-.post-actions button:hover { color: var(--accent-2); text-shadow: var(--nw-glow-2); }
+.post-actions button:hover { color: var(--accent-2); }
 
 /* Buttons and boxes to type in. */
 .f-btn { border-radius: 0; font: 600 12px var(--font-reading); letter-spacing: .1em; text-transform: uppercase; }
 .f-btn:not(.ghost) { border-color: var(--accent); background: var(--accent); clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px); transition: filter .15s; }
-.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.15) saturate(1.2); }
+.f-btn:not(.ghost):hover:not(:disabled) { filter: brightness(1.08); }
 .f-btn.ghost { border-color: var(--line-strong); }
-.f-btn.ghost:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2) !important; box-shadow: var(--nw-box), inset var(--nw-box); }
+.f-btn.ghost:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2) !important; }
 .f-btn.small { font-size: 11px; }
 input:not([type="checkbox"]), select, textarea { border-radius: 0; background: var(--bg); font-family: var(--font-reading); caret-color: var(--accent); }
 input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color: var(--accent-2); box-shadow: var(--nw-box); }
