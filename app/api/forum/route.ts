@@ -6,6 +6,7 @@ import { readMapImage, saveMapImage, saveStagedImage } from '@/lib/encyclopedia/
 import { scenePicture } from '@/lib/mcp/scene-picture';
 import { sameOrigin } from '@/lib/encyclopedia/workspace-server';
 import { ForumStore } from '@/lib/forum/store';
+import { ThemeStore } from '@/lib/campaign-theme/store';
 import { handleForum, handleForumImage, type Deps } from '@/lib/forum/request';
 import { loadWorkspace } from '@/lib/workspace-storage';
 import { campaignScenes } from '@/lib/agent-maps';
@@ -31,6 +32,7 @@ const deps = (): Deps => {
     },
     workspace: async owner => (await new EncyclopediaStore(bucket).read(owner)).data,
     store: new ForumStore(bucket),
+    themes: new ThemeStore(bucket),
     image: readMapImage,
     savePicture: saveStagedImage,
     ai: forumAi(bucket),

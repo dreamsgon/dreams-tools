@@ -14,19 +14,25 @@ import { PrintView, ReportsView, TrashView } from './forum-moderate';
 import { Notices, SearchView } from './forum-find';
 import { ForumPicker } from './forum-pick';
 import { ProfileView } from './forum-profile';
+import { AdminCp, useAdminCp, useDock, type Preview } from './forum-theme';
 
 export default function ForumApp() {
   const [key, setKey] = useState(''), [place, setPlace] = useState<Place>({ view: 'index' }), [view, setView] = useState<View | null>(null);
   const [error, setError] = useState(''), [status, setStatus] = useState(0), [loading, setLoading] = useState(true), [noForum, setNoForum] = useState(false);
   const request = useRef<AbortController | null>(null), shown = useRef('');
+  // The campaign's live theme as last sent: refreshes say `same` instead of sending its stylesheet again.
+  const theme = useRef<{ key: string; css: string; fonts: string } | null>(null);
+  const [preview, setPreview] = useState<Preview>(null);
 
   const load = useCallback(async (k: string, p: Place, quiet = false) => {
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
     if (!quiet) setLoading(true);
     try {
-      const v = await forumCall<View>({ action: 'view', campaign: k, page: pageOf(p) }, controller.signal);
+      const v = await forumCall<View>({ action: 'view', campaign: k, page: pageOf(p), ...(theme.current ? { theme: theme.current.key } : {}) }, controller.signal);
       if (controller.signal.aborted) return;
+      const t = v.frame.theme;
+      theme.current = !t ? null : t.same && theme.current?.key === t.key ? theme.current : { key: t.key, css: t.css ?? '', fonts: t.fonts ?? '' };
       if (p.view === 'place') {
         // From a place page in the Encyclopedia: its board, with a new topic open when the reader may start one.
         const b = v.frame.boards.find(x => x.place?.id === p.id);
@@ -61,6 +67,7 @@ export default function ForumApp() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [key, place, load]);
 
+  const cp = useAdminCp(key), [dock, setDock] = useDock();
   const go = useCallback((p: Place) => { const h = forumHash(key, p); if (location.hash !== h) location.hash = h; else void load(key, p); }, [key, load]);
   const done = useCallback(async (next?: Place) => { if (next) go(next); else await load(key, place, true); }, [go, load, key, place]);
   /** A solo campaign's GM view / Player view: pages only moderators open go back to the index in the player view. */
@@ -88,10 +95,19 @@ export default function ForumApp() {
   </div></div></div>;
 
   const { frame, page } = view, k = key;
+  // The theme being edited in the Admin CP, else the live one. The app bar and the Admin CP are never themed.
+  const live = frame.theme && theme.current ? { css: theme.current.css, fonts: theme.current.fonts, banner: frame.theme.banner } : null;
+  const skin = cp.open && preview ? preview : live;
+  const showCp = cp.open && frame.you.rights.boards;
   return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">{appBar}
+    <div className={`forum-body${showCp ? ` cp-open cp-${dock}` : ''}`}>
+    {showCp && <AdminCp k={k} dock={dock} setDock={setDock} onClose={cp.close} onPreview={setPreview} onSaved={() => void load(key, place, true)} />}
+    <div className="skin-frame">
+    {skin && <>{skin.fonts && <link rel="stylesheet" href={skin.fonts} precedence="default" />}<style>{skin.css}</style></>}
+    <div className="campaign-skin">
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} setPlayer={setPlayer} />
-      <Banner frame={frame} k={k} go={go} />
+      <Banner frame={frame} k={k} go={go} plain={skin?.banner === 'plain'} />
       <Notices frame={frame} />
       <SheetContext.Provider value={page.kind === 'topic' ? page.features : {}}><main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}
@@ -120,5 +136,6 @@ export default function ForumApp() {
       <Footer frame={frame} k={k} go={go} onReadAll={async () => { try { await forumCall({ action: 'readAll', campaign: k }); await done(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not mark the forum read.'); } }} />
       <BackToTop />
     </div>
+    </div></div></div>
   </div></PostContext.Provider>;
 }
