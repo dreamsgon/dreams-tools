@@ -192,6 +192,16 @@ export function themeCss(t: Theme, scope = SKIN_SCOPE, area: ThemeArea = "forum"
   return { css: `${vars}\n${sheet.css}`, problems: sheet.problems };
 }
 
+/**
+ * Only a theme's colours, inside `scope`: for a part that keeps its own fonts, corners and layout, like the Admin CP,
+ * which has to stay usable whatever the theme's stylesheet does.
+ */
+export function themeColours(t: Theme, scope: string): string {
+  const only = (c: ColourSet, dark: boolean) => `${scope} { ${varsOf(t, c, dark).split("; ").filter(v => !/^--(?:font|radius|head)\b/.test(v)).join("; ")}; }`;
+  const light = only(t.colors.light, false), dark = only(t.colors.dark, true);
+  return t.mode === "both" ? `${light}\n:root[data-theme="dark"] ${dark}` : t.mode === "light" ? `${light}\n:root[data-theme="dark"] ${light}` : `${dark}\n:root[data-theme="dark"] ${dark}`;
+}
+
 /** What a page needs for the live theme: the CSS and the fonts to load. */
 export function liveTheme(t: Theme | null, area: ThemeArea = "forum") {
   if (!t) return null;

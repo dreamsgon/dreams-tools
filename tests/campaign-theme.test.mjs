@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanCss, scopeSelector } from '../lib/campaign-theme/css.ts';
-import { THEME_PRESETS, areaCss, themeSchema, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
+import { THEME_PRESETS, areaCss, themeSchema, themeColours, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
 
 const NOW = new Date('2026-01-01T12:00:00.000Z');
 
@@ -102,6 +102,8 @@ test('preset skins: a light and a dark version each, readable, and their CSS pas
     const cleaned = cleanCss(t.css);
     assert.deepEqual(cleaned.problems, [], t.name);
     assert.ok(cleaned.rules >= 8, `${t.name} has a stylesheet`);
+    // A fully custom skin's other stylesheets pass the same checks.
+    for (const [part, css] of Object.entries(t.areas ?? {})) assert.deepEqual(cleanCss(css).problems, [], `${t.name}: ${part}`);
     // The banner's own art stands aside for a campaign's picture.
     assert.match(t.css, /\.board-head:not\(\.has-art\)/, t.name);
     assert.notDeepEqual(t.colors.light, t.colors.dark, t.name);
@@ -125,4 +127,13 @@ test('theme stylesheets for each part of the campaign', () => {
   // Theme code carries the parts' stylesheets.
   const { theme } = importTheme({ ...t, areas: { encyclopedia: '.topbar { color: red }', nonsense: 'x' } }, 'y');
   assert.deepEqual(theme.areas, { encyclopedia: '.topbar { color: red }' });
+});
+
+test('a theme’s colours alone, for the Admin CP', () => {
+  const both = themeColours(THEME_PRESETS.find(t => t.id === 'preset-neon'), '.admin-cp');
+  assert.match(both, /^\.admin-cp \{ --bg: #efe6f5; /);
+  assert.match(both, /\n:root\[data-theme="dark"\] \.admin-cp \{ --bg: #07060f; /);
+  assert.doesNotMatch(both, /--font-|--radius|--head-|nw-/, 'no fonts, corners, banner or stylesheet');
+  const dark = themeColours({ ...THEME_PRESETS[0], mode: 'dark' }, '.admin-cp');
+  assert.equal(dark.split('\n')[0].replace('.admin-cp', ''), dark.split('\n')[1].replace(':root[data-theme="dark"] .admin-cp', ''), 'a one-version theme shows that version to everyone');
 });

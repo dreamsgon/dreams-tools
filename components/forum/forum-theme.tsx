@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, PanelLeft, PanelRight, Palette, X } from 'lucide-react';
-import { COLOUR_ROLES, PRESET_NOTES, THEME_AREAS, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, areaCss, contrastChecks, cssSize, importTheme, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme, type ThemeArea } from '@/lib/campaign-theme/model';
+import { COLOUR_ROLES, PRESET_NOTES, THEME_AREAS, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, areaCss, contrastChecks, cssSize, importTheme, themeColours, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme, type ThemeArea } from '@/lib/campaign-theme/model';
 import { leavePreview } from '../campaign-skin';
 import { cleanCss } from '@/lib/campaign-theme/css';
 import { resolveTheme, parseThemeMode, THEME_STORAGE_KEY } from '@/lib/appearance';
@@ -113,7 +113,12 @@ export function AdminCp({ k, dock, setDock, onClose, onPreview, onSaved }: {
   });
   const pick = (s: 'light' | 'dark') => { setScheme(s); setSchemeState(s); };
 
+  // The Admin CP wears the colours of the theme being edited, else the live one: only colours, so it stays usable.
+  const shown = draft ?? themes?.live ?? null;
+  const colours = useMemo(() => shown ? themeColours(shown, '.admin-cp') : '', [shown]);
+
   return <aside className={`admin-cp dock-${dock}`} aria-label="Admin CP">
+    {colours && <style data-cp-colours="">{colours}</style>}
     <div className="cp-head">
       <Palette size={16} aria-hidden="true" /><b>Admin CP</b><span className="cp-sub">Campaign theme</span>
       <span className="cp-spacer" />

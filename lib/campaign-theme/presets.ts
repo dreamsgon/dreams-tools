@@ -7,6 +7,7 @@
  * switches the theme's banner to the picture.
  */
 import type { ColourSet, Theme } from "./model.ts";
+import { CITADEL_STATION } from "./skins/citadel-station.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -73,29 +74,8 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .f-btn:hover { border-color: var(--accent); }
 `),
 
-  skin("citadel", "Citadel Station", "Mass Effect (orange and blue)", 0, { display: "rajdhani", reading: "inter", ui: "inter" },
-    set("#e8eef4", "#f8fafc", "#edf2f7", "#c2cfdc", "#0f1c2b", "#4d6074", "#b85200", "#0a66c2"),
-    set("#05090f", "#0b131d", "#111c2a", "#1f3247", "#dbe7f3", "#8ba0b6", "#ff8a1f", "#3fa9ff"), `
-/* A ship's interface: cut corners, an orange bar for what matters and blue for everything else. */
-.board-head:not(.has-art) {
-  background: linear-gradient(115deg, color-mix(in srgb, var(--accent-2) 22%, transparent) 0 38%, transparent 38%), linear-gradient(180deg, var(--raised), var(--panel));
-  border-color: var(--accent-2); text-align: left;
-}
-.board-head { clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
-.board-head-text { padding-left: 28px; border-left: 6px solid var(--accent); margin: 26px 0 16px 22px; padding-top: 6px; padding-bottom: 6px; }
-.board-title { letter-spacing: .08em; }
-.board-tagline { font-style: normal; font-size: 15px; color: var(--accent-2); text-transform: uppercase; letter-spacing: .14em; }
-.board-nav { justify-content: flex-start; padding-left: 14px; }
-.category-title { padding: 6px 12px; border-left: 4px solid var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%); }
-.forum, .topic-row, .post, .topic-head { border-color: color-mix(in srgb, var(--accent-2) 45%, var(--line)); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
-.forum-name, .topic-title { text-transform: uppercase; letter-spacing: .08em; }
-.forum-desc, .topic-main small { font-style: normal; font-size: 14px; }
-.post-band { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 20%, transparent), transparent); border-bottom-color: var(--accent-2); }
-.post-name { color: var(--accent-2); }
-.post-text { font-size: 16px; font-weight: 400; }
-.tag.new { background: var(--accent); color: var(--on-accent); }
-:root[data-theme="dark"] .post { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-2) 20%, transparent), 0 0 22px color-mix(in srgb, var(--accent-2) 10%, transparent); }
-`),
+  /* A fully custom skin, with its own stylesheet for each part of the campaign (skins/citadel-station.ts). */
+  { inspired: "Mass Effect (orange and blue)", theme: CITADEL_STATION },
 
   skin("four-houses", "Four Houses", "Hogwarts", 2, { display: "fell", reading: "spectral", ui: "inter" },
     set("#ebdfc6", "#f6eeda", "#efe4cb", "#cbb88e", "#2c1c1a", "#6a5547", "#7a1f2b", "#1f5a3d"),
