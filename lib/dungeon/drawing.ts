@@ -75,7 +75,7 @@ export function buildDungeonMap(o: DungeonOptions): DungeonMap {
     return base(type, type === "door" ? "Door" : "Window", [cell(a.x, a.y), cell(b.x, b.y)], { thickness, stroke: style.ink, ...extra });
   };
   const doorShapes: MapShape[] = [];
-  const doorKind = (d: { x: number; y: number }, i: number): MapShape["door"] => o.doors === "mixed" ? (["wood", "iron", "arch"] as const)[Math.abs(Math.floor(d.x * 7 + d.y * 13)) % 3] : o.doors === "wood" ? null : o.doors;
+  const doorKind = (d: { x: number; y: number }): MapShape["door"] => o.doors === "mixed" ? (["wood", "iron", "arch"] as const)[Math.abs(Math.floor(d.x * 7 + d.y * 13)) % 3] : o.doors === "wood" ? null : o.doors;
   const ground: MapShape[] = [], floors: MapShape[] = [], over: MapShape[] = [], doors: MapShape[] = [], stamps: MapShape[] = [], labels: MapShape[] = [];
   const centreOf = (r: Layout["rooms"][number]) => r.cave && r.cx !== undefined && r.cy !== undefined ? { x: r.cx, y: r.cy } : { x: r.x + r.w / 2, y: r.y + r.h / 2 };
   // Where nothing else should be put: rooms' centres keep their numbers clear.
@@ -88,7 +88,7 @@ export function buildDungeonMap(o: DungeonOptions): DungeonMap {
     const pieces = layout.floors.map(f => f.t === "rect" ? rect(f.x, f.y, f.w, f.h, "Room") : ellipse(f.cx, f.cy, f.rx, f.ry, "Round room"));
     const merged = mergeRooms(pieces, id("merged"));
     floors.push({ ...(merged ? { ...merged, name: "Dungeon floor" } : pieces[0]), pattern });
-    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall * 2, { fill: style.floor, name: d.big ? "Great door" : "Door", door: doorKind(d, i) })));
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall * 2, { fill: style.floor, name: d.big ? "Great door" : "Door", door: doorKind(d) })));
   } else if (layout.kind === "cave" && layout.rock) {
     const rock = layout.rock;
     const loops = traceCells((x, y) => rock[y]?.[x] === 0, layout.cols, layout.rows);
@@ -104,7 +104,7 @@ export function buildDungeonMap(o: DungeonOptions): DungeonMap {
     const merged = outer.length > 1 ? mergeRooms(outer, id("merged")) : null;
     floors.push(merged ? { ...merged, name: "Building" } : outer[0]);
     layout.rooms.forEach((r, i) => floors.push(rect(r.x, r.y, r.w, r.h, `Room ${i + 1}`, { thickness: Math.round(wall * .75), pattern })));
-    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, d.outer ? wall * 2 + 2 : wall + 2, { fill: style.floor, name: d.outer ? "Front door" : "Door", door: doorKind(d, i) })));
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, d.outer ? wall * 2 + 2 : wall + 2, { fill: style.floor, name: d.outer ? "Front door" : "Door", door: doorKind(d) })));
     for (const w of layout.windows) doors.push(opening("window", w, wall * 2 + 2, { fill: style.floor }));
   } else if (layout.kind === "village") {
     for (const f of layout.fields) ground.push(rect(f.x, f.y, f.w, f.h, "Field", { fill: f.rot ? "#b9b46a" : "#a6b464", stroke: "#7d8a4a", thickness: 3, seeThrough: true }));
@@ -115,7 +115,7 @@ export function buildDungeonMap(o: DungeonOptions): DungeonMap {
       taken.push({ x: s.cx - s.rx, y: s.cy - s.ry, w: s.rx * 2, h: s.ry * 2 });
     }
     layout.rooms.forEach((r, i) => { floors.push(rect(r.x, r.y, r.w, r.h, `House ${i + 1}`, { pattern })); taken.push({ x: r.x - .5, y: r.y - .5, w: r.w + 1, h: r.h + 1 }); });
-    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall + 2, { fill: style.floor, door: doorKind(d, i) })));
+    layout.doors.forEach((d, i) => doors.push(doorShapes[i] = opening("door", d, wall + 2, { fill: style.floor, door: doorKind(d) })));
     if (layout.palisade) {
       const p = layout.palisade, fence = rect(p.x, p.y, p.w, p.h, "Palisade", { fill: null, stroke: "#6b4f2e", thickness: 10 });
       ground.push(fence);

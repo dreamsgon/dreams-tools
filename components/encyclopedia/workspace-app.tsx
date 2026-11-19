@@ -378,7 +378,7 @@ export default function WorkspaceApp() {
         return trail;
     }
     function showSection(id: "characters" | "maps" | "calendar" | "tables" | "templates" | "quests" | "codex" | "relationships" | "look") { setView(id); if (id === "tables") setTablesHome(n => n + 1); setSelected(null); setQuery(""); setMobile(false); }
-    function toggleFolder(id: string) { setClosed(old => { const next = new Set(old); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
+    function toggleFolder(id: string) { setClosed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
     function exportAll() { download(current.current, "world-manager-backup.json"); }
     async function importFile(file: File) { try {
         if (file.size > 2000000)
