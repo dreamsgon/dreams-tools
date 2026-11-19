@@ -9,6 +9,7 @@
 import type { ColourSet, Theme } from "./model.ts";
 import { CITADEL_STATION } from "./skins/citadel-station.ts";
 import { SWORD_COAST } from "./skins/sword-coast.ts";
+import { CASTLE_IN_THE_MISTS } from "./skins/castle-in-the-mists.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -85,31 +86,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .post-text > p:first-child::first-letter { font-family: var(--font-display); font-size: 1.9em; line-height: 1; color: var(--accent); }
 `),
 
-  skin("mists", "Castle in the Mists", "Curse of Strahd", 0, { display: "pirata", reading: "spectral", ui: "inter" },
-    set("#dcdad6", "#edebe8", "#e3e1dd", "#b9b5ae", "#1c1a1d", "#55515a", "#8a1218", "#3f4a63"),
-    set("#0a0a0c", "#131317", "#1b1b21", "#33323c", "#dcd9d4", "#9a96a0", "#d0383e", "#8f9bb3"), `
-/* Fog, iron and a single red: a blood moon over the mist. */
-.board-head:not(.has-art) {
-  background:
-    linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--bg) 92%, transparent) 100%),
-    radial-gradient(ellipse at 50% 100%, rgba(190, 196, 210, .35), transparent 60%),
-    radial-gradient(circle at 76% 22%, rgba(214, 60, 66, .5) 0 26px, transparent 60px),
-    linear-gradient(180deg, #17171d, #0b0b0e);
-  --head-ink: #dcd9d4; --head-title: #e4e1dc; --head-line: #3d3c47; --head-nav: rgba(0, 0, 0, .4); --head-shadow: 0 0 18px rgba(0, 0, 0, .9);
-}
-.board-title { text-transform: none; letter-spacing: .04em; font-weight: 400; font-size: 58px; }
-.board-tagline { color: #b9b5c2; }
-.category-title { text-transform: none; font-weight: 400; font-size: 24px; letter-spacing: .03em; color: var(--ink); }
-.category-title::before { content: "†"; color: var(--accent); }
-.forum, .topic-row, .post, .topic-head { border-color: var(--line); border-left: 3px solid var(--line-strong); }
-.forum:hover, .topic-row:hover { border-left-color: var(--accent); }
-.forum-name, .topic-title, .post-name, .topic-name { text-transform: none; font-weight: 400; letter-spacing: .03em; }
-.forum-name { font-size: 24px; } .topic-title { font-size: 21px; } .post-name { font-size: 27px; } .topic-name { font-size: 34px; }
-.post { box-shadow: inset 0 0 60px color-mix(in srgb, #000 22%, transparent); }
-.post-band { background: none; }
-.post-text > p:first-child::first-letter { font-family: var(--font-display); font-size: 2.6em; line-height: .8; color: var(--accent); padding-right: 4px; }
-.f-btn { letter-spacing: .1em; }
-`),
+  { inspired: "Ravenloft and Curse of Strahd", theme: CASTLE_IN_THE_MISTS },
 
   skin("blight", "Blight and Blood", "Dragon Age: Origins", 0, { display: "marcellus", reading: "spectral", ui: "inter" },
     set("#e3d9cb", "#f2eadf", "#e9dfd1", "#c4b29c", "#261a15", "#655549", "#8c1c13", "#6b5220"),
