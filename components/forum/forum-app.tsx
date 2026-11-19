@@ -77,11 +77,16 @@ export default function ForumApp() {
   }, [key, place, go, load]);
 
   /* eslint-disable @next/next/no-html-link-for-pages -- other tools open as full pages (AGENTS.md) */
-  const appBar = <div className="forum-appbar">
-    <a href="/campaigns" className="appbar-home">RPG Tools</a><span className="muted">·</span><a href="/campaigns">Campaigns</a><span className="muted">·</span><a href="/forum">Forums</a>
+  // The same tools as the site header everywhere else. Encyclopedia opens this campaign's notes (yours, or as a member).
+  const encyclopediaHref = key.startsWith('c-') ? `/encyclopedia?campaign=${key.slice(2)}` : key.startsWith('m-') ? `/encyclopedia#${key}` : '/encyclopedia';
+  const appBar = <header className="forum-appbar">
+    <a href="/" className="appbar-home" aria-label="RPG Tools home"><span className="tool-switch-mark" aria-hidden="true" />RPG Tools</a>
+    <nav className="appbar-links" aria-label="RPG tools">
+      <a href="/campaigns">Campaigns</a><a href="/maptable">Maptable</a><a href={encyclopediaHref}>Encyclopedia</a><a href="/forum" aria-current="page">Forum</a><a href="/guide">Guide</a>
+    </nav>
     {view && <span className="appbar-campaign">{view.frame.campaign.name}</span>}
-    <span className="appbar-spacer" />{loading && view && <span className="muted small">Loading…</span>}<ThemeToggle />
-  </div>;
+    <span className="appbar-spacer" />{loading && view && <span className="muted small">Loading…</span>}<ThemeToggle /><a href="/account" className="appbar-account">Account</a>
+  </header>;
   const backLink = <a href="/campaigns">Back to Campaigns</a>;
   /* eslint-enable @next/next/no-html-link-for-pages */
 

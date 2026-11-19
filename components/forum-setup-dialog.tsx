@@ -36,10 +36,10 @@ export function ForumSetupDialog({ campaignName, busy, error, close, onConfirm }
       <label>Name<input autoFocus value={setup.title} maxLength={80} placeholder={campaignName} onChange={e => set("title", e.target.value)} /><small>Shown in the forum&apos;s banner. Left empty, it uses the campaign&apos;s name.</small></label>
       <label>Tagline<input value={setup.tagline} maxLength={160} placeholder="For example, Tales from the Lantern Coast" onChange={e => set("tagline", e.target.value)} /></label>
       <label className="campaigns-check"><input type="checkbox" checked={setup.banner} onChange={e => set("banner", e.target.checked)} /><span><strong>Banner picture</strong> show the campaign&apos;s banner behind the name</span></label>
-      <label>The toolbar writes<select value={setup.markup} onChange={e => set("markup", e.target.value as ForumSetup["markup"])}>
+      <label>New posts start in<select value={setup.markup} onChange={e => set("markup", e.target.value as ForumSetup["markup"])}>
         <option value="markdown">Markdown</option>
         <option value="bbcode">BBCode</option>
-      </select><small>Posts read both either way.</small></label>
+      </select><small>Each poster can switch a post to the other when they write.</small></label>
       <fieldset>
         <legend>Boards to start with</legend>
         <label className="campaigns-check"><input type="checkbox" checked={setup.announcements} onChange={e => set("announcements", e.target.checked)} /><Megaphone size={16} aria-hidden="true" /><span><strong>Announcements</strong> news and rules; only moderators start topics</span></label>

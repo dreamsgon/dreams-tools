@@ -14,7 +14,7 @@ import { can, type MemberList } from "../members.ts";
 import { NARRATION } from "./reader.ts";
 import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMetaSchema, type Combat, type Slot } from "./combat.ts";
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
-import { emojiCodes, htmlParts, pictureIds } from "./markup.ts";
+import { POST_FORMATS, emojiCodes, htmlParts, pictureIds, type PostFormat } from "./markup.ts";
 
 export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3, cardRows: 12, styles: 4, styleChars: 2000, profiles: 100 } as const;
 /** Largest picture in a post, and largest emoji, in bytes. */
@@ -39,7 +39,7 @@ export const forumSettingsSchema = z.object({
   banner: z.boolean(),
   /** The notices strip under the banner: short lines from the GM, each dismissible by a reader. */
   notices: z.array(z.object({ id, text: z.string().trim().min(1).max(240) })).max(3).optional(),
-  /** Which markup the composer's toolbar writes: Markdown (left out) or BBCode. Posts read both either way. */
+  /** What new posts start in: Markdown (left out) or BBCode. Each poster can switch a post to the other (`Post.format`). */
   markup: z.enum(["markdown", "bbcode"]).optional(),
   /** The forum's AI help (ai.ts); left out: no AI in the forum. Set with `setAi`, never with the banner. */
   ai: forumAiSchema.optional(),
@@ -158,6 +158,8 @@ export const postSchema = z.object({
   turn: turnMetaSchema.optional(),
   /** Drafted with the forum's AI and posted, after a read, by a moderator (`by`). */
   ai: z.literal(true).optional(),
+  /** What the poster wrote it in (markup.ts `PostFormat`). Left out: from before the choice, read as both. */
+  format: z.enum(POST_FORMATS).optional(),
 });
 /** A post an AI connection (MCP) suggested, waiting in the topic for the GM or a co-GM to approve, change or skip. */
 export const suggestionSchema = z.object({ id, at, connection: nameOf(60), as: id.nullable(), body: z.string().min(1).max(FORUM_LIMITS.body) });
@@ -267,7 +269,7 @@ const cleanBody = (s: unknown) => {
  */
 export function checkMarkup(f: Forum, body: string, who: Poster, before = "", boardId?: string) {
   // HTML needs the board's permission for one of the writer's groups; HTML already in the post may stay.
-  if (boardId) { const had = new Set(htmlParts(before).map(h => h.trim())); if (htmlParts(body).some(h => !had.has(h.trim())) && !accessOn(who, boardId).html) fail("Your group can't use HTML on this board. Take out the [html] part."); }
+  if (boardId) { const had = new Set(htmlParts(before).map(h => h.trim())); if (htmlParts(body).some(h => !had.has(h.trim())) && !accessOn(who, boardId).html) fail("Your group can't use HTML on this board. Take out the [dohtml] part."); }
   const had = new Set(pictureIds(before)), added = pictureIds(body).filter(x => !had.has(x));
   if (added.length) {
     if (!who.rights.pictures) fail("Your group can't add pictures to posts.");
@@ -332,26 +334,28 @@ export type Change<T = undefined> = { topic?: Topic | null; forum: (f: Forum, la
 const withRolls = (rolls: readonly (Roll | null)[] | undefined) => rolls?.length ? { rolls: rolls.slice(0, ROLL_LIMIT) } : {};
 /** The AI mark, for moderators who post a draft from Draft with AI. */
 const withAi = (ai: boolean | undefined, who: Poster) => ai && who.rights.moderate ? { ai: true as const } : {};
+/** What the post is written in; anything else (or nothing) leaves it out, so it reads as both. */
+const withFormat = (format: unknown): { format?: PostFormat } => POST_FORMATS.includes(format as PostFormat) ? { format: format as PostFormat } : {};
 /** Tags for a topic: the forum's own, each once, three at most. */
 const cleanTags = (f: Forum, tags: readonly string[]) => {
   const known = new Set((f.topicTags ?? []).map(t => t.id)), out = [...new Set(tags)];
   if (out.some(t => !known.has(t))) fail("That tag was removed. Pick from the forum's tags.");
   return out.length > FORUM_LIMITS.tagsPerTopic ? fail(`A topic can have up to ${FORUM_LIMITS.tagsPerTopic} tags.`) : out;
 };
-export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean; tags?: string[] }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
+export function startTopic(f: Forum, input: { boardId: string; title: unknown; body: unknown; as: string | null; private?: string[]; rolls?: (Roll | null)[]; ai?: boolean; tags?: string[]; format?: PostFormat }, who: Poster, ids: { topic: string; post: string }, now: Date): Change<{ topicId: string }> {
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = checkMarkup(f, cleanBody(input.body), who, "", board.id);
   if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
-  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who) }] };
+  const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who), ...withFormat(input.format) }] };
   const tags = input.tags?.length ? cleanTags(f, input.tags) : [];
   const summary = summarize(topic, { title, pinned: false, locked: false, ...(only ? { private: only } : {}), ...(tags.length ? { tags } : {}) });
   const log: Recent = { at: stamp, userId: who.userId, as, topicId: topic.id, postId: ids.post };
   return { topic, forum: g => logPost(addCharacter(addCount(putSummary(g, summary), who.userId, 1), as), log), out: { topicId: topic.id } };
 }
 
-export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null; rolls?: (Roll | null)[]; ai?: boolean }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
+export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string | null; rolls?: (Roll | null)[]; ai?: boolean; format?: PostFormat }, who: Poster, postId: string, now: Date): Change<{ postId: string }> {
   const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
   if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
@@ -359,7 +363,7 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
   const as = checkAs(f, board, input.as, who), body = checkMarkup(f, cleanBody(input.body), who, "", board.id);
   // In a fight, a post in the current turn is marked with it.
   const turn = s.combat && countsFor(s.combat, as, who.rights.gm) ? turnMeta(s.combat) : undefined;
-  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}), ...withAi(input.ai, who) }] };
+  const next: Topic = { ...topic, boardId: s.boardId, posts: [...topic.posts, { id: postId, by: { userId: who.userId, as }, body, at: now.toISOString(), ...withRolls(input.rolls), ...(turn ? { turn } : {}), ...withAi(input.ai, who), ...withFormat(input.format) }] };
   const log: Recent = { at: now.toISOString(), userId: who.userId, as, topicId: topic.id, postId };
   return {
     topic: next, out: { postId },
@@ -419,13 +423,13 @@ export function dismissReports(f: Forum, input: { postId: string }, who: Poster)
 const postOf = (topic: Topic, postId: string) => topic.posts.find(p => p.id === postId) ?? fail("That post was removed.");
 const mayChange = (p: Post, who: Poster) => p.by.userId === who.userId || who.rights.moderate;
 
-export function editPost(f: Forum, topic: Topic, input: { postId: string; body: unknown; reroll?: (old: (Roll | null)[] | undefined, body: string) => (Roll | null)[] }, who: Poster, now: Date): Change {
+export function editPost(f: Forum, topic: Topic, input: { postId: string; body: unknown; format?: PostFormat; reroll?: (old: (Roll | null)[] | undefined, body: string) => (Roll | null)[] }, who: Poster, now: Date): Change {
   const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only edit your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
   const body = checkMarkup(f, cleanBody(input.body), who, p.body, s.boardId);
   const rolls = input.reroll ? input.reroll(p.rolls, body) : p.rolls;
-  const next: Topic = { ...topic, posts: topic.posts.map(x => { if (x.id !== p.id) return x; const y = { ...x, body, editedAt: now.toISOString() }; delete y.rolls; return { ...y, ...withRolls(rolls) }; }) };
+  const next: Topic = { ...topic, posts: topic.posts.map(x => { if (x.id !== p.id) return x; const y = { ...x, body, editedAt: now.toISOString(), ...(input.format ? withFormat(input.format) : {}) }; delete y.rolls; return { ...y, ...withRolls(rolls) }; }) };
   return { topic: next, forum: g => g };
 }
 

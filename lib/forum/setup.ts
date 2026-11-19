@@ -81,7 +81,7 @@ export function describeForumSetup(setup: ForumSetup, campaignName: string): str
   return [
     `Named “${setup.title.trim() || campaignName}”${setup.tagline.trim() ? `, with “${setup.tagline.trim()}” under it` : ""}${setup.banner ? ", over the campaign's banner picture" : ""}.`,
     boards.length ? `Starts with ${boards.join(", ").replace(/, ([^,]*)$/, " and $1")}, plus an empty Locations category for in-character boards.` : "Starts with an empty Locations category for in-character boards and no out-of-character boards.",
-    `The toolbar writes ${setup.markup === "bbcode" ? "BBCode" : "Markdown"}.`,
+    `New posts start in ${setup.markup === "bbcode" ? "BBCode" : "Markdown"}; each poster can switch.`,
     can("Players", setup.players) + (setup.players === "post" ? setup.pictures ? " They may add pictures." : " They can't add pictures." : ""),
     can("Guests", setup.guests),
     setup.cogms ? "Co-GMs moderate and arrange the boards." : "Only you moderate and arrange the boards.",

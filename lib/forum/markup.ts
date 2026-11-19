@@ -3,18 +3,26 @@
  * `code`, [[page links]]) plus what roleplay posts need: *italic*, __underline__, speech in quotes picked out, and
  * [collapse=Title] … [/collapse] for text a reader opens when they want it, [img]<picture>[/img] for a picture added
  * to the forum and :code: for one of the campaign's emoji, ~~strike~~ and [links](https://…). BBCode works too
- * (`fromBbcode`): [b], [i], [u], [s], [quote=Name], [code], [spoiler=Title], [url=…], [list][*]; the forum's settings
- * say which of the two the toolbar writes. Pure, so the server and the browser read posts the same way.
+ * (`fromBbcode`): [b], [i], [u], [s], [quote=Name], [code], [spoiler=Title], [url=…], [list][*]. Each post says which
+ * of the two it is written in (`PostFormat`): a Markdown post shows BBCode as typed and a BBCode post shows Markdown
+ * marks as typed. Posts from before that choice read both. [dohtml]…[/dohtml] (or [html]…[/html]) is HTML in either.
+ * The forum's own tags ([img], [roll], [collapse], [[page links]], :emoji:) work in both. Pure, so the server and the
+ * browser read posts the same way.
  */
 import { proseBlocks, proseParts, type ProseBlock } from "../encyclopedia/player-prose.ts";
 import { htmlNodes, htmlPictures, htmlText, type HtmlNode } from "./html.ts";
 
-/** An [html]…[/html] section, already cut down to what's allowed (html.ts). */
+/** What a post is written in. Left out (posts from before the choice): both. */
+export const POST_FORMATS = ["markdown", "bbcode"] as const;
+export type PostFormat = (typeof POST_FORMATS)[number];
+
+/** A [dohtml]…[/dohtml] (or [html]…[/html]) section, already cut down to what's allowed (html.ts). */
 export type HtmlBlock = { type: "html"; nodes: HtmlNode[] };
 export type PostBlock = ProseBlock | HtmlBlock | { type: "collapse"; title: string; blocks: (ProseBlock | HtmlBlock)[] };
-const HTML_PART = /\[html\]([\s\S]*?)(?:\[\/html\]|$)/gi, HTML_LINE = /^\u0001(\d+)\u0001$/;
-/** [html] sections, set aside before anything else reads the post. */
-export const htmlParts = (text: string) => [...text.matchAll(HTML_PART)].map(m => m[1]!);
+const HTML_PART = /\[(dohtml|html)\]([\s\S]*?)(?:\[\/\1\]|$)/gi, HTML_LINE = /^\u0001(\d+)\u0001$/;
+/** HTML sections, set aside before anything else reads the post. */
+export const htmlParts = (text: string) => [...text.matchAll(HTML_PART)].map(m => m[2]!);
+
 const OPEN = /^\s*\[collapse(?:=([^\]\n]{0,80}))?\]\s*$/i, CLOSE = /^\s*\[\/collapse\]\s*$/i;
 
 /** BBCode that marks text inside a line, and the Markdown it becomes (applied line by line, as Markdown marks don't cross lines). */
@@ -42,11 +50,31 @@ export function fromBbcode(text: string) {
   return t.replace(BB_LOOKS, "").replace(/\u0000(\d+)\u0000/g, (_m, n: string) => codes[Number(n)] ?? "");
 }
 
-/** Blocks of a post, with collapsed sections (one level; an unclosed one runs to the end). */
-export function postBlocks(source: string): PostBlock[] {
+/*
+ * A BBCode post shows Markdown marks as typed: before its BBCode becomes the forum's markup, each mark is swapped for
+ * a stand-in character (private use) that no reader picks up, and `unmask` puts the marks back in what is shown.
+ * Tags ([…]), web addresses and :emoji: are left alone, so the forum's own tags still work.
+ */
+const MASKED = "*_~`#>-(";
+const MASK_AT = 0xe100, MASK_RE = /[\ue100-\ue107]/g;
+const mask = (c: string) => String.fromCharCode(MASK_AT + MASKED.indexOf(c));
+/** The marks a BBCode post typed, back as typed. */
+export const unmask = (text: string) => text.replace(MASK_RE, c => MASKED[c.charCodeAt(0) - MASK_AT]!);
+function maskMarkdown(text: string) {
+  return text.split("\n").map(line => line
+    .replace(/^(\s*)([#>]|[-*](?= ))/, (_m, sp: string, c: string) => sp + mask(c))
+    .replace(/\]\(/g, "]" + mask("("))
+    .split(/(\[[^\]\n]*\]|https?:\/\/[^\s[\]]+|:[a-z][a-z0-9_]{1,31}:)/i)
+    .map((part, i) => i % 2 ? part : part.replace(/[*_~`]/g, mask)).join("")).join("\n");
+}
+const unmaskBlock = <B extends ProseBlock | HtmlBlock>(b: B): B => b.type === "code" ? { ...b, text: unmask(b.text) } : b;
+
+/** Blocks of a post, with collapsed sections (one level; an unclosed one runs to the end). `format`: see `PostFormat`. */
+export function postBlocks(source: string, format?: PostFormat): PostBlock[] {
   // HTML is set aside on lines of its own, so neither BBCode nor Markdown touches it.
   const parts: string[] = [];
-  const out: PostBlock[] = [], text = fromBbcode(source.replace(HTML_PART, (_m, inner: string) => { parts.push(inner); return `\n\u0001${parts.length - 1}\u0001\n`; }));
+  const kept = source.replace(HTML_PART, (_m, _tag: string, inner: string) => { parts.push(inner); return `\n\u0001${parts.length - 1}\u0001\n`; });
+  const out: PostBlock[] = [], text = format === "markdown" ? kept : format === "bbcode" ? fromBbcode(maskMarkdown(kept)) : fromBbcode(kept);
   // Prose with the HTML sections between its blocks.
   const read = (lines: string[]) => {
     const blocks: (ProseBlock | HtmlBlock)[] = [], run: string[] = [];
@@ -58,10 +86,10 @@ export function postBlocks(source: string): PostBlock[] {
       else if (!(after && !l.trim())) { run.push(l); after = false; }
     }
     prose();
-    return blocks;
+    return blocks.map(unmaskBlock);
   };
   let inner: string[] | null = null, title = "";
-  const flush = () => { if (inner) out.push({ type: "collapse", title: title || "Show more", blocks: read(inner) }); inner = null; };
+  const flush = () => { if (inner) out.push({ type: "collapse", title: unmask(title) || "Show more", blocks: read(inner) }); inner = null; };
   const plain: string[] = [];
   const flushPlain = () => { if (plain.length) out.push(...read(plain)); plain.length = 0; };
   for (const line of text.split("\n")) {
@@ -92,6 +120,9 @@ const PICTURE = /\[img(?:=([^\]\n]{0,120}))?\]([a-f0-9-]{36})\[\/img\]/gi;
 const EMOJI = /(?<![\w:])(:[a-z][a-z0-9_]{1,31}:)(?![\w:])/g;
 /** Inline parts: [roll] tags (rolls.ts), bold, code and links as on Encyclopedia pages, then underline, italic and speech. */
 export function postInline(text: string): Inline[] {
+  return /[\ue100-\ue107]/.test(text) ? inlineParts(text).map(p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === "string" && k !== "type" ? unmask(v) : v])) as Inline) : inlineParts(text);
+}
+function inlineParts(text: string): Inline[] {
   const out: Inline[] = [];
   const parts = text.split(/(\[roll(?:=[^\]\n]{0,60})?\][^[\]\n]{1,80}\[\/roll\]|\[img(?:=[^\]\n]{0,120})?\][a-f0-9-]{36}\[\/img\]|(?<!\[)\[[^[\]\n]{1,200}\]\(https?:\/\/[^\s)]{1,500}\)|\[(?:feature|spell)=[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_-]{1,100}\][^[\]\n]{1,80}\[\/(?:feature|spell)\])/gi);
   for (const [i, part] of parts.entries()) {
@@ -133,8 +164,8 @@ export function withEmoji(text: string): Inline[] {
 }
 /** The pictures a post shows, in order. */
 export const pictureIds = (text: string) => [...withoutHtml(text).matchAll(PICTURE)].map(m => m[2]!.toLowerCase()).concat(htmlParts(text).flatMap(h => htmlPictures(htmlNodes(h))));
-/** A post with its [html] sections as their text. */
-export const withoutHtml = (text: string) => text.replace(HTML_PART, (_m, inner: string) => ` ${htmlText(htmlNodes(inner))} `);
+/** A post with its HTML sections as their text. */
+export const withoutHtml = (text: string) => text.replace(HTML_PART, (_m, _tag: string, inner: string) => ` ${htmlText(htmlNodes(inner))} `);
 /** The :codes: a post uses. */
 export const emojiCodes = (text: string) => [...withoutHtml(text).matchAll(EMOJI)].map(m => m[1]!.slice(1, -1));
 
@@ -149,14 +180,15 @@ export function linkTargets(text: string) {
 export const wordCount = (text: string) => (fromBbcode(withoutHtml(text)).replace(/\]\(https?:\/\/[^\s)]+\)/g, "]").replace(/\[roll[^\]]*\][^[\]]*\[\/roll\]/gi, " ").replace(/\[\/?collapse[^\]]*\]/gi, " ").replace(PICTURE, " ").replace(EMOJI, " ").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
 
 /**
- * A post style with `text` in its {text} slot, and where that text sits. Inside an [html] part the words go in as
- * HTML text (escaped, blank lines as paragraphs), since an [html] part holds only HTML; elsewhere they go in as written.
+ * A post style with `text` in its {text} slot, and where that text sits. Inside a [dohtml] (or [html]) part the words
+ * go in as HTML text (escaped, blank lines as paragraphs), since that part holds only HTML; elsewhere they go in as written.
  * A style with no slot goes first, then the text.
  */
 export function fillStyle(body: string, text: string): { text: string; select: [number, number] } {
   const at = body.indexOf("{text}");
   if (at < 0) { const head = body + "\n\n"; return { text: head + text, select: [head.length, head.length + text.length] }; }
-  const before = body.slice(0, at).toLowerCase(), inHtml = before.lastIndexOf("[html]") > before.lastIndexOf("[/html]");
+  const before = body.slice(0, at).toLowerCase(), last = (tags: string[]) => Math.max(...tags.map(t => before.lastIndexOf(t)));
+  const inHtml = last(["[html]", "[dohtml]"]) > last(["[/html]", "[/dohtml]"]);
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const paras = text.trim().split(/\n\s*\n/).map(p => esc(p.trim()).split("\n").join("<br>"));
   const inner = !inHtml ? text : paras.length > 1 ? paras.map(p => `<p>${p}</p>`).join("") : paras[0] ?? "";
