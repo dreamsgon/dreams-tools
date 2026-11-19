@@ -28,6 +28,7 @@ import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 import { hubLinks } from "@/lib/campaign-hub-links";
 import SiteHeader from "./site-header";
+import { useCampaignSkin } from "./campaign-skin";
 import { ForumSetupDialog } from "./forum-setup-dialog";
 import type { ForumSetup } from "@/lib/forum/setup";
 import { keyFields } from "@/lib/ai/device-keys";
@@ -49,6 +50,8 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const [hub, setHub] = useState<CampaignHub | null>(null), [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>(tabParam), [editing, setEditing] = useState(false);
   usePageTitle(hub ? campaignTitle(hub.row.name) : "");
+  // The campaign's live theme (lib/campaign-theme) themes the dashboard below the site header, in place of its look.
+  const skin = useCampaignSkin(hub?.row.encyclopedia ? `c-${hub.row.encyclopedia.id}` : null, "dashboard");
   useDiceTarget(hub ? hubDiceTarget(hub.row) : NO_CAMPAIGN);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
   const [draft, setDraft] = useState<Dashboard | null>(null), [saveError, setSaveError] = useState("");
@@ -154,8 +157,8 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const attrs = lookAttributes(look);
   const halves: Halves = { maps: !!m, notes: !!e };
   const layout = hub.dashboard ?? defaultDashboard({}, halves);
-  return <>{header}<div className={`hub${draft ? " hub-customizing" : ""}`} data-look-accent={attrs["data-look-accent"]} style={attrs.style as CSSProperties}>
-    <LookFont look={look} />
+  return <>{header}<div className={`hub-skin ${skin.className}`}>{skin.nodes}<div className={`hub${draft ? " hub-customizing" : ""}`} data-look-accent={skin.on ? undefined : attrs["data-look-accent"]} style={skin.on ? undefined : attrs.style as CSSProperties}>
+    {!skin.on && <LookFont look={look} />}
     <nav className="hub-crumbs" aria-label="Breadcrumb"><Link href="/campaigns">Campaigns</Link><span aria-hidden="true">/</span><span aria-current="page">{row.name}</span></nav>
     {look?.banner && <LookBanner look={look} className="hub-banner" />}
     <div className="hub-head">
@@ -201,7 +204,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         : <><p className="hub-note"><Eye size={15} aria-hidden="true" />This is what players see first with their player link.</p><FrontPageView page={hub.front} href={L.entry} /></>}
     </div>
     {forumDialog && <ForumSetupDialog campaignName={row.name} busy={settingUp} error={forumError} close={() => setForumDialog(false)} onConfirm={setup => void setUpForum(setup)} />}
-  </div></>;
+  </div></div></>;
 }
 
 /** Members tab: solo play on or off. */

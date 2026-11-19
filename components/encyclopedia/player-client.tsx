@@ -7,10 +7,11 @@ import {useDiceTarget} from '../use-dice-target';
 import {playerDiceTarget,NO_CAMPAIGN} from '@/lib/dice-target';
 import {parsePlayerHash} from '@/lib/encyclopedia/player-place';
 import type {PlayerCampaign} from '@/lib/encyclopedia/world-model';
+import type {LiveTheme} from '@/lib/campaign-theme/model';
 import type {MyPages} from '@/lib/encyclopedia/player-edit';
 import type {SheetState} from '@/lib/encyclopedia/player-sheet';
 // A signed-in member also gets `you`: the pages they may edit (lib/encyclopedia/player-edit.ts).
-type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages;sheets?:Record<string,SheetState>}};
+type Shown=PlayerCampaign&{you?:{name:string;pages:MyPages;sheets?:Record<string,SheetState>};skin?:LiveTheme|null};
 export default function PlayerClient(){
  const [data,setData]=useState<Shown|null>(null),[error,setError]=useState(''),[token,setToken]=useState(''),[updating,setUpdating]=useState(false),[refreshed,setRefreshed]=useState(''),[signIn,setSignIn]=useState(false);
  const request=useRef<AbortController|null>(null);
@@ -26,5 +27,5 @@ export default function PlayerClient(){
   void refresh(token);const timer=setInterval(()=>{if(!document.hidden)void refresh(token);},5000),focus=()=>{if(!document.hidden)void refresh(token);};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
   return()=>{clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);request.current?.abort();request.current=null;};
  },[refresh]);
- return <><div className="player-refresh"><ThemeToggle/>{token.startsWith('m-')&&<Link className="player-back" href="/campaigns">Campaigns</Link>}{token&&!signIn&&<><span>{updating?'Updating…':error?'Updates paused until the connection recovers':`Updates every 5 seconds · Last checked ${refreshed}`}</span><button className="button" disabled={updating} onClick={()=>void refresh(token)}>Refresh now</button></>}</div>{data?<PlayerView data={data} playerToken={token} you={data.you} onChanged={()=>void refresh(token)}/>:<div className="welcome"><h1>{signIn?'Sign in first':error?(token.startsWith('m-')?'Campaign unavailable':'Link unavailable'):'Opening the campaign…'}</h1><p>{error||'Loading player-visible notes.'}</p>{signIn&&<p><Link className="button" href="/account?mode=login&next=%2Fcampaigns">Sign in</Link></p>}{token.startsWith('m-')&&error&&!signIn&&<p><Link href="/campaigns">Back to Campaigns</Link></p>}</div>}</>;
+ return <><div className="player-refresh"><ThemeToggle/>{token.startsWith('m-')&&<Link className="player-back" href="/campaigns">Campaigns</Link>}{token&&!signIn&&<><span>{updating?'Updating…':error?'Updates paused until the connection recovers':`Updates every 5 seconds · Last checked ${refreshed}`}</span><button className="button" disabled={updating} onClick={()=>void refresh(token)}>Refresh now</button></>}</div>{data?<PlayerView data={data} skin={data.skin??null} playerToken={token} you={data.you} onChanged={()=>void refresh(token)}/>:<div className="welcome"><h1>{signIn?'Sign in first':error?(token.startsWith('m-')?'Campaign unavailable':'Link unavailable'):'Opening the campaign…'}</h1><p>{error||'Loading player-visible notes.'}</p>{signIn&&<p><Link className="button" href="/account?mode=login&next=%2Fcampaigns">Sign in</Link></p>}{token.startsWith('m-')&&error&&!signIn&&<p><Link href="/campaigns">Back to Campaigns</Link></p>}</div>}</>;
 }

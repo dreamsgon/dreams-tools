@@ -52,6 +52,7 @@ import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,up
 import Link from "next/link";
 import {endPageDrag,startPageDrag} from "./page-drag";
 import {orgListItems} from "@/lib/encyclopedia/org-holdings";
+import {useCampaignSkin} from "../campaign-skin";
 
 // Sections, the article editor, the dialogs (AI, backups, item settings, templates) and the AI activity
 // button load as separate chunks so the dashboard appears sooner; they are fetched while the browser is idle, so opening one is still instant.
@@ -130,6 +131,8 @@ export default function WorkspaceApp() {
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
+    // The open campaign's live theme (lib/campaign-theme), in place of its look. A co-GM asks through their member ref.
+    const skin = useCampaignSkin(!loaded || signedOut ? null : memberRef() ? `m-${memberRef()}` : campaign ? `c-${campaign.id}` : null, "encyclopedia");
     usePageTitle(loaded && !signedOut ? encyclopediaTitle({ entry: view === "overview" ? entry?.title : null, view, campaign: campaign?.name, world: world?.name }) : "");
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
@@ -408,7 +411,7 @@ export default function WorkspaceApp() {
         return <div className="welcome"><div className="welcome-theme"><ThemeToggle/></div><Compass size={40}/><h1>{error ? "Couldn’t open your worlds" : "Opening your worlds…"}</h1>{error ? <><p>{error}</p><button onClick={() => location.reload()}>Try again</button></> : <LoaderCircle className="spin"/>}</div>;
     // The Maptable link opens the paired Maptable campaign. A co-GM whose group may run the maps opens the GM's Maptable.
     const maptableHref = member ? (member.maps ? `/maptable#m-${memberRef()}` : undefined) : campaign?.maptableCampaignId ? `/maptable?campaign=${encodeURIComponent(campaign.maptableCampaignId)}` : undefined;
-    const look = lookAttributes(campaign?.look);
+    const look = lookAttributes(skin.on ? undefined : campaign?.look);
     const overlay = mobile || moreOpen || palette || modal?.type === "entry", moreViews = ["dashboard", "quests", "calendar", "tables", "templates", "codex", "relationships", "characters", "look"];
     // Chosen items close the sheet first, then act; the dice tray is the shared one from global-dice.
     const later = (fn: () => void) => () => { setTimeout(fn, 0); };
@@ -438,7 +441,7 @@ export default function WorkspaceApp() {
         { id: "appearance", label: "Appearance", icon: <Palette size={18}/>, onSelect: later(() => document.querySelector<HTMLElement>(".topbar .appearance-trigger")?.click()) },
         { id: "account", label: "Account", icon: <UserRound size={18}/>, href: "/account" }] },
     ];
-    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}><LookFont look={campaign?.look}/>
+    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
   <aside id="workspace-sidebar" aria-label="Workspace navigation" role={sidebar.narrow&&mobile?"dialog":undefined} aria-modal={sidebar.narrow&&mobile?true:undefined} inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>

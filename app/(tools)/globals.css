@@ -2438,3 +2438,7 @@ button.primary, .rpg-open { font-weight:500; }
  .app-shell .toolbar .toolbar-label {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
  .app-shell .toolbar .toolbar-short {display:inline;}
 }
+
+/* The campaign dashboard's part of the page, below the site header, which a campaign theme fills edge to edge. */
+.rpg-hub:has(> .hub-skin) { display:flex; flex-direction:column; }
+.rpg-hub > .hub-skin { flex:1; margin:0 min(-20px,calc((var(--page-width, 1040px) - calc(100vw / var(--ui-zoom, 1)))/2)); padding:0 max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - var(--page-width, 1040px))/2)); }

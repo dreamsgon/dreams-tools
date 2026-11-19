@@ -144,3 +144,9 @@ html[data-text-size="larger"] { zoom:1.25; --ui-zoom:1.25; }
 html[data-page-width="narrow"] { --page-width:880px; --content-width:960px; --reading-width:600px; }
 html[data-page-width="wide"] { --page-width:1320px; --content-width:1600px; --reading-width:880px; }
 html[data-page-width="full"] { --page-width:100000px; --content-width:none; --reading-width:1fr; }
+
+/* A campaign's theme outside the forum (components/campaign-skin.tsx): the element holding the campaign's part of the
+   page gets .campaign-skin, with the theme's variables. The forum has its own rules in app/forum/forum.css. */
+.campaign-skin { background:var(--bg); color:var(--ink); font-family:var(--font-sans); }
+.skin-preview-note { position:fixed; z-index:400; left:16px; bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; max-width:calc(100vw / var(--ui-zoom, 1) - 32px); padding:8px 10px 8px 14px; border-radius:6px; background:#1c2329; color:#f5f6f7; font:13px/1.4 "Inter", system-ui, sans-serif; box-shadow:0 8px 24px #0006; }
+.skin-preview-note button { padding:4px 10px; border:1px solid #f5f6f7; border-radius:4px; background:transparent; color:inherit; font:inherit; font-weight:600; cursor:pointer; }
