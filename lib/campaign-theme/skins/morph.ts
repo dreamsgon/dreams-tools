@@ -466,7 +466,7 @@ a { text-underline-offset: 3px; }
 .category .category-title::before { content: "#" counter(mo-book, decimal-leading-zero); flex: none; padding: 3px 7px 2px; border: 2px solid var(--accent); border-radius: 3px; font: 400 11px/1.2 var(--font-display); letter-spacing: .04em; color: var(--accent); }
 .category-title::after { content: ""; flex: 1; min-width: 20px; height: 3px; border-radius: 2px; background: var(--mo-ramp); }
 .tag { border-radius: 3px; ${LABEL} font-size: 9px; text-shadow: none; }
-.tag:not(.topic-tag) { border-color: var(--mo-line); color: var(--muted); }
+.tag:where(:not(.topic-tag)) { border-color: var(--mo-line); color: var(--muted); }
 .tag.new { border-color: var(--mo-1); background: var(--mo-1); color: #1b1440; }
 
 /* Boards and topics: panels with the sunset down their left edge, and a stage of the change in the corner. */

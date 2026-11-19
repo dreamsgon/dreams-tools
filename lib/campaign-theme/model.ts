@@ -51,6 +51,9 @@ export const THEME_FONTS = {
   uncial: { label: "Uncial Antiqua", stack: '"Uncial Antiqua", Georgia, serif', query: "Uncial+Antiqua" },
   michroma: { label: "Michroma", stack: '"Michroma", "Eurostile", Arial, sans-serif', query: "Michroma" },
   saira: { label: "Saira", stack: '"Saira", "Eurostile", "Inter", sans-serif', query: "Saira:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400" },
+  metamorphous: { label: "Metamorphous", stack: '"Metamorphous", "Marcellus", Georgia, serif', query: "Metamorphous" },
+  caudex: { label: "Caudex", stack: '"Caudex", "Friz Quadrata", Georgia, serif', query: "Caudex:ital,wght@0,400;0,700;1,400;1,700" },
+  archivo: { label: "Archivo Narrow", stack: '"Archivo Narrow", "Arial Narrow", "Inter", sans-serif', query: "Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);

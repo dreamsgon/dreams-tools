@@ -16,6 +16,7 @@ import { NORTHERN_HOLD } from "./skins/northern-hold.ts";
 import { STARSHIP_CONSOLE } from "./skins/starship-console.ts";
 import { AGORA } from "./skins/agora.ts";
 import { MORPH_SKIN } from "./skins/morph.ts";
+import { TWO_BANNERS } from "./skins/two-banners.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -220,27 +221,5 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .topic-row.pinned { border-left-color: var(--accent-2); }
 `),
 
-  skin("two-banners", "Two Banners", "World of Warcraft", 6, { display: "marcellus", reading: "source", ui: "inter" },
-    set("#dccba3", "#efe2c0", "#e5d5ad", "#b89c62", "#2a1c0c", "#5f4b2a", "#7a1512", "#1c4f96"),
-    set("#0c0d10", "#16181d", "#1e2128", "#3b3a33", "#e9e3d0", "#a39f90", "#ffc21a", "#4da3ff"), `
-/* Gold-trimmed windows, a quest log's parchment in light, and a banner split between red and blue. */
-.board-head:not(.has-art) {
-  background: radial-gradient(ellipse at 50% 100%, rgba(255, 194, 26, .35), transparent 60%), linear-gradient(90deg, #6b1210 0 49.6%, #d9a521 49.6% 50.4%, #173f7a 50.4% 100%);
-  --head-ink: #f3ead2; --head-title: #ffd24a; --head-nav: rgba(0, 0, 0, .5); --head-line: #d9a521; --head-shadow: 0 2px 0 #000, 0 0 14px rgba(0, 0, 0, .8);
-}
-.board-head, .forum, .topic-row, .post, .topic-head, .board-foot { border: 2px solid transparent; border-image: linear-gradient(180deg, #f1d27a, #8a6a1e 45%, #d9b24a 55%, #6b5014) 2; }
-.board-title { font-weight: 400; letter-spacing: .08em; }
-.category-title { font-weight: 400; letter-spacing: .1em; font-size: 18px; text-shadow: 0 1px 0 color-mix(in srgb, #000 35%, transparent); }
-.forum, .topic-row, .post, .topic-head { box-shadow: inset 0 0 24px color-mix(in srgb, #000 16%, transparent); }
-.forum-name, .topic-title, .topic-name { font-weight: 400; letter-spacing: .04em; }
-.forum-name a:hover, .topic-title a:hover { color: var(--accent-2); }
-.forum-desc, .topic-main small { font-style: normal; font-size: 15px; }
-.tag.new { border-color: #ffc21a; background: #ffc21a; color: #2a1c0c; font-weight: 800; }
-.tag.new::before { content: "!"; }
-.topic-row.pinned { border-image: linear-gradient(180deg, #c98bff, #6a2bb0) 2; }
-.post-band { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent); }
-.post-name { font-weight: 400; letter-spacing: .08em; text-shadow: 0 1px 0 color-mix(in srgb, #000 35%, transparent); }
-.f-btn { font-family: var(--font-display); font-weight: 400; font-size: 13px; }
-.f-btn:not(.ghost) { border: 1px solid #6b5014; background: linear-gradient(180deg, #a3221c, #6b1210); color: #ffd24a !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25); }
-`),
+  { inspired: "World of Warcraft", theme: TWO_BANNERS },
 ];
