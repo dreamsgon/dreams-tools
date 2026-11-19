@@ -15,6 +15,7 @@ import { CHAMPION } from "./skins/champion.ts";
 import { NORTHERN_HOLD } from "./skins/northern-hold.ts";
 import { STARSHIP_CONSOLE } from "./skins/starship-console.ts";
 import { AGORA } from "./skins/agora.ts";
+import { MORPH_SKIN } from "./skins/morph.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -135,37 +136,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Ancient Greece", theme: AGORA },
 
-  skin("morph", "Morph", "Animorphs", 10, { display: "space", reading: "inter", ui: "inter" },
-    set("#eef3fb", "#ffffff", "#e9f0fa", "#c3d0e6", "#121a2b", "#4d5a73", "#c94705", "#6a2bd9"),
-    set("#0a0d1c", "#121733", "#1a2147", "#2f3a73", "#eef1ff", "#a2abd6", "#ff8a3d", "#b48cff"), `
-/* A nineties paperback: a sunset that shifts colour, a title mid-change and a flip-book square in every corner. */
-@keyframes sky { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
-@keyframes shift { 0%, 100% { letter-spacing: .02em; transform: skewX(0deg); } 50% { letter-spacing: .1em; transform: skewX(-7deg); } }
-.board-head:not(.has-art) {
-  background: linear-gradient(120deg, #ff7a18, #ff3d77, #7a2bff, #1fb5ff, #ff7a18); background-size: 300% 300%;
-  animation: sky 18s linear infinite alternate;
-  --head-ink: #ffffff; --head-title: #ffffff; --head-nav: rgba(10, 13, 28, .35); --head-line: rgba(255, 255, 255, .35); --head-shadow: 0 3px 0 rgba(10, 13, 28, .45);
-}
-.board-head { border: 0; border-radius: 18px; }
-.board-title { font-weight: 700; text-transform: uppercase; letter-spacing: .02em; font-size: 60px; font-stretch: 75%; }
-.board-title a { display: inline-block; }
-.board-title a:hover { animation: shift 1.6s ease-in-out infinite; }
-.board-tagline { font-style: normal; font-weight: 600; font-size: 16px; }
-.category-title { font-weight: 700; font-size: 20px; letter-spacing: .02em; background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.category-title .tag { color: var(--muted); }
-.forum, .topic-row, .post, .topic-head, .board-foot { position: relative; border-radius: 14px; border-color: var(--line); box-shadow: 0 6px 0 color-mix(in srgb, var(--accent-2) 18%, transparent); }
-.forum::after, .post::after { content: ""; position: absolute; right: 8px; bottom: 8px; width: 16px; height: 16px; border-radius: 3px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); opacity: .7; }
-.forum:hover::after { transform: rotate(45deg); border-radius: 50%; }
-.forum-art { border-radius: 14px 0 0 14px; }
-.forum-name, .topic-title, .topic-name, .post-name { font-weight: 700; letter-spacing: 0; text-transform: none; }
-.forum-desc, .topic-main small { font-style: normal; font-size: 15px; }
-.post { overflow: hidden; }
-.post-band { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent-2) 22%, transparent)); }
-.post-text { font-size: 16.5px; font-weight: 400; }
-.f-btn { border-radius: 999px; font-weight: 700; }
-.f-btn:not(.ghost) { border: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #ffffff !important; }
-@media (prefers-reduced-motion: reduce) { .board-head:not(.has-art), .board-title a:hover { animation: none; } }
-`),
+  { inspired: "Animorphs", theme: MORPH_SKIN },
 
   skin("crawl", "Galactic Crawl", "Star Wars", 0, { display: "jost", reading: "source", ui: "inter" },
     set("#ece6d8", "#f8f4ea", "#efe8d8", "#cdc2a8", "#1b1a17", "#5c5648", "#a04a00", "#0b5fa5"),

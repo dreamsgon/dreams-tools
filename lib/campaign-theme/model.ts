@@ -49,6 +49,8 @@ export const THEME_FONTS = {
   comic: { label: "Comic Neue", stack: '"Comic Neue", "Comic Sans MS", sans-serif', query: "Comic+Neue:ital,wght@0,400;0,700;1,400" },
   pirata: { label: "Pirata One", stack: '"Pirata One", Georgia, serif', query: "Pirata+One" },
   uncial: { label: "Uncial Antiqua", stack: '"Uncial Antiqua", Georgia, serif', query: "Uncial+Antiqua" },
+  michroma: { label: "Michroma", stack: '"Michroma", "Eurostile", Arial, sans-serif', query: "Michroma" },
+  saira: { label: "Saira", stack: '"Saira", "Eurostile", "Inter", sans-serif', query: "Saira:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);
