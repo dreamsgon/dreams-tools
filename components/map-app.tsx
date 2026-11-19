@@ -70,6 +70,7 @@ import {
   Home,
   BookOpen,
   Images as ImagesIcon,
+  Palette,
 } from "lucide-react";
 import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
@@ -149,6 +150,7 @@ import { campaignTableScene, maptableSearch, readMaptablePlace } from "@/lib/map
 import { maptableTitle } from "@/lib/page-title";
 import { usePageTitle } from "./use-page-title";
 import { useCampaignSkin } from "./campaign-skin";
+import { openThemeEditor, useThemeDock } from "./campaign-theme-dock";
 // Editors and panels that open on demand load as separate chunks; they are fetched while the
 // browser is idle (below) so the first open is still instant.
 const lazyParts = {
@@ -368,7 +370,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // The campaign's live theme (lib/campaign-theme), through the Encyclopedia campaign paired with this one. A co-GM asks
   // through their member ref. The map itself keeps its own colours; the theme dresses the header, panels and Scene Picker.
   const skinCampaign = dashboard ? pickerCampaignId : campaignId;
-  const skin = useCampaignSkin(mapMemberRef() ? `m-${mapMemberRef()}` : skinCampaign ? `mt-${skinCampaign}` : null, "maptable");
+  const skinKey = mapMemberRef() ? `m-${mapMemberRef()}` : skinCampaign ? `mt-${skinCampaign}` : null;
+  // The palette button in the header opens the Admin CP beside Maptable, for the campaign's theme.
+  const themeDock = useThemeDock(skinKey, "maptable");
+  const skin = useCampaignSkin(skinKey, "maptable", undefined, themeDock.editing);
   useEffect(() => {
     if (!navigationReady || !workspace || creatorOpen) return;
     const place = dashboard ? { campaignId: overviewCampaignId, sceneId: null, view: "scenes" as const } : { campaignId, sceneId: scene?.id ?? null };
@@ -1252,18 +1257,19 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     const pickerName = pickerCampaignId ? workspace.collections.find(c => c.id === pickerCampaignId)?.name ?? "Campaign" : "Maps not in a campaign";
     const back = { href: dashboardHref(pickerCampaignId), label: pickerCampaignId && !member ? `${pickerName} dashboard` : "All campaigns",
       go: (e: ReactMouseEvent) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); toDashboard(pickerCampaignId); } };
-    return <main className={"campaign-dashboard" + (member ? " is-co-gm" : "") + (skin.on ? " campaign-skin" : "")}>{skin.nodes}
+    // The Admin CP sits first in both views, so it stays open (with its draft) between the Scene Picker and a scene.
+    return <>{themeDock.node}<main className={"campaign-dashboard" + (member ? " is-co-gm" : "") + (skin.on ? " campaign-skin" : "")}>{skin.nodes}
     <header><ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} /><nav className="header-scene" aria-label="Breadcrumb"><span className="divider" /><a className="crumb crumb-home" href={back.href} onClick={back.go}><LayoutDashboard size={15} aria-hidden="true" />{pickerCampaignId && !member ? "Dashboard" : "Campaigns"}</a><ChevronRight size={14} aria-hidden="true" className="crumb-sep" /><strong aria-current="page">{pickerName}</strong></nav>{!member && <CampaignSwitcher variant="bar" tool="maptable" title={pickerCampaignId ? pickerName : "Switch campaign"}
-      isCurrent={row => !!pickerCampaignId && row.maptable?.id === pickerCampaignId} onPick={switchCampaign} open={switcherOpen} onOpenChange={setSwitcherOpen} beforeLeave={leaveSaved} />}<div className="header-actions">{saveChip}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
+      isCurrent={row => !!pickerCampaignId && row.maptable?.id === pickerCampaignId} onPick={switchCampaign} open={switcherOpen} onOpenChange={setSwitcherOpen} beforeLeave={leaveSaved} />}<div className="header-actions">{saveChip}{!member && pickerCampaignId && <button className="icon-button" title="Campaign theme" aria-label="Campaign theme" onClick={openThemeEditor}><Palette size={17} aria-hidden="true" /></button>}<button className="icon-button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={17} aria-hidden="true" /></button><button className="icon-button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={17} aria-hidden="true" /></button><AppearanceMenu /><AccountLink /></div></header>
     {coGmBar}
     <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={pickerCampaignId}
       lastSceneId={campaignFor(scene.containerId) === pickerCampaignId ? scene.id : null} open={enterScene} back={back}
       unfiled={pickerCampaignId && unfiledCount ? { count: unfiledCount, open: () => setOverview({ id: null }) } : null}
       addScenes={() => { const target = campaignFor(scene.containerId) === pickerCampaignId ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === pickerCampaignId); if (target) enterScene(target.id); else openCampaign(pickerCampaignId); setNewMapType("encounter"); setDialog("add-scenes"); }} /></div>
-  </main>;
+  </main></>;
   }
   return (
-    <main className={"app-shell" + (member ? " is-co-gm" : "") + (skin.on ? " campaign-skin" : "")} data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>{skin.nodes}
+    <>{themeDock.node}<main className={"app-shell" + (member ? " is-co-gm" : "") + (skin.on ? " campaign-skin" : "")} data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>{skin.nodes}
       <header className="app-header">
         <ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} />
         <div className="header-scene">
@@ -1280,6 +1286,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <a className="mobile-only header-menu-link" href={encyclopediaHref ?? "/encyclopedia"}><BookOpen size={18} aria-hidden="true" />Encyclopedia</a>
           <AppearanceMenu />
           <button className="header-menu-button" aria-expanded={tokenGalleryOpen} onClick={()=>setTokenGalleryOpen(v=>!v)}><ImagesIcon className="header-menu-icon" size={18} aria-hidden="true" />Token gallery</button>
+          {!member && campaignId && <button className="icon-button" title="Campaign theme" aria-label="Campaign theme" onClick={openThemeEditor}><Palette size={19} aria-hidden="true" /></button>}
           {!member && <button
             className="icon-button"
             title="Connections"
@@ -2368,6 +2375,6 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           </HelpGuides>
         </Modal>
       )}
-    </main>
+    </main></>
   );
 }

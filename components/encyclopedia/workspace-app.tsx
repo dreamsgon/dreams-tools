@@ -32,7 +32,7 @@ import {DiscordRollsSetting} from "./discord-rolls";
 import {LookSection,LookBanner,LookFont} from "./look-section";
 import {lookAttributes} from "@/lib/encyclopedia/look";
 import Breadcrumbs,{type Crumb} from "@/components/breadcrumbs";
-import {placeFromQuery,placeQuery,isNewPlace,defaultTab,type Place} from "@/lib/encyclopedia/place";
+import {placeFromQuery,placeQuery,isNewPlace,defaultTab,themeCampaignId,type Place} from "@/lib/encyclopedia/place";
 import {encyclopediaTitle} from "@/lib/page-title";
 import {usePageTitle} from "../use-page-title";
 import {useDiceTarget} from "../use-dice-target";
@@ -53,6 +53,7 @@ import Link from "next/link";
 import {endPageDrag,startPageDrag} from "./page-drag";
 import {orgListItems} from "@/lib/encyclopedia/org-holdings";
 import {useCampaignSkin} from "../campaign-skin";
+import {useThemeDock} from "../campaign-theme-dock";
 
 // Sections, the article editor, the dialogs (AI, backups, item settings, templates) and the AI activity
 // button load as separate chunks so the dashboard appears sooner; they are fetched while the browser is idle, so opening one is still instant.
@@ -131,8 +132,13 @@ export default function WorkspaceApp() {
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
-    // The open campaign's live theme (lib/campaign-theme), in place of its look. A co-GM asks through their member ref.
-    const skin = useCampaignSkin(!loaded || signedOut ? null : memberRef() ? `m-${memberRef()}` : campaign ? `c-${campaign.id}` : null, "encyclopedia");
+    // The campaign's live theme (lib/campaign-theme), in place of its look: the open campaign's, or on a world's own pages
+    // the world's only campaign's (themeCampaignId). A co-GM asks through their member ref.
+    const themed = themeCampaignId(data, { worldId, campaignId, view });
+    const skinKey = !loaded || signedOut ? null : memberRef() ? `m-${memberRef()}` : themed ? `c-${themed}` : null;
+    // The Admin CP floats beside the Encyclopedia when it's opened (the Look section has the button).
+    const themeDock = useThemeDock(skinKey, "encyclopedia");
+    const skin = useCampaignSkin(skinKey, "encyclopedia", undefined, themeDock.editing);
     usePageTitle(loaded && !signedOut ? encyclopediaTitle({ entry: view === "overview" ? entry?.title : null, view, campaign: campaign?.name, world: world?.name }) : "");
     const shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
@@ -443,7 +449,7 @@ export default function WorkspaceApp() {
         { id: "appearance", label: "Appearance", icon: <Palette size={18}/>, onSelect: later(() => document.querySelector<HTMLElement>(".topbar .appearance-trigger")?.click()) },
         { id: "account", label: "Account", icon: <UserRound size={18}/>, href: "/account" }] },
     ];
-    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}
+    return <div className={`app-shell ${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}{themeDock.node}
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
   <aside id="workspace-sidebar" aria-label="Workspace navigation" role={sidebar.narrow&&mobile?"dialog":undefined} aria-modal={sidebar.narrow&&mobile?true:undefined} inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>

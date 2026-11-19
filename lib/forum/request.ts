@@ -23,7 +23,7 @@ import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
 import { freshReads, markAll, markTopic } from "./reader.ts";
 import { isSolo, soloCharacters } from "../solo.ts";
-import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea, type ThemeFile } from "../campaign-theme/model.ts";
+import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea } from "../campaign-theme/model.ts";
 import type { ThemeStore } from "../campaign-theme/store.ts";
 
 /** The made-up member a solo player's view is worked out for: one of the built-in Players group. */
@@ -102,7 +102,6 @@ const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }), z.object({ kind: z.literal("profile") }),
   z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }), z.object({ kind: z.literal("sheet"), id }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
-  z.object({ kind: z.literal("themes") }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
 /**
@@ -110,18 +109,15 @@ const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "tras
  * open the campaign, whether or not they read the forum. Besides the forum's keys it takes `mt-<Maptable campaign id>`,
  * the signed-in GM's Maptable campaign, which finds the Encyclopedia campaign paired with it.
  */
-const skinSchema = z.object({ action: z.literal("skin"), campaign: z.string().regex(/^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100}|mt-[A-Za-z0-9_-]{1,100})$/),
+const partKey = z.string().regex(/^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,100}|mt-[A-Za-z0-9_-]{1,100})$/);
+const skinSchema = z.object({ action: z.literal("skin"), campaign: partKey,
   area: z.enum(THEME_AREAS.map(a => a.id) as [ThemeArea, ...ThemeArea[]]), theme: z.string().max(200).optional() });
 async function skinOf(deps: Deps, body: z.infer<typeof skinSchema>) {
   const userId = await deps.user();
   if (!userId) return json({ error: signIn }, 401);
   if (readThrottle.hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
-  let key = body.campaign;
-  if (key.startsWith("mt-")) {
-    const paired = (await deps.workspace(userId)).campaigns.find(c => c.maptableCampaignId === key.slice(3));
-    if (!paired) return json({ theme: null });
-    key = `c-${paired.id}`;
-  }
+  const key = await pairedKey(deps, userId, body.campaign);
+  if (!key) return json({ theme: null });
   const found = await deps.campaign(userId, key);
   if (!found) return json({ error: notMember }, 404);
   const file = deps.themes ? (await deps.themes.read(found.owner, found.campaignId)).file : null;
@@ -129,12 +125,52 @@ async function skinOf(deps: Deps, body: z.infer<typeof skinSchema>) {
   return json({ theme: theme && body.theme === theme.key ? { key: theme.key, name: theme.name, mode: theme.mode, banner: theme.banner, same: true } : theme });
 }
 
+/** A part's key as the forum's: `mt-<Maptable campaign>` becomes the paired Encyclopedia campaign's, or null when none is. */
+async function pairedKey(deps: Deps, userId: string, key: string) {
+  if (!key.startsWith("mt-")) return key;
+  const paired = (await deps.workspace(userId)).campaigns.find(c => c.maptableCampaignId === key.slice(3));
+  return paired ? `c-${paired.id}` : null;
+}
+
+/**
+ * The Admin CP's themes, from any part of the campaign. A theme belongs to the campaign, not to its forum, so these work
+ * before a forum is set up and take a part's keys like `skin`. `themes` reads the saved ones, the live one and where the
+ * campaign's parts open (for the Preview links); the others save a theme (and make it live), make a saved theme live (or
+ * none) and delete one, returning the themes as stored now. For those who may arrange the forum: the GM, and the groups
+ * the GM lets.
+ */
+const THEME_ACTIONS = new Set(["themes", "saveTheme", "liveTheme", "deleteTheme"]);
+const themeBodySchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("themes"), campaign: partKey }),
+  z.object({ action: z.literal("saveTheme"), campaign: partKey, theme: z.unknown(), live: z.boolean().optional() }),
+  z.object({ action: z.literal("liveTheme"), campaign: partKey, id: z.string().max(40).nullable() }),
+  z.object({ action: z.literal("deleteTheme"), campaign: partKey, id: z.string().max(40) }),
+]);
+async function themesOf(deps: Deps, body: z.infer<typeof themeBodySchema>, now: Date) {
+  const userId = await deps.user();
+  if (!userId) return json({ error: signIn }, 401);
+  if ((body.action === "themes" ? readThrottle : writeThrottle).hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
+  const key = await pairedKey(deps, userId, body.campaign);
+  if (!key) return json({ error: "This Maptable campaign isn't paired with an Encyclopedia campaign, so it has no theme yet. Pair them from its dashboard first.", code: "unpaired" }, 404);
+  const found = await deps.campaign(userId, key);
+  if (!found) return json({ error: notMember }, 404);
+  const campaign = (await deps.workspace(found.owner)).campaigns.find(c => c.id === found.campaignId);
+  if (!campaign) return json({ error: notMember }, 404);
+  const rights = forumRights(found.list, userId, found.owner);
+  if (!rights.boards) return json({ error: "Your group can't change the campaign's theme." }, 403);
+  if (!deps.themes) return json({ error: "Themes aren't available on this site." }, 404);
+  if (body.action === "themes") {
+    const { file } = await deps.themes.read(found.owner, found.campaignId);
+    return json({ themes: { live: file?.live ?? null, saved: file?.saved ?? [] }, where: { key, campaignId: found.campaignId, maptableId: campaign.maptableCampaignId ?? null, owner: rights.owner } });
+  }
+  const file = await deps.themes.update(found.owner, found.campaignId, f =>
+    body.action === "saveTheme" ? saveTheme(f, body.theme, { live: body.live, now }) : body.action === "liveTheme" ? makeLive(f, body.id) : deleteTheme(f, body.id));
+  return json({ ok: true, themes: { live: file.live, saved: file.saved } });
+}
+
 const bodySchema = z.discriminatedUnion("action", [
   // `theme`: the live theme's key the browser already has, so the stylesheet isn't sent again.
   z.object({ action: z.literal("view"), campaign: key, page: pageSchema, theme: z.string().max(200).optional() }),
-  z.object({ action: z.literal("saveTheme"), campaign: key, theme: z.unknown(), live: z.boolean().optional() }),
-  z.object({ action: z.literal("liveTheme"), campaign: key, id: z.string().max(40).nullable() }),
-  z.object({ action: z.literal("deleteTheme"), campaign: key, id: z.string().max(40) }),
   z.object({ action: z.literal("start"), campaign: key, boardId: id, title: z.string().max(500), body: z.string().max(40_000), as, private: z.array(z.string().regex(/^[a-f0-9]{16}$/)).max(FORUM_LIMITS.privateMembers).optional(), ai: z.boolean().optional(), tags: z.array(id).max(10).optional(), format }),
   z.object({ action: z.literal("reply"), campaign: key, topicId: id, body: z.string().max(40_000), as, ai: z.boolean().optional(), format }),
   z.object({ action: z.literal("ai"), campaign: key, op: z.enum(["summary", "catchUp", "check", "draft"]), topicId: id.optional(), boardId: id.optional(), title: z.string().max(500).optional(), body: z.string().max(40_000).optional(), as: as.optional(), hint: z.string().max(500).optional(), since: z.string().datetime().optional(),
@@ -213,16 +249,8 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, 
   return { ctx, found, userId, fresh: marks && !mine.reads, presence, themes };
 }
 
-async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof pageSchema>, themes: ThemeFile | null) {
+async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof pageSchema>) {
   switch (page.kind) {
-    case "themes": {
-      // The Admin CP's themes: the live one and the saved ones, for those who arrange the forum.
-      if (!ctx.viewer.rights.boards) return json({ error: "Your group can't change the campaign's theme." }, 403);
-      if (!deps.themes) return json({ error: "Themes aren't available on this site." }, 404);
-      // Where the Admin CP's Preview links open the campaign's other parts.
-      const paired = ctx.workspace.campaigns.find(c => c.id === ctx.campaignId)?.maptableCampaignId ?? null;
-      return json({ frame: frameOf(ctx), page: { kind: "themes", live: themes?.live ?? null, saved: themes?.saved ?? [], campaignId: ctx.campaignId, maptableId: paired, owner: ctx.viewer.rights.owner } });
-    }
     case "board": { const p = boardPage(ctx, page.id, { archive: page.archive }); return p ? json({ frame: frameOf(ctx), page: { kind: "board", ...p } }) : json({ error: "That board was removed." }, 404); }
     case "topic": {
       const stored = await deps.store.readTopic(found.owner, found.campaignId, page.id), p = stored ? topicPage(ctx, stored.topic) : null;
@@ -308,7 +336,7 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
 }
 
 /** Runs one change through the store. Changes that touch a topic read it there first. */
-function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" | "ai" | "saveTheme" | "liveTheme" | "deleteTheme" }>, now: Date) {
+function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" | "ai" }>, now: Date) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const who = posterOf(ctx);
   const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>) => deps.store.apply(found.owner, found.campaignId, topicId, make);
@@ -380,18 +408,6 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
     case "alertsSeen": return deps.store.writeAlerts(found.owner, found.campaignId, ctx.viewer.userId, a => a && unseen(a) ? { ...a, seen: now.toISOString() } : null).then(() => undefined);
     case "readAll": return deps.store.writeReads(found.owner, found.campaignId, ctx.viewer.userId, () => markAll(now)).then(() => undefined);
   }
-}
-
-/**
- * The Admin CP's theme changes, for those who may arrange the forum: save a theme (and make it live), make a saved
- * theme live (or go back to the forum's own look) and delete one. Returns the themes as stored now.
- */
-async function themeChange(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "saveTheme" | "liveTheme" | "deleteTheme" }>, now: Date) {
-  if (!ctx.viewer.rights.boards) throw new ForumError("Your group can't change the campaign's theme.");
-  if (!deps.themes) throw new ForumError("Themes aren't available on this site.");
-  const file = await deps.themes.update(found.owner, found.campaignId, f =>
-    body.action === "saveTheme" ? saveTheme(f, body.theme, { live: body.live, now }) : body.action === "liveTheme" ? makeLive(f, body.id) : deleteTheme(f, body.id));
-  return { themes: { live: file.live, saved: file.saved } };
 }
 
 /** Multi-moderation: one change per topic, in turn. Reports how many changed and the first problem, if any. */
@@ -549,7 +565,9 @@ export async function handleForum(request: Request, deps: Deps) {
     const text = await request.text();
     if (text.length > FORUM_BODY) return json({ error: "That post is too long." }, 413);
     const raw: unknown = JSON.parse(text);
-    if (typeof raw === "object" && raw !== null && (raw as { action?: unknown }).action === "skin") return await skinOf(deps, skinSchema.parse(raw));
+    const action = typeof raw === "object" && raw !== null ? (raw as { action?: unknown }).action : undefined;
+    if (action === "skin") return await skinOf(deps, skinSchema.parse(raw));
+    if (typeof action === "string" && THEME_ACTIONS.has(action)) return await themesOf(deps, themeBodySchema.parse(raw), deps.now?.() ?? new Date());
     const body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
     // The player view of a solo campaign's owner (contextOf); ignored for anyone else.
     const playerView = typeof raw === "object" && raw !== null && (raw as { playerView?: unknown }).playerView === true;
@@ -565,9 +583,8 @@ export async function handleForum(request: Request, deps: Deps) {
     if (body.action === "view") {
       // The browser already has this version of the theme: don't send the stylesheet again.
       if (ctx.theme && body.theme === ctx.theme.key) ctx.theme = { key: ctx.theme.key, name: ctx.theme.name, mode: ctx.theme.mode, banner: ctx.theme.banner, same: true };
-      return await view(deps, ctx, found, body.page, got.themes);
+      return await view(deps, ctx, found, body.page);
     }
-    if (body.action === "saveTheme" || body.action === "liveTheme" || body.action === "deleteTheme") return json({ ok: true, ...(await themeChange(deps, ctx, found, body, now)) });
     if (body.action === "ai") {
       // A request without a key is refused before any AI is asked, so it doesn't use up the minute's requests.
       if ((body.apiKey || body.own) && aiThrottle.hit(userId)) return json({ error: "The AI needs a minute between a few requests. Try again shortly." }, 429);

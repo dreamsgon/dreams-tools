@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import type { CardDesign, EmojiSettings, ForumSettings, Strip, TopicTag } from '@/lib/forum/model';
 import type { ForumAi } from '@/lib/forum/ai';
-import type { Theme } from '@/lib/campaign-theme/model';
 import type { AiConnection } from '@/lib/forum/request';
 import type { Frame, Picture, CardRow, StripItem, cardFields, cardSample, profilePage, picturesPage, activePage, boardPage, membersPage, reportsPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
 
@@ -23,7 +22,6 @@ export type PageData =
   | ({ kind: 'pictures' } & ReturnType<typeof picturesPage>)
   | ({ kind: 'profile' } & ReturnType<typeof profilePage>)
   | ({ kind: 'search'; boardId: string | null } & ReturnType<typeof searchPage>)
-  | { kind: 'themes'; live: Theme | null; saved: Theme[]; campaignId: string; maptableId: string | null; owner: boolean }
   | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; card: CardDesign & { fields: CardField[]; sample: CardSample }; strip: Strip; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };

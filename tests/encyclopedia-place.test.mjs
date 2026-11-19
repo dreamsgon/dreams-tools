@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { placeFromQuery, placeQuery } from "../lib/encyclopedia/place.ts";
+import { placeFromQuery, placeQuery, themeCampaignId } from "../lib/encyclopedia/place.ts";
 
 const data = {
   schemaVersion: 1,
@@ -86,4 +86,17 @@ test("an open tab travels with its page and is ignored without one", async () =>
   assert.equal(isNewPlace(a, { ...a, entryId: "e2" }), true, "another page pushes");
   assert.equal(isNewPlace(a, { ...a, entryId: null, view: "maps" }), true);
   assert.equal(isNewPlace(null, a), true);
+});
+
+test("the theme follows the campaign, and a world shared by several campaigns keeps the plain look", () => {
+  const shared = { campaigns: [{ id: "a", worldId: "w1" }, { id: "b", worldId: "w1" }, { id: "solo", worldId: "w2" }] };
+  // Inside a campaign, and on a world page opened from it, the campaign's theme.
+  assert.equal(themeCampaignId(shared, { worldId: "w1", campaignId: "b", view: "overview" }), "b");
+  // A world's own pages: its only campaign's theme, or none when several campaigns share the world.
+  assert.equal(themeCampaignId(shared, { worldId: "w2", campaignId: null, view: "overview" }), "solo");
+  assert.equal(themeCampaignId(shared, { worldId: "w2", campaignId: null, view: "characters" }), "solo");
+  assert.equal(themeCampaignId(shared, { worldId: "w1", campaignId: null, view: "overview" }), null);
+  // The Dashboard spans every world.
+  assert.equal(themeCampaignId(shared, { worldId: "w2", campaignId: null, view: "dashboard" }), null);
+  assert.equal(themeCampaignId(shared, { worldId: "", campaignId: null, view: "overview" }), null);
 });

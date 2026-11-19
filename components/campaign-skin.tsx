@@ -6,7 +6,11 @@
  * browser tab, so moving between pages doesn't flash the app's own look.
  *
  * The Admin CP's Preview links add ?skin-preview=1: the page then shows the theme the GM is editing, which the Admin CP
- * left in this browser's storage, instead of the live one. Nobody else sees it.
+ * left in this browser's storage, instead of the live one. Nobody else sees it. With the Admin CP open beside the page
+ * (components/campaign-theme-dock.tsx), the page shows the theme being edited as it changes (`editing`).
+ *
+ * The live theme is asked for again when the tab comes back into view and after the Admin CP saves (`refreshSkins`), so
+ * a theme made live elsewhere shows without a reload. The browser sends the key it has, so an unchanged theme costs little.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { SKIN_SCOPE } from '@/lib/campaign-theme/css';
@@ -43,15 +47,28 @@ function preview(area: ThemeArea): Skin | null {
     return t.success ? { key: 'preview', name: t.data.name, css: themeCss(t.data, SKIN_SCOPE, area).css, fonts: themeFontsUrl(t.data) } : null;
   } catch { return null; }
 }
+const REFRESH_EVENT = 'campaign-skin:refresh';
+/** Asks every part on this page for its live theme again: the Admin CP calls it after a save. */
+export const refreshSkins = () => window.dispatchEvent(new Event(REFRESH_EVENT));
+/** A theme being edited, compiled for one part: what the Admin CP hands the page beside it. */
+export type EditingSkin = { name: string; css: string; fonts: string };
 const stopPreview = () => { const url = new URL(location.href); url.searchParams.delete('skin-preview'); location.replace(url.toString()); };
 
 /**
  * The live theme for `area` of the campaign that `campaign` names (`c-<id>`, `m-<member ref>` or `mt-<Maptable campaign
  * id>`; null: no campaign, so no theme). `given`: a theme the page already has (the player pages get it with their data).
+ * `editing`: the theme open in the Admin CP beside the page, shown in place of the live one.
  */
-export function useCampaignSkin(campaign: string | null, area: ThemeArea, given?: LiveTheme | null): { on: boolean; className: string; nodes: ReactNode } {
+export function useCampaignSkin(campaign: string | null, area: ThemeArea, given?: LiveTheme | null, editing?: EditingSkin | null): { on: boolean; className: string; nodes: ReactNode } {
   const k = campaign ? `${campaign}:${area}` : '';
-  const [skin, setSkin] = useState<Skin | null>(null), [isPreview, setIsPreview] = useState(false);
+  const [skin, setSkin] = useState<Skin | null>(null), [isPreview, setIsPreview] = useState(false), [asks, setAsks] = useState(0);
+  // Ask again when the tab is back in view, or the Admin CP saved.
+  useEffect(() => {
+    if (given !== undefined || !k) return;
+    const again = () => { if (!document.hidden) setAsks(n => n + 1); };
+    window.addEventListener(REFRESH_EVENT, again); document.addEventListener('visibilitychange', again);
+    return () => { window.removeEventListener(REFRESH_EVENT, again); document.removeEventListener('visibilitychange', again); };
+  }, [k, given]);
   useEffect(() => {
     const shown = previewing ? preview(area) : null;
     const known = shown || given !== undefined || !k ? undefined : remembered(k);
@@ -70,14 +87,15 @@ export function useCampaignSkin(campaign: string | null, area: ThemeArea, given?
       })
       .catch(() => { /* the app's own look, until the next visit */ });
     return () => { live = false; };
-  }, [k, campaign, area, given]);
-  if (!skin) return { on: false, className: '', nodes: null };
+  }, [k, campaign, area, given, asks]);
+  const shown = editing ? { key: 'editing', ...editing } : skin;
+  if (!shown) return { on: false, className: '', nodes: null };
   return {
     on: true, className: 'campaign-skin',
     nodes: <>
-      <link rel="stylesheet" href={skin.fonts} precedence="default" />
-      <style>{skin.css}</style>
-      {isPreview && <div className="skin-preview-note" role="status">Previewing <b>{skin.name}</b>, not saved. Only you see this.<button type="button" onClick={stopPreview}>Stop previewing</button></div>}
+      <link rel="stylesheet" href={shown.fonts} precedence="default" />
+      <style>{shown.css}</style>
+      {isPreview && !editing && <div className="skin-preview-note" role="status">Previewing <b>{shown.name}</b>, not saved. Only you see this.<button type="button" onClick={stopPreview}>Stop previewing</button></div>}
     </>,
   };
 }
