@@ -21,6 +21,7 @@ import { INQUISITORS_TAROT } from "./skins/inquisitors-tarot.ts";
 import { LANCE_AND_MOONS } from "./skins/lance-and-moons.ts";
 import { IMPERIAL_PROVINCE } from "./skins/imperial-province.ts";
 import { GALACTIC_CRAWL } from "./skins/galactic-crawl.ts";
+import { ISSUE_ONE } from "./skins/issue-one.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -70,36 +71,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Star Trek (LCARS)", theme: STARSHIP_CONSOLE },
 
-  skin("issue-one", "Issue One", "Superhero comics", 4, { display: "bangers", reading: "comic", ui: "comic" },
-    set("#fff3c4", "#ffffff", "#fff0b3", "#1a1a1a", "#141414", "#4a4a4a", "#d81e2c", "#1456c8"),
-    set("#10122b", "#1a1d40", "#242859", "#7f8ae6", "#fdfbf0", "#b8bce6", "#ffd60a", "#ff6b7a"), `
-/* A comic page: thick ink lines, hard shadows, halftone dots and caption boxes. */
-.forum-page { background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1.2px, transparent 1.6px); background-size: 9px 9px; }
-.board-head:not(.has-art) {
-  background: radial-gradient(circle at 50% 110%, #ffd60a 0 30%, transparent 30.5%), repeating-conic-gradient(from 0deg at 50% 110%, #d81e2c 0 9deg, #f04a3e 9deg 18deg);
-  --head-ink: #141414; --head-title: #ffffff; --head-nav: #141414; --head-line: #141414; --head-shadow: 3px 3px 0 #141414;
-}
-.board-head, .forum, .topic-row, .post, .topic-head, .board-foot, .board-bar { border: 3px solid #141414; box-shadow: 5px 5px 0 #141414; }
-:root[data-theme="dark"] .forum, :root[data-theme="dark"] .topic-row, :root[data-theme="dark"] .post, :root[data-theme="dark"] .topic-head, :root[data-theme="dark"] .board-foot, :root[data-theme="dark"] .board-bar { border-color: #000; box-shadow: 5px 5px 0 #000; }
-.board-bar { margin-bottom: 12px; }
-.board-title { font-weight: 400; letter-spacing: .04em; font-size: 68px; transform: rotate(-2deg); }
-.board-title a { -webkit-text-stroke: 2px #141414; }
-.board-tagline { display: inline-block; margin-top: 10px; padding: 3px 12px; background: #ffffff; border: 2px solid #141414; color: #141414; font-style: normal; font-size: 16px; text-shadow: none; }
-.board-nav a { color: #ffffff; font-size: 16px; font-weight: 400; letter-spacing: .08em; }
-.board-nav a:hover { color: #ffd60a; border-bottom-color: #ffd60a; }
-.category-forums, .topics, .posts { gap: 14px; }
-.category-title { display: inline-flex; padding: 4px 14px; background: #ffd60a; color: #141414; border: 3px solid #141414; font-weight: 400; font-size: 22px; letter-spacing: .05em; transform: skew(-6deg); box-shadow: 3px 3px 0 #141414; }
-.forum-name, .topic-title, .topic-name, .post-name { font-weight: 400; letter-spacing: .04em; }
-.forum-name { font-size: 25px; } .topic-title { font-size: 21px; } .post-name { font-size: 27px; } .topic-name { font-size: 34px; }
-.forum-desc, .topic-main small { font-style: normal; font-size: 15px; }
-.post-band, .post.flip .post-band { background: var(--accent-2); border-bottom: 3px solid #141414; }
-.post-name { color: #ffffff; text-shadow: 2px 2px 0 #141414; }
-.post-band .post-meta, .post-band .post-meta a { color: #ffffff; }
-.post-text { font-size: 17px; font-weight: 400; }
-.f-btn { border: 2px solid #141414; box-shadow: 3px 3px 0 #141414; font-family: var(--font-display); font-size: 15px; font-weight: 400; letter-spacing: .06em; }
-.f-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #141414; }
-.tag.new { background: #ffd60a; color: #141414; border-color: #141414; transform: rotate(-4deg); }
-`),
+  { inspired: "Superhero comics", theme: ISSUE_ONE },
 
   { inspired: "Ancient Greece", theme: AGORA },
 
