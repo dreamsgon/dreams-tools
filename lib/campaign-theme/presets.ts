@@ -14,6 +14,7 @@ import { BLIGHT_AND_BLOOD } from "./skins/blight-and-blood.ts";
 import { CHAMPION } from "./skins/champion.ts";
 import { NORTHERN_HOLD } from "./skins/northern-hold.ts";
 import { STARSHIP_CONSOLE } from "./skins/starship-console.ts";
+import { AGORA } from "./skins/agora.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -132,28 +133,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .tag.new { background: #ffd60a; color: #141414; border-color: #141414; transform: rotate(-4deg); }
 `),
 
-  skin("agora", "Agora", "Ancient Greece", 0, { display: "cinzel", reading: "source", ui: "inter" },
-    set("#f2efe8", "#fbfaf6", "#f0ece2", "#cfc7b4", "#1c2a3a", "#57616d", "#1f5fa8", "#8f6b10"),
-    set("#0a1422", "#111f33", "#182a44", "#2b4466", "#eef0ea", "#9fb0c4", "#e0b84a", "#6fb3f0"), `
-/* White marble and Aegean blue: a key-pattern border, fluted columns and a temple's pediment. */
-.board-head:not(.has-art) {
-  background:
-    linear-gradient(180deg, transparent 0 calc(100% - 46px), var(--panel) calc(100% - 46px)),
-    conic-gradient(from 115deg at 50% 12%, var(--raised) 0 130deg, transparent 130deg),
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--bg)), var(--bg));
-  --head-nav: transparent; --head-line: transparent;
-}
-.board-head { border: 0; border-bottom: 10px solid transparent; border-image: repeating-linear-gradient(90deg, var(--accent) 0 12px, transparent 12px 16px, var(--accent) 16px 20px, transparent 20px 28px) 10; }
-.board-title { letter-spacing: .3em; font-weight: 500; }
-.board-nav a { letter-spacing: .24em; }
-.category-title { justify-content: center; letter-spacing: .3em; padding: 8px 0; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
-.forum, .topic-row, .post, .topic-head { border-color: var(--line); border-left: 12px solid transparent; border-image: repeating-linear-gradient(90deg, var(--line) 0 2px, var(--raised) 2px 4px) 1 1 1 12; }
-.forum-name, .topic-title, .topic-name { letter-spacing: .12em; font-weight: 500; }
-.post-band { background: none; border-bottom: 3px double var(--line-strong); }
-.post-name { letter-spacing: .2em; font-weight: 500; }
-.portrait.big { border-radius: 125px 125px 0 0; }
-.f-btn { letter-spacing: .16em; text-transform: uppercase; }
-`),
+  { inspired: "Ancient Greece", theme: AGORA },
 
   skin("morph", "Morph", "Animorphs", 10, { display: "space", reading: "inter", ui: "inter" },
     set("#eef3fb", "#ffffff", "#e9f0fa", "#c3d0e6", "#121a2b", "#4d5a73", "#c94705", "#6a2bd9"),
