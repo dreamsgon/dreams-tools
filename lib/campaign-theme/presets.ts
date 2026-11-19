@@ -10,6 +10,7 @@ import type { ColourSet, Theme } from "./model.ts";
 import { CITADEL_STATION } from "./skins/citadel-station.ts";
 import { SWORD_COAST } from "./skins/sword-coast.ts";
 import { CASTLE_IN_THE_MISTS } from "./skins/castle-in-the-mists.ts";
+import { BLIGHT_AND_BLOOD } from "./skins/blight-and-blood.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -88,30 +89,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 
   { inspired: "Ravenloft and Curse of Strahd", theme: CASTLE_IN_THE_MISTS },
 
-  skin("blight", "Blight and Blood", "Dragon Age: Origins", 0, { display: "marcellus", reading: "spectral", ui: "inter" },
-    set("#e3d9cb", "#f2eadf", "#e9dfd1", "#c4b29c", "#261a15", "#655549", "#8c1c13", "#6b5220"),
-    set("#0d0a09", "#171210", "#201916", "#3d2d27", "#e6dbd0", "#a39489", "#d8483b", "#b99b6b"), `
-/* Dark stone and spilled blood: a spattered banner and heavy, cut-stone edges. */
-.board-head:not(.has-art) {
-  background:
-    radial-gradient(circle at 22% 38%, rgba(150, 18, 12, .85) 0 18px, transparent 34px),
-    radial-gradient(circle at 27% 58%, rgba(150, 18, 12, .7) 0 7px, transparent 15px),
-    radial-gradient(circle at 15% 66%, rgba(150, 18, 12, .6) 0 4px, transparent 10px),
-    radial-gradient(circle at 78% 30%, rgba(150, 18, 12, .75) 0 12px, transparent 26px),
-    radial-gradient(circle at 84% 52%, rgba(150, 18, 12, .6) 0 5px, transparent 12px),
-    radial-gradient(ellipse at 50% 0%, #2c1d18, #0d0908 75%);
-  --head-ink: #e6dbd0; --head-title: #e9ddcf; --head-line: #5a2019; --head-nav: rgba(0, 0, 0, .45); --head-shadow: 0 2px 10px #000;
-}
-.board-head { border-top: 4px solid var(--accent); }
-.board-title { letter-spacing: .18em; font-weight: 400; }
-.category-title { color: var(--ink); letter-spacing: .2em; border-bottom: 1px solid var(--accent); padding-bottom: 6px; }
-.forum, .topic-row, .post, .topic-head { border-width: 1px 1px 3px; border-bottom-color: var(--line-strong); }
-.post { border-top: 3px solid var(--accent); }
-.post-band { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 55%); }
-.post-name { color: var(--ink); letter-spacing: .16em; }
-.topic-row.pinned { border-left-color: var(--accent-2); }
-.f-btn { text-transform: uppercase; letter-spacing: .14em; }
-`),
+  { inspired: "Dragon Age: Origins", theme: BLIGHT_AND_BLOOD },
 
   skin("champion", "Champion", "Dragon Age II", 0, { display: "schibsted", reading: "source", ui: "inter" },
     set("#f2f0ed", "#ffffff", "#f0eeeb", "#cfcac4", "#111111", "#555555", "#b3190f", "#1a1a1a"),
