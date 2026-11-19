@@ -12,6 +12,7 @@ import { SWORD_COAST } from "./skins/sword-coast.ts";
 import { CASTLE_IN_THE_MISTS } from "./skins/castle-in-the-mists.ts";
 import { BLIGHT_AND_BLOOD } from "./skins/blight-and-blood.ts";
 import { CHAMPION } from "./skins/champion.ts";
+import { NORTHERN_HOLD } from "./skins/northern-hold.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -42,27 +43,7 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
 .f-btn { border-radius: 0; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--on-accent) 25%, transparent); }
 `),
 
-  skin("northern-hold", "Northern Hold", "The Elder Scrolls V: Skyrim", 0, { display: "jost", reading: "jost", ui: "jost" },
-    set("#e9ebec", "#f7f8f8", "#eef0f1", "#c9ced1", "#16191b", "#596167", "#2b3338", "#3d6c85"),
-    set("#0b0c0d", "#131516", "#1a1d1f", "#2e3336", "#e6e8ea", "#9aa1a6", "#d6dadd", "#7fa3b8"), `
-/* Cold and spare: thin capitals, hairlines that fade out, almost no boxes. */
-.board-head:not(.has-art) { background: linear-gradient(180deg, var(--bg), var(--panel)); border: 0; }
-.board-title { font-weight: 300; letter-spacing: .34em; font-size: 38px; }
-.board-tagline { font-style: normal; font-weight: 300; letter-spacing: .12em; font-size: 15px; text-transform: uppercase; }
-.board-nav { background: none; border-top: 1px solid transparent; border-image: linear-gradient(90deg, transparent, var(--line-strong), transparent) 1; }
-.board-nav a { font-weight: 400; letter-spacing: .28em; }
-.category-title { justify-content: center; font-weight: 400; letter-spacing: .32em; padding-bottom: 9px; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, transparent, var(--line-strong) 30%, var(--line-strong) 70%, transparent) 1; }
-.category-title::before { content: "◇"; font-size: 10px; color: var(--accent-2); }
-.forum, .topic-row { background: transparent; border-width: 0 0 1px; border-color: var(--line); }
-.forum:hover, .topic-row:hover { background: linear-gradient(90deg, transparent, var(--raised), transparent); }
-.forum-name, .topic-title, .post-name, .topic-name { font-weight: 400; letter-spacing: .14em; text-transform: uppercase; }
-.forum-desc, .topic-main small { font-style: normal; font-weight: 300; }
-.post { border-width: 1px 0; background: transparent; }
-.post-band { background: none; }
-.post-text { font-weight: 400; font-size: 17px; }
-.f-btn { background: transparent; color: var(--ink) !important; border-color: var(--line-strong); font-weight: 400; letter-spacing: .2em; text-transform: uppercase; }
-.f-btn:hover { border-color: var(--accent); }
-`),
+  { inspired: "The Elder Scrolls V: Skyrim", theme: NORTHERN_HOLD },
 
   { inspired: "Mass Effect (orange and blue)", theme: CITADEL_STATION },
 
