@@ -2,6 +2,7 @@ import { MemberStore } from "./members-server.ts";
 import { readBoth, summaryOf, type Session } from "./campaigns-server.ts";
 import { recentPage, type CampaignSummary, type RecentPage } from "./campaign-links.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
+import { campaignLoreWorldIds } from "./encyclopedia/world-model.ts";
 import type { TableLibrary } from "./encyclopedia/tables.ts";
 import { starredTables, type HomeTable } from "./home-tables.ts";
 import { hasWidget, needsWorkspaces, type HomeLayout } from "./home-layout.ts";
@@ -56,7 +57,7 @@ export async function homeData(s: Session, layout: HomeLayout, all = false): Pro
         }).sort((a, b) => a.when.localeCompare(b.when)).slice(0, 30);
       }
       if (on("quests")) {
-        data.quests = live.flatMap(c => questsIn(book, c.worldId, c.id).filter(({ quest }) => quest.state === "active")
+        data.quests = live.flatMap(c => questsIn(book, c.worldId, c.id, campaignLoreWorldIds(book, c)).filter(({ quest }) => quest.state === "active")
           .sort((a, b) => (a.quest.rank ?? 1e9) - (b.quest.rank ?? 1e9) || b.entry.updatedAt.localeCompare(a.entry.updatedAt)).slice(0, 5)
           .map(({ entry, quest }) => ({ id: entry.id, title: entry.title, campaign: c.name, key: `e:${c.id}`, ...questProgress(quest), next: nextStep(quest) }))).slice(0, 30);
       }

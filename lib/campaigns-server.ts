@@ -2,7 +2,7 @@ import type { Bucket } from "./storage-types";
 import { loadWorkspace, saveWorkspace } from "./workspace-storage.ts";
 import { canMoveCollection, initialWorkspace, uid, type Workspace as MapWorkspace } from "./model.ts";
 import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
-import { newId, playerCampaign, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
+import { campaignLoreWorldIds, newId, playerCampaign, visibleEntries, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
 import { scenesInOrder } from "./scene-order.ts";
 import { dashboardSchema, excerpt, type Dashboard } from "./encyclopedia/dashboard.ts";
@@ -265,13 +265,13 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
   const campaign = row.encyclopedia ? book.campaigns.find(c => c.id === row.encyclopedia!.id) ?? null : null;
   const own = campaign ? book.entries.filter(e => e.campaignId === campaign.id && e.kind !== "folder") : [];
   // Shared world pages count too, as they do inside the campaign in the Encyclopedia.
-  const seen = campaign ? book.entries.filter(e => e.worldId === campaign.worldId && (e.campaignId === null || e.campaignId === campaign.id) && e.kind !== "folder") : [];
+  const seen = campaign ? visibleEntries(book, campaign.worldId, campaign.id).filter(e => e.kind !== "folder") : [];
   const player = campaign ? playerCampaign(book, campaign.id) : null;
   const titleOf = (id: string | null) => id ? book.entries.find(e => e.id === id)?.title ?? "" : "";
-  const quests = campaign ? questsIn(book, campaign.worldId, campaign.id)
+  const quests = campaign ? questsIn(book, campaign.worldId, campaign.id, campaignLoreWorldIds(book, campaign))
     .sort((a, b) => (a.quest.rank ?? 1e9) - (b.quest.rank ?? 1e9) || b.entry.updatedAt.localeCompare(a.entry.updatedAt))
     .map(({ entry, quest }) => ({ id: entry.id, title: entry.title, state: quest.state, type: quest.type, ...questProgress(quest), next: nextStep(quest) })) : [];
-  const codex = campaign ? codexIn(book.entries, campaign.worldId, campaign.id)
+  const codex = campaign ? codexIn(book.entries, campaign.worldId, campaign.id, campaignLoreWorldIds(book, campaign))
     .map(e => ({ id: e.id, title: e.title, category: e.codex.category, foundAt: e.codex.found[campaign.id]?.at ?? null, at: e.codex.found[campaign.id]?.at ?? e.updatedAt }))
     .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8) : [];
   const session = seen.filter(e => e.kind === "session").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];

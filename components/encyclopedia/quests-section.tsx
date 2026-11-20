@@ -1,7 +1,7 @@
 "use client";
 import {useRef,useState,type DragEvent} from 'react';
 import {Columns3,BookOpen,Plus,Search,Eye,EyeOff,MapPin,Gift,GripVertical,ChevronDown,ChevronRight,Goal,ArrowUpRight,Tags,Lock} from 'lucide-react';
-import {newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
+import {campaignLoreWorldIds,newId,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {categoryOf,column,defaultCategory,moveQuest,newQuest,nextStep,questCategories,questProgress,questsIn,questStates,stateNames,type Quest,type QuestCategory,type QuestState} from '@/lib/encyclopedia/quests';
 import {categoryLook,CategoryChip,CategoryPicker,QuestCategoriesDialog} from './quest-categories';
 import {ArticleBody} from './article-body';
@@ -23,7 +23,7 @@ export function QuestsSection({data,worldId,campaign,change,onOpen}:{data:Worksp
  const [mode,setMode]=useState<'board'|'journal'>('board'),[picked,setFilter]=useState<Filter>('all'),[selected,setSelected]=useState<string|null>(null),[editing,setEditing]=useState(false);
  const cats=questCategories(campaign),filter=picked==='all'||cats.some(c=>c.id===picked)?picked:'all';
  const [dragging,setDragging]=useState<string|null>(null),[dropAt,setDropAt]=useState<{state:QuestState;before:string|null}|null>(null);
- const all=questsIn(data,worldId,campaign.id),shown=(list:typeof all)=>list.filter(q=>filter==='all'||q.quest.type===filter);
+ const all=questsIn(data,worldId,campaign.id,campaignLoreWorldIds(data,campaign)),shown=(list:typeof all)=>list.filter(q=>filter==='all'||q.quest.type===filter);
  const byId=(id:string|null|undefined)=>id?data.entries.find(e=>e.id===id):undefined;
  const open=all.find(q=>q.entry.id===selected)??all.find(q=>q.quest.state==='active')??all[0];
 

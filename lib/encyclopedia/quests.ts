@@ -152,8 +152,8 @@ type QuestEntry = { id: string; worldId: string; campaignId: string | null; kind
 type HasEntries<E> = { entries: E[] };
 
 /** The quests in one campaign (and shared lore), with their data filled in. */
-export function questsIn<E extends QuestEntry>(s: HasEntries<E>, worldId: string, campaignId: string | null) {
-  return s.entries.filter(e => e.kind === "quest" && e.worldId === worldId && (e.campaignId === null || e.campaignId === campaignId))
+export function questsIn<E extends QuestEntry>(s: HasEntries<E>, worldId: string, campaignId: string | null, worldIds: readonly string[] = [worldId]) {
+  return s.entries.filter(e => e.kind === "quest" && (e.worldId === worldId ? (e.campaignId === null || e.campaignId === campaignId) : e.campaignId === null && worldIds.includes(e.worldId)))
     .map(e => ({ entry: e, quest: e.quest ?? newQuest() }));
 }
 

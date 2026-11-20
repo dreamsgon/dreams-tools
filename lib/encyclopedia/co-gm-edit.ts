@@ -9,7 +9,7 @@ import { campaignExport, workspaceSchema, type Entry, type Workspace } from './w
 export class CoGmEditError extends Error {}
 const no = (message: string): never => { throw new CoGmEditError(message); };
 // Settings that link the campaign to the owner's own accounts and folders stay the owner's.
-const ownerOnly = ['id', 'worldId', 'github', 'discord', 'maptableCampaignId', 'folderId'] as const;
+const ownerOnly = ['id', 'worldId', 'github', 'discord', 'maptableCampaignId', 'folderId', 'linkedWorldIds'] as const;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const images = (value: unknown) => new Set([...JSON.stringify(value).matchAll(/"(?:imageId|previewImageId)":"([0-9a-fA-F-]{36})"/g)].map(m => m[1]));
 
@@ -46,7 +46,7 @@ function restore(edited: Entry, full: Entry, campaignId: string): Entry {
 export function coGmRefusal(before: Workspace, after: Workspace, allowed: ReadonlySet<string> = new Set()): string | null {
   const was = before.campaigns[0], mine = after.campaigns[0];
   if (after.campaigns.length !== 1 || mine?.id !== was?.id) return 'A co-GM can only change the campaign they were invited to.';
-  if (after.worlds.length !== 1 || !same(after.worlds[0], before.worlds[0])) return 'Only the GM can change the world and its templates.';
+  if (!same(after.worlds, before.worlds)) return 'Only the GM can change the world and its templates.';
   for (const key of ownerOnly) if (!same(mine[key], was[key])) return 'Only the GM can change where this campaign is linked.';
   // Every picture they use must already be in this campaign, or be one they added to the GM's storage.
   const known = images(before);
@@ -60,7 +60,8 @@ export const newImageIds = (before: Workspace, after: Workspace): string[] => { 
 export function applyCoGmEdit(full: Workspace, campaignId: string, input: Workspace, allowed: ReadonlySet<string> = new Set()): Workspace {
   const edited = workspaceSchema.parse(input);
   const campaign = full.campaigns.find(c => c.id === campaignId) ?? no('This campaign is gone.');
-  const before = campaignExport(full, campaignId);
+  // The co-GM sees the lore of linked worlds too, but only the GM can change it.
+  const before = campaignExport(full, campaignId, { linked: true });
   const refused = coGmRefusal(before, edited, allowed);
   if (refused) no(refused);
   const mine = edited.campaigns[0];
@@ -69,7 +70,10 @@ export function applyCoGmEdit(full: Workspace, campaignId: string, input: Worksp
   const owned = new Map(full.entries.map(e => [e.id, e]));
   const kept = new Set(edited.entries.map(e => e.id));
   const changed = new Map<string, Entry>(), added: Entry[] = [];
+  const linkedOnly = new Set(before.entries.filter(e => e.worldId !== campaign.worldId).map(e => e.id));
+  for (const id of linkedOnly) if (!edited.entries.some(e => e.id === id)) no('Only the GM can change lore linked from another world.');
   for (const e of edited.entries) {
+    if (linkedOnly.has(e.id)) { if (!same(e, inScope.get(e.id))) no('Only the GM can change lore linked from another world.'); continue; }
     if (e.worldId !== campaign.worldId || (e.campaignId !== null && e.campaignId !== campaignId)) no('A page can only belong to this campaign or its world.');
     const was = inScope.get(e.id);
     if (!was) { if (owned.has(e.id)) no('That page belongs somewhere else.'); added.push(e); continue; }
