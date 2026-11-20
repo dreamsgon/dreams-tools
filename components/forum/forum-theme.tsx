@@ -19,12 +19,14 @@ import { cleanCss } from '@/lib/campaign-theme/css';
 import { resolveTheme, parseThemeMode, THEME_STORAGE_KEY } from '@/lib/appearance';
 import { confirmDialog } from '../confirm-dialog';
 import { forumCall } from './forum-api';
+import { BannerTab } from './admin-cp-banner';
+import type { Look } from '@/lib/encyclopedia/look';
 import { OPEN_ADMIN_CP as OPEN_EVENT, openAdminCp } from '../campaign-theme-entry';
 
 type Themes = { live: Theme | null; saved: Theme[] };
 /** The theme being edited, compiled for the part beside the Admin CP. */
 export type Preview = { name: string; css: string; fonts: string; banner: Theme['banner'] } | null;
-type Tab = 'themes' | 'basics' | 'help' | ThemeArea;
+type Tab = 'themes' | 'basics' | 'banner' | 'help' | ThemeArea;
 /** Where the campaign's parts open, for the Preview links: `key` is the campaign's key as the forum's (`c-` or `m-`). */
 type Where = { key: string; campaignId: string; maptableId: string | null; owner: boolean };
 
@@ -82,15 +84,15 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
 }) {
   const hostLabel = THEME_AREAS.find(a => a.id === host)?.label ?? 'Forum';
   const [themes, setThemes] = useState<Themes | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [note, setNote] = useState('');
-  const [where, setWhere] = useState<Where | null>(null);
+  const [where, setWhere] = useState<Where | null>(null), [banner, setBanner] = useState<Look['banner'] | null>(null);
   const [draft, setDraft] = useState<Theme | null>(null), [base, setBase] = useState<Theme | null>(null), [tab, setTab] = useState<Tab>('themes');
   // The Admin CP only renders in the browser, once the page beside it has loaded.
   const [scheme, setSchemeState] = useState<'light' | 'dark'>(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 
   useEffect(() => {
     let live = true;
-    forumCall<{ themes: Themes; where: Where }>({ action: 'themes', campaign: k })
-      .then(v => { if (live) { setThemes(v.themes); setWhere(v.where); } }, e => { if (live) setError(e instanceof Error ? e.message : 'The themes could not be read.'); });
+    forumCall<{ themes: Themes; where: Where; banner?: Look['banner'] | null }>({ action: 'themes', campaign: k })
+      .then(v => { if (live) { setThemes(v.themes); setWhere(v.where); setBanner(v.banner ?? null); } }, e => { if (live) setError(e instanceof Error ? e.message : 'The themes could not be read.'); });
     // Closing puts back the member's own light or dark setting, which Basics may have switched to preview a version.
     return () => { live = false; setScheme(ownScheme()); };
   }, [k]);
@@ -144,7 +146,7 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
       {!base ? <span className="cp-tag warn">Not saved yet</span> : dirty ? <span className="cp-tag warn">Unsaved changes</span> : <span className="cp-tag">Saved</span>}
     </div>}
     <nav className="cp-tabs" role="tablist" aria-label="Admin CP">
-      <div className="cp-tab-row">{([['themes', 'Themes'], ['basics', 'Basics'], ['help', 'Help']] as const).map(([id, label]) =>
+      <div className="cp-tab-row">{([['themes', 'Themes'], ['basics', 'Basics'], ['banner', 'Banner'], ['help', 'Help']] as const).map(([id, label]) =>
         <button key={id} role="tab" aria-selected={tab === id} disabled={!draft && id === 'basics'} onClick={() => setTab(id)}>{label}</button>)}</div>
       <div className="cp-tab-row parts"><span className="cp-tab-label" aria-hidden="true">Stylesheets</span>{THEME_AREAS.map(a =>
         <button key={a.id} role="tab" aria-selected={tab === a.id} disabled={!draft} title={draft ? `${a.label} stylesheet` : 'Pick a theme to edit first'} onClick={() => setTab(a.id)}>{a.label}<span className="sr-only"> stylesheet</span>{draft && areaCss(draft, a.id).trim() && <i className="cp-dot" aria-hidden="true" />}</button>)}</div>
@@ -158,6 +160,7 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
         remove={async t => { if (await confirmDialog({ title: `Delete ${t.name}?`, message: themes.live?.id === t.id ? 'It stays live until you pick another theme, but you won’t be able to edit it.' : 'This can’t be undone.', confirm: 'Delete', danger: true })) await run({ action: 'deleteTheme', id: t.id }, () => { if (draft?.id === t.id) { setDraft(null); setBase(null); } }); }} />}
       {draft && tab === 'basics' && <BasicsTab t={draft} set={setDraft} scheme={scheme} pick={pick} beside={hostLabel} />}
       {draft && THEME_AREAS.some(a => a.id === tab) && <CssTab key={tab} t={draft} set={setDraft} area={tab as ThemeArea} beside={tab === host} href={tab === host ? null : previewHref(k, where, tab as ThemeArea)} />}
+      {themes && tab === 'banner' && <BannerTab k={k} banner={banner ?? null} setBanner={setBanner} owner={!!where?.owner} onSaved={onSaved} />}
       {tab === 'help' && <HelpTab beside={hostLabel} />}
       {note && <p className="cp-note" role="status"><Check size={14} aria-hidden="true" /> {note}</p>}
     </div>
@@ -265,7 +268,7 @@ function BasicsTab({ t, set, scheme, pick, beside }: { t: Theme; set: (t: Theme)
     <label className="f-field">Corners · {t.radius}px<input type="range" min={0} max={16} value={t.radius} onChange={e => set({ ...t, radius: Number(e.target.value) })} /></label>
     <label className="f-field">Banner<select value={t.banner} onChange={e => set({ ...t, banner: e.target.value as Theme['banner'] })}>
       <option value="picture">The campaign’s banner picture</option><option value="plain">The theme’s colours, no picture</option>
-    </select><small>The picture shows when Forum settings uses it and the campaign has one.</small></label>
+    </select><small>The picture itself is set in the Banner tab. In the forum it shows when Forum settings uses it.</small></label>
   </div>;
 }
 

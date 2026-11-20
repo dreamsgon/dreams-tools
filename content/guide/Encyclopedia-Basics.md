@@ -19,6 +19,7 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 
 ![The same page on a phone](images/encyclopedia-phone.jpg)
 
+- A campaign's front page shows its banner picture behind the name. Use **Banner** on it (or drop a picture on it) to add, replace or move the picture; the Admin CP's **Banner** tab sets the same one. Below are your sections, what changed lately, active quests and world lore.
 - Page text is Markdown with wiki extras: info boxes, read-aloud boxes, columns, pictures, pages shown inside pages, styled words and HTML. The **Text** and **Page** buttons set how a page reads and looks, with a banner and an icon. In Write mode the **Insert** and **Style** menus add them and a preview shows the page beside the text. Everything you can type is in [Writing wiki pages](Writing-Wiki-Pages).
 - Wrap GM-only text in a secret block (players never receive it):
 

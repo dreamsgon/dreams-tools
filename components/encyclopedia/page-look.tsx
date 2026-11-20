@@ -23,7 +23,7 @@ export function pageProseLook(entry:Entry,data:Workspace):{className:string;styl
 }
 
 /** Closes a toolbar popover on a click outside it or Escape. */
-function usePopover(open:boolean,setOpen:(v:boolean)=>void){
+export function usePopover(open:boolean,setOpen:(v:boolean)=>void){
  const box=useRef<HTMLDivElement>(null);
  useEffect(()=>{if(!open)return;const out=(e:MouseEvent)=>{if(!box.current?.contains(e.target as Node))setOpen(false);};const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);(box.current?.querySelector('button') as HTMLButtonElement|null)?.focus();}};document.addEventListener('mousedown',out);document.addEventListener('keydown',key);return()=>{document.removeEventListener('mousedown',out);document.removeEventListener('keydown',key);};},[open,setOpen]);
  return box;

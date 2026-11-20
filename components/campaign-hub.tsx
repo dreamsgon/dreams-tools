@@ -33,6 +33,7 @@ import CampaignBar from "./campaign-bar";
 import { addToolParam, toolNames, type CampaignTool } from "@/lib/campaign-nav";
 import { useCampaignSkin } from "./campaign-skin";
 import { openThemeEditor, useThemeDock } from "./campaign-theme-dock";
+import { BANNER_CHANGED } from "./campaign-theme-entry";
 import { ForumSetupDialog } from "./forum-setup-dialog";
 import type { ForumSetup } from "@/lib/forum/setup";
 import { keyFields } from "@/lib/ai/device-keys";
@@ -66,7 +67,9 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   useCampaignOpened(hub?.row.key ?? null);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
   const [draft, setDraft] = useState<Dashboard | null>(null), [saveError, setSaveError] = useState("");
-  const saves = useRef(0);
+  const saves = useRef(0), [reads, setReads] = useState(0);
+  // The Admin CP changed the banner picture: read the campaign again.
+  useEffect(() => { const again = () => setReads(n => n + 1); window.addEventListener(BANNER_CHANGED, again); return () => window.removeEventListener(BANNER_CHANGED, again); }, []);
   useEffect(() => {
     let live = true;
     fetch(`/api/campaigns?hub=${encodeURIComponent(campaignKey)}`, { cache: "no-store" }).then(async r => {
@@ -79,7 +82,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       if (body.row.key !== campaignKey && window.location.pathname !== canonical) window.history.replaceState(window.history.state, "", canonical + window.location.search + window.location.hash);
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load this campaign."));
     return () => { live = false; };
-  }, [campaignKey]);
+  }, [campaignKey, reads]);
   // Members belong to the campaign's notes, so a Maptable-only campaign has none.
   const notesId = hub?.row.encyclopedia?.id;
   useEffect(() => {

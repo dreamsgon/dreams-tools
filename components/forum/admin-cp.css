@@ -128,3 +128,13 @@
   .admin-cp.floating, .admin-cp.floating.dock-right { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; height: auto; max-height: calc(70vh / var(--ui-zoom, 1)); border-top: 1px solid var(--line-strong); box-shadow: 0 -8px 24px rgba(0, 0, 0, .2); }
   .admin-cp.floating .cp-seg[aria-label="Dock the Admin CP"] { display: none; }
 }
+
+/* Banner: the campaign's picture, click to choose what stays in view. */
+.cp-banner-pick { position: relative; display: block; width: 100%; height: 120px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius, 4px); background: var(--raised) center / cover no-repeat; cursor: crosshair; overflow: hidden; }
+.cp-banner-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp-banner-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #fff; box-shadow: 0 0 0 1px #0006; pointer-events: none; }
+.cp-banner-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cp-banner-empty { display: flex; align-items: center; gap: 12px; width: 100%; padding: 18px 14px; border: 1px dashed var(--line-strong, var(--line)); border-radius: var(--radius, 4px); background: none; color: var(--muted); text-align: left; cursor: pointer; }
+.cp-banner-empty b { display: block; color: var(--accent); }
+.cp-banner-empty small { display: block; margin-top: 2px; }
+.cp-banner-empty:hover { border-color: var(--accent); }
