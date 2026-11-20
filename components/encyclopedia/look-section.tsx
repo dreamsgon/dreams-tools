@@ -73,7 +73,7 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
     <LookBanner look={look} className="look-preview-banner"><span>{campaign.name}</span></LookBanner>
     {!look.banner&&<div className="look-preview-plain"><span>{campaign.name}</span></div>}
     <div className="look-preview-body">
-     <nav>{[[House,'Campaign home'],[Goal,'Quests'],[Library,'Codex'],[Users,'Characters'],[MapIcon,'Maps']].map(([Icon,label],i)=>{const I=Icon as typeof House;return <span key={label as string} className={i===1?'on':''}><I size={14}/> {label as string}</span>;})}</nav>
+     <nav>{[[House,'Campaign home'],[Goal,'Quests'],[Library,'Codex'],[Users,'Characters'],[MapIcon,'World maps']].map(([Icon,label],i)=>{const I=Icon as typeof House;return <span key={label as string} className={i===1?'on':''}><I size={14}/> {label as string}</span>;})}</nav>
      <div><h3>The Ashen Vow</h3><div className="look-preview-chips"><span className="quest-type main">Main quest</span><span className="quest-type">Active</span></div>
       <p>The party owes <a>the Order of the Lamp</a> a favour, and the order has come to collect. A letter sealed in black wax waits at <a>Millhaven</a>.</p>
       <div className="button-row"><span className="button primary small"><Plus size={13}/> Add to the log</span><span className="button small">Show on map</span></div></div>

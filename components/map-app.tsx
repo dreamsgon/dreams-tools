@@ -1218,7 +1218,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   };
   /**
    * Picking a campaign in the campaign bar. In place: the board opens the scene you last had open in that campaign, with the side
-   * panel left as it is (Scenes stays Scenes, Tokens stays Tokens); the Scene Picker shows that campaign's scenes. With no remembered
+   * panel left as it is (Scenes stays Scenes, Tokens stays Tokens), from the board or the Scene Picker alike. With no remembered
    * scene (or none left), that campaign's Scene Picker opens: nothing is created. The change is only the open scene, so unsaved
    * edits stay in the workspace and autosave carries on. One not in this Maptable goes to its hub.
    */
@@ -1228,8 +1228,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setGridAdjust(false); setSearch("");
     const last = rememberedCampaignScene(workspace, id, readRemembered(campaignSceneKey(sceneScope, id)));
     if (!last) { setOverview({ id }); setDashboard(true); return; } // none remembered: that campaign's Scene Picker, as ?view=scenes does
-    if (dashboard) { setOverview({ id }); return; }
-    activate(last); setLocation(id); setOverview(null);
+    // From the board or the Scene Picker alike: the scene you last had open in that campaign (design: lib/campaign-nav.ts).
+    activate(last); setLocation(id); setOverview(null); setDashboard(false);
   };
   const aiTurn=scene?getCurrentInitiativeEntry(scene):null,aiOrder=scene&&aiTurn?getInitiativeEntries(scene).filter(isInitiativeEntryActive):[];
   // The AI panel's combat line; "focus" above asks the sync loop to fetch now (it listens for focus).

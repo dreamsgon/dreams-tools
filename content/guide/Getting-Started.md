@@ -29,7 +29,7 @@ Open **Campaigns**. It lists Maptable campaigns and Wiki campaigns together.
 > 1. Sign in and open **Campaigns**.
 > 2. Choose **New campaign**, name it, and create it in both tools.
 > 3. Open its card to reach the **campaign hub** (`/campaigns/<campaign>`): a Dashboard (scenes, next session, recent pages, party) and the Front page.
-> 4. Use **Open Wiki** and **Open in Maptable** for that campaign's table (the scene you last had open in it, else its first scene). Every link on the hub, including the Maptable and Wiki links at the top of the site, opens this campaign.
+> 4. Use the campaign bar at the top of the page: **Dashboard**, **Maptable**, **Wiki** and **Forum** all open this campaign. Maptable opens the scene you last had open in it, else its first scene. A place the campaign doesn't have yet shows as **+ Maptable**, **+ Wiki** or **+ Forum** and opens the Dashboard ready to add it. The campaign name in the bar switches campaigns (Ctrl/Cmd+Shift+O) and keeps you in the same place.
 
 ## Finding your way around
 
