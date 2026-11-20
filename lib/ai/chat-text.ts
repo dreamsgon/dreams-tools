@@ -4,8 +4,12 @@
  */
 import type { Step } from "./chat.ts";
 
-export type SavedTurn = { role: "user" | "assistant"; text: string; at: string; steps?: Step[] };
-export type ChatMeta = { id: string; title: string; connectionId: string; connectionName: string; model?: string; scene?: string; count: number; createdAt: string; updatedAt: string };
+/** An answer notes which connection (`by`) and model wrote it, since a chat can switch AI or model partway. */
+export type SavedTurn = { role: "user" | "assistant"; text: string; at: string; steps?: Step[]; by?: string; model?: string };
+/** `connectionId`, `connectionName` and `model` are the last ones used; `folder` is a ChatFolder's id. */
+export type ChatMeta = { id: string; title: string; connectionId: string; connectionName: string; model?: string; scene?: string; folder?: string; count: number; createdAt: string; updatedAt: string };
+/** A folder of saved chats, per campaign. */
+export type ChatFolder = { id: string; name: string; createdAt: string };
 /** `turns` are the latest turns; a long chat keeps `earlier` older turns in `parts` part files on the server. */
 export type SavedChat = ChatMeta & { turns: SavedTurn[]; parts?: number; earlier?: number };
 export type RecapPick = { answers: boolean; questions: boolean; steps: boolean };
@@ -30,7 +34,7 @@ export function chatMarkdown(chat: SavedChat, opts: { campaign?: string; heading
     lines.push(`# ${chat.title}`, "", `_${[opts.campaign, chat.scene, `${chat.connectionName}${chat.model ? ` (${chat.model})` : ""}`, dateLine(chat.createdAt)].filter(Boolean).join(" · ")}_`, "");
   }
   for (const t of chat.turns) {
-    lines.push(`**${t.role === "user" ? "You" : chat.connectionName}:** ${t.text.trim()}`, "");
+    lines.push(`**${t.role === "user" ? "You" : t.by ?? chat.connectionName}:** ${t.text.trim()}`, "");
     const steps = stepLines(t.steps);
     if (steps.length) lines.push(...steps, "");
   }

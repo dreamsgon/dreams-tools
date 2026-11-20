@@ -5,7 +5,8 @@ const {demoWorkspace}=await import('../lib/encyclopedia/world-model.ts');
 const {EncyclopediaStore}=await import('../lib/encyclopedia/store.ts');
 const {cleanApi,createApiConnection}=await import('../lib/mcp/connections.ts');
 const {chatTurn,cleanHistory}=await import('../lib/ai/run.ts');
-const {CHAT_LIMIT,PART_SIZE,TURN_LIMIT,chatMarkdown,chatRecap,chatSessionBody,chatTitle,cleanTitle,deleteChat,listChats,readChat,renameChat,saveExchange}=await import('../lib/ai/chats.ts');
+const {CHAT_LIMIT,PART_SIZE,TURN_LIMIT,addFolder,chatMarkdown,chatRecap,chatSessionBody,chatTitle,cleanTitle,deleteChat,deleteFolder,listChats,listFolders,moveChat,readChat,renameChat,renameFolder,saveExchange}=await import('../lib/ai/chats.ts');
+const {chatModels,isChatModel}=await import('../lib/ai/model-list.ts');
 const {chatFileName,CONTEXT_TURNS}=await import('../lib/ai/chat-text.ts');
 
 function bucket(){
@@ -141,4 +142,66 @@ test('the AI panel saves each turn of a chat with an API key connection',async()
  const said=sent.messages.filter(m=>m.role!=='system').map(m=>m.content);
  assert.ok(said.length<=CONTEXT_TURNS);
  assert.equal(said.at(-1),'m58');
+});
+
+test('chats go in folders: a new chat can start in one, chats move in and out, and deleting a folder keeps its chats',async()=>{
+ const b=bucket(),newId=ids(),folderId=(()=>{let i=0;return()=>`folder-${String(++i).padStart(4,'0')}`;})();
+ const lore=await addFolder(b,OWNER,CAMPAIGN,'  Lore   questions ',{newId:folderId});
+ assert.equal(lore.name,'Lore questions');
+ await assert.rejects(addFolder(b,OWNER,CAMPAIGN,'lore QUESTIONS',{newId:folderId}),/already a folder/);
+ await assert.rejects(addFolder(b,OWNER,CAMPAIGN,'   '),/Give the folder a name/);
+ const combat=await addFolder(b,OWNER,CAMPAIGN,'Combat',{newId:folderId});
+ assert.deepEqual((await listFolders(b,OWNER,CAMPAIGN)).map(f=>f.name),['Combat','Lore questions']);
+ // A new chat starts in the folder it was asked from; an unknown folder is ignored.
+ const a=await saveExchange(b,OWNER,CAMPAIGN,{...base,folder:lore.id,question:'Who founded Greyfen?',answer:'Nobody remembers.',steps:[],newId});
+ const c=await saveExchange(b,OWNER,CAMPAIGN,{...base,folder:'folder-9999',question:'Ferry toll?',answer:'Two coppers.',steps:[],newId});
+ assert.equal(a.folder,lore.id);assert.equal(c.folder,undefined);
+ // Continuing a chat keeps its folder, whatever folder the browser sends.
+ const again=await saveExchange(b,OWNER,CAMPAIGN,{...base,id:a.id,folder:combat.id,question:'And who ruled it?',answer:'The hag.',steps:[],newId});
+ assert.equal(again.folder,lore.id);
+ await moveChat(b,OWNER,CAMPAIGN,c.id,combat.id);
+ assert.equal((await listChats(b,OWNER,CAMPAIGN)).find(x=>x.id===c.id).folder,combat.id);
+ assert.equal((await readChat(b,OWNER,CAMPAIGN,c.id)).folder,combat.id);
+ await assert.rejects(moveChat(b,OWNER,CAMPAIGN,c.id,'folder-9999'),/That folder is gone/);
+ await moveChat(b,OWNER,CAMPAIGN,c.id,null);
+ assert.equal((await readChat(b,OWNER,CAMPAIGN,c.id)).folder,undefined);
+ await renameFolder(b,OWNER,CAMPAIGN,lore.id,'Lore');
+ await assert.rejects(renameFolder(b,OWNER,CAMPAIGN,lore.id,'combat'),/already a folder/);
+ assert.deepEqual((await listFolders(b,OWNER,CAMPAIGN)).map(f=>f.name),['Combat','Lore']);
+ // Deleting the folder keeps the chat, now in no folder.
+ await deleteFolder(b,OWNER,CAMPAIGN,lore.id);
+ assert.deepEqual((await listFolders(b,OWNER,CAMPAIGN)).map(f=>f.name),['Combat']);
+ const kept=(await listChats(b,OWNER,CAMPAIGN)).find(x=>x.id===a.id);
+ assert.equal(kept.folder,undefined);assert.equal(kept.count,4);
+ assert.equal((await readChat(b,OWNER,CAMPAIGN,a.id)).folder,undefined);
+});
+
+test('the chat can ask with another model, and each answer notes who wrote it',async()=>{
+ const b=bucket(),book=demoWorkspace();
+ await new EncyclopediaStore(b).save(OWNER,book,0);
+ const connection=await createApiConnection(b,OWNER,CAMPAIGN,'GPT','helper',cleanApi({provider:'openai',model:'tts-1-hd-1106',apiKey:'sk-test-1234567890abcd'}));
+ let sent;
+ const say=async(url,init)=>{sent=JSON.parse(init.body);return new Response(JSON.stringify({choices:[{message:{content:'Old Tamsin.'},finish_reason:'stop'}],usage:{total_tokens:10}}),{status:200,headers:{'content-type':'application/json'}});};
+ const use={connectionId:connection.id,apiKey:'sk-test-1234567890abcd'};
+ const r=await chatTurn(b,OWNER,CAMPAIGN,use,[{role:'user',text:'Name an innkeeper'}],undefined,say,undefined,{model:'gpt-5-mini'});
+ assert.equal(sent.model,'gpt-5-mini');
+ assert.equal(r.chat.model,'gpt-5-mini');
+ const saved=await readChat(b,OWNER,CAMPAIGN,r.chat.id);
+ assert.deepEqual([saved.turns[1].by,saved.turns[1].model],['GPT','gpt-5-mini']);
+ // Without a model, the connection's own model is used.
+ await chatTurn(b,OWNER,CAMPAIGN,use,[{role:'user',text:'Again'}],undefined,say);
+ assert.equal(sent.model,'tts-1-hd-1106');
+ await assert.rejects(chatTurn(b,OWNER,CAMPAIGN,use,[{role:'user',text:'x'}],undefined,say,undefined,{model:'bad model!'}),/Choose a model/);
+ // Markdown names whoever answered each turn.
+ assert.match(chatMarkdown({...saved,connectionName:'Someone else'}),/\*\*GPT:\*\* Old Tamsin\./);
+});
+
+test('model lists offer chat models first and set aside speech, image and embedding models',()=>{
+ for(const id of ['tts-1-hd-1106','tts-1','whisper-1','dall-e-3','text-embedding-3-small','omni-moderation-latest','gpt-4o-realtime-preview','gpt-4o-mini-transcribe','gpt-image-1','gpt-4o-audio-preview','babbage-002','imagen-3.0-generate-002','gemini-2.5-flash-preview-tts','grok-2-image-1212','text-embedding-004'])assert.equal(isChatModel(id),false,id);
+ for(const id of ['gpt-5','gpt-4o-mini','o3','chatgpt-4o-latest','grok-4','gemini-2.5-pro','deepseek-chat','claude-opus-5-5','anthropic/claude-sonnet-4','llama-3.3-70b','mistral-large-latest'])assert.equal(isChatModel(id),true,id);
+ const {chat,other}=chatModels(['tts-1-hd-1106','gpt-4-1106-preview','gpt-4o','dall-e-3','gpt-5','gpt-4o-2024-08-06','gpt-5'],'openai');
+ assert.deepEqual(chat,['gpt-5','gpt-4o','gpt-4o-2024-08-06','gpt-4-1106-preview']);
+ assert.deepEqual(other,['dall-e-3','tts-1-hd-1106']);
+ // Anthropic and OpenRouter keep the provider's newest-first order; a suggested model goes first.
+ assert.deepEqual(chatModels(['claude-b','claude-a','claude-opus-5-5'],'anthropic','claude-opus-5-5').chat,['claude-opus-5-5','claude-b','claude-a']);
 });

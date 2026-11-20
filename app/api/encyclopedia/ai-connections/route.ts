@@ -5,7 +5,8 @@ import {getBucket} from '@/lib/storage';
 import {claimStoredKeys,cleanApi,createApiConnection,createConnection,listConnections,publicConnection,revokeConnection,updateApi,updateConnection} from '@/lib/mcp/connections';
 import {listModels,ProviderError} from '@/lib/ai/chat';
 import {cleanApiKey} from '@/lib/ai/secret';
-import {cleanBaseUrl,isProvider} from '@/lib/ai/providers';
+import {cleanBaseUrl,isProvider,providerOf} from '@/lib/ai/providers';
+import {chatModels} from '@/lib/ai/model-list';
 export const dynamic='force-dynamic';
 const campaignId=z.string().min(1).max(100);
 // The signed-in GM's AI connections for one campaign. MCP keys are only returned once, when made. API keys are never
@@ -40,7 +41,9 @@ export async function POST(request:Request){
    const provider=saved?.provider??args.provider;if(!isProvider(provider))throw Error('Choose a provider.');
    const key=cleanApiKey(args.apiKey);
    const baseUrl=provider==='other'?(saved?.baseUrl&&args.baseUrl===undefined?saved.baseUrl:cleanBaseUrl(args.baseUrl)):undefined;
-   return json({models:await listModels({provider,baseUrl,key})});
+   // Models that can't chat (speech, images, embeddings) come back separately, so a new connection never starts on one.
+   const {chat,other}=chatModels(await listModels({provider,baseUrl,key}),provider,providerOf(provider).suggested);
+   return json({models:chat,other});
   }
   if(args.action==='createApi'){
    const {data}=await new EncyclopediaStore(bucket).read(owner);

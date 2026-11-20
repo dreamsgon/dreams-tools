@@ -10,6 +10,7 @@ import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
 import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
 import { chatLines } from "../encyclopedia/ai-styles.ts";
 import { CONTEXT_TURNS, saveExchange } from "./chats.ts";
+import { cleanModel } from "./providers.ts";
 
 const MAX_TEXT = 8000;
 
@@ -26,8 +27,12 @@ export function cleanHistory(v: unknown): ChatTurn[] {
   return turns;
 }
 
-/** One turn of the AI panel's chat. The question and answer are saved to chat `chatId` (a new chat when it has none). */
-export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch, chatId?: unknown) {
+/**
+ * One turn of the AI panel's chat. The question and answer are saved to chat `chatId` (a new chat when it has none).
+ * `opts.model` asks with another of the connection's provider's models, for this turn only; `opts.folder` is the folder a
+ * new chat starts in.
+ */
+export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: string, use: KeyUse, history: ChatTurn[], scene?: string, fetchImpl: typeof fetch = fetch, chatId?: unknown, opts: { model?: unknown; folder?: unknown } = {}) {
   const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === use.connectionId);
   if (!c?.api) throw Error("That AI connection was removed.");
   if (overLimit(c.api)) throw Error(`${c.name} has used this month's ${c.api.limit!.toLocaleString("en-US")} tokens. Raise the limit under What it may do.`);
@@ -47,9 +52,10 @@ export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: stri
     "Look things up with the tools instead of guessing. When something waits for the GM's OK, say so in a few words: the GM approves it right under your reply.",
     ...(scene ? [`The GM has the Maptable scene "${scene.slice(0, 120)}" open.`] : []),
   ].join("\n\n");
-  const result = await runChat(targetFor(c, use.apiKey), system, history, tools, run, fetchImpl);
+  const target = targetFor(c, use.apiKey), model = opts.model === undefined || opts.model === "" ? target.model : cleanModel(opts.model);
+  const result = await runChat({ ...target, model }, system, history, tools, run, fetchImpl);
   const after = await addUsage(bucket, owner, campaignId, c.id, result.tokens);
   const reply = result.reply || "(No answer.)";
-  const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model: c.api.model, scene, question: history[history.length - 1]!.text, answer: reply, steps: result.steps });
+  const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model, scene, folder: opts.folder, question: history[history.length - 1]!.text, answer: reply, steps: result.steps });
   return { ...result, api: after?.api ? publicApi(after.api) : undefined, chat };
 }
