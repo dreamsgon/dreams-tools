@@ -4,7 +4,7 @@
  * dropped from what it sends. Saved with the campaign's AI writing settings (ai-styles.ts). Pure.
  */
 import { z } from "zod";
-import type { RecapRequest, recapParts } from "./recap-schema.ts";
+import type { Recap, RecapItem, RecapRequest, recapParts } from "./recap-schema.ts";
 import { formatDate, type Calendar, type CalendarDate } from "./calendar-model.ts";
 
 export const extractKinds = ["timeline", "quotes", "people", "places", "orgs", "lore", "codex", "quests", "rumours", "gmNotes", "moments", "spotlights", "encounters", "next", "threads", "creatures", "items", "ties", "dates"] as const;
@@ -57,8 +57,28 @@ export const extractSchema = z.object({
   off: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
   /** Kinds that start off (`offAtFirst`) and were turned on. */
   on: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
+  /** Where each kind goes, when it isn't where it starts (`whereAtFirst`). */
+  where: z.record(z.enum(extractKinds), z.enum(["enc", "file", "both"])).optional(),
 });
 export type ExtractSettings = z.infer<typeof extractSchema>;
+
+/** Where a kind goes: the Encyclopedia (the session page, or the check list), the session file, or both. */
+export const wheres = ["enc", "file", "both"] as const;
+export type Where = typeof wheres[number];
+export const whereNames: Record<Where, string> = { enc: "Encyclopedia", file: "Session file", both: "Both" };
+/** Kinds that sit on the session page. They start in both places, as the session file has always held the timeline, quotes and GM notes. */
+export const sessionPageKinds: readonly ExtractKind[] = ["timeline", "quotes", "gmNotes", "moments", "spotlights", "encounters", "next", "threads"];
+/** Where a kind starts: session page kinds in both, everything else (pages, quests, items, ties, dates) in the Encyclopedia. */
+export const whereAtFirst = (k: ExtractKind): Where => sessionPageKinds.includes(k) ? "both" : "enc";
+export const whereOf = (x: ExtractSettings | undefined, k: ExtractKind): Where => x?.where?.[k] ?? whereAtFirst(k);
+/** Shown in the Encyclopedia: on the session page, or waiting in the check list. */
+export const inEncyclopedia = (x: ExtractSettings | undefined, k: ExtractKind) => whereOf(x, k) !== "file";
+/** Written in the session file (2-Story/Sessions/ in an export or a GitHub push, or downloaded). */
+export const inFile = (x: ExtractSettings | undefined, k: ExtractKind) => whereOf(x, k) !== "enc";
+export const setWhere = (x: ExtractSettings, k: ExtractKind, w: Where): ExtractSettings => {
+  const rest = { ...(x.where ?? {}) }; delete rest[k];
+  return { ...x, where: w === whereAtFirst(k) ? rest : { ...rest, [k]: w } };
+};
 
 export const isOn = (x: ExtractSettings | undefined, k: ExtractKind) => offAtFirst.includes(k) ? !!x?.on?.includes(k) && !x?.off?.includes(k) : !x?.off?.includes(k);
 /** Turns one kind on or off, keeping only what differs from how it starts. */
@@ -71,7 +91,8 @@ export function turnKind(x: ExtractSettings, k: ExtractKind, on: boolean): Extra
 export function cleanExtract(x: ExtractSettings): ExtractSettings | undefined {
   const parsed = extractSchema.parse(x);
   const off = extractKinds.filter(k => !offAtFirst.includes(k) && !isOn(parsed, k)), on = extractKinds.filter(k => offAtFirst.includes(k) && isOn(parsed, k));
-  const out: ExtractSettings = { ...(parsed.depth && parsed.depth !== "balanced" ? { depth: parsed.depth } : {}), ...(off.length ? { off } : {}), ...(on.length ? { on } : {}) };
+  const where = Object.fromEntries(extractKinds.filter(k => whereOf(parsed, k) !== whereAtFirst(k)).map(k => [k, whereOf(parsed, k)]));
+  const out: ExtractSettings = { ...(parsed.depth && parsed.depth !== "balanced" ? { depth: parsed.depth } : {}), ...(off.length ? { off } : {}), ...(on.length ? { on } : {}), ...(Object.keys(where).length ? { where } : {}) };
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -155,5 +176,34 @@ export function honourExtract<T extends Finds & Highlights & { timeline?: unknow
     ...(input.timeline && !isOn(x, "timeline") ? { timeline: [] } : {}),
     ...(input.quotes && !isOn(x, "quotes") ? { quotes: [] } : {}),
     ...(input.gmNotes !== undefined && !isOn(x, "gmNotes") ? { gmNotes: "" } : {}),
+  };
+}
+
+/** Which kind a check list item is. An update takes the kind of the page it changes. */
+export function itemKind(i: Pick<RecapItem, "kind" | "pageKind">, page?: { kind: string; character?: { role?: string } }): ExtractKind {
+  switch (i.kind) {
+    case "newPage": return kindOfFind(i.pageKind);
+    case "update": return !page ? "lore" : page.kind === "character" ? (page.character?.role === "creature" ? "creatures" : "people") : page.kind === "place" ? "places" : page.kind === "faction" ? "orgs" : page.kind === "quest" ? "quests" : "lore";
+    case "questLog": return "quests";
+    case "newQuest": return "rumours";
+    case "codex": return "codex";
+    case "loot": return "items";
+    case "tie": return "ties";
+    case "date": return "dates";
+  }
+}
+
+/**
+ * The recap as one place shows it: the session page in the Encyclopedia ("enc"), or the session file ("file"). Parts set
+ * to go only to the other place are left out. The recap itself keeps them, so moving a kind back brings them back.
+ */
+export function recapIn(r: Recap, x: ExtractSettings | undefined, place: "enc" | "file"): Recap {
+  const keep = (k: ExtractKind) => place === "enc" ? inEncyclopedia(x, k) : inFile(x, k);
+  if (sessionPageKinds.every(keep)) return r;
+  return {
+    ...r,
+    ...(keep("timeline") ? {} : { timeline: [] }), ...(keep("quotes") ? {} : { quotes: [] }), ...(keep("gmNotes") ? {} : { gmNotes: "" }),
+    ...(keep("moments") ? {} : { moments: [] }), ...(keep("spotlights") ? {} : { spotlights: [] }), ...(keep("encounters") ? {} : { encounters: [] }),
+    ...(keep("next") ? {} : { partyStatus: undefined, next: [] }), ...(keep("threads") ? {} : { threads: [] }),
   };
 }

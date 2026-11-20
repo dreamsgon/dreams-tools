@@ -14,7 +14,8 @@ import { formatDate, publicCalendar, moonPhase, seasonOn, dateOrdinal, type Cale
 import { playerMap, mapKinds, type MapData, type MapPin } from "./map-model.ts";
 import { routeTotals } from "./travel-model.ts";
 import { goalStatus, questCategories, categoryOf, stateNames, newQuest, type QuestState } from "./quests.ts";
-import { timelineMarkdown, quotesMarkdown } from "./recap-schema.ts";
+import { timelineMarkdown, quotesMarkdown, momentsMarkdown, nextMarkdown, type RecapItem } from "./recap-schema.ts";
+import { recapIn, inFile, itemKind, extractNames } from "./recap-extract.ts";
 import { tieTypesOf, tieTypeById } from "./ties.ts";
 import { infoRows, templateOf } from "./templates.ts";
 import { campaignTables, rangeLabel, rollLabel, type TableLibrary, type RandomTable } from "./tables.ts";
@@ -185,6 +186,19 @@ function calendarChunks(c: Calendar): Chunk[] {
   return sec(`### ${label(c.name)}`, out);
 }
 
+/** One thing a session found, for its session file: what kind it is, its page when it has one, and its line. GM only, like the check list. */
+function foundLine(cx: Ctx, i: RecapItem): string {
+  const page = (id: string | undefined, name: string) => ref(cx, id, true) || label(name), note = i.text.trim() ? ` - ${one(i.text)}` : "";
+  const kind = extractNames[itemKind(i, i.pageId ? cx.byId.get(i.pageId) : undefined)][0];
+  if (i.kind === "loot") return `- ${kind}: ${label(i.name)}${i.qty ? ` x${i.qty}` : ""}${i.pageId ? `, carried by ${page(i.pageId, "?")}` : ""}${note}`;
+  if (i.kind === "tie") {
+    const type = i.typeId ? tieTypeById(tieTypesOf(cx.ws.worlds.find(w => w.id === cx.c.worldId)), i.typeId).name : "Knows", a = page(i.pageId, i.name), b = page(i.toId, i.to ?? "?");
+    return `- ${kind}: ${i.reversed ? `${b} ${type} ${a}` : `${a} ${type} ${b}`}${note}`;
+  }
+  if (i.kind === "date") return `- ${kind}: ${label(i.name)}`;
+  return `- ${kind}: ${page(i.pageId, i.name)}${note}`;
+}
+
 /** The text of one entry, split into player and GM chunks. */
 function entryChunks(cx: Ctx, e: Entry): { chunks: Chunk[]; leadPub: string; leadGm: string } {
   const { ws } = cx, draft = e.recap?.status === "draft", ovPub = e.overviewVisibility === "players" && !draft;
@@ -195,10 +209,16 @@ function entryChunks(cx: Ctx, e: Entry): { chunks: Chunk[]; leadPub: string; lea
   if (tpl) cs.push(...sec("## Details", infoRows(ws, tpl, e, false).map(r => ln(!!r.gm || !ovPub || (!!r.pageId && !cx.ok(r.pageId, false)), bullet(label(r.label), String(r.value))))));
   for (const t of e.tabs ?? []) cs.push(...sec(`## ${label(t.title)}`, txt(t.visibility === "players" && !draft, t.body, ""), `## ${label(t.title)}${t.visibility === "players" && !draft ? " (secret lines)" : ""}`));
   if (e.recap) {
-    const r = e.recap, shared = ovPub && r.status === "published";
+    // The session file holds what What it pulls out sends to it (recap-extract.ts): parts set to the Encyclopedia only are left out.
+    const x = cx.c.aiWriting?.extract, r = recapIn(e.recap, x, "file"), shared = ovPub && r.status === "published";
     if (r.timeline.length) cs.push(...sec("## Recap timeline", txt(shared && !!r.shareTimeline, timelineMarkdown(r.timeline))));
     if (r.quotes.length) cs.push(...sec("## Recap quotes", txt(shared && !!r.shareQuotes, quotesMarkdown(r.quotes))));
+    const moments = momentsMarkdown(r), next = nextMarkdown(r);
+    if (moments) cs.push(...sec("## Recap key moments", txt(shared && !!r.shareMoments, moments)));
     if (r.gmNotes.trim()) cs.push(...sec("## GM notes", [{ gm: true, text: r.gmNotes }]));
+    if (next) cs.push(...sec("## Recap next time", [{ gm: true, text: next }]));
+    const found = r.review.filter(i => (i.state === "done" || i.state === "filed") && inFile(x, itemKind(i, i.pageId ? cx.byId.get(i.pageId) : undefined)));
+    if (found.length) cs.push(...sec("## Recap finds", found.map(i => L(true, foundLine(cx, i)))));
     const open = r.review.filter(i => i.state === "open");
     if (open.length) cs.push(...sec("## Recap items to check", open.map(i => L(true, `- ${i.kind}: ${one(i.name)}${i.text ? ` - ${one(i.text)}` : ""}`))));
   }
@@ -620,7 +640,7 @@ export const withoutFrontMatter = (text: string) => text.replace(/^\uFEFF/, "").
 export const sameApartFromFrontMatter = (a: string, b: string) => withoutFrontMatter(a) === withoutFrontMatter(b);
 
 /** The "## " sections of a page file the app writes from its data. Text under these headings is rebuilt on every export. */
-export const DERIVED_SECTIONS = ["Details", "Directory entry", "Stats", "Trackers", "Statblock", "Profile", "Map", "Recap timeline", "Recap quotes", "GM notes", "Recap items to check", "Secret lines in the overview"];
+export const DERIVED_SECTIONS = ["Details", "Directory entry", "Stats", "Trackers", "Statblock", "Profile", "Map", "Recap timeline", "Recap quotes", "Recap key moments", "GM notes", "Recap next time", "Recap finds", "Recap items to check", "Secret lines in the overview"];
 /** The sections of one file that are written from data, by path. */
 export function derivedSectionsOf(path: string): string[] {
   if (path === "1-Now/Current-State.md") return ["Date", "Party", "Most recent session"];
@@ -694,4 +714,19 @@ export function planWrite(existing: Map<string, string | null>, previous: unknow
     else if (prevHashes[path] === have && !path.startsWith(".rpg-tools/")) remove.push({ path, reason: "stale" });
   }
   return { write, skip, remove };
+}
+
+/**
+ * One session's file, as an export writes it to 2-Story/Sessions/, for Download session file. With includeGm the GM parts
+ * (from 6-GM-Only/) follow under a "GM only" heading, so the GM gets the whole session in one file. Null when the session isn't exported.
+ */
+export function sessionFile(workspace: Workspace, campaignId: string, entryId: string, opts: { includeGm: boolean; exportedAt: string; tables?: TableLibrary }): RpFile | null {
+  const files = rpExportFiles(workspace, campaignId, opts), mark = `\nrpg-tools-id: ${entryId}\n`;
+  const pick = (dir: string) => files.find(f => f.path.startsWith(dir) && f.path.endsWith(".md") && f.text.includes(mark));
+  const pub = pick("2-Story/Sessions/"), gm = opts.includeGm ? pick("6-GM-Only/2-Story/Sessions/") : undefined;
+  if (!pub && !gm) return null;
+  const name = (pub ?? gm)!.path.split("/").pop()!;
+  if (!gm) return { path: name, text: pub!.text };
+  const gmBody = withoutFrontMatter(gm.text).replace(/^# .*\n+/, "").replace(/^## /gm, "### ").trim();
+  return { path: name, text: `${(pub ? pub.text : gm.text.replace(/\npart: gm-only/, "").replace(/^(# .*) \(GM only\)$/m, "$1")).trimEnd()}${pub ? `\n\n## GM only\n\n${gmBody}` : ""}\n` };
 }

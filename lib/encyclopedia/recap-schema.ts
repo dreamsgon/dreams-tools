@@ -4,6 +4,7 @@
  * file so world-model.ts only has to add one optional field.
  */
 import { z } from "zod";
+import { recapIn, type ExtractSettings } from "./recap-extract.ts";
 
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 export const recapPageKinds = ["character", "creature", "place", "faction", "lore", "note"] as const;
@@ -33,7 +34,8 @@ export const recapItemSchema = z.object({
   /** An in-world date: the calendar and the day to move it on to. `name` is the date as written. */
   calendarId: id.optional(),
   date: z.object({ year: z.number().int().min(1).max(99999), periodId: id, day: z.number().int().min(1).max(130) }).optional(),
-  state: z.enum(["open", "done", "skipped"]),
+  /** Filed: set to go only to the session file (What it pulls out), so it never waits in the check list. */
+  state: z.enum(["open", "done", "skipped", "filed"]),
 });
 export const beatSchema = z.object({ id, title: z.string().trim().min(1).max(200), big: z.boolean(), steps: z.array(z.string().trim().min(1).max(300)).max(12) });
 export const quoteSchema = z.object({ id, text: z.string().trim().min(1).max(500), who: z.string().trim().max(120), checked: z.boolean().optional() });
@@ -120,9 +122,11 @@ export function nextMarkdown(r: Recap) {
 }
 export const quotesMarkdown = (quotes: Quote[]) => quotes.map(q => `> “${q.text.replace(/^["“]|["”]$/g, "")}”${q.who ? `\n> — ${q.who}` : ""}`).join("\n\n");
 
-/** The extra tabs players get on a published recap, when the GM shared them. A draft gets none. */
-export function playerRecapTabs(r: Recap | undefined, clean: (s: string) => string) {
-  if (!r || r.status !== "published") return [];
+/** The extra tabs players get on a published recap, when the GM shared them. A draft gets none. `x` is the campaign's What it pulls out. */
+export function playerRecapTabs(recap: Recap | undefined, clean: (s: string) => string, x?: ExtractSettings) {
+  if (!recap || recap.status !== "published") return [];
+  // Parts set to go only to the session file (What it pulls out) aren't on the page, so players don't get them either.
+  const r = recapIn(recap, x, "enc");
   return [
     ...(r.shareTimeline && r.timeline.length ? [{ id: "recap-timeline", title: "Timeline", body: clean(timelineMarkdown(r.timeline)) }] : []),
     ...(r.shareQuotes && r.quotes.length ? [{ id: "recap-quotes", title: "Quotes", body: clean(quotesMarkdown(r.quotes)) }] : []),

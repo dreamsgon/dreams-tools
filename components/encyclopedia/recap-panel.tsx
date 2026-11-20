@@ -5,7 +5,7 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine,X} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine,X,Download} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
@@ -180,7 +180,7 @@ function describe(r:RecapItem,carrier?:string,tie?:string){
 }
 
 export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;data:Workspace;change:Change;onOpen:(id:string)=>void;setNotice:(s:string)=>void}){
- const recap=entry.recap??emptyRecap(),open=openItems(recap),done=recap.review.filter(r=>r.state!=='open');
+ const recap=entry.recap??emptyRecap(),open=openItems(recap),done=recap.review.filter(r=>r.state==='done'||r.state==='skipped'),filed=recap.review.filter(r=>r.state==='filed');
  const [editing,setEditing]=useState<string|null>(null),[text,setText]=useState(''),[same,setSame]=useState<string|null>(null),[posting,setPosting]=useState(false);
  const others=data.entries.filter(e=>e.id!==entry.id&&e.kind!=='folder'&&e.kind!=='session'&&e.worldId===entry.worldId&&(e.campaignId===entry.campaignId||e.campaignId===null)).sort((a,b)=>a.title.localeCompare(b.title));
  const editItem=(id:string,p:Partial<RecapItem>)=>change(w=>({...w,entries:w.entries.map(e=>e.id===entry.id&&e.recap?{...e,recap:{...e.recap,review:e.recap.review.map(r=>r.id===id?{...r,...p}:r)}}:e)}));
@@ -201,13 +201,16 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
  };
  const carriers=others.filter(e=>e.kind==='character').sort((a,b)=>Number(!['pc','companion'].includes(a.character?.role??''))-Number(!['pc','companion'].includes(b.character?.role??''))||a.title.localeCompare(b.title));
  const groups=groupOrder.map(g=>({g,items:open.filter(r=>groupOf(r)===g)})).filter(x=>x.items.length);
+ const filedList=filed.length>0&&<details className="check-done"><summary>{filed.length} in the session file only</summary><p className="aside-hint">You set these to Session file in What it pulls out. Check one here to add it to your pages instead.</p>{filed.map(r=><p key={r.id} className="aside-hint check-filed">{tagOf[r.kind]} · {r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}<button className="button small" onClick={()=>editItem(r.id,{state:'open'})}>Check it here</button></p>)}</details>;
  const share=<div className="check-actions">{recap.status==='draft'?<button className="button primary" onClick={()=>publish(true)}><Eye size={14}/> Publish to players</button>:<button className="button" onClick={()=>publish(false)}><EyeOff size={14}/> Unpublish</button>}{recap.status==='published'&&<button className="button" disabled={posting} onClick={post}><Send size={14}/> {posting?'Posting…':'Post to Discord'}</button>}</div>;
  // A recap the GM wrote, with nothing found to check: sharing it comes first, and the AI check is optional.
- if(recap.mine&&!recap.review.length)return <div className="aside-section recap-check recap-ready">
+ if(recap.mine&&!recap.review.some(r=>r.state!=='filed'))return <div className="aside-section recap-check recap-ready">
   <strong className="recap-card-title">{recap.status==='draft'?'Ready to share?':'Shared with players'}</strong>
   <p className="aside-hint">{recap.status==='draft'?'Players see the recap text. Your GM notes and the transcript stay GM-only.':'Players see the recap. Unpublish to hide it again.'}</p>
   {share}
   {recap.status==='draft'&&<CheckWithAi entry={entry} data={data} setNotice={setNotice}/>}
+  {filedList}
+  <SessionFileButton entry={entry} data={data} setNotice={setNotice}/>
  </div>;
  return <div className="aside-section recap-check">
   <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
@@ -220,13 +223,33 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
     {r.kind==='loot'&&<label className="field-label">Who carries it<select aria-label={`Who carries ${r.name}`} value={r.pageId??''} onChange={e=>e.target.value==='page'?editItem(r.id,{kind:'newPage',pageKind:'lore',pageId:undefined,qty:undefined}):editItem(r.id,{pageId:e.target.value||undefined})}><option value="">Choose a character</option>{carriers.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}<option value="page">No one: make an item page</option></select></label>}
     <div className="check-actions"><button className="button primary small" disabled={r.kind==='loot'&&!r.pageId} onClick={()=>apply([r.id])}><Check size={13}/> {doLabel[r.kind]}</button>{r.kind==='newPage'&&others.length>0&&<button className="button small" onClick={()=>setSame(r.id)}>Same as…</button>}{r.kind!=='codex'&&r.kind!=='date'&&<button className="button small" onClick={()=>{setEditing(r.id);setText(r.text);}}>Edit</button>}<button className="button small" onClick={()=>change(w=>skipItem(w,entry.id,r.id))}>Skip</button></div></>}
   </div>)}</div>)}
+  {filedList}
   {done.length>0&&<details className="check-done"><summary>{done.length} done or skipped</summary>{done.map(r=><p key={r.id} className="aside-hint">{r.state==='done'?<Check size={12}/>:'–'} {tagOf[r.kind]} · {r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}{r.state==='skipped'?' (skipped)':''}</p>)}</details>}
   <div className="check-footer">
    {open.length>1&&<div className="check-actions"><button className="button small" onClick={()=>apply(open.map(r=>r.id))}><Check size={13}/> Add all {open.length}</button><button className="button small" onClick={()=>change(w=>open.reduce((x,r)=>skipItem(x,entry.id,r.id),w))}>Skip the rest</button></div>}
    {share}
+   <SessionFileButton entry={entry} data={data} setNotice={setNotice}/>
    <p className="aside-hint">{recap.status==='draft'?'Publishing shares the recap text with players. Timeline, quotes and key moments go too when you set their tabs to Player visible.':'Players see the recap. Unpublish to hide it again.'}</p>
   </div>
  </div>;
+}
+
+/** Download session file: the session as an export writes it to 2-Story/Sessions/, with the GM parts after it. */
+export function SessionFileButton({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotice:(s:string)=>void}){
+ const [busy,setBusy]=useState(false);
+ const download=async()=>{
+  if(!entry.campaignId)return;
+  setBusy(true);
+  try{
+   const {sessionFile}=await import('@/lib/encyclopedia/rp-export');
+   const file=sessionFile(data,entry.campaignId,entry.id,{includeGm:true,exportedAt:new Date().toISOString()});
+   if(!file){setNotice('This session has nothing to put in a file yet.');return;}
+   const url=URL.createObjectURL(new Blob([file.text],{type:'text/markdown'})),a=document.createElement('a');a.href=url;a.download=file.path;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){setNotice(e instanceof Error?e.message:'Could not make the session file.');}
+  finally{setBusy(false);}
+ };
+ if(!entry.campaignId)return null;
+ return <button type="button" className="button small session-file-button" disabled={busy} onClick={download} title="A Markdown file of this session, as Export and GitHub write it to 2-Story/Sessions/, with your GM parts after it"><Download size={13}/> {busy?'Making it…':'Download session file'}</button>;
 }
 
 /** Write it again, under a draft recap: the recap players read, from the timeline as it is now, with a note from the GM. */
