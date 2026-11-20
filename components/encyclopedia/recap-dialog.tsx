@@ -92,18 +92,21 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
   }
   setStep('options');
  };
+ // Write it myself, from the first step: the source comes along when there is one, and isn't needed when there isn't.
+ const writeMyself=async()=>{setMine(true);setWriter('');if(text.trim()||isLink&&link.trim())await toOptions();else{setError('');setCast([]);setStep('options');}};
  const pick=async(f:File|undefined)=>{if(!f)return;setError('');setBusy(true);try{const t=await readFile(f);setText(t);setFile(f.name);if(!t.trim())setError('That file has no text in it.');}catch(e){setError(e instanceof Error?e.message:'Could not read that file.');}finally{setBusy(false);}};
 
  const handOver=async()=>{
   if(!title.trim()){setError('Give the session a title.');return;}
+  if(!mine&&!appReads&&!text.trim()){setError('Go back and add what happened, or choose Me, no AI.');return;}
   setError('');setBusy(true);
   const request:RecapRequest|undefined=mine?undefined:{length,depth,...(style?{style}:{}),...(steer.trim()?{steer:steer.trim()}:{}),...(skip.size?{skip:[...skip]}:{}),...(cast.length?{cast}:{}),...(appReads?{link:link.trim()}:{}),at:new Date().toISOString()};
-  const source=isLink?`${linkName[kind]}: ${link.trim()}`:kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':kind==='forum'?`Forum topic: ${file}`:'A pasted transcript';
+  const source=isLink?`${linkName[kind]}: ${link.trim()}`:!text.trim()?'':kind==='file'?`Uploaded file: ${file}`:kind==='thread'?'An RP thread':kind==='forum'?`Forum topic: ${file}`:'A pasted transcript';
   let id='';
-  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,mine,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
+  const ok=change(w=>{try{const r=startRecap(w,{campaignId:campaign.id,title:title.trim().slice(0,160),playedOn:playedOn||undefined,source,request,mine,pageId:page?.id,folderId:sessionFolder(w,campaign.id)?.id??null,transcriptWords:appReads?undefined:words||undefined},new Date());id=r.id;return r.next;}catch(e){setError(e instanceof Error?e.message:'Could not make the page.');return w;}});
   if(ok===false||!id){setBusy(false);return;}
   let saved=true;
-  if(!appReads){
+  if(!appReads&&text.trim()){
    const r=await fetch('/api/encyclopedia/recaps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transcript',entryId:id,text})}).then(r=>r.ok).catch(()=>false);
    saved=r;
   }
@@ -147,10 +150,11 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  }
 
  return <ToolDialog title="New session recap" onClose={onClose} wide><div className="recap-dialog">
-  <p className="modal-intro">{step==='source'?'The AI reads what happened and drafts a recap for you to check. Nothing reaches players until you publish it.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':kind==='forum'?`Forum topic “${file}”`:'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
+  <p className="modal-intro">{step==='source'?'The AI drafts it from what happened, for you to check. Players see nothing until you publish.':appReads?`${linkName[kind as 'notion']} · ${link.trim()}`:!text.trim()?'Your own recap, with no transcript.':`${isLink?`${linkName[kind as 'notion']} read by RPG Tools`:kind==='file'?file:kind==='thread'?'RP thread':kind==='forum'?`Forum topic “${file}”`:'Pasted transcript'} · ${words.toLocaleString('en')} words`}</p>
   <div className="recap-steps" aria-label="Steps"><span className={step==='source'?'on':'done'}><b>1</b> Source</span><span className={step==='options'?'on':''}><b>2</b> Options</span><span><b>3</b> {key||mine?'Write it':'Hand it over'}</span></div>
   {step==='source'?<>
-   <div className="source-grid" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon;return <button key={s.kind} role="radio" aria-checked={kind===s.kind} className={`source-card ${kind===s.kind?'on':''}`} onClick={()=>{if(kind==='forum'&&s.kind!=='forum'||s.kind==='forum'&&kind!=='forum'){setText('');setFile('');setTopicId('');}setKind(s.kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><span className="source-icon"><Icon size={16}/></span><span><strong>{s.title}</strong><small>{s.hint}</small></span></button>;})}</div>
+   <div className="source-rows" role="radiogroup" aria-label="Where the session is">{sources.map(s=>{const Icon=s.icon;return <button key={s.kind} role="radio" aria-checked={kind===s.kind} className={`source-row ${kind===s.kind?'on':''}`} onClick={()=>{if(kind==='forum'&&s.kind!=='forum'||s.kind==='forum'&&kind!=='forum'){setText('');setFile('');setTopicId('');}setKind(s.kind);setError('');if(s.kind==='file')fileInput.current?.click();}}><Icon size={16} aria-hidden="true"/>{s.title}</button>;})}</div>
+   <p className="source-hint">{sources.find(s=>s.kind===kind)?.hint} {isLink?'Private links go to your AI app, which reads them with its own access.':'Audio isn’t transcribed here.'}</p>
    <input ref={fileInput} type="file" hidden accept=".txt,.md,.markdown,.log,.csv,.json,.html,.htm,text/plain,text/markdown,application/json,text/html" onChange={e=>{void pick(e.target.files?.[0]);e.target.value='';}}/>
    {isLink?<label className="field-title">Link to the {linkName[kind as 'notion']}<input className="recap-input" type="url" autoFocus value={link} placeholder={kind==='notion'?'https://www.notion.so/…/Session-13-notes':kind==='drive'?'https://docs.google.com/document/d/…':'https://github.com/you/campaign/blob/main/sessions/session-13.md'} onChange={e=>{setLink(e.target.value);setUnread(false);}}/>{fetched&&fetched===link.trim()&&<small className="link-read"><Check size={12}/> Read: {words.toLocaleString('en')} words · {playTime(words)}</small>}</label>
    :kind==='forum'?<ForumSource campaignId={campaign.id} picked={topicId} onPick={t=>{setTopicId(t.id);setFile(t.title);setText(t.text);if(!page)setTitle(x=>/^Session \d+$/.test(x)?t.title.slice(0,160):x);}}/>
@@ -158,7 +162,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
     {kind==='file'&&!text?<button className="drop-zone" onClick={()=>fileInput.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();void pick(e.dataTransfer.files[0]);}}>{busy?'Reading…':<><Upload size={16}/> Choose a file, or drop it here</>}</button>
     :<textarea className="recap-input transcript-paste" value={text} maxLength={TRANSCRIPT_LIMIT} placeholder={kind==='thread'?'Paste the thread. Each post’s author at the start of a line works best, such as “Mara: …”.':'GM: The ferry bumps against the Greyfen landing.\nMara (Bram): I keep my hand on my sword.'} onChange={e=>setText(e.target.value)}/>}</label>}
    {error&&<p className="form-error">{error}</p>}
-   <div className="dialog-footer"><span className="aside-hint">{isLink?'Private links go to your AI app, which reads them with its own access.':'You provide the transcript. Audio isn’t transcribed here.'}</span><div className="button-row"><button className="button" onClick={onClose}>Cancel</button>{unread&&<button className="button" onClick={()=>{setError('');setUnread(false);setFetched('');setStep('options');}}>Let my AI app read it</button>}<button className="button primary" disabled={busy} onClick={()=>void toOptions()}>{busy&&isLink?'Reading…':isLink&&fetched!==link.trim()?'Read the link':'Next'} <ArrowRight size={14}/></button></div></div>
+   <div className="dialog-footer"><button className="button write-myself" disabled={busy} onClick={()=>void writeMyself()}><PenLine size={14}/> Write it myself instead</button><div className="button-row"><button className="button" onClick={onClose}>Cancel</button>{unread&&<button className="button" onClick={()=>{setError('');setUnread(false);setFetched('');setStep('options');}}>Let my AI app read it</button>}<button className="button primary" disabled={busy} onClick={()=>void toOptions()}>{busy&&isLink?'Reading…':isLink&&fetched!==link.trim()?'Read the link':'Next'} <ArrowRight size={14}/></button></div></div>
   </>:<>
    <div className="recap-options">
     <div>
@@ -175,7 +179,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
       <label className={`writer-card ${!key&&!mine?'on':''}`}><input type="radio" name="writer" checked={!key&&!mine} onChange={()=>{setWriter('');setMine(false);}}/><span><strong>Your AI app {apps?.length?<small className="soon on">Connected: {apps[0]}</small>:null}</strong><small>Claude Code, Codex, Claude, ChatGPT or another app connected over MCP. It reads the source with its own access, so private Notion, Drive and GitHub work.</small></span></label>
       {keys.length?keys.map(k=>{const off=keyBlock||(!k.transcripts?`${k.name} can’t read GM-only things, and transcripts are GM-only. Turn that on under What it may do.`:'');return <label key={k.id} className={`writer-card ${key?.id===k.id?'on':''} ${off?'off':''}`}><input type="radio" name="writer" disabled={!!off} checked={key?.id===k.id} onChange={()=>{setWriter(k.id);setMine(false);}}/><span><strong><KeyRound size={13}/> {keys.length>1?k.name:'An API key, here'} {!off&&<small className="soon">About {recapTokens(compacted).toLocaleString('en')} tokens</small>}</strong><small>{off||`Runs in RPG Tools with ${k.name} (${k.model}). Works for pasted text, files and public links.`}</small></span></label>;})
       :<label className="writer-card off"><input type="radio" name="writer" disabled/><span><strong><KeyRound size={13}/> An API key, here</strong><small>Runs in RPG Tools with your own AI key. Add one with Connect an AI › Use an API key, with Help me run the game or Run the game.</small></span></label>}
-      <label className={`writer-card ${mine?'on':''}`}><input type="radio" name="writer" checked={mine} onChange={()=>setMine(true)}/><span><strong><PenLine size={13}/> Me, no AI</strong><small>{appReads?'Makes the page with the link noted on it. You write the recap; Check it with AI stays optional.':'Makes the page with the transcript on a GM-only tab. You write the recap; Check it with AI stays optional.'}</small></span></label>
+      <label className={`writer-card ${mine?'on':''}`}><input type="radio" name="writer" checked={mine} onChange={()=>setMine(true)}/><span><strong><PenLine size={13}/> Me, no AI</strong><small>{appReads?'Makes the page with the link noted on it. You write the recap; Check it with AI stays optional.':text.trim()?'Makes the page with the transcript on a GM-only tab. You write the recap; Check it with AI stays optional.':'Makes the page for you to write the recap. Check it with AI stays optional.'}</small></span></label>
      </div>
     </div>
    </div>
