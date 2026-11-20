@@ -5,10 +5,11 @@
  */
 import { z } from "zod";
 import type { RecapRequest, recapParts } from "./recap-schema.ts";
+import { formatDate, type Calendar, type CalendarDate } from "./calendar-model.ts";
 
-export const extractKinds = ["timeline", "quotes", "people", "places", "orgs", "lore", "codex", "quests", "rumours", "gmNotes", "moments", "spotlights", "encounters", "next", "threads"] as const;
+export const extractKinds = ["timeline", "quotes", "people", "places", "orgs", "lore", "codex", "quests", "rumours", "gmNotes", "moments", "spotlights", "encounters", "next", "threads", "creatures", "items", "ties", "dates"] as const;
 /** Kinds that start off: turned on with `on`. Every other kind starts on, and is turned off with `off`. */
-export const offAtFirst: readonly ExtractKind[] = ["spotlights", "encounters"];
+export const offAtFirst: readonly ExtractKind[] = ["spotlights", "encounters", "creatures", "dates"];
 export type ExtractKind = typeof extractKinds[number];
 export const extractDepths = ["main", "balanced", "everything"] as const;
 
@@ -29,13 +30,18 @@ export const extractNames: Record<ExtractKind, [string, string]> = {
   encounters: ["Encounters", "Fights and tense meetings, and how they went."],
   next: ["Party status and next steps", "Where the party stands and what they plan, for your prep."],
   threads: ["Loose threads", "Open questions and hooks nobody has followed yet."],
+  creatures: ["Creatures", "Monsters and beasts the party met, as creature pages."],
+  items: ["Items and loot", "Added to whoever carries it, or a new item page. Plain gear like a torch is left out."],
+  ties: ["Relationships", "New ties between people and groups."],
+  dates: ["In-world dates", "Moves the campaign calendar on to the session's date."],
 };
 /** How the kinds are grouped in the settings. */
 export const extractGroups: [string, ExtractKind[]][] = [
   ["On the session page", ["timeline", "quotes", "gmNotes"]],
   ["Highlights", ["moments", "spotlights", "encounters"]],
   ["For next time (GM only)", ["next", "threads"]],
-  ["Pages", ["people", "places", "orgs", "lore", "codex"]],
+  ["Pages", ["people", "creatures", "places", "orgs", "lore", "codex"]],
+  ["Items, ties and dates", ["items", "ties", "dates"]],
   ["Quests", ["quests", "rumours"]],
 ];
 export const depthNames: Record<typeof extractDepths[number], [string, string]> = {
@@ -74,7 +80,7 @@ export function partsOff(x: ExtractSettings | undefined): typeof recapParts[numb
   const off = (...k: ExtractKind[]) => k.every(y => !isOn(x, y));
   return [
     ...(off("timeline") ? ["timeline" as const] : []), ...(off("quotes") ? ["quotes" as const] : []),
-    ...(off("people", "places", "orgs", "lore", "codex") ? ["found" as const] : []), ...(off("quests", "rumours") ? ["quests" as const] : []),
+    ...(off("people", "creatures", "places", "orgs", "lore", "codex", "items", "ties", "dates") ? ["found" as const] : []), ...(off("quests", "rumours") ? ["quests" as const] : []),
     ...(off("gmNotes") ? ["gmNotes" as const] : []),
   ];
 }
@@ -83,6 +89,7 @@ const askNames: Record<ExtractKind, string> = {
   timeline: "the timeline", quotes: "quotes", people: "people (characters)", places: "places", orgs: "organizations (factions)", lore: "lore and notes",
   codex: "codex finds", quests: "moves on quests the campaign has", rumours: "new quests", gmNotes: "GM notes",
   moments: "key moments", spotlights: "character spotlights", encounters: "encounters", next: "party status and next steps", threads: "loose threads",
+  creatures: "creatures", items: "items and loot (loot)", ties: "relationships (ties)", dates: "the in-world date (gameDate)",
 };
 /** A line for the AI on what the GM turned off, if anything. The timeline is still asked for when the recap is written from it. */
 export function extractNotes(x: ExtractSettings | undefined, opts: { keepTimeline?: boolean } = {}) {
@@ -101,11 +108,34 @@ export function highlightAsks(x: ExtractSettings | undefined) {
   ].filter(Boolean);
 }
 
+/**
+ * What to ask the AI for of creatures, items, relationships and the in-world date, when they are on, one line each. The date
+ * needs the campaign's calendar, so the AI names a month it has.
+ */
+export function findAsks(x: ExtractSettings | undefined, calendar?: Calendar) {
+  return [
+    isOn(x, "creatures") ? "- found: creatures too: monsters and beasts the party met or fought, with kind: creature." : "",
+    isOn(x, "items") ? "- loot: notable items and treasure the party got, each with item, who took it (a character's name, or party), qty when more than one, and a short note. Leave out plain gear like torches, rations or a common sword." : "",
+    isOn(x, "ties") ? "- ties: relationships that began or changed, each with from and to (a person or group), kind (such as Ally of, Rival of, Sworn enemy of, Serves, Employs, Owes a debt to, Mentor of, In love with, Knows) and a short note." : "",
+    isOn(x, "dates") && calendar ? `- gameDate: the in-world date at the end of the session, if it is said or clear, as day, month and year. Months on the campaign calendar: ${calendar.periods.map(p => p.name).join(", ")}. The calendar is at ${formatDate(calendar, calendar.current)} now.` : "",
+  ].filter(Boolean);
+}
+
+/** The in-world date the AI sent, on the campaign calendar: a month it has (by name), a day in it, and a year (the calendar's own when left out). */
+export function readGameDate(calendar: Calendar | undefined, d: { day?: number; month?: string; year?: number } | undefined): CalendarDate | null {
+  if (!calendar || !d?.month?.trim()) return null;
+  const m = d.month.trim().toLowerCase(), period = calendar.periods.find(p => p.name.toLowerCase() === m) ?? calendar.periods.find(p => p.name.toLowerCase().startsWith(m) || m.startsWith(p.name.toLowerCase()));
+  if (!period) return null;
+  const year = Number.isInteger(d.year) && d.year! >= 1 ? d.year! : calendar.current.year, day = Number.isInteger(d.day) && d.day! >= 1 ? d.day! : 1;
+  const days = period.days + (period.id === calendar.leap.periodId ? calendar.leap.extraDays : 0);
+  return day <= Math.max(1, days) && year <= 99999 ? { year, periodId: period.id, day } : null;
+}
+
 /** The depth to use: what this recap asked for, or the campaign's setting. */
 export const depthFor = (x: ExtractSettings | undefined, r?: Pick<RecapRequest, "depth">) => r?.depth ?? x?.depth ?? "balanced";
 
-const kindOfFind = (kind: string | undefined): ExtractKind => kind === "character" ? "people" : kind === "place" ? "places" : kind === "faction" ? "orgs" : "lore";
-type Finds = { found?: { kind?: string }[]; codex?: unknown[] };
+const kindOfFind = (kind: string | undefined): ExtractKind => kind === "character" ? "people" : kind === "creature" ? "creatures" : kind === "place" ? "places" : kind === "faction" ? "orgs" : "lore";
+type Finds = { found?: { kind?: string }[]; codex?: unknown[]; loot?: unknown[]; ties?: unknown[]; gameDate?: unknown };
 type Highlights = { moments?: unknown[]; spotlights?: unknown[]; encounters?: unknown[]; threads?: unknown[]; next?: unknown[]; partyStatus?: string };
 /** Drops what the AI sent of kinds the GM turned off. Quest moves and new quests are told apart once matched (see recaps.ts). */
 export function honourExtract<T extends Finds & Highlights & { timeline?: unknown[]; quotes?: unknown[]; gmNotes?: string }>(input: T, x: ExtractSettings | undefined): T {
@@ -113,6 +143,9 @@ export function honourExtract<T extends Finds & Highlights & { timeline?: unknow
     ...(input.moments && !isOn(x, "moments") ? { moments: [] } : {}), ...(input.spotlights && !isOn(x, "spotlights") ? { spotlights: [] } : {}),
     ...(input.encounters && !isOn(x, "encounters") ? { encounters: [] } : {}), ...(input.threads && !isOn(x, "threads") ? { threads: [] } : {}),
     ...(!isOn(x, "next") ? { ...(input.next ? { next: [] } : {}), ...(input.partyStatus !== undefined ? { partyStatus: "" } : {}) } : {}),
+    ...(input.found && !isOn(x, "creatures") ? { found: input.found.filter(f => f.kind !== "creature") } : {}),
+    ...(input.loot && !isOn(x, "items") ? { loot: [] } : {}), ...(input.ties && !isOn(x, "ties") ? { ties: [] } : {}),
+    ...(input.gameDate !== undefined && !isOn(x, "dates") ? { gameDate: undefined } : {}),
   };
   if (!x?.off?.length) return { ...input, ...later };
   return {

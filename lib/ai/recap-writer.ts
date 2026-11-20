@@ -72,7 +72,7 @@ export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: st
   const transcript = compactTranscript(raw);
   if (transcript.length > IN_APP_LIMIT) throw Error("That transcript is too long to write here in one go. Hand it to your AI app, which reads it in parts.");
   const request = page.recap?.request ?? defaultRequest, scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
-  const head = { campaign: ctx.campaign.name, title: page.title, playedOn: page.recap?.playedOn, request, names: namesBlock(ctx.book.entries, scope), extract: ctx.campaign.aiWriting?.extract };
+  const head = { campaign: ctx.campaign.name, title: page.title, playedOn: page.recap?.playedOn, request, names: namesBlock(ctx.book.entries, scope), extract: ctx.campaign.aiWriting?.extract, calendar: ctx.campaign.calendars?.[0] };
   return counted(bucket, owner, campaignId, c.id, async add => {
     const first = await runOnce(target, RECAP_SYSTEM, notesPrompt({ ...head, quests: questsBlock(ctx.book, scope), transcript }), notesTool(), 12_000, fetchImpl);
     add(first.tokens);
@@ -128,12 +128,12 @@ export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: st
   const recap = unlinkNames(page.body).trim();
   if (!recap) throw Error("Write the recap first, then check it.");
   const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
-  const prompt = checkPrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, names: namesBlock(ctx.book.entries, scope), quests: questsBlock(ctx.book, scope), recap, extract: ctx.campaign.aiWriting?.extract });
+  const prompt = checkPrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, names: namesBlock(ctx.book.entries, scope), quests: questsBlock(ctx.book, scope), recap, extract: ctx.campaign.aiWriting?.extract, calendar: ctx.campaign.calendars?.[0] });
   return counted(bucket, owner, campaignId, c.id, async add => {
     const out = await runOnce(target, RECAP_SYSTEM, prompt, findsTool(), 6_000, fetchImpl);
     add(out.tokens);
     if (!out.input) throw new ProviderError("The AI didn't send what it found. Try again.");
-    const lists = Object.fromEntries((["found", "quests", "codex"] as const).filter(k => out.input![k] !== undefined).map(k => [k, out.input![k]]));
+    const lists = Object.fromEntries((["found", "quests", "codex", "loot", "ties", "gameDate"] as const).filter(k => out.input![k] !== undefined).map(k => [k, out.input![k]]));
     let saved;
     try { saved = await save(ctx, "add_recap_finds", { page: page.id, ...lists }); }
     catch (e) { throw Error(`What the AI found didn't fit: ${e instanceof Error ? e.message : "it was malformed"} Try again.`); }
@@ -145,7 +145,7 @@ export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: st
 function findsTool(): OnceTool {
   const full = listTools("run").find(t => t.name === "add_recap_finds")!.inputSchema as { properties: Record<string, unknown> };
   const { page: _page, ...properties } = full.properties;
-  return { name: "save_finds", description: "Send what the recap mentions: new or changed people, places and things, quests that moved, and codex finds.", inputSchema: { type: "object", properties, additionalProperties: false } };
+  return { name: "save_finds", description: "Send what the recap mentions: new or changed people, places and things, quests that moved, codex finds, and any loot, relationships and in-world date asked for.", inputSchema: { type: "object", properties, additionalProperties: false } };
 }
 
 /**

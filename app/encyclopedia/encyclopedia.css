@@ -980,6 +980,7 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .recap-check>.aside-hint{margin-top:8px}.recap-check>.aside-hint svg{vertical-align:-2px}
 .check-group{margin-top:18px}.check-group>.eyebrow{display:block;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .check-item{padding:12px 0;border-bottom:1px solid var(--line)}
+.check-item>.field-label{margin-bottom:8px}
 .recap-check .inline-link{padding:0;color:var(--accent);text-align:left;font:inherit}
 .check-title{display:flex;gap:8px;align-items:center;font-size:13px}.check-title strong{font-weight:600}.check-title .inline-link{font-weight:600;font-size:13px}
 .check-tag{font-size:10px;padding:2px 6px;border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent);flex-shrink:0}

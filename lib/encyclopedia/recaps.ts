@@ -7,7 +7,11 @@ import { defaultCharacter, newId, playerText, type Campaign, type Entry, type Wo
 import { defaultCategory, newQuest, questCategories, questsIn } from "./quests.ts";
 import { setFound } from "./codex.ts";
 import { honourSkips, keepNotes } from "./recap-request.ts";
-import { honourExtract, isOn } from "./recap-extract.ts";
+import { honourExtract, isOn, readGameDate } from "./recap-extract.ts";
+import { emptyInventory, putItem } from "./items.ts";
+import { canHoldTie, putTie } from "./tie-edit.ts";
+import { tieFits, tieTypeById, tieTypesOf, type TieType } from "./ties.ts";
+import { formatDate, sameDate } from "./calendar-model.ts";
 import { emptyRecap, recapPageKinds, type Beat, type Quote, type Recap, type RecapItem } from "./recap-schema.ts";
 
 // ---- Transcripts ------------------------------------------------------------------------------
@@ -96,7 +100,22 @@ export type AiRecap = {
   codex?: { page: string; label?: string }[];
   moments?: string[]; spotlights?: { who: string; text: string }[]; encounters?: { name: string; outcome?: string }[];
   partyStatus?: string; next?: string[]; threads?: string[];
+  loot?: { item: string; who?: string; qty?: number; note?: string }[];
+  ties?: { from: string; to: string; kind?: string; note?: string; playersSee?: boolean }[];
+  gameDate?: { day?: number; month?: string; year?: number };
 };
+
+const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\b(?:of|with|to|by|the|a|is|are)\b/g, " ").replace(/\s+/g, " ").trim();
+/** The kind of tie the AI named (Ally of, Rival of, serves), read from where it starts: a kind's own name, or its other name (reversed). Unknown: Connected to. */
+export function matchTieKind(types: TieType[], kind: string | undefined): { typeId: string; reversed: boolean; known: boolean } {
+  const k = words(kind ?? "");
+  if (k) for (const t of types) {
+    if (t.id === k || words(t.name) === k) return { typeId: t.id, reversed: false, known: true };
+    if (t.reverse && words(t.reverse) === k) return { typeId: t.id, reversed: true, known: true };
+  }
+  if (k) for (const t of types) if (words(t.name).split(" ")[0] === k.split(" ")[0] && k.split(" ")[0].length >= 4) return { typeId: t.id, reversed: false, known: true };
+  return { typeId: "linked", reversed: false, known: false };
+}
 
 /**
  * Builds the recap page from what the AI sent: links names that have pages, matches what it found to
@@ -123,7 +142,7 @@ export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, op
 }
 
 /** What the AI found: people, places and things, quest moves and codex finds, matched to pages. Each waits in the check list. */
-export type AiFinds = Pick<AiRecap, "found" | "quests" | "codex">;
+export type AiFinds = Pick<AiRecap, "found" | "quests" | "codex" | "loot" | "ties" | "gameDate">;
 
 /** Turns what the AI found into check list items: a match to an existing page is an update, anything else is new. */
 export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
@@ -149,6 +168,21 @@ export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
     const page = findPage(entries, k.page, c);
     if (page?.codex) review.push({ id: newId(), kind: "codex", name: page.title, pageId: page.id, text: k.label ?? "", state: "open" });
   }
+  for (const l of input.loot ?? []) {
+    const name = l.item.trim().slice(0, 160), who = l.who?.trim() && !/^(?:the )?(?:party|group|everyone|all)$/i.test(l.who.trim()) ? findPage(entries, l.who, c, ["character"]) : undefined;
+    const qty = Number.isInteger(l.qty) && l.qty! > 1 ? Math.min(l.qty!, 1_000_000) : undefined;
+    if (name) review.push({ id: newId(), kind: "loot", name, ...(who ? { pageId: who.id } : {}), ...(qty ? { qty } : {}), text: (l.note ?? "").trim().slice(0, 4000), state: "open" });
+  }
+  const types = tieTypesOf(ws.worlds.find(w => w.id === campaign.worldId));
+  for (const t of input.ties ?? []) {
+    const a = findPage(entries, t.from, c), b = findPage(entries, t.to, c), kind = matchTieKind(types, t.kind);
+    if (!t.from.trim() || !t.to.trim() || (a && b && a.id === b.id)) continue;
+    const note = [kind.known ? "" : (t.kind ?? "").trim(), (t.note ?? "").trim()].filter(Boolean).join(": ").slice(0, 300);
+    review.push({ id: newId(), kind: "tie", name: a?.title ?? t.from.trim().slice(0, 160), ...(a ? { pageId: a.id } : {}), to: b?.title ?? t.to.trim().slice(0, 160), ...(b ? { toId: b.id } : {}),
+      typeId: kind.typeId, ...(kind.reversed ? { reversed: true } : {}), text: note, ...(t.playersSee ? { playersSee: true } : {}), state: "open" });
+  }
+  const calendar = campaign.calendars?.[0], date = readGameDate(calendar, input.gameDate);
+  if (calendar && date && !sameDate(calendar.current, date)) review.push({ id: newId(), kind: "date", name: formatDate(calendar, date), calendarId: calendar.id, date, text: "", state: "open" });
   return review;
 }
 
@@ -187,16 +221,16 @@ export function applyItem(ws: Workspace, recapId: string, itemId: string, now = 
   let next = ws, message: string, done: Partial<RecapItem> = { state: "done" };
   if (item.kind === "newPage" || item.kind === "newQuest") {
     const campaign = ws.campaigns.find(x => x.id === campaignId)!, id = newId(), quest = item.kind === "newQuest";
-    const kind: Entry["kind"] = quest ? "quest" : item.pageKind ?? "note";
+    const pk = item.pageKind ?? "note", creature = pk === "creature", kind: Entry["kind"] = quest ? "quest" : pk === "creature" ? "character" : pk;
     const entry: Entry = {
       id, worldId: page.worldId, campaignId, parentId: null, title: item.name, kind, body: `${item.text ? `${item.text}\n\n` : ""}*From [[${page.id}|${page.title.replace(/[\]|]/g, "")}]].*`, updatedAt: at,
       ...(item.playersSee ? { overviewVisibility: "players" as const } : {}),
-      ...(kind === "character" ? { character: defaultCharacter() } : {}),
+      ...(kind === "character" ? { character: { ...defaultCharacter(), ...(creature ? { role: "creature" as const } : {}) } } : {}),
       ...(quest ? { quest: newQuest("rumour", defaultCategory(questCategories(campaign))) } : {}),
     };
     next = { ...ws, entries: [...ws.entries, entry] };
     next = patch(next, page.id, e => ({ ...e, body: linkOne(e.body, item.name, id) }));
-    message = `Made the ${quest ? "quest" : `${kind} page`} “${item.name}”${item.playersSee ? "" : ", GM only"}.`;
+    message = `Made the ${quest ? "quest" : `${creature ? "creature" : kind} page`} “${item.name}”${item.playersSee ? "" : ", GM only"}.`;
     done = { state: "done", pageId: id };
   } else if (item.kind === "update") {
     const body = `${target!.body.trimEnd()}${target!.body.trim() ? "\n\n" : ""}${from}${item.text}`;
@@ -213,6 +247,39 @@ export function applyItem(ws: Workspace, recapId: string, itemId: string, now = 
     const log = item.text ? [...quest.log, { id: newId(), at, label, text: item.text, players: !!item.playersSee }].slice(-500) : quest.log;
     next = patch(ws, target!.id, e => ({ ...e, quest: { ...quest, objectives, log }, updatedAt: at }));
     message = `${item.text ? "Wrote in" : "Updated"} the log of “${target!.title}”${ticked}.`;
+  } else if (item.kind === "loot") {
+    if (!target) throw Error(`Choose who carries “${item.name}” first.`);
+    if (target.kind !== "character" || !target.character) throw Error(`“${target.title}” isn't a character, so it has no inventory.`);
+    const inv = target.character.inventory ?? emptyInventory(), qty = item.qty ?? 1;
+    const items = putItem(inv.items, { name: item.name.slice(0, 80), ...(item.text ? { note: item.text.slice(0, 2000) } : {}) }, qty, newId);
+    next = patch(ws, target.id, e => ({ ...e, character: { ...e.character!, inventory: { ...inv, items } }, updatedAt: at }));
+    message = `Added ${qty > 1 ? `${qty} × ` : ""}“${item.name}” to ${target.title}’s inventory.`;
+  } else if (item.kind === "tie") {
+    const find = (id: string | undefined, name: string | undefined) => (id ? ws.entries.find(e => e.id === id) : undefined) ?? (name ? findPage(ws.entries, name, scope) : undefined);
+    const a = find(item.pageId, item.name), b = find(item.toId, item.to);
+    if (!a || !b) throw Error(`Make the page for “${!a ? item.name : item.to}” first, then add this tie.`);
+    if (a.id === b.id) throw Error("A page can't have a tie to itself.");
+    const types = tieTypesOf(ws.worlds.find(w => w.id === page.worldId));
+    let type = tieTypeById(types, item.typeId ?? "linked"), [owner, other] = item.reversed ? [b, a] : [a, b];
+    const fits = (t: TieType, o: Entry, x: Entry) => tieFits(t, o.kind, x.kind) && canHoldTie(o, x);
+    if (!fits(type, owner, other) && type.both && fits(type, other, owner)) [owner, other] = [other, owner];
+    if (!fits(type, owner, other)) { type = tieTypeById(types, "linked"); if (!fits(type, owner, other)) [owner, other] = [other, owner]; }
+    if ((owner.ties ?? []).some(t => t.toId === other.id && t.typeId === type.id)) message = `${owner.title} already has that tie to ${other.title}.`;
+    else {
+      const put = putTie(ws, owner.id, { id: newId(), toId: other.id, typeId: type.id, ...(item.text ? { note: item.text.slice(0, 300) } : {}), ...(item.playersSee ? {} : { gm: true }) }, at);
+      if (!put) throw Error(`“${owner.title}” has as many ties as it can hold.`);
+      next = put;
+      message = `Tied ${owner.title} to ${other.title}: ${type.name}${item.playersSee ? "" : ", GM only"}.`;
+    }
+    done = { state: "done", pageId: a.id, toId: b.id };
+  } else if (item.kind === "date") {
+    const campaign = ws.campaigns.find(x => x.id === campaignId), calendar = campaign?.calendars?.find(x => x.id === item.calendarId);
+    if (!campaign || !calendar || !item.date) throw Error("That calendar is gone.");
+    if (!calendar.periods.some(p => p.id === item.date!.periodId)) throw Error(`${calendar.name} doesn't have that month any more.`);
+    const title = page.title.slice(0, 100), has = calendar.events.some(ev => ev.title === title && sameDate(ev.date, item.date!));
+    const events = has || calendar.events.length >= 1000 ? calendar.events : [...calendar.events, { id: newId(), title, notes: "Session recap.", date: item.date, annual: false, visibility: "gm" as const }];
+    next = { ...ws, campaigns: ws.campaigns.map(x => x.id === campaignId ? { ...x, calendars: x.calendars!.map(k => k.id === calendar.id ? { ...k, current: item.date!, events } : k) } : x) };
+    message = `Moved ${calendar.name} on to ${formatDate(calendar, item.date)}${has ? "" : `, with “${title}” on that day`}.`;
   } else {
     if (!target!.codex) throw Error(`“${target!.title}” isn't in the codex.`);
     next = patch(ws, target!.id, e => ({ ...e, codex: setFound(e.codex!, campaignId, true, item.text || label, at), updatedAt: at }));

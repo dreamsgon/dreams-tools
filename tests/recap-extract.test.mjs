@@ -28,7 +28,7 @@ const finds={
 
 test('a fresh campaign pulls out everything, at Balanced, and stores nothing',()=>{
  for(const k of extractKinds)assert.equal(isOn(undefined,k),!offAtFirst.includes(k),k);
- assert.deepEqual(offAtFirst,['spotlights','encounters']);
+ assert.deepEqual(offAtFirst,['spotlights','encounters','creatures','dates']);
  assert.equal(depthFor(undefined),'balanced');
  assert.equal(cleanExtract({depth:'balanced',off:[]}),undefined);
  assert.deepEqual(saveExtract({chat:{length:'detailed'}},{depth:'balanced'}),{chat:{length:'detailed'}});
@@ -59,7 +59,7 @@ test('a draft leaves out the timeline, quotes and GM notes when they are off',()
 });
 
 test('the New session recap dialog starts from the campaign settings',()=>{
- assert.deepEqual(partsOff({off:['people','places','orgs','lore','codex','gmNotes']}),['found','gmNotes']);
+ assert.deepEqual(partsOff({off:['people','places','orgs','lore','codex','items','ties','gmNotes']}),['found','gmNotes']);
  assert.deepEqual(partsOff({off:['quests']}),[],'new quests still come');
  assert.deepEqual(partsOff({off:['quests','rumours','timeline']}),['timeline','quests']);
  assert.equal(depthFor({depth:'everything'}),'everything');
@@ -102,4 +102,38 @@ test('highlights and For next time are asked for when on, kept on the recap, and
  assert.equal(page.recap.partyStatus,undefined);assert.deepEqual(page.recap.next,[]);
  assert.deepEqual(playerRecapTabs({...page.recap,status:'published'},s=>s),[],'not shared until the GM shares it');
  assert.deepEqual(playerRecapTabs({...page.recap,status:'published',shareMoments:true},s=>s).map(t=>t.title),['Key moments']);
+});
+
+test('items, creatures, relationships and the in-world date wait in the check list and do their change',async()=>{
+ const {applyItem,matchTieKind}=await import('../lib/encyclopedia/recaps.ts');
+ const {builtInTieTypes}=await import('../lib/encyclopedia/ties.ts');
+ assert.deepEqual(matchTieKind(builtInTieTypes,'Ally of'),{typeId:'ally',reversed:false,known:true});
+ assert.deepEqual(matchTieKind(builtInTieTypes,'student of'),{typeId:'mentor',reversed:true,known:true});
+ assert.equal(matchTieKind(builtInTieTypes,'Haunts').typeId,'linked');
+ const ai={found:[{name:'Bog Hag',kind:'creature',text:'A marsh witch.'},{name:'Mire Toad',kind:'creature',text:'Huge.'}],loot:[{item:'Silver clapper',who:'Ostra Hale',note:'From the bell.'},{item:'Gold coins',who:'party',qty:40}],ties:[{from:'Ostra Hale',to:'Brother Halden',kind:'Owes a debt to',note:'For the ferry.'}],gameDate:{day:3,month:'nope',year:1}};
+ let {w,c}=world();
+ let items=findItems(w,c,ai);
+ assert.deepEqual(items.map(r=>r.kind),['loot','loot','tie'],'creatures and dates start off');
+ ({w,c}=world({on:['creatures','dates'],off:['ties']}));
+ const {makeCalendar,calendarTemplates}=await import('../lib/encyclopedia/calendar-templates.ts');
+ c.calendars=[makeCalendar(calendarTemplates[0].id)];
+ const cal=c.calendars[0];
+ ai.gameDate={day:2,month:'alturiak',year:1492};
+ items=findItems(w,c,ai);
+ assert.deepEqual(items.map(r=>`${r.kind}:${r.pageKind??''}`),['update:','newPage:creature','loot:','loot:','date:'],'Bog Hag has a page, so it is an update');
+ assert.equal(items.find(r=>r.name==='Gold coins').pageId,undefined,'the party: the GM chooses who carries it');
+ // Doing them
+ const s={id:'s13',worldId:c.worldId,campaignId:C,parentId:null,title:'Session 13',kind:'session',body:'',recap:{status:'draft',timeline:[],quotes:[],gmNotes:'',review:[...items,...findItems(world().w,world().c,{ties:ai.ties})]},updatedAt:NOW.toISOString()};
+ w.entries.push(s,{id:'halden',worldId:c.worldId,campaignId:C,parentId:null,title:'Brother Halden',kind:'character',body:'',character:{role:'npc',group:'',tags:[],location:'',faction:'',status:'active',statsVisibility:'gm',statsByCampaign:{}},updatedAt:NOW.toISOString()});
+ const ostra=w.entries.find(e=>e.id==='ostra');ostra.character={role:'pc',group:'',tags:[],location:'',faction:'',status:'active',statsVisibility:'gm',statsByCampaign:{}};
+ const by=k=>s.recap.review.find(r=>r.kind===k&&(k!=='loot'||r.pageId));
+ let r=applyItem(w,'s13',items[1].id,NOW);
+ assert.equal(r.next.entries.at(-1).character.role,'creature');assert.match(r.message,/creature page “Mire Toad”, GM only/);
+ r=applyItem(r.next,'s13',by('loot').id,NOW);
+ assert.deepEqual(r.next.entries.find(e=>e.id==='ostra').character.inventory.items.map(i=>[i.name,i.qty,i.note]),[['Silver clapper',1,'From the bell.']]);
+ assert.throws(()=>applyItem(r.next,'s13',s.recap.review.find(x=>x.name==='Gold coins').id,NOW),/Choose who carries/);
+ r=applyItem(r.next,'s13',by('tie').id,NOW);
+ assert.deepEqual(r.next.entries.find(e=>e.id==='ostra').ties.map(t=>[t.toId,t.typeId,t.note,t.gm]),[['halden','debt','For the ferry.',true]]);
+ assert.match(r.message,/Tied Ostra Hale to Brother Halden: Owes a debt to, GM only/);
+ r=applyItem(r.next,'s13',by('date').id,NOW);const k=r.next.campaigns.find(x=>x.id===C).calendars[0];assert.deepEqual(k.current,{year:1492,periodId:'alturiak',day:2});assert.ok(k.events.some(e=>e.title==='Session 13'&&e.visibility==='gm'));assert.match(r.message,/Moved .* on to 2 Alturiak/);
 });

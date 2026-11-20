@@ -97,9 +97,12 @@ const str = (description: string, max = 200) => ({ type: "string", minLength: 1,
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 /** save_recap's and add_recap_finds' lists of what changed in the world. */
 const findsSchema = {
-      found: { type: "array", maxItems: 40, description: "People, places, factions, lore and things that are new or changed. The server matches names to pages.", items: { type: "object", properties: { name: str("Its name.", 160), kind: { type: "string", enum: ["character", "place", "faction", "lore", "note"] }, text: { type: "string", minLength: 1, maxLength: 4000, description: "One or two sentences: who or what it is, or what changed." }, playersSee: { type: "boolean", description: "For a new page: players may read it." } }, required: ["name", "text"], additionalProperties: false } },
+      found: { type: "array", maxItems: 40, description: "People, places, factions, lore and things that are new or changed. The server matches names to pages.", items: { type: "object", properties: { name: str("Its name.", 160), kind: { type: "string", enum: [...recapPageKinds] }, text: { type: "string", minLength: 1, maxLength: 4000, description: "One or two sentences: who or what it is, or what changed." }, playersSee: { type: "boolean", description: "For a new page: players may read it." } }, required: ["name", "text"], additionalProperties: false } },
       quests: { type: "array", maxItems: 30, description: "Quests that moved. An unknown quest becomes a new rumour.", items: { type: "object", properties: { quest: str("The quest's title.", 160), log: { type: "string", maxLength: 4000, description: "A line for its log." }, tick: str("An objective that is now done, by its text.", 300), playersSee: { type: "boolean", description: "Players may read the log line." } }, required: ["quest"], additionalProperties: false } },
       codex: { type: "array", maxItems: 20, description: "Codex entries the party found.", items: { type: "object", properties: { page: str("The codex page's title."), label: str("Where or when, such as the session title.", 80) }, required: ["page"], additionalProperties: false } },
+      loot: { type: "array", maxItems: 30, description: "Notable items and treasure the party got. Each waits for the GM to add it to the inventory of who carries it. Kept only when the GM has Items and loot on.", items: { type: "object", properties: { item: str("The item's name.", 160), who: str("The character who took it, or party.", 160), qty: { type: "integer", minimum: 1, maximum: 1000000 }, note: { type: "string", maxLength: 2000, description: "A short note: what it is or does." } }, required: ["item"], additionalProperties: false } },
+      ties: { type: "array", maxItems: 30, description: "Relationships that began or changed, between people and groups. Kept only when the GM has Relationships on.", items: { type: "object", properties: { from: str("Who or what it starts at.", 160), to: str("Who or what it goes to.", 160), kind: str("Such as Ally of, Rival of, Sworn enemy of, Serves, Employs, Owes a debt to, Mentor of, In love with, Knows.", 60), note: { type: "string", maxLength: 300 }, playersSee: { type: "boolean", description: "Players may see the tie." } }, required: ["from", "to"], additionalProperties: false } },
+      gameDate: { type: "object", description: "The in-world date at the end of the session, on the campaign calendar. Kept only when the GM has In-world dates on.", properties: { day: { type: "integer", minimum: 1, maximum: 130 }, month: str("A month name from the campaign calendar.", 100), year: { type: "integer", minimum: 1, maximum: 99999 } }, required: ["month"], additionalProperties: false },
 };
 
 /** save_recap's highlights (a Key moments tab players may see) and For next time (GM only). Each is kept only when the GM has it on in What it pulls out. */
@@ -965,17 +968,32 @@ const linesOf = (a: Record<string, unknown>, key: string, max: number) => {
   return (v as string[]).map(x => x.trim()).filter(Boolean);
 };
 
-/** Checks the found, quests and codex lists of save_recap and add_recap_finds. */
+const wholeIn = (o: Record<string, unknown>, key: string, min: number, max: number) => {
+  const v = o[key];
+  if (v === undefined || v === null) return undefined;
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : fail(`${key} must be a whole number from ${min} to ${max}.`);
+};
+const gameDateOf = (a: Record<string, unknown>) => {
+  const v = a.gameDate;
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) return fail("gameDate must be an object with day, month and year.");
+  const d = v as Record<string, unknown>;
+  return { month: optionalText(d, "month", 100, true), day: wholeIn(d, "day", 1, 130), year: wholeIn(d, "year", 1, 99999) };
+};
+/** Checks the found, quests, codex, loot and ties lists and the gameDate of save_recap and add_recap_finds. */
 function findsInput(a: Record<string, unknown>): AiFinds {
   const s = (o: Record<string, unknown>, key: string, max: number, need = false) => optionalText(o, key, max, need);
   return {
     found: listOf(a, "found", 40).map(x => {
       const kind = s(x, "kind", 20) || "note";
-      if (!(recapPageKinds as readonly string[]).includes(kind)) fail("found kind must be character, place, faction, lore or note.");
+      if (!(recapPageKinds as readonly string[]).includes(kind)) fail("found kind must be character, creature, place, faction, lore or note.");
       return { name: s(x, "name", 160, true), kind, text: s(x, "text", 4000, true), playersSee: flagOf(x, "playersSee") };
     }),
     quests: listOf(a, "quests", 30).map(x => ({ quest: s(x, "quest", 160, true), log: s(x, "log", 4000) || undefined, tick: s(x, "tick", 300) || undefined, playersSee: flagOf(x, "playersSee") })),
     codex: listOf(a, "codex", 20).map(x => ({ page: s(x, "page", 200, true), label: s(x, "label", 80) || undefined })),
+    loot: listOf(a, "loot", 30).map(x => ({ item: s(x, "item", 160, true), who: s(x, "who", 160) || undefined, qty: wholeIn(x, "qty", 1, 1_000_000), note: s(x, "note", 2000) || undefined })),
+    ties: listOf(a, "ties", 30).map(x => ({ from: s(x, "from", 160, true), to: s(x, "to", 160, true), kind: s(x, "kind", 60) || undefined, note: s(x, "note", 300) || undefined, playersSee: flagOf(x, "playersSee") })),
+    gameDate: gameDateOf(a),
   };
 }
 

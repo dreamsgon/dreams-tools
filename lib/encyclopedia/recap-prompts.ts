@@ -7,7 +7,8 @@
 import { playerText, type Campaign, type Entry, type Workspace } from "./world-model.ts";
 import type { RecapRequest } from "./recap-schema.ts";
 import { requestNotes } from "./recap-request.ts";
-import { extractNotes, highlightAsks, type ExtractSettings } from "./recap-extract.ts";
+import { extractNotes, findAsks, highlightAsks, type ExtractSettings } from "./recap-extract.ts";
+import type { Calendar } from "./calendar-model.ts";
 import { questsIn } from "./quests.ts";
 import { builtInStyles, lockedLines, styleLines, type WritingStyle } from "./ai-styles.ts";
 
@@ -41,7 +42,7 @@ export function questsBlock(ws: Workspace, c: Scope) {
 /** [[id|Name]] links back to [[Name]], so the AI reads names, not ids. */
 export const unlinkNames = (s: string) => s.replace(/\[\[[^\]|\n]{1,120}\|([^\]\n]{1,160})\]\]/g, "[[$1]]");
 
-type Head = { campaign: string; title: string; playedOn?: string; request: RecapRequest; names: string; extract?: ExtractSettings };
+type Head = { campaign: string; title: string; playedOn?: string; request: RecapRequest; names: string; extract?: ExtractSettings; calendar?: Calendar };
 const headLines = (h: Head) => [`Campaign: "${h.campaign}". Session: "${h.title}"${h.playedOn ? `, played on ${h.playedOn}` : ""}.`];
 
 /** The first request: read the transcript once and send the notes with the save_notes tool. */
@@ -52,6 +53,7 @@ export function notesPrompt(h: Head & { quests: string; transcript: string }) {
     !skip.has("quotes") ? "- quotes: up to 10 memorable lines, word for word as in the transcript, each with who said it (the character, when a player speaks in character)." : "",
     !skip.has("found") ? "- found: people, places, factions, lore and things that are new or changed, a sentence or two each. Use the names below where they fit. playersSee: true only for new pages about what the players learned." : "",
     !skip.has("found") ? "- codex: codex pages the party found, by title." : "",
+    ...(!skip.has("found") ? findAsks(h.extract, h.calendar) : []),
     !skip.has("quests") ? "- quests: quests that moved, with a line for the log, and tick for an objective that is now done (copy its text from the list below). An unknown quest becomes a new rumour." : "",
     !skip.has("gmNotes") ? "- gmNotes: for the GM only: hooks, secrets the party got close to, rules calls, things to follow up." : "",
     ...highlightAsks(h.extract),
@@ -106,13 +108,14 @@ export function prosePrompt(h: Head & { timeline: string; quotes?: string; befor
  * Check it with AI, for a recap the GM wrote: read it and send what it mentions (new people, places and things,
  * quest moves, codex finds) with the save_finds tool. The recap itself is never written again.
  */
-export function checkPrompt(h: { campaign: string; title: string; playedOn?: string; names: string; quests: string; recap: string; extract?: ExtractSettings }) {
+export function checkPrompt(h: { campaign: string; title: string; playedOn?: string; names: string; quests: string; recap: string; extract?: ExtractSettings; calendar?: Calendar }) {
   return [
     `Campaign: "${h.campaign}". Session: "${h.title}"${h.playedOn ? `, played on ${h.playedOn}` : ""}.`,
     "The GM wrote the recap below themselves. Don't rewrite it or comment on it. Read it once and call save_finds once with:",
     "- found: people, places, factions, lore and things that are new or changed, a sentence or two each. Use the names below where they fit. playersSee: true only for new pages about what the players learned.",
     "- codex: codex pages the party found, by title.",
     "- quests: quests that moved, with a line for the log, and tick for an objective that is now done (copy its text from the list below). An unknown quest becomes a new rumour.",
+    ...findAsks(h.extract, h.calendar),
     "Only what the recap says. Send empty lists when it mentions nothing new.",
     ...extractNotes(h.extract),
     h.names ? `Page names in this campaign (spell names this way):\n${h.names}` : "This campaign has no pages yet.",
@@ -122,7 +125,7 @@ export function checkPrompt(h: { campaign: string; title: string; playedOn?: str
 }
 
 /** The notes the first request may send: save_recap's lists, without the page, title or recap. */
-export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes", "moments", "spotlights", "encounters", "partyStatus", "next", "threads"] as const;
+export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes", "moments", "spotlights", "encounters", "partyStatus", "next", "threads", "loot", "ties", "gameDate"] as const;
 
 // ---- The story so far ---------------------------------------------------------------------------
 
