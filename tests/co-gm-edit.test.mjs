@@ -67,3 +67,13 @@ test('a picture that is new to the copy is refused unless the server found it in
  const next=applyCoGmEdit(full,C,mine,new Set([IMG]));
  assert.equal(next.entries.find(e=>e.id==='demo-mara').picture.imageId,IMG);
 });
+
+test('a co-GM without "Use HTML in Wiki pages" cannot add HTML; with it they can',async()=>{
+ const {coGmRefusal}=await import('../lib/encyclopedia/co-gm-edit.ts');
+ const full=owner(),before=copy(full),after=structuredClone(before);
+ after.entries=after.entries.map(e=>e.id==='demo-first'?{...e,body:e.body+'\n::: html\n<b>Hi</b>\n:::'}:e);
+ assert.match(coGmRefusal(before,after,new Set(),false),/HTML/);
+ assert.equal(coGmRefusal(before,after,new Set(),true),null);
+ refuses(()=>applyCoGmEdit(full,C,after,new Set(),false),/HTML/);
+ assert.ok(applyCoGmEdit(full,C,after).entries.find(e=>e.id==='demo-first').body.includes('<b>Hi</b>'));
+});

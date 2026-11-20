@@ -33,7 +33,7 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unban"), ...owned, banId: id }),
   z.object({ action: z.literal("notify"), ...owned, joins: z.boolean(), discord: z.boolean() }),
   // Who can edit one Encyclopedia page, set from the page.
-  z.object({ action: z.literal("pageAccess"), ...owned, pageId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/), people: z.record(id, z.object({ edit: z.boolean(), subPages: z.boolean() })), groups: z.record(id, z.boolean()) }),
+  z.object({ action: z.literal("pageAccess"), ...owned, pageId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/), people: z.record(id, z.object({ edit: z.boolean(), subPages: z.boolean() })), groups: z.record(id, z.boolean()), add: z.record(id, z.boolean()).optional() }),
 ]);
 type Owned = Exclude<z.infer<typeof action>, { action: "invite" | "join" | "leave" }>;
 
@@ -113,7 +113,7 @@ async function manage(store: MemberStore, who: Who, body: Owned) {
     case "ban": await edit(l => ban(l, body.userId, { email: body.email, ip: body.ip }, body.note, `b-${newId()}`)); break;
     case "unban": await edit(l => unban(l, body.banId)); return;
     case "notify": await edit(l => ({ ...l, notify: { joins: body.joins, discord: body.discord } })); return;
-    case "pageAccess": await edit(l => setPageAccess(l, body.pageId, { people: body.people, groups: body.groups })); return;
+    case "pageAccess": await edit(l => setPageAccess(l, body.pageId, { people: body.people, groups: body.groups, add: body.add })); return;
   }
   await store.syncMembership(owner, c, body.userId);
 }

@@ -227,7 +227,7 @@ export class MemberStore {
     const found = await this.byRef(userId, ref);
     if (!found) return null;
     const { list } = await this.read(found.owner, found.campaignId).catch(() => ({ list: null as MemberList | null }));
-    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages"), maps: can(list, userId, "editMaps") } : null;
+    return list && can(list, userId, permission) ? { owner: found.owner, campaignId: found.campaignId, ownerName: list.ownerName || "the GM", role: roleOf(list, userId) ?? "Member", name: list.members.find(m => m.userId === userId)?.name ?? "A co-GM", edit: can(list, userId, "editPages"), maps: can(list, userId, "editMaps"), html: can(list, userId, "wikiHtml") } : null;
   }
 
   /**

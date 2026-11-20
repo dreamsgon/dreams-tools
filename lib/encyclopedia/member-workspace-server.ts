@@ -18,7 +18,7 @@ export async function coGmWorkspace(grant:{owner:string;campaignId:string}) {
   return { data:campaignExport(read.data,grant.campaignId,{linked:true}), revision:read.revision, etag:read.etag };
 }
 /** Saves a co-GM's copy into the owner's workspace. Null when it changed since they last read it. */
-export async function coGmSave(grant:{owner:string;campaignId:string;name:string}, data:Workspace, revision:number) {
+export async function coGmSave(grant:{owner:string;campaignId:string;name:string;html?:boolean}, data:Workspace, revision:number) {
   const store = new EncyclopediaStore(getBucket());
   const read = await store.read(grant.owner);
   if (read.revision !== revision) return null;
@@ -27,7 +27,7 @@ export async function coGmSave(grant:{owner:string;campaignId:string;name:string
   const fresh = incoming.success ? newImageIds(campaignExport(read.data, grant.campaignId, { linked: true }), incoming.data) : [];
   const allowed = new Set<string>();
   for (const id of fresh) if (await isCoGmUpload(grant.owner, grant.campaignId, id)) allowed.add(id);
-  return store.saveTagged(grant.owner, applyCoGmEdit(read.data, grant.campaignId, data, allowed), revision, { name: grant.name, as: 'co-gm' });
+  return store.saveTagged(grant.owner, applyCoGmEdit(read.data, grant.campaignId, data, allowed, grant.html !== false), revision, { name: grant.name, as: 'co-gm' });
 }
 export const coGmReadOnly = 'The GM has set your group to read this campaign, not edit it.';
 export const coGmGone = 'You can no longer open this campaign. You may have left it, or the GM changed what your group can see.';

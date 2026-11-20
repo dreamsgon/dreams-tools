@@ -46,6 +46,8 @@ For real accounts rather than a shared link, use the **Members** tab on the camp
 What members get:
 
 - **Players** open **Open player pages** from *Campaigns you're in* and see the front page and shared pages signed in, without the secret link. A page's **Who can edit** (set by the GM on the page) lets a member edit that page, add sub-pages, and so on from their player site.
+- **Who can edit** can also open a page or category to a whole group under *Adding pages inside*: switch on **Can add pages here** and that group's players can add pages inside it from their player site (each page starts for them and the GMs, and they choose whether other players see it). The group needs **Add pages inside pages you open to them** set to Yes on the Members tab (Players start at Yes).
+- **Use HTML in Wiki pages** on the Members tab decides who may add HTML boxes to pages (co-GMs start at Yes, players at No, guests at Never). Without it, someone can keep or remove HTML the GM wrote but not add new HTML. HTML is always filtered: see [Writing wiki pages](Writing-Wiki-Pages#html).
 - **Co-GMs** open the campaign from *Campaigns you're in*. Read only by default, with GM notes and secrets if their group allows. Permissions can add **Edit Wiki pages** and **Edit maps and run the table** (these also need *See GM-only pages*). Co-GMs can add pictures, stored in the GM's storage.
 - You hear about joins and leaves through the notification bell and, if set, Discord.
 

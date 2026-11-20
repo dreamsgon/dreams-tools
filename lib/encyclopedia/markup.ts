@@ -124,6 +124,14 @@ export function wikiBlocks(text: string, offset = 0, depth = 0): Block[] {
   return out;
 }
 
+/** How many HTML boxes (`::: html`, `[html]`, `[dohtml]`) the text has, for "Use HTML in Wiki pages". */
+export function htmlBlockCount(text: string): number {
+  const count = (blocks: readonly Block[]): number => blocks.reduce((n, b) => n + (b.type === 'html' ? 1 : b.type === 'block' ? count(b.children) + (b.columns ?? []).reduce((m, c) => m + count(c), 0) : 0), 0);
+  return /:::|\[(?:do)?html\]/i.test(text) ? count(wikiBlocks(text)) : 0;
+}
+/** Whether `after` has HTML that `before` didn't: someone without "Use HTML in Wiki pages" may keep or remove HTML, not add it. */
+export const addsHtml = (before: string, after: string) => htmlBlockCount(after) > htmlBlockCount(before);
+
 /** Footnote numbers in order of first use, for `[^key]` markers. */
 export function footnoteNumbers(text: string): Map<string, number> {
   const out = new Map<string, number>();

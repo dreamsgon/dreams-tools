@@ -70,3 +70,44 @@ test('pages remember who last changed them, and lose the mark when the GM change
  const gm=markEditor(marked,{...marked,entries:marked.entries.map(e=>e.id==='bram'?{...e,updatedAt:'2026-11-15T00:00:00.000Z'}:e)});
  assert.equal(gm.entries.find(e=>e.id==='bram').editedBy,undefined);
 });
+
+test('a page opened to a group: its players add pages there unless a group says Never',()=>{
+ const sessions=M.setPageAccess(list(),'demo-sessions',{people:{},groups:{},add:{players:true}});
+ assert.deepEqual(sessions.pages['demo-sessions'].add,{players:true});
+ assert.ok(M.pageRights(sessions,'tobin').subPages.has('demo-sessions'),'Players say Yes to adding pages by default');
+ assert.ok(!M.pageRights(sessions,'tobin').edit.has('demo-sessions'),'adding pages there is not editing it');
+ assert.ok(M.pageRights(sessions,'wren').subPages.has('demo-sessions'),'Wren is also a Guest: a No in another group does not stop it');
+ const off=M.setPermission(sessions,'players','addPages','no');
+ assert.ok(!M.pageRights(off,'tobin').subPages.has('demo-sessions'));
+ const never=M.setPermission(M.setPermission(sessions,'guests','addPages','never'),'players','addPages','yes');
+ assert.ok(!M.pageRights(never,'wren').subPages.has('demo-sessions'));
+ const cleared=M.setPageAccess(sessions,'demo-sessions',{people:{},groups:{},add:{players:false}});
+ assert.equal(cleared.pages['demo-sessions'],undefined,'an empty setting is removed');
+ const s=P.addPlayerSubPage(owner(),C,M.pageRights(sessions,'tobin'),{parentId:'demo-sessions',title:'Tobin’s notes',shared:false},'tobin-notes',{name:'Tobin',as:'player'},NOW);
+ assert.equal(s.entries.find(e=>e.id==='tobin-notes').parentId,'demo-sessions');
+});
+
+test('member lists saved before the new permissions still read, with each built-in group\'s starting choice',()=>{
+ const l=M.emptyMemberList(C,'Dreams');
+ const old={...l,groups:[...l.groups.map(g=>{const {addPages:_a,wikiHtml:_w,...perms}=g.perms;return {...g,perms};}),{id:'mine',name:'Mine',color:'teal',perms:Object.fromEntries(Object.keys(l.groups[0].perms).filter(k=>k!=='addPages'&&k!=='wikiHtml').map(k=>[k,'yes']))}]};
+ const read=M.memberListSchema.parse(old);
+ const perm=(id,k)=>read.groups.find(g=>g.id===id).perms[k];
+ assert.equal(perm('cogms','wikiHtml'),'yes');
+ assert.equal(perm('players','addPages'),'yes');
+ assert.equal(perm('players','wikiHtml'),'no');
+ assert.equal(perm('guests','wikiHtml'),'never');
+ assert.equal(perm('mine','wikiHtml'),'no','a group you made starts at No');
+});
+
+test('without "Use HTML in Wiki pages" a player keeps or removes HTML but cannot add it',()=>{
+ const rights=M.pageRights(list(),'mara');
+ assert.equal(rights.html,false,'Players start at No');
+ const add=()=>P.savePlayerEdit(owner(),C,rights,{entryId:'bram',tabs:[{id:'overview',body:'Hi\n::: html\n<b>x</b>\n:::'}]},MARA,NOW);
+ assert.throws(add,/HTML/);
+ assert.throws(()=>P.savePlayerEdit(owner(),C,rights,{entryId:'bram',tabs:[{id:'gear',body:'[dohtml]<i>y</i>[/dohtml]\n::: note\n::: html\nz\n:::\n:::'}]},MARA,NOW),/HTML/,'nested and [dohtml] count too');
+ const yes=M.pageRights(M.setPermission(list(),'players','wikiHtml','yes'),'mara');
+ assert.equal(yes.html,true);
+ const s=P.savePlayerEdit(owner(),C,yes,{entryId:'bram',tabs:[{id:'overview',body:'Hi\n::: html\n<b>x</b>\n:::'}]},MARA,NOW);
+ const kept=P.savePlayerEdit(s,C,rights,{entryId:'bram',tabs:[{id:'overview',body:'Changed\n::: html\n<b>x</b>\n:::'}]},MARA,NOW);
+ assert.match(kept.entries.find(e=>e.id==='bram').body,/^Changed/,'HTML already there can stay');
+});

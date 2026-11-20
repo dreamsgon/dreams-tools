@@ -10,7 +10,7 @@ import {memberRef} from './member-view';
  * Who can edit a page, set on the page (the GM only): people and groups from the campaign's members. Groups that
  * may edit every page (the grid's "Edit Encyclopedia pages") show as already able to. Saved as each switch changes.
  */
-type Access={people:Record<string,{edit:boolean;subPages:boolean}>;groups:Record<string,boolean>};
+type Access={people:Record<string,{edit:boolean;subPages:boolean}>;groups:Record<string,boolean>;add?:Record<string,boolean>};
 const none:Access={people:{},groups:{}};
 const avatarColors=['#5a3f8f','#2f5a8a','#3f6a4f','#8a5a2a','#8a2f4f','#2f6a6a'];
 function Face({name,seed}:{name:string;seed:string}){return <span className="who-face" style={{background:avatarColors[[...seed].reduce((a,c)=>a+c.charCodeAt(0),0)%avatarColors.length]}} aria-hidden="true">{[...name.trim()][0]?.toUpperCase()??'?'}</span>;}
@@ -25,7 +25,8 @@ export function WhoCanEdit({entry,campaignId}:{entry:Entry;campaignId:string}){
  const access:Access=view.pages?.[entry.id]??none,people=Object.keys(access.people),groupsOn=Object.keys(access.groups).filter(g=>access.groups[g]);
  const everyPage=view.groups.filter(g=>g.perms.editPages==='yes'),never=(groups:string[],k:'editPages'|'addSubPages'|'editOwnCharacter')=>groups.some(id=>view.groups.find(g=>g.id===id)?.perms[k]==='never');
  const yes=(groups:string[],k:'addSubPages'|'editOwnCharacter')=>groups.some(id=>view.groups.find(g=>g.id===id)?.perms[k]==='yes');
- const count=people.length+groupsOn.length;
+ const adders=view.groups.filter(g=>g.perms.addPages==='yes'&&g.perms.seeGm!=='yes'),addOn=Object.keys(access.add??{}).filter(g=>access.add?.[g]);
+ const count=people.length+groupsOn.length+addOn.length;
  async function save(next:Access){setBusy(true);setError('');try{const r=await fetch('/api/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pageAccess',campaignId,pageId:entry.id,...next})});const v=await r.json();if(!r.ok)throw new Error(v.error??'Could not save.');setView(v as MembersView);}catch(e){setError(e instanceof Error?e.message:'Could not save.');}finally{setBusy(false);}}
  const person=(userId:string,patch:Partial<{edit:boolean;subPages:boolean}>)=>save({...access,people:{...access.people,[userId]:{...access.people[userId],...patch}}});
  const drop=(userId:string)=>save({...access,people:Object.fromEntries(Object.entries(access.people).filter(([u])=>u!==userId))});
@@ -48,6 +49,9 @@ export function WhoCanEdit({entry,campaignId}:{entry:Entry;campaignId:string}){
      <button className="who-drop" aria-label={`Take ${m.name} off this page`} disabled={busy} onClick={()=>void drop(u)}><X size={13}/></button></div>;})}
    {groupsOn.map(g=><div key={g} className="who-row"><span className={`who-chip c-${view.groups.find(x=>x.id===g)?.color??'gray'}`}>{groupName(g)}</span><Switch on label="Can edit" disabled={busy} set={v=>void save({...access,groups:{...access.groups,[g]:v}})}/></div>)}
    {(otherPeople.length>0||otherGroups.length>0)&&<div className="who-add"><select aria-label="Add a person or group" value={adding} onChange={e=>setAdding(e.target.value)}><option value="">Add a person or group</option>{otherPeople.length>0&&<optgroup label="People">{otherPeople.map(m=><option key={m.userId} value={`p:${m.userId}`}>{m.name}</option>)}</optgroup>}{otherGroups.length>0&&<optgroup label="Groups">{otherGroups.map(g=><option key={g.id} value={`g:${g.id}`}>{g.name}</option>)}</optgroup>}</select><button className="button small" disabled={!adding||busy} onClick={add}>Add</button></div>}
+   <div className="who-adders"><span className="who-section">Adding pages inside {entry.title}</span>{!shared&&adders.length>0&&<p className="who-note">Players reach this page only once it is shared with players.</p>}
+    {adders.length?adders.map(g=><div key={g.id} className="who-row"><span className={`who-chip c-${g.color}`}>{g.name}</span><Switch on={!!access.add?.[g.id]} label="Can add pages here" disabled={busy} set={v=>void save({...access,add:{...access.add,[g.id]:v}})}/></div>)
+    :<p className="who-note">No group may add pages yet. Turn on “Add pages inside pages you open to them” for a group on the <Link href={`/campaigns/${encodeURIComponent('e:'+campaignId)}?tab=members`}>Members tab</Link>.</p>}</div>
    <p className="who-note">Sub-pages they add sit inside {entry.title} and start for them and the GMs only. They choose which of them players can see. You can always see and edit them. They edit from their player pages.</p></>}
    {error&&<p className="who-error" role="alert">{error}</p>}
   </div>}

@@ -1,3 +1,4 @@
+import { addsHtml } from './markup.ts';
 import { campaignExport, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
 
 /**
@@ -8,6 +9,7 @@ import { campaignExport, workspaceSchema, type Entry, type Workspace } from './w
  */
 export class CoGmEditError extends Error {}
 const no = (message: string): never => { throw new CoGmEditError(message); };
+const NO_HTML = 'The GM hasn’t turned on HTML in Wiki pages for your group. Take out the HTML box to keep your change.';
 // Settings that link the campaign to the owner's own accounts and folders stay the owner's.
 const ownerOnly = ['id', 'worldId', 'github', 'discord', 'maptableCampaignId', 'folderId', 'linkedWorldIds'] as const;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -43,7 +45,7 @@ function restore(edited: Entry, full: Entry, campaignId: string): Entry {
  * this before each change so a co-GM never gets stuck on a save the server would refuse; the server asks it again.
  * `allowed` is picture ids that aren't in the copy yet but are known to be in the GM's storage (pictures the co-GM added).
  */
-export function coGmRefusal(before: Workspace, after: Workspace, allowed: ReadonlySet<string> = new Set()): string | null {
+export function coGmRefusal(before: Workspace, after: Workspace, allowed: ReadonlySet<string> = new Set(), html = true): string | null {
   const was = before.campaigns[0], mine = after.campaigns[0];
   if (after.campaigns.length !== 1 || mine?.id !== was?.id) return 'A co-GM can only change the campaign they were invited to.';
   if (!same(after.worlds, before.worlds)) return 'Only the GM can change the world and its templates.';
@@ -51,18 +53,27 @@ export function coGmRefusal(before: Workspace, after: Workspace, allowed: Readon
   // Every picture they use must already be in this campaign, or be one they added to the GM's storage.
   const known = images(before);
   for (const id of images(after)) if (!known.has(id) && !allowed.has(id)) return "That picture isn't in this campaign's storage. Add it again.";
+  // Without "Use HTML in Wiki pages" they may keep or remove HTML the GM wrote, not add any.
+  if (!html) {
+    const was = new Map(before.entries.map(e => [e.id, e]));
+    for (const e of after.entries) {
+      const old = was.get(e.id);
+      if (e.body !== old?.body && addsHtml(old?.body ?? '', e.body)) return NO_HTML;
+      for (const t of e.tabs ?? []) { const ot = old?.tabs?.find(x => x.id === t.id); if (t.body !== ot?.body && addsHtml(ot?.body ?? '', t.body)) return NO_HTML; }
+    }
+  }
   return null;
 }
 
 /** The picture ids a co-GM's copy uses that the campaign's current copy doesn't: the ones the server must find in storage. */
 export const newImageIds = (before: Workspace, after: Workspace): string[] => { const known = images(before); return [...images(after)].filter(id => !known.has(id)); };
 
-export function applyCoGmEdit(full: Workspace, campaignId: string, input: Workspace, allowed: ReadonlySet<string> = new Set()): Workspace {
+export function applyCoGmEdit(full: Workspace, campaignId: string, input: Workspace, allowed: ReadonlySet<string> = new Set(), html = true): Workspace {
   const edited = workspaceSchema.parse(input);
   const campaign = full.campaigns.find(c => c.id === campaignId) ?? no('This campaign is gone.');
   // The co-GM sees the lore of linked worlds too, but only the GM can change it.
   const before = campaignExport(full, campaignId, { linked: true });
-  const refused = coGmRefusal(before, edited, allowed);
+  const refused = coGmRefusal(before, edited, allowed, html);
   if (refused) no(refused);
   const mine = edited.campaigns[0];
 
