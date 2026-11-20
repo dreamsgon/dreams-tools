@@ -2,7 +2,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, Bot, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, Bot, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, MessageSquare, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
@@ -25,7 +25,7 @@ import { BackupsButton } from "./rp-backups-button";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
 import { useDiceTarget } from "./use-dice-target";
-import { OPEN_CHAT_EVENT } from "@/lib/ai/chat-text";
+import { openAi, type ChatMeta } from "@/lib/ai/chat-text";
 import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 import { hubLinks } from "@/lib/campaign-hub-links";
@@ -401,38 +401,53 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
     case "recap": return <>{head(hub.lastSession && <a href={L.entry(hub.lastSession.id)}>Open</a>)}
       {hub.lastSession ? <><strong className="hub-recap-title">{hub.lastSession.title}</strong><p className="hub-muted">{hub.lastSession.excerpt || "This session page is empty."}</p></>
         : <p className="hub-muted">No session pages yet. Session pages you write in the Wiki show up here.</p>}</>;
-    case "ai": return <>{head()}<AiWidget campaignId={e?.id} maptableCampaignId={e ? undefined : m?.id} bare={bare} /></>;
+    case "ai": return <>{head()}<AiWidget campaignId={e?.id} maptableCampaignId={e ? undefined : m?.id} bare={bare} rows={h} /></>;
     case "notes": return <Notes layout={layout} save={save} head={head} />;
     case "links": return <Links layout={layout} save={save} head={head} />;
   }
 }
 
 type AiState = { paused: boolean; waiting?: unknown[]; entries: { id: string; at: string; summary: string; connection: string; undone?: string }[]; connected: string[]; hasConnections: boolean; chat?: { id: string; name: string }[] };
-/** The AI connection widget: who is connected, what they did lately, and Ask, which opens the AI panel on this page. */
-function AiWidget({ campaignId, maptableCampaignId, bare }: { campaignId?: string; maptableCampaignId?: string; bare?: boolean }) {
-  const [state, setState] = useState<AiState | null | "error">(null);
+/**
+ * The AI widget: the same chat as the AI panel on every page. Ask starts a new chat in the panel; Chats lists the saved
+ * ones and Log what the AI did, each opening the panel there. Connection opens the panel's Connection tab to check or fix it.
+ */
+function AiWidget({ campaignId, maptableCampaignId, bare, rows }: { campaignId?: string; maptableCampaignId?: string; bare?: boolean; rows: number }) {
+  const [state, setState] = useState<AiState | null | "error">(null), [chats, setChats] = useState<ChatMeta[] | null>(null);
+  const [view, setView] = useState<"chats" | "log">("chats"), [question, setQuestion] = useState("");
   useEffect(() => {
     if (bare || (!campaignId && !maptableCampaignId)) return;
     let live = true;
     const q = new URLSearchParams(campaignId ? { campaignId } : { maptableCampaignId: maptableCampaignId! });
-    fetch(`/api/encyclopedia/ai-activity?${q}`, { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject()).then(s => { if (live) setState(s as AiState); }).catch(() => { if (live) setState("error"); });
-    return () => { live = false; };
+    const read = () => {
+      fetch(`/api/encyclopedia/ai-activity?${q}`, { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject()).then(s => { if (live) setState(s as AiState); }).catch(() => { if (live) setState(x => x && x !== "error" ? x : "error"); });
+      fetch(`/api/encyclopedia/ai-chats?${q}`, { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject()).then((b: { chats?: ChatMeta[] }) => { if (live) setChats(b.chats ?? []); }).catch(() => { if (live) setChats(c => c ?? []); });
+    };
+    read();
+    // Chats asked from here, and what the AI did, show up without a reload.
+    const tick = setInterval(() => { if (!document.hidden) read(); }, 20_000);
+    return () => { live = false; clearInterval(tick); };
   }, [campaignId, maptableCampaignId, bare]);
   const connect = campaignId ? `/encyclopedia?campaign=${encodeURIComponent(campaignId)}&ai=connect` : null;
-  const open = () => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT));
-  if (bare) return <p className="hub-muted">Who is connected, what the AI did lately, and Ask, which opens the chat here.</p>;
+  if (bare) return <p className="hub-muted">Chat with your AI, your saved chats, and a log of what it did. The same chat as the AI button on every page.</p>;
   if (state === null) return <p className="hub-muted">Loading…</p>;
   if (state === "error") return <p className="hub-muted">Couldn’t load the AI connection.</p>;
-  if (!state.hasConnections) return <div className="hub-ai"><p className="hub-muted">No AI is connected yet. Connect Claude, ChatGPT or another AI app, or add an API key, to ask it about this campaign from any page.</p>{connect && <a className="hub-button" href={connect}><Sparkles size={14} aria-hidden="true" />Connect an AI</a>}</div>;
-  const waiting = state.waiting?.length ?? 0, chat = state.chat?.[0];
+  if (!state.hasConnections) return <div className="hub-ai"><p className="hub-muted">No AI is connected yet. Connect Claude, ChatGPT, Codex or another AI app, or add an API key to chat with it here and on every page.</p>{connect ? <a className="hub-button" href={connect}><Sparkles size={14} aria-hidden="true" />Connect an AI</a> : <button className="hub-button" onClick={() => openAi()}><Sparkles size={14} aria-hidden="true" />Connect an AI</button>}</div>;
+  const waiting = state.waiting?.length ?? 0, chat = state.chat?.[0], shown = Math.max(3, rows * 3);
+  function ask(e: React.FormEvent) { e.preventDefault(); const q = question.trim(); if (!q) return; openAi({ ask: q }); setQuestion(""); }
   return <div className="hub-ai">
-    <p className="hub-ai-status"><span className={`hub-ai-dot${state.paused ? " paused" : state.connected.length ? " live" : ""}`} aria-hidden="true" />{state.paused ? "Paused: it can read, but changes wait until you resume." : state.connected.length ? `Connected now: ${state.connected.join(", ")}` : chat ? `${state.chat!.map(c => c.name).join(", ")} ready to ask` : "Not connected right now"}</p>
-    <div className="hub-ai-actions">
-      {chat && <button className="hub-button hub-button-primary" onClick={open}><Bot size={14} aria-hidden="true" />Ask {chat.name}</button>}
-      <button className="hub-button" onClick={open}>{waiting ? `${waiting} waiting for your OK` : "Activity"}</button>
+    <p className="hub-ai-status"><span className={`hub-ai-dot${state.paused ? " paused" : state.connected.length ? " live" : ""}`} aria-hidden="true" /><span>{state.paused ? "Paused: it can read, but changes wait until you resume." : state.connected.length ? `Connected now: ${state.connected.join(", ")}` : chat ? `${state.chat!.map(c => c.name).join(", ")} ready to chat` : "No app has connected lately"}</span><button className="hub-ai-settings" onClick={() => openAi({ tab: "connection" })}>Connection</button></p>
+    {chat ? <form className="hub-ai-ask" onSubmit={ask}><input value={question} maxLength={2000} placeholder={`Ask ${chat.name} about this campaign…`} aria-label={`Ask ${chat.name}`} onChange={e => setQuestion(e.target.value)} /><button className="hub-button hub-button-primary" disabled={!question.trim()}><ArrowUp size={14} aria-hidden="true" />Ask</button></form>
+      : <p className="hub-muted">Chat here needs an AI with an API key: apps like Claude and Codex chat in their own window. <button className="hub-ai-settings" onClick={() => openAi({ tab: "ask" })}>Add a key</button></p>}
+    <div className="hub-ai-tabs" role="tablist">
+      <button role="tab" aria-selected={view === "chats"} onClick={() => setView("chats")}>Chats{chats?.length ? ` · ${chats.length}` : ""}</button>
+      <button role="tab" aria-selected={view === "log"} onClick={() => setView("log")}>Log{waiting ? ` · ${waiting} waiting` : ""}</button>
     </div>
-    {state.entries.length > 0 && <ul className="hub-list">{state.entries.slice(0, 3).map(x => <li key={x.id}><span><strong>{x.summary}</strong><small>{x.connection}{x.undone ? " · undone" : ""}</small></span><time dateTime={x.at}>{when(x.at)}</time></li>)}</ul>}
-    {connect && <a className="hub-ai-settings" href={connect}>What it may do</a>}
+    {view === "chats" ? chats === null ? <p className="hub-muted">Loading…</p> : chats.length ? <ul className="hub-list">{chats.slice(0, shown).map(c => <li key={c.id}><button className="hub-ai-row" onClick={() => openAi({ chat: c.id })}><MessageSquare size={15} aria-hidden="true" /><span><strong>{c.title}</strong><small>{[c.connectionName, `${c.count} messages`].join(" · ")}</small></span><time dateTime={c.updatedAt}>{when(c.updatedAt)}</time></button></li>)}</ul>
+      : <p className="hub-muted">No saved chats yet.{chat ? " Ask something above and it’s saved here." : ""}</p>
+    : <>{waiting > 0 && <button className="hub-button" onClick={() => openAi({ tab: "activity" })}>{waiting} waiting for your OK</button>}
+      {state.entries.length ? <ul className="hub-list">{state.entries.slice(0, shown).map(x => <li key={x.id}><button className="hub-ai-row" onClick={() => openAi({ tab: "activity" })}><ScrollText size={15} aria-hidden="true" /><span><strong>{x.summary}</strong><small>{x.connection}{x.undone ? " · undone" : ""}</small></span><time dateTime={x.at}>{when(x.at)}</time></button></li>)}</ul>
+        : <p className="hub-muted">Nothing yet. When a connected AI rolls dice or changes a page, it shows up here.</p>}</>}
   </div>;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeft,BookOpen,Check,Copy,Crown,Dices,Eye,Hand,KeyRound,Link2,Lock,Map as MapIcon,X} from 'lucide-react';
+import {ArrowLeft,BookOpen,Check,CircleAlert,Copy,Crown,Dices,Eye,Hand,KeyRound,Link2,Lock,Map as MapIcon,RefreshCw,Stethoscope,X} from 'lucide-react';
 import './ai-connection.css';
 import {confirmDialog} from '../confirm-dialog';
 import {actionGroups,modeNames,presets,type Choice,type Mode,type Perms} from '@/lib/mcp/permissions';
@@ -9,7 +9,9 @@ import {deviceKey,fetchConnections,forgetDeviceKey,onDeviceAi,saveDeviceKey} fro
 
 type Level='read'|'assist'|'run';
 type Api={provider:ProviderId;baseUrl?:string;model:string;last4:string;limit:number|null;used:number};
-type Connection={id:string;name:string;level:Level;perms:Perms;mode:Mode|'custom';createdAt:string;lastUsedAt?:string;api?:Api};
+export type Connection={id:string;name:string;level:Level;perms:Perms;mode:Mode|'custom';createdAt:string;lastUsedAt?:string;api?:Api};
+/** A link just made: shown once, with the steps for each app. */
+export type Made={name:string;mode:Mode|'custom';url:string};
 const tokens=(n:number)=>n>=1e6?`${+(n/1e6).toFixed(n%1e6?1:0)}M`:n>=1e3?`${Math.round(n/1e3)}k`:String(n);
 const usage=(a:Api)=>a.limit?`${tokens(a.used)} of ${tokens(a.limit)} tokens this month`:`${tokens(a.used)} tokens this month`;
 const modes:{id:Mode;about:string;icon:React.ReactNode}[]=[
@@ -19,7 +21,7 @@ const modes:{id:Mode;about:string;icon:React.ReactNode}[]=[
 ];
 const groupIcons:Record<string,React.ReactNode>={look:<Eye size={14}/>,dice:<Dices size={14}/>,encyclopedia:<BookOpen size={14}/>,table:<MapIcon size={14}/>};
 const choices:{id:Choice;name:string}[]=[{id:'do',name:'Do it'},{id:'ask',name:'Ask me'},{id:'off',name:'Off'}];
-function ago(iso:string|undefined,now:number){
+export function ago(iso:string|undefined,now:number){
  if(!iso)return 'not used yet';
  const s=(now-Date.parse(iso))/1000;
  if(s<90)return 'used just now';if(s<3600)return `used ${Math.round(s/60)} minutes ago`;if(s<86400)return `used ${Math.round(s/3600)} hours ago`;
@@ -27,16 +29,18 @@ function ago(iso:string|undefined,now:number){
 }
 /** Re-renders when this browser's AI keys change (pasted, forgotten, or changed in another tab). */
 function useDeviceKeys(){const [,set]=useState(0);useEffect(()=>onDeviceAi(()=>set(n=>n+1)),[]);}
-async function post(body:object){
+export async function post(body:object){
  const r=await fetch('/api/encyclopedia/ai-connections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error??'Something went wrong. Try again.');return data;
 }
 
 /** "Connect an AI": named MCP connections for one campaign, each with a level, and the setup for each AI app. */
-export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{campaignId:string;campaignName:string;onClose:()=>void;onWriting?:()=>void}){
+export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting,start}:{campaignId:string;campaignName:string;onClose:()=>void;onWriting?:()=>void;
+ /** From the AI panel: open on one connection's settings, or on a new link just made. */
+ start?:{edit?:string;made?:Made;way?:'key'}}){
  const ref=useRef<HTMLDialogElement>(null);
- const [list,setList]=useState<Connection[]|null>(null),[level,setLevel]=useState<Mode>('helper'),[name,setName]=useState(''),[way,setWay]=useState<'app'|'key'>('app');
- const [now]=useState(()=>Date.now()),[busy,setBusy]=useState(false),[error,setError]=useState(''),[made,setMade]=useState<{name:string;mode:Mode|'custom';url:string}|null>(null),[editing,setEditing]=useState<string|null>(null);
+ const [list,setList]=useState<Connection[]|null>(null),[level,setLevel]=useState<Mode>('helper'),[name,setName]=useState(''),[way,setWay]=useState<'app'|'key'>(start?.way??'app');
+ const [now]=useState(()=>Date.now()),[busy,setBusy]=useState(false),[error,setError]=useState(''),[made,setMade]=useState<Made|null>(start?.made??null),[editing,setEditing]=useState<string|null>(start?.edit??null);
  useEffect(()=>{const d=ref.current;if(d&&!d.open)d.showModal();},[]);
  useDeviceKeys();
  useEffect(()=>{let live=true;fetchConnections<Connection>(campaignId).then(l=>{if(live)setList(l);}).catch(e=>live&&setError(e instanceof Error?e.message:'Could not load the connections.'));return()=>{live=false;};},[campaignId]);
@@ -60,11 +64,11 @@ export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{
   try{await post({campaignId,action:'revoke',id:c.id});if(c.api)forgetDeviceKey(c.id);setList(l=>l?.filter(x=>x.id!==c.id)??null);}catch(e){setError((e as Error).message);}
  }
  return <dialog ref={ref} className="ai-dialog" aria-labelledby="ai-title" onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===ref.current)onClose();}}>
-  {made?<Ready made={made} campaignName={campaignName} onDone={()=>setMade(null)} onClose={onClose}/>:open?<MayDo c={open} campaignId={campaignId} campaignName={campaignName} now={now} error={error} onChange={how=>void change(open,how)} onSaved={c=>setList(l=>l?.map(x=>x.id===c.id?c:x)??null)} onBack={()=>setEditing(null)} onClose={onClose}/>:<>
+  {made?<Ready made={made} campaignName={campaignName} onDone={()=>setMade(null)} onClose={onClose}/>:open?<MayDo c={open} campaignId={campaignId} campaignName={campaignName} now={now} error={error} onChange={how=>void change(open,how)} onSaved={c=>setList(l=>l?.map(x=>x.id===c.id?c:x)??null)} onNewLink={m=>{setEditing(null);setMade(m);}} onBack={()=>setEditing(null)} onClose={onClose}/>:<>
    <div className="ai-head"><h2 id="ai-title">Connect an AI</h2><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={16}/></button></div>
    <p className="ai-lead">For {campaignName} and its Maptable maps. Two ways in, with the same modes, approvals and AI panel. The AI sees this campaign and nothing else.{onWriting&&<> <button type="button" className="inline-link" onClick={onWriting}>How the AI writes…</button></>}</p>
    <div className="ai-ways" role="radiogroup" aria-label="How to connect">
-    <label className={`ai-level ${way==='app'?'on':''}`}><input type="radio" name="ai-way" checked={way==='app'} onChange={()=>setWay('app')}/><strong><Link2 size={16}/>From an AI app</strong><span>Add RPG Tools to Claude, ChatGPT, Cursor or any app that supports MCP, with a link. You talk to it there.</span></label>
+    <label className={`ai-level ${way==='app'?'on':''}`}><input type="radio" name="ai-way" checked={way==='app'} onChange={()=>setWay('app')}/><strong><Link2 size={16}/>From an AI app</strong><span>Add RPG Tools to Claude, ChatGPT, Codex, Cursor or any app that supports MCP, with a link. You talk to it there.</span></label>
     <label className={`ai-level ${way==='key'?'on':''}`}><input type="radio" name="ai-way" checked={way==='key'} onChange={()=>setWay('key')}/><strong><KeyRound size={16}/>With an API key</strong><span>Any AI with an API key works inside RPG Tools: ask it in the AI panel at the table. Billed to that account.</span></label>
    </div>
    {way==='key'?<ApiForm campaignId={campaignId} full={list===null||list.length>=10} onMade={c=>{setList(l=>[...(l??[]),c]);setWay('app');}}/>:<>
@@ -96,15 +100,15 @@ export function AiConnectionDialog({campaignId,campaignName,onClose,onWriting}:{
  </dialog>;
 }
 
-const apps=['Claude','ChatGPT','Cursor / VS Code','Other apps'] as const;
+const apps=['Claude','ChatGPT','Codex','Cursor / VS Code','Other apps'] as const;
 const ago2=(c:Connection,now:number)=>ago(c.lastUsedAt,now).replace(/^used/,'connected');
 /** "What it may do": a ready-made set, then Do it, Ask me or Off for each action. Changes apply right away. */
-function MayDo({c,campaignId,campaignName,now,error,onChange,onSaved,onBack,onClose}:{c:Connection;campaignId:string;campaignName:string;now:number;error:string;onChange:(how:{level:Mode}|{perms:Perms})=>void;onSaved:(c:Connection)=>void;onBack:()=>void;onClose:()=>void}){
+function MayDo({c,campaignId,campaignName,now,error,onChange,onSaved,onNewLink,onBack,onClose}:{c:Connection;campaignId:string;campaignName:string;now:number;error:string;onChange:(how:{level:Mode}|{perms:Perms})=>void;onSaved:(c:Connection)=>void;onNewLink:(m:Made)=>void;onBack:()=>void;onClose:()=>void}){
  const mode=(Object.keys(presets) as Mode[]).find(m=>Object.entries(presets[m]).every(([k,v])=>c.perms[k as keyof Perms]===v))??'custom';
  return <>
   <div className="ai-head"><button type="button" className="icon-button" aria-label="Back to connections" onClick={onBack}><ArrowLeft size={16}/></button><h2 id="ai-title" className="ai-head-title">What {c.name} may do</h2><button type="button" className="icon-button" aria-label="Close" onClick={onClose}><X size={16}/></button></div>
-  <p className="ai-lead">{campaignName} · {ago2(c,now)}. Changes apply right away.</p>
-  {c.api&&<ApiSettings c={c} api={c.api} campaignId={campaignId} onSaved={onSaved}/>}
+  <p className="ai-lead">{campaignName} · {c.api?ago2(c,now):reached(c,now)}. Changes apply right away.</p>
+  {c.api?<ApiSettings c={c} api={c.api} campaignId={campaignId} onSaved={onSaved}/>:<AppSettings c={c} campaignId={campaignId} onSaved={onSaved} onNewLink={onNewLink}/>}
   <h3 className="ai-label" id="ai-mode">How should it help?</h3>
   <div className="ai-levels" role="radiogroup" aria-labelledby="ai-mode">
    {modes.map(l=><label key={l.id} className={`ai-level ${mode===l.id?'on':''}`}>
@@ -126,6 +130,53 @@ function MayDo({c,campaignId,campaignName,now,error,onChange,onSaved,onBack,onCl
  </>;
 }
 
+/** Whether the AI app has reached RPG Tools with this connection's link (noted at most every ten minutes). */
+const reached=(c:Connection,now:number)=>c.lastUsedAt?ago(c.lastUsedAt,now).replace(/^used/,'your AI app connected'):'your AI app hasn’t connected yet';
+
+/** A fresh link for an app connection, after the GM says yes: the old link stops working at once. */
+export async function newLink(c:Connection,campaignId:string):Promise<Made|null>{
+ if(!await confirmDialog({title:`New link for ${c.name}?`,message:'The old link stops working right away. You get the new one with the steps for each app, to paste in its place. The name and what it may do stay the same.',confirm:'Make a new link'}))return null;
+ const d=await post({campaignId,action:'newKey',id:c.id});
+ return {name:d.connection.name,mode:d.connection.mode,url:`${location.origin}/api/mcp/${d.key}`};
+}
+
+/** "Check it": what RPG Tools answers for this connection, and whether the AI app has reached it. */
+export type Checked={ok:boolean;tools:number;campaign:string;reached:boolean;lastUsedAt?:string;problem?:string}|{error:string};
+export async function checkConnection(campaignId:string,id:string):Promise<Checked>{
+ try{return (await post({campaignId,action:'check',id})).check as Checked;}catch(e){return {error:(e as Error).message};}
+}
+export function CheckResult({r,now}:{r:Checked;now:number}){
+ if('error' in r)return <div className="ai-check bad" role="status"><CircleAlert size={15}/><p>{r.error}</p></div>;
+ if(!r.ok)return <div className="ai-check bad" role="status"><CircleAlert size={15}/><p>RPG Tools couldn’t answer for this connection: {r.problem}</p></div>;
+ const ready=<>RPG Tools is ready, with {r.tools} tools for {r.campaign||'this campaign'}</>;
+ return r.reached?<div className="ai-check good" role="status"><Check size={15}/><p><b>Working.</b> {ready}, and {ago(r.lastUsedAt,now).replace(/^used/,'your AI app connected')}. If the app still can’t reach it, restart the app or start a new chat there.</p></div>
+  :<div className="ai-check warn" role="status"><CircleAlert size={15}/><div><p>{ready}, but your AI app hasn’t connected yet. That points to the app’s setup:</p><ul>
+   <li>Add it as a <b>URL</b> server (called Streamable HTTP or HTTP in some apps), not as a command to launch.</li>
+   <li>Paste the whole link, ending in <code>rpg_</code> and 64 letters and numbers. No token or header is needed.</li>
+   <li>Lost the link, or not sure it’s right? <b>New link</b> makes a fresh one, with the steps for each app.</li>
+  </ul></div></div>;
+}
+
+/** In "What it may do" for an app connection: rename it, check it, or get a new link. */
+function AppSettings({c,campaignId,onSaved,onNewLink}:{c:Connection;campaignId:string;onSaved:(c:Connection)=>void;onNewLink:(m:Made)=>void}){
+ const [name,setName]=useState(c.name),[busy,setBusy]=useState(''),[note,setNote]=useState(''),[checked,setChecked]=useState<Checked|null>(null),[now,setNow]=useState(()=>Date.now());
+ async function run(what:string,f:()=>Promise<void>){setBusy(what);setNote('');try{await f();}catch(e){setNote((e as Error).message);}finally{setBusy('');}}
+ return <section className="ai-api-settings" aria-label="Name and link">
+  <form className="ai-field" onSubmit={e=>{e.preventDefault();void run('name',async()=>{const d=await post({campaignId,action:'update',id:c.id,name});onSaved(d.connection);setNote('Renamed.');});}}>
+   <label className="ai-label" htmlFor="ai-rename">Name</label>
+   <div className="ai-inline"><input id="ai-rename" value={name} maxLength={60} onChange={e=>setName(e.target.value)}/><button className="button" disabled={!name.trim()||name.trim()===c.name||!!busy}>{busy==='name'?'Saving…':'Rename'}</button></div>
+  </form>
+  <h3 className="ai-label">Link</h3>
+  <p className="ai-device">The link holds the key, so it was shown once. If your app can’t connect, check it here, or make a new link and paste that in.</p>
+  <div className="ai-inline ai-api-save">
+   <button type="button" className="button" disabled={!!busy} onClick={()=>void run('check',async()=>{setChecked(null);setChecked(await checkConnection(campaignId,c.id));setNow(Date.now());})}><Stethoscope size={14}/> {busy==='check'?'Checking…':'Check it'}</button>
+   <button type="button" className="button" disabled={!!busy} onClick={()=>void run('link',async()=>{const m=await newLink(c,campaignId);if(m)onNewLink(m);})}><RefreshCw size={14}/> {busy==='link'?'Making…':'New link'}</button>
+   {note&&<span role="status">{note}</span>}
+  </div>
+  {checked&&<CheckResult r={checked} now={now}/>}
+ </section>;
+}
+
 function Ready({made,campaignName,onDone,onClose}:{made:{name:string;mode:Mode|'custom';url:string};campaignName:string;onDone:()=>void;onClose:()=>void}){
  const [app,setApp]=useState<typeof apps[number]>('Claude'),[copied,setCopied]=useState('');
  const key=made.url.split('/').pop()!,origin=made.url.slice(0,made.url.indexOf('/api/'));
@@ -139,6 +190,8 @@ function Ready({made,campaignName,onDone,onClose}:{made:{name:string;mode:Mode|'
   <div className="ai-steps" role="tabpanel">
    {app==='Claude'&&<ol><li>In Claude, open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li><li>Name it “RPG Tools: {campaignName}” and paste this connector URL:</li>{field("url",made.url,"Connector URL")}<li>In a chat, turn the connector on and ask: “Give me an overview of this campaign.”</li></ol>}
    {app==='ChatGPT'&&<ol><li>In ChatGPT, turn on <b>Developer mode</b> under <b>Settings → Apps &amp; Connectors → Advanced</b>.</li><li>Create a connector, paste this as its MCP server URL, and choose no authentication (the key is in the URL):</li>{field("url",made.url,"Connector URL")}<li>In a chat, pick the connector and ask: “Give me an overview of this campaign.”</li></ol>}
+   {app==='Codex'&&<><ol><li>Codex app: open <b>Settings → MCP servers</b> and add a server. Choose <b>Streamable HTTP</b>, not a command to launch. Name it <code>rpg-tools</code> and paste this as its URL. Leave the token and headers empty: the key is in the URL.</li>{field("url",made.url,"Connector URL")}<li>Codex CLI or IDE extension: run this command, or add the lines below to <code>~/.codex/config.toml</code>. The app, the CLI and the extension share that file.</li>{field("codex",`codex mcp add rpg-tools --url ${made.url}`,"Codex command")}{field("codex-toml",`[mcp_servers.rpg-tools]\nurl = "${made.url}"`,"Codex config.toml")}<li>To keep the key out of that file, use <code>url = &quot;{origin}/api/mcp&quot;</code> with <code>bearer_token_env_var = &quot;RPG_TOOLS_KEY&quot;</code>, and set <code>RPG_TOOLS_KEY</code> to the key (the end of the link, from <code>rpg_</code>).</li><li>Type <code>/mcp</code> in Codex: rpg-tools should be listed with its tools. Then ask: “Give me an overview of this campaign.”</li></ol>
+    <p className="ai-note">Added it as a command by mistake? Uninstall that server and add it again as Streamable HTTP: Codex can’t switch a server’s type in place.</p></>}
    {app==='Cursor / VS Code'&&<ol><li>Cursor: add this to <code>~/.cursor/mcp.json</code>.</li>{field("cursor",cursor,"Cursor settings")}<li>VS Code: add this to <code>.vscode/mcp.json</code>, then start the server from that file.</li>{field("vscode",vscode,"VS Code settings")}</ol>}
    {app==='Other apps'&&<ol><li>Apps that take a server URL: use the connector URL.</li>{field("url",made.url,"Connector URL")}<li>Apps that take a URL and a separate key: use <code>{origin}/api/mcp</code> with the header <code>Authorization: Bearer {key.slice(0,8)}…</code> (the key is the end of the connector URL).</li><li>Apps that only run local servers: run <code>node scripts/rpg-tools-mcp.mjs</code> from the RPG Tools folder with <code>RPG_TOOLS_URL={origin}</code> and <code>RPG_TOOLS_KEY</code> set to the key.</li></ol>}
   </div>

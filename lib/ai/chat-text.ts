@@ -61,5 +61,22 @@ export function chatSessionBody(chat: SavedChat, campaign?: string) {
 
 /** The event an "Open the chat" link sends to the AI panel. */
 export const OPEN_CHAT_EVENT = "rpg-open-ai-chat";
+/**
+ * What the next opening of the AI panel should show: a saved chat, a tab, or a question to ask in a new chat. Kept here,
+ * not on the event, because the panel on a page without its own (components/global-dice.tsx) is only made when asked,
+ * after the event has gone. The panel takes it as it opens.
+ */
+export type AiRequest = { chat?: string; tab?: "ask" | "activity" | "connection"; ask?: string };
+export const aiRequest: AiRequest = {};
+export function openAi(req: AiRequest = {}) {
+  Object.assign(aiRequest, req);
+  window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT, req.chat ? { detail: req.chat } : undefined));
+}
+/** Takes what was asked for, once. */
+export function takeAiRequest(): AiRequest {
+  const got = { ...aiRequest };
+  for (const k of Object.keys(aiRequest)) delete aiRequest[k as keyof AiRequest];
+  return got;
+}
 /** A file name for a downloaded chat. */
 export const chatFileName = (title: string) => (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "chat") + ".md";

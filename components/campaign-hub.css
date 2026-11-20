@@ -98,9 +98,22 @@
 .hub-ai-dot.live { background:#22a06b; }
 .hub-ai-dot.paused { background:#d97706; }
 .hub-ai-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.hub-ai-status > span:not(.hub-ai-dot) { flex:1; min-width:0; }
+.hub-ai-settings { font:inherit; font-size:13px; color:var(--accent); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; text-underline-offset:2px; white-space:nowrap; }
+.hub-ai-ask { display:flex; gap:8px; }
+.hub-ai-ask input { flex:1; min-width:0; min-height:36px; padding:6px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--control, var(--panel)); color:var(--ink); font:inherit; font-size:14px; }
+.hub-ai-ask input:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+.hub-ai-tabs { display:flex; gap:16px; border-bottom:1px solid var(--line); }
+.hub-ai-tabs button { padding:6px 0; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; background:none; color:var(--muted); font:inherit; font-size:13px; font-weight:500; cursor:pointer; }
+.hub-ai-tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); }
 .hub-ai .hub-list li { display:flex; align-items:center; gap:10px; }
-.hub-ai .hub-list li > span { flex:1; }
-.hub-ai-settings { font-size:13px; color:var(--accent); }
+.hub-ai-row { flex:1; min-width:0; display:flex; align-items:center; gap:10px; padding:9px 0; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.hub-list li:last-child .hub-ai-row { border-bottom:0; }
+.hub-ai-row > span { flex:1; min-width:0; display:flex; flex-direction:column; }
+.hub-ai-row strong { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hub-ai-row small { color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hub-ai-row time { color:var(--muted); font-size:12px; white-space:nowrap; }
+.hub-ai-row:hover strong { color:var(--accent); }
 .hub-choose { border-bottom:1px solid var(--line); padding:4px 0 12px; margin-bottom:10px; display:grid; gap:8px; }
 .hub-choose p { margin:0; font-size:13px; }
 .hub-choose-find { width:100%; }
