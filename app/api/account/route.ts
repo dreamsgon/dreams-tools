@@ -1,4 +1,5 @@
 import {NextRequest,NextResponse} from "next/server";
+import {getAppUser} from "@/lib/app-user";
 import {createServerClient} from "@supabase/ssr";
 import {z} from "zod";
 import {supabaseUrl,supabaseKey,rememberCookie,sessionCookieOptions} from "@/lib/supabase-config";
@@ -79,4 +80,11 @@ export async function POST(request:NextRequest){
     const message=(e as {shown?:boolean}).shown?(e as Error).message:action==="profile"?"Display names need 1 to 40 characters, without control characters.":"Check the form fields. Passwords need 12–128 characters; usernames need 3–32 letters, numbers, underscores or hyphens.";
     return NextResponse.json({error:message},{status:400,headers:{"Cache-Control":"private, no-store"}});
   }
+}
+/** The signed-in person's name, masked-ready email and picture version, for the account menu on pages rendered in the browser. */
+export async function GET(){
+  const user=await getAppUser();
+  const headers={"Cache-Control":"private, no-store"};
+  if(!user)return NextResponse.json({signedIn:false},{headers});
+  return NextResponse.json({signedIn:true,name:user.displayName,email:user.email,avatar:user.avatar},{headers});
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserRound } from "lucide-react";
+import AccountMenu from "./account-menu";
 
 type Tool = "maptable" | "encyclopedia";
 
@@ -22,6 +22,7 @@ export default function ToolSwitch({ active, maptableHref = "/maptable", encyclo
 }
 
 /** A small account link for the right end of a tool header. */
+/** Your picture at the right end of a tool's header or the campaign bar; it opens the account menu. */
 export function AccountLink() {
-  return <a href="/account" className="tool-account icon-button" aria-label="Account" title="Account"><UserRound size={17} aria-hidden="true" /></a>;
+  return <AccountMenu compact />;
 }

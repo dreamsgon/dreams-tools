@@ -2324,7 +2324,6 @@ button.primary, .rpg-open { font-weight:500; }
  .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) svg { width:18px; height:18px; flex:none; }
  .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .share-button { color:var(--accent); }
  .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .icon-button::after { content:attr(aria-label); font-size:15px; font-weight:500; }
- .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .appearance-dot { position:absolute; left:26px; top:12px; margin:0; }
  /* The scene list is a bottom sheet drawn over the whole page (in the page body, above the dice dock and tray). */
  .scene-sheet-backdrop { display:block; position:fixed; inset:0; z-index:400; background:rgb(0 0 0 / .5); }
  .scene-sheet { display:block; position:fixed; left:0; right:0; bottom:0; z-index:401; max-height:calc(85dvh / var(--ui-zoom, 1)); overflow:hidden; display:flex; flex-direction:column; background:var(--panel); color:var(--ink); border-top:1px solid var(--line); border-radius:16px 16px 0 0; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -12px 40px rgb(0 0 0 / .35); outline:none; }
@@ -2354,8 +2353,6 @@ button.primary, .rpg-open { font-weight:500; }
 .account-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
 .account-avatar-s { width:28px; height:28px; font-size:12px; }
 .account-avatar-l { width:104px; height:104px; font-size:38px; box-shadow:0 0 0 3px var(--panel), 0 0 0 4px var(--line-strong); }
-.site-header .site-me { display:inline-flex; align-items:center; gap:8px; padding:4px 0; }
-.site-header .site-me-name { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .account-settings { max-width:760px; margin:0 auto; padding:36px 0 64px; }
 .account-settings h1 { font-size:32px; letter-spacing:-.6px; margin:8px 0 6px; }
 .account-settings .rpg-eyebrow { margin:0; }
@@ -2405,8 +2402,7 @@ button.primary, .rpg-open { font-weight:500; }
  .account-profile, .account-two { grid-template-columns:minmax(0,1fr); }
  .account-avatar-box { width:auto; }
  .account-section { padding:18px; }
- .site-header .site-me-name { display:none; }
-}
+ }
 
 /* Maptable on phones: one bottom bar (map tools + More) and a slim zoom column, so the map gets the height. */
 @media(max-width:799px) {
@@ -2483,3 +2479,22 @@ button.primary, .rpg-open { font-weight:500; }
   .campaign-dashboard > .maptable-bar .save-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .campaign-dashboard > .maptable-bar .save-chip { padding:4px 8px; }
 }
+
+/* Fitting a new profile picture into its circle (components/avatar-crop.tsx). */
+.avatar-crop-backdrop { position:fixed; inset:0; z-index:var(--z-modal, 200); display:grid; place-items:center; padding:16px; background:var(--overlay, rgb(0 0 0 / .4)); overscroll-behavior:contain; }
+.avatar-crop { width:min(340px, 100%); box-sizing:border-box; display:grid; gap:14px; padding:20px; background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); }
+.avatar-crop h2 { margin:0; font-size:18px; }
+.avatar-crop .avatar-crop-hint { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+.avatar-crop-frame { position:relative; justify-self:center; width:260px; max-width:100%; aspect-ratio:1; overflow:hidden; border-radius:var(--radius); background:var(--raised) repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 16px 16px; cursor:grab; touch-action:none; user-select:none; }
+.avatar-crop-frame:active { cursor:grabbing; }
+.avatar-crop-frame:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.avatar-crop-frame img { position:absolute; left:0; top:0; max-width:none; transform-origin:0 0; pointer-events:none; }
+.avatar-crop-ring { position:absolute; inset:0; border-radius:50%; box-shadow:0 0 0 999px rgb(0 0 0 / .5), inset 0 0 0 2px rgb(255 255 255 / .85); pointer-events:none; }
+.avatar-crop-wait { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:13px; }
+.avatar-crop-zoom { display:flex; align-items:center; gap:8px; }
+.avatar-crop-zoom input { flex:1 1 auto; min-width:0; accent-color:var(--accent); }
+.avatar-crop-zoom button { display:inline-grid; place-items:center; width:32px; height:32px; min-height:32px; padding:0; flex:none; }
+.avatar-crop .account-row-end { margin-top:0; }
+.avatar-crop .account-primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.avatar-crop .account-ghost { background:transparent; border-color:transparent; color:var(--muted); }
+.avatar-crop .account-status { margin:0; padding:10px 12px; background:var(--raised); border-left:3px solid var(--danger); font-size:13px; }

@@ -87,7 +87,6 @@ html:root[data-theme="dark"] {
 /* Appearance menu. Uses whichever surface tokens the page defines. */
 .appearance { position:relative; display:inline-flex; }
 .appearance-trigger { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; min-height:36px; padding:0; border-radius:var(--radius); }
-.appearance-trigger .appearance-dot { position:absolute; right:7px; bottom:7px; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--chrome, var(--panel, var(--white, #fff))); pointer-events:none; }
 .appearance-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:var(--z-modal, 200); width:320px; max-height:min(680px, calc(calc(100vh / var(--ui-zoom, 1)) - 80px)); overflow-y:auto; overscroll-behavior:contain; max-width:calc(calc(100vw / var(--ui-zoom, 1)) - 24px); display:flex; flex-direction:column; gap:16px; padding:16px; background:var(--panel, var(--white, #fff)); color:var(--ink, #1c2329); border:1px solid var(--line, #d4dbe0); border-radius:var(--radius-lg); box-shadow:0 16px 48px rgb(0 0 0 / .18); text-align:left; white-space:normal; font-size:13px; font-weight:400; }
 .appearance-panel h2 { margin:0; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; letter-spacing:-.1px; color:inherit; }
 .appearance-group { display:flex; flex-direction:column; gap:8px; margin:0; padding:0; border:0; min-width:0; }

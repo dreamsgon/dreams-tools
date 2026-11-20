@@ -142,7 +142,6 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
   return <div className={`appearance ${className}`.trim()} ref={wrapper}>
     <button ref={trigger} type="button" className="appearance-trigger icon-button" aria-label="Appearance" title="Appearance" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
       <Palette size={18} aria-hidden="true" />
-      <span className="appearance-dot" aria-hidden="true" />
     </button>
     {open && <div className="appearance-panel" id={panelId} role="dialog" aria-label="Appearance">
       {campaignTheme && <div className="appearance-campaign">

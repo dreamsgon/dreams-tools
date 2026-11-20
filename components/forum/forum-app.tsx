@@ -9,6 +9,9 @@ import { offerCampaignTheme } from '../campaign-theme-entry';
 import { release } from '../campaign-skin';
 import { ThemeToggle } from '../encyclopedia/theme';
 import CampaignBar from '../campaign-bar';
+import AccountMenu from '../account-menu';
+import PlayerViewBanner from '../player-view-banner';
+import { useViewAsPlayer } from '@/lib/view-as-player';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
 import { useCampaignOpened } from '@/lib/opened-campaign';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
@@ -84,6 +87,14 @@ export default function ForumApp() {
     setPlayerView(key, on);
     if (on && (place.view === 'settings' || place.view === 'trash' || place.view === 'reports')) go({ view: 'index' }); else void load(key, place);
   }, [key, place, go, load]);
+  // Switch to Player view in the account menu: read the forum again as the Players group, or as the GM.
+  const asPlayer = useViewAsPlayer(), seen = useRef(asPlayer);
+  useEffect(() => {
+    if (seen.current === asPlayer) return;
+    seen.current = asPlayer;
+    if (!key) return;
+    if (asPlayer && (place.view === 'settings' || place.view === 'trash' || place.view === 'reports')) go({ view: 'index' }); else void load(key, place);
+  }, [asPlayer, key, place, go, load]);
 
   /* eslint-disable @next/next/no-html-link-for-pages -- other tools open as full pages (AGENTS.md) */
   const member = key.startsWith('m-');
@@ -97,7 +108,7 @@ export default function ForumApp() {
     <nav className="appbar-links" aria-label="RPG tools">
       <a href="/campaigns">Campaigns</a><a href="/maptable">Maptable</a><a href="/encyclopedia">Wiki</a><a href="/guide">Guide</a>
     </nav>
-    <span className="appbar-spacer" /><ThemeToggle /><a href="/account" className="appbar-account">Account</a>
+    <span className="appbar-spacer" /><ThemeToggle /><AccountMenu compact />
   </header>;
   const backLink = <a href="/campaigns">Back to Campaigns</a>;
   /* eslint-enable @next/next/no-html-link-for-pages */
@@ -125,7 +136,7 @@ export default function ForumApp() {
     {trailBoard && <a href={forumHash(k, { view: 'board', id: trailBoard.id })}>{trailBoard.name}</a>}
     {page.kind === 'topic' && <>{trailBoard && <span aria-hidden="true">›</span>}<span className="f-trail-here" aria-current="page">{page.topic.title}</span></>}
   </span> : undefined;
-  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><>{campaignBar(trail)}<div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">
+  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><>{campaignBar(trail)}{frame.preview && <PlayerViewBanner>You read {frame.campaign.name}&apos;s forum as the Players group does. Posting is off while you look.</PlayerViewBanner>}<div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">
     <div className={`forum-body${showCp ? ` cp-open cp-${dock}` : ''}`}>
     {showCp && <AdminCp k={k} dock={dock} setDock={setDock} onClose={cp.close} onPreview={setPreview} onSaved={() => void load(key, place, true)} />}
     <div className="skin-frame">

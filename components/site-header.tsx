@@ -1,7 +1,7 @@
 import Link from "next/link";
 import AppearanceMenu from "./appearance-menu";
 import NotificationBell from "./notification-bell";
-import { avatarSrc } from "@/lib/avatar";
+import AccountMenu from "./account-menu";
 import "./site-header.css";
 
 /** The slim header outside a campaign (Home, Campaigns, Guide, Account): the mark and the links on the left, so the mark never moves between pages, and the bell and account on the right. A forum only exists inside a campaign, so it has no link here. */
@@ -17,10 +17,7 @@ export default function SiteHeader({ account = false, signedIn = false, active, 
     <div className="site-end">
       <AppearanceMenu />
       {signedIn && <NotificationBell />}
-      <a href="/account" className={me ? "site-nav-link site-me" : "site-nav-link"} title={me ? "Account settings" : undefined}>
-        {me ? <><span className="account-avatar account-avatar-s" aria-hidden="true">{me.avatar ? <img alt="" src={avatarSrc(me.avatar)} /> : (Array.from(me.name.trim())[0] ?? "?").toUpperCase()}</span><span className="site-me-name">{me.name}</span><span className="sr-only"> account</span></>
-          : account || signedIn ? "Account" : <>Sign in<span className="site-account-long"> / Register</span></>}
-      </a>
+      {me ? <AccountMenu me={me} /> : account && !signedIn ? <AccountMenu /> : <a href="/account" className="site-nav-link">{account || signedIn ? "Account" : <>Sign in<span className="site-account-long"> / Register</span></>}</a>}
     </div>
   </header>;
 }
