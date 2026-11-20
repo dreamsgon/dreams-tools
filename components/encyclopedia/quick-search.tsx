@@ -5,6 +5,7 @@ import {colourStyle} from "@/lib/colour";
 import {loadTags,TagList,useTags} from "../tags";
 import {parseTagQuery,partialTag,suggestTags,tagsOn,targetKey,type Tag,type TaggedItem} from "@/lib/tags";
 import {searchableText,type Entry} from "@/lib/encyclopedia/world-model";
+import {pageIcon} from "./page-icons";
 
 type Item={key:string;label:string;detail?:string;icon:ComponentType<{size?:number}>;tags?:Tag[];run:(newTab:boolean)=>void};
 type Props={entries:Entry[];icons:Record<Entry["kind"],ComponentType<{size?:number}>>;labels:Record<Entry["kind"],string>;scopeName:(e:Entry)=>string;canCreate:boolean;
@@ -48,7 +49,7 @@ export function QuickSearch({entries,icons,labels,scopeName,canCreate,onOpen,onC
  const byId=new Map((library?.tags??[]).map(t=>[t.id,t]));
  const results:Item[]=filtering
   ?tagged.map(it=>({key:it.key,label:it.title,detail:it.detail,icon:kindIcon(it),tags:it.tagIds.flatMap(id=>byId.get(id)??[]),run:(newTab:boolean)=>{const id=it.key.slice(6);if(!newTab&&entries.some(e=>e.id===id)){onOpen(id);onClose();}else visit(it.href,newTab);}}))
-  :found.map(e=>({key:e.id,label:e.title,detail:`${labels[e.kind]} · ${scopeName(e)}`,icon:icons[e.kind],tags:library?tagsOn(library,targetKey("entry",e.id)):[],run:go(()=>onOpen(e.id))}));
+  :found.map(e=>({key:e.id,label:e.title,detail:`${labels[e.kind]} · ${scopeName(e)}`,icon:pageIcon(e.pageLook)??icons[e.kind],tags:library?tagsOn(library,targetKey("entry",e.id)):[],run:go(()=>onOpen(e.id))}));
  const actions:Item[]=filtering||partial!==null?[]:[
   ...(name&&!exact&&canCreate?[{key:"create",label:`Create “${name.slice(0,160)}” as a new entry`,icon:Plus,run:go(()=>onCreate(name.slice(0,160)))}]:[]),
   ...([["dashboard","Go to Worlds",LayoutDashboard],["characters","Go to Characters",Users],["maps","Go to Maps",MapIcon],["calendar","Go to Calendar",CalendarDays]] as const)

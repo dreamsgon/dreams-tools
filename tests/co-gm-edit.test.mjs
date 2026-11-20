@@ -77,3 +77,9 @@ test('a co-GM without "Use HTML in Wiki pages" cannot add HTML; with it they can
  refuses(()=>applyCoGmEdit(full,C,after,new Set(),false),/HTML/);
  assert.ok(applyCoGmEdit(full,C,after).entries.find(e=>e.id==='demo-first').body.includes('<b>Hi</b>'));
 });
+
+test('a picture shown in page text counts like a picture field: new ones need the GM\'s storage',()=>{
+ const full=owner(),mine=copy(full);mine.entries=mine.entries.map(e=>e.id==='demo-first'?{...e,body:`${e.body}\n\n![[picture:${IMG}|The bridge]]`}:e);
+ refuses(()=>applyCoGmEdit(full,C,mine,new Set()),/isn't in this campaign's storage/);
+ assert.ok(applyCoGmEdit(full,C,mine,new Set([IMG])).entries.find(e=>e.id==='demo-first').body.includes(`picture:${IMG}`));
+});

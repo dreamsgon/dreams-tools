@@ -8,6 +8,7 @@ import {createContext,useContext,type CSSProperties,type ReactNode} from 'react'
 import {Lock,Megaphone,ScrollText,Info,TriangleAlert,Code} from 'lucide-react';
 import {footnoteNumbers,infoRows,inlineParts,pageListOptions,styleOf,wikiBlocks,type Block,type PageListOptions} from '@/lib/encyclopedia/markup';
 import {htmlNodes,type HtmlNode} from '@/lib/forum/html';
+import {usePictureSrc} from './character-picture';
 
 export type WikiEnv={
  /** The GM's own page: secrets, asides and GM-only rows show, marked. Players never get them (the server takes them out). */
@@ -22,6 +23,8 @@ export type WikiEnv={
  maptable?:(sceneId:string,label:string,key:number)=>ReactNode;
  pageList?:(o:PageListOptions,key:number)=>ReactNode;
  onTask?:(line:number,done:boolean)=>void;
+ /** The player link a player's page is read through, for fetching its pictures. The GM's own page leaves it out. */
+ pictureToken?:string;
 };
 const Notes=createContext<Map<string,number>>(new Map());
 
@@ -81,6 +84,7 @@ function WikiBlock({b,env,depth}:{b:Block;env:WikiEnv;depth:number}):ReactNode{
   case 'quote':return <blockquote><I t={b.text}/></blockquote>;
   case 'code':return <pre>{b.text||' '}</pre>;
   case 'table':return <div className="wiki-table"><table><thead><tr>{b.head.map((h,i)=><th key={i} style={b.align[i]?{textAlign:b.align[i]!}:undefined}><I t={h}/></th>)}</tr></thead><tbody>{b.rows.map((r,n)=><tr key={n}>{b.head.map((_,i)=><td key={i} style={b.align[i]?{textAlign:b.align[i]!}:undefined}><I t={r[i]??''}/></td>)}</tr>)}</tbody></table></div>;
+  case 'picture':return <WikiPicture imageId={b.imageId} token={env.pictureToken} className={`wiki-picture ${b.side} ${b.size}`} alt={b.caption}>{b.caption&&<figcaption><I t={b.caption}/></figcaption>}</WikiPicture>;
   case 'embed':return depth>=2?<p><I t={`[[${b.target}]]`}/></p>:env.embed?.(b.target,b.options,depth)??null;
   case 'randomTable':return env.randomTable?.(b.inner,0)??<p><I t={`[[${b.inner}]]`}/></p>;
   case 'maptable':return env.maptable?.(b.sceneId,b.label,0)??null;
@@ -92,7 +96,7 @@ function WikiBlock({b,env,depth}:{b:Block;env:WikiEnv;depth:number}):ReactNode{
    if(name==='secret')return env.gm?<div className="secret-block"><div className="secret-label"><Lock size={12} aria-hidden="true"/> GM secret · hidden from players</div>{kids}</div>:null;
    if(name==='read-aloud'||name==='readaloud'||name==='boxed')return <div className="wiki-block read-aloud"><div className="wiki-block-label">{BLOCK_ICON['read-aloud']} {b.arg||'Read aloud'}</div>{kids}</div>;
    if(name==='handout')return <div className={`wiki-block handout ${/^notice\b/i.test(b.arg)?'notice':''}`}><div className="wiki-block-label">{BLOCK_ICON.handout} Handout</div>{kids}</div>;
-   if(name==='infobox'){const rows=infoRows(b.lines).filter(r=>env.gm||!r.gm);return <aside className={`wiki-infobox ${/\bleft\b/i.test(b.arg)?'left':''}`} aria-label="Info box"><h4><I t={b.arg.replace(/\s*\|?\s*\bleft\b\s*$/i,'')||env.title}/></h4><dl>{rows.map((r,i)=><div key={i} className={r.gm?'gm':''}><dt>{r.gm&&<Lock size={11} aria-hidden="true"/>}{r.label}</dt><dd><I t={r.value}/></dd></div>)}</dl></aside>;}
+   if(name==='infobox'){const rows=infoRows(b.lines).filter(r=>env.gm||!r.gm);return <aside className={`wiki-infobox ${/\bleft\s*$/i.test(b.arg)?'left':/\bright\s*$/i.test(b.arg)?'right':''}`} aria-label="Info box"><h4><I t={b.arg.replace(/\s*\|?\s*\b(left|right)\b\s*$/i,'')||env.title}/></h4><dl>{rows.map((r,i)=><div key={i} className={r.gm?'gm':''}><dt>{r.gm&&<Lock size={11} aria-hidden="true"/>}{r.label}</dt><dd><I t={r.value}/></dd></div>)}</dl></aside>;}
    if(name==='columns')return <div className="wiki-columns">{(b.columns??[]).map((c,i)=><div key={i}><WikiBlocks blocks={c} env={env} depth={depth}/></div>)}</div>;
    if(name==='pages')return env.pageList?.(pageListOptions(b.lines),0)??null;
    if(name==='style')return <div className="wiki-styled-block" style={styleOf(b.arg,true) as CSSProperties}>{kids}</div>;
@@ -100,6 +104,11 @@ function WikiBlock({b,env,depth}:{b:Block;env:WikiEnv;depth:number}):ReactNode{
    return <div className="wiki-block">{kids}</div>;
   }
  }
+}
+/** A picture uploaded to a page (`![[picture:<id>|Caption|left|small]]`), with its caption. */
+function WikiPicture({imageId,token,className,alt,children}:{imageId:string;token?:string;className:string;alt:string;children:ReactNode}){
+ const {src,failed}=usePictureSrc(imageId,token);
+ return <figure className={className}>{src?<img src={src} alt={alt}/>:<span className="wiki-picture-wait">{failed?'This picture couldn’t be loaded.':''}</span>}{children}</figure>;
 }
 export function WikiBlocks({blocks,env,depth=0}:{blocks:readonly Block[];env:WikiEnv;depth?:number}):ReactNode{
  return <>{blocks.map((b,i)=><WikiBlock key={i} b={b} env={env} depth={depth}/>)}</>;

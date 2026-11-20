@@ -70,3 +70,15 @@ test('excerpts (hover previews, page cards) read past wiki markup',async()=>{
  const {plainExcerpt}=await import('../lib/encyclopedia/inline.ts');
  assert.equal(plainExcerpt('::: infobox\nKind: Keep\n(gm) Secret: x\n:::\nThe [old [[Duke]]]{color=crimson} %%GM%% waits.[^1] ==Now==.\n[^1]: Note.'),'Kind: Keep The old Duke waits. Now.');
 });
+
+test('a picture line shows an uploaded picture with its caption, side and size',async()=>{
+ const {wikiBlocks,pictureLine,pictureIds}=await import('../lib/encyclopedia/markup.ts');
+ const {plainExcerpt}=await import('../lib/encyclopedia/inline.ts');
+ const id='0B5F6A8E-3c1d-4f2a-9b7e-1a2b3c4d5e6f',low=id.toLowerCase();
+ assert.deepEqual(wikiBlocks(`![[picture:${id}|The harbour | at dusk|left|small]]`)[0],{type:'picture',imageId:low,caption:'The harbour | at dusk',side:'left',size:'small'});
+ assert.deepEqual(wikiBlocks(`![[picture:${low}]]`)[0],{type:'picture',imageId:low,caption:'',side:'right',size:'medium'});
+ assert.equal(pictureLine(low,'A ] bad|caption','center','large'),`![[picture:${low}|A   bad caption|center|large]]`);
+ assert.equal(pictureLine(low),`![[picture:${low}]]`);
+ assert.deepEqual(pictureIds(`Text\n![[picture:${id}|x]]\n![[Ravenmoor]]`),[low]);
+ assert.equal(plainExcerpt(`Before.\n\n![[picture:${low}|Caption]]\n\nAfter.`),'Before. After.');
+});

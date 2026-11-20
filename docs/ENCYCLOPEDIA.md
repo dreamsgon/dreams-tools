@@ -18,6 +18,10 @@ The encyclopedia workspace limit remains 2 MB; PNG/JPEG/WebP atlas images allow 
 
 Page text is Markdown with wiki syntax, read by `lib/encyclopedia/markup.ts` and drawn by `components/encyclopedia/wiki-prose.tsx` for the GM and for players. The full syntax is in the guide, `content/guide/Writing-Wiki-Pages.md`. GM-only parts (`::: secret` boxes, nested boxes counted; `%%asides%%`; lines starting `(gm)`) are removed on the server by `stripSecrets` before any player payload is built. HTML goes through the Forum's filter (`lib/forum/html.ts`) and is built as React elements, never set as HTML.
 
+Pictures in page text are `![[picture:<image id>|Caption|left|small]]` lines, uploaded to the GM's map-image storage like any picture. Who may fetch one follows the text: a player fetches it when it is in a page tab they receive (`playerImageOwnerOf` in `lib/encyclopedia/store.ts`, after secrets are taken out), a co-GM when it is anywhere in their campaign's text. New picture ids in a co-GM's save must be ones they uploaded (`images()` in `co-gm-edit.ts`); a player's save can't add new ones (`savePlayerEdit`).
+
+A page's own look is optional `entry.pageLook` (`lib/encyclopedia/page-text.ts`): a banner (`imageId`, size and `y`), an icon from `PAGE_ICONS` (drawn by `components/encyclopedia/page-icons.tsx` in the sidebar, quick search and player list), `box: 'left'` for info boxes, `toc: false` to hide On this page, and `wide`. Players receive it without `toc`; its banner can be fetched like the page's pictures.
+
 ## Character trackers
 
 A character's **Stats** tab starts with **Trackers**: small gauges such as Shields, Stress, Ammo or Hit dice, shown as a bar or as pips, with − and + to move them. Add your own or start from a ready-made one, and use each tracker's eye to hide it from players. Players see the shown trackers when the character's stats are shared. A player who may edit the character, under its Who can edit, sees them at the top of the page on the player site, moves them with − and +, and can add, change or remove their own. A hidden tracker never reaches them.

@@ -117,3 +117,14 @@ test('an imported copy keeps the sidebar with its page links pointed at the copi
   assert.equal(copy.entries.find(e=>e.id===pageId)?.title,exported.entries.find(e=>e.id==='demo-mara').title);
   assert.equal(c.sidebar.quick.some(l=>l.type==='page'),false,'a link to a page not copied is dropped');
 });
+
+test('a category can gather every page with one of its tags, after its links and kinds',async()=>{
+ const {setCategoryTags,categoryItems:items,addCategory:add,defaultSidebar:start,sidebarSchema:schema}=await import('../lib/encyclopedia/sidebar.ts');
+ const made=add(start(),'Coast',()=> 'coast');let s=setCategoryTags(made.sidebar,'coast',['t-sea','t-sea','t-port']);
+ const cat=s.categories[0];assert.deepEqual(cat.tags,['t-sea','t-port']);assert.ok(schema.safeParse(s).success);
+ const pages=[{id:'a',title:'Saltmarsh',kind:'place'},{id:'b',title:'Anchorage',kind:'place'},{id:'c',title:'Mara',kind:'character'}];
+ const tags={a:['t-sea'],c:['t-port','t-x']};
+ assert.deepEqual(items(cat,pages,id=>tags[id]??[]).map(x=>x.page.id),['c','a']);
+ assert.deepEqual(items(cat,pages).length,0,'without tags to read, tags gather nothing');
+ assert.equal(setCategoryTags(s,'coast',[]).categories[0].tags,undefined);
+});

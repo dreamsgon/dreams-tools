@@ -36,6 +36,16 @@ You don't need to remember any of it. In **Write** mode the **Insert** menu puts
 
   Put `:` in the divider line to align a column: `:---:` centres it, `---:` puts it on the right.
 
+## Pictures
+
+**Insert › Picture…** uploads a picture and puts it on its own line. You can also drop a picture onto the text or paste one. It shows as:
+
+```
+![[picture:3f1c…|The harbour at dusk|left|small]]
+```
+
+After the `|`, add a caption, a side (`left`, `right` or `center`; right if you leave it out) and a size (`small`, `medium`, `large` or `full`). Players see a picture when they can see the text it is in. On a phone, pictures stop floating beside the text.
+
 ## Showing one page inside another
 
 Put an exclamation mark before a link, on a line of its own:
@@ -62,7 +72,7 @@ Population: 1,200
 :::
 ```
 
-It sits at the right of the text (write `::: infobox left` for the left). With no name after `infobox`, it uses the page's title. Rows starting `(gm)` are only yours.
+It sits at the right of the text (write `::: infobox left` for the left, or set the page's side under **Page**). With no name after `infobox`, it uses the page's title. Rows starting `(gm)` are only yours.
 
 ### Read-aloud, notes and handouts
 
@@ -141,7 +151,19 @@ The **Text** button beside a page's toolbar sets how its text reads:
 
 Under **Use these settings for**, pick **This page only**, **This page and every page inside it** (a whole category or region reads the same way), or **Every page in the Wiki** (the world's default). A page's own settings win over a page above it, and those win over the Wiki's default. **Go back to the default** clears a page's own settings. Players see pages with the same settings, and each reader's own text size in Appearance still scales everything.
 
+## How a page looks
 
+The **Page** button beside **Text** sets how this page itself looks:
+
+- **Banner**: a wide picture across the top. Click it to choose which part stays in view.
+- **Icon**: the page's icon in the sidebar, search and the player pages. **Usual** goes back to the icon for its kind.
+- **Info boxes sit on the** right or left of the text.
+- **On this page**: hide the list of headings beside the page.
+- **Width**: a book column, or **Wide** to use the whole width.
+
+These are for this page only, not the pages inside it. Players see the banner, icon and info box side too.
+
+## Only for the GM
 
 Three ways to keep text from players. The server takes it out before a player's page is sent, so it never reaches their browser.
 
