@@ -2,11 +2,11 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Users, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
-import { dashHeights, dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, missingHalf, moveWidget, resizeWidget, setHeight, toggleWidget, type Dashboard, type DashWidget, type Halves } from "@/lib/encyclopedia/dashboard";
+import { dashHeights, dashInfo, dashSizes, dashSpan, dashWidgets, defaultDashboard, missingHalf, moveWidget, pickedFrom, pickWidgets, resizeWidget, setHeight, setPicked, startsIn, toggleWidget, type Dashboard, type DashWidget, type Halves, type PickWidget } from "@/lib/encyclopedia/dashboard";
 import { stateNames, questStates } from "@/lib/encyclopedia/quests";
 import { isNewFind } from "@/lib/encyclopedia/codex";
 import { lookAttributes } from "@/lib/encyclopedia/look";
@@ -263,7 +263,7 @@ function DashboardView({ hub, layout, save, saveFront, customize }: { hub: Campa
 
 /** Customize: drag widgets (or use the arrow keys on the handle), pick a width, and choose widgets in the side panel. */
 function Customize({ hub, draft, setDraft: replace, halves }: { hub: CampaignHub; draft: Dashboard; setDraft: (d: (current: Dashboard | null) => Dashboard | null) => void; halves: Halves }) {
-  const [dragging, setDragging] = useState<DashWidget | null>(null);
+  const [dragging, setDragging] = useState<DashWidget | null>(null), [choosing, setChoosing] = useState<PickWidget | null>(null);
   // Always change the newest layout: drag events can come faster than React renders.
   const setDraft = (next: Dashboard | ((d: Dashboard) => Dashboard)) => replace(d => d && (typeof next === "function" ? next(d) : next));
   const dragOver = (over: DashWidget) => { if (dragging && dragging !== over) setDraft(d => moveWidget(d, d.widgets.findIndex(w => w.type === dragging), d.widgets.findIndex(w => w.type === over))); };
@@ -283,8 +283,10 @@ function Customize({ hub, draft, setDraft: replace, halves }: { hub: CampaignHub
           <button className="hub-icon" aria-label={`Move ${dashInfo[w.type].name} down`} disabled={i === draft.widgets.length - 1} onClick={() => setDraft(d => moveWidget(d, i, i + 1))}><ArrowDown size={15} aria-hidden="true" /></button>
           <div className="hub-sizes" role="radiogroup" aria-label={`Width of ${dashInfo[w.type].name}`}>{dashSizes.map(sz => <button key={sz} role="radio" aria-checked={w.size === sz} onClick={() => setDraft(d => resizeWidget(d, w.type, sz))}>{sz.toUpperCase()}</button>)}</div>
           <div className="hub-sizes hub-heights" role="radiogroup" aria-label="Height">{dashHeights.map(n => <button key={n} role="radio" aria-checked={(w.h ?? 1) === n} aria-label={`${n} ${n === 1 ? "row" : "rows"}`} title={`${n} ${n === 1 ? "row" : "rows"} tall`} onClick={() => setDraft(d => setHeight(d, w.type, n))}>{"▮".repeat(n)}</button>)}</div>
+          {isPick(w.type) && <button className="hub-icon" aria-label={`Choose who ${dashInfo[w.type].name} shows`} title="Choose who it shows" aria-expanded={choosing === w.type} onClick={() => setChoosing(choosing === w.type ? null : w.type as PickWidget)}><ListChecks size={15} aria-hidden="true" /></button>}
           <button className="hub-icon" aria-label={`Remove ${dashInfo[w.type].name}`} onClick={() => setDraft(d => toggleWidget(d, w.type, false))}><X size={15} /></button>
         </div>
+        {choosing === w.type && isPick(w.type) && <ChooseList kind={w.type} hub={hub} draft={draft} setDraft={setDraft} />}
         <div className="hub-edit-preview" inert><WidgetBody type={w.type} size={w.size} h={w.h ?? 1} hub={hub} layout={draft} save={noop} saveFront={async () => {}} bare /></div>
       </section>)}
       {!draft.widgets.length && <p className="hub-muted hub-grid-empty">Turn widgets on in the panel to add them.</p>}
@@ -302,8 +304,25 @@ function Customize({ hub, draft, setDraft: replace, halves }: { hub: CampaignHub
   </div>;
 }
 
+const isPick = (t: DashWidget): t is PickWidget => (pickWidgets as readonly string[]).includes(t);
+/** Customize: tick who a list shows. Ticks that match how the list starts aren't saved, so new player characters still show up by themselves. */
+function ChooseList({ kind, hub, draft, setDraft }: { kind: PickWidget; hub: CampaignHub; draft: Dashboard; setDraft: (f: (d: Dashboard) => Dashboard) => void }) {
+  const [find, setFind] = useState("");
+  const all: { id: string; title: string; role?: string; type?: string }[] = kind === "factions" ? hub.factions : hub.people;
+  const shown = new Set(pickedFrom(kind, all, draft).map(x => x.id)), q = find.trim().toLowerCase();
+  const list = all.filter(x => !q || x.title.toLowerCase().includes(q))
+    .sort((a, b) => Number(!shown.has(a.id)) - Number(!shown.has(b.id)) || Number(!startsIn(kind, a as { id: string; role: string }, draft)) - Number(!startsIn(kind, b as { id: string; role: string }, draft)) || a.title.localeCompare(b.title));
+  return <div className="hub-choose">
+    <p className="hub-muted">{kind === "factions" ? "Every faction shows at first. Untick the ones to leave out." : kind === "party" ? `Player characters${draft.widgets.some(w => w.type === "companions") ? "" : " and companions"} show at first. Tick anyone else to add them.` : "Companions show at first. Tick anyone else to add them."}</p>
+    {all.length > 8 && <input className="hub-choose-find" value={find} placeholder={kind === "factions" ? "Find a faction" : "Find a character"} aria-label="Find" onChange={ev => setFind(ev.target.value)} />}
+    {all.length ? <ul>{list.slice(0, 60).map(x => <li key={x.id}><label><input type="checkbox" checked={shown.has(x.id)} onChange={ev => { const on = ev.target.checked; setDraft(d => setPicked(d, kind, { id: x.id, role: x.role ?? "" }, on)); }} /><span>{x.title}</span><small>{kind === "factions" ? x.type : roleNames[x.role ?? ""] ?? ""}</small></label></li>)}</ul>
+      : <p className="hub-muted">{kind === "factions" ? "No organizations in this campaign yet." : "No characters in this campaign yet."}</p>}
+    {list.length > 60 && <p className="hub-muted">{list.length - 60} more. Find one by name.</p>}
+  </div>;
+}
+
 const icons: Record<DashWidget, typeof Flag> = {
-  next: CalendarDays, quests: Flag, board: LayoutDashboard, scenes: MapIcon, initiative: Swords, party: User, recent: FileText,
+  next: CalendarDays, quests: Flag, board: LayoutDashboard, scenes: MapIcon, initiative: Swords, party: User, companions: Handshake, factions: Shield, recent: FileText,
   codex: BookMarked, threads: Check, date: CalendarDays, recap: ScrollText, roll: Dices, notes: Pencil, links: Link2,
 };
 
@@ -357,9 +376,20 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
         </> : <p className="hub-muted">No encounter with initiative yet. {m && <a href={L.maptable!}>Open Maptable</a>}</p>}</>;
     }
     case "roll": return <>{head()}<RollPanel tables={hub.tables} library={hub.library} emptyText={e ? "Star a random table in the Wiki and use it in this campaign to add it here." : "Star a random table in the Wiki to add it here."} /></>;
-    case "party": return <>{head(e && <a href={L.notes("characters")!}>Characters</a>)}
-      {hub.party.length ? <ul className="hub-party">{hub.party.map(p => <PartyMember key={p.id} member={p} href={L.entry(p.id)} />)}</ul>
-        : <p className="hub-muted">Mark characters as player characters or companions in the Wiki and they show up here.</p>}</>;
+    case "party": case "companions": {
+      const order = (r: string) => r === "pc" ? 0 : r === "companion" ? 1 : 2;
+      const list = pickedFrom(type, hub.people, layout).sort((a, b) => order(a.role) - order(b.role) || a.title.localeCompare(b.title));
+      return <>{head(e && <a href={L.notes("characters")!}>Characters</a>)}
+        {list.length ? <ul className="hub-party">{list.map(p => <PartyMember key={p.id} member={p} href={L.entry(p.id)} />)}</ul>
+          : <p className="hub-muted">{type === "party" ? "Mark characters as player characters in the Wiki, or choose who is here with Customize." : "Mark characters as companions in the Wiki, or choose who is here with Customize."}</p>}</>;
+    }
+    case "factions": {
+      const list = pickedFrom("factions", hub.factions, layout), cap = (size === "s" ? 5 : 10) * h;
+      return <>{head(e && <a href={L.notes()!}>Wiki</a>)}
+        {list.length ? <ul className="hub-list">{list.slice(0, cap).map(f => <li key={f.id}><a href={L.entry(f.id)}><Shield size={15} aria-hidden="true" /><span><strong>{f.title}</strong>{f.type && <small>{f.type}</small>}</span></a></li>)}</ul>
+          : <p className="hub-muted">{hub.factions.length ? "Every faction is hidden. Choose which to show with Customize." : "No organizations yet. Make one in the Wiki and it shows up here."}</p>}
+        {list.length > cap && <small className="hub-muted">{list.length - cap} more</small>}</>;
+    }
     case "recent": return <>{head(e && <a href={L.notes()!}>Wiki</a>)}
       {hub.recent.length ? <ul className="hub-list">{hub.recent.slice(0, [5, 8, 12][h - 1] ?? 5).map(p => <li key={p.id}><a href={L.entry(p.id)}>{p.kind === "character" ? <User size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />}<span><strong>{p.title}</strong>{p.parent && <small>{p.parent}</small>}</span><time dateTime={p.updatedAt}>{when(p.updatedAt)}</time></a></li>)}</ul>
         : <p className="hub-muted">{e ? "No pages yet." : "No Wiki yet."}</p>}</>;
@@ -375,11 +405,12 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
   }
 }
 
-function PartyMember({ member: p, href }: { member: CampaignHub["party"][number]; href: string }) {
+const roleNames: Record<string, string> = { pc: "Player character", companion: "Companion", npc: "NPC", creature: "Creature" };
+function PartyMember({ member: p, href }: { member: CampaignHub["people"][number]; href: string }) {
   const { src } = usePictureSrc(p.picture ? tokenPicture(p.picture).imageId : undefined);
   return <li><a href={href}>
     {p.picture ? <PictureToken picture={tokenPicture(p.picture)} src={src} size={36} /> : <span className="hub-token-empty" aria-hidden="true"><User size={16} /></span>}
-    <span><strong>{p.title}</strong><small>{[p.role === "pc" ? "Player character" : "Companion", p.group].filter(Boolean).join(" · ")}</small></span>
+    <span><strong>{p.title}</strong><small>{[roleNames[p.role] ?? "Character", p.group].filter(Boolean).join(" · ")}</small></span>
   </a></li>;
 }
 

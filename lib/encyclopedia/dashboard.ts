@@ -7,7 +7,7 @@ import { z } from "zod";
  * Players never see the dashboard.
  */
 
-export const dashWidgets = ["next", "quests", "board", "scenes", "initiative", "party", "recent", "codex", "threads", "date", "recap", "roll", "notes", "links"] as const;
+export const dashWidgets = ["next", "quests", "board", "scenes", "initiative", "party", "companions", "factions", "recent", "codex", "threads", "date", "recap", "roll", "notes", "links"] as const;
 export type DashWidget = typeof dashWidgets[number];
 export const dashSizes = ["s", "m", "l"] as const;
 export type DashSize = typeof dashSizes[number];
@@ -27,7 +27,9 @@ export const dashInfo: Record<DashWidget, { name: string; hint: string; size: Da
   board: { name: "Quest board", hint: "The quest columns, small", size: "l", tool: "notes" },
   scenes: { name: "Scenes", hint: "Maptable scenes", size: "m", tool: "maps" },
   initiative: { name: "Last encounter", hint: "Initiative order where you left it", size: "s", tool: "maps" },
-  party: { name: "The party", hint: "Player characters and companions", size: "s", tool: "notes" },
+  party: { name: "The party", hint: "Player characters, and anyone you add", size: "s", tool: "notes" },
+  companions: { name: "Companions", hint: "Companions with the party", size: "s", tool: "notes" },
+  factions: { name: "Factions", hint: "Organizations in this campaign", size: "s", tool: "notes" },
   recent: { name: "Recently edited", hint: "Pages changed lately", size: "s", tool: "notes" },
   codex: { name: "Codex", hint: "Newest codex entries", size: "s", tool: "notes" },
   threads: { name: "Loose threads", hint: "A checklist only you see", size: "s" },
@@ -39,6 +41,11 @@ export const dashInfo: Record<DashWidget, { name: string; hint: string; size: Da
 };
 
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
+/** Widgets whose list the GM can choose: who is in The party, which companions, which factions. */
+export const pickWidgets = ["party", "companions", "factions"] as const;
+export type PickWidget = typeof pickWidgets[number];
+const pickSchema = z.object({ add: z.array(id).max(100).optional(), hide: z.array(id).max(300).optional() });
+export type ListPick = z.infer<typeof pickSchema>;
 const url = z.string().trim().max(500).refine(v => /^https?:\/\/[^\s]+$/i.test(v), "Links must start with http:// or https://");
 
 export const dashboardSchema = z.object({
@@ -47,6 +54,8 @@ export const dashboardSchema = z.object({
   threads: z.array(z.object({ id, text: z.string().trim().min(1).max(200), done: z.boolean() })).max(50).optional(),
   notes: z.string().max(4000).optional(),
   links: z.array(z.object({ label: z.string().trim().min(1).max(80), url })).max(12).optional(),
+  /** Who The party, Companions and Factions show, beyond who they show at first: pages added, and pages hidden. */
+  picks: z.object(Object.fromEntries(pickWidgets.map(k => [k, pickSchema.optional()])) as Record<PickWidget, z.ZodOptional<typeof pickSchema>>).optional(),
 });
 export type Dashboard = z.infer<typeof dashboardSchema>;
 
@@ -93,6 +102,31 @@ export const resizeWidget = (d: Dashboard, type: DashWidget, size: DashSize): Da
 /** Sets a widget's height; 1 (the default) is left out of the saved layout. */
 export const setHeight = (d: Dashboard, type: DashWidget, h: DashHeight): Dashboard =>
   ({ ...d, widgets: d.widgets.map(w => { if (w.type !== type) return w; const { h: _old, ...rest } = w; return h > 1 ? { ...rest, h } : rest; }) });
+
+/** A character's role as the party widgets read it. */
+type Person = { id: string; role: string };
+/** Who a list shows by itself: The party has player characters (and companions when Companions is off), Companions has companions, Factions has every faction. */
+export function startsIn(kind: PickWidget, x: Person | { id: string }, d: Pick<Dashboard, "widgets">) {
+  const role = "role" in x ? x.role : "";
+  if (kind === "factions") return true;
+  if (kind === "companions") return role === "companion";
+  return role === "pc" || (role === "companion" && !d.widgets.some(w => w.type === "companions"));
+}
+/** The pages a list shows: those it starts with and those added, less those hidden. */
+export function pickedFrom<T extends { id: string }>(kind: PickWidget, all: T[], d: Pick<Dashboard, "widgets" | "picks">) {
+  const p = d.picks?.[kind];
+  return all.filter(x => (startsIn(kind, x, d) || p?.add?.includes(x.id)) && !p?.hide?.includes(x.id));
+}
+/** Shows or hides one page in a list, keeping only what differs from how the list starts. */
+export function setPicked(d: Dashboard, kind: PickWidget, x: Person | { id: string }, on: boolean): Dashboard {
+  const p: ListPick = d.picks?.[kind] ?? {}, first = startsIn(kind, x, d);
+  const add = (p.add ?? []).filter(y => y !== x.id), hide = (p.hide ?? []).filter(y => y !== x.id);
+  const next: ListPick = { ...(on && !first ? { add: [...add, x.id] } : add.length ? { add } : {}), ...(!on && first ? { hide: [...hide, x.id] } : hide.length ? { hide } : {}) };
+  const picks = { ...d.picks, [kind]: next.add || next.hide ? next : undefined };
+  const kept = Object.fromEntries(Object.entries(picks).filter(([, v]) => v));
+  const { picks: _old, ...rest } = d;
+  return Object.keys(kept).length ? { ...rest, picks: kept } : rest;
+}
 
 /** A short plain-text excerpt of a page for the Last session widget. */
 export function excerpt(text: string, max = 280) {

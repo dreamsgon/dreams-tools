@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSchema,demoWorkspace} from '../lib/encyclopedia/world-model.ts';
-import {dashboardSchema,defaultDashboard,toggleWidget,moveWidget,resizeWidget,setHeight,missingHalf,excerpt,dashWidgets,dashInfo} from '../lib/encyclopedia/dashboard.ts';
+import {dashboardSchema,defaultDashboard,toggleWidget,moveWidget,resizeWidget,setHeight,missingHalf,excerpt,dashWidgets,dashInfo,pickedFrom,setPicked} from '../lib/encyclopedia/dashboard.ts';
 import {campaignSession,saveDashboard,loadHub,hubOf,lastEncounter} from '../lib/campaigns-server.ts';
 import {initialWorkspace} from '../lib/model.ts';
 import {saveWorkspace} from '../lib/workspace-storage.ts';
@@ -89,7 +89,7 @@ test('the starting layout depends on the halves a campaign has', () => {
 
 test('every widget names the half it needs', () => {
   assert.deepEqual(dashWidgets.filter(t=>dashInfo[t].tool==='maps'),['scenes','initiative']);
-  assert.deepEqual(dashWidgets.filter(t=>dashInfo[t].tool==='notes').sort(),['board','codex','date','party','quests','recap','recent']);
+  assert.deepEqual(dashWidgets.filter(t=>dashInfo[t].tool==='notes').sort(),['board','codex','companions','date','factions','party','quests','recap','recent']);
   assert.equal(missingHalf('roll',{maps:false,notes:false}),null);
   assert.equal(missingHalf('links',{maps:false,notes:false}),null);
   assert.equal(missingHalf('scenes',notesOnly),'maps');
@@ -173,4 +173,21 @@ test('the last encounter is the active scene with initiative, else the last one 
   assert.equal(lastEncounter({...ws,scenes:[scene('b','Quiet','m1',[tok('t3','Statue',null)])]},'m1'),null);
   const hub=hubOf({map:{workspace:ws},book:{data:{worlds:[],campaigns:[],entries:[]}}},'m:m1');
   assert.equal(hub.initiative.sceneId,'a');
+});
+
+test('the GM chooses who The party, Companions and Factions show, and only the changes are saved', () => {
+  const people=[{id:'a',role:'pc'},{id:'b',role:'companion'},{id:'c',role:'npc'},{id:'d',role:'pc'}];
+  let d={widgets:[{type:'party',size:'s'}]};
+  assert.deepEqual(pickedFrom('party',people,d).map(x=>x.id),['a','b','d'],'companions too while Companions is off');
+  d=toggleWidget(d,'companions',true);
+  assert.deepEqual(pickedFrom('party',people,d).map(x=>x.id),['a','d']);
+  assert.deepEqual(pickedFrom('companions',people,d).map(x=>x.id),['b']);
+  d=setPicked(d,'party',people[2],true);d=setPicked(d,'party',people[3],false);
+  assert.deepEqual(d.picks,{party:{add:['c'],hide:['d']}});
+  assert.deepEqual(pickedFrom('party',people,d).map(x=>x.id),['a','c']);
+  assert.equal(dashboardSchema.safeParse(d).success,true);
+  d=setPicked(setPicked(d,'party',people[2],false),'party',people[3],true);
+  assert.equal(d.picks,undefined,'back to how it starts: nothing saved');
+  d=setPicked(d,'factions',{id:'f1'},false);
+  assert.deepEqual(pickedFrom('factions',[{id:'f1'},{id:'f2'}],d).map(x=>x.id),['f2']);
 });
