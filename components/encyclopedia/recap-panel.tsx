@@ -5,7 +5,7 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine,X} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
@@ -149,10 +149,17 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   setNotice(r.ok?(r.b.skipped?'Discord recaps are off for this campaign. Turn them on in Maptable › Connections.':'Posted the recap to Discord.'):(r.b.error==='Publish the recap to players before posting it.'?'Publish the recap and let it save first, then post it.':r.b.error));
  };
  const groups=['People, places and things','Quests','Codex'].map(g=>({g,items:open.filter(r=>groupOf(r)===g)})).filter(x=>x.items.length);
+ const share=<div className="check-actions">{recap.status==='draft'?<button className="button primary" onClick={()=>publish(true)}><Eye size={14}/> Publish to players</button>:<button className="button" onClick={()=>publish(false)}><EyeOff size={14}/> Unpublish</button>}{recap.status==='published'&&<button className="button" disabled={posting} onClick={post}><Send size={14}/> {posting?'Posting…':'Post to Discord'}</button>}</div>;
+ // A recap the GM wrote, with nothing found to check: sharing it comes first, and the AI check is optional.
+ if(recap.mine&&!recap.review.length)return <div className="aside-section recap-check recap-ready">
+  <strong className="recap-card-title">{recap.status==='draft'?'Ready to share?':'Shared with players'}</strong>
+  <p className="aside-hint">{recap.status==='draft'?'Players see the recap text. Your GM notes and the transcript stay GM-only.':'Players see the recap. Unpublish to hide it again.'}</p>
+  {share}
+  {recap.status==='draft'&&<CheckWithAi entry={entry} data={data} setNotice={setNotice}/>}
+ </div>;
  return <div className="aside-section recap-check">
   <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
-  <p className="aside-hint">{recap.mine&&!recap.review.length?'Your own recap. Publish it as it is, or have the AI list the people, places and quest moves it mentions first.':'What the AI found in this session. Nothing changes in your pages until you press a button.'}</p>
-  {recap.mine&&<CheckWithAi entry={entry} data={data} setNotice={setNotice}/>}
+  <p className="aside-hint">What the AI found in this session. Nothing changes in your pages until you press a button.</p>
   {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g.toUpperCase()}</span>{items.map(r=><div key={r.id} className="check-item">
    <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
    {editing===r.id?<><textarea className="check-text" aria-label={`Text for ${r.name}`} rows={4} maxLength={4000} value={text} onChange={e=>setText(e.target.value)}/><div className="check-actions"><button className="button primary small" onClick={()=>{editItem(r.id,{text:text.trim()});setEditing(null);}}>Save</button><button className="button small" onClick={()=>setEditing(null)}>Cancel</button></div></>
@@ -162,7 +169,7 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   {done.length>0&&<details className="check-done"><summary>{done.length} done or skipped</summary>{done.map(r=><p key={r.id} className="aside-hint">{r.state==='done'?<Check size={12}/>:'–'} {tagOf[r.kind]} · {r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}{r.state==='skipped'?' (skipped)':''}</p>)}</details>}
   <div className="check-footer">
    {open.length>1&&<div className="check-actions"><button className="button small" onClick={()=>apply(open.map(r=>r.id))}><Check size={13}/> Add all {open.length}</button><button className="button small" onClick={()=>change(w=>open.reduce((x,r)=>skipItem(x,entry.id,r.id),w))}>Skip the rest</button></div>}
-   <div className="check-actions">{recap.status==='draft'?<button className="button primary" onClick={()=>publish(true)}><Eye size={14}/> Publish to players</button>:<button className="button" onClick={()=>publish(false)}><EyeOff size={14}/> Unpublish</button>}{recap.status==='published'&&<button className="button" disabled={posting} onClick={post}><Send size={14}/> {posting?'Posting…':'Post to Discord'}</button>}</div>
+   {share}
    <p className="aside-hint">{recap.status==='draft'?'Publishing shares the recap text with players. Timeline and quotes go too when you set their tabs to Player visible.':'Players see the recap. Unpublish to hide it again.'}</p>
   </div>
  </div>;
@@ -186,16 +193,18 @@ export function WriteAgain({entry,data,change,setNotice}:{entry:Entry;data:Works
   finally{setBusy(false);}
  };
  if(!open)return <div className="write-again closed"><button className="button small" onClick={()=>setOpen(true)}><RotateCcw size={13}/> Write it again…</button><span className="aside-hint">Quick changes, a note, or another style.</span></div>;
- return <div className="write-again">
-  <div className="field-label">Quick changes<div className="style-chips">{QUICK.map(q=><button type="button" key={q} className={`style-chip ${quick.includes(q)?'on':''}`} aria-pressed={quick.includes(q)} onClick={()=>setQuick(x=>x.includes(q)?x.filter(y=>y!==q):[...x,q])}>{q}</button>)}</div></div>
-  <label className="field-label">Anything else<textarea className="check-text" autoFocus rows={3} maxLength={400} value={note} placeholder="More about Bram. Open on the second bell." onChange={e=>setNote(e.target.value)}/></label>
+ const close=()=>{setOpen(false);setError('');};
+ return <section className="write-again" aria-label="Write it again">
+  <div className="write-again-head"><strong><RotateCcw size={14} aria-hidden="true"/> Write it again</strong><button type="button" className="icon-button" aria-label="Close" disabled={busy} onClick={close}><X size={15}/></button></div>
+  <div className="style-chips" role="group" aria-label="Quick changes">{QUICK.map(q=><button type="button" key={q} className={`style-chip ${quick.includes(q)?'on':''}`} aria-pressed={quick.includes(q)} onClick={()=>setQuick(x=>x.includes(q)?x.filter(y=>y!==q):[...x,q])}>{q}</button>)}</div>
+  <label className="write-field"><span>Anything else <span className="muted">(optional)</span></span><textarea className="check-text" autoFocus rows={2} maxLength={400} value={note} placeholder="More about Bram. Open on the second bell." onChange={e=>setNote(e.target.value)}/></label>
   {campaign&&<StylePicker writing={campaign.aiWriting} kind="recap" value={style} onChange={setStyle} onEdit={change?()=>setStyles(true):undefined}/>}
   {styles&&campaign&&change&&<AiWritingDialog data={data} campaign={campaign} change={change} onClose={()=>setStyles(false)}/>}
-  <p className="aside-hint">The recap is written again from the timeline, so fix a beat there first if it’s wrong. The timeline, quotes and this list stay as they are.</p>
-  {keys.length>1&&<label className="field-label">Written by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
+  {keys.length>1&&<label className="write-field">Written by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
+  <p className="aside-hint">Written again from the timeline. The timeline, quotes and check list stay as they are.</p>
   {error&&<p className="form-error">{error}</p>}
-  <div className="check-actions">{chosen&&<button className="button primary small" disabled={busy} onClick={run}><Sparkles size={13}/> {busy?'Writing…':`Write it with ${chosen.name}`}</button>}<button className={`button small ${chosen?'':'primary'}`} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy for my AI app'}</button><button className="button small" disabled={busy} onClick={()=>{setOpen(false);setError('');}}>Cancel</button></div>
- </div>;
+  <div className="write-again-actions"><button className="button" disabled={busy} onClick={close}>Cancel</button><button className={`button ${chosen?'':'primary'}`} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy for my AI app'}</button>{chosen&&<button className="button primary" disabled={busy} onClick={run}><Sparkles size={14}/> {busy?'Writing…':`Write it with ${chosen.name}`}</button>}</div>
+ </section>;
 }
 
 /**
@@ -206,6 +215,8 @@ function CheckWithAi({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotic
  const writers=useWriters(entry.campaignId),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
  const keys=writers?.keys??[],chosen=keys.find(k=>k.id===key)??keys.find(k=>k.transcripts)??keys[0];
  const campaign=data.campaigns.find(c=>c.id===entry.campaignId),empty=!entry.body.trim();
+ // Folded on a phone, where Publish matters more; open on a wider screen.
+ const [narrow]=useState(()=>typeof window!=='undefined'&&window.matchMedia?.('(max-width:720px)').matches);
  const ask=`In RPG Tools for "${campaign?.name??'my campaign'}", read the session page "${entry.title}" with read_page. I wrote its recap myself, so don't change it. List the new people, places and things, quest moves and codex finds it mentions with add_recap_finds.`;
  const run=async()=>{
   if(!chosen||!entry.campaignId)return;
@@ -215,14 +226,14 @@ function CheckWithAi({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotic
   finally{setBusy(false);}
  };
  const blocked=chosen&&!chosen.transcripts?`${chosen.name} can’t read draft recaps, which are GM-only. Turn on “See GM-only things” for it under What it may do.`:'';
- return <div className="check-with-ai">
-  <span className="eyebrow">CHECK IT WITH AI <small className="muted">optional</small></span>
-  <p className="aside-hint">The AI reads your recap and lists new people, places, quest moves and codex finds for you to add. It doesn’t change your words.</p>
+ return <details className="check-with-ai" open={!narrow}>
+  <summary>Check it with AI <span className="muted">(optional)</span></summary>
+  <p className="aside-hint">{chosen?.name??'The AI'} lists the new people, places, quest moves and codex finds it mentions, for you to add. Your words stay as they are.</p>
   {keys.length>1&&<label className="field-label">Checked by<select value={chosen?.id} onChange={e=>setKey(e.target.value)}>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.model}</option>)}</select></label>}
   {empty&&<p className="aside-hint">Write the recap first, then check it.</p>}
   {(blocked||error)&&<p className="form-error">{error||blocked}</p>}
-  <div className="check-actions">{chosen&&<button className="button small" disabled={busy||empty||!!blocked} onClick={run}><Sparkles size={13}/> {busy?'Reading…':`Check it with ${chosen.name}`}</button>}<button className="button small" disabled={empty} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy for my AI app'}</button></div>
- </div>;
+  <div className="check-actions">{chosen&&<button className="button" disabled={busy||empty||!!blocked} onClick={run}><Sparkles size={14}/> {busy?'Reading…':`Check it with ${chosen.name}`}</button>}<button className="button" disabled={empty} onClick={()=>void navigator.clipboard.writeText(ask).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>setError('Your browser didn’t allow copying.'))}>{copied?<Check size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy for my AI app'}</button></div>
+ </details>;
 }
 
 /** A session page with no recap yet: write it yourself, or have the AI draft it. */

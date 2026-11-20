@@ -1032,15 +1032,23 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .recap-check .handoff-wait{margin-top:12px;font-size:12px}.recap-check>.button{margin-top:12px}.recap-start{margin-top:12px}.folder-contents>.button.recap-start{padding:9px 13px;font-size:12px;margin:0 0 18px}
 @media(max-width:760px){.source-grid,.recap-options{grid-template-columns:1fr}}
 /* Write it again, under a draft recap */
-.write-again{display:grid;gap:8px;margin:28px 0 0;padding:14px;border:1px solid var(--line);border-radius:var(--radius);max-width:560px}
+.write-again{display:grid;gap:12px;margin:28px 0 0;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);max-width:620px}
+.write-again-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.write-again-head strong{display:flex;align-items:center;gap:7px;font-size:14px}
+.write-again-head .icon-button{width:36px;height:36px;align-items:center;justify-content:center}
+.write-again .style-chip{min-height:36px;padding:4px 13px;font-size:13px}
+.write-field{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink)}.write-field .muted{font-weight:400}.write-field textarea.check-text{margin:0}
+.write-field select{min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);font-size:13px;font-weight:400}
+.write-again>.aside-hint{margin:0;font-size:13px}
+.write-again-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.write-again-actions .button{min-height:40px;font-size:13px}
+@media(max-width:720px){.write-again .style-chip{min-height:40px}.write-again-actions{flex-direction:column-reverse}.write-again-actions .button{width:100%;min-height:44px}}
 .write-again.closed{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 0 0;border:0;border-top:1px solid var(--line);border-radius:0;max-width:none}
 .write-again.closed .aside-hint{margin:0}
 .write-again textarea,.write-again select{width:100%}
 .recap-start-choices{display:grid;gap:8px;margin-top:12px}
-.style-pick{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);margin-bottom:14px;font-size:12px}
+.style-pick{display:grid;gap:6px;margin-bottom:14px;font-size:13px}
 .style-pick-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600;color:var(--ink)}
 .style-pick .inline-link,.writing-dialog .inline-link{padding:0;color:var(--accent);text-decoration:underline;font:inherit;font-weight:600}
-.style-pick select{width:100%}.style-pick small{color:var(--muted);line-height:1.45}
+.style-pick select{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);font-size:13px}.style-pick small{color:var(--muted);line-height:1.45;font-size:13px}
 .style-chips{display:flex;flex-wrap:wrap;gap:6px}
 .style-chip{display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:3px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font-size:12px;font-weight:600}
 .style-chip small{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -1062,7 +1070,12 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .recap-choice{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink)}
 .recap-choice:hover{border-color:var(--accent)}.recap-choice svg{flex:none;margin-top:2px;color:var(--accent)}
 .recap-choice strong{display:block;font-size:13px;font-weight:600}.recap-choice small{display:block;color:var(--muted);font-size:12px;line-height:1.45;margin-top:2px}
-.check-with-ai{display:grid;gap:8px;margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:var(--radius)}.check-with-ai .aside-hint{margin:0}.check-with-ai select{width:100%}
+.check-with-ai{margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+.check-with-ai>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);min-height:32px;display:flex;align-items:center;gap:4px}.check-with-ai>summary .muted{font-weight:400}
+.check-with-ai>summary::-webkit-details-marker{display:none}.check-with-ai>summary::before{content:'';flex:none;width:6px;height:6px;margin:0 8px 0 2px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}.check-with-ai[open]>summary::before{transform:rotate(45deg)}
+.check-with-ai>:not(summary){margin-top:8px}.check-with-ai .aside-hint{font-size:13px}.check-with-ai .check-actions{gap:8px}.check-with-ai .button{min-height:40px;font-size:13px;flex:1 1 100%}
+.recap-ready .recap-card-title{display:block;font-size:15px}.recap-ready>.aside-hint{font-size:13px}.recap-ready>.check-actions .button{min-height:42px;font-size:13px;flex:1}
+@media(max-width:720px){.check-with-ai .button,.recap-ready>.check-actions .button{width:100%;min-height:44px}}.check-with-ai .aside-hint{margin:0}.check-with-ai select{width:100%}
 .folder-contents>.recap-start-row{margin:0 0 18px;gap:8px}.folder-contents>.recap-start-row>.button.recap-start{margin:0;padding:9px 13px;font-size:12px}
 .link-read{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--accent);font-weight:400}
 /* A co-GM in someone else's campaign (components/encyclopedia/member-view.ts): whose campaign it is, read only for now. */
