@@ -7,7 +7,7 @@ import { defaultCharacter, newId, playerText, type Campaign, type Entry, type Wo
 import { defaultCategory, newQuest, questCategories, questsIn } from "./quests.ts";
 import { setFound } from "./codex.ts";
 import { honourSkips, keepNotes } from "./recap-request.ts";
-import { honourExtract, isOn, readGameDate } from "./recap-extract.ts";
+import { honourExtract, inEncyclopedia, isOn, itemKind, readGameDate } from "./recap-extract.ts";
 import { emptyInventory, putItem } from "./items.ts";
 import { canHoldTie, putTie } from "./tie-edit.ts";
 import { tieFits, tieTypeById, tieTypesOf, type TieType } from "./ties.ts";
@@ -133,7 +133,7 @@ export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, op
   const recap: Recap = {
     ...before, status: "draft", by: opts.by.slice(0, 80), mine: undefined, timeline, quotes, gmNotes: input.gmNotes ?? "",
     moments: lines(input.moments), spotlights: (input.spotlights ?? []).filter(x => x.who.trim() && x.text.trim()), encounters: (input.encounters ?? []).filter(x => x.name.trim()).map(x => ({ name: x.name.trim(), outcome: (x.outcome ?? "").trim() })),
-    partyStatus: (input.partyStatus ?? "").trim() || undefined, next: lines(input.next), threads: lines(input.threads), review: [...before.review.filter(r => r.state !== "open"), ...review].slice(-80),
+    partyStatus: (input.partyStatus ?? "").trim() || undefined, next: lines(input.next), threads: lines(input.threads), review: [...before.review.filter(r => r.state !== "open" && r.state !== "filed"), ...review].slice(-80),
     ...(input.source ? { source: input.source.slice(0, 200) } : {}), ...(input.playedOn ? { playedOn: input.playedOn } : {}),
   };
   const body = linkNames(input.recap, entries, c), at = opts.now.toISOString();
@@ -183,7 +183,9 @@ export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
   }
   const calendar = campaign.calendars?.[0], date = readGameDate(calendar, input.gameDate);
   if (calendar && date && !sameDate(calendar.current, date)) review.push({ id: newId(), kind: "date", name: formatDate(calendar, date), calendarId: calendar.id, date, text: "", state: "open" });
-  return review;
+  // Kinds set to go only to the session file are kept for it, and never wait in the check list.
+  const pageOf = (id?: string) => id ? entries.find(e => e.id === id) : undefined;
+  return review.map(r => inEncyclopedia(x, itemKind(r, pageOf(r.pageId))) ? r : { ...r, state: "filed" as const });
 }
 
 /**
@@ -192,7 +194,7 @@ export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
  */
 export function addFinds(ws: Workspace, campaign: Campaign, page: Entry, input: AiFinds) {
   if (!page.recap) throw Error(`“${page.title}” has no recap.`);
-  const waiting = new Set(openItems(page.recap).map(r => `${r.kind}:${r.name.toLowerCase()}`));
+  const waiting = new Set(page.recap.review.filter(r => r.state === "open" || r.state === "filed").map(r => `${r.kind}:${r.name.toLowerCase()}`));
   const added = findItems(ws, campaign, input).filter(r => { const k = `${r.kind}:${r.name.toLowerCase()}`; if (waiting.has(k)) return false; waiting.add(k); return true; });
   return { added, entry: { ...page, recap: { ...page.recap, review: [...page.recap.review, ...added].slice(-80) } } satisfies Entry };
 }

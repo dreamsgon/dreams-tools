@@ -13,12 +13,13 @@ import type { Scene, Workspace as Maps } from "../model.ts";
 import { fogged, permsFor, type McpContext } from "./tools.ts";
 
 export function playersBook(book: Book, campaignId: string): Book {
+  const extract = book.campaigns.find(c => c.id === campaignId)?.aiWriting?.extract;
   const entries = book.entries.flatMap(e => {
     if (e.kind === "folder") return [e];
     if (e.recap?.status === "draft") return []; // A draft recap never reaches players.
     const overview = e.overviewVisibility === "players";
     const tabs = [...(e.tabs ?? []).filter(t => t.visibility === "players").map(t => ({ ...t, body: playerText(t.body) })),
-      ...(overview ? playerRecapTabs(e.recap, playerText).map(t => ({ ...t, visibility: "players" as const })) : [])];
+      ...(overview ? playerRecapTabs(e.recap, playerText, extract).map(t => ({ ...t, visibility: "players" as const })) : [])];
     const found = e.codex?.found[campaignId];
     const map = e.mapData?.visibility === "players";
     const vehicle = e.vehicle ? playerSafeVehicle(e.vehicle, playerText) ?? undefined : undefined;

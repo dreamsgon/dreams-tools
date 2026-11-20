@@ -5,10 +5,11 @@
  * wording on any style; and the AI panel chat's own instructions. StylePicker is the Style menu shown wherever the AI
  * writes (the recap dialog, Write it again, The story so far, and generators as they arrive).
  */
-import {useState} from 'react';
-import {Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
+import {useMemo,useState} from 'react';
+import {Download,Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
-import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,turnKind,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
+import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,turnKind,setWhere,whereOf,whereNames,wheres,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
+import {sessionFile} from '@/lib/encyclopedia/rp-export';
 import {saveExtract,allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
 import {ToolDialog} from './tool-dialog';
 import {useWriters} from './use-writers';
@@ -57,7 +58,7 @@ export function AiWritingDialog({data,campaign,change,onClose,start='recap'}:{da
   <p className="modal-intro">For {campaign.name}. Your AI app uses these too, and you can always write it yourself instead.</p>
   <div className="writing-layout">
   <nav className="writing-kinds" aria-label="What it writes">{kinds.map(([k,n,sub])=><button type="button" key={k} className={tab===k?'on':''} aria-current={tab===k?'true':undefined} onClick={()=>pickKind(k)}><strong>{n}</strong><small>{sub}</small></button>)}</nav>
-  {tab==='extract'?<ExtractSettingsForm key={campaign.id} writing={writing} save={save}/>:tab==='chat'?<ChatSettingsForm key={campaign.id} writing={writing} save={save}/>:<div className="writing-body">
+  {tab==='extract'?<ExtractSettingsForm key={campaign.id} data={data} campaign={campaign} writing={writing} save={save}/>:tab==='chat'?<ChatSettingsForm key={campaign.id} writing={writing} save={save}/>:<div className="writing-body">
    <div className="writing-edit">
     <p className="aside-hint">{kind==='recap'?'Used by New session recap, Write it again, and your AI app’s recap prompts.':kind==='story'?'Used by The story so far on the front page, written here or by your AI app.':'Used by generators that write with AI, as they arrive.'}</p>
     <div className="writing-styles">{groups.map(([g,list])=>(list.length||g==='Yours')&&<div key={g} className="writing-style-group"><span className="writing-group">{g}</span><div className="writing-style-list">
@@ -121,25 +122,44 @@ function ChatSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next
  </div>;
 }
 
-/** What it pulls out: which kinds the AI takes from a session, and how much. Saved with the campaign's other AI settings. */
-function ExtractSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next:AiWriting)=>void}){
+/** What it pulls out: which kinds the AI takes from a session, how much, and where each goes. Saved with the campaign's other AI settings. */
+function ExtractSettingsForm({data,campaign,writing,save}:{data:Workspace;campaign:Campaign;writing:AiWriting|undefined;save:(next:AiWriting)=>void}){
  const saved:ExtractSettings=writing?.extract??{},[draft,setDraft]=useState<ExtractSettings>(saved),[error,setError]=useState('');
- const depth=depthFor(draft),dirty=depth!==depthFor(saved)||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k));
+ const depth=depthFor(draft),dirty=depth!==depthFor(saved)||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k)||whereOf(draft,k)!==whereOf(saved,k));
  const turn=(k:typeof extractKinds[number],on:boolean)=>setDraft(d=>turnKind(d,k,on));
  const keep=()=>{try{setError('');save(saveExtract(writing,draft));}catch(e){setError(e instanceof Error?e.message:'Could not save that.');}};
  return <div className="writing-body">
   <div className="writing-edit">
-   <p className="aside-hint">What the AI takes from a session when it writes a recap, or checks one you wrote. Here, in your AI app, and with Check it with AI.</p>
+   <p className="aside-hint">What the AI takes from a session when it writes a recap, or checks one you wrote, and where each kind goes. Here, in your AI app, and with Check it with AI.</p>
    <div className="field-title">How much to pull out<Seg label="How much to pull out" value={depth} options={extractDepths.map(d=>[d,depthNames[d][0]] as [typeof d,string])} onChange={d=>setDraft({...draft,depth:d})}/><small className="aside-hint">{depthNames[depth][1]} You can change it for one session in New session recap.</small></div>
-   {extractGroups.map(([g,list])=><div key={g} className="extract-group"><span className="writing-group">{g}</span><div className="extract-rows">{list.map(k=><label key={k} className={`extract-row ${isOn(draft,k)?'':'off'}`}>
-    <span className="extract-switch"><input type="checkbox" checked={isOn(draft,k)} onChange={e=>turn(k,e.target.checked)}/><span aria-hidden="true"/></span>
-    <span className="extract-name"><strong>{extractNames[k][0]}</strong><small>{extractNames[k][1]}</small></span>
-   </label>)}</div></div>)}
+   {extractGroups.map(([g,list])=><div key={g} className="extract-group"><span className="writing-group">{g}</span><div className="extract-rows">{list.map(k=><div key={k} className={`extract-row ${isOn(draft,k)?'':'off'}`}>
+    <label className="extract-label"><span className="extract-switch"><input type="checkbox" checked={isOn(draft,k)} onChange={e=>turn(k,e.target.checked)}/><span aria-hidden="true"/></span>
+    <span className="extract-name"><strong>{extractNames[k][0]}</strong><small>{extractNames[k][1]}</small></span></label>
+    {isOn(draft,k)&&<select className="extract-where" aria-label={`Where ${extractNames[k][0]} go`} value={whereOf(draft,k)} onChange={e=>setDraft(d=>setWhere(d,k,e.target.value as typeof wheres[number]))}>{wheres.map(w=><option key={w} value={w}>{whereNames[w]}</option>)}</select>}
+   </div>)}</div></div>)}
    {error&&<p className="form-error">{error}</p>}
    {dirty&&<div className="writing-save"><span>Changes to What it pulls out</span><button type="button" className="button" onClick={()=>setDraft(saved)}><Undo2 size={14}/> Undo</button><button type="button" className="button primary" onClick={keep}>Save changes</button></div>}
   </div>
-  <aside className="writing-sample"><strong className="writing-sample-title">How it works</strong><p className="aside-hint">Kinds you turn off aren’t asked for, and aren’t kept if the AI sends them anyway.</p><p className="aside-hint">Everything else still waits in Check before publishing. Nothing changes in your pages until you add it.</p></aside>
+  <SessionFileAside data={data} campaign={campaign} draft={draft}/>
  </div>;
+}
+
+/** The session file: what goes in it, where it goes, and the latest session's file as the settings would write it, to read or download. */
+function SessionFileAside({data,campaign,draft}:{data:Workspace;campaign:Campaign;draft:ExtractSettings}){
+ const latest=data.entries.filter(e=>e.kind==='session'&&e.campaignId===campaign.id&&e.recap).sort((a,b)=>(b.recap!.playedOn??b.updatedAt).localeCompare(a.recap!.playedOn??a.updatedAt))[0];
+ const file=useMemo(()=>{
+  if(!latest)return null;
+  // As the draft settings would write it, before they're saved.
+  const ws={...data,campaigns:data.campaigns.map(c=>c.id===campaign.id?{...c,aiWriting:{...(c.aiWriting??{}),extract:draft}}:c)};
+  try{return sessionFile(ws,campaign.id,latest.id,{includeGm:true,exportedAt:new Date(0).toISOString()});}catch{return null;}
+ },[data,campaign.id,latest,draft]);
+ const download=()=>{if(!file)return;const url=URL.createObjectURL(new Blob([file.text],{type:'text/markdown'})),a=document.createElement('a');a.href=url;a.download=file.path;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ return <aside className="writing-sample session-file-aside">
+  <strong className="writing-sample-title">Session file</strong>
+  <p className="aside-hint">A Markdown file for each session, with everything set to Session file or Both. Export and your GitHub repository put it in <code>2-Story/Sessions/</code>, and GM-only parts in <code>6-GM-Only/</code>.</p>
+  <p className="aside-hint">Encyclopedia means the session page and the check list. Kinds set to Session file only stay out of both, and players never see them.</p>
+  {file&&latest?<><p className="aside-hint">Your latest session, {latest.title}, as these settings write it:</p><button type="button" className="button" onClick={download}><Download size={14}/> Download session file</button><pre className="session-file-preview" aria-label={`${file.path}, as it would be written`}>{file.text.replace(/^---[\s\S]*?\n---\n+/,'')}</pre></>:<p className="aside-hint">Your latest session’s file shows here once a session has a recap.</p>}
+ </aside>;
 }
 
 /** Try it: a sample written with the style as it stands, before it's saved or used. Nothing is saved. */

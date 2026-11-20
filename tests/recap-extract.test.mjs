@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {demoWorkspace} from '../lib/encyclopedia/world-model.ts';
 import {newQuest} from '../lib/encyclopedia/quests.ts';
 import {draftRecap,findItems} from '../lib/encyclopedia/recaps.ts';
-import {cleanExtract,depthFor,extractKinds,extractNotes,highlightAsks,honourExtract,isOn,offAtFirst,partsOff,turnKind} from '../lib/encyclopedia/recap-extract.ts';
+import {cleanExtract,depthFor,extractKinds,extractNotes,highlightAsks,honourExtract,isOn,offAtFirst,partsOff,turnKind,whereOf,setWhere,inEncyclopedia,inFile,recapIn} from '../lib/encyclopedia/recap-extract.ts';
+import {rpExportFiles,sessionFile} from '../lib/encyclopedia/rp-export.ts';
+import {addFinds} from '../lib/encyclopedia/recaps.ts';
 import {aiWritingSchema,saveExtract} from '../lib/encyclopedia/ai-styles.ts';
 import {checkPrompt,notesPrompt} from '../lib/encyclopedia/recap-prompts.ts';
 import {momentsMarkdown,nextMarkdown,playerRecapTabs} from '../lib/encyclopedia/recap-schema.ts';
@@ -136,4 +138,49 @@ test('items, creatures, relationships and the in-world date wait in the check li
  assert.deepEqual(r.next.entries.find(e=>e.id==='ostra').ties.map(t=>[t.toId,t.typeId,t.note,t.gm]),[['halden','debt','For the ferry.',true]]);
  assert.match(r.message,/Tied Ostra Hale to Brother Halden: Owes a debt to, GM only/);
  r=applyItem(r.next,'s13',by('date').id,NOW);const k=r.next.campaigns.find(x=>x.id===C).calendars[0];assert.deepEqual(k.current,{year:1492,periodId:'alturiak',day:2});assert.ok(k.events.some(e=>e.title==='Session 13'&&e.visibility==='gm'));assert.match(r.message,/Moved .* on to 2 Alturiak/);
+});
+
+test('where each kind goes: the Encyclopedia, the session file, or both',()=>{
+ assert.equal(whereOf(undefined,'timeline'),'both','session page kinds start in both, as the session file always had them');
+ assert.equal(whereOf(undefined,'people'),'enc','pages start in the Encyclopedia only');
+ let x=setWhere({},'moments','file');x=setWhere(x,'people','both');x=setWhere(x,'timeline','both');
+ assert.deepEqual(x.where,{moments:'file',people:'both'},'only what differs is kept');
+ assert.deepEqual(cleanExtract(x),{where:{moments:'file',people:'both'}});
+ assert.equal(cleanExtract(setWhere(x,'moments','both')).where.moments,undefined);
+ assert.ok(aiWritingSchema.safeParse({extract:{where:{quotes:'enc'}}}).success);
+ assert.equal(aiWritingSchema.safeParse({extract:{where:{quotes:'drawer'}}}).success,false);
+ assert.deepEqual([inEncyclopedia(x,'moments'),inFile(x,'moments'),inEncyclopedia(x,'people'),inFile(x,'people')],[false,true,true,true]);
+
+ const ai={title:'Session 13',recap:'We went to the chapel.',timeline:[{title:'Arrival'}],quotes:[{text:'Pay twice.',who:'Tobin'}],gmNotes:'The hag lies.',moments:['Tobin reveals the toll is a debt.'],partyStatus:'At the chapel.',next:['Return the ledger.'],threads:['Who wrote the name?'],...finds,playedOn:'2026-11-12'};
+ const extract={where:{moments:'file',quotes:'enc',places:'file',people:'both'}};
+ const {w,c}=world(extract);
+ const page=draftRecap(w,c,ai,{by:'AI',now:NOW});
+ const state=n=>page.recap.review.find(r=>r.name===n)?.state;
+ assert.equal(state('The Drowned Chapel'),'filed','a place set to Session file never waits in the check list');
+ assert.equal(state('Brother Halden'),'open');
+ assert.equal(state('The Greyfen Herald'),'open');
+ // The page shows what goes to the Encyclopedia; players get the same.
+ const shown=recapIn(page.recap,extract,'enc');
+ assert.deepEqual(shown.moments,[]);assert.equal(shown.quotes.length,1);
+ assert.deepEqual(playerRecapTabs({...page.recap,status:'published',shareMoments:true,shareQuotes:true},s=>s,extract).map(t=>t.title),['Quotes'],'a part only in the session file is not shared');
+ // Brother Halden is added, so he is in the file's finds; the chapel is there as filed.
+ page.recap.review=page.recap.review.map(r=>r.name==='Brother Halden'?{...r,state:'done'}:r);
+ page.overviewVisibility='players';page.recap.status='published';page.recap.shareMoments=true;
+ w.entries.push(page);
+ const files=rpExportFiles(w,C,{includeGm:true,exportedAt:NOW.toISOString()});
+ const pub=files.find(f=>f.path.startsWith('2-Story/Sessions/')&&f.text.includes(`rpg-tools-id: ${page.id}`)),gm=files.find(f=>f.path.startsWith('6-GM-Only/2-Story/Sessions/')&&f.text.includes(`rpg-tools-id: ${page.id}`));
+ assert.ok(pub&&gm);
+ assert.equal(pub.path,'2-Story/Sessions/2026-11-12-Session-13.md');
+ assert.match(pub.text,/## Recap key moments\n\n- Tobin reveals the toll is a debt\./,'shared key moments are player-visible');
+ assert.doesNotMatch(pub.text+gm.text,/Recap quotes|Pay twice/,'quotes set to the Encyclopedia only stay out of the file');
+ assert.match(gm.text,/## Recap next time\n\n### Party status\nAt the chapel\./);
+ assert.match(gm.text,/## Recap finds\n\n- People: Brother Halden - A lantern-keeper\.\n- Places: The Drowned Chapel - Under the marsh\./);
+ assert.doesNotMatch(gm.text,/Greyfen Herald.*\n.*## Recap finds/,'organizations only go to the Encyclopedia');
+ const one=sessionFile(w,C,page.id,{includeGm:true,exportedAt:NOW.toISOString()});
+ assert.equal(one.path,'2026-11-12-Session-13.md');
+ assert.match(one.text,/## Recap key moments[\s\S]*## GM only[\s\S]*### Recap next time[\s\S]*### Recap finds/);
+ assert.doesNotMatch(sessionFile(w,C,page.id,{includeGm:false,exportedAt:NOW.toISOString()}).text,/GM only|The hag lies/);
+ // Check it with AI doesn't add the chapel again while it is filed.
+ const again=addFinds(w,c,page,{found:[{name:'The Drowned Chapel',kind:'place',text:'Again.'}]});
+ assert.deepEqual(again.added,[]);
 });
