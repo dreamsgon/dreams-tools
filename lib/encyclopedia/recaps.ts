@@ -94,6 +94,8 @@ export type AiRecap = {
   found?: { name: string; kind?: string; text: string; playersSee?: boolean }[];
   quests?: { quest: string; log?: string; tick?: string; playersSee?: boolean }[];
   codex?: { page: string; label?: string }[];
+  moments?: string[]; spotlights?: { who: string; text: string }[]; encounters?: { name: string; outcome?: string }[];
+  partyStatus?: string; next?: string[]; threads?: string[];
 };
 
 /**
@@ -108,8 +110,11 @@ export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, op
   const timeline: Beat[] = input.timeline.map(b => ({ id: newId(), title: b.title.trim(), big: !!b.big, steps: (b.steps ?? []).map(s => s.trim()).filter(Boolean) }));
   const quotes: Quote[] = (input.quotes ?? []).map(q => ({ id: newId(), text: q.text.trim(), who: (q.who ?? "").trim(), ...(opts.transcript ? { checked: quoteInTranscript(q.text, opts.transcript) } : {}) }));
   const before = opts.existing?.recap ?? emptyRecap();
+  const lines = (l?: string[]) => (l ?? []).map(x => x.trim()).filter(Boolean);
   const recap: Recap = {
-    ...before, status: "draft", by: opts.by.slice(0, 80), mine: undefined, timeline, quotes, gmNotes: input.gmNotes ?? "", review: [...before.review.filter(r => r.state !== "open"), ...review].slice(-80),
+    ...before, status: "draft", by: opts.by.slice(0, 80), mine: undefined, timeline, quotes, gmNotes: input.gmNotes ?? "",
+    moments: lines(input.moments), spotlights: (input.spotlights ?? []).filter(x => x.who.trim() && x.text.trim()), encounters: (input.encounters ?? []).filter(x => x.name.trim()).map(x => ({ name: x.name.trim(), outcome: (x.outcome ?? "").trim() })),
+    partyStatus: (input.partyStatus ?? "").trim() || undefined, next: lines(input.next), threads: lines(input.threads), review: [...before.review.filter(r => r.state !== "open"), ...review].slice(-80),
     ...(input.source ? { source: input.source.slice(0, 200) } : {}), ...(input.playedOn ? { playedOn: input.playedOn } : {}),
   };
   const body = linkNames(input.recap, entries, c), at = opts.now.toISOString();

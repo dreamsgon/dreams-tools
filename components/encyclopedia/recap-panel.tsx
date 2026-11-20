@@ -88,6 +88,50 @@ export function QuotesTab({entryId,recap,editing,onChange}:{entryId:string;recap
  </div>;
 }
 
+// ---- Key moments and Next time -----------------------------------------------------------------
+
+/** Lines to a list: blank lines and spaces at the ends go. */
+const toLines=(t:string,max:number)=>t.split('\n').map(x=>x.trim().slice(0,300)).filter(Boolean).slice(0,max);
+/** "Name: text" lines to pairs; a line with no colon is all text. */
+const toPairs=(t:string,max:number,left:number)=>toLines(t,max).map(l=>{const i=l.indexOf(':');return i>0&&i<=left?[l.slice(0,i).trim(),l.slice(i+1).trim()]:['',l];});
+/** A textarea kept as typed until it loses focus, then saved as a list. */
+function LinesField({label,hint,value,rows=3,onSave}:{label:string;hint:string;value:string;rows?:number;onSave:(text:string)=>void}){
+ const [text,setText]=useState<string|null>(null);
+ return <label className="recap-lines-field"><span>{label} <small className="muted">{hint}</small></span><textarea className="check-text" rows={rows} value={text??value} onChange={e=>setText(e.target.value)} onBlur={()=>{if(text!==null){onSave(text);setText(null);}}}/></label>;
+}
+
+export function MomentsTab({recap,editing,onChange}:{recap:Recap;editing:boolean;onChange:(p:Partial<Recap>)=>void}){
+ const moments=recap.moments??[],spotlights=recap.spotlights??[],encounters=recap.encounters??[];
+ if(editing)return <div className="recap-lines-editor">
+  <LinesField label="Key moments" hint="one a line" value={moments.join('\n')} onSave={t=>onChange({moments:toLines(t,20)})}/>
+  <LinesField label="Character spotlights" hint="one a line, as Name: what they did" value={spotlights.map(s=>`${s.who}: ${s.text}`).join('\n')} onSave={t=>onChange({spotlights:toPairs(t,12,120).filter(([who,text])=>who&&text).map(([who,text])=>({who,text}))})}/>
+  <LinesField label="Encounters" hint="one a line, as Name: how it went" value={encounters.map(e=>e.outcome?`${e.name}: ${e.outcome}`:e.name).join('\n')} onSave={t=>onChange({encounters:toPairs(t,20,160).map(([a,b])=>a?{name:a,outcome:b}:{name:b,outcome:''})})}/>
+ </div>;
+ const parts=[moments.length>0,spotlights.length>0,encounters.length>0].filter(Boolean).length;
+ if(!parts)return <p className="muted">No key moments yet. Choose Write to add some, or turn Key moments on in What it pulls out.</p>;
+ return <div className="recap-moments">
+  {moments.length>0&&<section>{parts>1&&<h3>Key moments</h3>}<ul>{moments.map((m,i)=><li key={i}>{m}</li>)}</ul></section>}
+  {spotlights.length>0&&<section>{parts>1&&<h3>Character spotlights</h3>}<ul>{spotlights.map((s,i)=><li key={i}><strong>{s.who}:</strong> {s.text}</li>)}</ul></section>}
+  {encounters.length>0&&<section>{parts>1&&<h3>Encounters</h3>}<ul>{encounters.map((e,i)=><li key={i}><strong>{e.name}</strong>{e.outcome&&`: ${e.outcome}`}</li>)}</ul></section>}
+ </div>;
+}
+
+export function NextTab({recap,editing,onChange}:{recap:Recap;editing:boolean;onChange:(p:Partial<Recap>)=>void}){
+ const next=recap.next??[],threads=recap.threads??[],status=recap.partyStatus??'';
+ if(editing)return <div className="recap-lines-editor">
+  <LinesField label="Party status" hint="where they stand at the end" rows={3} value={status} onSave={t=>onChange({partyStatus:t.trim().slice(0,2000)||undefined})}/>
+  <LinesField label="Next steps" hint="one a line" value={next.join('\n')} onSave={t=>onChange({next:toLines(t,12)})}/>
+  <LinesField label="Loose threads" hint="one a line" value={threads.join('\n')} onSave={t=>onChange({threads:toLines(t,20)})}/>
+ </div>;
+ if(!status.trim()&&!next.length&&!threads.length)return <p className="muted">Nothing for next time yet. Choose Write to add the party’s status, next steps and loose threads.</p>;
+ return <div className="recap-moments">
+  <p className="aside-hint"><EyeOff size={13}/> For your prep. Players never see this tab.</p>
+  {status.trim()&&<section><h3>Party status</h3><p>{status}</p></section>}
+  {next.length>0&&<section><h3>Next steps</h3><ul>{next.map((n,i)=><li key={i}>{n}</li>)}</ul></section>}
+  {threads.length>0&&<section><h3>Loose threads</h3><ul>{threads.map((t,i)=><li key={i}>{t}</li>)}</ul></section>}
+ </div>;
+}
+
 // ---- Transcript --------------------------------------------------------------------------------
 
 export function TranscriptTab({entry,editing,update}:{entry:Entry;editing:boolean;update:(p:Partial<Entry>)=>void}){
@@ -170,7 +214,7 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   <div className="check-footer">
    {open.length>1&&<div className="check-actions"><button className="button small" onClick={()=>apply(open.map(r=>r.id))}><Check size={13}/> Add all {open.length}</button><button className="button small" onClick={()=>change(w=>open.reduce((x,r)=>skipItem(x,entry.id,r.id),w))}>Skip the rest</button></div>}
    {share}
-   <p className="aside-hint">{recap.status==='draft'?'Publishing shares the recap text with players. Timeline and quotes go too when you set their tabs to Player visible.':'Players see the recap. Unpublish to hide it again.'}</p>
+   <p className="aside-hint">{recap.status==='draft'?'Publishing shares the recap text with players. Timeline, quotes and key moments go too when you set their tabs to Player visible.':'Players see the recap. Unpublish to hide it again.'}</p>
   </div>
  </div>;
 }

@@ -8,7 +8,7 @@
 import {useState} from 'react';
 import {Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
-import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
+import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,turnKind,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
 import {saveExtract,allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
 import {ToolDialog} from './tool-dialog';
 import {useWriters} from './use-writers';
@@ -125,7 +125,7 @@ function ChatSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next
 function ExtractSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next:AiWriting)=>void}){
  const saved:ExtractSettings=writing?.extract??{},[draft,setDraft]=useState<ExtractSettings>(saved),[error,setError]=useState('');
  const depth=depthFor(draft),dirty=depth!==depthFor(saved)||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k));
- const turn=(k:typeof extractKinds[number],on:boolean)=>setDraft(d=>({...d,off:on?(d.off??[]).filter(x=>x!==k):[...(d.off??[]),k]}));
+ const turn=(k:typeof extractKinds[number],on:boolean)=>setDraft(d=>turnKind(d,k,on));
  const keep=()=>{try{setError('');save(saveExtract(writing,draft));}catch(e){setError(e instanceof Error?e.message:'Could not save that.');}};
  return <div className="writing-body">
   <div className="writing-edit">
