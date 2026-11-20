@@ -63,6 +63,15 @@ export const recapSchema = z.object({
   shareTimeline: z.boolean().optional(),
   shareQuotes: z.boolean().optional(),
   review: z.array(recapItemSchema).max(80),
+  /** Highlights: reveals and turning points, a line on each player character, and how the fights went. Shared with the Key moments tab. */
+  moments: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
+  spotlights: z.array(z.object({ who: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(300) })).max(12).optional(),
+  encounters: z.array(z.object({ name: z.string().trim().min(1).max(160), outcome: z.string().trim().max(300) })).max(20).optional(),
+  shareMoments: z.boolean().optional(),
+  /** For next time, GM only: where the party stands, what they plan, and open questions. */
+  partyStatus: z.string().max(2000).optional(),
+  next: z.array(z.string().trim().min(1).max(300)).max(12).optional(),
+  threads: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
   /** Words in the stored transcript, when there is one. */
   transcriptWords: z.number().int().min(0).max(10_000_000).optional(),
   request: requestSchema.optional(),
@@ -80,6 +89,25 @@ export function timelineMarkdown(beats: Beat[]) {
     ? [`### ${b.title}`, ...b.steps.map(s => `- ${s}`)].join("\n")
     : [`- **${b.title}**`, ...b.steps.map(s => `    - ${s}`)].join("\n")).join("\n\n");
 }
+export const hasMoments = (r: Recap) => !!(r.moments?.length || r.spotlights?.length || r.encounters?.length);
+export const hasNext = (r: Recap) => !!(r.partyStatus?.trim() || r.next?.length || r.threads?.length);
+/** The Key moments tab as Markdown: key moments, character spotlights and encounters, each under a heading when there is more than one. */
+export function momentsMarkdown(r: Recap) {
+  const parts: [string, string[]][] = [
+    ["Key moments", (r.moments ?? []).map(m => `- ${m}`)],
+    ["Character spotlights", (r.spotlights ?? []).map(s => `- **${s.who}:** ${s.text}`)],
+    ["Encounters", (r.encounters ?? []).map(e => `- **${e.name}**${e.outcome ? `: ${e.outcome}` : ""}`)],
+  ].filter((p): p is [string, string[]] => p[1].length > 0);
+  return parts.map(([h, lines]) => parts.length > 1 ? [`### ${h}`, ...lines].join("\n") : lines.join("\n")).join("\n\n");
+}
+/** The Next time tab as Markdown: party status, next steps and loose threads. */
+export function nextMarkdown(r: Recap) {
+  return [
+    ...(r.partyStatus?.trim() ? [`### Party status\n${r.partyStatus.trim()}`] : []),
+    ...(r.next?.length ? [`### Next steps\n${r.next.map(n => `- ${n}`).join("\n")}`] : []),
+    ...(r.threads?.length ? [`### Loose threads\n${r.threads.map(t => `- ${t}`).join("\n")}`] : []),
+  ].join("\n\n");
+}
 export const quotesMarkdown = (quotes: Quote[]) => quotes.map(q => `> “${q.text.replace(/^["“]|["”]$/g, "")}”${q.who ? `\n> — ${q.who}` : ""}`).join("\n\n");
 
 /** The extra tabs players get on a published recap, when the GM shared them. A draft gets none. */
@@ -88,5 +116,6 @@ export function playerRecapTabs(r: Recap | undefined, clean: (s: string) => stri
   return [
     ...(r.shareTimeline && r.timeline.length ? [{ id: "recap-timeline", title: "Timeline", body: clean(timelineMarkdown(r.timeline)) }] : []),
     ...(r.shareQuotes && r.quotes.length ? [{ id: "recap-quotes", title: "Quotes", body: clean(quotesMarkdown(r.quotes)) }] : []),
+    ...(r.shareMoments && hasMoments(r) ? [{ id: "recap-moments", title: "Key moments", body: clean(momentsMarkdown(r)) }] : []),
   ];
 }

@@ -7,7 +7,7 @@
 import { playerText, type Campaign, type Entry, type Workspace } from "./world-model.ts";
 import type { RecapRequest } from "./recap-schema.ts";
 import { requestNotes } from "./recap-request.ts";
-import { extractNotes, type ExtractSettings } from "./recap-extract.ts";
+import { extractNotes, highlightAsks, type ExtractSettings } from "./recap-extract.ts";
 import { questsIn } from "./quests.ts";
 import { builtInStyles, lockedLines, styleLines, type WritingStyle } from "./ai-styles.ts";
 
@@ -54,6 +54,7 @@ export function notesPrompt(h: Head & { quests: string; transcript: string }) {
     !skip.has("found") ? "- codex: codex pages the party found, by title." : "",
     !skip.has("quests") ? "- quests: quests that moved, with a line for the log, and tick for an objective that is now done (copy its text from the list below). An unknown quest becomes a new rumour." : "",
     !skip.has("gmNotes") ? "- gmNotes: for the GM only: hooks, secrets the party got close to, rules calls, things to follow up." : "",
+    ...highlightAsks(h.extract),
   ].filter(Boolean);
   return [
     ...headLines(h),
@@ -121,7 +122,7 @@ export function checkPrompt(h: { campaign: string; title: string; playedOn?: str
 }
 
 /** The notes the first request may send: save_recap's lists, without the page, title or recap. */
-export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes"] as const;
+export const notesKeys = ["timeline", "quotes", "found", "quests", "codex", "gmNotes", "moments", "spotlights", "encounters", "partyStatus", "next", "threads"] as const;
 
 // ---- The story so far ---------------------------------------------------------------------------
 

@@ -91,7 +91,7 @@ test('add_recap_finds is an Assist tool under “Session notes and recaps”',()
  assert.deepEqual(Object.keys(tool.inputSchema.properties),['page','found','quests','codex']);
  assert.equal(toolAction('add_recap_finds'),'notes');
  const save=listTools('assist').find(t=>t.name==='save_recap');
- assert.deepEqual(Object.keys(save.inputSchema.properties).slice(-3),['found','quests','codex'],'save_recap keeps the same lists');
+ assert.deepEqual(Object.keys(save.inputSchema.properties).slice(-9,-6),['found','quests','codex'],'save_recap keeps the same lists');
 });
 
 async function setup(){

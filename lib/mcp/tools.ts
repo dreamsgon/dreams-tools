@@ -102,6 +102,16 @@ const findsSchema = {
       codex: { type: "array", maxItems: 20, description: "Codex entries the party found.", items: { type: "object", properties: { page: str("The codex page's title."), label: str("Where or when, such as the session title.", 80) }, required: ["page"], additionalProperties: false } },
 };
 
+/** save_recap's highlights (a Key moments tab players may see) and For next time (GM only). Each is kept only when the GM has it on in What it pulls out. */
+const highlightsSchema = {
+      moments: { type: "array", maxItems: 20, description: "Key moments: reveals, betrayals, deaths, deals and turning points, one line each.", items: str("A key moment.", 300) },
+      spotlights: { type: "array", maxItems: 12, description: "One line for each player character on what they did best.", items: { type: "object", properties: { who: str("The character's name.", 120), text: str("What they did.", 300) }, required: ["who", "text"], additionalProperties: false } },
+      encounters: { type: "array", maxItems: 20, description: "Fights and tense meetings, and how they went.", items: { type: "object", properties: { name: str("Such as \"The ambush at the ford\".", 160), outcome: str("How it went.", 300) }, required: ["name"], additionalProperties: false } },
+      partyStatus: { type: "string", maxLength: 2000, description: "For the GM: where the party stands at the end of the session." },
+      next: { type: "array", maxItems: 12, description: "For the GM: what the party plans to do next, one line each.", items: str("A next step.", 300) },
+      threads: { type: "array", maxItems: 20, description: "For the GM: loose threads, open questions and hooks nobody followed yet.", items: str("A loose thread.", 300) },
+};
+
 export class ToolError extends Error {}
 const fail = (message: string): never => { throw new ToolError(message); };
 
@@ -636,6 +646,7 @@ const tools: Tool[] = [
       quotes: { type: "array", maxItems: 20, description: "Memorable lines, word for word.", items: { type: "object", properties: { text: str("The words exactly as said.", 500), who: str("Who said it.", 120) }, required: ["text"], additionalProperties: false } },
       gmNotes: { type: "string", maxLength: 20000, description: "For the GM only: hooks, secrets the party got close to, rules calls, things to follow up." },
       ...findsSchema,
+      ...highlightsSchema,
     }, ["title", "recap", "timeline"]),
     write: a => {
       const input = recapInput(a), q = text(a, "page", false);
@@ -946,6 +957,13 @@ const listOf = (a: Record<string, unknown>, key: string, max: number) => {
   return v as Record<string, unknown>[];
 };
 const flagOf = (o: Record<string, unknown>, key: string) => bool(o, key) || undefined;
+/** A list of short lines. */
+const linesOf = (a: Record<string, unknown>, key: string, max: number) => {
+  const v = a[key];
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > max || v.some(x => typeof x !== "string" || x.length > 300)) return fail(`${key} must be a list of up to ${max} lines of up to 300 characters.`);
+  return (v as string[]).map(x => x.trim()).filter(Boolean);
+};
 
 /** Checks the found, quests and codex lists of save_recap and add_recap_finds. */
 function findsInput(a: Record<string, unknown>): AiFinds {
@@ -973,6 +991,9 @@ function recapInput(a: Record<string, unknown>): AiRecap {
     }),
     quotes: listOf(a, "quotes", 20).map(x => ({ text: s(x, "text", 500, true), who: s(x, "who", 120) })),
     ...findsInput(a),
+    moments: linesOf(a, "moments", 20), next: linesOf(a, "next", 12), threads: linesOf(a, "threads", 20), partyStatus: optionalText(a, "partyStatus", 2000),
+    spotlights: listOf(a, "spotlights", 12).map(x => ({ who: s(x, "who", 120, true), text: s(x, "text", 300, true) })),
+    encounters: listOf(a, "encounters", 20).map(x => ({ name: s(x, "name", 160, true), outcome: s(x, "outcome", 300) })),
   };
 }
 

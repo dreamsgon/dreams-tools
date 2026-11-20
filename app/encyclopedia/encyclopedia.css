@@ -1041,6 +1041,8 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .recap-check .handoff-wait{margin-top:12px;font-size:12px}.recap-check>.button{margin-top:12px}.recap-start{margin-top:12px}.folder-contents>.button.recap-start{padding:9px 13px;font-size:12px;margin:0 0 18px}
 @media(max-width:760px){.source-grid,.recap-options{grid-template-columns:1fr}}
 /* Write it again, under a draft recap */
+.recap-moments{display:grid;gap:18px;font:16px/1.65 var(--font-reading,Georgia,serif);color:var(--ink)}.recap-moments h3{font:600 14px/1.4 var(--font-sans);margin:0 0 6px;color:var(--ink)}.recap-moments ul{margin:0;padding-left:22px;display:grid;gap:6px;list-style:disc}.recap-moments li::marker{color:var(--muted,currentColor)}.recap-moments p{margin:0}.recap-moments>.aside-hint{font:13px/1.5 var(--font-sans);display:flex;gap:6px;align-items:center}
+.recap-lines-editor{display:grid;gap:16px;max-width:720px}.recap-lines-field{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink)}.recap-lines-field small{font-weight:400}.recap-lines-field textarea.check-text{margin:0}
 .write-again{display:grid;gap:12px;margin:28px 0 0;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);max-width:620px}
 .write-again-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.write-again-head strong{display:flex;align-items:center;gap:7px;font-size:14px}
 .write-again-head .icon-button{width:36px;height:36px;align-items:center;justify-content:center}

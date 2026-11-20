@@ -4,7 +4,7 @@
  */
 import { levelNames, permsFor, type McpContext } from "./tools.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
-import { extractNotes } from "../encyclopedia/recap-extract.ts";
+import { extractNotes, highlightAsks } from "../encyclopedia/recap-extract.ts";
 import { styleFor, styleLines } from "../encyclopedia/ai-styles.ts";
 
 type Arg = { name: string; description: string; required?: boolean };
@@ -67,6 +67,7 @@ const prompts: Prompt[] = [
           : `2. Read it with read_transcript${a.page ? ` (page "${a.page}")` : ""}, part 1, then part 2 and on. If I pasted it in the chat, use that instead.`,
         "3. After each part, keep only short notes: the beats (a title and a few steps each, marking the big turns), lines worth quoting word for word with who said them, and the names of people, places, factions, quests and finds that matter. Don't look names up page by page: list_names already has them.",
         `4. From your notes only, write: a recap for the players in the style below ([[Name]] around names), the timeline, up to 10 quotes exactly as said, what's new or changed (\`found\`, a sentence or two each), quests that moved (a log line, and an objective to tick if one is done), codex finds, and GM notes (hooks, secrets the party got close to, rules calls).`,
+        ...(highlightAsks(c.campaign.aiWriting?.extract).length ? ["   Also, from your notes:", ...highlightAsks(c.campaign.aiWriting?.extract).map(x => `   ${x}`)] : []),
         "5. Leave out of the recap anything players didn't see or learn: GM asides, ':::secret' material, and table talk. That can go in the GM notes.",
         `How to write the recap ("${style.name}"): ${styleLines(style, "recap", asked?.length).join(" ")}`,
         ...(asked ? ["What I asked for in RPG Tools:", ...requestNotes(asked).filter(x => !x.startsWith("Recap length")).map(x => `- ${x}`)] : []),
