@@ -153,7 +153,7 @@ const colorName = (c: TagColor) => (TAG_COLOR_NAMES as Record<string, string>)[c
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const MANAGER_TEXT: Record<TagScope, { title: string; intro: string; empty: string; foot: string }> = {
-  encyclopedia: { title: "Encyclopedia tags", intro: "Your own labels for pages and characters.", empty: "No tags yet. Add one here, or with “+ Tag” on any page.", foot: "Deleting a tag removes it from every page but never deletes the pages." },
+  encyclopedia: { title: "Wiki tags", intro: "Your own labels for pages and characters.", empty: "No tags yet. Add one here, or with “+ Tag” on any page.", foot: "Deleting a tag removes it from every page but never deletes the pages." },
   campaigns: { title: "Campaign tags", intro: "Your own labels for campaigns.", empty: "No tags yet. Add one here, or with “+ Tag” on any campaign.", foot: "Deleting a tag removes it from every campaign but never deletes the campaigns." },
   maptable: { title: "Maptable tags", intro: "Your own labels for scenes.", empty: "No tags yet. Add one here, or with “+ Tag” in a scene's settings.", foot: "Deleting a tag removes it from every scene but never deletes the scenes." },
 };

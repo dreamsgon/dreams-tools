@@ -283,7 +283,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
           {menu === "export" && <div className="ai-chat-menu ai-chat-export" role="menu" aria-label="Export this chat">
             <button role="menuitem" onClick={() => void exportChat("markdown")}><Download size={15}/><span><strong>Download as Markdown</strong><small>A .md file you can keep, print or paste anywhere.</small></span></button>
             <button role="menuitem" onClick={() => void exportChat("copy")}><Copy size={15}/><span><strong>Copy as text</strong><small>The whole chat, ready to paste.</small></span></button>
-            <button role="menuitem" onClick={() => void exportChat("session")}><BookOpen size={15}/><span><strong>Save as a session page</strong><small>A new Session page in the Encyclopedia, kept as a GM secret until you share it.</small></span></button>
+            <button role="menuitem" onClick={() => void exportChat("session")}><BookOpen size={15}/><span><strong>Save as a session page</strong><small>A new Session page in the Wiki, kept as a GM secret until you share it.</small></span></button>
             <button role="menuitem" onClick={() => void exportChat("discord")}><Send size={15}/><span><strong>Post to Discord as a recap</strong><small>Pick what to post and check it first. Goes to your recaps channel.</small></span></button>
           </div>}
         </div>
@@ -315,7 +315,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       </li>)}</ol> : <p className="ai-panel-empty">Nothing yet. When a connected AI rolls dice or changes a page, it shows up here with an Undo button.</p>}
       <div className="ai-panel-foot">
         <button className="button small" disabled={!!busy} onClick={() => void act(state.paused ? "resume" : "pause")}>{state.paused ? <><Play size={14}/> Resume the AI</> : <><Pause size={14}/> Pause the AI</>}</button>
-        {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Encyclopedia, under Connect an AI)</small></a>}
+        {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Wiki, under Connect an AI)</small></a>}
         <p>{state.paused ? "The AI can still read, but every change is refused until you resume." : "While paused, the AI can still read but every change is refused until you resume."}</p>
       </div>
       </>}

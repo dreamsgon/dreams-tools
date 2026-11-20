@@ -50,7 +50,7 @@ export function InsertMenu({ frame, k, insert, wrap, style, disabled, as, html }
       {frame.you.rights.gm && frame.you.rights.pictures && item(<MapIcon size={16} />, 'Map from Maptable', 'A picture of a scene as players see it, without GM-only tokens', () => setOpen('map'))}
       {as && item(<Gem size={16} />, 'Feature or spell', 'From your character’s sheet. Readers who may see it get its text on hover', () => setOpen('feature'))}
       {item(<Dices size={16} />, 'Roll', 'Rolled by the forum when you post, so nobody can change it', done(() => wrap('[roll=Attack]', '[/roll]', '1d20+5')))}
-      {item(<Link2 size={16} />, 'Encyclopedia page', 'A link that opens the page for readers who may read it. Or type [[ ]]', done(() => wrap('[[', ']]', 'Page name')))}
+      {item(<Link2 size={16} />, 'Wiki page', 'A link that opens the page for readers who may read it. Or type [[ ]]', done(() => wrap('[[', ']]', 'Page name')))}
       {html && item(<Code2 size={16} />, 'HTML', 'Your own layout: tags and styles. Scripts and outside pictures are taken out', done(() => wrap('[dohtml]\n<div style="padding: 14px 18px; border: 1px solid #b8891c; background: #fbf3dc; color: #2b261d; font-family: Georgia, serif">\n', '\n</div>\n[/dohtml]', 'Your text')))}
       {frame.you.styles.length > 0 && item(<Brush size={16} />, 'My post styles', 'Wraps what you’ve written in one of your saved layouts', () => setOpen('styles'))}
       {item(<PanelTopClose size={16} />, 'Collapsible text', 'A title that opens to show more: handouts, long notes', done(() => wrap('[collapse=Read more]\n', '\n[/collapse]', 'Text readers open when they want it')))}
@@ -153,7 +153,7 @@ function FeaturePicker({ k, as, onPick, onBack }: { k: string; as: string; onPic
     <b className="pop-title">{sheet ? `From ${sheet.name}’s sheet` : 'From your character’s sheet'}</b>
     {sheet && sheet.features.length + sheet.spells.length > 8 && <label className="pop-search"><Search size={13} aria-hidden="true" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Find one" aria-label="Find a feature or spell" /></label>}
     {!sheet && !error ? <small className="muted">Reading the sheet…</small>
-      : sheet && !sheet.features.length && !sheet.spells.length ? <small className="muted">{sheet.name} has no features or spells you can see. Add them on the character’s Features and Spells tabs in the Encyclopedia.</small>
+      : sheet && !sheet.features.length && !sheet.spells.length ? <small className="muted">{sheet.name} has no features or spells you can see. Add them on the character’s Features and Spells tabs in the Wiki.</small>
       : sheet && <>{part('feature', 'Features', sheet.features)}{part('spell', 'Spells', sheet.spells)}</>}
     {error && <small className="form-error" role="alert">{error}</small>}
     <span className="pop-foot"><button type="button" className="f-btn ghost small" onClick={onBack}>Back</button></span>

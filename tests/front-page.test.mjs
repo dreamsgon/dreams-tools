@@ -192,7 +192,7 @@ test('saveFrontPage validates, refuses Maptable-only campaigns and saves valid p
   await assert.rejects(()=>saveFrontPage(s,'e:e1',{widgets:[{id:'a',type:'links',links:[{label:'x',url:'javascript:alert(1)'}]}]}),/http:\/\/ or https:\/\//);
   await assert.rejects(()=>saveFrontPage(s,'e:e1',{widgets:[{id:'a',type:'party'},{id:'a',type:'party'}]}),/unique/);
   await assert.rejects(()=>saveFrontPage(s,'e:e1','nonsense'),/./);
-  await assert.rejects(()=>saveFrontPage(s,'m:m1',{widgets:[]}),/Start Encyclopedia notes/);
+  await assert.rejects(()=>saveFrontPage(s,'m:m1',{widgets:[]}),/Start a Wiki/);
   assert.equal((await s.book.read('owner-1')).data.campaigns[0].frontPage,undefined,'nothing saved on failure');
   const page={widgets:[{id:'t',type:'text',title:'Rules',body:'Be kind'}]};
   const hub=await saveFrontPage(s,'e:e1',page);

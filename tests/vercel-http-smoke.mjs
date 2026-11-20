@@ -23,7 +23,7 @@ try{
   assert.ok(ready,output);
   const html=await (await fetch(base+'/account')).text();assert.match(html,/Register/);assert.match(html,/Forgot password/);assert.doesNotMatch(html,/Continue with ChatGPT/);
   const map=await fetch(base+'/maptable',{redirect:'manual'});assert.equal(map.status,307);assert.match(map.headers.get('location'),/\/account$/);
-  const home=await (await fetch(base+'/')).text();assert.match(home,/RPG Encyclopedia/);assert.match(home,/href="\/maptable"/);assert.match(home,/href="\/encyclopedia"/);assert.match(home,/href="\/campaigns"/);
+  const home=await (await fetch(base+'/')).text();assert.match(home,/>Wiki</);assert.match(home,/href="\/maptable"/);assert.match(home,/href="\/encyclopedia"/);assert.match(home,/href="\/campaigns"/);
   assert.match(await (await fetch(base+'/campaigns')).text(),/Sign in to see your campaigns/);
   const encyclopedia=await fetch(base+'/encyclopedia',{redirect:'manual'});assert.equal(encyclopedia.status,307);assert.match(encyclopedia.headers.get('location'),/\/account$/);
   assert.equal((await fetch(base+'/encyclopedia/player')).status,200);

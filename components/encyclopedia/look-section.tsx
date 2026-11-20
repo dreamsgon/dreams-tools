@@ -35,7 +35,7 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
    <h1>Look</h1>
    <p className="muted">How {campaign.name} looks for you and your players. Light or dark still follows each person’s own setting.</p>
    <div className="look-group look-theme"><h2>Campaign theme</h2>
-    <p className="muted small">A theme dresses the whole campaign at once: the Encyclopedia, Maptable, the campaign’s dashboard and its forum, with colours, fonts and a stylesheet for each part. While a theme is live, it takes the place of the look below.</p>
+    <p className="muted small">A theme dresses the whole campaign at once: the Wiki, Maptable, the campaign’s dashboard and its forum, with colours, fonts and a stylesheet for each part. While a theme is live, it takes the place of the look below.</p>
     <div className="button-row"><button className="button small" onClick={openThemeEditor}><Palette size={14}/> Open the Admin CP</button></div>
    </div>
    <div className="look-group"><h2>Banner</h2>
@@ -63,7 +63,7 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
     <div className="look-surfaces" role="radiogroup" aria-label="Page surface">{surfaces.map(s=><button key={s} role="radio" aria-checked={(look.surface??'plain')===s} className={(look.surface??'plain')===s?'on':''} onClick={()=>set({surface:s==='plain'?undefined:s})}><span className={`look-surface-chip ${s}`} data-look-surface={s==='plain'?undefined:s} aria-hidden="true"/><small>{surfaceNames[s]}</small></button>)}</div>
    </div>
    <div className="look-group"><h2>Use this look on</h2>
-    <label className="look-toggle"><input type="checkbox" checked disabled/> Encyclopedia pages in this campaign</label>
+    <label className="look-toggle"><input type="checkbox" checked disabled/> Wiki pages in this campaign</label>
     <label className="look-toggle"><input type="checkbox" checked={look.players!==false} onChange={e=>set({players:e.target.checked?undefined:false})}/> Player site and shared links</label>
    </div>
   </div>
@@ -73,7 +73,7 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
     <LookBanner look={look} className="look-preview-banner"><span>{campaign.name}</span></LookBanner>
     {!look.banner&&<div className="look-preview-plain"><span>{campaign.name}</span></div>}
     <div className="look-preview-body">
-     <nav>{[[House,'Campaign home'],[Goal,'Quests'],[Library,'Codex'],[Users,'Characters'],[MapIcon,'Maps']].map(([Icon,label],i)=>{const I=Icon as typeof House;return <span key={label as string} className={i===1?'on':''}><I size={14}/> {label as string}</span>;})}</nav>
+     <nav>{[[House,'Campaign home'],[Goal,'Quests'],[Library,'Codex'],[Users,'Characters'],[MapIcon,'World maps']].map(([Icon,label],i)=>{const I=Icon as typeof House;return <span key={label as string} className={i===1?'on':''}><I size={14}/> {label as string}</span>;})}</nav>
      <div><h3>The Ashen Vow</h3><div className="look-preview-chips"><span className="quest-type main">Main quest</span><span className="quest-type">Active</span></div>
       <p>The party owes <a>the Order of the Lamp</a> a favour, and the order has come to collect. A letter sealed in black wax waits at <a>Millhaven</a>.</p>
       <div className="button-row"><span className="button primary small"><Plus size={13}/> Add to the log</span><span className="button small">Show on map</span></div></div>

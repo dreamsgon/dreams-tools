@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { campaignTableScene, maptableSearch, readMaptablePlace } from "../lib/maptable-place.ts";
+import { campaignTableScene, rememberedCampaignScene, maptableSearch, readMaptablePlace } from "../lib/maptable-place.ts";
 import { hubLinks } from "../lib/campaign-hub-links.ts";
 import { parsePlayerHash, playerHash } from "../lib/encyclopedia/player-place.ts";
 
@@ -41,6 +41,9 @@ test("Open in Maptable lands on that campaign's own scene, never another campaig
   assert.equal(campaignTableScene(w, "B", "a1"), "b-act", "the open scene is in another campaign: B's first scene (folders first)");
   assert.equal(campaignTableScene(w, "B", "b-loose"), "b-loose", "the scene already open in B stays open");
   assert.equal(campaignTableScene(w, "B", null), "b-act");
+  assert.equal(rememberedCampaignScene(w, "B", "b-loose"), "b-loose", "the scene last open in B");
+  assert.equal(rememberedCampaignScene(w, "B", "a1"), null, "a scene of another campaign is not B's");
+  assert.equal(rememberedCampaignScene(w, "B", null), null, "nothing remembered: the scene list opens, not the first scene");
   assert.equal(campaignTableScene(w, "C", "a1"), null, "no scenes: the caller opens C's own scene page");
 });
 

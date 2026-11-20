@@ -1,6 +1,6 @@
 # World maps
 
-World maps live in the **Encyclopedia** (a map page in a campaign or a world's shared lore). They can be painted by hand, generated, drawn from a sketch, zoomed into closer maps, used for hex crawls, and sent to Maptable.
+World maps live in the **Wiki** (a map page in a campaign or a world's shared lore). They can be painted by hand, generated, drawn from a sketch, zoomed into closer maps, used for hex crawls, and sent to Maptable.
 
 ## The map editor
 
@@ -92,7 +92,7 @@ Under **Built-in checks** in the Generate dialog, choose up to 8 campaign pages 
 On a [planet page](Star-Systems-and-Space) from the star system generator, **Develop as world map** makes a world map page under the planet, with settings taken from the survey (temperature, water, air, gravity, day locked to its star, life, size, hazards and how settled it is). Gas and ice giants are skipped; chart a moon instead.
 
 > **Tutorial: from a sketch to a hex crawl**
-> 1. Create a map page in the Encyclopedia and press **Open map editor**.
+> 1. Create a map page in the Wiki and press **Open map editor**.
 > 2. **Generate › From a picture**, try the sample sketch, set *Kingdom* and press Use this map.
 > 3. Press **Z** (Zoom in), frame the coast and choose **Hex area map**.
 > 4. In the new map, select a hex, add a note and an encounter table, put the party on it and select a far hex to see travel time. Press **Move party here**.

@@ -2,26 +2,25 @@ import Link from "next/link";
 import AppearanceMenu from "./appearance-menu";
 import NotificationBell from "./notification-bell";
 import { avatarSrc } from "@/lib/avatar";
+import "./site-header.css";
 
-/** On a campaign's page, `maptableHref`, `encyclopediaHref` and `forumHref` open that campaign in each tool instead of the last place you were (Forum: a list of your forums). */
-export default function SiteHeader({ account = false, signedIn = false, active, me, maptableHref = "/maptable", encyclopediaHref = "/encyclopedia", forumHref = "/forum" }: { account?: boolean; signedIn?: boolean; active?: "campaigns" | "guide"; me?: { name: string; avatar: string }; maptableHref?: string; encyclopediaHref?: string; forumHref?: string }) {
+/** The slim header outside a campaign (Home, Campaigns, Guide, Account): the mark and the links on the left, so the mark never moves between pages, and the bell and account on the right. A forum only exists inside a campaign, so it has no link here. */
+export default function SiteHeader({ account = false, signedIn = false, active, me, maptableHref = "/maptable", encyclopediaHref = "/encyclopedia" }: { account?: boolean; signedIn?: boolean; active?: "campaigns" | "guide"; me?: { name: string; avatar: string }; maptableHref?: string; encyclopediaHref?: string }) {
   return <header className="site-header">
     <Link href="/" className="brand" aria-label="RPG Tools home"><span className="tool-switch-mark" aria-hidden="true" /><span className="brand-name">RPG Tools</span></Link>
-    <nav aria-label="Main navigation">
+    <nav className="site-links" aria-label="Main navigation">
+      <Link href="/campaigns" className="site-nav-link" aria-current={active === "campaigns" ? "page" : undefined}>Campaigns</Link>
+      <a href={maptableHref} className="site-nav-link">Maptable</a>
+      <a href={encyclopediaHref} className="site-nav-link">Wiki</a>
+      <a href="/guide" className="site-nav-link" aria-current={active === "guide" ? "page" : undefined}>Guide</a>
+    </nav>
+    <div className="site-end">
       <AppearanceMenu />
-      <div className="site-links">
-        <Link href="/campaigns" className="site-nav-link" aria-current={active === "campaigns" ? "page" : undefined}>Campaigns</Link>
-        <a href={maptableHref} className="site-nav-link">Maptable</a>
-        <a href={encyclopediaHref} className="site-nav-link">Encyclopedia</a>
-        <a href={forumHref} className="site-nav-link">Forum</a>
-        <a href="/guide" className="site-nav-link" aria-current={active === "guide" ? "page" : undefined}>Guide</a>
-
-      </div>
       {signedIn && <NotificationBell />}
       <a href="/account" className={me ? "site-nav-link site-me" : "site-nav-link"} title={me ? "Account settings" : undefined}>
         {me ? <><span className="account-avatar account-avatar-s" aria-hidden="true">{me.avatar ? <img alt="" src={avatarSrc(me.avatar)} /> : (Array.from(me.name.trim())[0] ?? "?").toUpperCase()}</span><span className="site-me-name">{me.name}</span><span className="sr-only"> account</span></>
           : account || signedIn ? "Account" : <>Sign in<span className="site-account-long"> / Register</span></>}
       </a>
-    </nav>
+    </div>
   </header>;
 }

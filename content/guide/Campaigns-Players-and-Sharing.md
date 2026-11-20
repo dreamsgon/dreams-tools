@@ -11,13 +11,13 @@
 
 ## Campaign looks
 
-Each campaign can have its own look: a **banner** (choose which part stays in view), an **accent colour**, a **heading font** (Cinzel, Spectral, Schibsted Grotesk, Marcellus, Cormorant Garamond or Space Grotesk) and a **page surface** (plain, parchment, stone, night). Each has light and dark versions. The look applies to the campaign's Encyclopedia pages and, unless you turn it off, to the player site.
+Each campaign can have its own look: a **banner** (choose which part stays in view), an **accent colour**, a **heading font** (Cinzel, Spectral, Schibsted Grotesk, Marcellus, Cormorant Garamond or Space Grotesk) and a **page surface** (plain, parchment, stone, night). Each has light and dark versions. The look applies to the campaign's Wiki pages and, unless you turn it off, to the player site.
 
 ## Sharing with players
 
 ### Player links
 
-In the Encyclopedia's Connections, create a **player link**. Anyone holding it reads only material you shared; private notes, GM secrets and unrevealed map areas are filtered out on the server. **Replace or revoke** the link to stop access. Picture links already issued can work for up to five more minutes, and downloaded copies can't be recalled.
+In the Wiki's Connections, create a **player link**. Anyone holding it reads only material you shared; private notes, GM secrets and unrevealed map areas are filtered out on the server. **Replace or revoke** the link to stop access. Picture links already issued can work for up to five more minutes, and downloaded copies can't be recalled.
 
 ### Who sees what
 
@@ -46,7 +46,7 @@ For real accounts rather than a shared link, use the **Members** tab on the camp
 What members get:
 
 - **Players** open **Open player pages** from *Campaigns you're in* and see the front page and shared pages signed in, without the secret link. A page's **Who can edit** (set by the GM on the page) lets a member edit that page, add sub-pages, and so on from their player site.
-- **Co-GMs** open the campaign from *Campaigns you're in*. Read only by default, with GM notes and secrets if their group allows. Permissions can add **Edit Encyclopedia pages** and **Edit maps and run the table** (these also need *See GM-only pages*). Co-GMs can add pictures, stored in the GM's storage.
+- **Co-GMs** open the campaign from *Campaigns you're in*. Read only by default, with GM notes and secrets if their group allows. Permissions can add **Edit Wiki pages** and **Edit maps and run the table** (these also need *See GM-only pages*). Co-GMs can add pictures, stored in the GM's storage.
 - You hear about joins and leaves through the notification bell and, if set, Discord.
 
 > **Tutorial: let a friend play**

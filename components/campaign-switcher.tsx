@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Check, ChevronDown, ChevronRight, Folder, Globe, LayoutGrid, Plus, Search, Star } from "lucide-react";
 import type { CampaignRow, CampaignSummary } from "@/lib/campaign-links";
-import { folderChain, hasHalf, hubHref, isSwitcherShortcut, moveIndex, navigable, openedFromHome, pinsFromHome, rowDetail, switcherItems, type SwitcherTool } from "@/lib/campaign-switcher";
+import { folderChain, isSwitcherShortcut, moveIndex, navigable, openedFromHome, pinsFromHome, switcherItems, type SwitcherItem } from "@/lib/campaign-switcher";
+import { hasTool, landingHref, landingNote, memberCampaign, ownCampaign, toolMarks, type BarCampaign, type CampaignTool, type JoinedCampaign, type ToolLink } from "@/lib/campaign-nav";
 import "./campaign-switcher.css";
 
 /** Ctrl/Cmd+Shift+O opens the switcher anywhere in a tool. The tool decides what "open" needs (a visible sidebar, no dialog on top). */
@@ -17,15 +18,18 @@ export function useCampaignSwitcherShortcut(onOpen: () => void) {
 }
 
 type Props = {
-  tool: SwitcherTool;
-  /** The current campaign (or, in the Encyclopedia with none open, the world) and the small line under it. */
+  /** The place you are in. Picking a campaign opens the same place in it (lib/campaign-nav.ts landingHref). */
+  tool: CampaignTool;
+  /** The current campaign and the small line under it. */
   title: string;
   subtitle?: string;
-  /** Which row is the open campaign. It gets the check. */
-  isCurrent: (row: CampaignRow) => boolean;
-  /** A campaign with something to open in this tool was picked: switch to it in place. */
-  onPick: (row: CampaignRow) => void;
-  /** The Encyclopedia's Worlds button. Left out in Maptable. */
+  /** Which campaign is open. It gets the check. */
+  isCurrent: (campaign: BarCampaign) => boolean;
+  /** A campaign of yours that has this place was picked: a tool that can switch in place does so. Left out, the page loads. */
+  onPick?: (row: CampaignRow) => void;
+  /** The current campaign's places, shown at the top of the popover on a phone, where the bar has no room for them. */
+  places?: ToolLink[];
+  /** The Wiki's Worlds button. Left out elsewhere. */
   onWorlds?: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,12 +42,13 @@ type Props = {
 
 const unmodified = (e: ReactMouseEvent) => e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
 
-export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onPick, onWorlds, open, onOpenChange, beforeLeave, variant = "side", className = "" }: Props) {
+export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onPick, places, onWorlds, open, onOpenChange, beforeLeave, variant = "side", className = "" }: Props) {
   const id = useId(), listId = `${id}-list`;
   const wrap = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLInputElement>(null), seeded = useRef(false);
   const current = useRef(isCurrent);
   useEffect(() => { current.current = isCurrent; });
   const [summary, setSummary] = useState<CampaignSummary | null>(null), [pins, setPins] = useState<string[] | null>(null), [opened, setOpened] = useState<Record<string, string> | undefined>(), [failed, setFailed] = useState(false);
+  const [joined, setJoined] = useState<JoinedCampaign[] | null>(null);
   const [query, setQuery] = useState(""), [activeId, setActiveId] = useState<string | null>(null), [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [mac, setMac] = useState(false), [tries, setTries] = useState(0);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- read after mount so the server and first client render agree
@@ -64,13 +69,17 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
     fetch("/api/home?layout=1", { cache: "no-store", signal: ctl.signal })
       .then(r => r.ok ? r.json() : null).catch(() => null)
       .then(body => { if (!ctl.signal.aborted) { setPins(pinsFromHome(body)); setOpened(openedFromHome(body)); } });
+    // Campaigns other people run that you joined. Failing just leaves them out.
+    fetch("/api/members?mine=1", { cache: "no-store", signal: ctl.signal })
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+      .then(body => { if (!ctl.signal.aborted) setJoined(Array.isArray(body?.campaigns) ? body.campaigns : null); });
     return () => ctl.abort();
   }, [open, tries]);
   // The folder holding the open campaign starts expanded; the rest start closed.
   useEffect(() => {
     if (!open || !summary || seeded.current) return;
     seeded.current = true;
-    const here = summary.rows.find(r => current.current(r));
+    const here = summary.rows.find(r => current.current(ownCampaign(r)));
     setExpanded(new Set(folderChain(summary.folders, here?.folderId ?? null)));
   }, [open, summary]);
   useEffect(() => { if (open) input.current?.focus({ preventScroll: true }); }, [open]);
@@ -82,7 +91,7 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
     return () => document.removeEventListener("pointerdown", down, true);
   }, [open, onOpenChange]);
 
-  const items = useMemo(() => summary ? switcherItems(summary, { query, pins, opened, expanded }) : [], [summary, query, pins, opened, expanded]);
+  const items = useMemo(() => summary ? switcherItems(summary, { query, pins, opened, expanded, joined }) : [], [summary, query, pins, opened, expanded, joined]);
   const nav = useMemo(() => navigable(items), [items]);
   const found = nav.findIndex(i => items[i].id === activeId);
   // With a search typed, Enter picks the first match until the arrows say otherwise.
@@ -95,11 +104,16 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
     window.location.assign(href);
   }
   const toggleFolder = (folderId: string) => setExpanded(old => { const next = new Set(old); if (next.has(folderId)) next.delete(folderId); else next.add(folderId); return next; });
-  function pick(row: CampaignRow) {
-    close(hasHalf(tool, row) && isCurrent(row));
-    if (hasHalf(tool, row)) { if (!isCurrent(row)) onPick(row); }
-    else void leave(hubHref(row));
+  /** The same place in the picked campaign: in place when this tool can switch there, else a page load (its Dashboard when it lacks this place). */
+  function pick(campaign: BarCampaign) {
+    const here = isCurrent(campaign);
+    close(here);
+    if (here) return;
+    if (onPick && campaign.kind === "own" && hasTool(campaign, tool)) { onPick(campaign.row); return; }
+    const href = landingHref(campaign, tool);
+    if (href) void leave(href);
   }
+  const itemCampaign = (item: SwitcherItem) => item.type === "row" ? ownCampaign(item.row) : item.type === "member" ? memberCampaign(item.joined) : null;
   function key(e: ReactKeyboardEvent) {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); return; }
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key) && nav.length) {
@@ -109,7 +123,7 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
       setActiveId(items[nav[moveIndex(at, e.key, nav.length)]].id);
     } else if (e.key === "Enter" && activeItem && activeItem.type !== "heading") {
       e.preventDefault();
-      if (activeItem.type === "folder") toggleFolder(activeItem.folder.id); else pick(activeItem.row);
+      if (activeItem.type === "folder") toggleFolder(activeItem.folder.id); else { const c = itemCampaign(activeItem); if (c) pick(c); }
     } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && activeItem?.type === "folder" && !query.trim() && !input.current?.value) {
       if (activeItem.open === (e.key === "ArrowLeft")) { e.preventDefault(); toggleFolder(activeItem.folder.id); }
     }
@@ -127,6 +141,11 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
       <ChevronDown className="csw-chev" size={15} aria-hidden="true" />
     </button>
     {open && <div id={`${id}-pop`} className="csw-pop" role="dialog" aria-label="Switch campaign">
+      {!!places?.length && <nav className="csw-places" aria-label={`Places in ${title}`}>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        {places.map(p => p.href ? <a key={p.tool} href={p.href} aria-current={p.tool === tool ? "page" : undefined} onClick={footLink(p.href)}>{p.name}</a>
+          : p.add ? <a key={p.tool} href={p.add} className="csw-place-add" onClick={footLink(p.add)}>+ {p.name}</a> : null)}
+      </nav>}
       <label className="csw-search">
         <Search size={15} aria-hidden="true" />
         <input ref={input} type="text" role="combobox" aria-label="Find a campaign" aria-autocomplete="list" aria-expanded="true" aria-controls={listId}
@@ -140,23 +159,27 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
         {summary && !items.some(i => i.type !== "heading") && <p className="csw-note">{query.trim() ? `No campaign matches “${query.trim()}”.` : "No campaigns yet."}</p>}
         {items.map(item => {
           if (item.type === "heading") return <div key={item.id} className="csw-head" role="presentation">{item.icon === "star" ? <Star aria-hidden="true" /> : item.icon === "folder" ? <Folder aria-hidden="true" /> : null}{item.label}</div>;
-          const kb = activeItem?.id === item.id, indent = { paddingLeft: 8 + item.depth * 14 };
+          const kb = activeItem?.id === item.id, indent = { paddingLeft: 8 + (item.type === "member" ? 0 : item.depth) * 14 };
           if (item.type === "folder") return <button key={item.id} id={optionId(item.id)} type="button" role="option" aria-selected={kb} tabIndex={-1} aria-label={`${item.folder.name} folder, ${item.count === 1 ? "1 campaign" : `${item.count} campaigns`}, ${item.open ? "open" : "closed"}`}
             className={`csw-fold${kb ? " kb" : ""}`} style={indent} onClick={() => toggleFolder(item.folder.id)}>
             <ChevronRight className="csw-fold-chev" size={14} aria-hidden="true" /><Folder size={14} aria-hidden="true" /><span className="csw-fold-name">{item.folder.name}</span><span className="csw-count">{item.count}</span>
           </button>;
-          const here = isCurrent(item.row), dim = tool === "maptable" && !hasHalf(tool, item.row);
+          const campaign = itemCampaign(item)!, here = isCurrent(campaign), dim = tool !== "dashboard" && !hasTool(campaign, tool);
+          const marks = toolMarks(campaign), note = landingNote(campaign, tool), pinned = item.type === "row" && item.pinned;
           return <button key={item.id} id={optionId(item.id)} type="button" role="option" aria-selected={kb} tabIndex={-1} aria-current={here ? "true" : undefined}
-            className={`csw-row${here ? " cur" : ""}${kb ? " kb" : ""}${dim ? " nohalf" : ""}`} style={indent} onClick={() => pick(item.row)}>
+            className={`csw-row${here ? " cur" : ""}${kb ? " kb" : ""}${dim ? " nohalf" : ""}`} style={item.type === "row" ? indent : undefined} onClick={() => pick(campaign)}>
             <span className="csw-mini" aria-hidden="true" />
-            <span className="csw-text"><strong>{item.row.name}</strong><small>{rowDetail(tool, item.row)}</small></span>
-            {item.pinned && <span className="csw-star" title="Pinned"><Star aria-label="Pinned" /></span>}
+            <span className="csw-text"><strong>{campaign.name}</strong>{note && <small>{note}</small>}</span>
+            <span className="csw-marks" aria-label={`Has ${marks.filter(m => m.on).map(m => m.name).join(", ") || "nothing open yet"}`}>
+              {marks.map(m => <span key={m.tool} className={m.on ? "on" : ""} title={`${m.name}${m.on ? "" : ": not yet"}`} aria-hidden="true">{m.name[0]}</span>)}
+            </span>
+            {pinned && <span className="csw-star" title="Pinned"><Star aria-label="Pinned" /></span>}
             {here && <span className="csw-check"><Check size={15} aria-label="Current campaign" /></span>}
           </button>;
         })}
       </div>
       <div className="csw-foot">
-        {/* Full-page links, as between the tools: Maptable and the Encyclopedia have separate layouts. */}
+        {/* Full-page links, as between the tools: Maptable and the Wiki have separate layouts. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/campaigns" onClick={footLink("/campaigns")}><LayoutGrid size={14} aria-hidden="true" />All campaigns</a>
         {onWorlds && <button type="button" onClick={() => { close(); onWorlds(); }}><Globe size={14} aria-hidden="true" />Worlds</button>}

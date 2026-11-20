@@ -1,7 +1,7 @@
 "use client";
 /*
  * The Tables and Oracle tabs of the Maptable dice tray: the random tables this campaign uses (from the
- * GM's Encyclopedia library, starred first) and its yes or no oracle with odds and tension.
+ * GM's Wiki library, starred first) and its yes or no oracle with odds and tension.
  */
 import { useEffect, useState } from "react";
 import { Dices, RotateCcw, Search, Star } from "lucide-react";
@@ -16,7 +16,7 @@ type Shown = { title: string; roll: string; text: string; steps: string[]; twist
 const autoKey = "maptable-discord-always";
 const always = () => { try { return localStorage.getItem(autoKey) === "true"; } catch { return false; } };
 
-/** The Encyclopedia campaign paired with the scene's Maptable campaign, so the tray lists its tables and tension. */
+/** The Wiki campaign paired with the scene's Maptable campaign, so the tray lists its tables and tension. */
 function usePaired(maptableCampaignId: string | null | undefined) {
   const [paired, setPaired] = useState<{ for: string; id: string | null; name?: string } | null>(null);
   useEffect(() => {
@@ -86,7 +86,7 @@ export function TrayTables({ scene }: { scene: TrayScene | null | undefined }) {
       <button type="button" aria-pressed={!category} className={!category ? "on" : ""} onClick={() => setCategory("")}>All</button>
       {cats.map(c => <button type="button" key={c} aria-pressed={category === c} className={category === c ? "on" : ""} onClick={() => setCategory(c)}>{categoryName(c)}</button>)}
     </div>}
-    {!tables.length ? <p className="tray-table-empty">{paired.id ? "This campaign has no random tables yet." : "No tables yet."} Add them on the Random tables page in the Encyclopedia.</p>
+    {!tables.length ? <p className="tray-table-empty">{paired.id ? "This campaign has no random tables yet." : "No tables yet."} Add them on the Random tables page in the Wiki.</p>
       : <ul className="tray-table-list">{list.map(t => <li key={t.id}>
         <button type="button" className={`tray-star${t.starred ? " on" : ""}`} aria-pressed={!!t.starred} aria-label={t.starred ? `Unstar ${t.name}` : `Star ${t.name}`} title={t.starred ? "Starred: kept at the top" : "Star to keep it at the top"} onClick={() => star(t)}><Star size={14}/></button>
         <button type="button" className="tray-table-roll" onClick={() => roll(t)}><span>{t.name}</span><small>{rollLabel(t)}</small></button>
@@ -101,7 +101,7 @@ export function TrayOracle({ scene }: { scene: TrayScene | null | undefined }) {
   const { shown, show } = useShow(scene), [saveError, setSaveError] = useState("");
   if (!lib) return <p className="tray-table-empty">{error || "Loading your oracle…"}</p>;
   const { oracles } = campaignTables(lib, paired.id), oracle = oracles.find(o => o.id === oracleId) ?? oracles[0];
-  if (!oracle) return <p className="tray-table-empty">This campaign has no yes or no oracle. Add one on the Random tables page in the Encyclopedia.</p>;
+  if (!oracle) return <p className="tray-table-empty">This campaign has no yes or no oracle. Add one on the Random tables page in the Wiki.</p>;
   const odds = oracle.odds ?? DEFAULT_ODDS, chosen = odds.find(o => o.label === pick) ?? odds[Math.floor((odds.length - 1) / 2)]!;
   const key = paired.id ?? "", tension = lib.tension?.[key] ?? 5;
   const setTension = (n: number) => { setSaveError(""); void saveTables(l => ({ ...l, tension: { ...l.tension, [key]: Math.max(1, Math.min(9, n)) } })).catch(e => setSaveError(e instanceof Error ? e.message : "Could not save the tension.")); };

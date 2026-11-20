@@ -126,7 +126,7 @@ export default function TokenEditor(p: TokenEditorProps) {
         </div>
         {!workspace.conditions.length && <small>No conditions are set up for this campaign yet.</small>}
       </section> },
-      { id: "statblock", label: "Statblock", summary: token.encyclopediaEntryId ? "Linked to the Encyclopedia" : "Not linked", content: <section className="editor-card" aria-label="Statblock"><TokenStatblock token={token} sceneId={scene.id} campaignId={campaignId} onLink={encyclopediaEntryId => p.patch({ encyclopediaEntryId })} /></section> },
+      { id: "statblock", label: "Statblock", summary: token.encyclopediaEntryId ? "Linked to the Wiki" : "Not linked", content: <section className="editor-card" aria-label="Statblock"><TokenStatblock token={token} sceneId={scene.id} campaignId={campaignId} onLink={encyclopediaEntryId => p.patch({ encyclopediaEntryId })} /></section> },
     ] : []),
     { id: "notes", label: "Notes", summary: token.notes?.trim() ? token.notes.trim().split("\n")[0].slice(0, 30) : "Empty", content: <section className="editor-card" aria-label="Notes">
       <TokenNotesControl section="notes" token={token} onChange={p.patch} sceneId={scene?.id ?? (mode === "saved" ? workspace.activeId : undefined)} campaignId={campaignId} />

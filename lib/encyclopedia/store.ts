@@ -44,7 +44,7 @@ export class EncyclopediaStore {
     const previous=await this.read(owner);
     if (previous.revision!==revision) return null;
     data=markEditor(previous.data,data,editor);
-    if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Encyclopedia workspace exceeds the 2 MB limit. Export a backup before reducing content.');
+    if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Wiki workspace exceeds the 2 MB limit. Export a backup before reducing content.');
     const next=revision+1;
     const saved=await this.bucket.put(encyclopediaPrefix(owner)+'workspace.json',JSON.stringify({data,revision:next}),{onlyIf:previous.etag?{etagMatches:previous.etag}:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
     if (!saved) return null;

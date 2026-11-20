@@ -1,6 +1,6 @@
 # AI connections
 
-RPG Tools can work with an AI two ways. Both are set up under **Connect an AI** (the **AI & GitHub** area in the Encyclopedia). Keys are per campaign and can be revoked at once.
+RPG Tools can work with an AI two ways. Both are set up under **Connect an AI** (the **AI & GitHub** area in the Wiki). Keys are per campaign and can be revoked at once.
 
 ## Way 1: connect an AI app (MCP)
 
@@ -8,7 +8,7 @@ RPG Tools can work with an AI two ways. Both are set up under **Connect an AI** 
 
 Use ChatGPT, Claude or any app that supports MCP connectors.
 
-1. In the Encyclopedia open **Connect an AI** and make a **named key** for a campaign.
+1. In the Wiki open **Connect an AI** and make a **named key** for a campaign.
 2. Give your AI app the address:
    - `/api/mcp/<key>` for connectors that take only a URL, or
    - `/api/mcp` with the key as a **Bearer** token.
@@ -44,7 +44,7 @@ Ready-made **prompts**: `prep_session`, `recap_session`, `recap_from_source` (al
 
 The **AI connected** chip opens the AI panel with an **activity log**. You can **Undo** a change (pages edited since are left alone) and **Pause** the connection. Maptable shows a similar chip with the combat line. The apps keep working while an AI edits: your unsaved edits are joined with the AI's saves instead of blocking.
 
-A simpler read-only encyclopedia connection exists too: create a **read-only agent key** in the encyclopedia's Connections, and run `scripts/encyclopedia-mcp.mjs` with `RPG_TOOLS_URL` and `ENCYCLOPEDIA_AGENT_KEY`. It reads private GM material for that campaign only; never give it to players.
+A simpler read-only Wiki connection exists too: create a **read-only agent key** in the Wiki's Connections, and run `scripts/encyclopedia-mcp.mjs` with `RPG_TOOLS_URL` and `ENCYCLOPEDIA_AGENT_KEY`. It reads private GM material for that campaign only; never give it to players.
 
 ## Way 2: paste an API key
 
@@ -58,7 +58,7 @@ A GM can paste an API key from **Anthropic, OpenAI, xAI (Grok), Google AI Studio
 
 Players and co-GMs can add **their own AI** under **Account settings › AI on this device** (any provider above, with their own key, kept the same way). The forum's **Catch me up** and **Check my post** use it; the GM uses the forum's connection with the key on their device.
 
-With a key, the **AI panel**'s **Ask** tab lets the AI use RPG Tools' tools and answer inside the app. Every chat is **saved** with its campaign and available on any device, shared by Maptable and the Encyclopedia. The chat bar switches, searches, renames and deletes chats, and exports Markdown, copy, a session page or Discord (older messages beyond the latest 400 move to part files and are still included in exports).
+With a key, the **AI panel**'s **Ask** tab lets the AI use RPG Tools' tools and answer inside the app. Every chat is **saved** with its campaign and available on any device, shared by Maptable and the Wiki. The chat bar switches, searches, renames and deletes chats, and exports Markdown, copy, a session page or Discord (older messages beyond the latest 400 move to part files and are still included in exports).
 
 Features that use an API-key connection: [Check with your AI](World-Maps), [recaps and The story so far](Session-Recaps-and-AI-Writing), [Write with AI](Relationships-and-Family-Trees) in the relationship generators, and Star-system [setting drafts and checks](Star-Systems-and-Space). Without a key, each has **Copy prompt** for your own AI app. **Tokens count against the monthly limit**, even when a call fails.
 

@@ -88,7 +88,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
       {scene.poiFolders.length>0&&<Field label="Folder"><select value={point.folderId??""} onChange={e=>patch({folderId:e.target.value||null})}><option value="">No folder</option>{scene.poiFolders.map(f=><option key={f.id} value={f.id}>{poiFolderPath(scene.poiFolders,f.id)}</option>)}</select></Field>}
       <Field label="Quick notes"><textarea value={point.notes??""} maxLength={2000} rows={2} placeholder="Only you see these" onChange={e=>patch({notes:e.target.value})}/></Field>
       <Field label="Read aloud"><textarea value={point.readAloud??""} maxLength={4000} rows={3} placeholder="What you read to the players when they get here" onChange={e=>patch({readAloud:e.target.value})}/></Field>
-      <div className="field"><span>Pages from the Encyclopedia</span>
+      <div className="field"><span>Pages from the Wiki</span>
         {notePages(book,point.pages).map(page=><div key={page.id} className="explore-page"><span><strong>{page.title}</strong><small>{page.kind}</small></span><button className="explore-icon" aria-label={`Take ${page.title} off this marker`} title="Take off" onClick={()=>update(current=>{const p=current.pointsOfInterest.find(p=>p.id===point.id);if(p)removeNotePage(p,page.id);})}><Trash2 size={14}/></button></div>)}
         {bookError&&<p className="muted" role="alert">{bookError}</p>}
         {adding?<PageSearch autoFocus pages={pages} taken={point.pages} onPick={page=>{update(current=>{const p=current.pointsOfInterest.find(p=>p.id===point.id);if(p)addNotePage(p,page.id);});setAdding(false);}}/>
@@ -96,7 +96,7 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
       </div>
       <Toggle label="Hidden from players" checked={point.hidden} onChange={hidden=>patch({hidden})}/>
       <Toggle label="Players see this note" checked={!!point.playersSee&&!point.hidden} onChange={playersSee=>patch({playersSee})}/>
-      {point.playersSee&&!point.hidden&&<p className="muted explore-hint">Players can click the marker for its read-aloud text and the pages they can already read in the Encyclopedia. Quick notes stay yours.</p>}
+      {point.playersSee&&!point.hidden&&<p className="muted explore-hint">Players can click the marker for its read-aloud text and the pages they can already read in the Wiki. Quick notes stay yours.</p>}
       <div className="explore-editor-foot">
         <button className="danger" onClick={()=>{update(current=>{current.pointsOfInterest=current.pointsOfInterest.filter(p=>p.id!==point.id);});select(null);}}><Trash2 size={15}/> Delete marker</button>
         <button onClick={()=>select(null)}>Done</button>
@@ -159,9 +159,9 @@ export default function ExplorationPanel({workspace,scene,pages,book,bookError,u
     {!scene.pointsOfInterest.length&&<div className="explore-empty"><MapPin size={20}/><p>No markers yet. Add one, click the map where it goes, then choose the map it opens.</p></div>}
     {q&&scene.pointsOfInterest.length>0&&!scene.pointsOfInterest.some(matches)&&<p className="empty-small">No markers match “{query}”.</p>}
 
-    <div className="section-heading"><h3>Encyclopedia pages</h3></div>
+    <div className="section-heading"><h3>Wiki pages</h3></div>
     <PanelTip more={<p>Drag a page onto the map to pin it there as a note, or onto a marker to add it to that marker’s note. With a marker selected, click a page to add it.</p>}>Drag a page onto the map or a marker.</PanelTip>
-    {bookError?<p className="muted" role="alert">{bookError}</p>:!book?<p className="muted">Loading your Encyclopedia…</p>:<PageSearch pages={pages} taken={selected?.pages} onPick={page=>{if(!selected){setPageHint("Select a marker first, or drag the page onto the map.");return;}let added=false;update(current=>{const p=current.pointsOfInterest.find(p=>p.id===selected.id);if(p)added=addNotePage(p,page.id);});setPageHint(added?`Added ${page.title} to ${pointName(selected)}.`:"That marker’s note is full.");}}/>}
+    {bookError?<p className="muted" role="alert">{bookError}</p>:!book?<p className="muted">Loading your Wiki…</p>:<PageSearch pages={pages} taken={selected?.pages} onPick={page=>{if(!selected){setPageHint("Select a marker first, or drag the page onto the map.");return;}let added=false;update(current=>{const p=current.pointsOfInterest.find(p=>p.id===selected.id);if(p)added=addNotePage(p,page.id);});setPageHint(added?`Added ${page.title} to ${pointName(selected)}.`:"That marker’s note is full.");}}/>}
     {pageHint&&<p className="muted explore-hint" role="status">{pageHint}</p>}
 
     <details className="explore-maps" open>

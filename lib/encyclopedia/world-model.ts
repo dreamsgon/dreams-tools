@@ -192,7 +192,7 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
     for (const c of s.campaigns)
         if (!worlds.has(c.worldId))
             bad("Campaign world is missing");
-    const paired=s.campaigns.flatMap(c=>c.maptableCampaignId?[c.maptableCampaignId]:[]);if(new Set(paired).size!==paired.length)bad("A Maptable campaign can be paired with only one Encyclopedia campaign");
+    const paired=s.campaigns.flatMap(c=>c.maptableCampaignId?[c.maptableCampaignId]:[]);if(new Set(paired).size!==paired.length)bad("A Maptable campaign can be paired with only one Wiki campaign");
     for(const c of s.campaigns){if(new Set((c.calendars??[]).map(x=>x.id)).size!==(c.calendars??[]).length)bad("Calendar IDs must be unique within a campaign");if(new Set((c.statFields??[]).map(f=>f.id)).size!==(c.statFields??[]).length)bad("Stat field IDs must be unique within a campaign");}
     for (const e of s.entries) {
         if(e.kind==='map'&&!e.mapData)bad('Map entries need map data');

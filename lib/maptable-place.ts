@@ -40,3 +40,15 @@ export function campaignTableScene(data: Data, campaignId: string, openSceneId: 
   const list = scenesInOrder(data as Parameters<typeof scenesInOrder>[0], campaignId);
   return (list.find(i => i.scene.id === openSceneId) ?? list[0])?.scene.id ?? null;
 }
+
+/**
+ * The scene you last had open in a campaign (the campaign bar's switcher opens it), or null when none is remembered
+ * or it was deleted or moved to another campaign. The caller then opens the campaign's Scene Picker; nothing is created.
+ */
+export function rememberedCampaignScene(data: Data, campaignId: string, rememberedSceneId: string | null | undefined): string | null {
+  if (!rememberedSceneId) return null;
+  return scenesInOrder(data as Parameters<typeof scenesInOrder>[0], campaignId).find(i => i.scene.id === rememberedSceneId)?.scene.id ?? null;
+}
+
+/** Where the last open scene of one campaign is kept (per tab and per browser, like the rest of Maptable's navigation state). */
+export const campaignSceneKey = (scope: string, campaignId: string) => `maptable:last-scene:v1:${encodeURIComponent(scope)}:${encodeURIComponent(campaignId)}`;

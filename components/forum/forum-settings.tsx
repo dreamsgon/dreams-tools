@@ -33,9 +33,9 @@ function BannerSettings({ page, k, done }: { page: Settings; k: string; done: Do
     <h2>Banner, links, notices and writing</h2>
     <label className="f-field">Title<input value={s.title} maxLength={80} placeholder="The campaign’s name" onChange={e => setS({ ...s, title: e.target.value })} /></label>
     <label className="f-field">Tagline<input value={s.tagline} maxLength={160} placeholder="A line under the title" onChange={e => setS({ ...s, tagline: e.target.value })} /></label>
-    <label className="f-check"><input type="checkbox" checked={s.banner} onChange={e => setS({ ...s, banner: e.target.checked })} /><span>Use the campaign’s banner picture behind the title <small>(set it in the campaign’s Look in the Encyclopedia)</small></span></label>
+    <label className="f-check"><input type="checkbox" checked={s.banner} onChange={e => setS({ ...s, banner: e.target.checked })} /><span>Use the campaign’s banner picture behind the title <small>(set it in the campaign’s Look in the Wiki)</small></span></label>
     <h3>Links in the banner</h3>
-    <p className="muted">Forum, Active topics and Members are always there. Add the Encyclopedia, a Discord server, a rules page…</p>
+    <p className="muted">Forum, Active topics and Members are always there. Add the Wiki, a Discord server, a rules page…</p>
     {s.links.map((l, i) => <div className="link-row" key={i}>
       <input aria-label="Link name" placeholder="Name" value={l.label} maxLength={40} onChange={e => link(i, { label: e.target.value })} />
       <input aria-label="Link address" placeholder="/encyclopedia or https://…" value={l.url} maxLength={500} onChange={e => link(i, { url: e.target.value })} />
@@ -82,7 +82,7 @@ function BoardForm({ frame, page, k, done, categoryId, row, onClose }: { frame: 
       </select></label>}
     </div>
     {fixed && <p className="muted small">This board has topics, so it stays {fixed === 'ic' ? 'in character' : 'out of character'}.</p>}
-    {v.type === 'location' && <label className="f-field">Place in the Encyclopedia <small>(its picture becomes the board’s art)</small><select value={v.placeId} onChange={e => setV({ ...v, placeId: e.target.value })}><option value="">None</option>{page.places.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+    {v.type === 'location' && <label className="f-field">Place in the Wiki <small>(its picture becomes the board’s art)</small><select value={v.placeId} onChange={e => setV({ ...v, placeId: e.target.value })}><option value="">None</option>{page.places.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {!hasSubs && <label className="f-field">Sits inside<select value={v.parentId} onChange={e => setV({ ...v, parentId: e.target.value })}><option value="">Nothing (a board of its own)</option>{tops.map(b => <option key={b.id} value={b.id}>{b.name} (as a subforum)</option>)}</select></label>}
     <label className="f-check"><input type="checkbox" checked={v.locked} onChange={e => setV({ ...v, locked: e.target.checked })} /><span>Only moderators start topics here</span></label>
     <div className="settings-foot"><button type="button" className="f-btn ghost" onClick={onClose}>Cancel</button><button className="f-btn" disabled={busy || !v.name.trim()}>{busy ? 'Saving…' : row ? 'Save board' : 'Add board'}</button></div>
@@ -137,7 +137,7 @@ function BoardsSettings({ frame, page, k, done }: { frame: Frame; page: Settings
   </li>;
   return <section className="settings-card">
     <h2>Categories and boards</h2>
-    <p className="muted">Each board is a location (tied to a place in the Encyclopedia, with its picture), a campaign board (in character, for a story with no single place) or out of character, for talking as yourselves. A new board takes its category’s kind. Half-width boards sit side by side on the forum page. Every post counts towards the member’s own post count.</p>
+    <p className="muted">Each board is a location (tied to a place in the Wiki, with its picture), a campaign board (in character, for a story with no single place) or out of character, for talking as yourselves. A new board takes its category’s kind. Half-width boards sit side by side on the forum page. Every post counts towards the member’s own post count.</p>
     {frame.categories.map(c => <div key={c.id} className="cat-block">
       <div className="cat-line">{renaming?.id === c.id ? <form className="cat-rename" onSubmit={e => { e.preventDefault(); void call({ action: 'editCategory', id: c.id, name: renaming.name }).then(ok => { if (ok) setRenaming(null); }); }}><input aria-label="Category name" value={renaming.name} maxLength={60} autoFocus onChange={e => setRenaming({ id: c.id, name: e.target.value })} /><button className="f-btn small" disabled={busy || !renaming.name.trim()}>Save</button><button type="button" className="f-btn ghost small" onClick={() => setRenaming(null)}>Cancel</button></form>
         : <h3>{c.name} <span className="tag">{c.kind === 'ic' ? 'In character' : 'Out of character'}</span></h3>}<span className="line-tools">
@@ -167,13 +167,13 @@ function AiSettings({ page, k, done }: { page: Settings; k: string; done: Done }
     <select value={v[key]} onChange={e => setV({ ...v, [key]: e.target.value })}>{(['all', 'staff', 'off'] as const).map(u => <option key={u} value={u}>{USE_LABEL[u]}</option>)}</select></label>;
   return <section className="settings-card ai-settings">
     <h2><Sparkles size={15} aria-hidden="true" /> AI</h2>
-    <p className="muted">Turn the forum’s AI on with one of this campaign’s API-key connections (Connect an AI, on the campaign’s page in the Encyclopedia). AI keys stay on each person’s own device and RPG Tools never saves them: you use this connection’s key from your device, and its tokens count toward its monthly limit. Everyone else uses their own AI, added under Account settings › AI on this device. The AI only gets forum text the person asking can read, with characters as players see them, never GM-only pages.</p>
+    <p className="muted">Turn the forum’s AI on with one of this campaign’s API-key connections (Connect an AI, on the campaign’s page in the Wiki). AI keys stay on each person’s own device and RPG Tools never saves them: you use this connection’s key from your device, and its tokens count toward its monthly limit. Everyone else uses their own AI, added under Account settings › AI on this device. The AI only gets forum text the person asking can read, with characters as players see them, never GM-only pages.</p>
     <div className="ai-pick" role="radiogroup" aria-label="Connection the forum uses">
       {list.map(c => <label key={c.id} className={`ai-choice${v.connectionId === c.id ? ' on' : ''}`}><input type="radio" name="ai-conn" checked={v.connectionId === c.id} onChange={() => setV({ ...v, connectionId: c.id })} />
         <span><b>{c.name}</b><small>{c.model} · {c.used.toLocaleString()}{c.limit ? ` of ${c.limit.toLocaleString()}` : ''} tokens this month</small></span></label>)}
       <label className={`ai-choice${!v.connectionId ? ' on' : ''}`}><input type="radio" name="ai-conn" checked={!v.connectionId} onChange={() => setV({ ...v, connectionId: '' })} /><span><b>No AI in the forum</b><small>Nothing goes to an AI</small></span></label>
     </div>
-    {!list.length && <p className="muted small">This campaign has no API-key connection yet. Add one under Connect an AI on the campaign’s page in the Encyclopedia, then come back.</p>}
+    {!list.length && <p className="muted small">This campaign has no API-key connection yet. Add one under Connect an AI on the campaign’s page in the Wiki, then come back.</p>}
     {v.connectionId && <>
       <h3>What members may use</h3>
       {use('catchUp', 'Summarize and Catch me up', 'A short summary of a topic, or of what’s new since you last read it.')}

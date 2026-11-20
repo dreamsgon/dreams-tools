@@ -3,13 +3,13 @@
 Welcome! **RPG Tools** is a tabletop workspace with two tools that share one account:
 
 - **Maptable**: a virtual tabletop for maps, tokens, fog, initiative, dice and Discord.
-- **RPG Encyclopedia**: a campaign wiki for worlds, characters, quests, maps, calendars, relationships, ships, inventories and more.
+- **Wiki**: a campaign wiki for worlds, characters, quests, maps, calendars, relationships, ships, inventories and more.
 
 This guide covers features that are finished and live. Each page explains what the feature is, how to use it step by step, and a short tutorial you can follow in a few minutes. Features still being planned are listed on [Limits and what's coming](Limits-and-Whats-Coming).
 
 ![The RPG Tools home page](images/home.jpg)
 
-**Looking for a tool or a download?** [Tools and downloads](Tools-and-Downloads) links to Maptable, the Encyclopedia and Campaigns, and has the Foundry module, the Roll20 script and dice link, and the Fantasy Grounds extension.
+**Looking for a tool or a download?** [Tools and downloads](Tools-and-Downloads) links to Maptable, the Wiki and Campaigns, and has the Foundry module, the Roll20 script and dice link, and the Fantasy Grounds extension.
 
 ## Start here
 
@@ -26,9 +26,9 @@ This guide covers features that are finished and live. Each page explains what t
 8. [World maps](World-Maps): painted world and planet maps, hex crawls, "Check with your AI".
 9. [Star systems and space](Star-Systems-and-Space): galaxies, sectors, star systems and planets.
 
-## The Encyclopedia
+## The Wiki
 
-10. [Encyclopedia basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, templates, random tables.
+10. [Wiki basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, templates, random tables.
 11. [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
 12. [Sheet import, export and Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 13. [Inventory, spells and stores](Inventory-Spells-and-Stores)

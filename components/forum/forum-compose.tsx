@@ -61,7 +61,7 @@ function AsPicker({ frame, k, kind, state }: { frame: Frame; k: string; kind: 'i
       {frame.you.cast.length > 6 && <label className="as-search"><Search size={14} aria-hidden="true" /><input ref={search} value={q} onChange={e => setQ(e.target.value)} placeholder={gm ? 'Search characters and NPCs…' : 'Search your characters…'} aria-label="Search characters" /></label>}
       {narration && <><h5>Narration</h5>{option(null, 'Game Master', 'Narration, written as the GM', null)}</>}
       {shown.map(([label, list]) => <div key={label}><h5>{label}{word && ` · ${list.length}`}</h5>{list.slice(0, 60).map(c => option(c.id, c.name, c.role, c.picture))}</div>)}
-      {!total && !narration && <p className="muted as-none">Nobody called “{q.trim()}”. NPCs come from the campaign’s character pages in the Encyclopedia.</p>}
+      {!total && !narration && <p className="muted as-none">Nobody called “{q.trim()}”. NPCs come from the campaign’s character pages in the Wiki.</p>}
     </div>}
   </div>;
 }

@@ -151,7 +151,7 @@ async function themesOf(deps: Deps, body: z.infer<typeof themeBodySchema>, now: 
   if (!userId) return json({ error: signIn }, 401);
   if ((body.action === "themes" ? readThrottle : writeThrottle).hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
   const key = await pairedKey(deps, userId, body.campaign);
-  if (!key) return json({ error: "This Maptable campaign isn't paired with an Encyclopedia campaign, so it has no theme yet. Pair them from its dashboard first.", code: "unpaired" }, 404);
+  if (!key) return json({ error: "This Maptable campaign isn't paired with a Wiki campaign, so it has no theme yet. Pair them from its dashboard first.", code: "unpaired" }, 404);
   const found = await deps.campaign(userId, key);
   if (!found) return json({ error: notMember }, 404);
   const campaign = (await deps.workspace(found.owner)).campaigns.find(c => c.id === found.campaignId);

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { offerCampaignTheme } from '../campaign-theme-entry';
 import { release } from '../campaign-skin';
 import { ThemeToggle } from '../encyclopedia/theme';
+import CampaignBar from '../campaign-bar';
 import { ForumRequestError, forumCall, forumHash, pageOf, parseForumHash, setPlayerView, validKey, type Place, type View } from './forum-api';
 import { useCampaignOpened } from '@/lib/opened-campaign';
 import { BackToTop, Banner, Crumbs, Footer, IndexPage, TopBar, TopicRow, Circle, whoStyle, PostContext, SheetContext, emojiMap } from './forum-parts';
@@ -85,34 +86,46 @@ export default function ForumApp() {
   }, [key, place, go, load]);
 
   /* eslint-disable @next/next/no-html-link-for-pages -- other tools open as full pages (AGENTS.md) */
-  // The same tools as the site header everywhere else. Encyclopedia opens this campaign's notes (yours, or as a member).
-  const encyclopediaHref = key.startsWith('c-') ? `/encyclopedia?campaign=${key.slice(2)}` : key.startsWith('m-') ? `/encyclopedia#${key}` : '/encyclopedia';
+  const member = key.startsWith('m-');
+  const ref = key.startsWith('c-') ? { encyclopediaId: decodeURIComponent(key.slice(2)) } : member ? { memberRef: decodeURIComponent(key.slice(2)) } : null;
+  // Inside a campaign: the shared campaign bar. It sits outside .forum-root, so the forum's theme never reaches it.
+  const campaignBar = (trail?: React.ReactNode) => ref ? <CampaignBar tool="forum" campaign={ref} name={view?.frame.campaign.name} bell={!member} trail={trail}
+    actions={<>{loading && view && <span className="muted small">Loading…</span>}<ThemeToggle /></>} /> : null;
+  // With no campaign (the forum picker): a simple bar. A forum only exists inside a campaign, so it has no Forum link.
   const appBar = <header className="forum-appbar">
     <a href="/" className="appbar-home" aria-label="RPG Tools home"><span className="tool-switch-mark" aria-hidden="true" />RPG Tools</a>
     <nav className="appbar-links" aria-label="RPG tools">
-      <a href="/campaigns">Campaigns</a><a href="/maptable">Maptable</a><a href={encyclopediaHref}>Encyclopedia</a><a href="/forum" aria-current="page">Forum</a><a href="/guide">Guide</a>
+      <a href="/campaigns">Campaigns</a><a href="/maptable">Maptable</a><a href="/encyclopedia">Wiki</a><a href="/guide">Guide</a>
     </nav>
-    {view && <span className="appbar-campaign">{view.frame.campaign.name}</span>}
-    <span className="appbar-spacer" />{loading && view && <span className="muted small">Loading…</span>}<ThemeToggle /><a href="/account" className="appbar-account">Account</a>
+    <span className="appbar-spacer" /><ThemeToggle /><a href="/account" className="appbar-account">Account</a>
   </header>;
   const backLink = <a href="/campaigns">Back to Campaigns</a>;
   /* eslint-enable @next/next/no-html-link-for-pages */
 
+  // A campaign with no forum yet: its Dashboard offers to add one.
+  const addForum = !view && !loading && noForum && key.startsWith('c-');
+  useEffect(() => { if (addForum) location.replace(`/campaigns/${encodeURIComponent('e:' + decodeURIComponent(key.slice(2)))}?add=forum`); }, [addForum, key]);
+
   if (!view && !key && !loading) return <div className="forum-root">{appBar}<div className="forum-page"><ForumPicker /></div></div>;
-  if (!view) return <div className="forum-root">{appBar}<div className="forum-page"><div className="forum-message">
-    <h1>{loading ? 'Opening the forum…' : status === 401 ? 'Sign in first' : noForum ? 'No forum yet' : 'Forum unavailable'}</h1>
-    {!loading && <p>{error}</p>}
-    {!loading && noForum && key.startsWith('c-') && <p><a className="f-btn" href={`/campaigns/${encodeURIComponent('e:' + decodeURIComponent(key.slice(2)))}?forum=setup`}>Set up the forum</a></p>}
+  if (!view) return <>{campaignBar()}<div className="forum-root">{!ref && appBar}<div className="forum-page"><div className="forum-message">
+    <h1>{loading || addForum ? 'Opening the forum…' : status === 401 ? 'Sign in first' : noForum ? 'No forum yet' : 'Forum unavailable'}</h1>
+    {!loading && !addForum && <p>{error}</p>}
     {status === 401 && <p><a className="f-btn" href={`/account?mode=login&next=${encodeURIComponent('/forum' + location.hash)}`}>Sign in</a></p>}
-    {!loading && <p>{backLink}</p>}
-  </div></div></div>;
+    {!loading && !addForum && <p>{backLink}</p>}
+  </div></div></div></>;
 
   const { frame, page } = view, k = key;
   // The theme being edited in the Admin CP, else the live one. The app bar and the Admin CP are never themed.
   const live = frame.theme && theme.current ? { css: theme.current.css, fonts: theme.current.fonts, banner: frame.theme.banner } : null;
   const skin = cp.open && preview ? preview : live;
   const showCp = cp.open && frame.you.rights.boards;
-  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">{appBar}
+  // The bar's trail starts below the campaign: board, then topic.
+  const trailBoard = page.kind === 'board' ? page.board : page.kind === 'topic' ? frame.boards.find(b => b.id === page.topic.boardId) : undefined;
+  const trail = trailBoard || page.kind === 'topic' ? <span className="f-trail">
+    {trailBoard && <a href={forumHash(k, { view: 'board', id: trailBoard.id })}>{trailBoard.name}</a>}
+    {page.kind === 'topic' && <>{trailBoard && <span aria-hidden="true">›</span>}<span className="f-trail-here" aria-current="page">{page.topic.title}</span></>}
+  </span> : undefined;
+  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><>{campaignBar(trail)}<div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">
     <div className={`forum-body${showCp ? ` cp-open cp-${dock}` : ''}`}>
     {showCp && <AdminCp k={k} dock={dock} setDock={setDock} onClose={cp.close} onPreview={setPreview} onSaved={() => void load(key, place, true)} />}
     <div className="skin-frame">
@@ -150,5 +163,5 @@ export default function ForumApp() {
       <BackToTop />
     </div>
     </div></div></div>
-  </div></PostContext.Provider>;
+  </div></></PostContext.Provider>;
 }

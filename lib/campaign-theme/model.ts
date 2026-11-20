@@ -22,7 +22,7 @@ export const THEME_LIMITS = { saved: 20, name: 60, css: 100_000, allCss: 160_000
 
 /** The parts of a campaign a theme styles. The forum's stylesheet is the theme's `css`; the others are in `areas`. */
 export const THEME_AREAS = [
-  { id: "forum", label: "Forum" }, { id: "encyclopedia", label: "Encyclopedia" },
+  { id: "forum", label: "Forum" }, { id: "encyclopedia", label: "Wiki" },
   { id: "maptable", label: "Maptable" }, { id: "dashboard", label: "Dashboard" },
 ] as const;
 export type ThemeArea = (typeof THEME_AREAS)[number]["id"];

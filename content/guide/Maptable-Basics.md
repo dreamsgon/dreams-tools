@@ -19,9 +19,9 @@ Maptable is the table-running tool: scenes with a map image or a drawn map, toke
 
 The **Tokens** panel (top to bottom): Make token, a Quick token, the token gallery link, the selected token strip with Edit, the token list (search appears from six tokens), then Initiative. Posting to Discord is folded under *Post to Discord*; campaign token defaults are at the bottom.
 
-The **token gallery** is a compact tile grid: search, Party / Allies / Neutral / Enemies chips, *This campaign / All campaigns*, collapsible folders and a ⋯ menu to move, duplicate or delete. Its **From the Encyclopedia** tab lists characters of the paired Encyclopedia campaign and its world's shared lore, with their pictures (framed token circle and ring colour) copied into Maptable.
+The **token gallery** is a compact tile grid: search, Party / Allies / Neutral / Enemies chips, *This campaign / All campaigns*, collapsible folders and a ⋯ menu to move, duplicate or delete. Its **From the Wiki** tab lists characters of the paired Wiki campaign and its world's shared lore, with their pictures (framed token circle and ring colour) copied into Maptable.
 
-**Right-click a token** for its menu: Status (Active, Unconscious, Dead), conditions, show/hide, delete and more. A token linked to an Encyclopedia character also offers *Roll from <name>'s sheet*, and its Statblock tab shows the character's pasted statblock.
+**Right-click a token** for its menu: Status (Active, Unconscious, Dead), conditions, show/hide, delete and more. A token linked to a Wiki character also offers *Roll from <name>'s sheet*, and its Statblock tab shows the character's pasted statblock.
 
 ![Right-click menu on a token](images/token-right-click.jpg)
 
@@ -68,9 +68,9 @@ These apply to every selected token. **Shift + scroll** over a selected or hover
 ## Fog, areas and notes
 
 - **Fog** can be edited manually and revealed by area. On a hex scene the Fog panel also has **Reveal around party tokens**, which clears the hexes around party tokens as they move (see [Hex map generator](Hex-Map-Generator)). Player previews and exports use opaque fog and hide hidden tokens.
-- **Areas** on area and combat maps can open a section of an Encyclopedia page. In the Exploration panel use *Draw an area* with a box or a click inside a drawn room.
-- **Markers** hold read-aloud text and up to 20 linked Encyclopedia pages. Selecting one opens a note card with a *Players see this note* switch. Drag a page from the Exploration list onto the map to pin it.
-- **Links from the Encyclopedia**: write `[[maptable:<scene>|Label]]` in a page for an *Open in Maptable* card; the Write mode has a scene picker.
+- **Areas** on area and combat maps can open a section of a Wiki page. In the Exploration panel use *Draw an area* with a box or a click inside a drawn room.
+- **Markers** hold read-aloud text and up to 20 linked Wiki pages. Selecting one opens a note card with a *Players see this note* switch. Drag a page from the Exploration list onto the map to pin it.
+- **Links from the Wiki**: write `[[maptable:<scene>|Label]]` in a page for an *Open in Maptable* card; the Write mode has a scene picker.
 
 ## Lights and darkness
 

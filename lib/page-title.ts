@@ -1,4 +1,4 @@
-/** Browser tab titles that name what is open: "Ayla · The Salt Road | RPG Encyclopedia". Pure, so it can be tested. */
+/** Browser tab titles that name what is open: "Ayla · The Salt Road | Wiki". Pure, so it can be tested. */
 const clean = (text: string | null | undefined, max = 80) => {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
   return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
@@ -10,10 +10,10 @@ export function pageTitle(parts: (string | null | undefined)[], app?: string): s
   return named && app ? `${named} | ${app}` : named || app || "";
 }
 
-export const encyclopediaApp = "RPG Encyclopedia";
+export const encyclopediaApp = "Wiki";
 const viewNames: Record<string, string> = {
   characters: "Characters", maps: "Maps", calendar: "Calendar", tables: "Random tables", templates: "Templates",
-  quests: "Quests", codex: "Codex", relationships: "Relationships", look: "Look", dashboard: "Dashboard",
+  quests: "Quests", codex: "Codex", relationships: "Relationships", look: "Look", dashboard: "Worlds",
 };
 
 /** Encyclopedia: a page is "Page · Campaign", a view is "Quests · Campaign", an open campaign is its name, else the world. */

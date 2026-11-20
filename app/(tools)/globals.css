@@ -1601,11 +1601,11 @@ button.primary, :root[data-theme="dark"] button.primary { background:var(--accen
 button.primary:hover, :root[data-theme="dark"] button.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
 button.active { background:var(--accent-soft); border-color:transparent; color:var(--accent); }
 .app-header, .campaign-dashboard > header, .creator-header { background:var(--chrome); color:var(--chrome-text); border-bottom:1px solid var(--chrome-line); }
-.app-header .brand, .campaign-dashboard > header .brand { color:var(--chrome-text); }
-.app-header .brand svg, .campaign-dashboard > header .brand svg { color:var(--accent); }
-.app-header .save-state, .campaign-dashboard > header .save-state, .creator-header > span { color:var(--chrome-muted); }
-.app-header .header-actions button, .campaign-dashboard > header .header-actions button { background:transparent; border-color:transparent; color:var(--chrome-text); font-weight:500; }
-.app-header .header-actions button:hover, .campaign-dashboard > header .header-actions button:hover { background:var(--chrome-hover); }
+:is(.app-header, .maptable-bar) .brand, .campaign-dashboard > header .brand { color:var(--chrome-text); }
+:is(.app-header, .maptable-bar) .brand svg, .campaign-dashboard > header .brand svg { color:var(--accent); }
+:is(.app-header, .maptable-bar) .save-state, .campaign-dashboard > header .save-state, .creator-header > span { color:var(--chrome-muted); }
+:is(.app-header, .maptable-bar) .header-actions button, .campaign-dashboard > header .header-actions button { background:transparent; border-color:transparent; color:var(--chrome-text); font-weight:500; }
+:is(.app-header, .maptable-bar) .header-actions button:hover, .campaign-dashboard > header .header-actions button:hover { background:var(--chrome-hover); }
 .rail { background:var(--chrome); border-right-color:var(--chrome-line); }
 .rail button { color:var(--chrome-muted); border-radius:var(--radius); font-size:11px; font-weight:500; }
 .rail button:hover { background:var(--chrome-hover); color:var(--chrome-text); }
@@ -1639,9 +1639,9 @@ h3 { color:var(--ink); font-size:13px; }
 .creator-bottom-tools button.active, :root[data-theme="dark"] .creator-bottom-tools button.active { background:var(--green-soft); color:var(--green); }
 @media (prefers-reduced-motion:reduce) { button { transition:none; } }
 .board { background-color:var(--workspace); background-image:radial-gradient(var(--workspace-dot) 1px, transparent 1px); }
-.app-header .header-scene small { color:var(--chrome-muted); }
-.app-header .header-actions button.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
-.app-header .header-actions button.primary:hover { background:var(--accent-hover); }
+:is(.app-header, .maptable-bar) .header-scene small { color:var(--chrome-muted); }
+:is(.app-header, .maptable-bar) .header-actions button.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+:is(.app-header, .maptable-bar) .header-actions button.primary:hover { background:var(--accent-hover); }
 
 /* Shared RPG Tools home and account surfaces. */
 .rpg-hub { background:var(--bg); color:var(--ink); padding:0 max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - var(--page-width, 1040px))/2)); }
@@ -1695,7 +1695,7 @@ h3 { color:var(--ink); font-size:13px; }
 .side-panel > .panel-content { flex:1 1 auto; min-height:0; }
 @media(max-width:600px) {
  .app-header { height:auto; min-height:61px; flex-wrap:wrap; padding:10px 13px; row-gap:8px; }
- .app-header .header-actions { margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+ :is(.app-header, .maptable-bar) .header-actions { margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
  .campaign-dashboard > header { flex-wrap:wrap; gap:12px; }
 }
 .fog-selection-actions { display:flex; flex-wrap:wrap; gap:6px; }
@@ -1946,15 +1946,15 @@ h3 { color:var(--ink); font-size:13px; }
 @media(max-width:600px) { .dashboard-continue { flex-direction:column; align-items:stretch; } .dashboard-continue-action { justify-content:center; } }
 
 /* Breadcrumb back to Campaigns from a map. */
-.app-header .header-scene { gap:8px; }
-.app-header .crumb { min-height:32px; padding:4px 8px; font-size:13px; font-weight:500; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--chrome-text); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
-.app-header .crumb-home { display:inline-flex; align-items:center; gap:6px; }
-.app-header .crumb-home svg { color:var(--accent); }
-.app-header .crumb:hover { background:var(--chrome-hover); border-color:transparent; }
-.app-header .crumb-sep { color:var(--chrome-muted); flex-shrink:0; }
-.app-header .header-scene strong { font-size:13px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+:is(.app-header, .maptable-bar) .header-scene { gap:8px; }
+:is(.app-header, .maptable-bar) .crumb { min-height:32px; padding:4px 8px; font-size:13px; font-weight:500; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--chrome-text); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
+:is(.app-header, .maptable-bar) .crumb-home { display:inline-flex; align-items:center; gap:6px; }
+:is(.app-header, .maptable-bar) .crumb-home svg { color:var(--accent); }
+:is(.app-header, .maptable-bar) .crumb:hover { background:var(--chrome-hover); border-color:transparent; }
+:is(.app-header, .maptable-bar) .crumb-sep { color:var(--chrome-muted); flex-shrink:0; }
+:is(.app-header, .maptable-bar) .header-scene strong { font-size:13px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .header-campaigns-compact { display:none; }
-@media(max-width:1000px) { .app-header .header-campaigns-compact { display:inline-flex; align-items:center; gap:2px; min-height:40px; padding:6px 10px; background:transparent; border:1px solid var(--chrome-line); color:var(--chrome-text); font-weight:600; margin-right:auto; margin-left:8px; } }
+@media(max-width:1000px) { :is(.app-header, .maptable-bar) .header-campaigns-compact { display:inline-flex; align-items:center; gap:2px; min-height:40px; padding:6px 10px; background:transparent; border:1px solid var(--chrome-line); color:var(--chrome-text); font-weight:600; margin-right:auto; margin-left:8px; } }
 @media(max-width:600px) { .campaign-dashboard > header { padding:12px 16px; } .campaign-dashboard > header .header-actions { width:100%; flex-wrap:wrap; gap:8px; } .campaign-dashboard > header .header-link { padding-left:0; margin-right:auto; } }
 
 /* Maptable's names for the shared design tokens in app/appearance.css. */
@@ -2027,15 +2027,15 @@ button.primary, .rpg-open { font-weight:500; }
 .header-scene { gap:10px; }
 .header-scene .divider { height:20px; }
 .header-scene strong { font-weight:500; color:var(--ink); }
-.app-header .crumb { padding:4px 4px; color:var(--muted); font-weight:400; }
-.app-header .crumb:hover { color:var(--ink); background:transparent; text-decoration:underline; text-underline-offset:4px; }
-.app-header .crumb-home svg { display:none; }
-.app-header .crumb-sep { color:var(--line-strong); }
-.app-header .header-actions, .campaign-dashboard > header .header-actions { gap:4px; }
-.app-header .header-actions button, .campaign-dashboard > header .header-actions button { min-height:32px; padding:4px 10px; font-size:13px; }
-.app-header .header-actions button.primary { padding:4px 12px; }
-.app-header .header-actions .icon-button, .campaign-dashboard > header .icon-button { width:32px; padding:0; }
-.app-header .save-state, .campaign-dashboard > header .save-state { font-size:12px; margin-right:6px; }
+:is(.app-header, .maptable-bar) .crumb { padding:4px 4px; color:var(--muted); font-weight:400; }
+:is(.app-header, .maptable-bar) .crumb:hover { color:var(--ink); background:transparent; text-decoration:underline; text-underline-offset:4px; }
+:is(.app-header, .maptable-bar) .crumb-home svg { display:none; }
+:is(.app-header, .maptable-bar) .crumb-sep { color:var(--line-strong); }
+:is(.app-header, .maptable-bar) .header-actions, .campaign-dashboard > header .header-actions { gap:4px; }
+:is(.app-header, .maptable-bar) .header-actions button, .campaign-dashboard > header .header-actions button { min-height:32px; padding:4px 10px; font-size:13px; }
+:is(.app-header, .maptable-bar) .header-actions button.primary { padding:4px 12px; }
+:is(.app-header, .maptable-bar) .header-actions .icon-button, .campaign-dashboard > header .icon-button { width:32px; padding:0; }
+:is(.app-header, .maptable-bar) .save-state, .campaign-dashboard > header .save-state { font-size:12px; margin-right:6px; }
 .appearance-trigger { width:32px; height:32px; min-height:32px; }
 
 /* Board: icon rail, flat panel, compact tool bar. */
@@ -2171,12 +2171,12 @@ button.primary, .rpg-open { font-weight:500; }
 .scene-settings-note { margin-top:16px; }
 /* The scene name in the header opens a quick switcher. */
 .scene-switcher { position:relative; display:inline-flex; align-items:center; gap:2px; min-width:0; }
-.app-header .scene-switcher-trigger { display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--chrome-text); max-width:260px; }
+:is(.app-header, .maptable-bar) .scene-switcher-trigger { display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--chrome-text); max-width:260px; }
 .scene-switcher-trigger span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scene-switcher-trigger[aria-expanded="true"] { background:var(--chrome-hover); }
 .scene-step { display:inline-flex; }
-.app-header .scene-step .icon-button { min-height:28px; width:28px; padding:0; border:0; background:transparent; color:var(--chrome-muted); display:inline-flex; align-items:center; justify-content:center; }
-.app-header .scene-step .icon-button:hover { color:var(--chrome-text); background:var(--chrome-hover); }
+:is(.app-header, .maptable-bar) .scene-step .icon-button { min-height:28px; width:28px; padding:0; border:0; background:transparent; color:var(--chrome-muted); display:inline-flex; align-items:center; justify-content:center; }
+:is(.app-header, .maptable-bar) .scene-step .icon-button:hover { color:var(--chrome-text); background:var(--chrome-hover); }
 .scene-switcher-panel { position:absolute; top:calc(100% + 8px); left:0; z-index:var(--z-modal, 200); width:360px; max-width:calc(calc(100vw / var(--ui-zoom, 1)) - 24px); background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:0 16px 40px rgb(0 0 0 / .16); overflow:hidden; font-weight:400; }
 .scene-switcher-search { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); color:var(--muted); }
 .scene-switcher-search input { flex:1; border:0; background:transparent; padding:4px 0; min-height:0; color:var(--ink); outline:none; box-shadow:none; }
@@ -2268,11 +2268,11 @@ button.primary, .rpg-open { font-weight:500; }
  .app-shell .app-header::-webkit-scrollbar {display:none;}
  .app-shell .app-header > * {flex:none;}
  .app-shell .app-header > .save-chip-group, .app-shell .app-header > .save-chip {margin-left:auto;}
- .app-shell .app-header .header-actions[data-mobile-open="true"] {position:fixed;}
- .app-shell .app-header .crumbbar-menu, .app-shell .app-header .scene-switcher-panel {position:fixed;top:60px;left:8px;right:8px;width:auto;max-width:none;}
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] {position:fixed;}
+ .app-shell :is(.app-header, .maptable-bar) .crumbbar-menu, .app-shell :is(.app-header, .maptable-bar) .scene-switcher-panel {position:fixed;top:60px;left:8px;right:8px;width:auto;max-width:none;}
 }
 @media(max-width:799px) and (max-height:500px) {
- .app-shell .app-header .crumbbar-menu, .app-shell .app-header .scene-switcher-panel {top:48px;}
+ .app-shell :is(.app-header, .maptable-bar) .crumbbar-menu, .app-shell :is(.app-header, .maptable-bar) .scene-switcher-panel {top:48px;}
 }
 
 .site-links { display:contents; }
@@ -2301,30 +2301,30 @@ button.primary, .rpg-open { font-weight:500; }
 .scene-sheet, .scene-sheet-backdrop { display:none; }
 @media(max-width:799px) {
  .app-shell .app-header { gap:6px; padding:6px 8px; }
- .app-shell .app-header .tool-switch, .app-shell .app-header .header-scene { display:none; }
- .app-shell .app-header .header-campaigns-compact { display:inline-flex; align-items:center; justify-content:center; width:40px; min-width:40px; min-height:40px; padding:0; margin:0; border:0; border-radius:var(--radius); }
- .app-shell .app-header .header-campaigns-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
- .app-shell .app-header .header-campaigns-compact svg { width:24px; height:24px; }
+ .app-shell :is(.app-header, .maptable-bar) .tool-switch, .app-shell :is(.app-header, .maptable-bar) .header-scene { display:none; }
+ .app-shell :is(.app-header, .maptable-bar) .header-campaigns-compact { display:inline-flex; align-items:center; justify-content:center; width:40px; min-width:40px; min-height:40px; padding:0; margin:0; border:0; border-radius:var(--radius); }
+ .app-shell :is(.app-header, .maptable-bar) .header-campaigns-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+ .app-shell :is(.app-header, .maptable-bar) .header-campaigns-compact svg { width:24px; height:24px; }
  .app-shell .app-header > .header-scene-phone { display:flex; flex:1 1 0; min-width:90px; }
  .header-scene-phone .scene-switcher { flex:1; min-width:0; }
- .app-shell .app-header .header-scene-phone .scene-switcher-trigger { flex:1; min-width:0; max-width:none; min-height:40px; padding:4px 10px; justify-content:flex-start; font-size:15px; border:1px solid var(--chrome-line); }
- .app-shell .app-header .header-scene-phone .scene-switcher-trigger span { flex:0 1 auto; min-width:0; }
- .app-shell .app-header .header-scene-phone .scene-switcher-trigger svg { flex:none; margin-left:auto; }
+ .app-shell :is(.app-header, .maptable-bar) .header-scene-phone .scene-switcher-trigger { flex:1; min-width:0; max-width:none; min-height:40px; padding:4px 10px; justify-content:flex-start; font-size:15px; border:1px solid var(--chrome-line); }
+ .app-shell :is(.app-header, .maptable-bar) .header-scene-phone .scene-switcher-trigger span { flex:0 1 auto; min-width:0; }
+ .app-shell :is(.app-header, .maptable-bar) .header-scene-phone .scene-switcher-trigger svg { flex:none; margin-left:auto; }
  .app-shell .app-header > .save-chip-group, .app-shell .app-header > .save-chip { margin-left:0; }
  /* The AI chip is just its icon on a phone, so the scene name keeps its room. */
- .app-shell .app-header .ai-chip { width:40px; min-width:40px; height:40px; padding:0; justify-content:center; flex:none; }
- .app-shell .app-header .ai-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
- .app-shell .app-header .mobile-menu-button { width:40px; min-width:40px; min-height:40px; padding:0; justify-content:center; align-items:center; }
+ .app-shell :is(.app-header, .maptable-bar) .ai-chip { width:40px; min-width:40px; height:40px; padding:0; justify-content:center; flex:none; }
+ .app-shell :is(.app-header, .maptable-bar) .ai-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+ .app-shell :is(.app-header, .maptable-bar) .mobile-menu-button { width:40px; min-width:40px; min-height:40px; padding:0; justify-content:center; align-items:center; }
  /* The map menu: every row is an icon and a label, left-aligned, the same height. */
- .app-shell .app-header .header-actions[data-mobile-open="true"] { top:60px; flex-direction:column; align-items:stretch; gap:2px; padding:6px; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] > :is(a, button, .appearance) { width:100%; flex:none; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) { display:flex; align-items:center; justify-content:flex-start; gap:12px; width:100%; min-height:48px; height:auto; padding:0 12px; margin:0; border:0; border-radius:var(--radius); background:transparent; color:var(--chrome-text); font-size:15px; font-weight:500; text-align:left; text-decoration:none; position:relative; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button):hover { background:var(--chrome-hover); }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .header-menu-icon { display:block; flex:none; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) svg { width:18px; height:18px; flex:none; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .share-button { color:var(--accent); }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .icon-button::after { content:attr(aria-label); font-size:15px; font-weight:500; }
- .app-shell .app-header .header-actions[data-mobile-open="true"] .appearance-dot { position:absolute; left:26px; top:12px; margin:0; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] { top:60px; flex-direction:column; align-items:stretch; gap:2px; padding:6px; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] > :is(a, button, .appearance) { width:100%; flex:none; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) { display:flex; align-items:center; justify-content:flex-start; gap:12px; width:100%; min-height:48px; height:auto; padding:0 12px; margin:0; border:0; border-radius:var(--radius); background:transparent; color:var(--chrome-text); font-size:15px; font-weight:500; text-align:left; text-decoration:none; position:relative; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button):hover { background:var(--chrome-hover); }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .header-menu-icon { display:block; flex:none; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] :is(.header-menu-link, .header-menu-button, .appearance-trigger, .share-button, .tool-account, .icon-button) svg { width:18px; height:18px; flex:none; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .share-button { color:var(--accent); }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .icon-button::after { content:attr(aria-label); font-size:15px; font-weight:500; }
+ .app-shell :is(.app-header, .maptable-bar) .header-actions[data-mobile-open="true"] .appearance-dot { position:absolute; left:26px; top:12px; margin:0; }
  /* The scene list is a bottom sheet drawn over the whole page (in the page body, above the dice dock and tray). */
  .scene-sheet-backdrop { display:block; position:fixed; inset:0; z-index:400; background:rgb(0 0 0 / .5); }
  .scene-sheet { display:block; position:fixed; left:0; right:0; bottom:0; z-index:401; max-height:calc(85dvh / var(--ui-zoom, 1)); overflow:hidden; display:flex; flex-direction:column; background:var(--panel); color:var(--ink); border-top:1px solid var(--line); border-radius:16px 16px 0 0; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -12px 40px rgb(0 0 0 / .35); outline:none; }
@@ -2443,3 +2443,43 @@ button.primary, .rpg-open { font-weight:500; }
 /* The campaign dashboard's part of the page, below the site header, which a campaign theme fills edge to edge. */
 .rpg-hub:has(> .hub-skin) { display:flex; flex-direction:column; }
 .rpg-hub > .hub-skin { flex:1; margin:0 min(-20px,calc((var(--page-width, 1040px) - calc(100vw / var(--ui-zoom, 1)))/2)); padding:0 max(20px,calc((calc(100vw / var(--ui-zoom, 1)) - var(--page-width, 1040px))/2)); }
+
+/* Maptable inside a campaign: the shared campaign bar (components/campaign-bar.tsx) replaces the ToolSwitch and the crumbs.
+   Maptable's own rules above reach it through .maptable-bar. Its z-index stays at the header's so popovers sit over the map. */
+.app-shell .maptable-bar, .campaign-dashboard > .maptable-bar { height:auto; min-height:52px; padding:0 14px; gap:14px; justify-content:flex-start; overflow:visible; z-index:var(--z-header, 30); }
+.app-shell > .maptable-bar { flex:none; }
+/* When the bar is full the trail (and then the right end) drops to a row of its own instead of overflowing. */
+@media(min-width:761px) { .maptable-bar { flex-wrap:wrap; row-gap:0; } .maptable-bar .cbar-trail { flex:1 1 240px; min-width:240px; } }
+.maptable-bar .cbar-trail .crumbbar { min-width:0; flex:1 1 auto; }
+.maptable-bar .cbar-end { min-width:0; }
+.maptable-bar .header-actions { display:flex; align-items:center; gap:4px; margin-left:0; width:auto; flex-wrap:nowrap; }
+.maptable-bar .cbar-end > .map-sync-note { font-size:12px; color:var(--chrome-muted); white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+.maptable-phone-row { display:none; }
+@media(max-width:799px) {
+  .app-shell .maptable-bar { padding:0 8px; gap:6px; min-height:48px; }
+  .maptable-bar .cbar-trail { display:none; }
+  /* A scene is open on a phone: one row (mark, campaign, save, more menu, account). The map menu stays closed until asked for. */
+  .app-shell .maptable-bar .header-actions:not([data-mobile-open="true"]) { display:none; }
+  .app-shell .maptable-bar .header-actions[data-mobile-open="true"] { top:52px; position:fixed; }
+  /* The scene row under the bar: back to the Scene Picker and the phone scene switcher. */
+  .maptable-phone-row { display:flex; align-items:center; gap:6px; flex:none; box-sizing:border-box; min-height:44px; padding:2px 8px; position:relative; z-index:var(--z-header, 30); background:var(--chrome, var(--panel)); border-bottom:1px solid var(--chrome-line, var(--line)); }
+  .maptable-phone-row > .header-scene-phone { display:flex; flex:1 1 0; min-width:0; }
+  .maptable-phone-row .scene-switcher-panel, .maptable-phone-row .crumbbar-menu { position:fixed; top:96px; left:8px; right:8px; width:auto; max-width:none; }
+  /* Nothing may push the bar sideways at 390px: the save chip keeps its icon, its words live in its tooltip. */
+  .app-shell .maptable-bar .save-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .app-shell .maptable-bar .save-chip { padding:4px 8px; }
+  .app-shell .maptable-bar .cbar-end > .map-sync-note { display:none; }
+  .app-shell .maptable-bar .cbar-end { flex:none; }
+}
+@media(max-width:799px) and (max-height:500px) {
+  .app-shell .maptable-bar { min-height:44px; }
+  .maptable-phone-row { min-height:40px; }
+  .maptable-phone-row .scene-switcher-panel, .maptable-phone-row .crumbbar-menu { top:84px; }
+}
+@media(max-width:760px) {
+  .app-shell .maptable-bar { flex-wrap:nowrap; }
+  .campaign-dashboard > .maptable-bar { padding:0 8px; gap:8px; row-gap:0; flex-wrap:wrap; }
+  .campaign-dashboard > .maptable-bar .header-actions { width:auto; flex-wrap:nowrap; gap:2px; }
+  .campaign-dashboard > .maptable-bar .save-chip > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .campaign-dashboard > .maptable-bar .save-chip { padding:4px 8px; }
+}

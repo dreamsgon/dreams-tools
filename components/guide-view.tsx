@@ -19,7 +19,7 @@ export default function GuideView({ slug, html, contents }: { slug: string; html
     <SiteHeader active="guide" account />
     <nav className="guide-tools" aria-label="Tools and downloads">
       <a href="/maptable"><MapIcon size={16} aria-hidden="true" />Open Maptable</a>
-      <a href="/encyclopedia"><BookOpen size={16} aria-hidden="true" />Open the Encyclopedia</a>
+      <a href="/encyclopedia"><BookOpen size={16} aria-hidden="true" />Open the Wiki</a>
       <a href="/campaigns"><Flag size={16} aria-hidden="true" />Campaigns</a>
       <a href="/guide/tools-and-downloads" className="guide-tools-downloads" aria-current={slug === "tools-and-downloads" ? "page" : undefined}><Download size={16} aria-hidden="true" />Tools and downloads</a>
     </nav>

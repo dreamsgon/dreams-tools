@@ -1,0 +1,40 @@
+/* The campaign bar (campaign-bar.tsx), the same on every page inside a campaign. Namespaced cbar-.
+   It uses the chrome tokens from app/appearance.css, so it follows light and dark but keeps the same look
+   whatever the campaign's theme does to the page under it. */
+.campaign-bar { position:relative; z-index:var(--z-header, 30); display:flex; align-items:center; gap:14px; min-height:52px; box-sizing:border-box; padding:0 14px; background:var(--chrome, var(--panel)); color:var(--chrome-text, var(--ink)); border-bottom:1px solid var(--chrome-line, var(--line)); font-family:var(--font-sans); font-size:13px; }
+.cbar-mark { display:inline-grid; place-items:center; flex:none; width:32px; height:32px; border-radius:var(--radius, 4px); }
+.cbar-mark:hover { background:var(--chrome-hover, var(--accent-soft)); }
+.cbar-mark:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.cbar-switcher { flex:none; min-width:0; }
+.cbar-switcher .csw-btn { max-width:280px; border-color:var(--chrome-line, var(--line)); background:var(--control, transparent); color:var(--chrome-text, var(--ink)); }
+.cbar-switcher .csw-btn:hover { background:var(--chrome-hover, var(--accent-soft)); }
+
+.cbar-places { display:flex; align-self:stretch; align-items:stretch; gap:18px; flex:none; padding:0 4px; border-left:1px solid var(--chrome-line, var(--line)); padding-left:16px; }
+.cbar-places a, .cbar-wait > span { display:inline-flex; align-items:center; gap:3px; color:var(--chrome-muted, var(--muted)); font-weight:500; text-decoration:none; white-space:nowrap; box-shadow:inset 0 -2px transparent; }
+.cbar-places a:hover { color:var(--chrome-text, var(--ink)); text-decoration:none; }
+.cbar-places a[aria-current="page"], .cbar-wait > span.cur { color:var(--chrome-text, var(--ink)); box-shadow:inset 0 -2px var(--accent); }
+.cbar-places a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+/* A place the campaign doesn't have yet: quiet, and it opens the Dashboard ready to add it. */
+.cbar-places a.cbar-add { color:var(--chrome-muted, var(--muted)); font-weight:400; opacity:.8; }
+.cbar-places a.cbar-add:hover { opacity:1; }
+.cbar-wait { display:flex; gap:18px; }
+
+.cbar-trail { display:flex; align-items:center; flex:1 1 auto; min-width:0; gap:6px; padding-left:16px; border-left:1px solid var(--chrome-line, var(--line)); }
+.cbar-end { display:flex; align-items:center; gap:8px; flex:none; margin-left:auto; }
+.campaign-bar:not(:has(.cbar-trail)) .cbar-end { margin-left:auto; }
+
+/* Phones: two rows. The campaign and account on top, the places in equal columns under it.
+   A page that needs the height (an open map) hands the places to the switcher instead. */
+@media (max-width:760px) {
+  .campaign-bar { flex-wrap:wrap; gap:8px; padding:0 8px; min-height:48px; }
+  .cbar-switcher { flex:1 1 0; }
+  .cbar-switcher .csw-btn { max-width:none; width:100%; min-height:40px; border-color:transparent; background:none; }
+  .cbar-mark { width:40px; height:40px; }
+  .cbar-trail { display:none; }
+  .cbar-end { gap:2px; }
+  .cbar-places { order:3; flex:1 0 100%; display:grid; grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:0; margin:0 -8px; padding:0; border-left:0; border-top:1px solid var(--chrome-line, var(--line)); }
+  .cbar-places a, .cbar-wait > span { justify-content:center; min-height:44px; padding:0 4px; overflow:hidden; text-overflow:ellipsis; }
+  .cbar-wait { display:contents; }
+  .campaign-bar--no-phone-places .cbar-places { display:none; }
+  .campaign-bar--phone-trail .cbar-trail { order:4; display:flex; flex:1 0 100%; min-height:40px; margin:0 -8px; padding:0 8px; border-left:0; border-top:1px solid var(--chrome-line, var(--line)); overflow-x:auto; }
+}

@@ -52,7 +52,7 @@ test('rename, create and complete change both tools and keep them paired', async
 
   summary=await campaignAction(s,{action:'complete',maptableId:'m2',worldId:'w1'});
   assert.equal(summary.rows.find(r=>r.maptable?.id==='m2').encyclopedia.worldName,'Ashenwood');
-  await assert.rejects(()=>campaignAction(s,{action:'complete',maptableId:'m2',worldId:'w1'}),/already has Encyclopedia notes/);
+  await assert.rejects(()=>campaignAction(s,{action:'complete',maptableId:'m2',worldId:'w1'}),/already has a Wiki/);
 
   summary=await campaignAction(s,{action:'create',name:'Notes only',maptable:false,encyclopedia:true,worldId:'w1'});
   const notesOnly=summary.rows.find(r=>r.name==='Notes only');
@@ -216,7 +216,7 @@ test('forum: a campaign starts without one; setting it up makes an empty forum o
   b.data.set(forumKey('owner-1','e1'),{text:JSON.stringify({...JSON.parse(b.data.get(forumKey('owner-1','e1')).text),settings:{...JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings,title:'Kept'}}),etag:'x'});
   await store.create('owner-1','e1');
   assert.equal(JSON.parse(b.data.get(forumKey('owner-1','e1')).text).settings.title,'Kept');
-  await assert.rejects(()=>campaignAction(s,{action:'forum',encyclopediaId:'nope'}),/Encyclopedia notes/);
+  await assert.rejects(()=>campaignAction(s,{action:'forum',encyclopediaId:'nope'}),/no Wiki/);
 });
 
 test('forum: the GM chooses how it starts; the choices make the forum and set the groups, and a bad choice changes nothing', async () => {
@@ -270,7 +270,7 @@ test('forum setup: the confirm step says what will happen in plain words', async
 
 test('solo play is set when creating a campaign, switched on the campaign and needs Encyclopedia notes', async () => {
   const {s}=await setup();
-  await assert.rejects(campaignAction(s,{action:'create',name:'Alone',maptable:true,encyclopedia:false,solo:true}),/needs Encyclopedia notes/);
+  await assert.rejects(campaignAction(s,{action:'create',name:'Alone',maptable:true,encyclopedia:false,solo:true}),/needs a Wiki/);
   const made=await campaignAction(s,{action:'create',name:'Alone',maptable:false,encyclopedia:true,worldId:'w1',solo:true});
   assert.equal(made.rows.find(r=>r.name==='Alone').encyclopedia.solo,true);
   let summary=await campaignAction(s,{action:'solo',encyclopediaId:'e1',on:true});
@@ -278,5 +278,5 @@ test('solo play is set when creating a campaign, switched on the campaign and ne
   summary=await campaignAction(s,{action:'solo',encyclopediaId:'e1',on:false});
   assert.equal(summary.rows.find(r=>r.encyclopedia?.id==='e1').encyclopedia.solo,false);
   assert.equal('solo' in (await s.book.read('owner-1')).data.campaigns.find(c=>c.id==='e1'),false,'switching off leaves nothing behind');
-  await assert.rejects(campaignAction(s,{action:'solo',encyclopediaId:'nope',on:true}),/no Encyclopedia notes/);
+  await assert.rejects(campaignAction(s,{action:'solo',encyclopediaId:'nope',on:true}),/no Wiki/);
 });

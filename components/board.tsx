@@ -133,11 +133,11 @@ type Props = {
   renderNote?: (poi: PointOfInterest, at: { x: number; y: number; width: number; height: number }) => ReactNode;
   /** Player view: a tap on a marker (or on nothing, with null). */
   onPlayerPoiTap?: (id: string | null) => void;
-  /** The name of the Encyclopedia character a token's linked sheet belongs to, when it has rolls. Not given to players. */
+  /** The name of the Wiki character a token's linked sheet belongs to, when it has rolls. Not given to players. */
   sheetCharacterOf?: (tokenId: string) => string | undefined;
   /** Opens the roll list of that sheet, beside where the menu was. */
   onRollFromSheet?: (tokenId: string, at: { x: number; y: number }) => void;
-  /** An Encyclopedia page dropped on the map, with the marker it landed on. */
+  /** a Wiki page dropped on the map, with the marker it landed on. */
   onPageDrop?: (entryId: string, point: Point, poiId: string | null) => void;
   /** Map notes: layers drawn over the map in screen space (areas, their cards, drawing a new area). */
   renderOverlay?: (view: { x: number; y: number; scale: number; width: number; height: number }) => ReactNode;

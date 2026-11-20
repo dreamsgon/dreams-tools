@@ -45,7 +45,7 @@ test('a campaign without a half for the tool goes to its hub',()=>{
   assert.equal(hasHalf('maptable',s.rows[7]),true,'a Maptable campaign with no scenes yet still opens in Maptable');
   assert.equal(rowDetail('maptable',s.rows[7]),'No scenes yet');
   assert.equal(hubHref({key:'e:a b'}),'/campaigns/e%3Aa%20b');
-  assert.equal(rowDetail('maptable',s.rows[1]),'No maps yet · Add maps');
+  assert.equal(rowDetail('maptable',s.rows[1]),'No Maptable yet · Add Maptable');
   assert.equal(rowDetail('maptable',s.rows[0]),'2 scenes');
   assert.equal(rowDetail('encyclopedia',s.rows[0]),'Thedas · 3 pages');
 });

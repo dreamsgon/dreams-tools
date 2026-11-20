@@ -6,5 +6,5 @@ export const metadata = { title: "Campaign | RPG Tools" };
 export default async function CampaignPage({ params }: { params: Promise<{ key: string }> }) {
   const [{ key }, user] = await Promise.all([params, getAppUser()]);
   if (!user) redirect("/account");
-  return <main className="rpg-hub"><CampaignHub campaignKey={decodeURIComponent(key)} /></main>;
+  return <CampaignHub campaignKey={decodeURIComponent(key)} />;
 }

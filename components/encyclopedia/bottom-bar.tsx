@@ -23,11 +23,11 @@ type BarProps = {
 /** The phone's bottom bar (hidden above 720px by CSS): the places a thumb needs most. */
 export function BottomBar({ pagesRef, moreRef, ...p }: BarProps) {
   const cls = (on: boolean) => on ? "is-current" : "";
-  return <nav className="enc-bar" aria-label="Encyclopedia">
+  return <nav className="enc-bar" aria-label="Wiki">
     <button ref={pagesRef} type="button" className={cls(p.pagesOpen || p.pagesCurrent)} aria-expanded={p.pagesOpen} aria-controls="workspace-sidebar" aria-current={!p.pagesOpen && p.pagesCurrent ? "page" : undefined} onClick={p.onPages}><Menu size={20} aria-hidden="true"/><span>Pages</span></button>
     <button type="button" className={cls(p.searchOpen)} aria-haspopup="dialog" onClick={p.onSearch}><Search size={20} aria-hidden="true"/><span>Search</span></button>
     <button type="button" className={`enc-bar-new ${cls(p.newOpen)}`} aria-haspopup="dialog" disabled={!p.canCreate} aria-label="New entry" onClick={p.onNew}><span className="enc-bar-plus"><Plus size={24} aria-hidden="true"/></span><span>New</span></button>
-    <button type="button" className={cls(p.mapsCurrent)} disabled={!p.canCreate} aria-current={p.mapsCurrent ? "page" : undefined} onClick={p.onMaps}><MapIcon size={20} aria-hidden="true"/><span>Maps</span></button>
+    <button type="button" className={cls(p.mapsCurrent)} disabled={!p.canCreate} aria-current={p.mapsCurrent ? "page" : undefined} onClick={p.onMaps}><MapIcon size={20} aria-hidden="true"/><span>World maps</span></button>
     <button ref={moreRef} type="button" className={cls(p.moreOpen || p.moreCurrent)} aria-haspopup="dialog" aria-expanded={p.moreOpen} aria-current={!p.moreOpen && p.moreCurrent ? "page" : undefined} onClick={p.onMore}><Ellipsis size={20} aria-hidden="true"/><span>More</span></button>
   </nav>;
 }

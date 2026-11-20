@@ -16,7 +16,7 @@ To roll between the two while you play, add the **dice link** browser extension.
 
 ## 1. Get the script
 
-1. In RPG Tools, open the **Encyclopedia** and go to **AI & GitHub › Other tables › Connect a table**.
+1. In RPG Tools, open the **Wiki** and go to **AI & GitHub › Other tables › Connect a table**.
 2. Under **Roll20**, press **Copy the Roll20 script**. You can also press **Open the script** to see it in a new window.
 
 You can also [open the script here](/api/bridge/roll20/rpg-tools-roll20.js) and copy it.

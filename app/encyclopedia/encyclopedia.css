@@ -1284,3 +1284,28 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .builder-bulk{position:sticky;top:-1px;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
 .builder-bulk-count{flex:1;font-size:12px;color:var(--muted)}
 .builder-gone{margin-top:12px}
+
+/* The campaign bar over the Wiki (components/campaign-bar.tsx) and the player view's bar. The bar spans the page; the sidebar and the page sit under it. */
+.app-shell.wiki-shell{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+.wiki-shell>.wiki-bar{grid-column:1/-1;grid-row:1}
+.wiki-shell>.sidebar{grid-column:1;grid-row:2;align-self:stretch;min-height:calc(100vh / var(--ui-zoom, 1) - 52px)}
+.wiki-shell>.main-panel{grid-column:2;grid-row:2;align-self:stretch}
+.wiki-trail{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+.wiki-trail .topbar-crumbs{flex:1 1 auto;min-width:0;min-height:28px}
+.wiki-bar .cbar-end,.player-bar .cbar-end{min-width:0}
+.wiki-bar .search-box input{width:150px}
+.wiki-bar .button.primary.small{min-height:32px;padding:4px 12px;font-size:13px;white-space:nowrap}
+.wiki-bar .appearance-trigger,.player-bar .appearance-trigger{border-color:transparent}
+.player-bar .player-status{font-size:12px;color:var(--muted);white-space:nowrap}
+.player-bar .button.small{min-height:32px;padding:4px 12px;font-size:13px}
+@media(max-width:1300px){.wiki-bar .search-box{position:relative;padding-right:6px}.wiki-bar .search-box input{display:none}.wiki-bar .search-box .quick-hint::after{content:"";position:absolute;inset:0}.wiki-bar .button.primary.small{font-size:0;gap:0;padding:0 9px}}
+@media(max-width:1200px){.wiki-bar .theme-label,.player-bar .theme-label,.player-bar .player-status{display:none}}
+@media(max-width:1000px){.wiki-bar .theme-track,.player-bar .theme-track{display:none}}
+/* Phone: the bar is two rows (mark, campaign, controls; then the places). Search and New entry live in the bottom bar, the page tree in the drawer. */
+@media(max-width:720px){
+.app-shell.wiki-shell{display:block}
+.wiki-bar .search-box,.wiki-bar .button.primary.small,.wiki-bar .mobile-menu,.wiki-bar .appearance-trigger,.player-bar .player-status,.player-bar .player-refresh-long,.player-bar .appearance-trigger{display:none!important}
+.wiki-bar,.player-bar{max-width:100%}
+.wiki-bar .cbar-end,.player-bar .cbar-end{gap:2px}
+.wiki-bar .appearance-panel,.player-bar .appearance-panel{position:fixed;top:56px;bottom:auto;left:8px;right:8px;width:auto;max-width:none}
+}

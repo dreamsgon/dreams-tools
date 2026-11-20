@@ -25,7 +25,7 @@ function PageRow({ page, onRemove }: { page: Pick<NotePage, "id" | "title" | "ki
       {page.excerpt && <p>{page.excerpt}</p>}
     </div>
     {onRemove && <div className="note-page-actions">
-      <a className="note-icon" href={pageHref(page.id)} target="_blank" rel="noopener" aria-label={`Open ${page.title} in the Encyclopedia`} title="Open in the Encyclopedia"><ArrowUpRight size={14} /></a>
+      <a className="note-icon" href={pageHref(page.id)} target="_blank" rel="noopener" aria-label={`Open ${page.title} in the Wiki`} title="Open in the Wiki"><ArrowUpRight size={14} /></a>
       <button type="button" className="note-icon" aria-label={`Take ${page.title} off this note`} title="Take off this note" onClick={onRemove}><X size={14} /></button>
     </div>}
   </li>;
@@ -43,7 +43,7 @@ export function PageSearch({ pages, taken, onPick, autoFocus, placeholder = "Fin
         <span className="note-page-badge" style={{ background: groupColor[p.group] }} aria-hidden="true">{initial(p.title)}</span>
         <span><strong>{p.title}</strong><small>{p.kind}</small></span>
       </button></li>)}</ul>
-      : <p className="note-muted">{pages.length ? `No pages match “${query}”.` : "No Encyclopedia pages to link yet."}</p>}
+      : <p className="note-muted">{pages.length ? `No pages match “${query}”.` : "No Wiki pages to link yet."}</p>}
   </div>;
 }
 
@@ -66,7 +66,7 @@ export function GmNoteCard({ point, at, pages, linkable, loadError, onClose, onE
     <div className="map-note-body">
       {point.notes?.trim() && <div className="map-note-section"><span className="map-note-label">Quick notes</span><p className="map-note-text">{point.notes}</p></div>}
       {point.readAloud?.trim() && <div className="map-note-section"><span className="map-note-label">Read aloud</span><blockquote className="map-note-read">{point.readAloud}</blockquote></div>}
-      {(pages.length > 0 || missing > 0) && <div className="map-note-section"><span className="map-note-label">From the Encyclopedia</span>
+      {(pages.length > 0 || missing > 0) && <div className="map-note-section"><span className="map-note-label">From the Wiki</span>
         <ul className="note-pages">{pages.map(p => <PageRow key={p.id} page={p} onRemove={() => onRemove(p.id)} />)}</ul>
         {loadError ? <p className="note-muted" role="alert">{loadError}</p> : missing > 0 && <p className="note-muted">{missing === 1 ? "One linked page was" : `${missing} linked pages were`} deleted or moved to another campaign.</p>}
       </div>}

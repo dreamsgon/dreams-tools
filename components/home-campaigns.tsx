@@ -9,6 +9,7 @@ import {
 } from "@/lib/home-layout";
 import type { HomeData } from "@/lib/home-server";
 import { Attention, Folders, Head, Links, Notes, Pinned, Quests, Roll, Sessions, Todo, type Act } from "./home-widgets";
+import { addToolHref } from "@/lib/campaign-nav";
 import { facts, KindIcon, kindName, forumHref, mapsHref, notesHref, openHref, pageHref, plural, when } from "./home-shared";
 
 export { when };
@@ -142,7 +143,7 @@ function Campaigns({ layout, data, act }: { layout: HomeLayout; data: HomeData; 
       {(show !== "pinned" || !shown.length) && <Link className="home-new-campaign" href="/campaigns?new=1">
         <span aria-hidden="true"><Plus size={18} /></span>
         New campaign
-        <small>{data.summary.rows.length ? "Keep its maps and notes together" : "Start your first campaign"}</small>
+        <small>{data.summary.rows.length ? "Keep its Maptable and Wiki together" : "Start your first campaign"}</small>
       </Link>}
     </div>
     {list.length > shown.length && <p className="home-more">{plural(list.length - shown.length, "more campaign")} · <Link href="/campaigns">See them all</Link></p>}
@@ -153,7 +154,7 @@ function Campaigns({ layout, data, act }: { layout: HomeLayout; data: HomeData; 
 
 function Recent({ layout, data }: { layout: HomeLayout; data: HomeData }) {
   const recent: RecentPage[] = (data.summary?.recent ?? []).slice(0, layout.options?.recent?.count ?? 6);
-  if (!recent.length) return data.summary ? <><Head title="Recently edited" id="home-recent-title" /><p className="home-muted">Pages you edit in the Encyclopedia show up here.</p></> : null;
+  if (!recent.length) return data.summary ? <><Head title="Recently edited" id="home-recent-title" /><p className="home-muted">Pages you edit in the Wiki show up here.</p></> : null;
   return <div className="home-recent home-grow">
     <Head title="Recently edited" id="home-recent-title" />
     <ul>{recent.map(p => <RecentRow key={p.id} page={p} />)}</ul>
@@ -174,10 +175,10 @@ function ContinueCard({ row, opened }: { row: CampaignRow; opened: string | null
       {e?.description && <p className="home-continue-text">{e.description}</p>}
       <p className="home-continue-facts">{[e?.worldName, ...facts(row).map(([n, l]) => `${n} ${l}`)].filter(Boolean).join(" · ")}</p>
       <div className="home-continue-actions">
-        {notes && <a className="home-button home-button-primary" href={notes}><BookOpen size={15} aria-hidden="true" />Wiki</a>}
-        {maps && <a className={notes ? "home-button" : "home-button home-button-primary"} href={maps}><MapIcon size={15} aria-hidden="true" />Maps</a>}
-        {forum && <a className="home-button" href={forum}><MessagesSquare size={15} aria-hidden="true" />Forum</a>}
-        <Link className="home-button home-button-quiet" href={openHref(row)}><LayoutGrid size={15} aria-hidden="true" />Campaign hub</Link>
+        <Link className="home-button home-button-primary" href={openHref(row)}><LayoutGrid size={15} aria-hidden="true" />Dashboard</Link>
+        {maps ? <a className="home-button" href={maps}><MapIcon size={15} aria-hidden="true" />Maptable</a> : <a className="home-button home-button-quiet" href={addToolHref(row.key, "maptable")}><Plus size={15} aria-hidden="true" />Maptable</a>}
+        {notes ? <a className="home-button" href={notes}><BookOpen size={15} aria-hidden="true" />Wiki</a> : <a className="home-button home-button-quiet" href={addToolHref(row.key, "encyclopedia")}><Plus size={15} aria-hidden="true" />Wiki</a>}
+        {forum ? <a className="home-button" href={forum}><MessagesSquare size={15} aria-hidden="true" />Forum</a> : e && <a className="home-button home-button-quiet" href={addToolHref(row.key, "forum")}><Plus size={15} aria-hidden="true" />Forum</a>}
       </div>
     </div>
     <div className="home-continue-side">
@@ -187,7 +188,7 @@ function ContinueCard({ row, opened }: { row: CampaignRow; opened: string | null
         <span>{p.title}<small>{p.path || kindName(p.kind)}</small></span>
         <time dateTime={p.updatedAt}>{when(p.updatedAt)}</time>
       </a></li>)}</ul>
-        : <p>{notes ? <>No pages yet. <a href={notes}>Write the first one</a>.</> : "This campaign has no Encyclopedia notes yet."}</p>}
+        : <p>{notes ? <>No pages yet. <a href={notes}>Write the first one</a>.</> : "This campaign has no Wiki yet."}</p>}
     </div>
   </section>;
 }
@@ -203,9 +204,9 @@ function CampaignCard({ row, pinned, onPin }: { row: CampaignRow; pinned: boolea
       <dl className="home-campaign-facts">{facts(row).map(([n, l]) => <div key={l}><dt>{l}</dt><dd>{n}</dd></div>)}</dl>
       <div className="home-campaign-foot">
         <span className="home-campaign-links">
-          {notes && <a href={notes}><BookOpen size={14} aria-hidden="true" />Wiki</a>}
-          {maps && <a href={maps}><MapIcon size={14} aria-hidden="true" />Maps</a>}
-          {forum && <a href={forum}><MessagesSquare size={14} aria-hidden="true" />Forum</a>}
+          {maps ? <a href={maps}><MapIcon size={14} aria-hidden="true" />Maptable</a> : <a className="home-add" href={addToolHref(row.key, "maptable")}><Plus size={14} aria-hidden="true" />Maptable</a>}
+          {notes ? <a href={notes}><BookOpen size={14} aria-hidden="true" />Wiki</a> : <a className="home-add" href={addToolHref(row.key, "encyclopedia")}><Plus size={14} aria-hidden="true" />Wiki</a>}
+          {forum ? <a href={forum}><MessagesSquare size={14} aria-hidden="true" />Forum</a> : e && <a className="home-add" href={addToolHref(row.key, "forum")}><Plus size={14} aria-hidden="true" />Forum</a>}
         </span>
         {e?.lastEdited && <span>{when(e.lastEdited)}</span>}
       </div>
@@ -302,6 +303,6 @@ function Settings_({ type, draft, data, change }: { type: HomeWidget; draft: Hom
   if (type === "sessions") return <div className="home-settings"><label>Look ahead<select value={o?.sessions?.days ?? 14} onChange={e => change(d => setOption(d, "sessions", { days: num(e.target.value) as 7 | 14 | 30 }))}>
     <option value={7}>1 week</option><option value={14}>2 weeks</option><option value={30}>1 month</option></select></label></div>;
   if (type === "roll") return <div className="home-settings"><label>Show your tables<input type="checkbox" role="switch" className="home-switch" checked={o?.roll?.tables !== false} onChange={e => change(d => setOption(d, "roll", { tables: e.target.checked }))} /></label>
-    <p className="home-muted">Star a random table in the Encyclopedia to add it here.</p></div>;
+    <p className="home-muted">Star a random table in the Wiki to add it here.</p></div>;
   return <div className="home-settings"><p className="home-muted">Add and remove links right in the section once you are done customizing.</p></div>;
 }

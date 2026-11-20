@@ -8,7 +8,7 @@ Three ways to bring a character from another game or tool into RPG Tools, and on
 
 Works for any game system. The AI app (ChatGPT or Claude) turns your sheet into a standard **`rpgtools-sheet`** JSON file that RPG Tools reads.
 
-1. In the Encyclopedia open **Characters › Import sheet** (a new character), or a character's sheet section › **Import a sheet** / **Import again** (to update).
+1. In the Wiki open **Characters › Import sheet** (a new character), or a character's sheet section › **Import a sheet** / **Import again** (to update).
 2. The dialog **copies a prompt** that includes the game system and your campaign's stat form, so the AI reuses your field names. Paste it into ChatGPT or Claude along with your sheet (text, PDF text, or notes).
 3. Paste the AI's reply into the dialog, or upload a `.json`. Chat around the JSON and code fences are ignored.
 4. **Check step**: you see token slots, every field matched to your stat form by name (choose *Use*, *Add as new* or *Don't import*), trackers, rolls, tabs, traits and anything the AI couldn't place.

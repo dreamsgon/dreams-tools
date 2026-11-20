@@ -112,7 +112,7 @@ export async function startBackup(s: Session, bucket: S3Bucket, key: string) {
 export async function readFiles(s: Session, bucket: S3Bucket, key: string, paths: unknown) {
   if (!Array.isArray(paths) || paths.length > 200) throw new Error("Ask for at most 200 files at a time.");
   const both = await readBoth(s), row = rowOf(both, key), eid = row.encyclopedia?.id;
-  if (!eid) throw new Error("Only a campaign with Encyclopedia notes has files.");
+  if (!eid) throw new Error("Only a campaign with a Wiki has files.");
   const out: Record<string, string | null> = {};
   await each(paths.filter(isBackupFile), async path => {
     const object = await bucket.get(fileKey(s.owner, eid, path));
@@ -147,7 +147,7 @@ export async function putImage(s: Session, bucket: S3Bucket, body: { tool?: unkn
   await bucket.delete(transfer.key).catch(() => {});
   const bytes = new Uint8Array(transfer.bytes), type = sniffImage(bytes);
   if (!type || type !== transfer.type) throw new Error("That picture is not a PNG, JPEG or WebP image.");
-  if (ref.tool === "encyclopedia" && bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("An Encyclopedia picture can be at most 8 MB.");
+  if (ref.tool === "encyclopedia" && bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("A Wiki picture can be at most 8 MB.");
   await bucket.put(imageKey(s, ref), bytes, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: { contentType: type } });
   return { ok: true };
 }

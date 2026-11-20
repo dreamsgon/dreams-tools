@@ -16,9 +16,9 @@ export type {EncyclopediaCharacter,EncyclopediaRaw};
 export {encyclopediaCharacters,encyclopediaVehicles,campaignCharacters,pairedCampaign};
 
 let cached:Promise<EncyclopediaRaw>|null=null;
-/** The signed-in user's Encyclopedia, read-only and fetched once per page unless refreshed. */
+/** The signed-in user's Wiki, read-only and fetched once per page unless refreshed. */
 export function loadEncyclopedia(refresh=false):Promise<EncyclopediaRaw>{
- if(!cached||refresh){cached=fetch(bookWorkspaceUrl()).then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Encyclopedia characters.":v.error??"Could not load your Encyclopedia.");return v.data??{};});cached.catch(()=>{cached=null;});}
+ if(!cached||refresh){cached=fetch(bookWorkspaceUrl()).then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Wiki characters.":v.error??"Could not load your Wiki.");return v.data??{};});cached.catch(()=>{cached=null;});}
  return cached;
 }
 
@@ -26,15 +26,15 @@ const ALL_KEY="maptable:encyclopedia-tokens-all";
 export const roleColor={pc:"#3f6f9a",companion:"#5f7d4a",npc:"#8f5a3c",creature:"#8a3b4a"} as const;
 
 /**
- * Lists Encyclopedia characters as the same compact tiles as the saved tokens: click one, then click the map, or drag it on.
- * Placing creates the token in Maptable's own data. Nothing is written to the Encyclopedia.
+ * Lists Wiki characters as the same compact tiles as the saved tokens: click one, then click the map, or drag it on.
+ * Placing creates the token in Maptable's own data. Nothing is written to the Wiki.
  */
 export default function EncyclopediaTokens({disabled,onAdd,campaignId,coGm,workspace,armed,setArmed}:{disabled:boolean;onAdd:(c:EncyclopediaCharacter)=>void|Promise<void>;campaignId?:string|null;coGm?:boolean;workspace:Workspace;armed:ArmedToken|null;setArmed:(a:ArmedToken|null)=>void}){
  const [raw,setRaw]=useState<EncyclopediaRaw|null>(null),[all,setAll]=useState(()=>{try{return localStorage.getItem(ALL_KEY)==="1";}catch{return false;}}),[error,setError]=useState(""),[query,setQuery]=useState(""),[added,setAdded]=useState("");
  const gesture=usePlacementGesture(token=>{if(disabled){setAdded("Open a scene to place tokens.");return;}setArmed(toggleArmed(armed,token));});
  useEffect(()=>{const controller=new AbortController();
   loadEncyclopedia(true).then(raw=>{if(!controller.signal.aborted)setRaw(raw);})
-   .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load your Encyclopedia.");});
+   .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Could not load your Wiki.");});
   return()=>controller.abort();},[]);
  const paired=raw?pairedCampaign(raw,campaignId):undefined,scoped=!!paired&&!all;
  const list=useMemo(()=>raw?campaignCharacters(raw,campaignId,all):null,[raw,campaignId,all]);
@@ -51,9 +51,9 @@ export default function EncyclopediaTokens({disabled,onAdd,campaignId,coGm,works
  return <section className="encyclopedia-tokens token-gallery-body"><div className="gallery-scroll">
   <label className="gallery-search ency-token-search"><Search size={14}/><input aria-label="Find a character" placeholder="Find a character" value={query} onChange={e=>setQuery(e.target.value)}/></label>
   {paired&&<label className="ency-token-toggle"><input type="checkbox" checked={all} onChange={e=>toggle(e.target.checked)}/>Show other campaigns and worlds</label>}
-  {raw&&!paired&&!coGm&&<p className="ency-token-hint">This campaign isn&apos;t linked to an Encyclopedia campaign yet. Link them on the <Link href="/campaigns">Campaigns page</Link>.</p>}
+  {raw&&!paired&&!coGm&&<p className="ency-token-hint">This campaign isn&apos;t linked to a Wiki campaign yet. Link them on the <Link href="/campaigns">Campaigns page</Link>.</p>}
   {disabled&&<p className="ency-token-hint">Open a map to add tokens.</p>}
-  {error?<p className="ency-token-hint" role="alert">{error}</p>:!list?<p className="ency-token-hint">Loading characters…</p>:!shown.length?<p className="ency-token-hint">{list.length?"No characters match.":scoped?"No characters in this campaign yet. Use “Show other campaigns and worlds” to bring in characters from elsewhere.":"No characters in your Encyclopedia yet."}</p>:
+  {error?<p className="ency-token-hint" role="alert">{error}</p>:!list?<p className="ency-token-hint">Loading characters…</p>:!shown.length?<p className="ency-token-hint">{list.length?"No characters match.":scoped?"No characters in this campaign yet. Use “Show other campaigns and worlds” to bring in characters from elsewhere.":"No characters in your Wiki yet."}</p>:
    worlds.map(w=><section className="gallery-group" key={w} aria-label={w}>{worlds.length>1&&<h3 className="ency-token-world-heading"><span>{w}</span></h3>}
     <div className="token-tile-grid">{shown.filter(c=>c.world===w).map(c=><TokenTile key={c.id} armed={armed?.id===encyclopediaPlacementId(c.id)} name={c.name} tint={roleSide[c.role]}
      title={disabled?"Open a scene to place tokens":`${c.name}${c.origin?` (${c.origin})`:""}. ${c.detail}. Click, then click the map to place it, or drag it onto the map.`}

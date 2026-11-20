@@ -15,7 +15,7 @@ export const navIds = ["quests", "codex", "relationships", "characters", "maps",
 export type NavId = typeof navIds[number];
 /** Menu items that need a campaign; a world on its own does not show them. */
 export const campaignOnlyNav: readonly NavId[] = ["quests", "codex", "calendar"];
-export const navLabels: Record<NavId, string> = { quests: "Quests", codex: "Codex", relationships: "Relationships", characters: "Characters", maps: "Maps", calendar: "Calendar", tables: "Random tables", templates: "Templates" };
+export const navLabels: Record<NavId, string> = { quests: "Quests", codex: "Codex", relationships: "Relationships", characters: "Characters", maps: "World maps", calendar: "Calendar", tables: "Random tables", templates: "Templates" };
 
 /** Parts of the Encyclopedia a link can open: the menu items, and Look. */
 export const viewIds = [...navIds, "look"] as const;

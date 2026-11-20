@@ -1,18 +1,18 @@
 # Set up Foundry VTT
 
-This page walks you through connecting a Foundry VTT world to one RPG Tools campaign, step by step. When you're done, your player characters appear in Foundry as actors and stay up to date. Your Encyclopedia pages, quests and session recaps appear as journals. HP changes go both ways, and public rolls reach your campaign's Discord.
+This page walks you through connecting a Foundry VTT world to one RPG Tools campaign, step by step. When you're done, your player characters appear in Foundry as actors and stay up to date. Your Wiki pages, quests and session recaps appear as journals. HP changes go both ways, and public rolls reach your campaign's Discord.
 
 It takes about five minutes. For what the bridge does in general, see [VTT bridges](VTT-Bridges).
 
 ## What you need
 
 - A Foundry VTT world on **version 12 or 13**, opened as the **GM**. Any game system works. D&D 5e and Pathfinder 2e get the most filled in.
-- An RPG Tools campaign with its characters in the Encyclopedia.
+- An RPG Tools campaign with its characters in the Wiki.
 - To use Discord rolls, a Discord channel already set for the campaign. See [Dice, rolls and Discord](Dice-Rolls-and-Discord).
 
 ## 1. Make a bridge key in RPG Tools
 
-1. Open the **Encyclopedia** and choose the campaign you want to connect.
+1. Open the **Wiki** and choose the campaign you want to connect.
 2. Open **AI & GitHub**, scroll to **Other tables (VTT bridge)** and press **Connect a table**.
 3. Set **Table** to **Foundry VTT**. You can name the key, for example "Thursday table". Then press **Make bridge key**.
 4. The dialog shows three things. Keep it open for the next steps:
@@ -63,7 +63,7 @@ Open an actor. The **RPG Tools rolls** button at the top of its sheet lists the 
 
 ## Journals and what players see
 
-Each Encyclopedia page becomes a journal. Its Overview and each tab become the journal's pages. A quest also gets **Goals**, **Log** and **GM prep** pages, and a session's recap gets its timeline, quotes and GM notes.
+Each Wiki page becomes a journal. Its Overview and each tab become the journal's pages. A quest also gets **Goals**, **Log** and **GM prep** pages, and a session's recap gets its timeline, quotes and GM notes.
 
 Players see exactly what RPG Tools shows them:
 
