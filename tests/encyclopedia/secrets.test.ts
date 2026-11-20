@@ -36,3 +36,22 @@ test('player views never contain secret text from the overview or a shared tab',
   assert(JSON.stringify(campaignExport(s, 'demo-campaign')).includes('SECRET-TAB'));
   assert(JSON.stringify(callReadTool(s, 'read_article', { campaign_id: 'demo-campaign', article_id: 'demo-greyhaven' })).includes('SECRET-OVERVIEW'));
 });
+
+test('stripSecrets: blocks inside a secret do not end it early; asides and (gm) lines go too', () => {
+  assert.equal(stripSecrets('A\n::: secret\n::: note\nINNER\n:::\nSTILL HIDDEN\n:::\nB'), 'A\nB');
+  assert.equal(stripSecrets('The innkeeper %%is the cult leader%% smiles.'), 'The innkeeper smiles.');
+  assert.equal(stripSecrets('::: infobox\nKind: Inn\n(gm) Owner: The cult\n:::'), '::: infobox\nKind: Inn\n:::');
+  assert.equal(stripSecrets('(GM) whole line\nKept'), 'Kept');
+  assert.equal(stripSecrets('100% sure, 50% likely'), '100% sure, 50% likely');
+  assert.equal(stripSecrets('::: note\nPlain\n:::'), '::: note\nPlain\n:::');
+});
+
+test('players never receive asides, (gm) rows or text in a secret holding nested blocks', () => {
+  const data = demoWorkspace();
+  const page = data.entries.find(e => e.id === 'demo-greyhaven')!;
+  page.overviewVisibility = 'players';
+  page.body = 'Open %%ASIDE%% text\n(gm) GMLINE\n::: secret\n::: columns\nNESTED\n+++\nMORE\n:::\nAFTER\n:::\nEnd';
+  const json = JSON.stringify(playerCampaign(data, 'demo-campaign'));
+  for (const word of ['ASIDE', 'GMLINE', 'NESTED', 'MORE', 'AFTER']) assert.ok(!json.includes(word), word);
+  assert.ok(json.includes('End'));
+});

@@ -1,4 +1,4 @@
-import { MAPTABLE_LINK, SECRET_OPEN, visibleEntries, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
+import { MAPTABLE_LINK, stripSecrets, visibleEntries, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
 
 /**
  * A player editing pages from the player pages, as each page's Who can edit allows (lib/members.ts pageRights).
@@ -10,7 +10,8 @@ const no = (message: string): never => { throw new PlayerEditError(message); };
 export type Rights = { edit: ReadonlySet<string>; subPages: ReadonlySet<string>; made: ReadonlySet<string> };
 export type Editor = { name: string; as: 'player' | 'co-gm' };
 
-const hasSecret = (text: string) => text.split('\n').some(line => SECRET_OPEN.test(line.replace(/\r$/, '')));
+// Secrets, asides and GM-only lines: a player can't rewrite text that holds any of them, since they would see it.
+const hasSecret = (text: string) => stripSecrets(text) !== text;
 /** Whether a player may rewrite this text: nothing in it is hidden from them. */
 export const playerCanRewrite = (text: string) => !hasSecret(text) && !new RegExp(MAPTABLE_LINK.source).test(text);
 
