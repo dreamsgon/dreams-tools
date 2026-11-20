@@ -67,7 +67,7 @@ export default function SaveChip({ status, error, conflict, onSave, hints: own, 
       <p>{autosave.on ? "Changes save a moment after each edit." : "Nothing saves until you press Save or Ctrl+S. Leaving the page with unsaved changes asks first."}</p>
       <hr />
       {(autosave.lastSaved || (manual && autosave.changes > 0)) && <p className="save-chip-when">{autosave.lastSaved ? `Last saved ${time(autosave.lastSaved)}` : "Not saved yet this visit"}{phase === "unsaved" && autosave.changes > 0 ? ` · ${autosave.changes} change${autosave.changes === 1 ? "" : "s"} since` : ""}</p>}
-      <p className="save-chip-note">This choice is kept on this device, for Maptable and the Encyclopedia.</p>
+      <p className="save-chip-note">This choice is kept on this device, for Maptable and the Wiki.</p>
     </div>}
   </span>;
 }

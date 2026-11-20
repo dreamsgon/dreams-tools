@@ -34,7 +34,7 @@ export async function POST(request:Request){
  try{
   const raw=await request.text();if(raw.length>12000)return json({error:'Request too large'},413);
   const input=z.object({campaignId:campaignId.optional(),maptableCampaignId:campaignId.optional(),action:z.enum(['undo','pause','resume','approve','skip','approveAll']),id:z.string().max(100).optional(),args:z.record(z.string().max(40),z.unknown()).optional()}).parse(JSON.parse(raw));
-  const bucket=getBucket(),found=await campaignFor(bucket,owner,input);if(!found)throw Error('This map has no Encyclopedia campaign paired with it.');
+  const bucket=getBucket(),found=await campaignFor(bucket,owner,input);if(!found)throw Error('This map has no Wiki campaign paired with it.');
   const args={...input,campaignId:found};
   // Suggestions from a helper AI: run it (as suggested or as the GM changed it), or drop it.
   if(args.action==='approve'||args.action==='skip'){

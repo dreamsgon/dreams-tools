@@ -26,7 +26,7 @@ export function forumAi(bucket: S3Bucket): NonNullable<Deps["ai"]> {
       }
       const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === use.connectionId);
       if (!c?.api) throw new ForumError("The forum's AI connection was removed. Ask the GM to choose another in Forum settings.");
-      if (overLimit(c.api)) throw new ForumError(`${c.name} has used this month's tokens. The GM can raise its limit in the Encyclopedia.`);
+      if (overLimit(c.api)) throw new ForumError(`${c.name} has used this month's tokens. The GM can raise its limit in the Wiki.`);
       let target: ReturnType<typeof targetFor>;
       try { target = targetFor(c, use.apiKey); } catch (e) { throw new ForumError((e as Error).message); }
       let tokens = 0;

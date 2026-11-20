@@ -8,10 +8,10 @@ Everything you can open or download, in one place. These links go to this site, 
 |---|---|---|
 | Campaigns | Every campaign, its maps and notes together | [Open Campaigns](/campaigns) |
 | Maptable | Maps, tokens, fog, lights, initiative and dice | [Open Maptable](/maptable) |
-| RPG Encyclopedia | Pages, characters, quests, maps, calendars | [Open the Encyclopedia](/encyclopedia) |
+| Wiki | Pages, characters, quests, maps, calendars | [Open the Wiki](/encyclopedia) |
 | Account | Sign in, display name, avatar, email and password | [Open Account](/account) |
 
-The Map Creator, dungeon generator and hex map generator open from inside Maptable. World maps, star systems and random tables open from inside the Encyclopedia.
+The Map Creator, dungeon generator and hex map generator open from inside Maptable. World maps, star systems and random tables open from inside the Wiki.
 
 ## Downloads for other virtual tabletops
 
@@ -28,7 +28,7 @@ None of these files hold campaign data; your bridge key or your own files carry 
 
 The dice link isn't in the Chrome Web Store yet. Unzip it, open `chrome://extensions` in Chrome or Edge, turn on **Developer mode**, press **Load unpacked** and pick the `rpg-tools-dice-link` folder.
 
-You can also reach all of these in the Encyclopedia under **AI & GitHub › Other tables › Connect a table**, where you make the bridge key Foundry needs.
+You can also reach all of these in the Wiki under **AI & GitHub › Other tables › Connect a table**, where you make the bridge key Foundry needs.
 
 ## For AI apps and coding assistants
 
@@ -37,7 +37,7 @@ These scripts are in the [RPG Tools source on GitHub](https://github.com/dreamsg
 | Script | What it does |
 |---|---|
 | `rpg-tools-mcp.mjs` | Connects a local AI app to one campaign, the same as the hosted connector address |
-| `encyclopedia-mcp.mjs` | Read-only Encyclopedia access with a read-only agent key |
+| `encyclopedia-mcp.mjs` | Read-only Wiki access with a read-only agent key |
 | `maptable-mcp.mjs` | Maptable access with a campaign agent key |
 | `campaign-sync.mjs` | Exports a campaign's JSON and Markdown to a local Git folder |
 
@@ -45,4 +45,4 @@ These scripts are in the [RPG Tools source on GitHub](https://github.com/dreamsg
 
 - **Map images and Universal VTT (.dd2vtt)** from the Map Creator's **Use in Maptable** dialog. See [Map Creator](Map-Creator).
 - **Character sheets (.json)** from a character's sheet section. See [Sheet import, export and Google Sheets](Sheet-Import-Export-and-Google-Sheets).
-- **Backups (.json)** from Maptable's export dialog and the Encyclopedia's Settings.
+- **Backups (.json)** from Maptable's export dialog and the Wiki's Settings.

@@ -27,7 +27,7 @@ export const TAG_LIMIT = 500, TAGS_PER_ITEM = 30, TAG_NAME_LIMIT = 40, TARGET_LI
 const id = z.string().min(1).max(60).regex(/^[a-zA-Z0-9_-]+$/);
 export const TAG_SCOPES = ["encyclopedia", "campaigns", "maptable"] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];
-export const TAG_SCOPE_NAMES: Record<TagScope, string> = { encyclopedia: "Encyclopedia", campaigns: "Campaign", maptable: "Maptable" };
+export const TAG_SCOPE_NAMES: Record<TagScope, string> = { encyclopedia: "Wiki", campaigns: "Campaign", maptable: "Maptable" };
 const target = z.string().min(3).max(140).regex(/^(entry|scene|campaign):[a-zA-Z0-9_:-]+$/);
 export const tagSchema = z.object({ id, name: z.string().trim().min(1).max(TAG_NAME_LIMIT), color: tagColorSchema, scope: z.enum(TAG_SCOPES) });
 export const tagLibrarySchema = z.object({

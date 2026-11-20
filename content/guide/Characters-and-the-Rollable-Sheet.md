@@ -56,7 +56,7 @@ When the Stats tab is **Player visible**, players get a read-only sheet in its g
 
 ## From Maptable
 
-Tokens can **link** to an Encyclopedia character (tokens added from the Encyclopedia link automatically). A linked token's menu offers **Roll from <name>'s sheet** and the roll goes through the dice tray, which can post to Discord.
+Tokens can **link** to a Wiki character (tokens added from the Wiki link automatically). A linked token's menu offers **Roll from <name>'s sheet** and the roll goes through the dice tray, which can post to Discord.
 
 > **Tutorial: a skill with a modifier**
 > 1. Stats tab › **Add a layout** › *d20 + modifier*.

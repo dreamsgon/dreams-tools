@@ -37,7 +37,7 @@ export async function POST(request:Request){
   const raw=JSON.parse(await request.text());
   const where=z.object({campaignId:id.optional(),maptableCampaignId:id.optional(),chatId:id}).parse(raw),input=action.parse(raw);
   const bucket=getBucket(),campaign=await campaignFor(bucket,owner,where);
-  if(!campaign)throw Error('This map has no Encyclopedia campaign paired with it.');
+  if(!campaign)throw Error('This map has no Wiki campaign paired with it.');
   if(input.action==='rename'){await renameChat(bucket,owner,campaign,where.chatId,input.title);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
   if(input.action==='delete'){await deleteChat(bucket,owner,campaign,where.chatId);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
   const chat=await readChat(bucket,owner,campaign,where.chatId,{full:true});
@@ -57,6 +57,6 @@ export async function POST(request:Request){
    const saved=await store.saveTagged(owner,{...data,entries:[...data.entries,page]},revision);
    if(saved)return json({ok:true,page:{id:page.id,title:page.title,folder:folder?.title??null}});
   }
-  throw Error('Your Encyclopedia is busy. Try again.');
+  throw Error('Your Wiki is busy. Try again.');
  }catch(e){return json({error:e instanceof Error&&!(e instanceof z.ZodError)?e.message:'Could not change that chat.'},400);}
 }

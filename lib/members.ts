@@ -17,7 +17,7 @@ export type Permission = (typeof permissionKeys)[number];
 export const permissionInfo: Record<Permission, { name: string; forum?: true; soon?: true; hint?: string }> = {
   seePlayer: { name: "See the front page and player pages" },
   seeGm: { name: "See GM-only pages, secrets and hidden tokens" },
-  editPages: { name: "Edit Encyclopedia pages", hint: "Also needs “See GM-only pages” for now." },
+  editPages: { name: "Edit Wiki pages", hint: "Also needs “See GM-only pages” for now." },
   editOwnCharacter: { name: "Edit their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
   addSubPages: { name: "Add sub-pages under their own character page", hint: "Starts on for them when you add them to their page's Who can edit." },
   editMaps: { name: "Edit maps and run the table in Maptable", hint: "Also needs “See GM-only pages”: maps show hidden tokens." },

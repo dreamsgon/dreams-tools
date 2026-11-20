@@ -25,7 +25,7 @@ export const homeInfo: Record<HomeWidget, { name: string; hint: string; size: Ho
   folders: { name: "Campaign folders", hint: "Your folders, opened right here", size: "m" },
   links: { name: "Quick links", hint: "Any links you add: sheets, Discord, music", size: "s" },
   recent: { name: "Recently edited", hint: "Pages changed lately, all campaigns", size: "m" },
-  pinned: { name: "Pinned pages", hint: "Pages you pin in the Encyclopedia", size: "s" },
+  pinned: { name: "Pinned pages", hint: "Pages you pin in the Wiki", size: "s" },
   quests: { name: "Active quests", hint: "Across every campaign", size: "m" },
   todo: { name: "GM to-do", hint: "A checklist only you see", size: "s" },
   notes: { name: "Scratchpad", hint: "Notes only you see", size: "s" },

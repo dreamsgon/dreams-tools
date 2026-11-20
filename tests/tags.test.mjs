@@ -394,7 +394,7 @@ test('scope: a tag can only go on targets of its own kind', () => {
   const lib=mixed();
   assert.throws(()=>applyTagAction(lib,{action:'add',target:'entry:p1',tagId:'c1'}),/Campaign tag can only go on campaigns/);
   assert.throws(()=>applyTagAction(lib,{action:'add',target:'entry:p1',tagId:'m1'}),/Maptable tag/);
-  assert.throws(()=>applyTagAction(lib,{action:'add',target:'scene:s1',tagId:'t1'}),/Encyclopedia tag can only go on pages/);
+  assert.throws(()=>applyTagAction(lib,{action:'add',target:'scene:s1',tagId:'t1'}),/Wiki tag can only go on pages/);
   assert.throws(()=>applyTagAction(lib,{action:'add',target:'campaign:e:e1',tagId:'m1'}),/Maptable tag/);
   assert.deepEqual(run(lib,{action:'add',target:'campaign:e:e1',tagId:'c1'}).on,{'campaign:e:e1':['c1']});
   assert.equal(targetScope('scene:s1'),'maptable');

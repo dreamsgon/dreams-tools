@@ -64,10 +64,10 @@ export async function handleSheetHp(request: Request, deps: Deps) {
       const next = body.action === "hp" ? storeHp(data, body.entryId, body.value, now) : storeWriteBack(data, body.entryId, body.on);
       if (await deps.store.save(owner, next, revision)) return json({ ok: true });
     }
-    return json({ error: "The Encyclopedia is busy. Try again in a moment." }, 409);
+    return json({ error: "The Wiki is busy. Try again in a moment." }, 409);
   } catch (e) {
     return e instanceof SheetHpError ? json({ error: e.message }, e.status)
       : e instanceof z.ZodError || e instanceof SyntaxError ? json({ error: "That request isn't valid." }, 400)
-      : json({ error: "Could not save to your Encyclopedia." }, 500);
+      : json({ error: "Could not save to your Wiki." }, 500);
   }
 }

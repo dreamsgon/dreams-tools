@@ -14,7 +14,7 @@ Fantasy Grounds doesn't need a bridge key. It can't reach the web, so it never t
 
 ## 1. Get the extension
 
-1. In RPG Tools, open the **Encyclopedia** and go to **AI & GitHub › Other tables › Connect a table**.
+1. In RPG Tools, open the **Wiki** and go to **AI & GitHub › Other tables › Connect a table**.
 2. Under **Fantasy Grounds**, press **Download the extension**. You get a file named `rpg-tools.ext`. Don't unzip it.
 
 You can also [download the extension here](/api/bridge/fantasygrounds/rpg-tools.ext).

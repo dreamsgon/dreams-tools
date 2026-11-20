@@ -99,7 +99,7 @@ export const FONT_ROLES: Record<FontRole, { label: string; cssVar: string; stora
     ],
   },
   reading: {
-    label: "Reading (Encyclopedia articles)", cssVar: "--font-reading", storageKey: "rpg-tools:font-reading", defaultId: "source-serif",
+    label: "Reading (Wiki articles)", cssVar: "--font-reading", storageKey: "rpg-tools:font-reading", defaultId: "source-serif",
     sample: "A quiet village at the edge of the Ashenwood.",
     options: [
       { id: "source-serif", label: "Source Serif 4", stack: serif("Source Serif 4"), query: null },

@@ -51,9 +51,9 @@ export const hubHref = (row: CampaignRow) => `/campaigns/${encodeURIComponent(ro
 
 /** The small line under a campaign name. */
 export function rowDetail(tool: SwitcherTool, row: CampaignRow): string {
-  if (tool === "maptable") return !row.maptable ? "No maps yet · Add maps" : row.maptable.scenes ? plural(row.maptable.scenes, "scene") : "No scenes yet";
+  if (tool === "maptable") return !row.maptable ? "No Maptable yet · Add Maptable" : row.maptable.scenes ? plural(row.maptable.scenes, "scene") : "No scenes yet";
   const world = row.encyclopedia?.worldName ?? "";
-  return row.encyclopedia ? [world, plural(row.encyclopedia.pages, "page")].filter(Boolean).join(" · ") : "Maps only · Add notes";
+  return row.encyclopedia ? [world, plural(row.encyclopedia.pages, "page")].filter(Boolean).join(" · ") : "Maptable only · Add Wiki";
 }
 
 /** True when the text names the campaign or its world, ignoring case and extra spaces. */

@@ -30,7 +30,7 @@ export function RollPanel({ tables, library, showTables = true, emptyText }: { t
         <span>{t.name}</span>
         {t.rollable ? <button type="button" className="rw-link" onClick={() => rollOn(t.id, t.name)}>Roll</button>
           : <a className="rw-link" href="/encyclopedia?view=tables">Open<ArrowUpRight size={12} aria-hidden="true" /></a>}
-      </li>)}</ul> : <p className="rw-muted">{emptyText ?? "Star a random table in the Encyclopedia to add it here."}</p>}
+      </li>)}</ul> : <p className="rw-muted">{emptyText ?? "Star a random table in the Wiki to add it here."}</p>}
     </div>}
   </>;
 }

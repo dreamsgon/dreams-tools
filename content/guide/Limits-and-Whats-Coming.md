@@ -3,8 +3,8 @@
 ## Good to know
 
 - **Accounts and sharing**: separate accounts; no live multiplayer yet. Players join by link or through Members.
-- **Storage**: the Encyclopedia workspace is limited to 2 MB; atlas images up to 8 MB each. Uploaded map icons up to 1 MB, up to 40 per map.
-- **Maptable and Encyclopedia stay separate**: pairing links them but maps do not sync automatically.
+- **Storage**: the Wiki workspace is limited to 2 MB; atlas images up to 8 MB each. Uploaded map icons up to 1 MB, up to 40 per map.
+- **Maptable and Wiki stay separate**: pairing links them but maps do not sync automatically.
 - **Maptable fog**: manual fog; automatic wall-based vision is not built.
 - **Offline mode** is not available.
 - **Email**: signup, confirmation and reset email for ordinary users needs custom SMTP set up by the site owner.

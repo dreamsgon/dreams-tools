@@ -179,7 +179,7 @@ export default function CampaignSwitcher({ tool, title, subtitle, isCurrent, onP
         })}
       </div>
       <div className="csw-foot">
-        {/* Full-page links, as between the tools: Maptable and the Encyclopedia have separate layouts. */}
+        {/* Full-page links, as between the tools: Maptable and the Wiki have separate layouts. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/campaigns" onClick={footLink("/campaigns")}><LayoutGrid size={14} aria-hidden="true" />All campaigns</a>
         {onWorlds && <button type="button" onClick={() => { close(); onWorlds(); }}><Globe size={14} aria-hidden="true" />Worlds</button>}

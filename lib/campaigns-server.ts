@@ -43,7 +43,7 @@ export const backupKey = (owner: string) => encyclopediaPrefix(owner) + "backups
 async function backupOnce(s: Session, both: Awaited<ReturnType<typeof readBoth>>) {
   const key = backupKey(s.owner);
   if (await s.bucket.head(key)) return;
-  const body = JSON.stringify({ createdAt: new Date().toISOString(), note: "Maptable and Encyclopedia data before the Campaigns page changed anything.", maptable: both.map?.workspace ?? null, encyclopedia: both.book.data });
+  const body = JSON.stringify({ createdAt: new Date().toISOString(), note: "Maptable and Wiki data before the Campaigns page changed anything.", maptable: both.map?.workspace ?? null, encyclopedia: both.book.data });
   await s.bucket.put(key, body, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: { contentType: "application/json" } });
 }
 
@@ -110,7 +110,7 @@ function addMapCampaign(map: MapWorkspace, name: string) {
 function addBookCampaign(book: BookWorkspace, body: { worldId?: unknown; newWorld?: unknown; solo?: unknown }, name: string, description: string, maptableId?: string) {
   let worlds = book.worlds, worldId = str(body.worldId);
   if (!worldId || !worlds.some(w => w.id === worldId && !w.isTemplate)) {
-    if (typeof body.newWorld !== "string" || !body.newWorld.trim()) throw new Error("Choose a world for the Encyclopedia notes.");
+    if (typeof body.newWorld !== "string" || !body.newWorld.trim()) throw new Error("Choose a world for the Wiki.");
     worldId = newId();
     worlds = [...worlds, { id: worldId, name: cleanName(body.newWorld), description: "", archived: false }];
   }
@@ -135,7 +135,7 @@ export async function campaignAction(s: Session, body: CampaignAction) {
       await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === mid ? { ...c, name } : c) });
     }
     if (eid) {
-      if (!both.book.data.campaigns.some(c => c.id === eid)) throw new Error("That Encyclopedia campaign no longer exists. Reload the page.");
+      if (!both.book.data.campaigns.some(c => c.id === eid)) throw new Error("That Wiki campaign no longer exists. Reload the page.");
       const description = body.description === undefined ? undefined : describe(body.description);
       await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === eid ? { ...c, name, ...(description === undefined ? {} : { description }) } : c) });
     }
@@ -143,7 +143,7 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     const name = cleanName(body.name), description = describe(body.description);
     if (!body.maptable && !body.encyclopedia) throw new Error("Choose at least one tool.");
     // Solo play is kept with the Encyclopedia notes, where the characters are.
-    if (body.solo === true && !body.encyclopedia) throw new Error("A solo campaign needs Encyclopedia notes: they hold your characters.");
+    if (body.solo === true && !body.encyclopedia) throw new Error("A solo campaign needs a Wiki: it holds your characters.");
     let mapId: string | undefined;
     // Encyclopedia problems (such as no world chosen) are found before Maptable is changed.
     const book = body.encyclopedia ? addBookCampaign(both.book.data, body, name, description) : null;
@@ -153,7 +153,7 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     const eid = str(body.encyclopediaId), mid = str(body.maptableId);
     if (eid) {
       const campaign = both.book.data.campaigns.find(c => c.id === eid);
-      if (!campaign) throw new Error("That Encyclopedia campaign no longer exists. Reload the page.");
+      if (!campaign) throw new Error("That Wiki campaign no longer exists. Reload the page.");
       if (campaign.maptableCampaignId && mapNow.collections.some(c => c.id === campaign.maptableCampaignId)) throw new Error("This campaign already has a Maptable campaign.");
       const made = addMapCampaign(mapNow, cleanName(campaign.name));
       await saveMap(s, both.map, made.next);
@@ -161,13 +161,13 @@ export async function campaignAction(s: Session, body: CampaignAction) {
     } else if (mid) {
       const campaign = mapNow.collections.find(c => c.id === mid && c.kind === "campaign");
       if (!campaign) throw new Error("That Maptable campaign no longer exists. Reload the page.");
-      if (both.book.data.campaigns.some(c => c.maptableCampaignId === mid)) throw new Error("This campaign already has Encyclopedia notes.");
+      if (both.book.data.campaigns.some(c => c.maptableCampaignId === mid)) throw new Error("This campaign already has a Wiki.");
       await saveBook(s, both.book.revision, addBookCampaign(both.book.data, body, campaign.name, "", mid).next);
     } else throw new Error("Choose a campaign.");
   } else if (body.action === "forum") {
     // Sets up the campaign's forum: an empty one in storage, and the flag the campaign pages read.
     const eid = str(body.encyclopediaId), campaign = both.book.data.campaigns.find(c => c.id === eid);
-    if (!campaign) throw new Error("That campaign has no Encyclopedia notes, which its forum lives with. Reload the page.");
+    if (!campaign) throw new Error("That campaign has no Wiki, which its forum lives with. Reload the page.");
     // `setup` is what the GM confirmed (lib/forum/setup.ts); left out, the forum starts as it always did. A forum that is
     // already there (used before forums were opt-in) keeps its boards, settings and the groups' permissions.
     const parsed = body.setup === undefined ? { success: true as const, data: defaultForumSetup() } : forumSetupSchema.safeParse(body.setup);
@@ -181,7 +181,7 @@ export async function campaignAction(s: Session, body: CampaignAction) {
   } else if (body.action === "solo") {
     // Solo play: just the GM, with an oracle or an AI. Nothing else changes, so it can be switched back at any time.
     const eid = str(body.encyclopediaId), campaign = both.book.data.campaigns.find(c => c.id === eid);
-    if (!campaign) throw new Error("That campaign has no Encyclopedia notes, which solo play lives with. Reload the page.");
+    if (!campaign) throw new Error("That campaign has no Wiki, which solo play lives with. Reload the page.");
     if (typeof body.on !== "boolean") throw new Error("Choose solo play on or off.");
     if ((campaign.solo === true) !== body.on) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => {
       if (c.id !== campaign.id) return c;
@@ -334,7 +334,7 @@ export async function saveDashboard(s: Session, key: string, input: unknown) {
 export async function saveFrontPage(s: Session, key: string, input: unknown) {
   const both = await readBoth(s);
   const row = rowByKey(summaryOf(both).rows, key);
-  if (!row?.encyclopedia) throw new Error("Start Encyclopedia notes for this campaign to give it a front page.");
+  if (!row?.encyclopedia) throw new Error("Start a Wiki for this campaign to give it a front page.");
   const parsed = frontPageSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That front page could not be saved.");
   const frontPage = parsed.data;

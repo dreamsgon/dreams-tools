@@ -29,8 +29,8 @@ type Ctx = { grant: BridgeGrant; store: EncyclopediaStore; bucket: ReturnType<ty
 /** Runs a bridge call: checks the key, the rate and the body size, and turns errors into JSON with the right status. */
 export async function bridge(request: Request, run: (ctx: Ctx) => Promise<Response>) {
   const key = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
-  if (!key) return reply({ error: "A bridge key is required: Authorization: Bearer rpgb_… Make one in the Encyclopedia under AI & GitHub › Other tables." }, 401);
-  const wrong = () => reply({ error: "This bridge key was revoked or is wrong. Make a new one in the Encyclopedia under AI & GitHub › Other tables." }, 401);
+  if (!key) return reply({ error: "A bridge key is required: Authorization: Bearer rpgb_… Make one in the Wiki under AI & GitHub › Other tables." }, 401);
+  const wrong = () => reply({ error: "This bridge key was revoked or is wrong. Make a new one in the Wiki under AI & GitHub › Other tables." }, 401);
   if (!BRIDGE_KEY.test(key)) return wrong();
   try {
     const bucket = getBucket(), grant = await bridgeGrant(bucket, key);

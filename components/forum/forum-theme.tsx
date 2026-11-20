@@ -334,11 +334,11 @@ function CssTab({ t, set, area, beside, href }: { t: Theme; set: (t: Theme) => v
 function HelpTab({ beside }: { beside: string }) {
   return <div className="cp-section cp-help">
     <h3>How themes work</h3>
-    <p>A theme is colours, fonts, corners, the banner and stylesheets. Save as many as {THEME_LIMITS.saved}; one is live, and members see it across the campaign: the forum, the Encyclopedia, Maptable and the campaign’s dashboard. Saving a theme that’s live doesn’t change what members see until you press Save and make live.</p>
+    <p>A theme is colours, fonts, corners, the banner and stylesheets. Save as many as {THEME_LIMITS.saved}; one is live, and members see it across the campaign: the forum, the Wiki, Maptable and the campaign’s dashboard. Saving a theme that’s live doesn’t change what members see until you press Save and make live.</p>
     <h3>A stylesheet for each part</h3>
     <p>Colours, fonts and corners apply everywhere. Each part is built differently, so each has its own stylesheet tab with its class names. The {beside} beside this shows its own as you type; Preview opens the others in a new tab with the theme you’re editing.</p>
     <h3>Open it from anywhere</h3>
-    <p>This Admin CP opens from every part of the campaign: Forum settings, the Encyclopedia’s Look, the palette button in Maptable’s header and Theme on the campaign’s dashboard. A campaign doesn’t need a forum to have a theme.</p>
+    <p>This Admin CP opens from every part of the campaign: Forum settings, the Wiki’s Look, the palette button in Maptable’s header and Theme on the campaign’s dashboard. A campaign doesn’t need a forum to have a theme.</p>
     <h3>Variables</h3>
     <p><code>--bg --panel --raised --line --line-strong --ink --muted --accent --accent-2 --on-accent --accent-soft --font-display --font-reading --font-sans --radius</code></p>
     <h3>What the safety checks do</h3>

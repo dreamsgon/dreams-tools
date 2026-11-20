@@ -14,8 +14,8 @@
 - [World maps](World-Maps)
 - [Star systems and space](Star-Systems-and-Space)
 
-**Encyclopedia**
-- [Encyclopedia basics](Encyclopedia-Basics)
+**Wiki**
+- [Wiki basics](Encyclopedia-Basics)
 - [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
 - [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 - [Inventory, spells and stores](Inventory-Spells-and-Stores)

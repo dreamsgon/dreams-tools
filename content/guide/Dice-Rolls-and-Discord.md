@@ -27,7 +27,7 @@ Advantage and disadvantage turn a single d20 into `2d20kh1` or `2d20kl1`; other 
 
 ## Rolls inside your writing
 
-In any Encyclopedia article or tab, `[[1d20+5]]` or `[[1d20+5|Label]]` becomes a click-to-roll chip with a result card. A formula needs a die, so `[[1999]]` stays a plain link. `[[table:Name]]` rolls a random table. `{{word|note}}` adds a hover note. Players get rolls as plain, working chips but never the hidden note text.
+In any Wiki article or tab, `[[1d20+5]]` or `[[1d20+5|Label]]` becomes a click-to-roll chip with a result card. A formula needs a die, so `[[1999]]` stays a plain link. `[[table:Name]]` rolls a random table. `{{word|note}}` adds a hover note. Players get rolls as plain, working chips but never the hidden note text.
 
 ## Discord
 

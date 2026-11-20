@@ -443,7 +443,7 @@ function NewCampaign({ summary, busy, close, send }: { summary: CampaignSummary;
         <label className="campaigns-check"><input type="checkbox" checked={encyclopedia} onChange={e => setEncyclopedia(e.target.checked)} /><BookOpen size={16} aria-hidden="true" /><span><strong>Wiki</strong> campaign notes in {worldId ? `the ${worldName}` : "a new"} world</span></label>
       </fieldset>
       <fieldset><legend>Who plays</legend>
-        <label className="campaigns-check"><input type="checkbox" checked={solo && encyclopedia} disabled={!encyclopedia} onChange={e => setSolo(e.target.checked)} /><UserRound size={16} aria-hidden="true" /><span><strong>Just me, solo</strong> no other players, with an oracle or an AI. You keep every GM power and play the player characters, with a player view for your character posts.{!encyclopedia && " Needs Encyclopedia notes, which hold your characters."}</span></label>
+        <label className="campaigns-check"><input type="checkbox" checked={solo && encyclopedia} disabled={!encyclopedia} onChange={e => setSolo(e.target.checked)} /><UserRound size={16} aria-hidden="true" /><span><strong>Just me, solo</strong> no other players, with an oracle or an AI. You keep every GM power and play the player characters, with a player view for your character posts.{!encyclopedia && " Needs a Wiki, which holds your characters."}</span></label>
       </fieldset>
     </form>
   </Modal>;

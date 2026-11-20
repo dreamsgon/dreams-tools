@@ -1,6 +1,6 @@
-# Encyclopedia basics
+# Wiki basics
 
-The RPG Encyclopedia is a campaign wiki. Open it at `/encyclopedia`. It holds **worlds** (shared lore) and **campaigns**, nested pages, character pages, maps, calendars with moons and seasons, weather and travel, templates and player sharing.
+The Wiki is your campaign notebook. Open it at `/encyclopedia`. It holds **worlds** (shared lore) and **campaigns**, nested pages, character pages, maps, calendars with moons and seasons, weather and travel, templates and player sharing.
 
 ## Pages inside pages
 
@@ -45,7 +45,7 @@ A character or **Creature** page can hold a **picture**. Press **Frame token** t
 
 ## Random tables
 
-**Random tables** (a page in the Encyclopedia) holds one library per account.
+**Random tables** (a page in the Wiki) holds one library per account.
 
 - Kinds: **dice-and-range** tables, **weighted lists**, **word pairs** and a **yes/no oracle** (odds, tension 1 to 9 per campaign, twists on doubles).
 - Use a table in every campaign or only chosen ones; copy or share between campaigns.

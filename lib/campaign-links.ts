@@ -219,7 +219,7 @@ export function applyPairs(book: BookWorkspace, map: Pick<MapWorkspace, "collect
   const maps = new Set((map?.collections ?? []).filter(c => c.kind === "campaign").map(c => c.id));
   let campaigns = book.campaigns;
   for (const { encyclopediaId, maptableId } of pairs) {
-    if (!campaigns.some(c => c.id === encyclopediaId)) throw new Error("That Encyclopedia campaign no longer exists. Reload the page.");
+    if (!campaigns.some(c => c.id === encyclopediaId)) throw new Error("That Wiki campaign no longer exists. Reload the page.");
     if (maptableId !== null && !maps.has(maptableId)) throw new Error("That Maptable campaign no longer exists. Reload the page.");
     campaigns = campaigns.map(c => {
       if (c.id === encyclopediaId) return withPair(c, maptableId);

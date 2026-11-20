@@ -42,7 +42,7 @@ function DeleteCampaign({ row, close, onDeleted }: { row: CampaignRow; close: ()
   const matches = typed.trim().toLocaleLowerCase() === row.name.trim().toLocaleLowerCase();
   const parts = [
     row.maptable && `${plural(row.maptable.scenes, "scene")} in Maptable, with its saved tokens`,
-    row.encyclopedia && `${plural(row.encyclopedia.pages, "page")} in the Encyclopedia (${row.encyclopedia.worldName ? `${row.encyclopedia.worldName}'s` : "the world's"} shared lore stays)`,
+    row.encyclopedia && `${plural(row.encyclopedia.pages, "page")} in the Wiki (${row.encyclopedia.worldName ? `${row.encyclopedia.worldName}'s` : "the world's"} shared lore stays)`,
     row.encyclopedia?.forum && "its forum and every post in it",
     row.encyclopedia && "its saved AI chats, session transcripts and random tables used only in it",
   ].filter(Boolean) as string[];

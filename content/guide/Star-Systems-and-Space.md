@@ -1,6 +1,6 @@
 # Star systems and space
 
-Run a space setting by drawing a galaxy, a sector, a star system and its planets. Everything is built from the Encyclopedia's **entry types**: Galaxy, Sector, Star system and (for a charted world) a place page. The space tabs are **GM only** for now; players see only tabs you share.
+Run a space setting by drawing a galaxy, a sector, a star system and its planets. Everything is built from the Wiki's **entry types**: Galaxy, Sector, Star system and (for a charted world) a place page. The space tabs are **GM only** for now; players see only tabs you share.
 
 ## 1. Galaxy
 

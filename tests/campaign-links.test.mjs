@@ -50,7 +50,7 @@ test('pairing adds only an optional link, moves a pairing, and can be removed', 
 
 test('saved Encyclopedia data rejects a Maptable campaign paired twice, and imports drop pairings', () => {
   const data=book();data.campaigns[0].maptableCampaignId='m1';data.campaigns[1].maptableCampaignId='m1';
-  assert.throws(()=>workspaceSchema.parse(data),/only one Encyclopedia campaign/);
+  assert.throws(()=>workspaceSchema.parse(data),/only one Wiki campaign/);
   data.campaigns[1].maptableCampaignId=undefined;delete data.campaigns[1].maptableCampaignId;
   const parsed=workspaceSchema.parse(data);
   const copied=importCopy(emptyWorkspace(),parsed);

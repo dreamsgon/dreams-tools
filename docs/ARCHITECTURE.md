@@ -38,7 +38,7 @@ Map data schemas are retained from the 2026-11-09 extraction. The original proje
 
 Hashed player/agent keys resolve to an owner and campaign, then are checked against the current campaign pointer so replacement and revocation invalidate future reads. Player responses use the original field/calendar/fog filtering. Agent keys include GM content but only the selected campaign and shared world lore. Map and encyclopedia keys are independent. Authenticated image reads redirect to five-minute signed URLs; already issued URLs remain usable until expiry.
 
-`app/(tools)/` holds Maptable/account styles; `app/encyclopedia/` has its own layout/theme/styles. Cross-module navigation uses full page anchors to avoid global-style leakage. The encyclopedia's campaign-sync script is an explicit local export/import workflow, not automatic hosted GitHub sync.
+`app/(tools)/` holds Maptable/account styles; `app/encyclopedia/` has its own layout/theme/styles. Cross-module navigation uses full page anchors to avoid global-style leakage. The shared campaign bar (`components/campaign-bar.tsx`, with its links and same-place switching in `lib/campaign-nav.ts`) sits on the Dashboard, Maptable, Wiki (the Encyclopedia) and Forum and uses those anchors. People read the Encyclopedia as "Wiki"; routes, code and storage keep the old name. The encyclopedia's campaign-sync script is an explicit local export/import workflow, not automatic hosted GitHub sync.
 
 ## Campaign forum
 
