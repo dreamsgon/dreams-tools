@@ -122,11 +122,11 @@ export function requestNotes(r: RecapRequest) {
 }
 
 /** Leaves out what the GM said not to make, whatever the AI sent. */
-export function honourSkips<T extends { recap: string; timeline: unknown[]; quotes?: unknown[]; found?: unknown[]; quests?: unknown[]; codex?: unknown[]; gmNotes?: string }>(input: T, r?: RecapRequest): T {
+export function honourSkips<T extends { recap: string; timeline: unknown[]; quotes?: unknown[]; found?: unknown[]; quests?: unknown[]; codex?: unknown[]; loot?: unknown[]; ties?: unknown[]; gameDate?: unknown; gmNotes?: string }>(input: T, r?: RecapRequest): T {
   const skip = new Set(r?.skip ?? []);
   return {
     ...input,
     ...(skip.has("recap") ? { recap: "" } : {}), ...(skip.has("timeline") ? { timeline: [] } : {}), ...(skip.has("quotes") ? { quotes: [] } : {}),
-    ...(skip.has("found") ? { found: [], codex: [] } : {}), ...(skip.has("quests") ? { quests: [] } : {}), ...(skip.has("gmNotes") ? { gmNotes: "" } : {}),
+    ...(skip.has("found") ? { found: [], codex: [], loot: [], ties: [], gameDate: undefined } : {}), ...(skip.has("quests") ? { quests: [] } : {}), ...(skip.has("gmNotes") ? { gmNotes: "" } : {}),
   };
 }

@@ -6,12 +6,12 @@
 import { z } from "zod";
 
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
-export const recapPageKinds = ["character", "place", "faction", "lore", "note"] as const;
+export const recapPageKinds = ["character", "creature", "place", "faction", "lore", "note"] as const;
 
 /** One thing the AI found that waits for the GM: a new page, a line for an existing page, or a quest change. */
 export const recapItemSchema = z.object({
   id,
-  kind: z.enum(["newPage", "update", "questLog", "newQuest", "codex"]),
+  kind: z.enum(["newPage", "update", "questLog", "newQuest", "codex", "loot", "tie", "date"]),
   /** The page or quest's name as the AI gave it. */
   name: z.string().trim().min(1).max(160),
   /** The existing page or quest it was matched to. */
@@ -23,6 +23,16 @@ export const recapItemSchema = z.object({
   /** A quest objective to tick, by its text. */
   tick: z.string().max(300).optional(),
   playersSee: z.boolean().optional(),
+  /** Loot: how many. The character who carries it is `pageId`, and `name` is the item. */
+  qty: z.number().int().min(1).max(1_000_000).optional(),
+  /** A tie: `name` (and `pageId`) is where it starts, `to` (and `toId`) where it goes, `typeId` its kind of tie, `reversed` when it is stored on `to`. */
+  to: z.string().trim().min(1).max(160).optional(),
+  toId: id.optional(),
+  typeId: id.optional(),
+  reversed: z.boolean().optional(),
+  /** An in-world date: the calendar and the day to move it on to. `name` is the date as written. */
+  calendarId: id.optional(),
+  date: z.object({ year: z.number().int().min(1).max(99999), periodId: id, day: z.number().int().min(1).max(130) }).optional(),
   state: z.enum(["open", "done", "skipped"]),
 });
 export const beatSchema = z.object({ id, title: z.string().trim().min(1).max(200), big: z.boolean(), steps: z.array(z.string().trim().min(1).max(300)).max(12) });

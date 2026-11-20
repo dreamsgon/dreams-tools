@@ -10,6 +10,7 @@ import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
 import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
 import {newId} from '@/lib/encyclopedia/world-model';
+import {tieLabel,tieTypeById,tieTypesOf} from '@/lib/encyclopedia/ties';
 import {confirmDialog} from '../confirm-dialog';
 import {AiWritingDialog,StylePicker} from './ai-writing';
 import {useWriters} from './use-writers';
@@ -161,10 +162,16 @@ export function TranscriptTab({entry,editing,update}:{entry:Entry;editing:boolea
 
 // ---- Check before publishing -------------------------------------------------------------------
 
-const groupOf=(r:RecapItem)=>r.kind==='questLog'||r.kind==='newQuest'?'Quests':r.kind==='codex'?'Codex':'People, places and things';
-const tagOf:Record<RecapItem['kind'],string>={newPage:'New',update:'Update',questLog:'Journal',newQuest:'New',codex:'Found'};
-const doLabel:Record<RecapItem['kind'],string>={newPage:'Make page',update:'Add',questLog:'Add',newQuest:'Make quest',codex:'Mark found'};
-function describe(r:RecapItem){
+const groupOf=(r:RecapItem)=>r.kind==='questLog'||r.kind==='newQuest'?'Quests':r.kind==='codex'?'Codex':r.kind==='loot'?'Items and loot':r.kind==='tie'?'Relationships':r.kind==='date'?'Calendar':'People, places and things';
+const groupOrder=['People, places and things','Quests','Items and loot','Relationships','Calendar','Codex'];
+const tagOf:Record<RecapItem['kind'],string>={newPage:'New',update:'Update',questLog:'Journal',newQuest:'New',codex:'Found',loot:'Loot',tie:'Tie',date:'Date'};
+const doLabel:Record<RecapItem['kind'],string>={newPage:'Make page',update:'Add',questLog:'Add',newQuest:'Make quest',codex:'Mark found',loot:'Add to inventory',tie:'Add tie',date:'Move calendar'};
+/** A tie's kind, read from where it starts. */
+const tieName=(data:Workspace,worldId:string,r:RecapItem)=>{const t=tieTypeById(tieTypesOf(data.worlds.find(w=>w.id===worldId)),r.typeId??'linked');return r.reversed?tieLabel(t,false):t.name;};
+function describe(r:RecapItem,carrier?:string,tie?:string){
+ if(r.kind==='loot')return `${r.qty?`${r.qty} of them. `:''}${r.text?`${r.text} `:''}${carrier?`Goes in ${carrier}’s inventory.`:'Who carries it?'}`;
+ if(r.kind==='tie')return `${tie} ${r.to}.${r.text?` “${r.text}”`:''}${r.playersSee?' Players see it.':' GM only.'}`;
+ if(r.kind==='date')return 'Moves the campaign calendar on to this day, and marks the session on it (GM only).';
  if(r.kind==='newPage')return `${r.pageKind?r.pageKind[0].toUpperCase()+r.pageKind.slice(1):'Note'} · ${r.text}${r.playersSee?' Players see it.':' GM-only page to start.'}`;
  if(r.kind==='update')return `Add: “${r.text}”`;
  if(r.kind==='questLog')return `${r.text?`${r.playersSee?'Shared':'GM-only'} entry: “${r.text}”`:''}${r.tick?`${r.text?' ':''}Ticks the step ${r.tick}.`:''}`;
@@ -192,7 +199,8 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   setPosting(false);
   setNotice(r.ok?(r.b.skipped?'Discord recaps are off for this campaign. Turn them on in Maptable › Connections.':'Posted the recap to Discord.'):(r.b.error==='Publish the recap to players before posting it.'?'Publish the recap and let it save first, then post it.':r.b.error));
  };
- const groups=['People, places and things','Quests','Codex'].map(g=>({g,items:open.filter(r=>groupOf(r)===g)})).filter(x=>x.items.length);
+ const carriers=others.filter(e=>e.kind==='character').sort((a,b)=>Number(!['pc','companion'].includes(a.character?.role??''))-Number(!['pc','companion'].includes(b.character?.role??''))||a.title.localeCompare(b.title));
+ const groups=groupOrder.map(g=>({g,items:open.filter(r=>groupOf(r)===g)})).filter(x=>x.items.length);
  const share=<div className="check-actions">{recap.status==='draft'?<button className="button primary" onClick={()=>publish(true)}><Eye size={14}/> Publish to players</button>:<button className="button" onClick={()=>publish(false)}><EyeOff size={14}/> Unpublish</button>}{recap.status==='published'&&<button className="button" disabled={posting} onClick={post}><Send size={14}/> {posting?'Posting…':'Post to Discord'}</button>}</div>;
  // A recap the GM wrote, with nothing found to check: sharing it comes first, and the AI check is optional.
  if(recap.mine&&!recap.review.length)return <div className="aside-section recap-check recap-ready">
@@ -205,10 +213,12 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
   <p className="aside-hint">What the AI found in this session. Nothing changes in your pages until you press a button.</p>
   {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g.toUpperCase()}</span>{items.map(r=><div key={r.id} className="check-item">
-   <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
+   <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
    {editing===r.id?<><textarea className="check-text" aria-label={`Text for ${r.name}`} rows={4} maxLength={4000} value={text} onChange={e=>setText(e.target.value)}/><div className="check-actions"><button className="button primary small" onClick={()=>{editItem(r.id,{text:text.trim()});setEditing(null);}}>Save</button><button className="button small" onClick={()=>setEditing(null)}>Cancel</button></div></>
    :same===r.id?<><label className="field-label">Same as<select autoFocus aria-label={`${r.name} is the same as`} defaultValue="" onChange={e=>{const p=others.find(x=>x.id===e.target.value);if(p){editItem(r.id,{kind:'update',pageId:p.id,name:p.title,pageKind:undefined});setSame(null);}}}><option value="" disabled>Choose a page</option>{others.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label><div className="check-actions"><button className="button small" onClick={()=>setSame(null)}>Cancel</button></div></>
-   :<><p className="check-text">{describe(r)}</p><div className="check-actions"><button className="button primary small" onClick={()=>apply([r.id])}><Check size={13}/> {doLabel[r.kind]}</button>{r.kind==='newPage'&&others.length>0&&<button className="button small" onClick={()=>setSame(r.id)}>Same as…</button>}{r.kind!=='codex'&&<button className="button small" onClick={()=>{setEditing(r.id);setText(r.text);}}>Edit</button>}<button className="button small" onClick={()=>change(w=>skipItem(w,entry.id,r.id))}>Skip</button></div></>}
+   :<><p className="check-text">{describe(r,r.kind==='loot'?others.find(e=>e.id===r.pageId)?.title:undefined,r.kind==='tie'?tieName(data,entry.worldId,r):undefined)}</p>
+    {r.kind==='loot'&&<label className="field-label">Who carries it<select aria-label={`Who carries ${r.name}`} value={r.pageId??''} onChange={e=>e.target.value==='page'?editItem(r.id,{kind:'newPage',pageKind:'lore',pageId:undefined,qty:undefined}):editItem(r.id,{pageId:e.target.value||undefined})}><option value="">Choose a character</option>{carriers.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}<option value="page">No one: make an item page</option></select></label>}
+    <div className="check-actions"><button className="button primary small" disabled={r.kind==='loot'&&!r.pageId} onClick={()=>apply([r.id])}><Check size={13}/> {doLabel[r.kind]}</button>{r.kind==='newPage'&&others.length>0&&<button className="button small" onClick={()=>setSame(r.id)}>Same as…</button>}{r.kind!=='codex'&&r.kind!=='date'&&<button className="button small" onClick={()=>{setEditing(r.id);setText(r.text);}}>Edit</button>}<button className="button small" onClick={()=>change(w=>skipItem(w,entry.id,r.id))}>Skip</button></div></>}
   </div>)}</div>)}
   {done.length>0&&<details className="check-done"><summary>{done.length} done or skipped</summary>{done.map(r=><p key={r.id} className="aside-hint">{r.state==='done'?<Check size={12}/>:'–'} {tagOf[r.kind]} · {r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}{r.state==='skipped'?' (skipped)':''}</p>)}</details>}
   <div className="check-footer">

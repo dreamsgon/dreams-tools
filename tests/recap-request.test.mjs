@@ -66,7 +66,7 @@ test('what the GM asked for reads as a few short lines',()=>{
  ]);
  assert.deepEqual(requestNotes({length:'standard',depth:'balanced',at:''}),['Recap length: about 250 to 600 words.','Pull out the people, places, quests and finds that matter.']);
  const all=honourSkips({recap:'r',timeline:[1],quotes:[1],found:[1],codex:[1],quests:[1],gmNotes:'g'},{...request,skip:['recap','timeline','found','quests','gmNotes']});
- assert.deepEqual(all,{recap:'',timeline:[],quotes:[1],found:[],codex:[],quests:[],gmNotes:''});
+ assert.deepEqual(all,{recap:'',timeline:[],quotes:[1],found:[],codex:[],loot:[],ties:[],gameDate:undefined,quests:[],gmNotes:''});
 });
 
 function bucket(){

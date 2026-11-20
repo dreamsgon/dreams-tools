@@ -88,10 +88,10 @@ test('addFinds adds what the AI found to the check list, matched to pages, witho
 test('add_recap_finds is an Assist tool under “Session notes and recaps”',()=>{
  const tool=listTools('assist').find(t=>t.name==='add_recap_finds');
  assert.ok(tool);assert.ok(!listTools('read').some(t=>t.name==='add_recap_finds'));
- assert.deepEqual(Object.keys(tool.inputSchema.properties),['page','found','quests','codex']);
+ assert.deepEqual(Object.keys(tool.inputSchema.properties),['page','found','quests','codex','loot','ties','gameDate']);
  assert.equal(toolAction('add_recap_finds'),'notes');
  const save=listTools('assist').find(t=>t.name==='save_recap');
- assert.deepEqual(Object.keys(save.inputSchema.properties).slice(-9,-6),['found','quests','codex'],'save_recap keeps the same lists');
+ assert.deepEqual(Object.keys(save.inputSchema.properties).slice(-12,-6),['found','quests','codex','loot','ties','gameDate'],'save_recap keeps the same lists');
 });
 
 async function setup(){
@@ -110,7 +110,7 @@ test('Check it with AI reads the GM’s recap and fills only the check list, thr
  assert.equal(r.added,2);assert.equal(r.by,'Sonnet');assert.equal(r.tokens,700);
  const sent=f.sent[0].body;
  assert.deepEqual(sent.tool_choice,{type:'function',function:{name:'save_finds'}});
- assert.deepEqual(Object.keys(sent.tools[0].function.parameters.properties),['found','quests','codex']);
+ assert.deepEqual(Object.keys(sent.tools[0].function.parameters.properties),['found','quests','codex','loot','ties','gameDate']);
  const asked=sent.messages[1].content;
  assert.match(asked,/wrote the recap below themselves\. Don't rewrite it/);assert.match(asked,/<recap>\nWe reached Greyfen\. \[\[Ostra Hale\]\] was waiting/);
  assert.match(asked,/The Drowned Bell: Find the bell/);

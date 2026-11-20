@@ -91,7 +91,7 @@ test('RPG Tools writes the recap with the GM’s key: notes from the transcript,
  assert.equal(r.tokens,1200);assert.equal(r.toCheck,3);assert.equal(r.by,'Sonnet');assert.equal(r.api.used,1200);
  const first=f.sent[0].body;
  assert.deepEqual(first.tool_choice,{type:'function',function:{name:'save_notes'}},'the notes must come back through the tool');
- assert.deepEqual(Object.keys(first.tools[0].function.parameters.properties),['timeline','quotes','found','quests','codex','gmNotes','moments','spotlights','encounters','partyStatus','next','threads']);
+ assert.deepEqual(Object.keys(first.tools[0].function.parameters.properties),['timeline','quotes','found','quests','codex','gmNotes','moments','spotlights','encounters','partyStatus','next','threads','loot','ties','gameDate']);
  const asked=first.messages[1].content;
  assert.match(asked,/Warm and a little ominous/);assert.match(asked,/Lights on the marsh: Find out who keeps the toll/);
  assert.match(asked,/Ostra Hale lifts the toll lantern/);assert.doesNotMatch(asked,/19:02|lol/,'the transcript is compacted first');
