@@ -90,6 +90,17 @@
 .hub-scene-art[style] { background-size:cover; background-position:center; }
 :root[data-theme="dark"] .hub-scene-art:not([style]) { background-color:#3a3a33; background-image:linear-gradient(#ffffff14 1px,transparent 1px),linear-gradient(90deg,#ffffff14 1px,transparent 1px); }
 
+.hub-ai { display:grid; gap:10px; align-content:start; }
+.hub-ai p { margin:0; }
+.hub-ai > .hub-button { justify-self:start; }
+.hub-ai-status { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
+.hub-ai-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
+.hub-ai-dot.live { background:#22a06b; }
+.hub-ai-dot.paused { background:#d97706; }
+.hub-ai-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.hub-ai .hub-list li { display:flex; align-items:center; gap:10px; }
+.hub-ai .hub-list li > span { flex:1; }
+.hub-ai-settings { font-size:13px; color:var(--accent); }
 .hub-choose { border-bottom:1px solid var(--line); padding:4px 0 12px; margin-bottom:10px; display:grid; gap:8px; }
 .hub-choose p { margin:0; font-size:13px; }
 .hub-choose-find { width:100%; }

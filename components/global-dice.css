@@ -4,8 +4,8 @@
 .global-dice button:hover { border-color: var(--accent, #246c58); }
 .global-dice button[aria-expanded="true"] { background: var(--accent, #246c58); border-color: var(--accent, #246c58); color: var(--on-accent, #fff); }
 .global-dice button:focus-visible { outline: 2px solid var(--accent, #246c58); outline-offset: 2px; }
-.global-dice button:nth-child(2) { padding: 0; width: 40px; }
-@media (max-width: 799px) { .global-dice { right: 12px; bottom: 12px; } .global-dice button { min-height: 44px; min-width: 44px; } .global-dice button:nth-child(2) { width: 44px; } }
+.global-dice button.global-dice-icon { padding: 0; width: 40px; }
+@media (max-width: 799px) { .global-dice { right: 12px; bottom: 12px; } .global-dice button { min-height: 44px; min-width: 44px; } .global-dice button.global-dice-icon { width: 44px; } }
 @media print { .global-dice { display: none; } }
 
 /* Leave room under the last of the page's content so it can scroll clear of the buttons. */

@@ -67,3 +67,12 @@ test("two pages registering equal targets do not undo each other", () => {
   two(); assert.equal(diceTargetStore.get(), NO_CAMPAIGN);
   two(); assert.equal(diceTargetStore.get(), NO_CAMPAIGN, "a second cleanup is harmless");
 });
+
+test("the AI button beside the dice talks to the page's campaign, and opens the Wiki's own panel there", () => {
+  assert.deepEqual(encyclopediaDiceTarget({ id: "c1", name: "Salt Road" }, false).ai, { campaignId: "c1", here: true });
+  assert.equal(encyclopediaDiceTarget({ id: "c1", name: "Salt Road" }, true).ai, undefined, "a co-GM gets no AI button");
+  assert.equal(encyclopediaDiceTarget(null, false).ai, undefined);
+  assert.deepEqual(hubDiceTarget({ name: "Salt Road", encyclopedia: { id: "c1" }, maptable: { id: "m1" } }).ai, { campaignId: "c1" });
+  assert.deepEqual(hubDiceTarget({ name: "Maps only", encyclopedia: null, maptable: { id: "m1" } }).ai, { maptableCampaignId: "m1" });
+  assert.equal(NO_CAMPAIGN.ai, undefined);
+});

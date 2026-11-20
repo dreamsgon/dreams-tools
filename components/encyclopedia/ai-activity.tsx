@@ -46,7 +46,7 @@ const time = (iso: string) => {
 const argNames: Record<string, string> = { to: "Move to", as: "Roll as", for: "What for", on: "On" };
 const argName = (k: string) => argNames[k] ?? (k[0]!.toUpperCase() + k.slice(1).replace(/([A-Z])/g, " $1").toLowerCase());
 
-export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onChanged, onSuggestedMoves, onSettings }: {
+export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onChanged, onSuggestedMoves, onSettings, floating, openSignal }: {
   campaignId?: string; maptableCampaignId?: string; combat?: { round: number; turn: string; next?: string } | null; onChanged: () => void;
   /** Maptable: the open scene, so the AI knows what the GM is looking at. */
   scene?: string;
@@ -54,6 +54,10 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   onSuggestedMoves?: (moves: SuggestedMove[]) => void;
   /** Opens "What it may do" for the connections. Without it, the link goes to the Encyclopedia. */
   onSettings?: () => void;
+  /** Opened from the AI button beside the dice on a page without its own panel: no chip in a top bar. */
+  floating?: boolean;
+  /** Opens the panel each time it goes up. */
+  openSignal?: number;
 }) {
   const [state, setState] = useState<State | null>(null), [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [top, setTop] = useState(48);
   const [changing, setChanging] = useState<{ id: string; args: Record<string, unknown> } | null>(null);
@@ -143,10 +147,13 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const opener = useRef(showPanel);
   useEffect(() => { opener.current = showPanel; });
   useEffect(() => {
-    const on = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (typeof id === "string") opener.current(id); };
+    // With a chat's id, that chat; without one (the AI button beside the dice), the panel as it was.
+    const on = (e: Event) => { const id = (e as CustomEvent<string | undefined>).detail; opener.current(typeof id === "string" ? id : undefined); };
     window.addEventListener(OPEN_CHAT_EVENT, on);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, on);
   }, []);
+
+  useEffect(() => { if (openSignal) opener.current(); }, [openSignal]);
 
   async function ask() {
     const text = draft.trim();
@@ -218,6 +225,14 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     finally { setBusy(""); }
   }
 
+  const settingsLink = onSettings ? <button type="button" className="ai-connect-link" onClick={() => { setOpen(false); onSettings(); }}>Connect an AI</button>
+    : <a className="ai-connect-link" href={campaignId ? `/encyclopedia?campaign=${encodeURIComponent(campaignId)}&ai=connect` : "/encyclopedia?ai=connect"}>Connect an AI</a>;
+  // Opened from the AI button with nothing connected yet: say how to connect one.
+  if (state && !state.hasConnections) return open ? createPortal(<aside className="ai-panel ai-panel-none" id="ai-activity" aria-label="AI" style={{ top }}>
+    <div className="ai-panel-head"><Bot size={16}/><h2>AI</h2><button className="icon-button" aria-label="Close" onClick={() => setOpen(false)}><X size={16}/></button></div>
+    <p className="ai-panel-empty">No AI is connected to this campaign yet. Connect Claude, ChatGPT or another AI app, or add an API key, and you can ask it about the campaign from any page here.</p>
+    <div className="ai-panel-foot">{settingsLink}</div>
+  </aside>, document.body) : null;
   if (!state?.hasConnections) return null;
   const who = state.connected[0], waiting = state.waiting ?? [], showing = chat ? tab : "activity";
   const card = (w: Waiting) => <>
@@ -251,9 +266,9 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     </>;
   };
   return <>
-    <button ref={chip} className={`ai-chip${state.paused ? " paused" : waiting.length ? " asking" : who ? " live" : ""}`} onClick={() => { if (open) setOpen(false); else showPanel(); }} aria-expanded={open} aria-controls="ai-activity" title="AI activity">
+    {!floating && <button ref={chip} className={`ai-chip${state.paused ? " paused" : waiting.length ? " asking" : who ? " live" : ""}`} onClick={() => { if (open) setOpen(false); else showPanel(); }} aria-expanded={open} aria-controls="ai-activity" title="AI activity">
       <Bot size={15}/><span>{state.paused ? "AI paused" : !waiting.length && chat && !who ? <>Ask<span className="ai-chip-name"> {chat.name}</span></> : waiting.length ? <><span className="ai-chip-name">{waiting[0].connection} is helping · </span>{waiting.length} to approve</> : who && combat ? "AI is running combat" : who ? <>AI connected<span className="ai-chip-name"> · {who}</span></> : "AI activity"}</span>
-    </button>
+    </button>}
     {/* In document.body, so the panel sits above the map's own layers. */}
     {open && createPortal(<aside className="ai-panel" id="ai-activity" aria-label="AI activity" style={{ top }}>
       <div className="ai-panel-head"><Bot size={16}/>{chat ? <div className="ai-panel-tabs" role="tablist">
