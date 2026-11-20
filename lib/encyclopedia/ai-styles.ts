@@ -6,6 +6,7 @@
  * lines that keep GM secrets from players. Pure.
  */
 import { z } from "zod";
+import { cleanExtract, extractSchema, type ExtractSettings } from "./recap-extract.ts";
 
 export const styleTones = ["Warm", "Grim", "Funny", "Epic", "Mysterious", "Plain"] as const;
 export const writingKinds = ["recap", "story", "gen"] as const;
@@ -40,6 +41,8 @@ export const aiWritingSchema = z.object({
   use: z.object({ recap: id.optional(), story: id.optional(), gen: id.optional() }).optional(),
   /** The AI panel's chat with an API key: the GM's own instructions and how long replies are. */
   chat: z.object({ instructions: z.string().max(2000).optional(), length: z.enum(["short", "standard", "detailed"]).optional() }).optional(),
+  /** What it pulls out of a session, and how much (recap-extract.ts). */
+  extract: extractSchema.optional(),
 });
 export type AiWriting = z.infer<typeof aiWritingSchema>;
 
@@ -148,6 +151,13 @@ export function saveChat(w: AiWriting | undefined, c: ChatSettings): AiWriting {
   const rest: AiWriting = { ...w };
   delete rest.chat;
   return Object.keys(chat).length ? { ...rest, chat } : rest;
+}
+
+/** Saves What it pulls out. The usual settings are left out. */
+export function saveExtract(w: AiWriting | undefined, x: ExtractSettings): AiWriting {
+  const extract = cleanExtract(x), rest: AiWriting = { ...w };
+  delete rest.extract;
+  return extract ? { ...rest, extract } : rest;
 }
 
 /** A short line for the style menu, such as "Standard · warm · about the party · a story · past tense". */

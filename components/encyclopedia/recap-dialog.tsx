@@ -15,6 +15,7 @@ import {IN_APP_LIMIT,recapTokens} from '@/lib/encyclopedia/recap-prompts';
 import {useWriters,writeWithKey} from './recap-panel';
 import {ToolDialog} from './tool-dialog';
 import {ForumSource} from './recap-forum-source';
+import {depthFor,partsOff} from '@/lib/encyclopedia/recap-extract';
 import {AiWritingDialog,StylePicker} from './ai-writing';
 import {styleFor} from '@/lib/encyclopedia/ai-styles';
 
@@ -56,7 +57,7 @@ export function RecapDialog({data,campaign,change,onOpen,onClose,page}:{data:Wor
  const [step,setStep]=useState<'source'|'options'|'handoff'>(resume?'handoff':'source');
  const [kind,setKind]=useState<Kind>('paste'),[text,setText]=useState(''),[file,setFile]=useState(''),[link,setLink]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [title,setTitle]=useState(page?.title??`Session ${sessions.length+1}`),[playedOn,setPlayedOn]=useState(page?.recap?.playedOn??today());
- const [style,setStyle]=useState(''),[editStyles,setEditStyles]=useState(false),[length,setLength]=useState<RecapRequest['length']>(()=>styleFor(campaign.aiWriting,'recap').length),[depth,setDepth]=useState<RecapRequest['depth']>('balanced'),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(new Set());
+ const [style,setStyle]=useState(''),[editStyles,setEditStyles]=useState(false),[length,setLength]=useState<RecapRequest['length']>(()=>styleFor(campaign.aiWriting,'recap').length),[depth,setDepth]=useState<RecapRequest['depth']>(()=>depthFor(campaign.aiWriting?.extract)),[steer,setSteer]=useState(''),[skip,setSkip]=useState<Set<typeof recapParts[number]>>(()=>new Set(partsOff(campaign.aiWriting?.extract)));
  const [cast,setCast]=useState<NonNullable<RecapRequest['cast']>>([]),[made,setMade]=useState<{id:string;title:string;saved:boolean;link?:string}|null>(resume?{id:resume.id,title:resume.title,saved:true,link:resume.recap?.request?.link}:null);
  const writers=useWriters(campaign.id),apps=writers?.apps??null,keys=writers?.keys??[];
  const [mine,setMine]=useState(false),[writer,setWriter]=useState(''),[copied,setCopied]=useState(''),[writing,setWriting]=useState<'no'|'busy'|'done'|'failed'>('no'),[result,setResult]=useState<{by:string;tokens:number;toCheck?:number}|null>(null);

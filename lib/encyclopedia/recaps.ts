@@ -7,6 +7,7 @@ import { defaultCharacter, newId, playerText, type Campaign, type Entry, type Wo
 import { defaultCategory, newQuest, questCategories, questsIn } from "./quests.ts";
 import { setFound } from "./codex.ts";
 import { honourSkips, keepNotes } from "./recap-request.ts";
+import { honourExtract, isOn } from "./recap-extract.ts";
 import { emptyRecap, recapPageKinds, type Beat, type Quote, type Recap, type RecapItem } from "./recap-schema.ts";
 
 // ---- Transcripts ------------------------------------------------------------------------------
@@ -101,7 +102,7 @@ export type AiRecap = {
  * every match waits in the review list. `existing` is a draft page to fill (from the New session recap dialog).
  */
 export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, opts: { by: string; now: Date; existing?: Entry; transcript?: string | null; folderId?: string | null }) {
-  input = honourSkips(input, opts.existing?.recap?.request);
+  input = honourExtract(honourSkips(input, opts.existing?.recap?.request), campaign.aiWriting?.extract);
   const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
   const review = findItems(ws, campaign, input);
   const timeline: Beat[] = input.timeline.map(b => ({ id: newId(), title: b.title.trim(), big: !!b.big, steps: (b.steps ?? []).map(s => s.trim()).filter(Boolean) }));
@@ -121,7 +122,8 @@ export type AiFinds = Pick<AiRecap, "found" | "quests" | "codex">;
 
 /** Turns what the AI found into check list items: a match to an existing page is an update, anything else is new. */
 export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
-  const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
+  const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries, x = campaign.aiWriting?.extract;
+  input = honourExtract(input, x);
   const review: RecapItem[] = [];
   for (const f of input.found ?? []) {
     const page = findPage(entries, f.name, c, ["character", "place", "faction", "lore", "note", "quest"]);
@@ -133,6 +135,7 @@ export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
   const quests = questsIn(ws, campaign.worldId, campaign.id);
   for (const q of input.quests ?? []) {
     const low = q.quest.trim().toLowerCase(), match = quests.find(x => x.entry.title.toLowerCase() === low) ?? (quests.filter(x => x.entry.title.toLowerCase().startsWith(low)).length === 1 ? quests.find(x => x.entry.title.toLowerCase().startsWith(low)) : undefined);
+    if (!isOn(x, match ? "quests" : "rumours")) continue;
     review.push(match
       ? { id: newId(), kind: "questLog", name: match.entry.title, pageId: match.entry.id, text: q.log ?? "", ...(q.tick ? { tick: q.tick } : {}), ...(q.playersSee ? { playersSee: true } : {}), state: "open" }
       : { id: newId(), kind: "newQuest", name: q.quest.trim(), text: q.log ?? "", ...(q.playersSee ? { playersSee: true } : {}), state: "open" });

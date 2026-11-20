@@ -8,7 +8,8 @@
 import {useState} from 'react';
 import {Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
-import {allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
+import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
+import {saveExtract,allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
 import {ToolDialog} from './tool-dialog';
 import {useWriters} from './use-writers';
 import {confirmDialog} from '../confirm-dialog';
@@ -33,9 +34,9 @@ const Seg=<T extends string,>({value,options,onChange,label}:{value:T;options:[T
  <div className="segmented wide" role="group" aria-label={label}>{options.map(([v,l])=><button type="button" key={v} className={value===v?'on':''} aria-pressed={value===v} onClick={()=>onChange(v)}>{l}</button>)}</div>;
 
 /** The How the AI writes dialog. Saves into the campaign as the GM changes it, like other settings. */
-export function AiWritingDialog({data,campaign,change,onClose,start='recap'}:{data:Workspace;campaign:Campaign;change:Change;onClose:()=>void;start?:WritingKind|'chat'}){
+export function AiWritingDialog({data,campaign,change,onClose,start='recap'}:{data:Workspace;campaign:Campaign;change:Change;onClose:()=>void;start?:WritingKind|'chat'|'extract'}){
  const writing=campaign.aiWriting;
- const [tab,setTab]=useState<WritingKind|'chat'>(start),kind:WritingKind=tab==='chat'?'recap':tab;
+ const [tab,setTab]=useState<WritingKind|'chat'|'extract'>(start),kind:WritingKind=tab==='chat'||tab==='extract'?'recap':tab;
  const [sel,setSel]=useState(()=>styleFor(writing,kind).id);
  const saved=allStyles(writing).find(s=>s.id===sel)??styleFor(writing,kind);
  const [draft,setDraft]=useState<WritingStyle>(saved),[naming,setNaming]=useState<string|null>(null),[error,setError]=useState('');
@@ -47,15 +48,16 @@ export function AiWritingDialog({data,campaign,change,onClose,start='recap'}:{da
  const saveNew=()=>attempt(()=>{const s={...draft,id:newId(),name:(naming??'').trim()};save(saveStyle(writing,s));pick(s);});
  const saveOwn=()=>attempt(()=>{save(saveStyle(writing,{...draft,id:sel,name:saved.name}));setDraft({...draft,id:sel,name:saved.name});});
  const remove=async()=>{if(!await confirmDialog({title:`Delete “${saved.name}”?`,message:'Writing that used it goes back to Warm storyteller.',confirm:'Delete',danger:true}))return;save(deleteStyle(writing,sel));pick(styleFor(deleteStyle(writing,sel),kind));};
- const lens=lengthNames[kind],pickKind=(k:WritingKind|'chat')=>{setTab(k);if(k!=='chat')pick(styleFor(writing,k));};
- const kinds:[WritingKind|'chat',string,string][]=[...writingKinds.map(k=>[k,kindNames[k],styleFor(writing,k).name] as [WritingKind,string,string]),['chat','AI chat',writing?.chat?.instructions?.trim()?'Your instructions':`${chatLengths[writing?.chat?.length??'short'][0]} replies`]];
+ const lens=lengthNames[kind],pickKind=(k:WritingKind|'chat'|'extract')=>{setTab(k);if(k!=='chat'&&k!=='extract')pick(styleFor(writing,k));};
+ const pulled=extractKinds.filter(k=>isOn(writing?.extract,k)).length;
+ const kinds:[WritingKind|'chat'|'extract',string,string][]=[...writingKinds.map(k=>[k,kindNames[k],styleFor(writing,k).name] as [WritingKind,string,string]),['chat','AI chat',writing?.chat?.instructions?.trim()?'Your instructions':`${chatLengths[writing?.chat?.length??'short'][0]} replies`],['extract','What it pulls out',`${pulled} of ${extractKinds.length} kinds · ${depthNames[depthFor(writing?.extract)][0]}`]];
  const groups:[string,WritingStyle[]][]=[['Built in',allStyles(writing).filter(s=>isBuiltIn(s.id))],['Yours',allStyles(writing).filter(s=>!isBuiltIn(s.id))]];
  const more=[{story:'Story',bullets:'Bullets',both:'Story and bullets'}[draft.shape],draft.tense==='past'?'past tense':'present tense',draft.language?.trim()||'English',...(draft.instructions?.trim()?['your instructions']:[])].join(' · ');
  return <ToolDialog title="How the AI writes" onClose={onClose} wide className="writing-modal"><div className="writing-dialog">
   <p className="modal-intro">For {campaign.name}. Your AI app uses these too, and you can always write it yourself instead.</p>
   <div className="writing-layout">
   <nav className="writing-kinds" aria-label="What it writes">{kinds.map(([k,n,sub])=><button type="button" key={k} className={tab===k?'on':''} aria-current={tab===k?'true':undefined} onClick={()=>pickKind(k)}><strong>{n}</strong><small>{sub}</small></button>)}</nav>
-  {tab==='chat'?<ChatSettingsForm key={campaign.id} writing={writing} save={save}/>:<div className="writing-body">
+  {tab==='extract'?<ExtractSettingsForm key={campaign.id} writing={writing} save={save}/>:tab==='chat'?<ChatSettingsForm key={campaign.id} writing={writing} save={save}/>:<div className="writing-body">
    <div className="writing-edit">
     <p className="aside-hint">{kind==='recap'?'Used by New session recap, Write it again, and your AI app’s recap prompts.':kind==='story'?'Used by The story so far on the front page, written here or by your AI app.':'Used by generators that write with AI, as they arrive.'}</p>
     <div className="writing-styles">{groups.map(([g,list])=>(list.length||g==='Yours')&&<div key={g} className="writing-style-group"><span className="writing-group">{g}</span><div className="writing-style-list">
@@ -116,6 +118,27 @@ function ChatSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next
    {dirty&&<div className="writing-save"><span>Changes to the AI chat</span><button type="button" className="button" onClick={()=>setDraft(saved)}><Undo2 size={14}/> Undo</button><button type="button" className="button primary" onClick={keep}>Save changes</button></div>}
   </div>
   <aside className="writing-sample"><strong className="writing-sample-title">Try it</strong><p className="aside-hint">Ask something in the AI panel. Your instructions apply from the next message.</p></aside>
+ </div>;
+}
+
+/** What it pulls out: which kinds the AI takes from a session, and how much. Saved with the campaign's other AI settings. */
+function ExtractSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next:AiWriting)=>void}){
+ const saved:ExtractSettings=writing?.extract??{},[draft,setDraft]=useState<ExtractSettings>(saved),[error,setError]=useState('');
+ const depth=depthFor(draft),dirty=depth!==depthFor(saved)||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k));
+ const turn=(k:typeof extractKinds[number],on:boolean)=>setDraft(d=>({...d,off:on?(d.off??[]).filter(x=>x!==k):[...(d.off??[]),k]}));
+ const keep=()=>{try{setError('');save(saveExtract(writing,draft));}catch(e){setError(e instanceof Error?e.message:'Could not save that.');}};
+ return <div className="writing-body">
+  <div className="writing-edit">
+   <p className="aside-hint">What the AI takes from a session when it writes a recap, or checks one you wrote. Here, in your AI app, and with Check it with AI.</p>
+   <div className="field-title">How much to pull out<Seg label="How much to pull out" value={depth} options={extractDepths.map(d=>[d,depthNames[d][0]] as [typeof d,string])} onChange={d=>setDraft({...draft,depth:d})}/><small className="aside-hint">{depthNames[depth][1]} You can change it for one session in New session recap.</small></div>
+   {extractGroups.map(([g,list])=><div key={g} className="extract-group"><span className="writing-group">{g}</span><div className="extract-rows">{list.map(k=><label key={k} className={`extract-row ${isOn(draft,k)?'':'off'}`}>
+    <span className="extract-switch"><input type="checkbox" checked={isOn(draft,k)} onChange={e=>turn(k,e.target.checked)}/><span aria-hidden="true"/></span>
+    <span className="extract-name"><strong>{extractNames[k][0]}</strong><small>{extractNames[k][1]}</small></span>
+   </label>)}</div></div>)}
+   {error&&<p className="form-error">{error}</p>}
+   {dirty&&<div className="writing-save"><span>Changes to What it pulls out</span><button type="button" className="button" onClick={()=>setDraft(saved)}><Undo2 size={14}/> Undo</button><button type="button" className="button primary" onClick={keep}>Save changes</button></div>}
+  </div>
+  <aside className="writing-sample"><strong className="writing-sample-title">How it works</strong><p className="aside-hint">Kinds you turn off aren’t asked for, and aren’t kept if the AI sends them anyway.</p><p className="aside-hint">Everything else still waits in Check before publishing. Nothing changes in your pages until you add it.</p></aside>
  </div>;
 }
 

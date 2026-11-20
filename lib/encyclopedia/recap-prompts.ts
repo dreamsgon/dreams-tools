@@ -7,6 +7,7 @@
 import { playerText, type Campaign, type Entry, type Workspace } from "./world-model.ts";
 import type { RecapRequest } from "./recap-schema.ts";
 import { requestNotes } from "./recap-request.ts";
+import { extractNotes, type ExtractSettings } from "./recap-extract.ts";
 import { questsIn } from "./quests.ts";
 import { builtInStyles, lockedLines, styleLines, type WritingStyle } from "./ai-styles.ts";
 
@@ -40,7 +41,7 @@ export function questsBlock(ws: Workspace, c: Scope) {
 /** [[id|Name]] links back to [[Name]], so the AI reads names, not ids. */
 export const unlinkNames = (s: string) => s.replace(/\[\[[^\]|\n]{1,120}\|([^\]\n]{1,160})\]\]/g, "[[$1]]");
 
-type Head = { campaign: string; title: string; playedOn?: string; request: RecapRequest; names: string };
+type Head = { campaign: string; title: string; playedOn?: string; request: RecapRequest; names: string; extract?: ExtractSettings };
 const headLines = (h: Head) => [`Campaign: "${h.campaign}". Session: "${h.title}"${h.playedOn ? `, played on ${h.playedOn}` : ""}.`];
 
 /** The first request: read the transcript once and send the notes with the save_notes tool. */
@@ -56,7 +57,7 @@ export function notesPrompt(h: Head & { quests: string; transcript: string }) {
   ].filter(Boolean);
   return [
     ...headLines(h),
-    "What the GM asked for:", ...requestNotes(h.request).map(x => `- ${x}`),
+    "What the GM asked for:", ...[...requestNotes(h.request), ...extractNotes(h.extract, { keepTimeline: !skip.has("recap") })].map(x => `- ${x}`),
     "Read the transcript below once and call save_notes once with:", ...want,
     "Leave out table talk and rules chatter, except rules calls in the GM notes.",
     h.names ? `Page names in this campaign (spell names this way):\n${h.names}` : "This campaign has no pages yet.",
@@ -104,7 +105,7 @@ export function prosePrompt(h: Head & { timeline: string; quotes?: string; befor
  * Check it with AI, for a recap the GM wrote: read it and send what it mentions (new people, places and things,
  * quest moves, codex finds) with the save_finds tool. The recap itself is never written again.
  */
-export function checkPrompt(h: { campaign: string; title: string; playedOn?: string; names: string; quests: string; recap: string }) {
+export function checkPrompt(h: { campaign: string; title: string; playedOn?: string; names: string; quests: string; recap: string; extract?: ExtractSettings }) {
   return [
     `Campaign: "${h.campaign}". Session: "${h.title}"${h.playedOn ? `, played on ${h.playedOn}` : ""}.`,
     "The GM wrote the recap below themselves. Don't rewrite it or comment on it. Read it once and call save_finds once with:",
@@ -112,6 +113,7 @@ export function checkPrompt(h: { campaign: string; title: string; playedOn?: str
     "- codex: codex pages the party found, by title.",
     "- quests: quests that moved, with a line for the log, and tick for an objective that is now done (copy its text from the list below). An unknown quest becomes a new rumour.",
     "Only what the recap says. Send empty lists when it mentions nothing new.",
+    ...extractNotes(h.extract),
     h.names ? `Page names in this campaign (spell names this way):\n${h.names}` : "This campaign has no pages yet.",
     ...(h.quests ? [`Open quests, with objectives not done yet:\n${h.quests}`] : []),
     `<recap>\n${h.recap}\n</recap>`,
