@@ -343,3 +343,38 @@
 }
 @media(prefers-reduced-motion:reduce){.ai-full-side{transition:none}}
 .ai-chat-menu-foot .inline-link,.ai-chat-menu-empty .inline-link{padding:0;border:0;background:none;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer}
+
+/* The panel in document.body takes the campaign's theme through a wrapper that draws no box (ai-activity.tsx). */
+.ai-theme{display:contents}
+.ai-panel{color:var(--ink)}
+.ai-panel-tabs .ai-dot{width:7px;height:7px;margin-right:6px}
+.ai-panel-tabs button svg{margin-right:5px}
+
+/* Connection tab: each connection, whether its app reached RPG Tools, and Check it, Edit, New link. */
+.ai-conn{flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
+.ai-conn-list{list-style:none;margin:0;padding:0}
+.ai-conn-list>li{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ai-conn-top{display:flex;align-items:center;gap:8px;min-width:0}
+.ai-conn-top strong{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-conn-list small{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.ai-conn-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.ai-conn-actions .button{display:inline-flex;align-items:center;gap:5px}
+.ai-conn .ai-panel-foot{margin-top:auto}
+
+/* What "Check it" found. */
+.ai-check{display:flex;gap:8px;align-items:flex-start;margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius,6px);background:var(--raised,transparent);font-size:12.5px;line-height:1.5;color:var(--ink)}
+.ai-check>svg{flex-shrink:0;margin-top:2px}
+.ai-check p{margin:0}
+.ai-check ul{margin:6px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:4px}
+.ai-check code{font-size:11.5px;background:var(--control,var(--panel));padding:0 4px;border-radius:var(--radius-sm,4px)}
+.ai-check.good>svg{color:var(--success,#3fb68b)}
+.ai-check.warn>svg{color:var(--accent)}
+.ai-check.bad{border-color:color-mix(in srgb,var(--danger,#a33a2e) 45%,var(--line))}
+.ai-check.bad>svg{color:var(--danger,#a33a2e)}
+
+/* The Chat tab with no AI that can chat here. */
+.ai-nochat{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:24px 16px;font-size:13px;line-height:1.6;color:var(--muted)}
+.ai-nochat>svg{color:var(--accent)}
+.ai-nochat p{margin:0}
+.ai-nochat b{color:var(--ink);font-weight:600}
+.ai-nochat .button{display:inline-flex;align-items:center;gap:6px;margin-top:4px}

@@ -25,7 +25,7 @@ export async function GET(request:Request){
   const now=Date.now(),active=connections.filter(c=>c.lastUsedAt&&now-Date.parse(c.lastUsedAt)<ACTIVE_MS).sort((a,b)=>b.lastUsedAt!.localeCompare(a.lastUsedAt!));
   // Connections made with an API key can be asked from the panel.
   const chat=connections.flatMap(c=>c.api?[{id:c.id,name:c.name,provider:providerOf(c.api.provider).name,model:c.api.model}]:[]);
-  return json({...publicActivity(log),connected:active.map(c=>c.name),hasConnections:connections.length>0,chat,...(moved.length?{moved}:{})});
+  return json({...publicActivity(log),campaign:id,connected:active.map(c=>c.name),hasConnections:connections.length>0,chat,...(moved.length?{moved}:{})});
  }catch{return json({error:'Could not load the AI activity.'},400);}
 }
 export async function POST(request:Request){

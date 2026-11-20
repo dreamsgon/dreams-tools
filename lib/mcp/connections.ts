@@ -174,6 +174,30 @@ export async function updateConnection(bucket: S3Bucket, owner: string, campaign
   return publicConnection(next);
 }
 
+/**
+ * A new link for an app connection: a fresh key replaces the old one, which stops working at once. Its name, mode and
+ * history stay. For a link that was lost, pasted somewhere it shouldn't be, or set up wrong in the AI app.
+ */
+export async function newKey(bucket: S3Bucket, owner: string, campaignId: string, id: unknown) {
+  const list = await listConnections(bucket, owner, campaignId), c = list.find(x => x.id === id);
+  if (!c) throw Error("That connection was already revoked.");
+  if (c.api) throw Error("This connection uses your own API key, so it has no link.");
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+  const hash = await hashToken(token), next: Connection = { ...c, hash };
+  delete next.lastUsedAt;
+  await bucket.put(keyPath(hash), JSON.stringify({ owner, campaignId, connectionId: c.id }), { httpMetadata: { contentType: "application/json" } });
+  await writeConnections(bucket, owner, campaignId, list.map(x => x === c ? next : x));
+  if (c.hash) await bucket.delete(keyPath(c.hash)).catch(() => {});
+  return { key: `rpg_${token}`, connection: publicConnection(next) };
+}
+
+/** What a connection's key would be granted, for checking it from the GM's side without the key itself. */
+export async function grantOf(bucket: S3Bucket, owner: string, campaignId: string, id: unknown): Promise<KeyGrant> {
+  const c = (await listConnections(bucket, owner, campaignId)).find(x => x.id === id);
+  if (!c) throw Error("That connection was already revoked.");
+  return { owner, campaignId, connectionId: c.id, level: c.level, ...(c.perms ? { perms: c.perms } : {}) };
+}
+
 export async function revokeConnection(bucket: S3Bucket, owner: string, campaignId: string, id: unknown) {
   const list = await listConnections(bucket, owner, campaignId), gone = list.find(c => c.id === id);
   if (!gone) return false;

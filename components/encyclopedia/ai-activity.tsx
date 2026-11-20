@@ -3,10 +3,11 @@
  * What connected AI apps changed in this campaign: a chip in the top bar ("AI connected · Claude") and
  * a side panel listing each change with Undo, plus "Pause the AI". Shown once a campaign has a connection.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
-import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Folder, Map as MapIcon, Maximize2, Minimize2, PanelLeft, Pause, Play, Plus, ScrollText, Send, Undo2, User, X } from "lucide-react";
-import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, type ChatFolder, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
+import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Folder, Map as MapIcon, KeyRound, Maximize2, MessageSquare, Minimize2, PanelLeft, Pause, Play, Plus, ScrollText, Send, Undo2, User, X } from "lucide-react";
+import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, takeAiRequest, type ChatFolder, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
 import "./ai-connection.css";
 import { keepMoved, keyFields } from "@/lib/ai/device-keys";
 import { isChatModel } from "@/lib/ai/model-list";
@@ -16,7 +17,26 @@ type Line = { id: string; at: string; connection: string; tool: string; summary:
 /** Where a suggested move would put a token, for the dashed token on the map. */
 export type SuggestedMove = { id: string; sceneId: string; tokenId: string; x: number; y: number; label: string };
 type Waiting = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; args: Record<string, unknown>; preview?: Omit<SuggestedMove, "id" | "label"> };
-type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; connected: string[]; hasConnections: boolean; chat?: ChatConnection[] };
+/** `campaign`: the Encyclopedia campaign, for the Connection tab. */
+type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; campaign?: string; connected: string[]; hasConnections: boolean; chat?: ChatConnection[] };
+const ConnectionTab = dynamic(() => import("./ai-connection-tab"), { ssr: false, loading: () => <p className="ai-panel-empty">Loading…</p> });
+
+/**
+ * The campaign's theme, for what this panel draws in document.body (to sit above the map's own layers). That is outside
+ * the page part wearing the theme, so a wrapper that draws no box takes the same hooks: the theme's class, the look's
+ * accent and surface, and their variables.
+ */
+type Themed = { className: string; attrs: Record<string, string>; style: Record<string, string> };
+const unthemed: Themed = { className: "", attrs: {}, style: {} };
+function pageTheme(): Themed {
+  const skin = document.querySelector(".campaign-skin"), look = document.querySelector("[data-look-accent],[data-look-surface]");
+  const attrs: Record<string, string> = {}, style: Record<string, string> = {};
+  for (const el of [look, skin]) if (el instanceof HTMLElement) {
+    for (const a of ["data-look-accent", "data-look-surface"]) { const v = el.getAttribute(a); if (v) attrs[a] = v; }
+    for (const p of Array.from(el.style)) if (p.startsWith("--")) style[p] = el.style.getPropertyValue(p);
+  }
+  return { className: skin ? "campaign-skin" : "", attrs, style };
+}
 type Step = { tool: string; title: string; ok: boolean; waiting?: string; summary?: string };
 /** An answer says which AI (`by`) and model wrote it, since a chat can switch partway. */
 type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true; by?: string; model?: string };
@@ -61,7 +81,8 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
 }) {
   const [state, setState] = useState<State | null>(null), [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [top, setTop] = useState(48);
   const [changing, setChanging] = useState<{ id: string; args: Record<string, unknown> } | null>(null);
-  const [tab, setTab] = useState<"ask" | "activity">("ask"), [talkTo, setTalkTo] = useState(""), [chatLog, setChatLog] = useState<Open>({ key: "", id: null, turns: [] }), [draft, setDraft] = useState(""), [thinking, setThinking] = useState(false);
+  const [themed, setThemed] = useState<Themed>(unthemed), [asking, setAsking] = useState(""), [connectKey, setConnectKey] = useState(0), [addKey, setAddKey] = useState(false);
+  const [tab, setTab] = useState<"ask" | "activity" | "connection">("ask"), [talkTo, setTalkTo] = useState(""), [chatLog, setChatLog] = useState<Open>({ key: "", id: null, turns: [] }), [draft, setDraft] = useState(""), [thinking, setThinking] = useState(false);
   const [history, setHistory] = useState<{ key: string; list: ChatMeta[] | null; folders: ChatFolder[] }>({ key: "", list: null, folders: [] }), [menu, setMenu] = useState<"" | "list" | "export" | "model" | "ai">("");
   const [chatNote, setChatNote] = useState<{ text: string; href?: string; link?: string; error?: boolean } | null>(null);
   /** Full page: the chat fills the window, with the saved chats and folders in a sidebar. `side` opens that sidebar on a phone. */
@@ -86,6 +107,9 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       if (newest.current !== null && latest !== newest.current) changed.current();
       newest.current = latest;
       setState(next);
+      // A theme can arrive after the page: follow it.
+      const t = pageTheme();
+      setThemed(p => JSON.stringify(p) === JSON.stringify(t) ? p : t);
       const shown = (next.waiting ?? []).flatMap(w => w.preview ? [{ ...w.preview, id: w.id, label: w.summary }] : []);
       if (JSON.stringify(shown) !== lastMoves.current) { lastMoves.current = JSON.stringify(shown); moves.current?.(shown); }
     } catch { /* Try again at the next poll. */ }
@@ -152,10 +176,14 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   function newChat(folder?: string) { setChatLog({ key: campaignKey, id: null, turns: [], ...(folder ? { folder } : {}) }); remember(openKey, null); setMenu(""); setChatNote(null); setSide(false); }
   /** Opening the panel loads the saved chats, and reopens the chat this tab had open. */
   function showPanel(chatId?: string) {
-    setTop(chip.current?.closest("header")?.getBoundingClientRect().bottom ?? 48); setOpen(true);
+    setTop(chip.current?.closest("header")?.getBoundingClientRect().bottom ?? 48); setThemed(pageTheme()); setOpen(true);
     void loadList();
-    const id = chatId ?? (current.id ? null : remembered(openKey));
-    if (chatId) setTab("ask");
+    // What another part of the page asked for (the dashboard's AI widget): a chat, a tab, or a question for a new chat.
+    const req = takeAiRequest(), wanted = chatId ?? req.chat;
+    if (req.ask) { setTab("ask"); setAsking(req.ask); return; }
+    if (req.tab) setTab(req.tab);
+    const id = wanted ?? (current.id ? null : remembered(openKey));
+    if (wanted) setTab("ask");
     if (id) void openChat(id);
   }
   // "Open the chat" on a session page made from a chat.
@@ -169,23 +197,33 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   }, []);
 
   useEffect(() => { if (openSignal) opener.current(); }, [openSignal]);
+  // A question from the dashboard's AI widget, asked in a new chat once the panel knows which AI can chat.
+  const asker = useRef(ask);
+  useEffect(() => { asker.current = ask; });
+  useEffect(() => {
+    if (!asking || !state) return;
+    const q = asking, t = setTimeout(() => { setAsking(""); if (state.chat?.length) void asker.current(q); }, 0);
+    return () => clearTimeout(t);
+  }, [asking, state]);
 
-  async function ask() {
-    const text = draft.trim();
+  /** `given`: a question from elsewhere (the dashboard), asked in a new chat. */
+  async function ask(given?: string) {
+    const fresh = given !== undefined, base: Open = fresh ? { key: campaignKey, id: null, turns: [] } : current;
+    const text = (given ?? draft).trim();
     if (!text || !chat || thinking) return;
-    const next: Said[] = [...said.filter(m => !m.error), { role: "user", text }];
-    setChatLog({ ...current, turns: next }); setDraft(""); setThinking(true); setMenu(""); setChatNote(null);
+    const next: Said[] = [...(fresh ? [] : said).filter(m => !m.error), { role: "user", text }];
+    setChatLog({ ...base, turns: next }); if (!fresh) setDraft(""); if (fresh) remember(openKey, null); setThinking(true); setMenu(""); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, model, ...(current.id ? { chatId: current.id } : current.folder ? { folder: current.folder } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, model, ...(base.id ? { chatId: base.id } : base.folder ? { folder: base.folder } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
       const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string; chat?: ChatMeta };
       if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
       const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");
       const done: Said[] = [...next, { role: "assistant", text: reply, steps: body.steps ?? [], by: chat.name, model }], meta = body.chat;
-      setChatLog({ key: campaignKey, id: meta?.id ?? current.id, title: meta?.title ?? current.title, savedAt: meta?.updatedAt, folder: meta ? meta.folder : current.folder, turns: done });
+      setChatLog({ key: campaignKey, id: meta?.id ?? base.id, title: meta?.title ?? base.title, savedAt: meta?.updatedAt, folder: meta ? meta.folder : base.folder, turns: done });
       if (meta) { remember(openKey, meta.id); setHistory({ key: campaignKey, list: [meta, ...(list ?? []).filter(c => c.id !== meta.id)], folders }); }
       if (body.steps?.some(st => st.ok)) changed.current();
       await load();
-    } catch (e) { setChatLog({ ...current, turns: [...next, { role: "assistant", text: e instanceof Error ? e.message : "Could not ask the AI.", error: true }] }); }
+    } catch (e) { setChatLog({ ...base, turns: [...next, { role: "assistant", text: e instanceof Error ? e.message : "Could not ask the AI.", error: true }] }); }
     finally { setThinking(false); }
   }
 
@@ -271,13 +309,23 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const settingsLink = onSettings ? <button type="button" className="ai-connect-link" onClick={() => { setOpen(false); onSettings(); }}>Connect an AI</button>
     : <a className="ai-connect-link" href={campaignId ? `/encyclopedia?campaign=${encodeURIComponent(campaignId)}&ai=connect` : "/encyclopedia?ai=connect"}>Connect an AI</a>;
   // Opened from the AI button with nothing connected yet: say how to connect one.
-  if (state && !state.hasConnections) return open ? createPortal(<aside className="ai-panel ai-panel-none" id="ai-activity" aria-label="AI" style={{ top }}>
+  /** In document.body, so the panel sits above the map's own layers, in the campaign's theme. */
+  const portal = (node: ReactNode) => createPortal(<div className={`ai-theme ${themed.className}`.trim()} {...themed.attrs} style={themed.style}>{node}</div>, document.body);
+  if (state && !state.hasConnections) return open ? portal(<aside className="ai-panel ai-panel-none" id="ai-activity" aria-label="AI" style={{ top }}>
     <div className="ai-panel-head"><Bot size={16}/><h2>AI</h2><button className="icon-button" aria-label="Close" onClick={() => setOpen(false)}><X size={16}/></button></div>
-    <p className="ai-panel-empty">No AI is connected to this campaign yet. Connect Claude, ChatGPT or another AI app, or add an API key, and you can ask it about the campaign from any page here.</p>
-    <div className="ai-panel-foot">{settingsLink}</div>
-  </aside>, document.body) : null;
+    <p className="ai-panel-empty">No AI is connected to this campaign yet. Connect Claude, ChatGPT, Codex or another AI app, or add an API key to chat with it right here, on any page.</p>
+    {state.campaign ? <ConnectionTab key={connectKey} campaignId={state.campaign} onChanged={() => void load()}/> : <div className="ai-panel-foot">{settingsLink}</div>}
+  </aside>) : null;
   if (!state?.hasConnections) return null;
-  const who = state.connected[0], waiting = state.waiting ?? [], showing = chat ? tab : "activity";
+  const who = state.connected[0], waiting = state.waiting ?? [], showing = tab === "connection" && !state.campaign ? "activity" : tab;
+  /** The Chat tab with no AI that can chat here: apps like Claude and Codex chat in their own window. */
+  const noChat = <div className="ai-nochat">
+    <MessageSquare size={20} aria-hidden/>
+    <p><b>Chat here needs an AI with an API key.</b> Apps like Claude, ChatGPT and Codex chat in their own window{who ? `, as ${who} does` : ""}, and what they do here shows under Activity.</p>
+    <p>Add a key from Anthropic, OpenAI, Google, OpenRouter or another provider, and you can ask it from this panel on any page. Your chats are saved with the campaign.</p>
+    {state.campaign ? <button type="button" className="button small primary" onClick={() => { setConnectKey(k => k + 1); setTab("connection"); setAddKey(true); }}><KeyRound size={14}/> Add an API key</button> : settingsLink}
+  </div>;
+  const connection = state.campaign && <ConnectionTab key={connectKey} campaignId={state.campaign} addKey={addKey} onChanged={() => { setAddKey(false); void load(); }}/>;
   const card = (w: Waiting) => <>
     <span className="ai-waiting-icon" aria-hidden>{icon(w.tool)}</span>
     <div>
@@ -373,14 +421,16 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     </div>
     <div className="ai-panel-foot">
       <button className="button small" disabled={!!busy} onClick={() => void act(state.paused ? "resume" : "pause")}>{state.paused ? <><Play size={14}/> Resume the AI</> : <><Pause size={14}/> Pause the AI</>}</button>
-      {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Wiki, under Connect an AI)</small></a>}
+      {state.campaign ? <button type="button" className="ai-settings-link" onClick={() => setTab("connection")}>{who ? `Connected: ${who}` : "Check or fix the connection"}</button> : onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Wiki, under Connect an AI)</small></a>}
       <p>{state.paused ? "The AI can still read, but every change is refused until you resume." : "While paused, the AI can still read but every change is refused until you resume."}</p>
     </div>
   </>;
-  const tabs = chat ? <div className="ai-panel-tabs" role="tablist">
-    <button role="tab" aria-selected={showing === "ask"} onClick={() => setTab("ask")}>{full ? "Chat" : `Ask ${chat.name}`}</button>
-    <button role="tab" aria-selected={showing === "activity"} onClick={() => setTab("activity")}>Activity{waiting.length ? ` · ${waiting.length} waiting` : ""}</button>
-  </div> : <><h2>AI activity</h2><span className="ai-panel-who">{state.paused ? "Paused" : who ?? "Not connected now"}</span></>;
+  // Chat, Activity and Connection on every page, whichever AI is connected.
+  const tabs = <div className="ai-panel-tabs" role="tablist">
+    <button role="tab" aria-selected={showing === "ask"} onClick={() => setTab("ask")}>Chat</button>
+    <button role="tab" aria-selected={showing === "activity"} onClick={() => setTab("activity")}>Activity{waiting.length ? ` · ${waiting.length}` : state.paused ? " · paused" : ""}</button>
+    {state.campaign && <button role="tab" aria-selected={showing === "connection"} title={who ? `Connected now: ${who}` : "Check, edit or fix the connection"} onClick={() => setTab("connection")}><span className={`ai-dot${who ? " live" : ""}`} aria-hidden/>Connection</button>}
+  </div>;
   const sizeButton = chat && <button type="button" className="icon-button" aria-label={full ? "Back to the side panel" : "Open as a full page"} title={full ? "Back to the side panel" : "Open as a full page"} onClick={() => goFull(!full)}>{full ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button>;
   const closeButton = <button className="icon-button" aria-label="Close AI activity" onClick={() => setOpen(false)}><X size={16}/></button>;
 
@@ -399,7 +449,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
         <div className="ai-full-actions">{showing === "ask" && exportButton}{exportMenu}</div>
         {sizeButton}{closeButton}
       </div>
-      {showing === "ask" ? <>{noteLine}{conversation}{composer}</> : <div className="ai-full-activity">{activity}</div>}
+      {showing === "ask" ? <>{noteLine}{conversation}{composer}</> : <div className="ai-full-activity">{showing === "connection" ? connection : activity}</div>}
     </div>
   </aside> : <aside className="ai-panel" id="ai-activity" aria-label="AI activity" style={{ top }}>
     <div className="ai-panel-head"><Bot size={16}/>{tabs}{sizeButton}{closeButton}</div>
@@ -416,15 +466,16 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       </div>
       {noteLine}{conversation}{composer}
     </>}
+    {showing === "ask" && !chat && noChat}
     {showing === "activity" && activity}
+    {showing === "connection" && connection}
   </aside>;
   return <>
     {!floating && <button ref={chip} className={`ai-chip${state.paused ? " paused" : waiting.length ? " asking" : who ? " live" : ""}`} onClick={() => { if (open) setOpen(false); else showPanel(); }} aria-expanded={open} aria-controls="ai-activity" title="AI activity">
       <Bot size={15}/><span>{state.paused ? "AI paused" : !waiting.length && chat && !who ? <>Ask<span className="ai-chip-name"> {chat.name}</span></> : waiting.length ? <><span className="ai-chip-name">{waiting[0].connection} is helping · </span>{waiting.length} to approve</> : who && combat ? "AI is running combat" : who ? <>AI connected<span className="ai-chip-name"> · {who}</span></> : "AI activity"}</span>
     </button>}
-    {/* In document.body, so the panel sits above the map's own layers. */}
-    {open && createPortal(panel, document.body)}
-    {posting && createPortal(<div className="ai-post-backdrop" onClick={e => { if (e.target === e.currentTarget && busy !== "post") setPosting(null); }}>
+    {open && portal(panel)}
+    {posting && portal(<div className="ai-post-backdrop" onClick={e => { if (e.target === e.currentTarget && busy !== "post") setPosting(null); }}>
       <form className="ai-post" role="dialog" aria-modal="true" aria-label={`Post “${posting.chat.title}” to Discord`} onSubmit={e => { e.preventDefault(); void postRecap(); }}>
         <div className="ai-post-head"><h2>Post “{posting.chat.title}” to Discord</h2><button type="button" className="icon-button" aria-label="Close" onClick={() => setPosting(null)}><X size={16}/></button></div>
         <div className="ai-post-body">
@@ -441,6 +492,6 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
         </div>
         <div className="ai-post-foot"><button type="button" className="button" onClick={() => setPosting(null)}>Cancel</button><button className="button primary" disabled={!posting.text.trim() || busy === "post"}><Send size={14}/> {busy === "post" ? "Posting…" : "Post to Discord"}</button></div>
       </form>
-    </div>, document.body)}
+    </div>)}
   </>;
 }

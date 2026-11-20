@@ -2,7 +2,8 @@ import {z} from 'zod';
 import {json,ownerFrom,sameOrigin} from '@/lib/encyclopedia/workspace-server';
 import {EncyclopediaStore} from '@/lib/encyclopedia/store';
 import {getBucket} from '@/lib/storage';
-import {claimStoredKeys,cleanApi,createApiConnection,createConnection,listConnections,publicConnection,revokeConnection,updateApi,updateConnection} from '@/lib/mcp/connections';
+import {claimStoredKeys,cleanApi,createApiConnection,createConnection,listConnections,newKey,publicConnection,revokeConnection,updateApi,updateConnection} from '@/lib/mcp/connections';
+import {checkConnection} from '@/lib/mcp/check';
 import {listModels,ProviderError} from '@/lib/ai/chat';
 import {cleanApiKey} from '@/lib/ai/secret';
 import {cleanBaseUrl,isProvider,providerOf} from '@/lib/ai/providers';
@@ -17,7 +18,9 @@ export async function GET(request:Request){
  const id=campaignId.safeParse(new URL(request.url).searchParams.get('campaignId'));if(!id.success)return json({error:'Choose a campaign.'},400);
  try{
   const bucket=getBucket(),moved=await claimStoredKeys(bucket,owner,id.data);
-  return json({connections:(await listConnections(bucket,owner,id.data)).map(publicConnection),...(moved.length?{moved}:{})});
+  // The AI panel's Connection tab asks for the name too, to open Connect an AI from any page.
+  const campaignName=new URL(request.url).searchParams.has('named')?(await new EncyclopediaStore(bucket).read(owner)).data.campaigns.find(c=>c.id===id.data)?.name:undefined;
+  return json({connections:(await listConnections(bucket,owner,id.data)).map(publicConnection),...(campaignName?{campaignName}:{}),...(moved.length?{moved}:{})});
  }
  catch{return json({error:'Could not load the AI connections.'},400);}
 }
@@ -26,7 +29,7 @@ export async function POST(request:Request){
  if(!sameOrigin(request))return json({error:'Same-origin request required'},403);
  try{
   const raw=await request.text();if(raw.length>4000)return json({error:'Request too large'},413);
-  const args=z.object({campaignId,action:z.enum(['create','update','revoke','models','createApi','updateApi']),id:z.string().max(100).optional(),name:z.string().max(200).optional(),level:z.string().max(20).optional(),
+  const args=z.object({campaignId,action:z.enum(['create','update','revoke','models','createApi','updateApi','newKey','check']),id:z.string().max(100).optional(),name:z.string().max(200).optional(),level:z.string().max(20).optional(),perms:z.record(z.string().max(40),z.string().max(10)).optional(),
    provider:z.string().max(20).optional(),baseUrl:z.string().max(400).optional(),apiKey:z.string().max(500).optional(),last4:z.string().max(4).optional(),model:z.string().max(200).optional(),limit:z.union([z.number(),z.string().max(20),z.null()]).optional()}).parse(JSON.parse(raw));
   const bucket=getBucket();
   if(args.action==='create'){
@@ -51,7 +54,10 @@ export async function POST(request:Request){
    return json({connection:await createApiConnection(bucket,owner,args.campaignId,args.name,args.level,cleanApi({provider:args.provider,baseUrl:args.baseUrl,model:args.model,limit:args.limit,last4:args.last4}))});
   }
   if(args.action==='updateApi')return json({connection:await updateApi(bucket,owner,args.campaignId,args.id,{model:args.model,limit:args.limit,last4:args.last4,baseUrl:args.baseUrl})});
-  if(args.action==='update')return json({connection:await updateConnection(bucket,owner,args.campaignId,args.id,{level:args.level,name:args.name})});
+  // A fresh key for an app connection (the old link stops working), and a check that runs the server as an AI app would.
+  if(args.action==='newKey')return json(await newKey(bucket,owner,args.campaignId,args.id));
+  if(args.action==='check')return json({check:await checkConnection(bucket,owner,args.campaignId,args.id)});
+  if(args.action==='update')return json({connection:await updateConnection(bucket,owner,args.campaignId,args.id,{level:args.level,name:args.name,perms:args.perms})});
   return json({revoked:await revokeConnection(bucket,owner,args.campaignId,args.id)});
  }catch(e){return json({error:e instanceof ProviderError||e instanceof Error&&!(e instanceof z.ZodError)?e.message:'Could not update the AI connection.'},400);}
 }

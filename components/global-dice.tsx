@@ -48,7 +48,8 @@ export default function GlobalDice() {
   // "Ask" on the dashboard's AI widget asks for the chat the same way.
   useEffect(() => {
     if (!ai || ai.here) return;
-    const on = () => setAiOpen(o => ({ key: aiKey, n: o.key === aiKey ? o.n + 1 : 1 }));
+    // Once the panel is made it hears the event itself, so this only makes it the first time.
+    const on = () => setAiOpen(o => o.key === aiKey && o.n > 0 ? o : { key: aiKey, n: 1 });
     window.addEventListener(OPEN_CHAT_EVENT, on);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, on);
   }, [ai, aiKey]);
