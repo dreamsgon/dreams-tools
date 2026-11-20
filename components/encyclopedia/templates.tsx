@@ -4,8 +4,9 @@
  * the template choice in New entry, and Save as template.
  */
 import { Fragment, useState } from "react";
-import { Copy, EyeOff, LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
-import { compareEntries, folderPath, newId, templateKinds, type Entry, type HideableTab, type PageTemplate, type TemplateField, type Workspace } from "@/lib/encyclopedia/world-model";
+import { arrangeStats, moveStat, moveStatGroup, statGroups, statOff, tidy, toggleStat, type StatArrangement } from "@/lib/encyclopedia/stat-arrange";
+import { ArrowDown, ArrowUp, Copy, EyeOff, LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
+import { compareEntries, folderPath, newId, templateKinds, type Entry, type HideableTab, type PageTemplate, type StatField, type TemplateField, type Workspace } from "@/lib/encyclopedia/world-model";
 import { applyTemplate, characterStarters, cleanValue, deleteTemplate, FIELD_TYPES, HIDEABLE_TABS, infoRows, KIND_NAMES, saveTemplate, starterTemplates, templateFromPage, templateOf, templatesFor, templateUses, type FieldValue } from "@/lib/encyclopedia/templates";
 import { defaultCharacterLayout, maxFacts, profileBlockInfo, type CharacterLayout } from "@/lib/encyclopedia/character-profile";
 import { ToolDialog } from "./tool-dialog";
@@ -102,6 +103,7 @@ function templateSummary(t: PageTemplate) {
   const shown = t.kind === "character" ? HIDEABLE_TABS.filter(([id]) => !t.hiddenTabs?.includes(id)).map(([, n]) => n) : [];
   const parts = [
     t.fields.length ? `${t.fields.length} field${t.fields.length === 1 ? "" : "s"}` : "",
+    t.stats?.off?.length ? `${t.stats.off.length} stat${t.stats.off.length === 1 ? "" : "s"} off` : t.stats?.order?.length ? "Own stat order" : "",
     t.layout?.facts?.length ? t.layout.facts.map(f => f.label).slice(0, 4).join(", ") : "",
     [...shown, ...t.tabs.map(x => x.title)].length ? `Tabs: ${[...shown, ...t.tabs.map(x => x.title)].slice(0, 5).join(", ")}${[...shown, ...t.tabs].length > 5 ? "…" : ""}` : "",
   ].filter(Boolean);
@@ -147,7 +149,7 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
         <label>New pages go inside<select value={t.parentId ?? ""} onChange={e => edit({ parentId: e.target.value || null })}><option value="">Wherever you are</option>{parents.map(p => <option key={p.id} value={p.id}>{[folderPath(data, p), p.title].filter(Boolean).join(" › ")}</option>)}</select></label>
         <label className="template-check"><input type="checkbox" checked={t.overviewVisibility === "players"} onChange={e => edit({ overviewVisibility: e.target.checked ? "players" : "gm" })}/> Players can see new pages’ Overview</label>
       </div>
-      {t.kind === "character" && <CharacterTemplateParts t={t} edit={edit} worldLayout={world.characterLayout}/>}
+      {t.kind === "character" && <CharacterTemplateParts t={t} edit={edit} worldLayout={world.characterLayout} form={campaign?.statFields?.filter(f => !f.archived)} campaignName={campaign?.name}/>}
       <h2>Fields, shown in the info box</h2>
       <div className="template-fields-table" role="table" aria-label="Fields">
         <div role="row" className="head"><span role="columnheader">Name</span><span role="columnheader">Type</span><span role="columnheader">Choices</span><span role="columnheader">Who sees it</span><span/></div>
@@ -173,7 +175,7 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
 }
 
 /** A character template's own parts: which ready-made tabs pages show, and the Profile layout they start with. */
-function CharacterTemplateParts({ t, edit, worldLayout }: { t: PageTemplate; edit: (p: Partial<PageTemplate>) => void; worldLayout?: CharacterLayout }) {
+function CharacterTemplateParts({ t, edit, worldLayout, form = [], campaignName }: { t: PageTemplate; edit: (p: Partial<PageTemplate>) => void; worldLayout?: CharacterLayout; form?: StatField[]; campaignName?: string }) {
   const hidden = new Set(t.hiddenTabs ?? []), layout = t.layout, [label, setLabel] = useState("");
   const setHidden = (id: HideableTab, hide: boolean) => { const next = HIDEABLE_TABS.map(([x]) => x).filter(x => x === id ? hide : hidden.has(x)); edit({ hiddenTabs: next.length ? next : undefined }); };
   const facts = layout?.facts ?? [], setFacts = (f: NonNullable<CharacterLayout["facts"]>) => layout && edit({ layout: { ...layout, facts: f.length ? f : undefined } });
@@ -182,6 +184,7 @@ function CharacterTemplateParts({ t, edit, worldLayout }: { t: PageTemplate; edi
     <h2>Tabs a character gets</h2>
     <div className="template-tab-switches">{HIDEABLE_TABS.map(([id, name]) => <label key={id} className="template-check"><input type="checkbox" checked={!hidden.has(id)} onChange={e => setHidden(id, !e.target.checked)}/> {name}</label>)}</div>
     <p className="aside-hint">Profile, Overview and Connections are always there. A tab left out can be shown again from the page’s Tabs menu.</p>
+    {!hidden.has("stats") && <TemplateStats t={t} edit={edit} form={form} campaignName={campaignName}/>}
     <h2>Profile layout</h2>
     {layout ? <div className="template-layout">
       <div className="template-layout-row"><span className="template-layout-label">Fields at the top</span><span className="template-chips">{facts.map(f => <span key={f.id} className="template-chip">{f.label}{f.gm && <EyeOff size={11} aria-label="GM only"/>}<button type="button" aria-label={`Remove ${f.label}`} onClick={() => setFacts(facts.filter(x => x.id !== f.id))}><X size={11}/></button></span>)}
@@ -190,5 +193,27 @@ function CharacterTemplateParts({ t, edit, worldLayout }: { t: PageTemplate; edi
       {!layout.bar.hidden && <div className="template-layout-row"><span className="template-layout-label">{layout.bar.title || "Bottom bar"}</span><span className="template-chips">{layout.bar.fields.map(f => <span key={f.id} className="template-chip plain">{f.label}</span>)}</span></div>}
       <p className="aside-hint">To move blocks around, arrange a character’s Profile, then Save as template and pick Update “{t.name}”. <button type="button" className="text-button" onClick={() => edit({ layout: undefined })}>Use the world’s layout instead</button></p>
     </div> : <div className="template-layout is-empty"><p>New characters get the world’s character layout.</p><button type="button" className="button small" onClick={() => edit({ layout: worldLayout ?? defaultCharacterLayout() })}><Plus size={13}/> Give this template its own</button></div>}
+  </>;
+}
+
+/** Which of the campaign's stats a character made from this template has on, and in what order (per group). */
+function TemplateStats({ t, edit, form, campaignName }: { t: PageTemplate; edit: (p: Partial<PageTemplate>) => void; form: StatField[]; campaignName?: string }) {
+  const known = new Set(form.map(f => f.id)), ordered = arrangeStats(form, t.stats), groups = statGroups(ordered);
+  const set = (next: StatArrangement | undefined) => { const tidied = tidy(next, known); edit({ stats: tidied }); };
+  if (!form.length) return <><h2>Stats and skills</h2><p className="aside-hint">{campaignName ? `${campaignName} has no stat form yet. Make one with Stat form, then choose which stats this template uses.` : "Open a campaign to choose which of its stats this template uses."}</p></>;
+  const on = ordered.filter(f => !statOff(t.stats, f.id)).length;
+  return <>
+    <h2>Stats and skills</h2>
+    <p className="aside-hint">From {campaignName}’s stat form. {on} of {form.length} on. Characters made from this template, or given it with Use a template, get this order and only these stats. {t.stats && <button type="button" className="text-button" onClick={() => edit({ stats: undefined })}>Use the form’s order, all on</button>}</p>
+    <div className="template-stats">{groups.map((g, gi) => <div key={g.name} className="template-stat-group">
+      <div className="template-stat-head"><strong>{g.name || "Stats"}</strong><span>
+        <button type="button" className="icon-button" aria-label={`Move ${g.name} up`} disabled={gi === 0} onClick={() => set({ ...t.stats, order: moveStatGroup(ordered, g.name, -1) })}><ArrowUp size={13}/></button>
+        <button type="button" className="icon-button" aria-label={`Move ${g.name} down`} disabled={gi === groups.length - 1} onClick={() => set({ ...t.stats, order: moveStatGroup(ordered, g.name, 1) })}><ArrowDown size={13}/></button></span></div>
+      {g.fields.map((f, i) => <div key={f.id} className={`template-stat${statOff(t.stats, f.id) ? " is-off" : ""}`}>
+        <label className="template-check"><input type="checkbox" checked={!statOff(t.stats, f.id)} onChange={() => set(toggleStat(t.stats, f.id))}/> {f.label}</label>
+        <span><button type="button" className="icon-button" aria-label={`Move ${f.label} up`} disabled={i === 0} onClick={() => set({ ...t.stats, order: moveStat(ordered, f.id, -1) })}><ArrowUp size={13}/></button>
+          <button type="button" className="icon-button" aria-label={`Move ${f.label} down`} disabled={i === g.fields.length - 1} onClick={() => set({ ...t.stats, order: moveStat(ordered, f.id, 1) })}><ArrowDown size={13}/></button></span>
+      </div>)}
+    </div>)}</div>
   </>;
 }

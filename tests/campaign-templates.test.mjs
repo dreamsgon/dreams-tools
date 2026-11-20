@@ -85,3 +85,20 @@ test('a campaign export leaves out other campaigns\' templates, and an import po
   assert.equal(world.templates.find(t=>t.id==='mine').campaignId,camp.id);
   assert.equal(world.templates.find(t=>t.id==='world').campaignId,undefined);
 });
+
+test('a template carries which stats are on and their order',()=>{
+  const {s,c}=base();
+  const stats={order:['ath','acr'],off:['arc']};
+  const t=tpl('pc',{stats});
+  const page=pageFromTemplate(t,{id:'p9',title:'Kit',worldId:c.worldId,campaignId:c.id,parentId:null,newId});
+  assert.deepEqual(page.character.statLayout,stats);
+  assert.notEqual(page.character.statLayout.order,stats.order);
+  // Save as template picks up a character's own arrangement; Use a template puts it on another, keeping values.
+  const e={id:'old',worldId:c.worldId,campaignId:c.id,parentId:null,title:'Old',kind:'character',body:'',character:{...defaultCharacter(),statsByCampaign:{[c.id]:{acr:3}},statLayout:{order:['acr','ath']}},updatedAt:T};
+  assert.deepEqual(templateFromPage({...s,entries:[...s.entries,e]},e,'X',newId,T).stats,{order:['acr','ath']});
+  let w={...s,worlds:s.worlds.map(x=>x.id===c.worldId?{...x,templates:[t]}:x),entries:[...s.entries,e]};
+  w=applyTemplate(w,'old','pc',newId,T);
+  const got=w.entries.find(x=>x.id==='old').character;
+  assert.deepEqual(got.statLayout,stats);assert.equal(got.statsByCampaign[c.id].acr,3);
+  assert.ok(workspaceSchema.safeParse(w).success);
+});

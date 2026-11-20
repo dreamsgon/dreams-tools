@@ -55,6 +55,9 @@ export function characterStarters(newId: () => string, now = new Date().toISOStr
   ];
 }
 
+/** A copy of a stat arrangement (order and switched-off stats), with empty lists left out. */
+const copyStats = (a: { order?: string[]; off?: string[] }) => ({ ...(a.order?.length ? { order: [...a.order] } : {}), ...(a.off?.length ? { off: [...a.off] } : {}) });
+
 /** Ready-made character tabs that can be hidden, in tab order, with their usual names (Spells takes the campaign's own name in the UI). */
 export const HIDEABLE_TABS: [HideableTab, string][] = [["statblock", "Statblock"], ["stats", "Stats & Skills"], ["features", "Features"], ["inventory", "Inventory"], ["spells", "Spells"]];
 const hideOrder = (ids: Iterable<string>) => HIDEABLE_TABS.map(([id]) => id).filter(id => new Set(ids).has(id));
@@ -106,7 +109,7 @@ export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: str
   return {
     id: opts.id, worldId: opts.worldId, campaignId: opts.campaignId, parentId: opts.parentId, title: opts.title.trim().slice(0, 160), kind: t.kind,
     body: t.body, overviewVisibility: t.overviewVisibility ?? "gm", ...(t.tabs.length ? { tabs: t.tabs.map(x => ({ id: opts.newId(), title: x.title, body: "", visibility: x.visibility })) } : {}),
-    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {} } } : {}),
+    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {}, ...(t.stats ? { statLayout: copyStats(t.stats) } : {}) } } : {}),
     updatedAt: opts.now ?? new Date().toISOString(),
   };
 }
@@ -120,6 +123,7 @@ export function templateFromPage(s: Workspace, e: Entry, name: string, newId: ()
     parentId: e.parentId, overviewVisibility: e.overviewVisibility ?? "gm", updatedAt: now,
     ...(kind === "character" && e.hiddenTabs?.length ? { hiddenTabs: [...e.hiddenTabs] } : {}),
     ...(kind === "character" && e.profile ? { layout: profileLayoutOf(e.profile) } : {}),
+    ...(kind === "character" && e.character?.statLayout ? { stats: copyStats(e.character.statLayout) } : {}),
   };
 }
 
@@ -139,6 +143,8 @@ export function applyTemplate(s: Workspace, entryId: string, templateId: string,
     ...e, templateId: t.id,
     ...(missing.length ? { tabs: [...(e.tabs ?? []), ...missing.map(x => ({ id: newId(), title: x.title, body: "", visibility: x.visibility }))] } : {}),
     ...(e.kind === "character" ? hideTabsPatch(e, t.hiddenTabs ?? []) : {}),
+    // The template's stats: which are on and their order. Values stay; a template without stats leaves the character's own.
+    ...(e.kind === "character" && t.stats && e.character ? { character: { ...(hideTabsPatch(e, t.hiddenTabs ?? []).character ?? e.character), statLayout: copyStats(t.stats) } } : {}),
     ...(e.kind === "character" && t.layout ? { profile: e.profile ? layOutProfile(e.profile, t.layout) : profileFromLayout(t.layout) } : {}),
     updatedAt: now,
   };

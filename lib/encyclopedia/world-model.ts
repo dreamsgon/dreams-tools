@@ -105,6 +105,8 @@ export const pageTemplateSchema = z.object({
   // Optional (added later): ready-made tabs a page made from it leaves out (hideableTabs in templates.ts), and for a character its Profile layout.
   hiddenTabs:z.array(z.enum(hideableTabIds)).max(hideableTabIds.length).optional(),
   layout:characterLayoutSchema.optional(),
+  // Optional (added later): for a character, which of the campaign's stats are on and their order (like character.statLayout).
+  stats:z.object({order:z.array(id).max(500).optional(),off:z.array(id).max(500).optional()}).optional(),
 });
 export type PageTemplate=z.infer<typeof pageTemplateSchema>;
 export type TemplateField=z.infer<typeof templateFieldSchema>;
