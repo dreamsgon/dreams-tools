@@ -34,6 +34,15 @@ export const recapItemSchema = z.object({
   /** An in-world date: the calendar and the day to move it on to. `name` is the date as written. */
   calendarId: id.optional(),
   date: z.object({ year: z.number().int().min(1).max(99999), periodId: id, day: z.number().int().min(1).max(130) }).optional(),
+  /** Added automatically (What it pulls out, Add automatically), so it shows in Added for you with Undo. */
+  auto: z.boolean().optional(),
+  /** What Undo needs to take the change back: the quest log line and ticked objective, the tie and the page it is on, the calendar's
+   * date before and the event added, the line added to a page, and whether a codex entry was already found. */
+  undo: z.object({
+    logId: id.optional(), tick: z.string().max(300).optional(), tieId: id.optional(), ownerId: id.optional(), eventId: id.optional(),
+    prev: z.object({ year: z.number().int().min(1).max(99999), periodId: id, day: z.number().int().min(1).max(130) }).optional(),
+    line: z.string().max(4400).optional(), found: z.boolean().optional(),
+  }).optional(),
   /** Filed: set to go only to the session file (What it pulls out), so it never waits in the check list. */
   state: z.enum(["open", "done", "skipped", "filed"]),
 });

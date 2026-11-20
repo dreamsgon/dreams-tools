@@ -23,7 +23,7 @@ import { advanceInitiative, getCurrentInitiativeEntry, getInitiativeEntries, isI
 import { editScene } from "./table.ts";
 import { actionName, fromLevel, toolAction, type Perms } from "./permissions.ts";
 import type { MovePreview } from "./activity.ts";
-import { PART_SIZE, addFinds, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiFinds, type AiRecap } from "../encyclopedia/recaps.ts";
+import { PART_SIZE, addFinds, autoAdd, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiFinds, type AiRecap } from "../encyclopedia/recaps.ts";
 import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
 import { extractNotes } from "../encyclopedia/recap-extract.ts";
@@ -656,11 +656,12 @@ const tools: Tool[] = [
       return (full, c, now) => {
         const existing = q ? own(pick(pages(c).filter(e => e.kind === "session"), q, x => x.id, x => x.title, "session page")) : undefined;
         const entry = draftRecap(c.book, c.campaign, input, { by: c.connection ?? "An AI", now, existing, folderId: sessionFolder(c.book, c.campaign.id)?.id ?? null });
-        const next = existing ? patchEntry(full, existing.id, entry) : { ...full, entries: [...full.entries, entry] };
-        const waiting = openItems(entry.recap);
+        // Kinds the GM set to Add automatically are added now (new pages GM only); the rest wait in the check list.
+        const auto = autoAdd(existing ? patchEntry(full, existing.id, entry) : { ...full, entries: [...full.entries, entry] }, entry.id, now), next = auto.next;
+        const waiting = openItems(next.entries.find(e => e.id === entry.id)?.recap);
         return {
-          next, summary: `Drafted the recap “${entry.title}”`, detail: waiting.length ? `${waiting.length} thing${waiting.length > 1 ? "s" : ""} to check before publishing` : "Nothing else to check",
-          reply: { saved: { id: entry.id, title: entry.title }, toCheck: waiting.map(r => `${r.kind}: ${r.name}`), note: "Saved as a draft: players can't see it. Tell the GM to open the page, check the list and publish it. Nothing else in the campaign has changed." },
+          next, summary: `Drafted the recap “${entry.title}”`, detail: [waiting.length ? `${waiting.length} thing${waiting.length > 1 ? "s" : ""} to check before publishing` : "Nothing else to check", ...(auto.added.length ? [`${auto.added.length} added automatically`] : [])].join(", "),
+          reply: { saved: { id: entry.id, title: entry.title }, toCheck: waiting.map(r => `${r.kind}: ${r.name}`), ...(auto.added.length ? { addedAutomatically: auto.added } : {}), note: auto.added.length ? "Saved as a draft: players can't see it. The GM set some kinds to Add automatically, so those were added (new pages GM only) and can be undone on the page. Tell the GM to check the rest and publish it." : "Saved as a draft: players can't see it. Tell the GM to open the page, check the list and publish it. Nothing else in the campaign has changed." },
         };
       };
     },
@@ -691,9 +692,10 @@ const tools: Tool[] = [
       return (full, c, now) => {
         const e = own(pick(pages(c).filter(x => x.kind === "session" && x.recap), q, x => x.id, x => x.title, "session recap"));
         const { added, entry } = addFinds(c.book, c.campaign, e, input);
+        const auto = autoAdd(patchEntry(full, e.id, { recap: entry.recap, updatedAt: now.toISOString() }), e.id, now);
         return {
-          next: patchEntry(full, e.id, { recap: entry.recap, updatedAt: now.toISOString() }), summary: `Listed what “${e.title}” mentions`, detail: added.length ? `${added.length} thing${added.length > 1 ? "s" : ""} to check before publishing` : "Nothing new to check",
-          reply: { saved: { id: e.id, title: e.title }, added: added.map(r => `${r.kind}: ${r.name}`), note: "Added to the check list only. The recap text didn't change, and nothing else changes until the GM adds each one." },
+          next: auto.next, summary: `Listed what “${e.title}” mentions`, detail: [added.length ? `${added.length} thing${added.length > 1 ? "s" : ""} to check before publishing` : "Nothing new to check", ...(auto.added.length ? [`${auto.added.length} added automatically`] : [])].join(", "),
+          reply: { saved: { id: e.id, title: e.title }, added: added.map(r => `${r.kind}: ${r.name}`), ...(auto.added.length ? { addedAutomatically: auto.added } : {}), note: auto.added.length ? "The GM set some kinds to Add automatically, so those were added (new pages GM only) and can be undone on the page. The rest wait in the check list. The recap text didn't change." : "Added to the check list only. The recap text didn't change, and nothing else changes until the GM adds each one." },
         };
       };
     },

@@ -5,10 +5,10 @@
  * GM notes use the page's own editor (see article-editor.tsx).
  */
 import {useEffect,useState} from 'react';
-import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine,X,Download} from 'lucide-react';
+import {Check,Eye,EyeOff,Plus,Trash2,ArrowUp,ArrowDown,Send,FileText,Sparkles,Clock,RotateCcw,Copy,PenLine,X,Download,Undo2} from 'lucide-react';
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {emptyRecap,type Beat,type Quote,type Recap,type RecapItem} from '@/lib/encyclopedia/recap-schema';
-import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
+import {applyItem,openItems,publishRecap,quoteInTranscript,skipItem,undoItem,wordCount,TRANSCRIPT_LIMIT} from '@/lib/encyclopedia/recaps';
 import {newId} from '@/lib/encyclopedia/world-model';
 import {tieLabel,tieTypeById,tieTypesOf} from '@/lib/encyclopedia/ties';
 import {confirmDialog} from '../confirm-dialog';
@@ -180,7 +180,7 @@ function describe(r:RecapItem,carrier?:string,tie?:string){
 }
 
 export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;data:Workspace;change:Change;onOpen:(id:string)=>void;setNotice:(s:string)=>void}){
- const recap=entry.recap??emptyRecap(),open=openItems(recap),done=recap.review.filter(r=>r.state==='done'||r.state==='skipped'),filed=recap.review.filter(r=>r.state==='filed');
+ const recap=entry.recap??emptyRecap(),open=openItems(recap),done=recap.review.filter(r=>(r.state==='done'&&!r.auto)||r.state==='skipped'),filed=recap.review.filter(r=>r.state==='filed'),auto=recap.review.filter(r=>r.state==='done'&&r.auto);
  const [editing,setEditing]=useState<string|null>(null),[text,setText]=useState(''),[same,setSame]=useState<string|null>(null),[posting,setPosting]=useState(false);
  const others=data.entries.filter(e=>e.id!==entry.id&&e.kind!=='folder'&&e.kind!=='session'&&e.worldId===entry.worldId&&(e.campaignId===entry.campaignId||e.campaignId===null)).sort((a,b)=>a.title.localeCompare(b.title));
  const editItem=(id:string,p:Partial<RecapItem>)=>change(w=>({...w,entries:w.entries.map(e=>e.id===entry.id&&e.recap?{...e,recap:{...e.recap,review:e.recap.review.map(r=>r.id===id?{...r,...p}:r)}}:e)}));
@@ -188,6 +188,13 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   const said:string[]=[];
   change(w=>{let next=w;for(const id of ids){try{const r=applyItem(next,entry.id,id);next=r.next;said.push(r.message);}catch(e){said.push(e instanceof Error?e.message:'Could not do that.');}}return next;});
   setNotice(said.length>2?`Done: ${said.length} changes. ${said.at(-1)}`:said.join(' '));
+ };
+ const undo=async(ids:string[])=>{
+  const made=recap.review.filter(r=>ids.includes(r.id)&&(r.kind==='newPage'||r.kind==='newQuest')&&r.pageId);
+  if(made.length&&!await confirmDialog({title:made.length===1?`Delete “${made[0].name}”?`:`Delete ${made.length} pages?`,message:`Undo deletes ${made.length===1?'the page it made':'the pages it made'}, with any changes since. ${made.length===1?'It goes':'They go'} back in the check list.`,confirm:'Undo',danger:true}))return;
+  const said:string[]=[];
+  change(w=>{let next=w;for(const id of ids){try{const r=undoItem(next,entry.id,id);next=r.next;said.push(r.message);}catch(e){said.push(e instanceof Error?e.message:'Could not undo that.');}}return next;});
+  setNotice(said.length>2?`Undone: ${said.length} changes. They’re back in the check list.`:said.join(' '));
  };
  const publish=async(on:boolean)=>{
   if(on&&open.length&&!await confirmDialog({title:`Publish with ${open.length} left to check?`,message:'The recap goes to players now. What’s left stays in the list for later.',confirm:'Publish'}))return;
@@ -215,6 +222,10 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
  return <div className="aside-section recap-check">
   <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
   <p className="aside-hint">What the AI found in this session. Nothing changes in your pages until you press a button.</p>
+  {auto.length>0&&<div className="check-group check-auto"><div className="check-auto-head"><span className="eyebrow">ADDED FOR YOU</span>{auto.length>1&&<button className="button small" onClick={()=>undo(auto.map(r=>r.id))}><Undo2 size={13}/> Undo all</button>}</div>
+   <p className="aside-hint">You set these to Add automatically. New pages are GM only.</p>
+   {auto.map(r=><div key={r.id} className="check-auto-row"><Check size={13} aria-hidden="true"/><span><span className="check-tag">{tagOf[r.kind]}</span> {r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}</span><button className="button small" aria-label={`Undo ${r.name}`} onClick={()=>undo([r.id])}><Undo2 size={13}/> Undo</button></div>)}
+  </div>}
   {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g.toUpperCase()}</span>{items.map(r=><div key={r.id} className="check-item">
    <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
    {editing===r.id?<><textarea className="check-text" aria-label={`Text for ${r.name}`} rows={4} maxLength={4000} value={text} onChange={e=>setText(e.target.value)}/><div className="check-actions"><button className="button primary small" onClick={()=>{editItem(r.id,{text:text.trim()});setEditing(null);}}>Save</button><button className="button small" onClick={()=>setEditing(null)}>Cancel</button></div></>
@@ -224,7 +235,7 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
     <div className="check-actions"><button className="button primary small" disabled={r.kind==='loot'&&!r.pageId} onClick={()=>apply([r.id])}><Check size={13}/> {doLabel[r.kind]}</button>{r.kind==='newPage'&&others.length>0&&<button className="button small" onClick={()=>setSame(r.id)}>Same as…</button>}{r.kind!=='codex'&&r.kind!=='date'&&<button className="button small" onClick={()=>{setEditing(r.id);setText(r.text);}}>Edit</button>}<button className="button small" onClick={()=>change(w=>skipItem(w,entry.id,r.id))}>Skip</button></div></>}
   </div>)}</div>)}
   {filedList}
-  {done.length>0&&<details className="check-done"><summary>{done.length} done or skipped</summary>{done.map(r=><p key={r.id} className="aside-hint">{r.state==='done'?<Check size={12}/>:'–'} {tagOf[r.kind]} · {r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}{r.state==='skipped'?' (skipped)':''}</p>)}</details>}
+  {done.length>0&&<details className="check-done"><summary>{done.length} done or skipped</summary>{done.map(r=><p key={r.id} className="aside-hint">{r.state==='done'?<Check size={12}/>:'–'} {tagOf[r.kind]} · {r.pageId?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}{r.state==='skipped'?' (skipped)':<button className="inline-link check-undo" onClick={()=>undo([r.id])}>Undo</button>}</p>)}</details>}
   <div className="check-footer">
    {open.length>1&&<div className="check-actions"><button className="button small" onClick={()=>apply(open.map(r=>r.id))}><Check size={13}/> Add all {open.length}</button><button className="button small" onClick={()=>change(w=>open.reduce((x,r)=>skipItem(x,entry.id,r.id),w))}>Skip the rest</button></div>}
    {share}

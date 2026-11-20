@@ -8,7 +8,7 @@
 import {useMemo,useState} from 'react';
 import {Download,Lock,Plus,Sparkles,Trash2,Undo2} from 'lucide-react';
 import {newId,type Campaign,type Workspace} from '@/lib/encyclopedia/world-model';
-import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,turnKind,setWhere,whereOf,whereNames,wheres,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
+import {depthFor,depthNames,extractDepths,extractGroups,extractKinds,extractNames,isOn,turnKind,setWhere,whereOf,whereNames,wheres,findKinds,isAuto,setAuto,cleanFixes,inEncyclopedia,type ExtractSettings} from '@/lib/encyclopedia/recap-extract';
 import {sessionFile} from '@/lib/encyclopedia/rp-export';
 import {saveExtract,allStyles,chatLengths,deleteStyle,isBuiltIn,kindNames,lengthNames,lockedLines,saveChat,saveStyle,settingLines,styleFor,styleSummary,styleTones,chooseStyle,writingKinds,type AiWriting,type ChatSettings,type WritingKind,type WritingStyle} from '@/lib/encyclopedia/ai-styles';
 import {ToolDialog} from './tool-dialog';
@@ -125,7 +125,9 @@ function ChatSettingsForm({writing,save}:{writing:AiWriting|undefined;save:(next
 /** What it pulls out: which kinds the AI takes from a session, how much, and where each goes. Saved with the campaign's other AI settings. */
 function ExtractSettingsForm({data,campaign,writing,save}:{data:Workspace;campaign:Campaign;writing:AiWriting|undefined;save:(next:AiWriting)=>void}){
  const saved:ExtractSettings=writing?.extract??{},[draft,setDraft]=useState<ExtractSettings>(saved),[error,setError]=useState('');
- const depth=depthFor(draft),dirty=depth!==depthFor(saved)||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k)||whereOf(draft,k)!==whereOf(saved,k));
+ const depth=depthFor(draft),fixes=draft.fixes??[],sameFixes=JSON.stringify(cleanFixes(draft.fixes))===JSON.stringify(cleanFixes(saved.fixes));
+ const dirty=depth!==depthFor(saved)||!sameFixes||extractKinds.some(k=>isOn(draft,k)!==isOn(saved,k)||whereOf(draft,k)!==whereOf(saved,k)||isAuto(draft,k)!==isAuto(saved,k));
+ const setFix=(i:number,p:Partial<{from:string;to:string}>)=>setDraft(d=>({...d,fixes:(d.fixes??[]).map((f,j)=>j===i?{...f,...p}:f)}));
  const turn=(k:typeof extractKinds[number],on:boolean)=>setDraft(d=>turnKind(d,k,on));
  const keep=()=>{try{setError('');save(saveExtract(writing,draft));}catch(e){setError(e instanceof Error?e.message:'Could not save that.');}};
  return <div className="writing-body">
@@ -135,8 +137,14 @@ function ExtractSettingsForm({data,campaign,writing,save}:{data:Workspace;campai
    {extractGroups.map(([g,list])=><div key={g} className="extract-group"><span className="writing-group">{g}</span><div className="extract-rows">{list.map(k=><div key={k} className={`extract-row ${isOn(draft,k)?'':'off'}`}>
     <label className="extract-label"><span className="extract-switch"><input type="checkbox" checked={isOn(draft,k)} onChange={e=>turn(k,e.target.checked)}/><span aria-hidden="true"/></span>
     <span className="extract-name"><strong>{extractNames[k][0]}</strong><small>{extractNames[k][1]}</small></span></label>
-    {isOn(draft,k)&&<select className="extract-where" aria-label={`Where ${extractNames[k][0]} go`} value={whereOf(draft,k)} onChange={e=>setDraft(d=>setWhere(d,k,e.target.value as typeof wheres[number]))}>{wheres.map(w=><option key={w} value={w}>{whereNames[w]}</option>)}</select>}
+    {isOn(draft,k)&&<div className="extract-controls"><select className="extract-where" aria-label={`Where ${extractNames[k][0]} go`} value={whereOf(draft,k)} onChange={e=>setDraft(d=>setWhere(d,k,e.target.value as typeof wheres[number]))}>{wheres.map(w=><option key={w} value={w}>{whereNames[w]}</option>)}</select>
+     {findKinds.includes(k)&&inEncyclopedia(draft,k)&&<Seg label={`How ${extractNames[k][0]} are added`} value={isAuto(draft,k)?'auto':'check'} options={[['check','Check first'],['auto','Automatic']]} onChange={v=>setDraft(d=>setAuto(d,k,v==='auto'))}/>}</div>}
    </div>)}</div></div>)}
+   <details className="writing-more" open={fixes.length>0}><summary>Spelling fixes <small>{fixes.length?`${cleanFixes(fixes).length} rule${cleanFixes(fixes).length===1?'':'s'}`:'optional'}</small></summary><div className="writing-more-in extract-fixes">
+    <p className="aside-hint">Names the transcript or the AI gets wrong. They’re written your way in the recap and everything it finds, and the AI is told how to spell them.</p>
+    {fixes.map((f,i)=><div key={i} className="extract-fix"><input aria-label={`Wrong spelling ${i+1}`} placeholder="Toben" maxLength={80} value={f.from} onChange={e=>setFix(i,{from:e.target.value})}/><span aria-hidden="true">→</span><input aria-label={`Right spelling ${i+1}`} placeholder="Tobin" maxLength={80} value={f.to} onChange={e=>setFix(i,{to:e.target.value})}/><button type="button" className="icon-button" aria-label={`Remove spelling fix ${i+1}`} onClick={()=>setDraft(d=>({...d,fixes:(d.fixes??[]).filter((_,j)=>j!==i)}))}><Trash2 size={14}/></button></div>)}
+    {fixes.length<50&&<button type="button" className="button small" onClick={()=>setDraft(d=>({...d,fixes:[...(d.fixes??[]),{from:'',to:''}]}))}><Plus size={14}/> Add a spelling fix</button>}
+   </div></details>
    {error&&<p className="form-error">{error}</p>}
    {dirty&&<div className="writing-save"><span>Changes to What it pulls out</span><button type="button" className="button" onClick={()=>setDraft(saved)}><Undo2 size={14}/> Undo</button><button type="button" className="button primary" onClick={keep}>Save changes</button></div>}
   </div>
@@ -158,6 +166,7 @@ function SessionFileAside({data,campaign,draft}:{data:Workspace;campaign:Campaig
   <strong className="writing-sample-title">Session file</strong>
   <p className="aside-hint">A Markdown file for each session, with everything set to Session file or Both. Export and your GitHub repository put it in <code>2-Story/Sessions/</code>, and GM-only parts in <code>6-GM-Only/</code>.</p>
   <p className="aside-hint">Encyclopedia means the session page and the check list. Kinds set to Session file only stay out of both, and players never see them.</p>
+  <p className="aside-hint">Automatic adds a find as soon as the AI sends it, instead of waiting in the check list. New pages start GM only, and each one can be undone on the session page under Added for you.</p>
   {file&&latest?<><p className="aside-hint">Your latest session, {latest.title}, as these settings write it:</p><button type="button" className="button" onClick={download}><Download size={14}/> Download session file</button><pre className="session-file-preview" aria-label={`${file.path}, as it would be written`}>{file.text.replace(/^---[\s\S]*?\n---\n+/,'')}</pre></>:<p className="aside-hint">Your latest session’s file shows here once a session has a recap.</p>}
  </aside>;
 }

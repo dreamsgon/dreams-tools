@@ -57,6 +57,10 @@ export const extractSchema = z.object({
   off: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
   /** Kinds that start off (`offAtFirst`) and were turned on. */
   on: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
+  /** Kinds added to the campaign as soon as the AI finds them, instead of waiting in the check list. New pages start GM only. */
+  auto: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
+  /** Spelling fixes: a name the transcript or the AI gets wrong, and how to write it. */
+  fixes: z.array(z.object({ from: z.string().trim().min(1).max(80), to: z.string().trim().min(1).max(80) })).max(50).optional(),
   /** Where each kind goes, when it isn't where it starts (`whereAtFirst`). */
   where: z.record(z.enum(extractKinds), z.enum(["enc", "file", "both"])).optional(),
 });
@@ -80,6 +84,28 @@ export const setWhere = (x: ExtractSettings, k: ExtractKind, w: Where): ExtractS
   return { ...x, where: w === whereAtFirst(k) ? rest : { ...rest, [k]: w } };
 };
 
+/** Kinds that become a change to the campaign (a page, a quest, an item, a tie, a date), so they can be checked first or added automatically. */
+export const findKinds: readonly ExtractKind[] = ["people", "creatures", "places", "orgs", "lore", "codex", "quests", "rumours", "items", "ties", "dates"];
+export const isAuto = (x: ExtractSettings | undefined, k: ExtractKind) => findKinds.includes(k) && !!x?.auto?.includes(k);
+export const setAuto = (x: ExtractSettings, k: ExtractKind, on: boolean): ExtractSettings => ({ ...x, auto: [...(x.auto ?? []).filter(y => y !== k), ...(on && findKinds.includes(k) ? [k] : [])] });
+
+/** Spelling fixes with blank or repeated names left out. The first fix for a name wins. */
+export function cleanFixes(fixes: ExtractSettings["fixes"]) {
+  const seen = new Set<string>();
+  return (fixes ?? []).map(f => ({ from: f.from.trim(), to: f.to.trim() })).filter(f => f.from && f.to && f.from !== f.to && !seen.has(f.from.toLowerCase()) && seen.add(f.from.toLowerCase()));
+}
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Writes every name the GM fixed the way they spell it, in every text the AI sent: whole words only, any case. Pure. */
+export function fixSpelling<T>(input: T, fixes: ExtractSettings["fixes"]): T {
+  const list = cleanFixes(fixes);
+  if (!list.length) return input;
+  // Names already written the GM's way match as themselves, so fixing "Ostra" to "Ostra Hale" leaves "Ostra Hale" alone.
+  const to = new Map([...list.map(f => [f.to.toLowerCase(), f.to] as const), ...list.map(f => [f.from.toLowerCase(), f.to] as const)]);
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[...to.keys()].sort((a, b) => b.length - a.length).map(escape).join("|")})(?![\\p{L}\\p{N}])`, "giu");
+  const walk = (v: unknown): unknown => typeof v === "string" ? v.replace(re, m => to.get(m.toLowerCase()) ?? m) : Array.isArray(v) ? v.map(walk) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v;
+  return walk(input) as T;
+}
+
 export const isOn = (x: ExtractSettings | undefined, k: ExtractKind) => offAtFirst.includes(k) ? !!x?.on?.includes(k) && !x?.off?.includes(k) : !x?.off?.includes(k);
 /** Turns one kind on or off, keeping only what differs from how it starts. */
 export function turnKind(x: ExtractSettings, k: ExtractKind, on: boolean): ExtractSettings {
@@ -89,10 +115,12 @@ export function turnKind(x: ExtractSettings, k: ExtractKind, on: boolean): Extra
 
 /** Saves the settings: the usual depth and kinds that are on are left out, so a fresh campaign stores nothing. */
 export function cleanExtract(x: ExtractSettings): ExtractSettings | undefined {
-  const parsed = extractSchema.parse(x);
+  // Spelling fix rows the GM left blank are dropped, not refused.
+  const parsed = extractSchema.parse({ ...x, ...(x.fixes ? { fixes: x.fixes.filter(f => f.from.trim() && f.to.trim()) } : {}) });
   const off = extractKinds.filter(k => !offAtFirst.includes(k) && !isOn(parsed, k)), on = extractKinds.filter(k => offAtFirst.includes(k) && isOn(parsed, k));
   const where = Object.fromEntries(extractKinds.filter(k => whereOf(parsed, k) !== whereAtFirst(k)).map(k => [k, whereOf(parsed, k)]));
-  const out: ExtractSettings = { ...(parsed.depth && parsed.depth !== "balanced" ? { depth: parsed.depth } : {}), ...(off.length ? { off } : {}), ...(on.length ? { on } : {}), ...(Object.keys(where).length ? { where } : {}) };
+  const auto = findKinds.filter(k => isAuto(parsed, k)), fixes = cleanFixes(parsed.fixes);
+  const out: ExtractSettings = { ...(parsed.depth && parsed.depth !== "balanced" ? { depth: parsed.depth } : {}), ...(off.length ? { off } : {}), ...(on.length ? { on } : {}), ...(Object.keys(where).length ? { where } : {}), ...(auto.length ? { auto } : {}), ...(fixes.length ? { fixes } : {}) };
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -115,7 +143,11 @@ const askNames: Record<ExtractKind, string> = {
 /** A line for the AI on what the GM turned off, if anything. The timeline is still asked for when the recap is written from it. */
 export function extractNotes(x: ExtractSettings | undefined, opts: { keepTimeline?: boolean } = {}) {
   const off = extractKinds.filter(k => !offAtFirst.includes(k) && !isOn(x, k) && !(k === "timeline" && opts.keepTimeline));
-  return off.length ? [`The GM turned these off in What it pulls out, so leave them out and send them empty: ${off.map(k => askNames[k]).join(", ")}.`] : [];
+  const fixes = cleanFixes(x?.fixes);
+  return [
+    ...(off.length ? [`The GM turned these off in What it pulls out, so leave them out and send them empty: ${off.map(k => askNames[k]).join(", ")}.`] : []),
+    ...(fixes.length ? [`Spell these names the GM's way, even where the transcript doesn't: ${fixes.map(f => `${f.to} (not ${f.from})`).join(", ")}.`] : []),
+  ];
 }
 
 /** What to ask the AI for of the highlights and For next time kinds that are on, one line each, as in the notes prompt. */

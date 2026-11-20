@@ -7,9 +7,9 @@ import { defaultCharacter, newId, playerText, type Campaign, type Entry, type Wo
 import { defaultCategory, newQuest, questCategories, questsIn } from "./quests.ts";
 import { setFound } from "./codex.ts";
 import { honourSkips, keepNotes } from "./recap-request.ts";
-import { honourExtract, inEncyclopedia, isOn, itemKind, readGameDate } from "./recap-extract.ts";
+import { fixSpelling, honourExtract, inEncyclopedia, isAuto, isOn, itemKind, readGameDate } from "./recap-extract.ts";
 import { emptyInventory, putItem } from "./items.ts";
-import { canHoldTie, putTie } from "./tie-edit.ts";
+import { canHoldTie, putTie, removeTie } from "./tie-edit.ts";
 import { tieFits, tieTypeById, tieTypesOf, type TieType } from "./ties.ts";
 import { formatDate, sameDate } from "./calendar-model.ts";
 import { emptyRecap, recapPageKinds, type Beat, type Quote, type Recap, type RecapItem } from "./recap-schema.ts";
@@ -123,7 +123,7 @@ export function matchTieKind(types: TieType[], kind: string | undefined): { type
  * every match waits in the review list. `existing` is a draft page to fill (from the New session recap dialog).
  */
 export function draftRecap(ws: Workspace, campaign: Campaign, input: AiRecap, opts: { by: string; now: Date; existing?: Entry; transcript?: string | null; folderId?: string | null }) {
-  input = honourExtract(honourSkips(input, opts.existing?.recap?.request), campaign.aiWriting?.extract);
+  input = honourExtract(honourSkips(fixSpelling(input, campaign.aiWriting?.extract?.fixes), opts.existing?.recap?.request), campaign.aiWriting?.extract);
   const c = { worldId: campaign.worldId, campaignId: campaign.id }, entries = ws.entries;
   const review = findItems(ws, campaign, input);
   const timeline: Beat[] = input.timeline.map(b => ({ id: newId(), title: b.title.trim(), big: !!b.big, steps: (b.steps ?? []).map(s => s.trim()).filter(Boolean) }));
@@ -195,7 +195,7 @@ export function findItems(ws: Workspace, campaign: Campaign, input: AiFinds) {
 export function addFinds(ws: Workspace, campaign: Campaign, page: Entry, input: AiFinds) {
   if (!page.recap) throw Error(`“${page.title}” has no recap.`);
   const waiting = new Set(page.recap.review.filter(r => r.state === "open" || r.state === "filed").map(r => `${r.kind}:${r.name.toLowerCase()}`));
-  const added = findItems(ws, campaign, input).filter(r => { const k = `${r.kind}:${r.name.toLowerCase()}`; if (waiting.has(k)) return false; waiting.add(k); return true; });
+  const added = findItems(ws, campaign, fixSpelling(input, campaign.aiWriting?.extract?.fixes)).filter(r => { const k = `${r.kind}:${r.name.toLowerCase()}`; if (waiting.has(k)) return false; waiting.add(k); return true; });
   return { added, entry: { ...page, recap: { ...page.recap, review: [...page.recap.review, ...added].slice(-80) } } satisfies Entry };
 }
 
@@ -239,14 +239,16 @@ export function applyItem(ws: Workspace, recapId: string, itemId: string, now = 
     if (body.length > 100000) throw Error(`“${target!.title}” is at its length limit.`);
     next = patch(ws, target!.id, e => ({ ...e, body, updatedAt: at }));
     message = `Added to “${target!.title}”.`;
+    done = { state: "done", undo: { line: `${from}${item.text}`.slice(0, 4400) } };
   } else if (item.kind === "questLog") {
     const quest = target!.quest ?? newQuest();
-    let objectives = quest.objectives, ticked = "";
+    let objectives = quest.objectives, ticked = "", tick = "";
     if (item.tick) {
       const low = item.tick.toLowerCase(), o = objectives.find(x => x.text.toLowerCase() === low) ?? objectives.find(x => x.text.toLowerCase().startsWith(low));
-      if (o) { objectives = objectives.map(x => x === o ? { ...x, done: true } : x); ticked = ` and ticked “${o.text}”`; }
+      if (o && !o.done) { objectives = objectives.map(x => x === o ? { ...x, done: true } : x); ticked = ` and ticked “${o.text}”`; tick = o.text; }
     }
-    const log = item.text ? [...quest.log, { id: newId(), at, label, text: item.text, players: !!item.playersSee }].slice(-500) : quest.log;
+    const logId = newId(), log = item.text ? [...quest.log, { id: logId, at, label, text: item.text, players: !!item.playersSee }].slice(-500) : quest.log;
+    done = { state: "done", undo: { ...(item.text ? { logId } : {}), ...(tick ? { tick } : {}) } };
     next = patch(ws, target!.id, e => ({ ...e, quest: { ...quest, objectives, log }, updatedAt: at }));
     message = `${item.text ? "Wrote in" : "Updated"} the log of “${target!.title}”${ticked}.`;
   } else if (item.kind === "loot") {
@@ -268,26 +270,103 @@ export function applyItem(ws: Workspace, recapId: string, itemId: string, now = 
     if (!fits(type, owner, other)) { type = tieTypeById(types, "linked"); if (!fits(type, owner, other)) [owner, other] = [other, owner]; }
     if ((owner.ties ?? []).some(t => t.toId === other.id && t.typeId === type.id)) message = `${owner.title} already has that tie to ${other.title}.`;
     else {
-      const put = putTie(ws, owner.id, { id: newId(), toId: other.id, typeId: type.id, ...(item.text ? { note: item.text.slice(0, 300) } : {}), ...(item.playersSee ? {} : { gm: true }) }, at);
+      const tieId = newId(), put = putTie(ws, owner.id, { id: tieId, toId: other.id, typeId: type.id, ...(item.text ? { note: item.text.slice(0, 300) } : {}), ...(item.playersSee ? {} : { gm: true }) }, at);
       if (!put) throw Error(`“${owner.title}” has as many ties as it can hold.`);
       next = put;
       message = `Tied ${owner.title} to ${other.title}: ${type.name}${item.playersSee ? "" : ", GM only"}.`;
+      done = { undo: { tieId, ownerId: owner.id } };
     }
-    done = { state: "done", pageId: a.id, toId: b.id };
+    done = { ...done, state: "done", pageId: a.id, toId: b.id };
   } else if (item.kind === "date") {
     const campaign = ws.campaigns.find(x => x.id === campaignId), calendar = campaign?.calendars?.find(x => x.id === item.calendarId);
     if (!campaign || !calendar || !item.date) throw Error("That calendar is gone.");
     if (!calendar.periods.some(p => p.id === item.date!.periodId)) throw Error(`${calendar.name} doesn't have that month any more.`);
     const title = page.title.slice(0, 100), has = calendar.events.some(ev => ev.title === title && sameDate(ev.date, item.date!));
-    const events = has || calendar.events.length >= 1000 ? calendar.events : [...calendar.events, { id: newId(), title, notes: "Session recap.", date: item.date, annual: false, visibility: "gm" as const }];
+    const eventId = newId(), added = !has && calendar.events.length < 1000;
+    const events = added ? [...calendar.events, { id: eventId, title, notes: "Session recap.", date: item.date, annual: false, visibility: "gm" as const }] : calendar.events;
+    done = { state: "done", undo: { prev: calendar.current, ...(added ? { eventId } : {}) } };
     next = { ...ws, campaigns: ws.campaigns.map(x => x.id === campaignId ? { ...x, calendars: x.calendars!.map(k => k.id === calendar.id ? { ...k, current: item.date!, events } : k) } : x) };
     message = `Moved ${calendar.name} on to ${formatDate(calendar, item.date)}${has ? "" : `, with “${title}” on that day`}.`;
   } else {
     if (!target!.codex) throw Error(`“${target!.title}” isn't in the codex.`);
     next = patch(ws, target!.id, e => ({ ...e, codex: setFound(e.codex!, campaignId, true, item.text || label, at), updatedAt: at }));
+    done = { state: "done", undo: { found: !!target!.codex.found[campaignId] } };
     message = `Marked “${target!.title}” found in the codex.`;
   }
   return { next: patch(next, page.id, e => setItem(e, item.id, done)), message };
+}
+
+/**
+ * Undo: takes back what adding an item did, and puts it back in the check list. A page it made is deleted (and unlinked
+ * in the recap), a line it added to a page comes out, a quest log line and the objective it ticked come back out, an item
+ * leaves the inventory, a tie goes, and the calendar goes back to its date before. Throws a message when it can't.
+ */
+export function undoItem(ws: Workspace, recapId: string, itemId: string, now = new Date()): { next: Workspace; message: string } {
+  const page = ws.entries.find(e => e.id === recapId), item = page?.recap?.review.find(r => r.id === itemId);
+  if (!page?.recap || !item) throw Error("That item is gone. Reload the page.");
+  if (item.state !== "done") throw Error("That isn't added, so there is nothing to undo.");
+  const at = now.toISOString(), u = item.undo ?? {}, target = item.pageId ? ws.entries.find(e => e.id === item.pageId) : undefined;
+  let next = ws, message: string, back: Partial<RecapItem> = { state: "open", auto: undefined, undo: undefined };
+  if (item.kind === "newPage" || item.kind === "newQuest") {
+    if (target) {
+      if (ws.entries.some(e => e.parentId === target.id)) throw Error(`“${target.title}” has pages inside it now. Move them out, then undo.`);
+      next = { ...ws, entries: ws.entries.filter(e => e.id !== target.id) };
+      next = patch(next, page.id, e => ({ ...e, body: e.body.split(`[[${target.id}|`).join("[[") }));
+    }
+    message = `Deleted “${item.name}”.`;
+    back = { ...back, pageId: undefined };
+  } else if (item.kind === "update") {
+    if (target && u.line) {
+      const at2 = target.body.lastIndexOf(u.line);
+      if (at2 >= 0) next = patch(ws, target.id, e => ({ ...e, body: (e.body.slice(0, at2).replace(/\n\n$/, "") + e.body.slice(at2 + u.line!.length)).trimEnd(), updatedAt: at }));
+    }
+    message = `Took the line back out of “${item.name}”.`;
+  } else if (item.kind === "questLog") {
+    if (target?.quest) next = patch(ws, target.id, e => ({ ...e, quest: { ...e.quest!, log: e.quest!.log.filter(l => l.id !== u.logId), objectives: e.quest!.objectives.map(o => u.tick && o.text === u.tick ? { ...o, done: false } : o) }, updatedAt: at }));
+    message = `Took the log line back out of “${item.name}”.`;
+  } else if (item.kind === "loot") {
+    if (target?.character?.inventory) {
+      const inv = target.character.inventory, low = item.name.slice(0, 80).toLowerCase(), qty = item.qty ?? 1;
+      const items = inv.items.flatMap(x => x.name.toLowerCase() === low && (x.note ?? "") === (item.text ? item.text.slice(0, 2000) : "") ? (x.qty > qty ? [{ ...x, qty: x.qty - qty }] : []) : [x]);
+      next = patch(ws, target.id, e => ({ ...e, character: { ...e.character!, inventory: { ...inv, items } }, updatedAt: at }));
+    }
+    message = `Took “${item.name}” back out of ${target?.title ?? "the inventory"}.`;
+  } else if (item.kind === "tie") {
+    if (u.tieId && u.ownerId) next = removeTie(ws, { source: "tie", ownerId: u.ownerId, id: u.tieId }, at);
+    message = `Took the tie between ${item.name} and ${item.to ?? "?"} back out.`;
+  } else if (item.kind === "date") {
+    const campaign = ws.campaigns.find(x => x.id === page.campaignId), calendar = campaign?.calendars?.find(x => x.id === item.calendarId);
+    if (calendar) next = { ...ws, campaigns: ws.campaigns.map(x => x.id === campaign!.id ? { ...x, calendars: x.calendars!.map(k => k.id === calendar.id ? { ...k, ...(u.prev ? { current: u.prev } : {}), events: k.events.filter(ev => ev.id !== u.eventId) } : k) } : x) };
+    message = calendar && u.prev ? `Moved ${calendar.name} back to ${formatDate(calendar, u.prev)}.` : "Took the date back out.";
+  } else {
+    if (target?.codex && !u.found && page.campaignId) next = patch(ws, target.id, e => ({ ...e, codex: setFound(e.codex!, page.campaignId!, false), updatedAt: at }));
+    message = `“${item.name}” isn't found in the codex any more.`;
+  }
+  return { next: patch(next, page.id, e => setItem(e, item.id, back)), message };
+}
+
+/**
+ * Add automatically: adds the items waiting on a recap whose kinds the GM set to Add automatically (What it pulls out).
+ * New pages start GM only, whatever the AI said. Anything that can't be added yet (loot with no one to carry it, a tie to
+ * a page that isn't made) stays in the check list. Returns the workspace and what was added, one sentence each.
+ */
+export function autoAdd(ws: Workspace, recapId: string, now = new Date()): { next: Workspace; added: string[] } {
+  const page = ws.entries.find(e => e.id === recapId), x = ws.campaigns.find(c => c.id === page?.campaignId)?.aiWriting?.extract;
+  if (!page?.recap || !x?.auto?.length) return { next: ws, added: [] };
+  const added: string[] = [];
+  let next = ws;
+  // Pages first, so a tie or an update can find a page made from the same list.
+  const order = (r: RecapItem) => r.kind === "newPage" || r.kind === "newQuest" ? 0 : 1;
+  for (const item of [...page.recap.review].filter(r => r.state === "open").sort((a, b) => order(a) - order(b))) {
+    if (!isAuto(x, itemKind(item, item.pageId ? next.entries.find(e => e.id === item.pageId) : undefined))) continue;
+    try {
+      const gmOnly = item.kind === "newPage" || item.kind === "newQuest" ? patch(next, recapId, e => setItem(e, item.id, { playersSee: undefined })) : next;
+      const r = applyItem(gmOnly, recapId, item.id, now);
+      next = patch(r.next, recapId, e => setItem(e, item.id, { auto: true }));
+      added.push(r.message);
+    } catch { /* Stays in the check list for the GM. */ }
+  }
+  return { next, added };
 }
 
 export const skipItem = (ws: Workspace, recapId: string, itemId: string) => patch(ws, recapId, e => e.recap ? setItem(e, itemId, { state: "skipped" }) : e);
