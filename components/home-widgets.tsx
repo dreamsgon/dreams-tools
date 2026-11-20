@@ -84,7 +84,7 @@ export function Folders({ layout, data }: Part) {
           return <li key={r.key}>
             <Link href={openHref(r)} className="home-frow"><span className="home-fmini" style={tint(folderColor(r.key))} aria-hidden="true" />
               <span><strong>{r.name}</strong><small>{[r.encyclopedia && plural(r.encyclopedia.pages, "page"), r.maptable && plural(r.maptable.scenes, "scene"), r.encyclopedia?.lastEdited && when(r.encyclopedia.lastEdited)].filter(Boolean).join(" · ")}</small></span></Link>
-            <span className="home-fgo">{notes && <a href={notes}>Wiki</a>}{maps && <a href={maps}>Maps</a>}{forum && <a href={forum}>Forum</a>}</span>
+            <span className="home-fgo">{notes && <a href={notes}>Wiki</a>}{maps && <a href={maps}>Maptable</a>}{forum && <a href={forum}>Forum</a>}</span>
           </li>;
         })}</ul> : <p className="home-muted home-folder-empty">No campaigns in this folder.</p>}
       </div>];
@@ -136,7 +136,7 @@ export function Pinned({ layout, data, act }: Part) {
       <span className="home-row-text"><a href={pageHref(p)}>{p.title}</a><small>{p.campaignName ?? (p.worldName ? `${p.worldName} lore` : kindName(p.kind))}</small></span>
       <button type="button" className="home-icon" aria-label={`Unpin ${p.title}`} onClick={() => act({ action: "pinPage", id: p.id, on: false })}><X size={14} aria-hidden="true" /></button>
     </li>)}</ul> : <p className="home-muted">No pinned pages yet.</p>}
-    <p className="home-muted home-hint">Pin any page with the pin button above it in the Encyclopedia.</p>
+    <p className="home-muted home-hint">Pin any page with the pin button above it in the Wiki.</p>
   </>;
 }
 

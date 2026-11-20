@@ -501,7 +501,7 @@ button.tag.topic-tag:disabled { cursor: default; opacity: .3; }
 .gm-body { padding: 16px 22px 12px; max-width: 760px; margin: 0 auto; }
 .gm-body .post-text > p:first-child::first-letter { float: left; margin: 4px 8px 0 0; font: 900 54px/0.8 var(--font-display); color: var(--accent); }
 /* Focus mode: only the box. */
-html.forum-focus .forum-appbar, html.forum-focus .board-bar, html.forum-focus .board-head, html.forum-focus .crumbs, html.forum-focus .board-foot, html.forum-focus .to-top { display: none; }
+html.forum-focus .forum-appbar, html.forum-focus .campaign-bar, html.forum-focus .board-bar, html.forum-focus .board-head, html.forum-focus .crumbs, html.forum-focus .board-foot, html.forum-focus .to-top { display: none; }
 html.forum-focus .forum-page { max-width: 900px; padding-top: 24px; }
 html.forum-focus .reply-page .composer { border-color: var(--line-strong); }
 html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom, 1)); font-size: 20px; line-height: 1.65; }
@@ -907,3 +907,10 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .forum-body.cp-open, .forum-body.cp-open.cp-right { display: flex; flex-direction: column; }
   .forum-body.cp-open.cp-right .admin-cp { order: 0; }
 }
+
+/* The campaign bar (components/campaign-bar.tsx) sits above .forum-root, so the forum's theme variables and
+   `.forum-root a` never reach it. Only its trail is the forum's: board, then topic. */
+.f-trail { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--chrome-muted, var(--muted)); }
+.f-trail a { color: inherit; text-decoration: none; white-space: nowrap; }
+.f-trail a:hover { color: var(--chrome-text, var(--ink)); }
+.f-trail-here { color: var(--chrome-text, var(--ink)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

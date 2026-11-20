@@ -42,8 +42,12 @@
 .campaigns-row.selected { background:var(--accent-soft); box-shadow:inset 3px 0 var(--accent); }
 .campaigns-row-head { padding-top:10px; padding-bottom:10px; color:var(--muted); font-size:13px; }
 .campaigns-row-head span { display:inline-flex; align-items:center; gap:6px; }
-.campaigns-name button { display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-height:0; padding:0; border:0; background:none; color:var(--ink); text-align:left; white-space:normal; font-size:15px; }
-.campaigns-name button:hover { background:none; text-decoration:underline; text-underline-offset:3px; }
+.campaigns-name-line { display:flex; align-items:flex-start; gap:6px; min-width:0; }
+.campaigns-name-link { display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:0; color:var(--ink); text-decoration:none; font-size:15px; }
+.campaigns-name-link:hover strong { text-decoration:underline; text-underline-offset:3px; }
+.campaigns-expand { flex:none; display:inline-grid; place-items:center; min-height:28px; min-width:28px; padding:0; }
+.campaigns-cell a { color:inherit; text-decoration:none; }
+.campaigns-cell a:hover { text-decoration:underline; text-underline-offset:3px; }
 .campaigns-name strong { font-weight:600; }
 .campaigns-name small, .campaigns-cell small { color:var(--muted); font-size:13px; font-weight:400; }
 .campaigns-cell { display:flex; flex-direction:column; gap:2px; min-width:0; }

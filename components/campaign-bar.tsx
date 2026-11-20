@@ -50,12 +50,14 @@ export type CampaignBarProps = {
   onWorlds?: () => void;
   /** On a phone the places get their own row. A page that needs the height (a map) can leave them to the switcher. */
   phonePlaces?: boolean;
+  /** On a phone the trail is hidden unless the page needs it there (the Wiki's menu button and breadcrumb): then it gets a row of its own. */
+  phoneTrail?: boolean;
   /** Notifications for the campaigns you run. Off for a page a member opened. */
   bell?: boolean;
   className?: string;
 };
 
-export default function CampaignBar({ tool, campaign: ref, name, trail, actions, onPick, beforeLeave, canOpenSwitcher, onWorlds, phonePlaces = true, bell = true, className = "" }: CampaignBarProps) {
+export default function CampaignBar({ tool, campaign: ref, name, trail, actions, onPick, beforeLeave, canOpenSwitcher, onWorlds, phonePlaces = true, phoneTrail = false, bell = true, className = "" }: CampaignBarProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null), [open, setOpen] = useState(false);
   useEffect(() => { let live = true; void loadCampaigns().then(l => { if (live) setLoaded(l); }); return () => { live = false; }; }, []);
   const refKey = JSON.stringify(ref);
@@ -77,7 +79,7 @@ export default function CampaignBar({ tool, campaign: ref, name, trail, actions,
   const title = current?.name ?? name ?? "Campaign";
   const member = current?.kind === "member";
 
-  return <header className={`campaign-bar${phonePlaces ? "" : " campaign-bar--no-phone-places"} ${className}`}>
+  return <header className={`campaign-bar${phonePlaces ? "" : " campaign-bar--no-phone-places"}${phoneTrail ? " campaign-bar--phone-trail" : ""} ${className}`}>
     <Link href="/" className="cbar-mark" aria-label="RPG Tools home" title="RPG Tools home" onClick={beforeLeave ? follow("/") : undefined}><span className="tool-switch-mark" aria-hidden="true" /></Link>
     <CampaignSwitcher variant="bar" className="cbar-switcher" tool={tool} title={title} subtitle={member ? `Run by ${current.joined.ownerName || "the GM"}` : current?.world}
       isCurrent={c => matchesRef(c, ref)} onPick={onPick} places={places} onWorlds={onWorlds} open={open} onOpenChange={setOpen} beforeLeave={beforeLeave} />

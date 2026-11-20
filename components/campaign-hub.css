@@ -1,15 +1,11 @@
 /* The campaign hub: one campaign across Maptable and the Encyclopedia. */
 .hub { padding:20px 0 64px; color:var(--ink); }
 .hub a { text-decoration:none; }
-.hub-crumbs { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin-bottom:16px; min-width:0; }
-.hub-crumbs a { color:var(--muted); }
-.hub-crumbs a:hover { color:var(--accent); }
-.hub-crumbs [aria-current] { color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* A plain header: no box around it, so the tag menu can open freely. The banner comes from the campaign look. */
 .hub-banner { height:150px; margin-bottom:20px; border-radius:var(--radius-lg, 8px); }
 .hub-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px 24px; flex-wrap:wrap; margin-bottom:12px; }
 .hub-title { min-width:0; }
-.hub-title > p { margin:0; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.hub-title > p { margin:0; font-size:13px; font-weight:500; color:var(--muted); }
 .hub-title h1 { margin:4px 0 0; font-family:var(--font-display); font-size:clamp(28px,calc(3.6vw / var(--ui-zoom, 1)),40px); line-height:1.15; letter-spacing:-.01em; font-weight:600; }
 .hub-actions { display:flex; gap:8px; flex-wrap:wrap; padding-bottom:2px; }
 
@@ -227,3 +223,7 @@
 .hub-solo label { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
 .hub-solo p { margin:0; color:var(--muted); font-size:13.5px; }
 .hub-solo.on { border-left:3px solid var(--accent, currentColor); }
+/* The one quiet line the campaign bar's "+ Maptable" sends you to the Dashboard for. */
+.hub-notice { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:0 0 16px; padding:8px 8px 8px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--accent-soft); font-size:14px; }
+.hub-notice > span { flex:1 1 auto; min-width:0; }
+.hub-notice .hub-icon { flex:none; }

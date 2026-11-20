@@ -51,7 +51,7 @@ export function QuickSearch({entries,icons,labels,scopeName,canCreate,onOpen,onC
   :found.map(e=>({key:e.id,label:e.title,detail:`${labels[e.kind]} · ${scopeName(e)}`,icon:icons[e.kind],tags:library?tagsOn(library,targetKey("entry",e.id)):[],run:go(()=>onOpen(e.id))}));
  const actions:Item[]=filtering||partial!==null?[]:[
   ...(name&&!exact&&canCreate?[{key:"create",label:`Create “${name.slice(0,160)}” as a new entry`,icon:Plus,run:go(()=>onCreate(name.slice(0,160)))}]:[]),
-  ...([["dashboard","Go to Dashboard",LayoutDashboard],["characters","Go to Characters",Users],["maps","Go to Maps",MapIcon],["calendar","Go to Calendar",CalendarDays]] as const)
+  ...([["dashboard","Go to Worlds",LayoutDashboard],["characters","Go to Characters",Users],["maps","Go to Maps",MapIcon],["calendar","Go to Calendar",CalendarDays]] as const)
     .filter(([,label])=>!name||label.toLowerCase().includes(name.toLowerCase()))
     .map(([view,label,icon])=>({key:view,label,icon,run:go(()=>onView(view))})),
   ...(!name||"open maptable".includes(name.toLowerCase())?[{key:"maptable",label:"Open Maptable",icon:ArrowUpRight,run:(newTab:boolean)=>visit("/maptable",newTab)}]:[]),

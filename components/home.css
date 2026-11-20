@@ -279,3 +279,8 @@
   .home-campaign-art { height:28px; }
   .home-w-editing .home-campaign-grid { margin-inline:0; padding-inline:0; }
 }
+
+/* A tool the campaign lacks: quiet, and it opens the Dashboard ready to add it. */
+.home-campaign-links a.home-add { color:var(--muted); font-weight:400; }
+.home-campaign-links a.home-add:hover { color:var(--accent); }
+.home-campaign-links { flex-wrap:wrap; }

@@ -6,9 +6,9 @@ import '@/components/home.css';
 export const dynamic='force-dynamic';
 
 const doors=[
-  {n:'01',label:'Campaigns',short:'Maps and notes together',title:'Run your campaigns',text:'Every campaign with its maps and notes in one place, across both tools.',href:'/campaigns',open:'Open Campaigns',Icon:Flag,primary:true},
+  {n:'01',label:'Campaigns',short:'Maptable and Wiki together',title:'Run your campaigns',text:'Every campaign with its Maptable and Wiki in one place, across both tools.',href:'/campaigns',open:'Open Campaigns',Icon:Flag,primary:true},
   {n:'02',label:'Maptable',short:'Maps, tokens and fog',title:'Set the scene',text:'Maps, tokens, initiative, fog and a live view for your players.',href:'/maptable',open:'Open Maptable',Icon:MapIcon},
-  {n:'03',label:'RPG Encyclopedia',short:'Pages, calendars and tables',title:'Give your world a memory',text:'Places, people, sessions, calendars, random tables and a player view.',href:'/encyclopedia',open:'Open Encyclopedia',Icon:BookOpen},
+  {n:'03',label:'Wiki',short:'Pages, calendars and tables',title:'Give your world a memory',text:'Places, people, sessions, calendars, random tables and a player view.',href:'/encyclopedia',open:'Open Wiki',Icon:BookOpen},
 ];
 
 export default async function Home(){
@@ -35,6 +35,6 @@ export default async function Home(){
       </section>)}
     </nav>
     </>}
-    <p className="home-account-line">{user?`Signed in as ${user.displayName}.`:'Register or sign in with your email to keep your maps and encyclopedia private.'} Both tools share one login.</p>
+    <p className="home-account-line">{user?`Signed in as ${user.displayName}.`:'Register or sign in with your email to keep your maps and Wiki private.'} Both tools share one login.</p>
   </main>;
 }

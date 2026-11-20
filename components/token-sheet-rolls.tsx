@@ -12,7 +12,7 @@ import "./encyclopedia/character-sheet.css";
 import "./token-sheet-rolls.css";
 
 /**
- * A compact list of the rolls on the sheet linked to a token's Encyclopedia character, opened from the token's menu.
+ * A compact list of the rolls on the sheet linked to a token's Wiki character, opened from the token's menu.
  * Rolling goes through the dice tray, so it lands in the roll log and the Discord card shows the token's picture.
  * Advantage and disadvantage work on single d20 rolls here; other rolls roll once.
  */

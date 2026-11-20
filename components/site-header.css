@@ -1,0 +1,14 @@
+/* The slim site header (site-header.tsx): links beside the mark, bell and account at the right end.
+   Doubled class names beat the older .site-links / nav rules in the tools' globals.css. */
+.site-header.site-header .site-links { display:flex; align-items:center; gap:20px; flex:1 1 auto; min-width:0; margin-left:8px; overflow:visible; }
+.site-header.site-header .site-end { display:flex; align-items:center; gap:12px; flex:none; margin-left:auto; }
+.site-header.site-header .site-links .site-nav-link[aria-current="page"] { order:0; }
+
+/* Phone: mark and account on the first row, the four links under them. Nothing scrolls sideways. */
+@media (max-width:640px) {
+  .rpg-hub .site-header.site-header { flex-wrap:wrap; row-gap:0; padding-top:8px; padding-bottom:0; }
+  .rpg-hub .site-header.site-header .site-end { order:2; gap:8px; }
+  .rpg-hub .site-header.site-header .site-links { display:flex; order:3; flex:0 0 100%; width:100%; margin:0; gap:18px; flex-wrap:nowrap; overflow:hidden; }
+  .rpg-hub .site-header.site-header .site-links .site-nav-link { padding:8px 0; }
+  .site-header.site-header .site-me-name { display:none; }
+}

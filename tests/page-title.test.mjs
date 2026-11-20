@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { pageTitle, encyclopediaTitle, maptableTitle, playerTitle, campaignTitle } from "../lib/page-title.ts";
 
 test("Encyclopedia titles name the page, view or world that is open", () => {
-  assert.equal(encyclopediaTitle({ entry: "Ayla", campaign: "The Salt Road", world: "The Lantern Coast" }), "Ayla · The Salt Road | RPG Encyclopedia");
-  assert.equal(encyclopediaTitle({ entry: "Ayla", world: "The Lantern Coast" }), "Ayla · The Lantern Coast | RPG Encyclopedia", "shared lore sits in the world");
-  assert.equal(encyclopediaTitle({ view: "quests", campaign: "The Salt Road", world: "The Lantern Coast" }), "Quests · The Salt Road | RPG Encyclopedia");
-  assert.equal(encyclopediaTitle({ view: "tables", world: "The Lantern Coast" }), "Random tables · The Lantern Coast | RPG Encyclopedia");
-  assert.equal(encyclopediaTitle({ view: "dashboard", world: "The Lantern Coast" }), "The Lantern Coast | RPG Encyclopedia");
-  assert.equal(encyclopediaTitle({ view: "overview", campaign: "The Salt Road", world: "The Lantern Coast" }), "The Salt Road | RPG Encyclopedia");
-  assert.equal(encyclopediaTitle({}), "RPG Encyclopedia");
+  assert.equal(encyclopediaTitle({ entry: "Ayla", campaign: "The Salt Road", world: "The Lantern Coast" }), "Ayla · The Salt Road | Wiki");
+  assert.equal(encyclopediaTitle({ entry: "Ayla", world: "The Lantern Coast" }), "Ayla · The Lantern Coast | Wiki", "shared lore sits in the world");
+  assert.equal(encyclopediaTitle({ view: "quests", campaign: "The Salt Road", world: "The Lantern Coast" }), "Quests · The Salt Road | Wiki");
+  assert.equal(encyclopediaTitle({ view: "tables", world: "The Lantern Coast" }), "Random tables · The Lantern Coast | Wiki");
+  assert.equal(encyclopediaTitle({ view: "dashboard", world: "The Lantern Coast" }), "The Lantern Coast | Wiki");
+  assert.equal(encyclopediaTitle({ view: "overview", campaign: "The Salt Road", world: "The Lantern Coast" }), "The Salt Road | Wiki");
+  assert.equal(encyclopediaTitle({}), "Wiki");
 });
 test("Maptable titles name the scene and its campaign", () => {
   assert.equal(maptableTitle({ scene: "Greyfen docks", campaign: "The Salt Road" }), "Greyfen docks · The Salt Road | Maptable");

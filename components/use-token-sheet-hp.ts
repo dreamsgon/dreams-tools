@@ -16,10 +16,10 @@ export async function postSheetHp(body:object){
  let res:Response;
  try{res=await fetch("/api/encyclopedia/sheet-hp",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
  catch{throw new Error("Couldn’t reach RPG Tools.");}
- if(!res.ok)throw new Error(((await res.json().catch(()=>null)) as {error?:string}|null)?.error??"Could not save to your Encyclopedia.");
+ if(!res.ok)throw new Error(((await res.json().catch(()=>null)) as {error?:string}|null)?.error??"Could not save to your Wiki.");
 }
 
-/** The job against the newest Encyclopedia copy: still switched on, and still the same spreadsheet, tab and cell. Null when it must not be written. */
+/** The job against the newest Wiki copy: still switched on, and still the same spreadsheet, tab and cell. Null when it must not be written. */
 async function revalidate(job:Job):Promise<Job|null>{
  const fresh=chooseWrites([{entryId:job.entryId,tokenId:"",hp:job.hp}],await loadEncyclopedia(true))[0],a=hpTarget(job.sheet),b=fresh?hpTarget(fresh.sheet):null;
  return fresh&&a.ok&&b?.ok&&a.range===b.range&&job.sheet.spreadsheetId===fresh.sheet.spreadsheetId?{...fresh,hp:job.hp}:null;
@@ -48,7 +48,7 @@ async function attempt(s:Shared,queued:Job,force:boolean){
  }
 }
 const run=(s:Shared,job:Job,force=false)=>{s.chain.p=s.chain.p.then(()=>attempt(s,job,force));};
-/** After the wait: read the newest Encyclopedia copy (the switch may have changed elsewhere) and decide again. */
+/** After the wait: read the newest Wiki copy (the switch may have changed elsewhere) and decide again. */
 async function flush(s:Shared,entryId:string,hp:number){
  try{
   // The copy already loaded says whether this character writes at all; only then fetch the newest one (the switch may have changed since).
@@ -56,15 +56,15 @@ async function flush(s:Shared,entryId:string,hp:number){
   if(!chooseWrites(change,await loadEncyclopedia()).length)return;
   const pick=chooseWrites(change,await loadEncyclopedia(true))[0];if(pick)run(s,pick);
  }
- catch{/* Maptable works without the Encyclopedia */}
+ catch{/* Maptable works without the Wiki */}
 }
 
 /**
- * Writes a token's HP to the Google Sheet of the Encyclopedia character it is linked to, when that sheet has Write HP
+ * Writes a token's HP to the Google Sheet of the Wiki character it is linked to, when that sheet has Write HP
  * back switched on (GM only; never for a co-GM or the player view). `observe(before, after)` is called where scene changes
  * are applied: a click, a zero-HP rule, undo, redo or a change that came from the cloud. A change waits 1.5 s per
  * character; then the browser, with the person's own live Google token (it never opens a pop-up), checks the cell,
- * writes only the HP cell and stores the number on the Encyclopedia copy.
+ * writes only the HP cell and stores the number on the Wiki copy.
  */
 export function useTokenSheetHp({enabled,notify,setTokenHp,refreshSheets}:{enabled:boolean;notify:(text:string)=>void;setTokenHp:(entryId:string,hp:number)=>void;refreshSheets:()=>void}){
  const [statuses,setStatuses]=useState<Record<string,HpStatus>>({});

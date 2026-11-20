@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, Upload, UserRound, X } from "lucide-react";
 import { hubHref } from "@/lib/campaign-switcher";
 import { campaignLayout, folderChoices, moveOptions, suggestPairs, type CampaignFolder, type CampaignRow, type CampaignSummary } from "@/lib/campaign-links";
@@ -146,12 +147,12 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   const selected = summary?.rows.find(r => r.key === selectedKey) ?? null;
   usePageTitle(selected ? campaignTitle(selected.name) : "");
 
-  if (!signedIn) return <section className="campaigns-empty"><h1>Campaigns</h1><p>Sign in to see your campaigns from Maptable and the Encyclopedia in one list.</p><a className="rpg-open" href="/account">Sign in or register</a></section>;
+  if (!signedIn) return <section className="campaigns-empty"><h1>Campaigns</h1><p>Sign in to see your campaigns from Maptable and the Wiki in one list.</p><a className="rpg-open" href="/account">Sign in or register</a></section>;
 
   return <div className={`campaigns-page${selected ? " has-details" : ""}`}>
     <div className="campaigns-main">
       <div className="campaigns-head">
-        <div><h1>Campaigns</h1><p>Each campaign has its maps in Maptable and its notes in the Encyclopedia. Manage both here.</p></div>
+        <div><h1>Campaigns</h1><p>Each campaign has its maps in Maptable and its notes in the Wiki. Manage both here.</p></div>
         <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "import" })} disabled={!summary}><Upload size={16} aria-hidden="true" />Import</button>
         <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "folder" })} disabled={!summary}><FolderPlus size={16} aria-hidden="true" />New folder</button>
         <button type="button" className="campaigns-primary" onClick={() => setDialog({ kind: "new" })} disabled={!summary}><Plus size={16} aria-hidden="true" />New campaign</button>
@@ -161,7 +162,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
       {summary && <>
         {unpairedMaps.length > 0 && unpairedNotes.length > 0 && dismissed !== matchKey && <div className="campaigns-match-banner">
           <Link2 size={18} aria-hidden="true" />
-          <span><strong>Match your campaigns.</strong> {plural(unpairedMaps.length, "Maptable campaign")} and {plural(unpairedNotes.length, "Encyclopedia campaign")} aren&apos;t paired yet.</span>
+          <span><strong>Match your campaigns.</strong> {plural(unpairedMaps.length, "Maptable campaign")} and {plural(unpairedNotes.length, "Wiki campaign")} aren&apos;t paired yet.</span>
           <button type="button" onClick={() => setDialog({ kind: "match" })}>Match them</button>
           <button type="button" className="campaigns-icon" onClick={dismissMatch} aria-label="Hide until something changes" title="Hide until something changes"><X size={16} /></button>
         </div>}
@@ -180,7 +181,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
         </div>
         {drag && <div className={`campaigns-drop-top${over === "top" ? " over" : ""}`} {...dropProps(null, "top")}><Folder size={15} aria-hidden="true" />Drop here for the top level</div>}
         <div className="campaigns-table" role="table" aria-label="Campaigns">
-          <div className="campaigns-row campaigns-row-head" role="row"><span role="columnheader">Campaign</span><span role="columnheader"><MapIcon size={14} aria-hidden="true" />Maptable</span><span role="columnheader"><BookOpen size={14} aria-hidden="true" />Encyclopedia</span><span role="columnheader"><span className="sr-only">Open</span></span></div>
+          <div className="campaigns-row campaigns-row-head" role="row"><span role="columnheader">Campaign</span><span role="columnheader"><MapIcon size={14} aria-hidden="true" />Maptable</span><span role="columnheader"><BookOpen size={14} aria-hidden="true" />Wiki</span><span role="columnheader"><span className="sr-only">Open</span></span></div>
           {layout.map(item => item.type === "folder" ? <FolderRow key={`f:${item.folder.id}`} item={item} busy={busy} renaming={renaming === item.folder.id} removing={removing === item.folder.id}
             over={over === `f:${item.folder.id}`} dragging={drag?.type === "folder" && drag.id === item.folder.id}
             toggle={() => toggleFolder(item.folder.id)} startRename={() => { setRenaming(item.folder.id); setRemoving(null); }} startRemove={() => { setRemoving(item.folder.id); setRenaming(null); }}
@@ -188,11 +189,11 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             drag={dragProps({ type: "folder", id: item.folder.id })} drops={folderDrops(item.folder)} edge={edge?.id === item.folder.id ? edge.place : undefined}
             canStep={d => !filtered && canMoveSibling(folders, item.folder.id, d)} step={d => void send({ action: "stepFolder", folderId: item.folder.id, delta: d }, `Moved “${item.folder.name}” ${d < 0 ? "up" : "down"}.`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
             className={`campaigns-row${r.key === selectedKey ? " selected" : ""}${drag?.type === "campaign" && drag.key === r.key ? " dragging" : ""}`} style={{ "--depth": item.depth } as React.CSSProperties}>
-            <span role="cell" className="campaigns-name"><button type="button" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey}><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></button><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
-            <span role="cell" className="campaigns-cell">{r.maptable ? <><span>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</span>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
-              <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add maps</button>}</span>
-            <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><span>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</span><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
-              <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Start a wiki</button>}</span>
+            <span role="cell" className="campaigns-name"><span className="campaigns-name-line"><Link href={`/campaigns/${encodeURIComponent(r.key)}`} className="campaigns-name-link" title="Open the Dashboard"><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></Link><button type="button" className="campaigns-mini campaigns-expand" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey} aria-label={`Details for ${r.name}`} title="Details">{r.key === selectedKey ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}</button></span><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
+            <span role="cell" className="campaigns-cell">{r.maptable ? <><a href={mapsHref(r.maptable.id)}>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</a>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
+              <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add Maptable</button>}</span>
+            <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><a href={notesHref(r.encyclopedia.id)}>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</a><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
+              <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Add Wiki</button>}</span>
             <span role="cell" className="campaigns-open">
               <button type="button" className="campaigns-mini campaigns-move" disabled={busy} onClick={() => setMoving(r)} aria-label={`Move ${r.name} to a folder`}>Move</button>
               <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
@@ -247,15 +248,15 @@ function Details({ row, summary, busy, error, close, send, onDeleted }: { row: C
     <TagRow className="campaigns-tags" targets={campaignTargets(row)} />
     {row.encyclopedia?.description && <p className="campaigns-muted">{row.encyclopedia.description}</p>}
     <div className="campaigns-details-open">
-      {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Maps</a>}
+      {row.maptable && <a className="campaigns-primary" href={mapsHref(row.maptable.id)}><MapIcon size={16} aria-hidden="true" />Maptable</a>}
       {row.encyclopedia && <a className="campaigns-secondary" href={notesHref(row.encyclopedia.id)}><BookOpen size={16} aria-hidden="true" />Wiki</a>}
       {row.encyclopedia && (row.encyclopedia.forum ? <a className="campaigns-secondary" href={`/forum#c-${encodeURIComponent(row.encyclopedia.id)}`}><MessagesSquare size={16} aria-hidden="true" />Forum</a>
-        : <button type="button" className="campaigns-secondary" disabled={busy} title="A roleplay forum for this campaign. Forums start switched off." onClick={() => setForumSetup(true)}><Plus size={16} aria-hidden="true" />Set up forum</button>)}
+        : <button type="button" className="campaigns-secondary" disabled={busy} title="A roleplay forum for this campaign. Forums start switched off." onClick={() => setForumSetup(true)}><Plus size={16} aria-hidden="true" />Add Forum</button>)}
     </div>
     <dl className="campaigns-facts">
       <div><dt>World</dt><dd>{row.encyclopedia?.worldName || "None yet"}</dd></div>
-      <div><dt>Maps</dt><dd>{row.maptable ? plural(row.maptable.scenes, "scene") : "Not in Maptable"}</dd></div>
-      <div><dt>Pages</dt><dd>{row.encyclopedia ? `${plural(row.encyclopedia.pages, "page")}, ${plural(row.encyclopedia.characters, "character")}` : "Not in the Encyclopedia"}</dd></div>
+      <div><dt>Maptable</dt><dd>{row.maptable ? plural(row.maptable.scenes, "scene") : "Not in Maptable"}</dd></div>
+      <div><dt>Pages</dt><dd>{row.encyclopedia ? `${plural(row.encyclopedia.pages, "page")}, ${plural(row.encyclopedia.characters, "character")}` : "No Wiki yet"}</dd></div>
       {row.encyclopedia && <div className="campaigns-pair"><dt>Players</dt><dd>
         <label className="campaigns-solo" title="Solo play: no other players, just you with an oracle or an AI. You keep every GM power and play the player characters; the forum gets a Player view for your character posts.">
           <input type="checkbox" checked={row.encyclopedia.solo} disabled={busy} onChange={e => send({ action: "solo", encyclopediaId: row.encyclopedia!.id, on: e.target.checked }, e.target.checked ? "Solo play is on. Your player characters are yours to play." : "Solo play is off.")} />
@@ -268,7 +269,7 @@ function Details({ row, summary, busy, error, close, send, onDeleted }: { row: C
           {folderChoices(summary.folders).map(f => <option key={f.id} value={f.id}>{f.path}</option>)}
         </select>
       </dd></div>}
-      <div className="campaigns-pair"><dt><label htmlFor="campaign-pair">{row.encyclopedia ? "Maptable campaign" : "Encyclopedia campaign"}</label></dt><dd>
+      <div className="campaigns-pair"><dt><label htmlFor="campaign-pair">{row.encyclopedia ? "Maptable campaign" : "Wiki campaign"}</label></dt><dd>
         <select id="campaign-pair" value={pairedId} disabled={busy} onChange={e => pair(e.target.value)}>
           <option value="">{row.encyclopedia ? "Not paired" : "Choose one to pair"}</option>
           {pairOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -278,12 +279,12 @@ function Details({ row, summary, busy, error, close, send, onDeleted }: { row: C
     <form className="campaigns-rename" onSubmit={e => { e.preventDefault(); if (changed) send({ action: "rename", name, encyclopediaId: row.encyclopedia?.id, maptableId: row.maptable?.id, ...(row.encyclopedia ? { description } : {}) }, "Saved."); }}>
       <label>Name<input value={name} maxLength={120} onChange={e => setName(e.target.value)} /></label>
       {row.encyclopedia && <label>Description<textarea rows={3} maxLength={1000} value={description} onChange={e => setDescription(e.target.value)} /></label>}
-      <p className="campaigns-muted">{row.maptable && row.encyclopedia ? "Renaming here renames it in both tools. Maps and notes stay where they are." : "Maps and notes stay where they are."}</p>
+      <p className="campaigns-muted">{row.maptable && row.encyclopedia ? "Renaming here renames it in both tools. Maptable and Wiki content stay where they are." : "Maptable and Wiki content stay where they are."}</p>
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
     <CampaignBackupSection row={row} busy={busy} onDeleted={onDeleted} />
     {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
-      onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum set up. Open it with Forum.", () => setForumSetup(false))} />}
+      onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum added. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;
 }
 
@@ -439,7 +440,7 @@ function NewCampaign({ summary, busy, close, send }: { summary: CampaignSummary;
       {encyclopedia && <WorldPicker summary={summary} worldId={worldId} setWorldId={setWorldId} newWorld={newWorld} setNewWorld={setNewWorld} />}
       <fieldset><legend>Set it up in</legend>
         <label className="campaigns-check"><input type="checkbox" checked={maptable} onChange={e => setMaptable(e.target.checked)} /><MapIcon size={16} aria-hidden="true" /><span><strong>Maptable</strong> a campaign folder for its scenes</span></label>
-        <label className="campaigns-check"><input type="checkbox" checked={encyclopedia} onChange={e => setEncyclopedia(e.target.checked)} /><BookOpen size={16} aria-hidden="true" /><span><strong>Encyclopedia</strong> campaign notes in {worldId ? `the ${worldName}` : "a new"} world</span></label>
+        <label className="campaigns-check"><input type="checkbox" checked={encyclopedia} onChange={e => setEncyclopedia(e.target.checked)} /><BookOpen size={16} aria-hidden="true" /><span><strong>Wiki</strong> campaign notes in {worldId ? `the ${worldName}` : "a new"} world</span></label>
       </fieldset>
       <fieldset><legend>Who plays</legend>
         <label className="campaigns-check"><input type="checkbox" checked={solo && encyclopedia} disabled={!encyclopedia} onChange={e => setSolo(e.target.checked)} /><UserRound size={16} aria-hidden="true" /><span><strong>Just me, solo</strong> no other players, with an oracle or an AI. You keep every GM power and play the player characters, with a player view for your character posts.{!encyclopedia && " Needs Encyclopedia notes, which hold your characters."}</span></label>
@@ -451,11 +452,11 @@ function NewCampaign({ summary, busy, close, send }: { summary: CampaignSummary;
 function StartNotes({ row, summary, busy, close, send, fromHub }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; close: () => void; send: Send; fromHub?: boolean }) {
   const [worldId, setWorldId] = useState(summary.worlds.find(w => !w.archived)?.id ?? ""), [newWorld, setNewWorld] = useState("");
   const ready = worldId || newWorld.trim();
-  return <Modal title={`Start notes for ${row.name}`} intro="This makes an Encyclopedia campaign with the same name, paired with these maps." close={close} footer={<>
+  return <Modal title={`Add Wiki for ${row.name}`} intro="This makes a Wiki campaign with the same name, paired with these maps." close={close} footer={<>
     <button type="button" className="campaigns-secondary" onClick={close}>Cancel</button>
-    <button type="submit" form="start-notes" className="campaigns-primary" disabled={busy || !ready}>Start notes</button>
+    <button type="submit" form="start-notes" className="campaigns-primary" disabled={busy || !ready}>Add Wiki</button>
   </>}>
-    <form id="start-notes" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "complete", maptableId: row.maptable!.id, worldId, newWorld }, `Started notes for “${row.name}”.`, next => {
+    <form id="start-notes" className="campaigns-form" onSubmit={e => { e.preventDefault(); if (ready) send({ action: "complete", maptableId: row.maptable!.id, worldId, newWorld }, `Added Wiki for “${row.name}”.`, next => {
       // Opened from the campaign's dashboard: go back to it (its address changes now that it has notes).
       const now = fromHub && next.rows.find(r => r.maptable?.id === row.maptable!.id);
       if (now) window.location.assign(hubHref(now)); else close();
@@ -472,18 +473,18 @@ function Match({ summary, busy, close, send }: { summary: CampaignSummary; busy:
   const suggested = useMemo(() => new Set(suggestPairs(summary).map(p => `${p.maptableId}:${p.encyclopediaId}`)), [summary]);
   const pairs = Object.entries(choice).filter(([, e]) => e).map(([maptableId, encyclopediaId]) => ({ maptableId, encyclopediaId }));
   const used = new Set(pairs.map(p => p.encyclopediaId));
-  return <Modal wide title="Match your campaigns" intro="Maptable and the Encyclopedia keep separate campaign lists. Pair them once, and each campaign shows up here with its maps and its notes. Nothing is moved or copied." close={close} footer={<>
+  return <Modal wide title="Match your campaigns" intro="Maptable and the Wiki keep separate campaign lists. Pair them once, and each campaign shows up here with its maps and its notes. Nothing is moved or copied." close={close} footer={<>
     <small>A private copy of both tools&apos; data is kept before the first change. You can change a pairing later from the campaign&apos;s details.</small>
     <button type="button" className="campaigns-secondary" onClick={close}>Later</button>
     <button type="button" className="campaigns-primary" disabled={busy || !pairs.length} onClick={() => send({ action: "pair", pairs }, `Paired ${plural(pairs.length, "campaign")}.`, close)}>{pairs.length ? `Pair ${plural(pairs.length, "campaign")}` : "Pair campaigns"}</button>
   </>}>
     <div className="campaigns-match" role="table" aria-label="Pairings">
-      <div className="campaigns-match-row campaigns-match-head" role="row"><span role="columnheader">In Maptable</span><span role="columnheader">In the Encyclopedia</span></div>
+      <div className="campaigns-match-row campaigns-match-head" role="row"><span role="columnheader">In Maptable</span><span role="columnheader">In the Wiki</span></div>
       {maps.map(m => {
         const value = choice[m.maptable!.id] ?? "";
         return <div className="campaigns-match-row" role="row" key={m.key}>
           <span role="cell"><MapIcon size={16} aria-hidden="true" />{m.maptable!.name}</span>
-          <span role="cell"><select aria-label={`Encyclopedia campaign for ${m.maptable!.name}`} value={value} onChange={e => setChoice({ ...choice, [m.maptable!.id]: e.target.value })}>
+          <span role="cell"><select aria-label={`Wiki campaign for ${m.maptable!.name}`} value={value} onChange={e => setChoice({ ...choice, [m.maptable!.id]: e.target.value })}>
             <option value="">Leave unpaired</option>
             {notes.filter(n => n.encyclopedia!.id === value || !used.has(n.encyclopedia!.id)).map(n => <option key={n.key} value={n.encyclopedia!.id}>{n.encyclopedia!.name} ({n.encyclopedia!.worldName})</option>)}
           </select>{value && suggested.has(`${m.maptable!.id}:${value}`) && <small className="campaigns-same">Same name</small>}</span>

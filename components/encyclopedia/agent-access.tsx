@@ -14,7 +14,7 @@ export default function EncyclopediaAgentAccess({campaignId,campaignName}:{campa
   <p className="modal-intro">Let Claude, ChatGPT or any other app that supports MCP read this campaign and its Maptable maps. Each connection has its own key, and you can revoke it at any time.</p>
   {campaignId?<>
    <button className="button primary" onClick={()=>setOpen(true)}><Sparkles size={16}/> Connect an AI</button>
-   <details className="connection-help"><summary>Older Encyclopedia key</summary><p>Keys made here before (starting with <code>enc_</code>) keep working until you revoke them.</p><button className="button" disabled={busy} onClick={()=>void revokeOld()}>Revoke the older key</button></details>
+   <details className="connection-help"><summary>Older Wiki key</summary><p>Keys made here before (starting with <code>enc_</code>) keep working until you revoke them.</p><button className="button" disabled={busy} onClick={()=>void revokeOld()}>Revoke the older key</button></details>
    {open&&<AiConnectionDialog campaignId={campaignId} campaignName={campaignName??'this campaign'} onClose={()=>setOpen(false)}/>}
   </>:<p>Choose and save a campaign first.</p>}
   {message&&<p role="status">{message}</p>}

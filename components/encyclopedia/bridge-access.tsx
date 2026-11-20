@@ -93,7 +93,7 @@ function BridgeDialog({campaignId,campaignName,onClose}:{campaignId:string;campa
       <button type="button" className="button small" aria-expanded={editing===k.id} onClick={()=>setEditing(editing===k.id?null:k.id)}>{editing===k.id?'Done':'What syncs'}</button>
       <button type="button" className="button small danger" onClick={()=>void revoke(k)}>Revoke</button></div>
      {editing===k.id&&<div className="bridge-sync">
-      <p className="import-note">Each kind of thing has its own direction. Lore starts one way, from RPG Tools, so the table can’t overwrite your Encyclopedia by accident.</p>
+      <p className="import-note">Each kind of thing has its own direction. Lore starts one way, from RPG Tools, so the table can’t overwrite your Wiki by accident.</p>
       <table className="bridge-table"><thead><tr><th>In RPG Tools</th><th>At the table</th><th>Direction</th></tr></thead><tbody>
        {syncKinds.map(kind=><tr key={kind}><td><b>{syncInfo[kind].name}</b>{!syncInfo[kind].ready&&<span className="import-chip">Coming next</span>}</td><td>{syncInfo[kind].there}</td>
         <td><select aria-label={`${syncInfo[kind].name} direction`} value={k.sync[kind]} onChange={e=>void direction(k,kind,e.target.value as Direction)}>{(Object.keys(directionNames) as Direction[]).map(d=><option key={d} value={d}>{directionNames[d]}</option>)}</select></td></tr>)}

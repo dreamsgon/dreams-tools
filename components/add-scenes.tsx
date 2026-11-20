@@ -11,8 +11,10 @@ const MAP_KINDS:[Scene["mapType"],string,string,LucideIcon][]=[
   ["area","Area map","A town, dungeon or region to explore.",Mountain],
   ["world","World map","Your whole setting. Its markers open area maps.",Globe2],
 ];
-export default function AddScenes({workspace:w,campaignId,initialDestination,initialMapType="encounter",commit,close,importMap,splitMap,openScene}: {
+export default function AddScenes({workspace:w,campaignId,initialDestination,initialMapType="encounter",boardOnly=false,commit,close,importMap,splitMap,openScene}: {
   workspace:Workspace;campaignId:string|null;initialDestination:string|null;initialMapType?:Scene["mapType"];
+  /** Opened with no scene on the board yet (an empty campaign's Scene Picker): uploading and splitting need an open scene, so they wait. */
+  boardOnly?:boolean;
   commit:(fn:(w:Workspace)=>void)=>void;close:()=>void;importMap:(destination:string|null,mapType:Scene["mapType"])=>void;splitMap:(destination:string|null)=>void;openScene:(id:string)=>void;
 }) {
   const [destination,setDestination]=useState(initialDestination),[search,setSearch]=useState(""),[source,setSource]=useState("all"),[status,setStatus]=useState("");
@@ -51,8 +53,8 @@ export default function AddScenes({workspace:w,campaignId,initialDestination,ini
       </div>
       <span className="add-step">2. How do you want to start?</span>
       <div className="add-scene-actions">
-        <button disabled={!campaignId} onClick={()=>splitMap(destination)}><strong>Split a large map</strong><span>{campaignId?"Preview numbered sections and create linked area scenes.":"Open a campaign to create linked map sections."}</span></button>
-        <button onClick={()=>importMap(destination,mapType)}><strong>Upload or link {mapName}</strong><span>Use an image, Universal VTT export, URL, or connected storage.</span></button>
+        <button disabled={!campaignId||boardOnly} onClick={()=>splitMap(destination)}><strong>Split a large map</strong><span>{boardOnly?"Start a scene in this campaign first.":campaignId?"Preview numbered sections and create linked area scenes.":"Open a campaign to create linked map sections."}</span></button>
+        <button disabled={boardOnly} onClick={()=>importMap(destination,mapType)}><strong>Upload or link {mapName}</strong><span>{boardOnly?"Start a scene in this campaign first, then upload from its Scenes panel.":"Use an image, Universal VTT export, URL, or connected storage."}</span></button>
         <button onClick={()=>{const scene=newScene(`New ${mapName}`);scene.mapType=mapType;scene.containerId=destination;commit(next=>{next.scenes.push(scene);next.activeId=scene.id;});openScene(scene.id);}}><strong>Start a blank {mapName}</strong><span>Add terrain, labels, markers, and tokens.</span></button>
       </div>
       <h3>Bring in an existing scene</h3>

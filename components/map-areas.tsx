@@ -90,7 +90,7 @@ export function GmAreaCard({ area, areas, book, view, onSelect, onEdit, onShare,
     </header>
     <div className="map-note-body">
       <h3 className="map-area-title">{area.section || page?.title || "Area"}</h3>
-      {!book ? <p className="note-muted">Loading your Encyclopedia…</p> : !page ? <p className="note-muted">This area’s page was deleted or moved. Edit the area to link another.</p>
+      {!book ? <p className="note-muted">Loading your Wiki…</p> : !page ? <p className="note-muted">This area’s page was deleted or moved. Edit the area to link another.</p>
         : text === null ? <p className="note-muted">The heading “{area.section}” isn’t on {page.title} any more. Edit the area to pick another section.</p> : <SectionText text={text} />}
     </div>
     <footer>
@@ -126,7 +126,7 @@ export function AreaDialog({ area, areas, drawing, pages, book, onSave, onLinkAl
   return <div className="map-area-dialog" role="dialog" aria-label={area.id ? "Edit area" : "New area"} onPointerDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}>
     <header><h3>{area.id ? "Edit area" : "New area"}</h3><button type="button" className="note-icon" aria-label="Close" onClick={onClose}><X size={16} /></button></header>
     <div className="map-area-dialog-body">
-      <span className="map-note-label">Encyclopedia page</span>
+      <span className="map-note-label">Wiki page</span>
       {page ? <div className="map-area-page"><strong>{page.title}</strong><button type="button" className="text-button" onClick={() => { setPageId(""); setSection(null); }}>Change</button></div>
         : <PageSearch autoFocus pages={pages} onPick={p => { setPageId(p.id); setSection(null); }} placeholder="Find the page for this area" />}
       {page && <>
