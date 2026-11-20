@@ -41,6 +41,8 @@ export type Context = {
    * the Players group would, with their player characters and companions as their cast. Left out for everyone else.
    */
   solo?: { player: boolean };
+  /** Any other campaign's owner previewing the forum as the Players group (the account menu's Switch to Player view). Read only. */
+  preview?: true;
 };
 
 export type Picture = { imageId: string; x: number; y: number };
@@ -360,6 +362,8 @@ export function frameOf(ctx: Context) {
     banner, date: dateOf(ctx), staff: staffOf(ctx),
     /** For a solo campaign's owner: whether they're in the player view, which the forum's GM view / Player view switch shows. */
     solo: ctx.solo ?? null,
+    /** The owner's read-only player preview (Context.preview). */
+    preview: ctx.preview === true,
     you: {
       name: memberName(ctx, ctx.viewer.userId), rights: ctx.viewer.rights, posts: f.counts[ctx.viewer.userId] ?? 0, cast: castOf(ctx), editable: [...ctx.viewer.editable],
       /** Their saved post styles (forum profile), for Insert. */

@@ -12,7 +12,7 @@ import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
 import { Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Pencil, Globe, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette, Sparkles } from "lucide-react";
 import type { CampaignRow } from "@/lib/campaign-links";
-import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, resolveLink, visibleEntries, linkedLoreWorldIds, setWorldLink, defaultCharacter, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
+import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, resolveLink, visibleEntries, linkedLoreWorldIds, setWorldLink, defaultCharacter, playerCampaign, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
 import {newMap} from "@/lib/encyclopedia/map-model";
 import {FogImageSync} from "./fog-image-sync";
@@ -25,6 +25,9 @@ import {BottomBar,MoreSheet,type MoreGroup} from "./bottom-bar";
 import {openDiceTray} from "@/lib/dice-open";
 import ToolSwitch,{AccountLink} from "@/components/tool-switch";
 import CampaignBar from "@/components/campaign-bar";
+import PlayerViewBanner from "@/components/player-view-banner";
+import { useViewAsPlayer } from "@/lib/view-as-player";
+import { PlayerView } from "./player-view";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import {TagsManager} from "@/components/tags";
 import type {Tag} from "@/lib/tags";
@@ -119,6 +122,8 @@ const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not ed
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
     const [member, setMember] = useState<CoGm | null>(null);
+    // Switch to Player view (the account menu): the open campaign as its players read it.
+    const asPlayer = useViewAsPlayer();
     const [data, setData] = useState<Workspace>(emptyWorkspace), [loaded, setLoaded] = useState(false), [signedOut, setSignedOut] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState("Loading"), [worldId, setWorldId] = useState(""), [campaignId, setCampaignId] = useState<string | null>(null), [selected, setSelected] = useState<string | null>(null), [query, setQuery] = useState(""), [editing, setEditing] = useState(false), [modal, setModal] = useState<Modal | null>(null), [palette, setPalette] = useState(false), [paletteTags, setPaletteTags] = useState<string[]>([]), [tagsOpen, setTagsOpen] = useState(false), [aiOpen, setAiOpen] = useState(false), [writing, setWriting] = useState<WritingKind | "chat" | null>(null), [mobile, setMobile] = useState(false), [moreOpen, setMoreOpen] = useState(false), [closed, setClosed] = useState<Set<string>>(new Set), [toast, setToast] = useState(""), [dragging, setDragging] = useState<string | null>(null), [dropAt, setDropAt] = useState<{ id: string; place: DropPlace } | null>(null);
     const sidebar=useSidebarLayout(),navigation=useNavigationSections();
     const pagesBtn = useRef<HTMLButtonElement>(null), moreBtn = useRef<HTMLButtonElement>(null), drawerWas = useRef(false);
@@ -452,12 +457,14 @@ export default function WorkspaceApp() {
     const sidebarButtons = <><button className="sidebar-toggle icon-button" aria-label={sidebar.collapsed?"Show sidebar":"Hide sidebar"} title={sidebar.collapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebar.collapsed} aria-controls="workspace-sidebar" onClick={()=>sidebar.setCollapsed(!sidebar.collapsed)}>{sidebar.collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(true)}><Menu size={20}/></button></>;
     const trailNode = barOn ? <div className="crumbs wiki-trail">{sidebarButtons}<Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail(true)}/></div> : <Breadcrumbs className="topbar-crumbs" fewest={2} items={crumbTrail(false)}/>;
     const topActions = <><SaveChip status={status} error={error} conflict={false} onSave={saveNow} hints={{ saved: "All changes saved. Ctrl/Cmd+S saves now.", loading: "Loading your Wiki.", offline: "Your Wiki could not be loaded." }} autosave={{ on: autosave.on, set: setAutosave, changes: unsaved, lastSaved }}/><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search this campaign…" aria-label="Search the Wiki"/>{query ? <button aria-label="Clear search" onClick={() => setQuery("")}><X size={14}/></button> : <button className="quick-hint" aria-label="Open quick search" title="Quick search: jump to or create any entry" onClick={() => openSearch()}><kbd>Ctrl K</kbd></button>}</label><button className="button primary small" disabled={!world} onClick={() => setModal({ type: "entry" })}><Plus size={16}/> New entry</button>{campaign && <AiActivity campaignId={campaign.id} onChanged={() => void pollRef.current()} onSettings={() => setAiOpen(true)}/>}<ThemeToggle/></>;
+    const wikiBar = barOn && <CampaignBar className="wiki-bar" tool="encyclopedia" campaign={mref ? { memberRef: mref } : { encyclopediaId: campaign!.id }} name={campaign?.name} phoneTrail bell={!mref}
+      trail={trailNode} actions={topActions} onPick={mref ? undefined : row => switchCampaign(row)} onWorlds={mref ? undefined : () => setModal({ type: "library" })}
+      beforeLeave={leaveSaved} canOpenSwitcher={() => loaded && !signedOut && !modal && !palette && !tagsOpen && !aiOpen && !backups && !writing && !tool && !moreOpen}/>;
+    if (asPlayer && campaign && !member && !mref) return <div className="wiki-player-preview">{wikiBar}<PlayerViewBanner>You read {campaign.name} as its players do: only what you marked player-visible.</PlayerViewBanner><PlayerView data={playerCampaign(data, campaign.id)}/></div>;
     return <div className={`app-shell ${barOn?"wiki-shell ":""}${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}{themeDock.node}
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
-   {barOn && <CampaignBar className="wiki-bar" tool="encyclopedia" campaign={mref ? { memberRef: mref } : { encyclopediaId: campaign!.id }} name={campaign?.name} phoneTrail bell={!mref}
-      trail={trailNode} actions={topActions} onPick={mref ? undefined : row => switchCampaign(row)} onWorlds={mref ? undefined : () => setModal({ type: "library" })}
-      beforeLeave={leaveSaved} canOpenSwitcher={() => loaded && !signedOut && !modal && !palette && !tagsOpen && !aiOpen && !backups && !writing && !tool && !moreOpen}/>}
+   {barOn && wikiBar}
 
   <aside id="workspace-sidebar" aria-label="Workspace navigation" role={sidebar.narrow&&mobile?"dialog":undefined} aria-modal={sidebar.narrow&&mobile?true:undefined} inert={sidebar.narrow?!mobile:sidebar.collapsed} className={`sidebar ${mobile ? "is-open" : ""}`} onKeyDown={e=>{if(e.key==="Escape")setMobile(false);}}>
    <button className="sidebar-mobile-close icon-button" aria-label="Close navigation" onClick={()=>setMobile(false)}><X size={17}/></button>

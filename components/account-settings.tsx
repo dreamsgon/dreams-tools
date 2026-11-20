@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {avatarSrc} from "@/lib/avatar";
 import {DeviceAi} from "./device-ai";
+import AvatarCrop from "./avatar-crop";
 import {forgetDeviceAi} from "@/lib/ai/device-keys";
 export type AccountUser={name:string;username:string;email:string;avatar:string;pendingEmail:string};
 type Status={text:string;ok:boolean}|null;
@@ -16,22 +17,13 @@ async function post(body:Record<string,unknown>){
  const r=await fetch("/api/account",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
  const data=await r.json().catch(()=>({})) as {error?:string};if(!r.ok)throw Error(data.error||"The request could not be completed.");
 }
-/** Center-crops to a square and shrinks to 256 px. WebP where the browser can encode it, else JPEG. */
-async function shrink(file:File):Promise<Blob>{
- const bitmap=await createImageBitmap(file).catch(()=>{throw Error("That file could not be read as a picture.");});
- const side=Math.min(bitmap.width,bitmap.height),size=Math.min(256,side),canvas=document.createElement("canvas");canvas.width=canvas.height=size;
- canvas.getContext("2d")!.drawImage(bitmap,(bitmap.width-side)/2,(bitmap.height-side)/2,side,side,0,0,size,size);bitmap.close();
- const encode=(type:string,q:number)=>new Promise<Blob|null>(done=>canvas.toBlob(done,type,q));
- let blob=await encode("image/webp",.86);if(!blob||blob.type!=="image/webp")blob=await encode("image/jpeg",.88);
- if(!blob)throw Error("That picture could not be resized.");return blob;
-}
 function Note({status}:{status:Status}){return status?<p className={status.ok?"account-status":"account-status account-status-error"} role={status.ok?"status":"alert"}>{status.text}</p>:null;}
 export default function AccountSettings({user}:{user:AccountUser}){
  const [name,setName]=useState(user.name),[savedName,setSavedName]=useState(user.name),[avatar,setAvatar]=useState(user.avatar);
  const [newEmail,setNewEmail]=useState(""),[emailPassword,setEmailPassword]=useState(""),[pending,setPending]=useState(user.pendingEmail);
  const [current,setCurrent]=useState(""),[next,setNext]=useState(""),[confirm,setConfirm]=useState("");
  const [busy,setBusy]=useState(""),[status,setStatus]=useState<Record<string,Status>>({});
- const file=useRef<HTMLInputElement>(null),router=useRouter();
+ const file=useRef<HTMLInputElement>(null),router=useRouter(),[picked,setPicked]=useState<File|null>(null);
  useEffect(()=>{
   const changed=new URLSearchParams(location.search).get("changed");
   if(changed==="email")setStatus(s=>({...s,email:{ok:true,text:"Your sign-in email is changed. Use the new address next time you sign in."}}));
@@ -51,6 +43,7 @@ export default function AccountSettings({user}:{user:AccountUser}){
  const shown=name.trim()||user.username||"Player";
  const disabled=!!busy;
  return <div className="account-settings">
+  {picked&&<AvatarCrop file={picked} onCancel={()=>setPicked(null)} onSave={async blob=>{setPicked(null);await sendAvatar(blob);}}/>}
   <p className="rpg-eyebrow">YOUR RPG TOOLS ACCOUNT</p>
   <h1>Account settings</h1>
   <p className="account-lead">Your profile is what players and other GMs see. Sign-in details stay private to you.</p>
@@ -65,10 +58,10 @@ export default function AccountSettings({user}:{user:AccountUser}){
      <div className="account-profile">
       <div className="account-avatar-box">
        <Avatar name={shown} avatar={avatar} size="l"/>
-       <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void (async()=>{try{await sendAvatar(await shrink(f));}catch(err){setStatus(s=>({...s,profile:{ok:false,text:(err as Error).message}}));}})();}}/>
+       <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f){setStatus(s=>({...s,profile:null}));setPicked(f);}}}/>
        <button type="button" disabled={disabled} onClick={()=>file.current?.click()}>{avatar?"Change picture":"Upload picture"}</button>
        {avatar&&<button type="button" className="account-ghost" disabled={disabled} onClick={()=>void sendAvatar(null)}>Remove</button>}
-       <small>PNG, JPG or WebP. Cropped to a square and shrunk to 256 px.</small>
+       <small>PNG, JPG or WebP. You fit it into the circle before it saves, at 256 px.</small>
       </div>
       <form className="account-fields account-fields-tight" onSubmit={e=>{e.preventDefault();void run("profile",async()=>{await post({action:"profile",displayName:name});setSavedName(name.trim());router.refresh();return "Profile saved.";});}}>
        <label>Display name<input required maxLength={40} autoComplete="nickname" value={name} onChange={e=>setName(e.target.value)}/><small>Up to 40 characters. Spaces and accents are fine.</small></label>

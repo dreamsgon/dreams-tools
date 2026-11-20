@@ -1480,12 +1480,23 @@ test('solo: the owner keeps the GM view, plays the PCs and companions, and may s
   const back = (await (await post({ action: 'reply', campaign: KEY, topicId, body: 'The barkeep looks up.', as: null })).json());
   assert.equal(back.ok, true);
 
-  // Anyone else, or a campaign that isn't solo, gets no player view.
+  // The owner of a campaign that isn't solo gets a read-only preview as the Players group (Switch to Player view).
+  const gmPlain = (await (await post(index, deps(OWNER, workspace))).json()).frame;
+  assert.equal(gmPlain.preview, false);
+  assert.equal(gmPlain.you.rights.gm, true);
   const plain = (await (await post({ ...index, playerView: true }, deps(OWNER, workspace))).json()).frame;
   assert.equal(plain.solo, null);
-  assert.equal(plain.you.rights.gm, true);
+  assert.equal(plain.preview, true);
+  assert.deepEqual([plain.you.rights.gm, plain.you.rights.moderate, plain.you.rights.boards, plain.you.rights.read], [false, false, false, true]);
+  assert.deepEqual(plain.you.editable, [], 'a preview plays no characters');
+  assert.equal((await post({ action: 'view', campaign: KEY, page: { kind: 'settings' }, playerView: true }, deps(OWNER, workspace))).status, 403);
+  const blocked = await post({ action: 'start', campaign: KEY, boardId: 'tavern-board', title: 'Peek', body: 'Only looking.', as: null, playerView: true }, deps(OWNER, workspace));
+  assert.equal(blocked.status, 403, 'the preview is read only');
+  assert.equal((await blocked.json()).code, 'preview');
+  // Anyone else gets no player view: the flag is ignored.
   const member = (await (await post({ ...index, campaign: 'm-' + 'a'.repeat(64), playerView: true }, deps('p1', solo, list()))).json()).frame;
   assert.equal(member.solo, null);
+  assert.equal(member.preview, false);
 });
 test('solo: an AI never plays the solo player’s characters', () => {
   const solo = { ...workspace, campaigns: workspace.campaigns.map(c => ({ ...c, solo: true })) };

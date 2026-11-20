@@ -227,8 +227,11 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, 
   // A solo campaign's owner plays its player characters and companions (lib/solo.ts), and may switch to the player view:
   // the Players group's forum rights and the pages players may read, posting as those characters or as themselves.
   const solo = rights.owner && isSolo(workspace, found.campaignId) ? { player: playerView } : undefined;
-  if (solo?.player) rights = soloPlayerRights(found.list, found.owner);
-  const editable = solo ? soloCharacters(workspace, found.campaignId) : rights.owner ? new Set<string>() : pageRights(found.list, userId).edit;
+  // Any other campaign's owner may preview the forum the same way, read only (Switch to Player view in the account menu).
+  const preview = rights.owner && !solo && playerView;
+  const asPlayers = solo?.player || preview;
+  if (asPlayers) rights = soloPlayerRights(found.list, found.owner);
+  const editable = solo ? soloCharacters(workspace, found.campaignId) : preview || rights.owner ? new Set<string>() : pageRights(found.list, userId).edit;
   // Players read the pages the player view gives them; the GM and co-GMs read every page.
   const readable = rights.gm ? null : new Set(playerCampaign(workspace, found.campaignId, editable).entries.map(e => e.id));
   // Pictures don't need read marks or presence.
@@ -245,7 +248,7 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, 
   // A first visit starts with everything before the member joined (the GM: before now) marked read.
   const joined = found.list.members.find(m => m.userId === userId)?.joinedAt;
   const reads = mine.reads ?? freshReads(joined && joined < now.toISOString() ? joined : now.toISOString());
-  const ctx: Context = { forum, list: found.list, owner: found.owner, workspace, campaignId: found.campaignId, viewer: { userId, rights, key: campaign, editable, access: solo?.player ? soloPlayerAccess(forum, found.list, found.owner) : boardAccess(forum, found.list, userId, rights) }, readable, reads, presence: presence.presence, alerts: alerts.alerts, theme: liveTheme(themes?.live ?? null), now, ...(solo ? { solo } : {}) };
+  const ctx: Context = { forum, list: found.list, owner: found.owner, workspace, campaignId: found.campaignId, viewer: { userId, rights, key: campaign, editable, access: asPlayers ? soloPlayerAccess(forum, found.list, found.owner) : boardAccess(forum, found.list, userId, rights) }, readable, reads, presence: presence.presence, alerts: alerts.alerts, theme: liveTheme(themes?.live ?? null), now, ...(solo ? { solo } : {}), ...(preview ? { preview: true as const } : {}) };
   return { ctx, found, userId, fresh: marks && !mine.reads, presence, themes };
 }
 
@@ -569,11 +572,12 @@ export async function handleForum(request: Request, deps: Deps) {
     if (action === "skin") return await skinOf(deps, skinSchema.parse(raw));
     if (typeof action === "string" && THEME_ACTIONS.has(action)) return await themesOf(deps, themeBodySchema.parse(raw), deps.now?.() ?? new Date());
     const body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
-    // The player view of a solo campaign's owner (contextOf); ignored for anyone else.
+    // The player view of a campaign's owner (contextOf): a solo campaign's, or any other's read-only preview. Ignored for anyone else.
     const playerView = typeof raw === "object" && raw !== null && (raw as { playerView?: unknown }).playerView === true;
     const got = await contextOf(deps, body.campaign, now, true, playerView);
     if (got.fail) return got.fail;
     const { ctx, found, userId } = got;
+    if (ctx.preview && body.action !== "view") return json({ error: "Player view is read only. Switch back to the GM view to post or change things.", code: "preview" }, 403);
     if ((body.action === "view" ? readThrottle : writeThrottle).hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
     // Any visit notes that they're online and, the first time, keeps where their read marks start. Best effort.
     await Promise.all([

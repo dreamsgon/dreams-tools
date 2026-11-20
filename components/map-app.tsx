@@ -79,6 +79,7 @@ import Board, { type View } from "./board";
 import AppearanceMenu from "./appearance-menu";
 import ToolSwitch, { AccountLink } from "./tool-switch";
 import CampaignBar from "./campaign-bar";
+import { setViewAsPlayer, useViewAsPlayer } from "@/lib/view-as-player";
 import { hubHref } from "@/lib/campaign-switcher";
 import { maptableHubHref, type CampaignRow } from "@/lib/campaign-links";
 import { ActionMenu } from "./popover-menu";
@@ -384,6 +385,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   usePageTitle(navigationReady && workspace ? maptableTitle(dashboard
     ? { campaign: workspace.collections.find(c => c.id === overviewCampaignId)?.name }
     : { scene: scene?.name, campaign: campaign?.name }) : "");
+  // Switch to Player view in the account menu turns the open scene's player view on and off; the board's own
+  // GM view / Player view button (and anything that turns it off to edit) does the same to the account menu.
+  const asPlayer=useViewAsPlayer(),playerSynced=useRef<boolean|null>(null);
+  useEffect(()=>{playerSynced.current=asPlayer;setPlayer(asPlayer);if(asPlayer){setArmed(null);setSelected(null);}},[asPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{if(playerSynced.current===null){playerSynced.current=player;return;}if(player!==playerSynced.current){playerSynced.current=player;setViewAsPlayer(player);}},[player]);
   // Map notes: the GM's Wiki, read once a marker links a page or the Exploration panel opens.
   const [book,setBook]=useState<EncyclopediaWorkspace|null>(null),[bookError,setBookError]=useState(""),[playerNoteOpen,setPlayerNoteOpen]=useState<{id:string;key:string}|null>(null);
   // The player note closes when the view or the scene changes.

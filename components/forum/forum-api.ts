@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { CardDesign, EmojiSettings, ForumSettings, Strip, TopicTag } from '@/lib/forum/model';
 import type { ForumAi } from '@/lib/forum/ai';
+import { setViewAsPlayer, viewAsPlayer } from '@/lib/view-as-player';
 import type { AiConnection } from '@/lib/forum/request';
 import type { Frame, Picture, CardRow, StripItem, cardFields, cardSample, profilePage, picturesPage, activePage, boardPage, membersPage, reportsPage, searchPage, topicPage, trashPage } from '@/lib/forum/view';
 
@@ -53,15 +54,20 @@ export const validKey = (key: string) => /^(?:m-[a-f0-9]{64}|c-[A-Za-z0-9_-]{1,1
 
 export class ForumRequestError extends Error { status: number; code: string; constructor(message: string, status: number, code = '') { super(message); this.status = status; this.code = code; } }
 /*
- * Solo campaigns: their owner may read and post in the player view (lib/forum/request.ts). The choice is kept per
+ * Solo campaigns: their owner may read and post in the player view (lib/forum/request.ts); any other campaign's owner may
+ * preview it, read only. The choice is kept per
  * campaign on this device, and every request for that campaign carries it; the server ignores it for anyone else.
  */
 const playerViews = new Map<string, boolean>(), viewKey = (key: string) => `forum:player-view:${key}`;
+/** On for this campaign (a solo campaign's switch), or everywhere (the account menu's Switch to Player view, which any campaign's owner may use). */
 export function playerViewOn(key: string) {
+  if (viewAsPlayer()) return true;
   if (!playerViews.has(key)) { try { playerViews.set(key, localStorage.getItem(viewKey(key)) === '1'); } catch { playerViews.set(key, false); } }
   return playerViews.get(key)!;
 }
 export function setPlayerView(key: string, on: boolean) {
+  // Back to the GM view also turns off the account menu's player view, or the forum would stay in it.
+  if (!on) setViewAsPlayer(false);
   playerViews.set(key, on);
   try { if (on) localStorage.setItem(viewKey(key), '1'); else localStorage.removeItem(viewKey(key)); } catch { /* storage may be off */ }
 }
