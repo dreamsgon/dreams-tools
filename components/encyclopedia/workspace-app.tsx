@@ -53,7 +53,7 @@ import {newStarSystem} from "@/lib/encyclopedia/star-systems";
 import {GalaxyIcon} from "./galaxy-art";
 import {newStore} from "@/lib/encyclopedia/stores";
 import type {PageTemplate} from "@/lib/encyclopedia/world-model";
-import {memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberRef,uploaded,workspaceUrl} from "./member-view";
+import {memberHtml,memberReadOnly,memberRef,memberRefFromHash,setMemberEdit,setMemberHtml,setMemberRef,uploaded,workspaceUrl} from "./member-view";
 import Link from "next/link";
 import {endPageDrag,startPageDrag} from "./page-drag";
 import {orgListItems} from "@/lib/encyclopedia/org-holdings";
@@ -118,7 +118,7 @@ type Modal = {
 function excerpt(e: Entry, s: Workspace) { return e.body.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label ?? resolveLink(s, e, target)?.title ?? target).replace(/^[ \t]*- \[[ xX]\] /gm, "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim().slice(0, 150); }
 function download(value: unknown, name: string) { const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 /** A co-GM in someone else's campaign: whose it is and their role, for the bar at the top. */
-type CoGm = { ownerName: string; role: string; campaignId: string; edit?: boolean; maps?: boolean };
+type CoGm = { ownerName: string; role: string; campaignId: string; edit?: boolean; maps?: boolean; html?: boolean };
 const CO_GM_READ_ONLY = "The GM has set your group to read this campaign, not edit it.";
 export default function WorkspaceApp() {
   useIdlePreload(preloadParts);
@@ -186,7 +186,7 @@ export default function WorkspaceApp() {
         // A co-GM opens the one campaign they were let into.
         const shared = body.member ? checked.campaigns.find(c => c.id === body.member!.campaignId) : undefined;
         if (body.member && shared) {
-            setMember(body.member); setMemberEdit(!!body.member.edit);
+            setMember(body.member); setMemberEdit(!!body.member.edit); setMemberHtml(body.member.html !== false);
             const place = placeFromQuery(query, checked);
             setWorldId(shared.worldId); setCampaignId(shared.id); setView(place?.view ?? "overview"); setSelected(place?.entryId ?? null); setTabAt(place?.entryId && place.tab ? { entry: place.entryId, tab: place.tab } : null);
             setLoaded(true); setStatus(body.member.edit ? "All changes saved" : "Read only");
@@ -319,7 +319,7 @@ export default function WorkspaceApp() {
     useEffect(() => { pollRef.current = poll; });
     useEffect(() => { if (!loaded) return; const tick = setInterval(() => void pollRef.current(), 8000), look = () => { if (!document.hidden) void pollRef.current(); }; document.addEventListener("visibilitychange", look); window.addEventListener("focus", look); return () => { clearInterval(tick); document.removeEventListener("visibilitychange", look); window.removeEventListener("focus", look); }; }, [loaded]);
     /** Save a new workspace, or a change worked out from the latest one so changes made in the same moment don't undo each other. */
-    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberReadOnly()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const refused = memberRef() ? coGmRefusal(current.current, next, uploaded()) : null; if (refused) { setToast(refused); return false; } const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
+    function change(input: Workspace | ((latest: Workspace) => Workspace)) { if (memberReadOnly()) { setToast(CO_GM_READ_ONLY); return false; } const next = typeof input === 'function' ? input(current.current) : input; if (next === current.current) return true; const refused = memberRef() ? coGmRefusal(current.current, next, uploaded(), memberHtml()) : null; if (refused) { setToast(refused); return false; } const checked=workspaceSchema.safeParse(next); if(!checked.success){setToast(checked.error.issues[0].message);return false;}if(new TextEncoder().encode(JSON.stringify(next)).length>2000000){setToast("The workspace exceeds 2 MB. Export and free space before adding more content.");return false;} current.current = next; setData(next); version.current++; setUnsaved(n => n + 1); setStatus("Unsaved changes"); if (timer.current)
         clearTimeout(timer.current); timer.current = autosave.ref.current ? setTimeout(save, 600) : null; return true; }
     function updateEntry(id: string, patch: Partial<Entry>) { change({ ...current.current, entries: current.current.entries.map(e => e.id === id ? { ...e, ...patch, editedBy: undefined, updatedAt: new Date().toISOString() } : e) }); }
     /** Clicking a tag opens search with that tag, across pages, scenes and campaigns. */

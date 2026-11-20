@@ -158,7 +158,7 @@ For layouts Markdown can't do, write HTML in an HTML box:
 :::
 ```
 
-`[dohtml]` … `[/dohtml]` works too, the same as in the Forum. The same filter as the Forum applies: tags, attributes and styles are allowed, but scripts, event handlers, frames, forms and outside pictures are taken out. On your page, a note says when something was left out.
+The GM can always add HTML. Co-GMs and players need **Use HTML in Wiki pages** on the campaign's Members tab. `[dohtml]` … `[/dohtml]` works too, the same as in the Forum. The same filter as the Forum applies: tags, attributes and styles are allowed, but scripts, event handlers, frames, forms and outside pictures are taken out. On your page, a note says when something was left out.
 
 ## Rolls, tables and Maptable
 

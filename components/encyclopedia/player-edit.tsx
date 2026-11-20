@@ -37,7 +37,7 @@ export function PlayerEditor({page,entryId,memberRef,done}:{page:Page;entryId:st
  async function save(){if(!changed.length){done(false);return;}setBusy(true);setError('');try{await send({action:'save',ref:memberRef,entryId,tabs:changed.map(id=>({id,body:text[id]}))});done(true);}catch(e){setError(e instanceof Error?e.message:'Could not save.');}finally{setBusy(false);}}
  return <div className="player-editor">
   {page.tabs.map(t=><label key={t.id} className="player-editor-tab"><span className="eyebrow">{t.title}</span>{t.locked?<p className="player-edit-locked"><Lock size={13}/> Your GM keeps secret notes in this part, so only they can change it.</p>:<textarea value={text[t.id]} rows={t.id==='overview'?10:6} onChange={e=>setText({...text,[t.id]:e.target.value})}/>}</label>)}
-  <p className="player-edit-hint">Your GM sees that you made the change. Link a page with [[Its name]].</p>
+  <p className="player-edit-hint">Your GM sees that you made the change. Link a page with [[Its name]]. <a href="/guide/writing-wiki-pages" target="_blank" rel="noopener">Everything you can type</a></p>
   {error&&<p className="player-edit-error" role="alert">{error}</p>}
   <div className="player-edit-actions"><button className="button primary small" disabled={busy} onClick={()=>void save()}>{busy?'Saving…':'Save'}</button><button className="button small" disabled={busy} onClick={()=>done(false)}>Cancel</button></div>
  </div>;

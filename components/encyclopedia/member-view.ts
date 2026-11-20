@@ -2,12 +2,15 @@
  * A co-GM opening a campaign someone else runs: /encyclopedia#m-<ref> (see lib/members-server.ts). The Encyclopedia
  * then reads that one campaign with ?member=<ref>, and pictures and maps load from the owner's images the same way.
  */
-let ref = '', edit = false;
+let ref = '', edit = false, html = true;
 export const memberRefFromHash = () => /^#m-([a-f0-9]{64})$/.exec(typeof location === 'undefined' ? '' : location.hash)?.[1] ?? '';
 export const setMemberRef = (value: string) => { if (value !== ref) added.clear(); ref = value; };
 export const memberRef = () => ref;
 /** Set from the campaign's member list: true when this co-GM's groups say Yes to "Edit Encyclopedia pages". */
 export const setMemberEdit = (value: boolean) => { edit = value; };
+/** Whether the co-GM's groups let them add HTML to Wiki pages ("Use HTML in Wiki pages"). */
+export const setMemberHtml = (value: boolean) => { html = value; };
+export const memberHtml = () => !ref || html;
 /** A co-GM who may look but not change anything. */
 export const memberReadOnly = () => !!ref && !edit;
 export const workspaceUrl = () => '/api/encyclopedia/workspace' + (ref ? `?member=${ref}` : '');

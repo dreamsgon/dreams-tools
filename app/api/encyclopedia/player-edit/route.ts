@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       if (!rights.subPages.has(body.parentId)) return json({ error: 'You can’t add pages here. Ask your GM.' }, 403);
       // Theirs first, so a page that saves is never one they can't edit.
       await members.addMadePage(found.owner, found.campaignId, user.userId, page);
-      rights = { edit: new Set([...rights.edit, page]), subPages: new Set([...rights.subPages, page]), made: new Set([...rights.made, page]) };
+      rights = { ...rights, edit: new Set([...rights.edit, page]), subPages: new Set([...rights.subPages, page]), made: new Set([...rights.made, page]) };
     }
     const apply = (s: Workspace) => body.action === 'save' ? savePlayerEdit(s, found.campaignId, rights, body, who)
       : body.action === 'add' ? addPlayerSubPage(s, found.campaignId, rights, body, page, who)
