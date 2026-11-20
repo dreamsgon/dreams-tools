@@ -1,6 +1,8 @@
 'use client';
 /* The player view's page text, read by the same reader as the GM's page (wiki-prose.tsx). The server already took out secrets, asides, GM-only rows, rolls and Maptable links. */
+import type {CSSProperties} from 'react';
 import {FileText} from 'lucide-react';
+import {proseLook,type TextSettings} from '@/lib/encyclopedia/page-text';
 import {playerLink} from '@/lib/encyclopedia/player-prose';
 import {plainExcerpt} from '@/lib/encyclopedia/inline';
 import {headingId,leadText,linkParts,sectionText} from '@/lib/encyclopedia/markup';
@@ -9,7 +11,7 @@ import {PageList} from './article-body';
 
 type Page={id:string;title:string;kind?:string;parentId?:string;tabs?:readonly {id:string;title:string;body:string}[]};
 const overview=(p:Page)=>p.tabs?.find(t=>t.id==='overview')?.body??null;
-export function PlayerProse({text,title='',entries,open,className=''}:{text:string;title?:string;entries:readonly Page[];open:(id:string)=>void;className?:string}){
+export function PlayerProse({text,title='',entries,open,className='',look}:{text:string;title?:string;entries:readonly Page[];open:(id:string)=>void;className?:string;look?:TextSettings}){
  const go=(id:string,section:string|null)=>{open(id);if(section)scrollToHeading(headingId(section));};
  const env=(title:string):WikiEnv=>({
   gm:false,title,
@@ -25,5 +27,6 @@ export function PlayerProse({text,title='',entries,open,className=''}:{text:stri
   },
   pageList:(o,i)=><PageList key={i} options={o} pages={entries.filter(e=>e.kind&&(!title||e.title!==title)).map(e=>({id:e.id,title:e.title,kind:e.kind!,parentId:e.parentId??null,excerpt:plainExcerpt(leadText(overview(e)??''),110)}))} parent={o.inside?playerLink(entries,o.inside)??null:undefined} onOpen={id=>open(id)}/>,
  });
- return <div className={`prose player-prose formatted ${className}`.trim()}><WikiProse text={text} env={env(title)}/></div>;
+ const set=proseLook(look);
+ return <div className={`prose player-prose formatted ${set.className} ${className}`.trim()} style={set.style as CSSProperties}><WikiProse text={text} env={env(title)}/></div>;
 }

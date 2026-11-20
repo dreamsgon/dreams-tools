@@ -130,7 +130,18 @@ By order of the Duke
 
 `align=` can be left, center or right.
 
-## Only for the GM
+## Text settings for a page, a branch or the whole Wiki
+
+The **Text** button beside a page's toolbar sets how its text reads:
+
+- **Size** (S, M, L, XL), **Font** (Book, Clean, Old hand, Typewriter, Heading) and **Line spacing** (Tight, Normal, Airy).
+- **Paragraphs**: space between them, or indented like a book.
+- **Headings**: plain, underlined, small caps or centred.
+- **First letter**: plain, or a large drop cap.
+
+Under **Use these settings for**, pick **This page only**, **This page and every page inside it** (a whole category or region reads the same way), or **Every page in the Wiki** (the world's default). A page's own settings win over a page above it, and those win over the Wiki's default. **Go back to the default** clears a page's own settings. Players see pages with the same settings, and each reader's own text size in Appearance still scales everything.
+
+
 
 Three ways to keep text from players. The server takes it out before a player's page is sent, so it never reaches their browser.
 
