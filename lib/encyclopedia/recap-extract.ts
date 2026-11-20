@@ -1,0 +1,91 @@
+/*
+ * What it pulls out: the campaign's settings for what the AI takes from a session (when it writes a recap,
+ * or checks one the GM wrote) and how much. Kinds turned off are left out of what the AI is asked for, and
+ * dropped from what it sends. Saved with the campaign's AI writing settings (ai-styles.ts). Pure.
+ */
+import { z } from "zod";
+import type { RecapRequest, recapParts } from "./recap-schema.ts";
+
+export const extractKinds = ["timeline", "quotes", "people", "places", "orgs", "lore", "codex", "quests", "rumours", "gmNotes"] as const;
+export type ExtractKind = typeof extractKinds[number];
+export const extractDepths = ["main", "balanced", "everything"] as const;
+
+/** Each kind's name and a line on what it is. */
+export const extractNames: Record<ExtractKind, [string, string]> = {
+  timeline: ["Timeline", "The session's beats, on a Timeline tab. Write it again works from it."],
+  quotes: ["Quotes", "Memorable lines, word for word, on a Quotes tab."],
+  people: ["People", "New characters, and what changed for ones you have."],
+  places: ["Places", "Where the party went, new and changed."],
+  orgs: ["Organizations", "Guilds, houses and factions."],
+  lore: ["Lore and notes", "History, legends and secrets the party learned."],
+  codex: ["Codex finds", "Codex pages the party found."],
+  quests: ["Quest moves", "Log lines, and objectives that are done."],
+  rumours: ["New quests", "Quests you don't have yet, as rumours."],
+  gmNotes: ["GM notes", "Hooks, secrets and rules calls, for you only."],
+};
+/** How the kinds are grouped in the settings. */
+export const extractGroups: [string, ExtractKind[]][] = [
+  ["On the session page", ["timeline", "quotes", "gmNotes"]],
+  ["Pages", ["people", "places", "orgs", "lore", "codex"]],
+  ["Quests", ["quests", "rumours"]],
+];
+export const depthNames: Record<typeof extractDepths[number], [string, string]> = {
+  main: ["Only the main ones", "Only the people, places and quests that matter most."],
+  balanced: ["Balanced", "The people, places, quests and finds that matter."],
+  everything: ["Everything", "Every named person, place, quest and find."],
+};
+
+export const extractSchema = z.object({
+  /** How much to pull out when nothing else is asked. Left out: balanced. */
+  depth: z.enum(extractDepths).optional(),
+  /** Kinds turned off. Everything else is pulled out. */
+  off: z.array(z.enum(extractKinds)).max(extractKinds.length).optional(),
+});
+export type ExtractSettings = z.infer<typeof extractSchema>;
+
+export const isOn = (x: ExtractSettings | undefined, k: ExtractKind) => !x?.off?.includes(k);
+
+/** Saves the settings: the usual depth and kinds that are on are left out, so a fresh campaign stores nothing. */
+export function cleanExtract(x: ExtractSettings): ExtractSettings | undefined {
+  const parsed = extractSchema.parse(x), off = extractKinds.filter(k => parsed.off?.includes(k));
+  const out: ExtractSettings = { ...(parsed.depth && parsed.depth !== "balanced" ? { depth: parsed.depth } : {}), ...(off.length ? { off } : {}) };
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** The parts of the New session recap dialog that start unticked: those with every kind in them turned off. */
+export function partsOff(x: ExtractSettings | undefined): typeof recapParts[number][] {
+  const off = (...k: ExtractKind[]) => k.every(y => !isOn(x, y));
+  return [
+    ...(off("timeline") ? ["timeline" as const] : []), ...(off("quotes") ? ["quotes" as const] : []),
+    ...(off("people", "places", "orgs", "lore", "codex") ? ["found" as const] : []), ...(off("quests", "rumours") ? ["quests" as const] : []),
+    ...(off("gmNotes") ? ["gmNotes" as const] : []),
+  ];
+}
+
+const askNames: Record<ExtractKind, string> = {
+  timeline: "the timeline", quotes: "quotes", people: "people (characters)", places: "places", orgs: "organizations (factions)", lore: "lore and notes",
+  codex: "codex finds", quests: "moves on quests the campaign has", rumours: "new quests", gmNotes: "GM notes",
+};
+/** A line for the AI on what the GM turned off, if anything. The timeline is still asked for when the recap is written from it. */
+export function extractNotes(x: ExtractSettings | undefined, opts: { keepTimeline?: boolean } = {}) {
+  const off = extractKinds.filter(k => !isOn(x, k) && !(k === "timeline" && opts.keepTimeline));
+  return off.length ? [`The GM turned these off in What it pulls out, so leave them out and send them empty: ${off.map(k => askNames[k]).join(", ")}.`] : [];
+}
+
+/** The depth to use: what this recap asked for, or the campaign's setting. */
+export const depthFor = (x: ExtractSettings | undefined, r?: Pick<RecapRequest, "depth">) => r?.depth ?? x?.depth ?? "balanced";
+
+const kindOfFind = (kind: string | undefined): ExtractKind => kind === "character" ? "people" : kind === "place" ? "places" : kind === "faction" ? "orgs" : "lore";
+type Finds = { found?: { kind?: string }[]; codex?: unknown[] };
+/** Drops what the AI sent of kinds the GM turned off. Quest moves and new quests are told apart once matched (see recaps.ts). */
+export function honourExtract<T extends Finds & { timeline?: unknown[]; quotes?: unknown[]; gmNotes?: string }>(input: T, x: ExtractSettings | undefined): T {
+  if (!x?.off?.length) return input;
+  return {
+    ...input,
+    ...(input.found ? { found: input.found.filter(f => isOn(x, kindOfFind(f.kind))) } : {}),
+    ...(input.codex && !isOn(x, "codex") ? { codex: [] } : {}),
+    ...(input.timeline && !isOn(x, "timeline") ? { timeline: [] } : {}),
+    ...(input.quotes && !isOn(x, "quotes") ? { quotes: [] } : {}),
+    ...(input.gmNotes !== undefined && !isOn(x, "gmNotes") ? { gmNotes: "" } : {}),
+  };
+}

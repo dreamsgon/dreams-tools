@@ -1079,7 +1079,16 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 .writing-style small{font-size:12px;color:var(--muted)}
 .writing-style.new{display:flex;align-items:center;gap:6px;border-style:dashed;color:var(--accent);font-size:13px;font-weight:600}
 .writing-style .in-use{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--raised);color:var(--muted);border:1px solid var(--line)}
-.writing-styles>.aside-hint{margin:0;font-size:13px}.writing-dialog .segmented.wide{max-width:100%;overflow-x:auto}
+.writing-styles>.aside-hint{margin:0;font-size:13px}
+.extract-group{margin-bottom:16px}.extract-rows{display:grid;gap:6px}
+.extract-row{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);cursor:pointer}
+.extract-row.off{background:var(--raised)}.extract-row.off strong{color:var(--muted)}
+.extract-name{display:grid;gap:1px;min-width:0}.extract-name strong{font-size:13px;font-weight:600;color:var(--ink)}.extract-name small{font-size:12px;color:var(--muted);line-height:1.4}
+.extract-switch{position:relative;flex:none;width:40px;height:24px}.extract-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
+.extract-switch>span{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .15s}
+.extract-switch>span::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px var(--shadow-color);transition:transform .15s}
+.extract-switch input:checked+span{background:var(--accent)}.extract-switch input:checked+span::after{transform:translateX(16px)}
+.extract-switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}.writing-dialog .segmented.wide{max-width:100%;overflow-x:auto}
 .writing-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start;min-width:0}
 .writing-edit{display:grid;min-width:0}.writing-edit .aside-hint{margin:0 0 14px;font-size:13px}
 .writing-edit .field-title{font-size:13px;margin-bottom:18px}.writing-edit .segmented.wide button{min-height:36px;font-size:13px}.writing-edit .style-chip{min-height:36px;padding:4px 13px;font-size:13px}.writing-edit .field-title .aside-hint{margin:0;font-weight:400}

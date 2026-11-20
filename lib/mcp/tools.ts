@@ -26,6 +26,7 @@ import type { MovePreview } from "./activity.ts";
 import { PART_SIZE, addFinds, compactTranscript, draftRecap, linkNames, openItems, sessionFolder, transcriptParts, wordCount, type AiFinds, type AiRecap } from "../encyclopedia/recaps.ts";
 import { recapPageKinds, timelineMarkdown } from "../encyclopedia/recap-schema.ts";
 import { requestNotes } from "../encyclopedia/recap-request.ts";
+import { extractNotes } from "../encyclopedia/recap-extract.ts";
 import { publishedRecaps, storyNow } from "../encyclopedia/recap-prompts.ts";
 import { ForumError } from "../forum/model.ts";
 import type { ForumMcp } from "../forum/mcp.ts";
@@ -299,7 +300,7 @@ const tools: Tool[] = [
       if (!raw?.trim()) return fail(`“${e.title}” has no transcript. ${ask}`);
       const parts = transcriptParts(compactTranscript(raw)), n = (a.part as number | undefined) ?? 1;
       if (n > parts.length) fail(`“${e.title}” has ${parts.length} part${parts.length > 1 ? "s" : ""}.`);
-      return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), ...(n === 1 && e.recap?.request ? { gmAsked: requestNotes(e.recap.request) } : {}), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
+      return { page: e.title, id: e.id, part: n, of: parts.length, words: wordCount(raw), ...(n === 1 && (e.recap?.request || c.campaign.aiWriting?.extract?.off?.length) ? { gmAsked: [...(e.recap?.request ? requestNotes(e.recap.request) : []), ...extractNotes(c.campaign.aiWriting?.extract)] } : {}), text: parts[n - 1], next: n < parts.length ? `Call read_transcript with part ${n + 1} when you have your notes from this one.` : "That was the last part." };
     },
   },
   {

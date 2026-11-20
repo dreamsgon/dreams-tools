@@ -72,7 +72,7 @@ export async function writeRecap(bucket: S3Bucket, owner: string, campaignId: st
   const transcript = compactTranscript(raw);
   if (transcript.length > IN_APP_LIMIT) throw Error("That transcript is too long to write here in one go. Hand it to your AI app, which reads it in parts.");
   const request = page.recap?.request ?? defaultRequest, scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
-  const head = { campaign: ctx.campaign.name, title: page.title, playedOn: page.recap?.playedOn, request, names: namesBlock(ctx.book.entries, scope) };
+  const head = { campaign: ctx.campaign.name, title: page.title, playedOn: page.recap?.playedOn, request, names: namesBlock(ctx.book.entries, scope), extract: ctx.campaign.aiWriting?.extract };
   return counted(bucket, owner, campaignId, c.id, async add => {
     const first = await runOnce(target, RECAP_SYSTEM, notesPrompt({ ...head, quests: questsBlock(ctx.book, scope), transcript }), notesTool(), 12_000, fetchImpl);
     add(first.tokens);
@@ -128,7 +128,7 @@ export async function checkRecap(bucket: S3Bucket, owner: string, campaignId: st
   const recap = unlinkNames(page.body).trim();
   if (!recap) throw Error("Write the recap first, then check it.");
   const scope = { worldId: ctx.campaign.worldId, campaignId: ctx.campaign.id };
-  const prompt = checkPrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, names: namesBlock(ctx.book.entries, scope), quests: questsBlock(ctx.book, scope), recap });
+  const prompt = checkPrompt({ campaign: ctx.campaign.name, title: page.title, playedOn: page.recap.playedOn, names: namesBlock(ctx.book.entries, scope), quests: questsBlock(ctx.book, scope), recap, extract: ctx.campaign.aiWriting?.extract });
   return counted(bucket, owner, campaignId, c.id, async add => {
     const out = await runOnce(target, RECAP_SYSTEM, prompt, findsTool(), 6_000, fetchImpl);
     add(out.tokens);
