@@ -16,6 +16,7 @@
 
 **Wiki**
 - [Wiki basics](Encyclopedia-Basics)
+- [Writing wiki pages](Writing-Wiki-Pages)
 - [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
 - [Sheet import, export, Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 - [Inventory, spells and stores](Inventory-Spells-and-Stores)

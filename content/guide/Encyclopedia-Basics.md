@@ -17,7 +17,7 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 
 ![The same page on a phone](images/encyclopedia-phone.jpg)
 
-- Page text is Markdown. In Write mode there are buttons for a **GM secret** and a **Table**.
+- Page text is Markdown with wiki extras: info boxes, read-aloud boxes, columns, pages shown inside pages, styled words and HTML. In Write mode the **Insert** and **Style** menus add them and a preview shows the page beside the text. Everything you can type is in [Writing wiki pages](Writing-Wiki-Pages).
 - Wrap GM-only text in a secret block (players never receive it):
 
   ```

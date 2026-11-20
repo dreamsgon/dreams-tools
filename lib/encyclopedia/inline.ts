@@ -36,6 +36,10 @@ export function playerInline(text: string) {
 export function plainExcerpt(text: string, max = 220) {
   const out = text
     .replace(/^[ \t]*:::[ \t]*secret[\s\S]*?^[ \t]*:::[ \t]*$/gim, '')
+    // Wiki extras (lib/encyclopedia/markup.ts): GM asides and rows, box lines, footnotes, styled words, embeds.
+    .replace(/%%[^%\n]*%%/g, '').replace(/^[ \t]*\(gm\).*$/gim, '').replace(/^[ \t]*:::.*$/gm, '').replace(/^\+{3,}[ \t]*$/gm, '')
+    .replace(/^\[\^[\w-]+\]:.*$/gm, '').replace(/\[\^[\w-]+\]/g, '').replace(/^!\[\[/gm, '[[')
+    .replace(/\[((?:\[\[[^\]\n]+\]\]|[^\]\n])+)\]\{[^}\n]*\}/g, '$1').replace(/\[([^\]\n]+)\]\(https?:[^)\s]*\)/g, '$1').replace(/==|~~/g, '')
     .replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g, (_, target: string, label?: string) => label?.trim() || (target.startsWith('maptable:') ? 'Battle map' : tableTarget(target)?.name ?? target))
     .replace(NOTE, (_, word: string) => word)
     .replace(/^[ \t]*- \[[ xX]\] /gm, '').replace(/^#+ /gm, '').replace(/[*`>]/g, '')
