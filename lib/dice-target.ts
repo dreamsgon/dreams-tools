@@ -6,7 +6,9 @@ export type DiceDiscord =
   | { mode: "maptable"; maptableCampaignId: string; label: string }
   /** A signed-in member on a player page: rolled on the server, sent through /api/encyclopedia/player-dice. */
   | { mode: "member"; ref: string; campaignId: string; label: string };
-export type DiceTarget = { discord: DiceDiscord | null; note: string };
+/** The campaign the AI button beside the dice talks to. `here`: the page has its own AI panel, which the button opens. */
+export type AiTarget = { campaignId?: string; maptableCampaignId?: string; here?: boolean };
+export type DiceTarget = { discord: DiceDiscord | null; note: string; ai?: AiTarget };
 
 /** What a roll remembers about where it may go: the mode and the campaign it was made for. Never the member's ref. */
 export type DiceVia = { mode: DiceDiscord["mode"]; id: string; label: string };
@@ -20,6 +22,10 @@ export const NO_CAMPAIGN: DiceTarget = { discord: null, note: LOCAL_ONLY };
 
 /** The Encyclopedia: the open campaign, when it has a Discord choice or a paired Maptable campaign. A co-GM posts nothing (the route reads only the owner's own data). */
 export function encyclopediaDiceTarget(campaign: { id: string; name: string; discord?: unknown; maptableCampaignId?: string | null } | null | undefined, coGm: boolean): DiceTarget {
+  const target = encyclopediaDice(campaign, coGm);
+  return campaign && !coGm ? { ...target, ai: { campaignId: campaign.id, here: true } } : target;
+}
+function encyclopediaDice(campaign: { id: string; name: string; discord?: unknown; maptableCampaignId?: string | null } | null | undefined, coGm: boolean): DiceTarget {
   if (!campaign) return { discord: null, note: "Rolls here stay on this device. Open a campaign to post them to Discord." };
   if (coGm) return { discord: null, note: "Rolls here stay on this device. Only the GM posts rolls to Discord." };
   if (!campaign.discord && !campaign.maptableCampaignId) return { discord: null, note: "Rolls here stay on this device. Choose a Discord channel for this campaign (AI & GitHub) to post them." };
@@ -29,8 +35,8 @@ export function encyclopediaDiceTarget(campaign: { id: string; name: string; dis
 /** A campaign's page in the Campaigns hub. Notes first (their Discord choice applies), else the Maptable campaign. */
 export function hubDiceTarget(row: { name: string; encyclopedia: { id: string } | null; maptable: { id: string } | null } | null | undefined): DiceTarget {
   if (!row) return NO_CAMPAIGN;
-  if (row.encyclopedia) return { discord: { mode: "encyclopedia", campaignId: row.encyclopedia.id, label: row.name }, note: "" };
-  if (row.maptable) return { discord: { mode: "maptable", maptableCampaignId: row.maptable.id, label: row.name }, note: "" };
+  if (row.encyclopedia) return { discord: { mode: "encyclopedia", campaignId: row.encyclopedia.id, label: row.name }, note: "", ai: { campaignId: row.encyclopedia.id } };
+  if (row.maptable) return { discord: { mode: "maptable", maptableCampaignId: row.maptable.id, label: row.name }, note: "", ai: { maptableCampaignId: row.maptable.id } };
   return NO_CAMPAIGN;
 }
 
@@ -47,7 +53,7 @@ let current: DiceTarget = NO_CAMPAIGN;
 const listeners = new Set<() => void>();
 function settle() {
   const next = registrations.length ? registrations[registrations.length - 1].target : NO_CAMPAIGN;
-  if (next.note === current.note && JSON.stringify(next.discord) === JSON.stringify(current.discord)) return;
+  if (next.note === current.note && JSON.stringify(next.discord) === JSON.stringify(current.discord) && JSON.stringify(next.ai) === JSON.stringify(current.ai)) return;
   current = next; listeners.forEach(l => l());
 }
 export const diceTargetStore = {

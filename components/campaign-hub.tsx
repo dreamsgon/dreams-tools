@@ -2,7 +2,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, Bot, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
@@ -25,6 +25,7 @@ import { BackupsButton } from "./rp-backups-button";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
 import { useDiceTarget } from "./use-dice-target";
+import { OPEN_CHAT_EVENT } from "@/lib/ai/chat-text";
 import { hubDiceTarget, NO_CAMPAIGN } from "@/lib/dice-target";
 import { campaignTitle } from "@/lib/page-title";
 import { hubLinks } from "@/lib/campaign-hub-links";
@@ -323,7 +324,7 @@ function ChooseList({ kind, hub, draft, setDraft }: { kind: PickWidget; hub: Cam
 
 const icons: Record<DashWidget, typeof Flag> = {
   next: CalendarDays, quests: Flag, board: LayoutDashboard, scenes: MapIcon, initiative: Swords, party: User, companions: Handshake, factions: Shield, recent: FileText,
-  codex: BookMarked, threads: Check, date: CalendarDays, recap: ScrollText, roll: Dices, notes: Pencil, links: Link2,
+  codex: BookMarked, threads: Check, date: CalendarDays, recap: ScrollText, roll: Dices, ai: Bot, notes: Pencil, links: Link2,
 };
 
 function Head({ title, children }: { title: string; children?: ReactNode }) {
@@ -400,9 +401,39 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
     case "recap": return <>{head(hub.lastSession && <a href={L.entry(hub.lastSession.id)}>Open</a>)}
       {hub.lastSession ? <><strong className="hub-recap-title">{hub.lastSession.title}</strong><p className="hub-muted">{hub.lastSession.excerpt || "This session page is empty."}</p></>
         : <p className="hub-muted">No session pages yet. Session pages you write in the Wiki show up here.</p>}</>;
+    case "ai": return <>{head()}<AiWidget campaignId={e?.id} maptableCampaignId={e ? undefined : m?.id} bare={bare} /></>;
     case "notes": return <Notes layout={layout} save={save} head={head} />;
     case "links": return <Links layout={layout} save={save} head={head} />;
   }
+}
+
+type AiState = { paused: boolean; waiting?: unknown[]; entries: { id: string; at: string; summary: string; connection: string; undone?: string }[]; connected: string[]; hasConnections: boolean; chat?: { id: string; name: string }[] };
+/** The AI connection widget: who is connected, what they did lately, and Ask, which opens the AI panel on this page. */
+function AiWidget({ campaignId, maptableCampaignId, bare }: { campaignId?: string; maptableCampaignId?: string; bare?: boolean }) {
+  const [state, setState] = useState<AiState | null | "error">(null);
+  useEffect(() => {
+    if (bare || (!campaignId && !maptableCampaignId)) return;
+    let live = true;
+    const q = new URLSearchParams(campaignId ? { campaignId } : { maptableCampaignId: maptableCampaignId! });
+    fetch(`/api/encyclopedia/ai-activity?${q}`, { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject()).then(s => { if (live) setState(s as AiState); }).catch(() => { if (live) setState("error"); });
+    return () => { live = false; };
+  }, [campaignId, maptableCampaignId, bare]);
+  const connect = campaignId ? `/encyclopedia?campaign=${encodeURIComponent(campaignId)}&ai=connect` : null;
+  const open = () => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT));
+  if (bare) return <p className="hub-muted">Who is connected, what the AI did lately, and Ask, which opens the chat here.</p>;
+  if (state === null) return <p className="hub-muted">Loading…</p>;
+  if (state === "error") return <p className="hub-muted">Couldn’t load the AI connection.</p>;
+  if (!state.hasConnections) return <div className="hub-ai"><p className="hub-muted">No AI is connected yet. Connect Claude, ChatGPT or another AI app, or add an API key, to ask it about this campaign from any page.</p>{connect && <a className="hub-button" href={connect}><Sparkles size={14} aria-hidden="true" />Connect an AI</a>}</div>;
+  const waiting = state.waiting?.length ?? 0, chat = state.chat?.[0];
+  return <div className="hub-ai">
+    <p className="hub-ai-status"><span className={`hub-ai-dot${state.paused ? " paused" : state.connected.length ? " live" : ""}`} aria-hidden="true" />{state.paused ? "Paused: it can read, but changes wait until you resume." : state.connected.length ? `Connected now: ${state.connected.join(", ")}` : chat ? `${state.chat!.map(c => c.name).join(", ")} ready to ask` : "Not connected right now"}</p>
+    <div className="hub-ai-actions">
+      {chat && <button className="hub-button hub-button-primary" onClick={open}><Bot size={14} aria-hidden="true" />Ask {chat.name}</button>}
+      <button className="hub-button" onClick={open}>{waiting ? `${waiting} waiting for your OK` : "Activity"}</button>
+    </div>
+    {state.entries.length > 0 && <ul className="hub-list">{state.entries.slice(0, 3).map(x => <li key={x.id}><span><strong>{x.summary}</strong><small>{x.connection}{x.undone ? " · undone" : ""}</small></span><time dateTime={x.at}>{when(x.at)}</time></li>)}</ul>}
+    {connect && <a className="hub-ai-settings" href={connect}>What it may do</a>}
+  </div>;
 }
 
 const roleNames: Record<string, string> = { pc: "Player character", companion: "Companion", npc: "NPC", creature: "Creature" };

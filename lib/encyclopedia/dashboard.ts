@@ -7,7 +7,7 @@ import { z } from "zod";
  * Players never see the dashboard.
  */
 
-export const dashWidgets = ["next", "quests", "board", "scenes", "initiative", "party", "companions", "factions", "recent", "codex", "threads", "date", "recap", "roll", "notes", "links"] as const;
+export const dashWidgets = ["next", "quests", "board", "scenes", "initiative", "party", "companions", "factions", "recent", "codex", "threads", "date", "recap", "roll", "ai", "notes", "links"] as const;
 export type DashWidget = typeof dashWidgets[number];
 export const dashSizes = ["s", "m", "l"] as const;
 export type DashSize = typeof dashSizes[number];
@@ -36,6 +36,7 @@ export const dashInfo: Record<DashWidget, { name: string; hint: string; size: Da
   date: { name: "In the game", hint: "Today in a campaign calendar", size: "s", tool: "notes" },
   recap: { name: "Last session", hint: "The newest session page", size: "m", tool: "notes" },
   roll: { name: "Quick roll", hint: "Dice and this campaign's tables", size: "s" },
+  ai: { name: "AI connection", hint: "Ask your AI, and see what it did", size: "s" },
   notes: { name: "GM notes", hint: "A scratchpad only you see", size: "s" },
   links: { name: "Links", hint: "Character sheets, music, VTT", size: "s" },
 };

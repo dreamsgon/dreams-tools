@@ -242,3 +242,9 @@
 .ai-chat-export button{white-space:normal}
 .ai-chat-export span{flex:1;min-width:0;text-align:left}
 .ai-chat-open{text-align:left}
+
+/* The AI panel with nothing connected yet (opened from the AI button beside the dice). */
+.ai-panel-none .ai-panel-head h2{flex:1}
+.ai-panel-none .ai-panel-foot{display:flex}
+.ai-connect-link{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:var(--on-accent,#fff);font:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
+.ai-connect-link:hover{filter:brightness(1.08)}

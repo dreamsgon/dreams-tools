@@ -10,7 +10,7 @@ import { withoutDeletedStats } from "@/lib/encyclopedia/stat-arrange";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
-import { Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Pencil, Globe, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette, Sparkles } from "lucide-react";
+import { Bot, Network, Ship, Store, Hexagon, Orbit, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, BookOpen, Compass, Plus, Search, ChevronRight, ChevronDown, Folder, FileText, MapPin, Users, Flag, ScrollText, ListChecks, Check, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Pencil, Globe, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette, Sparkles } from "lucide-react";
 import type { CampaignRow } from "@/lib/campaign-links";
 import { emptyWorkspace, demoWorkspace, newId, workspaceSchema, campaignExport, importCopy, resolveLink, visibleEntries, linkedLoreWorldIds, setWorldLink, defaultCharacter, playerCampaign, searchableText, compareEntries, reorderEntry, folderPath, type Workspace, type Entry } from "@/lib/encyclopedia/world-model";
 import { descendantCount, dropProblem, movePage, type DropPlace } from "@/lib/encyclopedia/page-tree";
@@ -40,6 +40,7 @@ import {placeFromQuery,placeQuery,isNewPlace,defaultTab,themeCampaignId,type Pla
 import {encyclopediaTitle} from "@/lib/page-title";
 import {usePageTitle} from "../use-page-title";
 import {useDiceTarget} from "../use-dice-target";
+import {OPEN_CHAT_EVENT} from "@/lib/ai/chat-text";
 import {encyclopediaDiceTarget,NO_CAMPAIGN} from "@/lib/dice-target";
 import { confirmDialog } from "../confirm-dialog";
 import {pageFromTemplate,type FieldValue} from "@/lib/encyclopedia/templates";
@@ -180,6 +181,8 @@ export default function WorkspaceApp() {
         // ?styles=story (from the Campaigns page's The story so far) opens How the AI writes.
         const styles = query.get("styles");
         if (styles) setWriting([...writingKinds, "chat", "extract"].includes(styles) ? styles as WritingKind | "chat" | "extract" : "recap");
+        // ?ai=connect (from the dashboard's AI widget and the AI button on other pages) opens Connect an AI.
+        if (query.get("ai") === "connect") setAiOpen(true);
         // A co-GM opens the one campaign they were let into.
         const shared = body.member ? checked.campaigns.find(c => c.id === body.member!.campaignId) : undefined;
         if (body.member && shared) {
@@ -441,6 +444,7 @@ export default function WorkspaceApp() {
         { id: "dice", label: "Dice", icon: <Dices size={18}/>, onSelect: later(() => openDiceTray("dice")) },
         { id: "log", label: "Roll log", icon: <ScrollText size={18}/>, onSelect: later(() => openDiceTray("log")) },
         ...(campaign ? [
+          { id: "askai", label: "Ask AI", icon: <Bot size={18}/>, onSelect: later(() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT))) },
           { id: "form", label: "Stat form", icon: <ListChecks size={18}/>, onSelect: () => setTool("form") },
           { id: "items", label: "Items and spells", icon: <Backpack size={18}/>, onSelect: () => setTool("items") },
           { id: "share", label: "Player view", icon: <Users size={18}/>, onSelect: () => setTool("share") },
