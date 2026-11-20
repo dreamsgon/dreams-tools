@@ -1,0 +1,114 @@
+/* The Wiki's front page (campaign-home.tsx). Colours, fonts and corners come from the app's tokens, so a campaign theme restyles it too. */
+.campaign-home { max-width: 1240px; }
+
+/* The hero. Without a picture it keeps the plain heading (or a theme's own art); with one, the picture fills it. */
+.home-hero-wrap { position: relative; margin-bottom: 22px; }
+.home-hero { align-items: flex-start; }
+.home-hero-text { min-width: 0; max-width: 62ch; }
+.home-hero .subtitle { margin: 6px 0 0; }
+.home-hero-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.hero-banner-button { display: inline-flex; align-items: center; gap: 7px; width: auto !important; padding: 0 12px !important; height: 36px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.home-hero-actions .hero-action { min-height: 36px; min-width: 36px; }
+
+.dashboard-intro.home-hero.has-picture {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) auto; align-items: end !important; gap: 16px;
+  min-height: 280px; padding: 28px 32px !important; margin: 0 !important;
+  border-radius: var(--radius-lg, 8px); overflow: hidden; background-color: #16161a; background-repeat: no-repeat;
+  color: #fff !important; border: 0 !important;
+}
+/* A theme's drawn art (its ::before and ::after) gives way to the picture. */
+.dashboard-intro.home-hero.has-picture::before, .dashboard-intro.home-hero.has-picture::after { display: none !important; }
+.home-hero.has-picture .home-hero-actions { align-self: start; }
+.home-hero.has-picture h1 { color: #fff !important; text-shadow: 0 2px 18px rgb(0 0 0 / .45) !important; margin: 6px 0 0; }
+.home-hero.has-picture .eyebrow, .home-hero.has-picture .subtitle, .home-hero.has-picture .linked-worlds { color: rgb(255 255 255 / .86) !important; text-shadow: 0 1px 8px rgb(0 0 0 / .5) !important; }
+.home-hero.has-picture .linked-worlds .chip { color: #fff; border-color: rgb(255 255 255 / .35); }
+.home-hero.has-picture .hero-action { background: rgb(10 10 12 / .5) !important; color: #fff !important; border: 1px solid rgb(255 255 255 / .28) !important; backdrop-filter: blur(6px); }
+.home-hero.has-picture .hero-action:hover { background: rgb(10 10 12 / .7) !important; }
+.home-hero.is-dropping { outline: 2px dashed var(--accent); outline-offset: 4px; }
+.home-hero-drop { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--ink); font-weight: 600; pointer-events: none; z-index: 5; }
+
+/* The Banner popover: below the hero's buttons, outside the hero so a theme's clipping never cuts it off. */
+.home-banner-pop { position: absolute; z-index: 25; top: 78px; right: 12px; width: 360px; max-width: calc(100% - 24px); display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: 0 14px 36px var(--shadow-color, rgb(0 0 0 / .25)); }
+.home-banner-pick { position: relative; display: block; width: 100%; height: 110px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised) center / cover no-repeat; cursor: crosshair; overflow: hidden; }
+.home-banner-line { position: absolute; left: 0; right: 0; border-top: 2px dashed #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .35); pointer-events: none; }
+.home-banner-empty { width: 100%; background: none; cursor: pointer; }
+.home-banner-empty small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; }
+.home-pop-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.home-pop-foot { display: grid; justify-items: start; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.home-pop-foot .text-button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.home-banner-pop .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The shelf: one strip into the main sections, each with what's in it. */
+.home-shelf { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 34px; border: 1px solid var(--line); border-radius: var(--radius-lg, 8px); background: var(--panel); overflow: hidden; }
+.home-shelf-item { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; border: 0; border-left: 1px solid var(--line); background: none; color: var(--ink); text-align: left; }
+.home-shelf-item:first-child { border-left: 0; }
+.home-shelf-item > svg:first-child { color: var(--accent); flex-shrink: 0; }
+.home-shelf-item:hover { background: var(--hover); }
+.home-shelf-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.home-shelf-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.home-shelf-label { font-weight: 600; font-size: 14px; }
+.home-shelf-text small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-shelf-go { color: var(--muted); flex-shrink: 0; }
+
+/* Two columns: what changed lately, then quests and lore beside it. */
+.home-columns { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(260px, 1fr); gap: 44px; align-items: start; }
+.home-heading { margin-bottom: 10px !important; align-items: center !important; }
+.home-heading .button.small { display: inline-flex; align-items: center; gap: 5px; }
+.home-heading .text-button { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+.home-side { display: grid; gap: 34px; }
+
+.home-recent, .home-quests, .home-lore { list-style: none; margin: 0; padding: 0; }
+.home-recent li + li, .home-quests li + li, .home-lore li + li { border-top: 1px solid var(--line); }
+.home-recent button, .home-quests button, .home-lore button { width: 100%; border: 0; background: none; color: var(--ink); text-align: left; border-radius: var(--radius); }
+.home-recent button:hover, .home-quests button:hover, .home-lore button:hover { background: var(--hover); }
+.home-recent button:focus-visible, .home-quests button:focus-visible, .home-lore button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.home-recent button { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 8px; }
+.home-recent .entry-icon { margin-top: 1px; }
+.home-recent-text { display: grid; gap: 3px; min-width: 0; }
+.home-recent-text strong { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-recent-meta { font-size: 12px; color: var(--muted); }
+.home-recent-excerpt { font-size: 13px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.home-go { color: var(--muted); align-self: center; }
+
+.home-quests button { display: grid; gap: 5px; padding: 12px 8px; }
+.home-quests strong { font-size: 15px; font-weight: 600; }
+.home-quest-step { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.home-quest-progress { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-meter { flex: 0 0 72px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.home-meter i { display: block; height: 100%; background: var(--accent); }
+.home-more { margin-top: 8px; font-size: 13px; }
+
+.home-lore button { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 8px; }
+.home-lore button > svg:first-child { color: var(--muted); }
+.home-lore span { display: grid; gap: 2px; font-size: 14px; font-weight: 500; min-width: 0; }
+.home-lore small { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+.home-empty { padding: 22px 20px; border: 1px dashed var(--line-strong, var(--line)); border-radius: var(--radius-lg, 8px); }
+.home-empty p { margin: 0 0 14px; color: var(--muted); line-height: 1.55; }
+.home-empty strong { color: var(--ink); }
+.home-starters { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-starters .button { display: inline-flex; align-items: center; gap: 6px; }
+.home-quiet { margin: 0; padding: 4px 8px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.home-quiet .text-button { font-size: 13px; }
+
+@media (max-width: 1100px) {
+  .home-columns { grid-template-columns: 1fr; gap: 34px; }
+  .home-side { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+}
+@media (max-width: 860px) {
+  .home-shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-shelf-item:nth-child(3) { border-left: 0; }
+  .home-shelf-item:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 720px) {
+  .dashboard-intro.home-hero.has-picture { min-height: 220px; padding: 18px !important; gap: 10px; }
+  .home-hero.has-picture h1 { font-size: 28px; }
+  .hero-banner-button span { display: none; }
+  .hero-banner-button { padding: 0 !important; width: 44px !important; height: 44px; justify-content: center; }
+  .home-hero-actions .hero-action { min-height: 44px; min-width: 44px; }
+  .home-side { grid-template-columns: 1fr; }
+  .home-shelf-item { min-height: 58px; padding: 10px 12px; gap: 10px; }
+  .home-recent button { grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; padding: 12px 4px; }
+  .home-recent-excerpt { display: none; }
+  .home-banner-pop { right: 0; top: 64px; }
+}

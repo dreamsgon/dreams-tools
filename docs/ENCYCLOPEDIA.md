@@ -20,6 +20,8 @@ Page text is Markdown with wiki syntax, read by `lib/encyclopedia/markup.ts` and
 
 Pictures in page text are `![[picture:<image id>|Caption|left|small]]` lines, uploaded to the GM's map-image storage like any picture. Who may fetch one follows the text: a player fetches it when it is in a page tab they receive (`playerImageOwnerOf` in `lib/encyclopedia/store.ts`, after secrets are taken out), a co-GM when it is anywhere in their campaign's text. New picture ids in a co-GM's save must be ones they uploaded (`images()` in `co-gm-edit.ts`); a player's save can't add new ones (`savePlayerEdit`).
 
+The campaign front page (`components/encyclopedia/campaign-home.tsx`) draws `campaign.look.banner` behind the campaign's name; the GM sets it there, in Look, or in the Admin CP's Banner tab, which saves through the forum's `banner` action into the Wiki workspace (revision-checked).
+
 A page's own look is optional `entry.pageLook` (`lib/encyclopedia/page-text.ts`): a banner (`imageId`, size and `y`), an icon from `PAGE_ICONS` (drawn by `components/encyclopedia/page-icons.tsx` in the sidebar, quick search and player list), `box: 'left'` for info boxes, `toc: false` to hide On this page, and `wide`. Players receive it without `toc`; its banner can be fetched like the page's pictures.
 
 ## Character trackers

@@ -1591,3 +1591,25 @@ test('request: a campaign without a forum still has themes, from any part of it'
   assert.equal((await player.post({ action: 'liveTheme', campaign: KEY, id: null })).status, 403, 'players still can’t change it');
   assert.equal((await (await gm.post({ action: 'themes', campaign: KEY })).json()).themes.saved.length, 1);
 });
+
+test('request: the GM sets the campaign banner from the Admin CP, from any part of the campaign', async () => {
+  const gm = harness({ user: OWNER, forum: false }), player = harness({ user: 'p1', forum: false });
+  let look, staged = [];
+  const setLook = async (owner, campaignId, edit) => { assert.deepEqual([owner, campaignId], [OWNER, 'camp']); look = edit(look); return look; };
+  for (const h of [gm, player]) Object.assign(h.deps, { setLook, savePicture: async (owner, uploader, transferId) => { staged.push([owner, uploader, transferId]); return 'banner1'; } });
+  gm.deps.workspace = player.deps.workspace = async () => ({ ...workspace, campaigns: workspace.campaigns.map(c => c.id === 'camp' ? { ...c, look, maptableCampaignId: 'maps1' } : c) });
+  const banner = body => gm.post({ action: 'banner', campaign: KEY, ...body });
+  // Nothing to move before there's a picture.
+  assert.equal((await banner({ y: .3 })).status, 400);
+  const added = await (await banner({ picture: { transferId: 'tr1', width: 1600, height: 400 }, y: .4 })).json();
+  assert.deepEqual(added.banner, { imageId: 'banner1', width: 1600, height: 400, y: .4 });
+  assert.deepEqual(staged, [[OWNER, OWNER, 'tr1']], 'stored with the GM’s pictures');
+  // The Admin CP reads it with the themes; from Maptable too, through the paired campaign.
+  assert.equal((await (await gm.post({ action: 'themes', campaign: KEY })).json()).banner.imageId, 'banner1');
+  assert.equal((await (await gm.post({ action: 'banner', campaign: 'mt-maps1', y: .8 })).json()).banner.y, .8);
+  // Players can't; a picture and a remove at once is refused.
+  assert.equal((await player.post({ action: 'banner', campaign: KEY, remove: true })).status, 403);
+  assert.equal((await banner({ remove: true, y: .2 })).status, 400);
+  assert.equal((await (await banner({ remove: true })).json()).banner, null);
+  assert.equal(look, undefined, 'an empty look is left out');
+});

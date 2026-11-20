@@ -33,6 +33,19 @@ const deps = (): Deps => {
     workspace: async owner => (await new EncyclopediaStore(bucket).read(owner)).data,
     store: new ForumStore(bucket),
     themes: new ThemeStore(bucket),
+    // The Admin CP's banner picture: the campaign's look in the GM's Wiki, saved with its revision check.
+    setLook: async (owner, campaignId, edit) => {
+      const wiki = new EncyclopediaStore(bucket);
+      for (let tries = 0; tries < 4; tries++) {
+        const { data, revision } = await wiki.read(owner), campaign = data.campaigns.find(c => c.id === campaignId);
+        if (!campaign) throw new Error('That campaign isn’t in the Wiki any more.');
+        const look = edit(campaign.look);
+        if (look === campaign.look) return look;
+        const next = { ...data, campaigns: data.campaigns.map(c => c.id === campaignId ? { ...c, look } : c) };
+        if (await wiki.saveTagged(owner, next, revision)) return look;
+      }
+      throw new Error('The Wiki was changing at the same moment. Try again.');
+    },
     image: readMapImage,
     savePicture: saveStagedImage,
     ai: forumAi(bucket),

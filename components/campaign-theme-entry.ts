@@ -22,3 +22,7 @@ export function offerCampaignTheme(): () => void {
 export function useCampaignThemeOffered() {
   return useSyncExternalStore(l => { listeners.add(l); return () => { listeners.delete(l); }; }, () => offers > 0, () => false);
 }
+
+/** The campaign's banner picture changed from the Admin CP: the page beside it reads the campaign's look again. */
+export const BANNER_CHANGED = 'campaign:banner-changed';
+export const bannerChanged = () => window.dispatchEvent(new Event(BANNER_CHANGED));

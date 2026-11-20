@@ -25,6 +25,7 @@ import { freshReads, markAll, markTopic } from "./reader.ts";
 import { isSolo, soloCharacters } from "../solo.ts";
 import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea } from "../campaign-theme/model.ts";
 import type { ThemeStore } from "../campaign-theme/store.ts";
+import type { Look } from "../encyclopedia/look.ts";
 
 /** The made-up member a solo player's view is worked out for: one of the built-in Players group. */
 const SOLO_PLAYER = "solo-player";
@@ -62,6 +63,11 @@ export type Deps = {
    * anything over `maxBytes` or that isn't a PNG, JPEG or WebP. Returns its id.
    */
   savePicture?: (owner: string, uploader: string, transferId: string, maxBytes: number) => Promise<string>;
+  /**
+   * Changes the campaign's look (its banner picture) in the owner's Wiki: `edit` gets the look as saved now and returns
+   * the new one. Saved with the Wiki's revision check, trying again when it changed in the same moment. The new look.
+   */
+  setLook?: (owner: string, campaignId: string, edit: (look: Look | undefined) => Look | undefined) => Promise<Look | undefined>;
   /** A signed address for one of the owner's pictures. */
   image?: (owner: string, imageId: string) => Promise<{ url: string } | null>;
   now?: () => Date;
@@ -146,6 +152,46 @@ const themeBodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("liveTheme"), campaign: partKey, id: z.string().max(40).nullable() }),
   z.object({ action: z.literal("deleteTheme"), campaign: partKey, id: z.string().max(40) }),
 ]);
+/**
+ * The campaign's banner picture from the Admin CP, wherever it's open: a new picture someone staged (/api/transfers),
+ * where it's kept in view when cropped (`y`), or none. The banner is the campaign's look in the Wiki (Look, and the
+ * Wiki's front page), so it shows there, on the dashboard, the player site and the forum. For the GM, who owns the look.
+ */
+const bannerSchema = z.object({
+  action: z.literal("banner"), campaign: partKey,
+  picture: z.object({ transferId: z.string().min(1).max(200), width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000) }).optional(),
+  y: z.number().min(0).max(1).optional(),
+  remove: z.literal(true).optional(),
+}).refine(b => [b.picture, b.y, b.remove].filter(v => v !== undefined).length >= 1 && !(b.remove && (b.picture || b.y !== undefined)), { message: "Send a picture, a position or remove." });
+async function bannerOf(deps: Deps, body: z.infer<typeof bannerSchema>) {
+  const userId = await deps.user();
+  if (!userId) return json({ error: signIn }, 401);
+  if (writeThrottle.hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
+  const key = await pairedKey(deps, userId, body.campaign);
+  if (!key) return json({ error: "This Maptable campaign isn't paired with a Wiki campaign yet. Pair them from its dashboard first.", code: "unpaired" }, 404);
+  const found = await deps.campaign(userId, key);
+  if (!found) return json({ error: notMember }, 404);
+  if (!forumRights(found.list, userId, found.owner).owner) return json({ error: "Only the GM can change the campaign's banner." }, 403);
+  if (!deps.setLook) return json({ error: "The banner can't be changed here right now." }, 404);
+  let picture: NonNullable<Look["banner"]> | undefined;
+  if (body.picture) {
+    if (!deps.savePicture) return json({ error: "Pictures can't be added right now." }, 404);
+    try { picture = { imageId: await deps.savePicture(found.owner, userId, body.picture.transferId, PICTURE_BYTES), width: body.picture.width, height: body.picture.height, y: body.y ?? .5 }; }
+    catch (e) { return json({ error: e instanceof Error && e.message ? e.message : "That picture couldn't be added." }, 400); }
+  }
+  let missing = false;
+  const look = await deps.setLook(found.owner, found.campaignId, now => {
+    const next: Look = { ...now };
+    if (body.remove) delete next.banner;
+    else if (picture) next.banner = picture;
+    else if (now?.banner && body.y !== undefined) next.banner = { ...now.banner, y: body.y };
+    else { missing = true; return now; }
+    return Object.keys(next).length ? next : undefined;
+  });
+  if (missing) return json({ error: "The campaign has no banner picture to move. Add one first." }, 400);
+  return json({ ok: true, banner: look?.banner ?? null });
+}
+
 async function themesOf(deps: Deps, body: z.infer<typeof themeBodySchema>, now: Date) {
   const userId = await deps.user();
   if (!userId) return json({ error: signIn }, 401);
@@ -161,7 +207,7 @@ async function themesOf(deps: Deps, body: z.infer<typeof themeBodySchema>, now: 
   if (!deps.themes) return json({ error: "Themes aren't available on this site." }, 404);
   if (body.action === "themes") {
     const { file } = await deps.themes.read(found.owner, found.campaignId);
-    return json({ themes: { live: file?.live ?? null, saved: file?.saved ?? [] }, where: { key, campaignId: found.campaignId, maptableId: campaign.maptableCampaignId ?? null, owner: rights.owner } });
+    return json({ themes: { live: file?.live ?? null, saved: file?.saved ?? [] }, where: { key, campaignId: found.campaignId, maptableId: campaign.maptableCampaignId ?? null, owner: rights.owner }, banner: campaign.look?.banner ?? null });
   }
   const file = await deps.themes.update(found.owner, found.campaignId, f =>
     body.action === "saveTheme" ? saveTheme(f, body.theme, { live: body.live, now }) : body.action === "liveTheme" ? makeLive(f, body.id) : deleteTheme(f, body.id));
@@ -570,6 +616,7 @@ export async function handleForum(request: Request, deps: Deps) {
     const raw: unknown = JSON.parse(text);
     const action = typeof raw === "object" && raw !== null ? (raw as { action?: unknown }).action : undefined;
     if (action === "skin") return await skinOf(deps, skinSchema.parse(raw));
+    if (action === "banner") return await bannerOf(deps, bannerSchema.parse(raw));
     if (typeof action === "string" && THEME_ACTIONS.has(action)) return await themesOf(deps, themeBodySchema.parse(raw), deps.now?.() ?? new Date());
     const body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
     // The player view of a campaign's owner (contextOf): a solo campaign's, or any other's read-only preview. Ignored for anyone else.
