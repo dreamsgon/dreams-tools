@@ -36,8 +36,9 @@ export const isNewFind = (found: { at: string } | undefined, now = Date.now()) =
 type CodexEntry = { id: string; worldId: string; campaignId: string | null; title: string; codex?: Codex };
 
 /** Codex entries a campaign can see (its own and shared lore). */
-export function codexIn<E extends CodexEntry>(entries: E[], worldId: string, campaignId: string) {
-  return entries.filter(e => e.codex && e.worldId === worldId && (e.campaignId === null || e.campaignId === campaignId))
+export function codexIn<E extends CodexEntry>(entries: E[], worldId: string, campaignId: string, worldIds: readonly string[] = [worldId]) {
+  // `worldIds` adds the worlds the campaign is linked to (campaignLoreWorldIds); only their shared lore counts.
+  return entries.filter(e => e.codex && (e.worldId === worldId ? (e.campaignId === null || e.campaignId === campaignId) : e.campaignId === null && worldIds.includes(e.worldId)) && (e.campaignId === null || e.campaignId === campaignId))
     .sort((a, b) => a.title.localeCompare(b.title)) as (E & { codex: Codex })[];
 }
 

@@ -134,7 +134,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): coins, weight, item categories, what spells are called and what players may change (items.ts).
   items:itemSettingsSchema.optional(),
   // Optional (added later): the GM's Encyclopedia sidebar for this campaign: menu order, quick links and their own categories (sidebar.ts).
-  sidebar:sidebarSchema.optional() });
+  sidebar:sidebarSchema.optional(),
+  // Optional (added later): other worlds whose shared lore this campaign's Wiki also shows, live (see campaignLoreWorldIds). Nothing is copied.
+  linkedWorldIds:z.array(id).max(12).optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)
@@ -192,6 +194,9 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
     for (const c of s.campaigns)
         if (!worlds.has(c.worldId))
             bad("Campaign world is missing");
+    for (const c of s.campaigns)
+        if (c.linkedWorldIds && (new Set(c.linkedWorldIds).size !== c.linkedWorldIds.length || c.linkedWorldIds.includes(c.worldId)))
+            bad("Linked worlds must be different from each other and from the campaign's own world");
     const paired=s.campaigns.flatMap(c=>c.maptableCampaignId?[c.maptableCampaignId]:[]);if(new Set(paired).size!==paired.length)bad("A Maptable campaign can be paired with only one Wiki campaign");
     for(const c of s.campaigns){if(new Set((c.calendars??[]).map(x=>x.id)).size!==(c.calendars??[]).length)bad("Calendar IDs must be unique within a campaign");if(new Set((c.statFields??[]).map(f=>f.id)).size!==(c.statFields??[]).length)bad("Stat field IDs must be unique within a campaign");}
     for (const e of s.entries) {
@@ -283,12 +288,48 @@ export type Campaign = z.infer<typeof campaignSchema>;
 export type World = z.infer<typeof worldSchema>;
 export const emptyWorkspace = (): Workspace => ({ schemaVersion: 1, worlds: [], campaigns: [], entries: [] });
 export const newId = () => crypto.randomUUID();
-export const visibleEntries = (s: Workspace, worldId: string, campaignId: string | null) => s.entries.filter(e => e.worldId === worldId && (e.campaignId === null || e.campaignId === campaignId));
-export function campaignExport(s: Workspace, campaignId: string): Workspace {
+export const MAX_LINKED_WORLDS = 12;
+/**
+ * The worlds whose lore (pages with no campaign) a campaign shows: its own world first, then the worlds it is linked to.
+ * A link to a world that is gone, archived or a template, to the campaign's own world, or a repeat is ignored, so a stale id never shows anything.
+ */
+export function campaignLoreWorldIds(s: Pick<Workspace, "worlds">, campaign: Pick<Campaign, "worldId" | "linkedWorldIds">): string[] {
+    const usable = new Set(s.worlds.filter(w => !w.archived && !w.isTemplate).map(w => w.id));
+    const out = [campaign.worldId];
+    for (const id of campaign.linkedWorldIds ?? []) if (usable.has(id) && !out.includes(id) && out.length <= MAX_LINKED_WORLDS) out.push(id);
+    return out;
+}
+/** Just the linked worlds (not the campaign's own). */
+export const linkedLoreWorldIds = (s: Pick<Workspace, "worlds">, campaign: Pick<Campaign, "worldId" | "linkedWorldIds">) => campaignLoreWorldIds(s, campaign).slice(1);
+/** Pages a campaign sees: its own world's lore and its own pages, plus linked worlds' lore. With no campaign (a world's own view) only that world's lore. */
+export const visibleEntries = (s: Workspace, worldId: string, campaignId: string | null) => {
+    const own = campaignId === null ? undefined : s.campaigns.find(c => c.id === campaignId);
+    const linked = own && own.worldId === worldId && own.linkedWorldIds?.length ? new Set(linkedLoreWorldIds(s, own)) : null;
+    return s.entries.filter(e => (e.worldId === worldId && (e.campaignId === null || e.campaignId === campaignId)) || (!!linked && e.campaignId === null && linked.has(e.worldId)));
+};
+/** Worlds and links after a world is removed: no campaign keeps a link to it. */
+export const withoutWorldLinks = (s: Workspace, worldId: string): Workspace => s.campaigns.some(c => c.linkedWorldIds?.includes(worldId))
+    ? { ...s, campaigns: s.campaigns.map(c => { if (!c.linkedWorldIds?.includes(worldId)) return c; const { linkedWorldIds, ...rest } = c; const left = linkedWorldIds.filter(x => x !== worldId); return left.length ? { ...rest, linkedWorldIds: left } : rest; }) }
+    : s;
+/** Turns one world's link to a campaign on or off. Not the campaign's own world; at most 12 links. */
+export function setWorldLink(s: Workspace, campaignId: string, worldId: string, on: boolean): Workspace {
+    return { ...s, campaigns: s.campaigns.map(c => {
+        if (c.id !== campaignId || c.worldId === worldId) return c;
+        const has = (c.linkedWorldIds ?? []).includes(worldId);
+        if (on === has || (on && (c.linkedWorldIds ?? []).length >= MAX_LINKED_WORLDS)) return c;
+        const { linkedWorldIds, ...rest } = c;
+        const next = on ? [...(linkedWorldIds ?? []), worldId] : (linkedWorldIds ?? []).filter(x => x !== worldId);
+        return next.length ? { ...rest, linkedWorldIds: next } : rest;
+    }) };
+}
+// `linked` also gives the lore of the worlds the campaign is linked to (own world first). Left out by default, so agents, backups and exports stay to the campaign's own world.
+export function campaignExport(s: Workspace, campaignId: string, opts: { linked?: boolean } = {}): Workspace {
     const c = s.campaigns.find(x => x.id === campaignId);
     if (!c)
         throw new Error("Campaign not found");
-    return workspaceSchema.parse({ schemaVersion: 1, worlds: s.worlds.filter(w => w.id === c.worldId), campaigns: [c], entries: visibleEntries(s, c.worldId, c.id).map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e).map(e=>e.codex?{...e,codex:{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).filter(([cid])=>cid===c.id))}}:e) });
+    const ids = opts.linked ? campaignLoreWorldIds(s, c) : [c.worldId];
+    const own = visibleEntries(s, c.worldId, c.id), pages = opts.linked ? own : own.filter(e => e.worldId === c.worldId);
+    return workspaceSchema.parse({ schemaVersion: 1, worlds: ids.map(id => s.worlds.find(w => w.id === id)!), campaigns: [c], entries: pages.map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e).map(e=>e.codex?{...e,codex:{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).filter(([cid])=>cid===c.id))}}:e) });
 }
 export function importCopy(current: Workspace, input: unknown): Workspace {
     const incoming = workspaceSchema.parse(input);
@@ -297,7 +338,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     const links=(body:string)=>body.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,(full,target,label)=>ids.has(target)?`[[${ref(target)}${label??""}]]`:full);
     return workspaceSchema.parse({ schemaVersion: 1,
         worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
-        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}), ...(c.sidebar ? { sidebar: remapSidebarPages(c.sidebar, ids) } : {}) }; delete copy.maptableCampaignId; delete copy.discord; return copy; })],
+        campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.linkedWorldIds?.some(w => ids.has(w)) ? { linkedWorldIds: c.linkedWorldIds.filter(w => ids.has(w)).map(ref) } : {}), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}), ...(c.sidebar ? { sidebar: remapSidebarPages(c.sidebar, ids) } : {}) }; delete copy.maptableCampaignId; delete copy.discord; if (!c.linkedWorldIds?.some(w => ids.has(w))) delete copy.linkedWorldIds; return copy; })],
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,...(e.mapData.zoomOf?{zoomOf:ids.has(e.mapData.zoomOf.mapId)?{...e.mapData.zoomOf,mapId:ref(e.mapData.zoomOf.mapId)}:undefined}:{}),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, store:e.store?remapStore(e.store,id=>ids.get(id)):undefined, sector:e.sector?{...e.sector,systems:e.sector.systems.map(x=>({...x,pageId:x.pageId?ids.get(x.pageId):undefined}))}:undefined, starSystem:e.starSystem?remapSystem(e.starSystem,id=>ids.get(id)):undefined, planet:e.planet?{...e.planet,systemPageId:ids.get(e.planet.systemPageId)??e.planet.systemPageId,worldMapId:e.planet.worldMapId?ids.get(e.planet.worldMapId):undefined}:undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }

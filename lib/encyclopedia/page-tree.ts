@@ -1,4 +1,4 @@
-import { compareEntries, resolveLink, type Entry, type Workspace } from "./world-model.ts";
+import { compareEntries, resolveLink, visibleEntries, type Entry, type Workspace } from "./world-model.ts";
 
 /**
  * Pages inside pages, links between them, and where a page is mentioned.
@@ -62,7 +62,7 @@ export function movePage(s: Workspace, id: string, targetId: string, place: Drop
 }
 
 /** Pages a link typed on `from` can point at: its own campaign and shared lore in the same world. */
-const linkable = (s: Workspace, from: Entry) => s.entries.filter(e => e.id !== from.id && e.worldId === from.worldId && (e.campaignId === null || e.campaignId === from.campaignId));
+const linkable = (s: Workspace, from: Entry) => visibleEntries(s, from.worldId, from.campaignId).filter(e => e.id !== from.id);
 
 /** Best matches for a [[ or @ link, with where each page sits. An empty query lists recently changed pages. */
 export function linkSuggestions(s: Workspace, from: Entry, query: string, limit = 6): { entry: Entry; path: string[] }[] {

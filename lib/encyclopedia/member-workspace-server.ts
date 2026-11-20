@@ -15,7 +15,7 @@ export const coGmGrant = (userId:string,ref:string) => memberRefPattern.test(ref
 export async function coGmWorkspace(grant:{owner:string;campaignId:string}) {
   const read = await new EncyclopediaStore(getBucket()).read(grant.owner);
   if (!read.data.campaigns.some(c=>c.id===grant.campaignId)) return null;
-  return { data:campaignExport(read.data,grant.campaignId), revision:read.revision, etag:read.etag };
+  return { data:campaignExport(read.data,grant.campaignId,{linked:true}), revision:read.revision, etag:read.etag };
 }
 /** Saves a co-GM's copy into the owner's workspace. Null when it changed since they last read it. */
 export async function coGmSave(grant:{owner:string;campaignId:string;name:string}, data:Workspace, revision:number) {
@@ -24,7 +24,7 @@ export async function coGmSave(grant:{owner:string;campaignId:string;name:string
   if (read.revision !== revision) return null;
   // Pictures new to the copy must be ones a co-GM uploaded for this campaign.
   const incoming = workspaceSchema.safeParse(data);
-  const fresh = incoming.success ? newImageIds(campaignExport(read.data, grant.campaignId), incoming.data) : [];
+  const fresh = incoming.success ? newImageIds(campaignExport(read.data, grant.campaignId, { linked: true }), incoming.data) : [];
   const allowed = new Set<string>();
   for (const id of fresh) if (await isCoGmUpload(grant.owner, grant.campaignId, id)) allowed.add(id);
   return store.saveTagged(grant.owner, applyCoGmEdit(read.data, grant.campaignId, data, allowed), revision, { name: grant.name, as: 'co-gm' });

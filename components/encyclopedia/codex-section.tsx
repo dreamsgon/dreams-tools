@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import {Inbox,BookOpen,Plus,Eye,EyeOff,Lock,X,ArrowUpRight,Goal,Library,CircleDot,Trash2} from 'lucide-react';
 import {CategoryIcon} from './codex-icon';
-import {newId,defaultCharacter,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
+import {campaignLoreWorldIds,newId,defaultCharacter,type Entry,type Workspace,type Campaign} from '@/lib/encyclopedia/world-model';
 import {codexCategories,codexIn,isCreatureCategory,isNewFind,setFound,type Codex} from '@/lib/encyclopedia/codex';
 import {newQuest} from '@/lib/encyclopedia/quests';
 import {ArticleBody} from './article-body';
@@ -26,7 +26,7 @@ function filedUnder(w:Workspace,worldId:string,campaignId:string,title:string,no
 
 /** The campaign codex: categories, the inbox of notes from the table, the entries and the one you picked. */
 export function CodexSection({data,worldId,campaign,change,onOpen}:{data:Workspace;worldId:string;campaign:Campaign;change:Change;onOpen:(id:string)=>void}){
- const entries=codexIn(data.entries,worldId,campaign.id),categories=codexCategories(entries,campaign.codexCategories),inbox=campaign.codexInbox??[];
+ const entries=codexIn(data.entries,worldId,campaign.id,campaignLoreWorldIds(data,campaign)),categories=codexCategories(entries,campaign.codexCategories),inbox=campaign.codexInbox??[];
  const [category,setCategory]=useState(ALL),[selected,setSelected]=useState<string|null>(null),[fresh,setFresh]=useState<string|null>(null),[adding,setAdding]=useState(false),[newName,setNewName]=useState(''),[note,setNote]=useState('');
  const shown=category===ALL||category===INBOX?entries:entries.filter(e=>e.codex.category.toLowerCase()===category.toLowerCase());
  const open=entries.find(e=>e.id===selected);
@@ -121,7 +121,7 @@ export function CodexDetail({entry,data,campaign,categories,update,onOpen,onClos
 /** On any page: put it in the codex, or show its codex details. */
 export function CodexPanel({entry,data,campaign,update,onOpen}:{entry:Entry;data:Workspace;campaign?:Campaign;update:(p:Partial<Entry>)=>void;onOpen:(id:string)=>void}){
  if(!campaign||entry.kind==='folder')return null;
- const categories=codexCategories(codexIn(data.entries,entry.worldId,campaign.id),campaign.codexCategories);
+ const categories=codexCategories(codexIn(data.entries,campaign.worldId,campaign.id,campaignLoreWorldIds(data,campaign)),campaign.codexCategories);
  if(!entry.codex)return <div className="aside-section"><div className="aside-heading"><span className="eyebrow">CODEX</span></div><label className="codex-add-page"><select aria-label="Add to the codex" value="" onChange={e=>{if(e.target.value)update({codex:{category:e.target.value,summary:'',found:{}}});}}><option value="">Add to the codex…</option>{categories.map(c=><option key={c} value={c}>{c}</option>)}</select></label></div>;
  return <div className="aside-section codex-aside"><div className="aside-heading"><span className="eyebrow">CODEX</span></div><CodexDetail entry={entry as Entry&{codex:Codex}} data={data} campaign={campaign} categories={categories} update={update} onOpen={onOpen}/></div>;
 }
