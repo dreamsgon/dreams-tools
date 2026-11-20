@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {demoWorkspace,campaignExport,playerCampaign,workspaceSchema} from '../lib/encyclopedia/world-model.ts';
 import {newQuest} from '../lib/encyclopedia/quests.ts';
 import {EncyclopediaStore} from '../lib/encyclopedia/store.ts';
-import {applyItem,compactTranscript,discordText,draftRecap,linkNames,openItems,publishRecap,quoteInTranscript,skipItem,transcriptParts,wordCount} from '../lib/encyclopedia/recaps.ts';
+import {applyItem,autoAdd,undoItem,compactTranscript,discordText,draftRecap,linkNames,openItems,publishRecap,quoteInTranscript,skipItem,transcriptParts,wordCount} from '../lib/encyclopedia/recaps.ts';
 import {timelineMarkdown} from '../lib/encyclopedia/recap-schema.ts';
 import {playersBook} from '../lib/mcp/players-only.ts';
 import {callTool,listTools} from '../lib/mcp/tools.ts';
@@ -242,4 +242,60 @@ test('the recap prompt reads cheaply and saves a draft',()=>{
  const notion=getPrompt(c,'recap_from_source',{source:'https://www.notion.so/Session-13'}).messages[0].content.text;
  assert.match(notion,/your own tools/);assert.doesNotMatch(notion,/read_transcript/);
  assert.match(getPrompt({...c,level:'read'},'recap_from_source',{}).messages[0].content.text,/don't try to save/);
+});
+
+test('kinds set to Add automatically are added as the recap is saved, GM only, and each can be undone',async()=>{
+ const s=await setup(),{data,revision}=await s.store.read(OWNER);
+ const c=data.campaigns.find(x=>x.id===C);
+ c.aiWriting={...c.aiWriting,extract:{auto:['people','quests','codex','rumours'],fixes:[{from:'Halden',to:'Brother Halden'},{from:'Ostra Hail',to:'Ostra Hale'}]}};
+ await s.store.save(OWNER,data,revision);
+ const r=await s.call('save_recap',{...ai,recap:ai.recap+' Ostra Hail waved. Halden waved too.',found:[...ai.found,{name:'Old Tobin',kind:'character',text:'The ferryman.',playersSee:true}]});
+ assert.equal(r.isError,false,r.text);
+ const out=body(r);
+ assert.equal(out.addedAutomatically.length,6,out.addedAutomatically.join(' | '));
+ assert.deepEqual(out.toCheck,[],'everything it found was a kind set to Add automatically');
+ let w=await s.latest();
+ const page=w.entries.find(e=>e.id===out.saved.id),tobin=w.entries.find(e=>e.title==='Old Tobin');
+ assert.match(page.body,/Ostra Hale\]?\]? waved\. \[?\[?[^\]]*Brother Halden/,'spelling fixes, and a name already right is left alone');
+ assert.doesNotMatch(page.body,/Brother Brother|Ostra Hail/);
+ assert.ok(tobin,'a new page is made');assert.notEqual(tobin.overviewVisibility,'players','a new page added automatically starts GM only, whatever the AI said');
+ assert.ok(page.recap.review.every(i=>i.state==='done'&&i.auto));
+ assert.match(w.entries.find(e=>e.id==='ostra').body,/Asked the party to carry a sealed jar\./);
+ assert.equal(w.entries.find(e=>e.id==='lights').quest.log.length,1);
+ assert.ok(w.entries.find(e=>e.id==='lights').quest.objectives[0].done);
+ assert.ok(w.entries.find(e=>e.id==='hag').codex.found[C]);
+ // Undo each kind: the change goes, and the item waits in the check list again.
+ for(const item of page.recap.review){const u=undoItem(w,page.id,item.id,NOW);w=u.next;}
+ assert.equal(w.entries.find(e=>e.title==='Old Tobin'),undefined,'the page it made is deleted');
+ assert.doesNotMatch(w.entries.find(e=>e.id===page.id).body,/\[\[[^\]|]+\|Old Tobin/);
+ assert.equal(w.entries.find(e=>e.id==='ostra').body,'Keeps the toll lantern.');
+ assert.equal(w.entries.find(e=>e.id==='lights').quest.log.length,0);assert.equal(w.entries.find(e=>e.id==='lights').quest.objectives[0].done,false);
+ assert.equal(w.entries.find(e=>e.id==='hag').codex.found[C],undefined);
+ assert.equal(w.entries.filter(e=>e.kind==='quest'&&e.title==='The chapel bell').length,0);
+ const after=w.entries.find(e=>e.id===page.id).recap.review;
+ assert.ok(after.every(i=>i.state==='open'&&!i.auto&&!i.undo));
+ assert.ok(workspaceSchema.safeParse(w).success);
+ assert.throws(()=>undoItem(w,page.id,after[0].id),/isn’t added|isn't added/);
+});
+
+test('Undo takes back loot, ties and dates too, and autoAdd leaves what it can’t add',()=>{
+ const w0=world(),c=w0.campaigns.find(x=>x.id===C),at=NOW.toISOString();
+ w0.entries.push({id:'bram',worldId:c.worldId,campaignId:C,parentId:null,title:'Bram',kind:'character',body:'',character:{...w0.entries.find(e=>e.kind==='character'&&e.character)?.character,role:'pc',inventory:{visibility:'gm',items:[]}},updatedAt:at});
+ const page={id:'s13',worldId:c.worldId,campaignId:C,parentId:null,title:'Session 13',kind:'session',body:'',updatedAt:at,recap:{status:'draft',timeline:[],quotes:[],gmNotes:'',review:[
+  {id:'i1',kind:'loot',name:'Silver clapper',pageId:'bram',qty:2,text:'',state:'open'},
+  {id:'i2',kind:'loot',name:'Ferry token',text:'',state:'open'},
+  {id:'i3',kind:'tie',name:'Bram',pageId:'bram',to:'Ostra Hale',toId:'ostra',typeId:'linked',text:'',state:'open'},
+ ]}};
+ w0.entries.push(page);
+ c.aiWriting={extract:{auto:['items','ties']}};
+ let {next:w,added}=autoAdd(w0,'s13',NOW);
+ assert.equal(added.length,2,'loot with no one to carry it waits for the GM');
+ const review=()=>w.entries.find(e=>e.id==='s13').recap.review;
+ assert.equal(review().find(i=>i.id==='i2').state,'open');
+ assert.equal(w.entries.find(e=>e.id==='bram').character.inventory.items[0].qty,2);
+ assert.equal(w.entries.find(e=>e.id==='bram').ties.length,1);
+ w=undoItem(w,'s13','i1',NOW).next;w=undoItem(w,'s13','i3',NOW).next;
+ assert.deepEqual(w.entries.find(e=>e.id==='bram').character.inventory.items,[]);
+ assert.equal(w.entries.find(e=>e.id==='bram').ties,undefined);
+ assert.deepEqual(review().map(i=>i.state),['open','open','open']);
 });

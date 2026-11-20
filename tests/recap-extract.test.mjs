@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {demoWorkspace} from '../lib/encyclopedia/world-model.ts';
 import {newQuest} from '../lib/encyclopedia/quests.ts';
 import {draftRecap,findItems} from '../lib/encyclopedia/recaps.ts';
-import {cleanExtract,depthFor,extractKinds,extractNotes,highlightAsks,honourExtract,isOn,offAtFirst,partsOff,turnKind,whereOf,setWhere,inEncyclopedia,inFile,recapIn} from '../lib/encyclopedia/recap-extract.ts';
+import {cleanExtract,depthFor,extractKinds,extractNotes,highlightAsks,honourExtract,isOn,offAtFirst,partsOff,turnKind,whereOf,setWhere,inEncyclopedia,inFile,recapIn,isAuto,setAuto,fixSpelling,findKinds} from '../lib/encyclopedia/recap-extract.ts';
 import {rpExportFiles,sessionFile} from '../lib/encyclopedia/rp-export.ts';
 import {addFinds} from '../lib/encyclopedia/recaps.ts';
 import {aiWritingSchema,saveExtract} from '../lib/encyclopedia/ai-styles.ts';
@@ -183,4 +183,17 @@ test('where each kind goes: the Encyclopedia, the session file, or both',()=>{
  // Check it with AI doesn't add the chapel again while it is filed.
  const again=addFinds(w,c,page,{found:[{name:'The Drowned Chapel',kind:'place',text:'Again.'}]});
  assert.deepEqual(again.added,[]);
+});
+
+test('Add automatically is only for finds, and spelling fixes write names the GM’s way',()=>{
+ let x=setAuto({},'people',true);x=setAuto(x,'moments',true);x=setAuto(x,'items',true);x=setAuto(x,'items',false);
+ assert.deepEqual(x.auto,['people'],'session page kinds are never automatic');
+ assert.ok(isAuto(x,'people'));assert.ok(!isAuto(undefined,'people'),'everything starts as Check first');
+ assert.ok(findKinds.includes('dates')&&!findKinds.includes('timeline'));
+ const fixes=[{from:'Toben',to:'Tobin'},{from:'Ostra',to:'Ostra Hale'},{from:' ',to:'x'},{from:'toben',to:'Tobias'}];
+ assert.deepEqual(cleanExtract({auto:['people','moments'],fixes}),{auto:['people'],fixes:[{from:'Toben',to:'Tobin'},{from:'Ostra',to:'Ostra Hale'}]},'blank and repeated fixes are dropped');
+ const out=fixSpelling({recap:'TOBEN met Ostra, then Ostra Hale again. Tobenson stayed.',found:[{name:'toben',text:'Ostra’s ferryman'}],n:3},fixes);
+ assert.deepEqual(out,{recap:'Tobin met Ostra Hale, then Ostra Hale again. Tobenson stayed.',found:[{name:'Tobin',text:'Ostra Hale’s ferryman'}],n:3});
+ assert.equal(fixSpelling('Ostra Hale',fixes),'Ostra Hale','a name already right is left alone');
+ assert.match(extractNotes({fixes}).join(' '),/Tobin \(not Toben\), Ostra Hale \(not Ostra\)/);
 });
