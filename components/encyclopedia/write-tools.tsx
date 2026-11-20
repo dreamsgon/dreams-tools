@@ -5,8 +5,9 @@
  * lines in ::: style. Everything they write is plain text the reader understands (lib/encyclopedia/markup.ts).
  */
 import {useEffect,useRef,useState,type ReactNode,type RefObject} from 'react';
-import {ChevronDown,Plus,Type,BookOpen} from 'lucide-react';
-import {PALETTE} from '@/lib/encyclopedia/markup';
+import {ChevronDown,Plus,Type,BookOpen,ImagePlus} from 'lucide-react';
+import {PALETTE,pictureLine} from '@/lib/encyclopedia/markup';
+import {uploadMapImage} from './map-transfer';
 
 type Props={editor:RefObject<HTMLTextAreaElement|null>;body:string;setBody:(next:string)=>void;caretTo:(at:number,end?:number)=>void};
 const INSERTS:[string,string][]=[
@@ -35,15 +36,31 @@ function Menu({label,icon,children,open,setOpen,wide}:{label:string;icon:ReactNo
 }
 
 export function WriteTools({editor,body,setBody,caretTo}:Props){
- const [menu,setMenu]=useState<'insert'|'style'|null>(null);
- const insert=(text:string)=>{
+ const [menu,setMenu]=useState<'insert'|'style'|null>(null),[status,setStatus]=useState('');
+ const file=useRef<HTMLInputElement>(null);
+ const latest=useRef({body,setBody});latest.current={body,setBody};
+ const insert=(text:string,select=true)=>{const {body,setBody}=latest.current;
   // On an empty line it goes there; otherwise on the lines after the one the cursor is in.
   const el=editor.current,at=el?el.selectionEnd:body.length,lineStart=body.lastIndexOf('\n',at-1)+1,found=body.indexOf('\n',at),lineEnd=found<0?body.length:found;
   const empty=!body.slice(lineStart,lineEnd).trim(),before=body.slice(0,empty?lineStart:lineEnd),after=body.slice(lineEnd);
   const lead=before&&!before.endsWith('\n')?'\n':'',tail=after.startsWith('\n')||!after?'':'\n';
   setBody(before+lead+text+tail+after);setMenu(null);
-  const start=before.length+lead.length;caretTo(start,start+text.length);
+  const start=before.length+lead.length;caretTo(select?start:start+text.length,start+text.length);
  };
+ // A picture from the Insert menu, or dropped or pasted into the text: uploaded to the GM's storage, then shown on its own line.
+ const pictures=async(files:File[])=>{
+  const images=files.filter(f=>f.type.startsWith('image/'));if(!images.length)return false;
+  for(const f of images){setStatus(`Uploading ${f.name||'the picture'}…`);
+   try{const up=await uploadMapImage(f);insert(pictureLine(up.imageId,'','right','medium'),false);setStatus('Added the picture. Add a caption after the | or write left, center, small or large.');}
+   catch(e){setStatus(e instanceof Error?e.message:'Could not upload the picture.');return true;}}
+  return true;
+ };
+ const picturesRef=useRef(pictures);picturesRef.current=pictures;
+ useEffect(()=>{const el=editor.current;if(!el)return;
+  const drop=(e:DragEvent)=>{const files=[...(e.dataTransfer?.files??[])];if(files.some(f=>f.type.startsWith('image/'))){e.preventDefault();void picturesRef.current(files);}};
+  const paste=(e:ClipboardEvent)=>{const files=[...(e.clipboardData?.files??[])];if(files.some(f=>f.type.startsWith('image/'))){e.preventDefault();void picturesRef.current(files);}};
+  el.addEventListener('drop',drop);el.addEventListener('paste',paste);return()=>{el.removeEventListener('drop',drop);el.removeEventListener('paste',paste);};
+ },[editor]);
  const style=(attr:string,lines:boolean)=>{
   const el=editor.current;if(!el)return;let s=el.selectionStart,e=el.selectionEnd;
   if(lines){s=body.lastIndexOf('\n',s-1)+1;const le=body.indexOf('\n',Math.max(e-1,s));e=le<0?body.length:le;const inner=body.slice(s,e)||'Your lines';const text=`::: style ${attr}\n${inner}\n:::`;setBody(body.slice(0,s)+text+body.slice(e));caretTo(s,s+text.length);}
@@ -52,6 +69,7 @@ export function WriteTools({editor,body,setBody,caretTo}:Props){
  };
  return <>
   <Menu label="Insert" icon={<Plus size={14} aria-hidden="true"/>} open={menu==='insert'} setOpen={v=>setMenu(v?'insert':null)}>
+   <button type="button" role="menuitem" onMouseDown={e=>e.preventDefault()} onClick={()=>{setMenu(null);file.current?.click();}}><span><ImagePlus size={13} aria-hidden="true"/> Picture…</span><small>upload</small></button>
    {INSERTS.map(([name,text])=><button key={name} type="button" role="menuitem" onMouseDown={e=>e.preventDefault()} onClick={()=>insert(text)}><span>{name}</span><small>{text.split('\n')[0]!.slice(0,18)}</small></button>)}
   </Menu>
   <Menu label="Style" icon={<Type size={14} aria-hidden="true"/>} open={menu==='style'} setOpen={v=>setMenu(v?'style':null)} wide>
@@ -61,6 +79,8 @@ export function WriteTools({editor,body,setBody,caretTo}:Props){
    <span className="write-pop-label">Highlight</span><div className="write-pop-row">{PALETTE.slice(0,6).map(c=><button key={c} type="button" role="menuitem" className="swatch" aria-label={`${c} highlight`} title={`${c} highlight`} style={{background:`color-mix(in srgb, var(--wiki-${c}) 25%, transparent)`}} onMouseDown={e=>e.preventDefault()} onClick={()=>style(`bg=${c}`,false)}/>)}</div>
    <span className="write-pop-label">Lines</span><div className="write-pop-row">{LINES.map(([a,l])=><button key={a} type="button" role="menuitem" onMouseDown={e=>e.preventDefault()} onClick={()=>style(a,true)}>{l}</button>)}</div>
   </Menu>
+ <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={e=>{const files=[...(e.target.files??[])];e.target.value='';void pictures(files);}}/>
+  {status&&<span className="write-status" role="status">{status}</span>}
   <a className="button small write-guide" href="/guide/writing-wiki-pages" target="_blank" rel="noopener"><BookOpen size={14} aria-hidden="true"/> What can I type?</a>
  </>;
 }

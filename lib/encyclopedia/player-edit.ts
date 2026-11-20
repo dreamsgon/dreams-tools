@@ -1,4 +1,4 @@
-import { addsHtml } from './markup.ts';
+import { addsHtml, pictureIds } from './markup.ts';
 import { MAPTABLE_LINK, stripSecrets, visibleEntries, workspaceSchema, type Entry, type Workspace } from './world-model.ts';
 
 /**
@@ -11,6 +11,9 @@ const no = (message: string): never => { throw new PlayerEditError(message); };
 /** `html`: their groups let them use HTML in Wiki pages (lib/members.ts wikiHtml). */
 export type Rights = { edit: ReadonlySet<string>; subPages: ReadonlySet<string>; made: ReadonlySet<string>; html?: boolean };
 const NO_HTML = 'Your GM hasn’t turned on HTML in Wiki pages for you. Take out the HTML box and save again.';
+const NO_PICTURE = 'Only your GM can add pictures to a page. Take out the new picture and save again.';
+// A player may keep or remove the pictures on a page, not show others: the picture links let players fetch those pictures.
+const addsPicture = (before: string, after: string) => { const had = new Set(pictureIds(before)); return pictureIds(after).some(id => !had.has(id)); };
 export type Editor = { name: string; as: 'player' | 'co-gm' };
 
 // Secrets, asides and GM-only lines: a player can't rewrite text that holds any of them, since they would see it.
@@ -61,12 +64,14 @@ export function savePlayerEdit(s: Workspace, campaignId: string, rights: Rights,
     if (t.id === 'overview') {
       if (!playerCanRewrite(e.body)) no('The GM keeps secrets on this page’s overview, so it stays as it is.');
       if (!rights.html && addsHtml(e.body, t.body)) no(NO_HTML);
+      if (addsPicture(e.body, t.body)) no(NO_PICTURE);
       next = { ...next, body: t.body };
       continue;
     }
     const tab = (e.tabs ?? []).find(x => x.id === t.id && x.visibility === 'players') ?? no('That tab is gone, or the GM keeps it to themselves now.');
     if (!playerCanRewrite(tab.body)) no(`The GM keeps secrets in “${tab.title}”, so it stays as it is.`);
     if (!rights.html && addsHtml(tab.body, t.body)) no(NO_HTML);
+    if (addsPicture(tab.body, t.body)) no(NO_PICTURE);
     next = { ...next, tabs: (next.tabs ?? []).map(x => x.id === t.id ? { ...x, body: t.body } : x) };
   }
   return put(s, next);

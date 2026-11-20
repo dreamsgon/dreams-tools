@@ -66,3 +66,36 @@ export function proseLook(t: TextSettings | undefined): { className: string; sty
   const className = [r.para === 'indent' && 't-para-indent', r.heads !== 'plain' && `t-heads-${r.heads}`, r.drop === 'on' && 't-drop', Object.keys(style).length && 't-set'].filter(Boolean).join(' ');
   return { className, style };
 }
+
+/*
+ * How a page itself looks, beside its text: a banner picture across the top, an icon (in the sidebar and lists),
+ * which side its info boxes sit on, whether "On this page" lists its headings, and a wide page. Only the page's own;
+ * nothing here reaches the pages inside it.
+ */
+export const PAGE_ICONS = [
+  'castle', 'crown', 'swords', 'shield', 'skull', 'scroll', 'book', 'gem', 'coins', 'flame', 'mountain', 'trees',
+  'anchor', 'ship', 'sailboat', 'tent', 'house', 'church', 'landmark', 'pyramid', 'beer', 'key', 'map', 'compass',
+  'flag', 'pin', 'star', 'moon', 'sun', 'eye', 'heart', 'ghost', 'mask', 'drama', 'feather', 'wand', 'sparkles',
+  'hammer', 'axe', 'pickaxe', 'flask', 'brain', 'bone', 'bug', 'bird', 'fish', 'paw', 'leaf', 'wheat', 'snowflake',
+  'waves', 'zap', 'hourglass', 'bell', 'lamp', 'music', 'dices', 'gavel', 'footprints', 'gift', 'lock', 'users',
+  'rocket', 'globe', 'building',
+] as const;
+export type PageIcon = (typeof PAGE_ICONS)[number];
+export const pageLookSchema = z.object({
+  /** A picture across the top of the page; `y` is which part of it shows, 0 the top and 1 the bottom. */
+  banner: z.object({ imageId: z.string().uuid(), width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000), y: z.number().min(0).max(1) }).optional(),
+  icon: z.enum(PAGE_ICONS).optional(),
+  /** The side info boxes sit on when they don't say (`::: infobox left` or `right` still wins). */
+  box: z.enum(['left', 'right']).optional(),
+  /** False: no "On this page" list of headings. */
+  toc: z.boolean().optional(),
+  /** The text runs the full width instead of a book-like column. */
+  wide: z.boolean().optional(),
+});
+export type PageLook = z.infer<typeof pageLookSchema>;
+/** Drops settings that are the same as having none, so a page that goes back to plain stores nothing. */
+export function cleanPageLook(l: PageLook | undefined): PageLook | undefined {
+  if (!l) return undefined;
+  const out: PageLook = { ...(l.banner ? { banner: l.banner } : {}), ...(l.icon ? { icon: l.icon } : {}), ...(l.box === 'left' ? { box: 'left' as const } : {}), ...(l.toc === false ? { toc: false } : {}), ...(l.wide ? { wide: true } : {}) };
+  return Object.keys(out).length ? out : undefined;
+}

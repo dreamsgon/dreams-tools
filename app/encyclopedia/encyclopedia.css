@@ -1135,7 +1135,7 @@ p.check-text{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 10px
 /* Co-GMs never see what works on the owner's own account or settings: page history, templates, random tables, Maptable scenes, AI recaps, campaign settings. */
 .is-co-gm :is(.sidebar-bottom, .save-template, [aria-label="Page history"], .quiet-card .text-button, .dashboard-intro > .icon-button, .character-nav .button-row, .aside-section > .text-button:last-child, .recap-start, [title="Link one of your Maptable scenes"], [title="Put one of your random tables on this page"]) { display:none !important; }
 /* A co-GM whose group can't edit pages sees no editing controls at all. */
-.co-gm-read :is(.picture-add, .add-note, .top-actions > .button.primary, .save-chip-group, .note-card.add-card, .tag-add, .tab-controls, .article-toolbar .segmented, .codex-add-page, .delete-entry, [aria-label="Rename entry"], [aria-label="Add tab"], [aria-label^="Add a sub-page inside"], .aside-section:has(> .field-label [aria-label="Inside"]), .aside-heading > .text-button) { display:none !important; }
+.co-gm-read :is(.picture-add, .add-note, .arrange-toggle, .page-look, .top-actions > .button.primary, .save-chip-group, .note-card.add-card, .tag-add, .tab-controls, .article-toolbar .segmented, .codex-add-page, .delete-entry, [aria-label="Rename entry"], [aria-label="Add tab"], [aria-label^="Add a sub-page inside"], .aside-section:has(> .field-label [aria-label="Inside"]), .aside-heading > .text-button) { display:none !important; }
 /* Editing from the player pages: a member's own pages, set by each page's Who can edit. */
 .player-edit-bar{margin:6px 0 18px;display:flex;flex-direction:column;gap:10px}
 .player-edit-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -1499,3 +1499,44 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .look-scope select{display:block;width:100%;margin-top:6px;padding:7px 8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-size:12.5px}
 .look-from{margin:10px 0 2px}
 .write-pop.look-pop{max-height:min(640px,85vh / var(--ui-zoom, 1))}
+/* A page's own look (page-look.tsx PageStyle): banner, wide page, info box side. */
+.page-banner{height:200px;margin:0 0 24px}
+@media(max-width:720px){.page-banner{height:140px}}
+.article-layout.page-wide{grid-template-columns:minmax(0,1fr) 220px}
+@media(max-width:1200px){.article-layout.page-wide{grid-template-columns:minmax(0,1fr) 155px}}
+.prose.box-left .wiki-infobox:not(.right){float:left;margin:4px 28px 18px 0}
+.page-style-pop .look-banner-edit .look-banner{height:84px}
+.page-style-pop .look-banner-empty{width:100%;padding:12px;background:none;cursor:pointer}
+.page-style-pop .look-banner-empty small{display:block;font-size:12px}
+.page-style-pop .button-row{gap:6px;margin:6px 0 4px}
+.page-icon-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;margin-bottom:4px}
+.page-icon-grid button{height:30px;display:grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-size:12px;cursor:pointer}
+.page-icon-grid button:first-child{grid-column:span 2}
+.page-icon-grid button:hover{border-color:var(--line-strong)}
+.page-icon-grid button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.write-status{align-self:center;font:12px/1.35 var(--font-sans);color:var(--muted);max-width:340px}
+/* Pictures in page text (markup.ts `![[picture:…]]`). */
+.wiki-picture{margin:4px 0 18px;width:min(300px,100%)}
+.wiki-picture.small{width:min(190px,100%)}.wiki-picture.large{width:min(460px,100%)}.wiki-picture.full{width:100%}
+.wiki-picture.right{float:right;clear:right;margin-left:26px}
+.wiki-picture.left{float:left;clear:left;margin-right:26px}
+.wiki-picture.center,.wiki-picture.full{float:none;margin-left:auto;margin-right:auto}
+.wiki-picture img{display:block;width:100%;height:auto;border-radius:var(--radius-sm)}
+.wiki-picture-wait{display:block;aspect-ratio:4/3;border-radius:var(--radius-sm);background:var(--hover);font:12px var(--font-sans);color:var(--muted);padding:10px}
+.wiki-picture figcaption{padding-top:6px;font:13px/1.45 var(--font-sans);color:var(--muted);text-indent:0}
+@container (max-width:520px){.prose.box-left .wiki-infobox:not(.right){float:none;width:auto;margin:0 0 16px}.prose .wiki-picture.left,.prose .wiki-picture.right{float:none;margin:0 auto 16px}}
+/* Sidebar Arrange (workspace-app.tsx arrangeRow): rename in place and move with buttons as well as by dragging. */
+.arrange-toggle{display:inline-flex;align-items:center;gap:4px;margin-left:auto;min-height:24px;padding:2px 6px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 11px var(--font-sans);letter-spacing:0;cursor:pointer}
+.arrange-toggle:hover{color:var(--ink);background:var(--hover)}
+.arrange-toggle.on{color:var(--accent);background:var(--accent-soft)}
+.side-heading .arrange-toggle+.add-note{margin-left:2px}
+.arrange-row{gap:5px;padding-right:4px;background:var(--hover);margin-bottom:2px}
+.arrange-grip{flex:none;color:var(--muted);cursor:grab}
+.arrange-row>svg:not(.arrange-grip){flex:none}
+.arrange-name{flex:1;min-width:0;height:26px;padding:2px 6px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink);font-size:12px}
+.arrange-name:hover{border-color:var(--line)}
+.arrange-name:focus{border-color:var(--accent);background:var(--panel);outline:none}
+.arrange-moves{flex:none;display:flex}
+.arrange-moves button{display:grid;place-items:center;width:22px;height:24px;padding:0;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);cursor:pointer}
+.arrange-moves button:hover:not(:disabled){color:var(--ink);background:var(--panel)}
+.arrange-moves button:disabled{opacity:.3;cursor:default}

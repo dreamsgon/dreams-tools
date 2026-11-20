@@ -13,7 +13,8 @@ const NO_HTML = 'The GM hasn’t turned on HTML in Wiki pages for your group. Ta
 // Settings that link the campaign to the owner's own accounts and folders stay the owner's.
 const ownerOnly = ['id', 'worldId', 'github', 'discord', 'maptableCampaignId', 'folderId', 'linkedWorldIds'] as const;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const images = (value: unknown) => new Set([...JSON.stringify(value).matchAll(/"(?:imageId|previewImageId)":"([0-9a-fA-F-]{36})"/g)].map(m => m[1]));
+// Pictures in page text (`![[picture:<id>]]`, markup.ts) count as well as picture fields.
+const images = (value: unknown) => new Set([...JSON.stringify(value).matchAll(/(?:"(?:imageId|previewImageId)":"|!\[\[picture:)([0-9a-fA-F-]{36})/g)].map(m => m[1].toLowerCase()));
 
 /** Puts back what campaignExport left out of a shared page: other campaigns' stats, codex finds and weather links. */
 function restore(edited: Entry, full: Entry, campaignId: string): Entry {

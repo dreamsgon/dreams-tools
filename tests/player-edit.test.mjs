@@ -111,3 +111,13 @@ test('without "Use HTML in Wiki pages" a player keeps or removes HTML but cannot
  const kept=P.savePlayerEdit(s,C,rights,{entryId:'bram',tabs:[{id:'overview',body:'Changed\n::: html\n<b>x</b>\n:::'}]},MARA,NOW);
  assert.match(kept.entries.find(e=>e.id==='bram').body,/^Changed/,'HTML already there can stay');
 });
+
+test('a player keeps or removes the pictures on a page they edit, but cannot show new ones',()=>{
+ const pic='0b5f6a8e-3c1d-4f2a-9b7e-1a2b3c4d5e6f',other='1c6a7b9f-4d2e-4a3b-8c8f-2b3c4d5e6f70';
+ const s=owner(),l=list(),rights=M.pageRights(l,'mara');
+ assert.throws(()=>P.savePlayerEdit(s,C,rights,{entryId:'bram',tabs:[{id:'overview',body:`A guard.\n\n![[picture:${other}]]`}]},MARA),/Only your GM can add pictures/);
+ const withPic={...s,entries:s.entries.map(e=>e.id==='bram'?{...e,body:`A guard.\n\n![[picture:${pic}|Bram]]`}:e)};
+ const kept=P.savePlayerEdit(withPic,C,rights,{entryId:'bram',tabs:[{id:'overview',body:`A tired guard.\n\n![[picture:${pic}|Bram at the gate|left]]`}]},MARA,NOW);
+ assert.match(kept.entries.find(e=>e.id==='bram').body,/Bram at the gate/);
+ assert.ok(P.savePlayerEdit(withPic,C,rights,{entryId:'bram',tabs:[{id:'overview',body:'No picture now.'}]},MARA,NOW));
+});

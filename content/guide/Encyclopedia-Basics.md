@@ -9,6 +9,8 @@ The Wiki is your campaign notebook. Open it at `/encyclopedia`. It holds **world
 Any page can hold sub-pages in the same campaign or shared lore; folders are not required as parents.
 
 - **Drag** a page in the sidebar onto another to nest it, or onto a row's edge to place it before or after. Rows show how many pages are inside.
+- **Arrange** (the arrows beside World Lore and Campaign Notes) shows every page with its name to rename in place and buttons to move it up, down, out of the page it is in, or into the page above. Press **Done** when you finish.
+- **Customize sidebar** categories can list pages you pick, every page of some kinds, or every page with some of your Wiki tags. New pages join by themselves.
 - Beside a page: its **sub-pages** (with **+ Sub-page**), **Mentioned in** (pages that link here, with the words around the link) and **Named but not linked** with **Link all**.
 - In **Write** mode, type `[[` or `@` to list pages to link, and create a new page inside this one on the spot.
 - **Hover** a link to preview the page. `{{word|note}}` adds a hover note to text.
@@ -17,7 +19,7 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 
 ![The same page on a phone](images/encyclopedia-phone.jpg)
 
-- Page text is Markdown with wiki extras: info boxes, read-aloud boxes, columns, pages shown inside pages, styled words and HTML. In Write mode the **Insert** and **Style** menus add them and a preview shows the page beside the text. Everything you can type is in [Writing wiki pages](Writing-Wiki-Pages).
+- Page text is Markdown with wiki extras: info boxes, read-aloud boxes, columns, pictures, pages shown inside pages, styled words and HTML. The **Text** and **Page** buttons set how a page reads and looks, with a banner and an icon. In Write mode the **Insert** and **Style** menus add them and a preview shows the page beside the text. Everything you can type is in [Writing wiki pages](Writing-Wiki-Pages).
 - Wrap GM-only text in a secret block (players never receive it):
 
   ```

@@ -3,6 +3,7 @@ import { emptyWorkspace, workspaceSchema, playerCampaign, type Workspace } from 
 import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from './tables.ts';
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
+import { pictureIds } from './markup.ts';
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -157,6 +158,6 @@ export class EncyclopediaStore {
   }
   async playerImageOwnerOf(grant: {owner:string;campaignId:string},imageId:string) {
     const shared=await this.playerOf(grant);if(!shared)return null;
-    return shared.campaign.look?.banner?.imageId===imageId||shared.entries.some(e=>e.mapData?.imageId===imageId||e.mapData?.icons?.some(i=>i.imageId===imageId)||e.picture?.imageId===imageId||e.picture?.token?.imageId===imageId||e.org?.emblem.imageId===imageId||e.org?.banner?.imageId===imageId)?grant.owner:null;
+    return shared.campaign.look?.banner?.imageId===imageId||shared.entries.some(e=>e.mapData?.imageId===imageId||e.mapData?.icons?.some(i=>i.imageId===imageId)||e.picture?.imageId===imageId||e.picture?.token?.imageId===imageId||e.org?.emblem.imageId===imageId||e.org?.banner?.imageId===imageId||e.pageLook?.banner?.imageId===imageId||e.tabs.some(t=>pictureIds(t.body).includes(imageId.toLowerCase())))?grant.owner:null;
   }
 }

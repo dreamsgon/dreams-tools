@@ -3,10 +3,14 @@ import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "re
 import { ArrowDown, ArrowUp, ArrowUpRight, Backpack, CalendarDays, Check, ChevronDown, ChevronRight, Dices, Eye, EyeOff, Globe, Goal, GripVertical, LayoutTemplate, Library, Link as LinkIcon, ListChecks, Map as MapIcon, Network, Palette, Pencil, Plus, ScrollText, Search, Settings, SlidersHorizontal, Sparkles, Tag, Trash2, Users, X } from "lucide-react";
 import "./sidebar-nav.css";
 import { ToolDialog } from "./tool-dialog";
+import { TagChip, useTags } from "../tags";
+import { targetKey, type TagLibrary } from "@/lib/tags";
+import { PageGlyph } from "./page-icons";
+import type { PageIcon } from "@/lib/encyclopedia/page-text";
 import {
   addCategory, addCategoryLink, addQuick, builtInSections, campaignOnlyNav, categoryItems, categoryKinds, defaultSidebar, maxCategories, maxQuickLinks,
   moveCategoryLink, moveNav, moveQuick, moveSection, navLabels, removeCategory, removeCategoryLink, removeQuick, renameCategory, sectionLabels,
-  setCategoryKinds, showNav, showSection, toolIds, toolLabels, viewIds, viewLabels,
+  setCategoryKinds, setCategoryTags, showNav, showSection, toolIds, toolLabels, viewIds, viewLabels,
   type BuiltInSection, type CategoryKind, type NavId, type Sidebar, type SidebarCategory, type SidebarLink, type ToolId, type ViewId,
 } from "@/lib/encyclopedia/sidebar";
 
@@ -15,7 +19,7 @@ import {
  * Customize sidebar (lib/encyclopedia/sidebar.ts), and the Customize mode that arranges them.
  */
 
-type Page = { id: string; title: string; kind: string; campaignId: string | null };
+type Page = { id: string; title: string; kind: string; campaignId: string | null; pageLook?: { icon?: PageIcon } };
 const viewIcons: Record<ViewId, typeof Goal> = { quests: Goal, codex: Library, relationships: Network, characters: Users, maps: MapIcon, calendar: CalendarDays, tables: Dices, templates: LayoutTemplate, look: Palette };
 const toolIcons: Record<ToolId, typeof Goal> = { form: ListChecks, share: Eye, items: Backpack, dice: Dices, log: ScrollText, search: Search, tags: Tag, ai: Sparkles, backups: Settings };
 const newLinkId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -57,6 +61,7 @@ function linkLabel(l: SidebarLink, pages: Page[]): string {
 
 /** The menu, quick links and sections, or Customize mode in their place. */
 export function SidebarNav(p: SidebarNavProps) {
+  const tags = useTags("encyclopedia").library;
   if (p.draft) return <Customize {...p} draft={p.draft} />;
   const { layout, campaign, member } = p;
   const nav = layout.nav.filter(x => x.on && (campaign || !campaignOnlyNav.includes(x.id)) && !(member && x.id === "tables"));
@@ -80,7 +85,7 @@ export function SidebarNav(p: SidebarNavProps) {
         const c = layout.categories.find(x => x.id === s.id);
         if (!c || !campaign) return null;
         const key = `cat:${c.id}`, open = p.isOpen(key);
-        const items = categoryItems(c, p.pages).filter(({ link }) => !(member && link.type === "tool") && !(link.type === "view" && member && link.view === "tables"));
+        const items = categoryItems(c, p.pages, member || !tags ? undefined : tagsOf(tags)).filter(({ link }) => !(member && link.type === "tool") && !(link.type === "view" && member && link.view === "tables"));
         return <section key={c.id} className="navigation-section sb-category">
           <div className="side-heading"><button className="section-toggle" aria-expanded={open} aria-controls={`sb-cat-${c.id}`} onClick={() => p.toggle(key)}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {c.name}</button></div>
           {open && <div id={`sb-cat-${c.id}`}>
@@ -109,9 +114,12 @@ function go(l: SidebarLink, g: Go) {
   else if (l.type === "tool") g.onTool(l.tool);
 }
 
+// A page's Wiki tags, for categories that gather pages by tag. A co-GM's tags are their own, so they gather nothing there.
+const tagsOf = (lib: TagLibrary) => (pageId: string) => lib.on[targetKey("entry", pageId)] ?? [];
+
 function CategoryRow({ link, page, p }: { link: SidebarLink; page?: Page; p: SidebarNavProps }) {
   const current = link.type === "page" ? p.selected === link.page : link.type === "view" ? p.view === link.view && !p.selected : false;
-  const icon = link.type === "page" ? p.pageIcon(page?.kind ?? "note") : link.type === "view" ? (() => { const I = viewIcons[link.view]; return <I size={15} />; })() : link.type === "tool" ? (() => { const I = toolIcons[link.tool]; return <I size={15} />; })() : <Globe size={15} />;
+  const icon = link.type === "page" ? (page?.pageLook?.icon ? <PageGlyph look={page.pageLook} size={15} /> : p.pageIcon(page?.kind ?? "note")) : link.type === "view" ? (() => { const I = viewIcons[link.view]; return <I size={15} />; })() : link.type === "tool" ? (() => { const I = toolIcons[link.tool]; return <I size={15} />; })() : <Globe size={15} />;
   const label = link.type === "page" ? page?.title ?? "" : linkLabel(link, p.pages);
   return <div className={`tree-row sb-row ${current ? "selected" : ""}`} style={{ paddingLeft: 12 }}>
     <span className="disclosure" />
@@ -256,7 +264,8 @@ function LinkPicker({ pages, kindLabels, pageIcon, has, onAdd }: { pages: Page[]
 /** A category's name, its links in order, and the kinds of page it lists by itself. */
 function CategoryDialog({ cat, p, edit, onClose, onDelete }: { cat: SidebarCategory; p: SidebarNavProps; edit: (f: (s: Sidebar) => Sidebar) => void; onClose: () => void; onDelete: () => void }) {
   const [name, setName] = useState(cat.name);
-  const kinds = new Set(cat.kinds ?? []);
+  const kinds = new Set(cat.kinds ?? []), chosen = new Set(cat.tags ?? []);
+  const tagLib = useTags("encyclopedia").library, tags = tagLib?.tags ?? [];
   return <ToolDialog title="Edit category" onClose={onClose}>
     <div className="sb-cat-dialog">
       <label className="sb-field">Name<input className="sb-input" value={name} maxLength={40} onChange={e => setName(e.target.value)} onBlur={() => edit(s => renameCategory(s, cat.id, name))} /></label>
@@ -273,6 +282,9 @@ function CategoryDialog({ cat, p, edit, onClose, onDelete }: { cat: SidebarCateg
       <LinkPicker pages={p.pages} kindLabels={p.kindLabels} pageIcon={p.pageIcon} has={l => cat.links.some(x => sameTarget(x, l))} onAdd={l => edit(s => addCategoryLink(s, cat.id, l, newLinkId))} />
       <h3>Also list every page that is a…</h3>
       <div className="sb-kinds">{categoryKinds.map(k => <label key={k}><input type="checkbox" checked={kinds.has(k)} onChange={e => { const next = new Set(kinds); if (e.target.checked) next.add(k); else next.delete(k); edit(s => setCategoryKinds(s, cat.id, [...next] as CategoryKind[])); }} />{p.kindLabels[k] ?? k}</label>)}</div>
+      <h3>Also list every page tagged…</h3>
+      {tags.length ? <div className="sb-tags" role="group" aria-label="Tags">{tags.map(t => <label key={t.id} className={chosen.has(t.id) ? "on" : ""}><input type="checkbox" checked={chosen.has(t.id)} onChange={e => { const next = new Set(chosen); if (e.target.checked) next.add(t.id); else next.delete(t.id); edit(s => setCategoryTags(s, cat.id, [...next])); }} /><TagChip tag={t} small /></label>)}</div>
+        : <p className="sb-hint">{tagLib ? "No Wiki tags yet. Tag pages with # on a page, then pick them here." : "Loading tags…"}</p>}
       <p className="sb-hint">Those pages show after your links, by name, and new ones join by themselves.</p>
       <div className="sb-dialog-foot">
         <button className="text-button sb-danger" onClick={onDelete}><Trash2 size={14} /> Delete category</button>

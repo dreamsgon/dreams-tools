@@ -39,3 +39,16 @@ test('players get the settings a page is read with, even from a branch they cann
  assert.equal(child.parentId,undefined,'its GM-only parent is not named');
  assert.ok(!view.entries.some(e=>e.id==='demo-greyhaven'));
 });
+
+test('a page look keeps only what differs from a plain page, and players get it without the contents switch',async()=>{
+ const {cleanPageLook,pageLookSchema}=await import('../lib/encyclopedia/page-text.ts');
+ const banner={imageId:'0b5f6a8e-3c1d-4f2a-9b7e-1a2b3c4d5e6f',width:1200,height:400,y:.3};
+ assert.equal(cleanPageLook({box:'right',toc:true,wide:false}),undefined);
+ assert.deepEqual(cleanPageLook({banner,icon:'castle',box:'left',toc:false,wide:true}),{banner,icon:'castle',box:'left',toc:false,wide:true});
+ assert.equal(pageLookSchema.safeParse({icon:'not-an-icon'}).success,false);
+ assert.equal(pageLookSchema.safeParse({banner:{...banner,imageId:'nope'}}).success,false);
+ const w=demoWorkspace();w.entries=w.entries.map(e=>e.id==='demo-first'?{...e,overviewVisibility:'players',pageLook:{banner,icon:'castle',toc:false}}:e);
+ assert.ok(workspaceSchema.safeParse(w).success);
+ const page=playerCampaign(w,'demo-campaign').entries.find(e=>e.id==='demo-first');
+ assert.deepEqual(page.pageLook,{banner,icon:'castle',toc:undefined});
+});

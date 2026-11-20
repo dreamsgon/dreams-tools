@@ -11,10 +11,11 @@ import {PageList} from './article-body';
 
 type Page={id:string;title:string;kind?:string;parentId?:string;tabs?:readonly {id:string;title:string;body:string}[]};
 const overview=(p:Page)=>p.tabs?.find(t=>t.id==='overview')?.body??null;
-export function PlayerProse({text,title='',entries,open,className='',look}:{text:string;title?:string;entries:readonly Page[];open:(id:string)=>void;className?:string;look?:TextSettings}){
+/** `token`: the player link the page is read through, for its pictures. */
+export function PlayerProse({text,title='',entries,open,className='',look,token}:{text:string;title?:string;entries:readonly Page[];open:(id:string)=>void;className?:string;look?:TextSettings;token?:string}){
  const go=(id:string,section:string|null)=>{open(id);if(section)scrollToHeading(headingId(section));};
  const env=(title:string):WikiEnv=>({
-  gm:false,title,
+  gm:false,title,pictureToken:token,
   link:(inner,i)=>{const {page:target,section,label}=linkParts(inner);const found=target?playerLink(entries,target):null;const text=label??(section?(target?`${found?.title??target}, ${section}`:section):found?.title??target);
    if(!target&&section)return <button key={i} className="wiki-link" onClick={()=>scrollToHeading(headingId(section))}>{text}</button>;
    return found?<button key={i} className="wiki-link" onClick={()=>go(found.id,section)}>{text}</button>:<span key={i}>{text}</span>;},

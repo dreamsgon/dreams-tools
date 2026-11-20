@@ -35,7 +35,7 @@ export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore
 export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system"] as const;
 export type CategoryKind = typeof categoryKinds[number];
 
-export const maxQuickLinks = 12, maxCategories = 30, maxCategoryLinks = 60;
+export const maxQuickLinks = 12, maxCategories = 30, maxCategoryLinks = 60, maxCategoryTags = 20;
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const label = z.string().trim().min(1).max(60);
 const url = z.string().trim().max(500).refine(v => /^https?:\/\/[^\s]+$/i.test(v), "Links must start with http:// or https://");
@@ -53,6 +53,8 @@ export const sidebarCategorySchema = z.object({
   id, name: z.string().trim().min(1).max(40),
   links: z.array(sidebarLinkSchema).max(maxCategoryLinks),
   kinds: z.array(z.enum(categoryKinds)).max(categoryKinds.length).optional(),
+  /** Optional (added later): also every page with any of these Wiki tags (the GM's own tags, lib/tags.ts). */
+  tags: z.array(id).max(maxCategoryTags).optional(),
 });
 export type SidebarCategory = z.infer<typeof sidebarCategorySchema>;
 
@@ -165,12 +167,18 @@ export function setCategoryKinds(s: Sidebar, catId: string, kinds: CategoryKind[
   return updateCategory(s, catId, c => { const rest = { ...c }; delete rest.kinds; return ordered.length ? { ...rest, kinds: ordered } : rest; });
 }
 
+export function setCategoryTags(s: Sidebar, catId: string, tags: string[]): Sidebar {
+  const clean = [...new Set(tags)].slice(0, maxCategoryTags);
+  return updateCategory(s, catId, c => { const rest = { ...c }; delete rest.tags; return clean.length ? { ...rest, tags: clean } : rest; });
+}
+
 type PageLike = { id: string; title: string; kind: string };
 /**
- * What a category lists: its own links first, in the GM's order, then every page of its kinds not
- * already linked, by title. Links to pages that are gone, or that this campaign cannot see, are skipped.
+ * What a category lists: its own links first, in the GM's order, then every page of its kinds, or with any of its
+ * tags, not already linked, by title. Links to pages that are gone, or that this campaign cannot see, are skipped.
+ * `tagsOf` gives a page's tag ids; without it, tags gather nothing.
  */
-export function categoryItems<P extends PageLike>(c: SidebarCategory, pages: P[]): ({ link: SidebarLink; page?: P })[] {
+export function categoryItems<P extends PageLike>(c: SidebarCategory, pages: P[], tagsOf?: (pageId: string) => readonly string[]): ({ link: SidebarLink; page?: P })[] {
   const byId = new Map(pages.map(p => [p.id, p]));
   const out: ({ link: SidebarLink; page?: P })[] = [];
   for (const link of c.links) {
@@ -178,10 +186,11 @@ export function categoryItems<P extends PageLike>(c: SidebarCategory, pages: P[]
     const page = byId.get(link.page);
     if (page) out.push({ link, page });
   }
-  if (c.kinds?.length) {
+  const tags = new Set(tagsOf ? c.tags ?? [] : []);
+  if (c.kinds?.length || tags.size) {
     const linked = new Set(c.links.flatMap(l => l.type === "page" ? [l.page] : []));
-    const kinds = new Set<string>(c.kinds);
-    pages.filter(p => kinds.has(p.kind) && !linked.has(p.id)).sort((a, b) => a.title.localeCompare(b.title)).forEach(p => out.push({ link: { id: `auto-${p.id}`, type: "page", page: p.id }, page: p }));
+    const kinds = new Set<string>(c.kinds ?? []);
+    pages.filter(p => (kinds.has(p.kind) || (tags.size > 0 && tagsOf!(p.id).some(t => tags.has(t)))) && !linked.has(p.id)).sort((a, b) => a.title.localeCompare(b.title)).forEach(p => out.push({ link: { id: `auto-${p.id}`, type: "page", page: p.id }, page: p }));
   }
   return out;
 }

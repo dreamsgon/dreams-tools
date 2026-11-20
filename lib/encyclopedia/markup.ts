@@ -22,10 +22,34 @@ export type Block =
   | { type: 'table'; head: string[]; align: ('left' | 'center' | 'right' | null)[]; rows: string[][] }
   | { type: 'block'; name: string; arg: string; children: Block[]; lines: string[]; columns?: Block[][] }
   | { type: 'embed'; target: string; options: string[] }
+  | { type: 'picture'; imageId: string; caption: string; side: PictureSide; size: PictureSize }
   | { type: 'randomTable'; inner: string }
   | { type: 'maptable'; sceneId: string; label: string }
   | { type: 'html'; source: string }
   | { type: 'footnotes'; notes: { key: string; n: number; text: string }[] };
+
+export type PictureSide = 'left' | 'right' | 'center';
+export type PictureSize = 'small' | 'medium' | 'large' | 'full';
+/** `![[picture:<id>|Caption|right|small]]` on a line of its own: a picture uploaded to the page. */
+const PICTURE_LINE = /^!\[\[picture:([0-9a-fA-F-]{36})((?:\|[^\]\n]*)?)\]\]$/;
+const PICTURE_ANY = /!\[\[picture:([0-9a-fA-F-]{36})[|\]]/g;
+/** The pictures a page's text shows, for checking which pictures a reader may fetch. */
+export const pictureIds = (text: string) => [...text.matchAll(PICTURE_ANY)].map(m => m[1]!.toLowerCase());
+/** The text that shows a picture, with its caption, side and size. */
+export function pictureLine(imageId: string, caption = '', side: PictureSide = 'right', size: PictureSize = 'medium') {
+  const parts = [`picture:${imageId}`, caption.replace(/[\]|\n]/g, ' ').trim(), side === 'right' ? '' : side, size === 'medium' ? '' : size].filter(Boolean);
+  return `![[${parts.join('|')}]]`;
+}
+function pictureOptions(raw: string): { caption: string; side: PictureSide; size: PictureSize } {
+  let side: PictureSide = 'right', size: PictureSize = 'medium'; const words: string[] = [];
+  for (const part of raw.split('|').map(s => s.trim()).filter(Boolean)) {
+    const low = part.toLowerCase();
+    if (low === 'left' || low === 'right' || low === 'center' || low === 'centre') side = low === 'centre' ? 'center' : low;
+    else if (low === 'small' || low === 'medium' || low === 'large' || low === 'full') size = low;
+    else words.push(part);
+  }
+  return { caption: words.join(' | ').slice(0, 300), side, size };
+}
 
 export const BLOCK_OPEN = /^[ \t]*:::[ \t]*([a-z][\w-]*)[ \t]*(.*?)[ \t]*$/i;
 export const BLOCK_CLOSE = /^[ \t]*:::[ \t]*$/;
@@ -94,6 +118,7 @@ export function wikiBlocks(text: string, offset = 0, depth = 0): Block[] {
       out.push({ type: 'block', name: m[1]!.toLowerCase(), arg: m[2]!.trim(), lines: body, children: wikiBlocks(body.join('\n'), offset + start, depth + 1) }); continue;
     }
     const trimmed = line.trim();
+    if ((m = PICTURE_LINE.exec(trimmed))) { out.push({ type: 'picture', imageId: m[1]!.toLowerCase(), ...pictureOptions(m[2]!) }); i++; continue; }
     if ((m = /^!\[\[([^\]\n]{1,300})\]\]$/.exec(trimmed))) { const [target = '', ...options] = m[1]!.split('|').map(s => s.trim()); out.push({ type: 'embed', target, options }); i++; continue; }
     if ((m = /^\[\[(table:[^\]\n]{1,300})\]\]$/i.exec(trimmed))) { out.push({ type: 'randomTable', inner: m[1]! }); i++; continue; }
     if ((m = /^\[\[maptable:([A-Za-z0-9_-]{1,120})(?:\|([^\]]*))?\]\]$/.exec(trimmed))) { out.push({ type: 'maptable', sceneId: m[1]!, label: m[2]?.trim() || 'Battle map' }); i++; continue; }
