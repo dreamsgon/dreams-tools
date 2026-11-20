@@ -1,7 +1,8 @@
 import { campaignLayout, homeCampaigns, type CampaignFolder, type CampaignRow, type CampaignSummary } from "./campaign-links.ts";
+import { joinedForSwitcher, type JoinedCampaign } from "./campaign-nav.ts";
 
 /**
- * The quick campaign switcher in the sidebar of both tools. Pure logic only:
+ * The quick campaign switcher in the campaign bar (components/campaign-bar.tsx). Pure logic only:
  * filtering, grouping into Pinned / Recent / Folders and keyboard movement.
  * The popover itself is components/campaign-switcher.tsx.
  */
@@ -65,7 +66,9 @@ export function matchesQuery(row: CampaignRow, query: string): boolean {
 export type SwitcherItem =
   | { type: "heading"; id: string; label: string; icon?: "star" | "folder" }
   | { type: "folder"; id: string; folder: CampaignFolder; depth: number; count: number; open: boolean }
-  | { type: "row"; id: string; row: CampaignRow; depth: number; pinned: boolean };
+  | { type: "row"; id: string; row: CampaignRow; depth: number; pinned: boolean }
+  /** A campaign someone else runs that you joined. */
+  | { type: "member"; id: string; joined: JoinedCampaign };
 
 export type SwitcherOptions = {
   query?: string;
@@ -76,6 +79,13 @@ export type SwitcherOptions = {
   /** Folder ids that are expanded. */
   expanded?: ReadonlySet<string>;
   recentLimit?: number;
+  /** Campaigns other people run that you joined (GET /api/members?mine=1). Listed last, under "Campaigns you're in". */
+  joined?: readonly JoinedCampaign[] | null;
+};
+
+const joinedMatches = (j: JoinedCampaign, query: string) => {
+  const q = query.trim().toLocaleLowerCase();
+  return !q || j.campaign.toLocaleLowerCase().includes(q) || j.world.toLocaleLowerCase().includes(q);
 };
 
 /**
@@ -86,10 +96,12 @@ export type SwitcherOptions = {
 export function switcherItems(summary: CampaignSummary, options: SwitcherOptions = {}): SwitcherItem[] {
   const { query = "", pins = null, opened, expanded = new Set<string>(), recentLimit = RECENT_LIMIT } = options;
   const flag = (row: CampaignRow) => isPinned(row, pins);
+  const joined = joinedForSwitcher(options.joined).filter(j => joinedMatches(j, query));
+  const members = joined.map((j): SwitcherItem => ({ type: "member", id: `j:${j.ref}`, joined: j }));
   if (query.trim()) {
-    const hits = summary.rows.filter(r => matchesQuery(r, query));
-    return [{ type: "heading", id: "h-matches", label: hits.length === 1 ? "1 match" : `${hits.length} matches` },
-      ...hits.map((row): SwitcherItem => ({ type: "row", id: `s:${row.key}`, row, depth: 0, pinned: flag(row) }))];
+    const hits = summary.rows.filter(r => matchesQuery(r, query)), count = hits.length + members.length;
+    return [{ type: "heading", id: "h-matches", label: count === 1 ? "1 match" : `${count} matches` },
+      ...hits.map((row): SwitcherItem => ({ type: "row", id: `s:${row.key}`, row, depth: 0, pinned: flag(row) })), ...members];
   }
   const live = summary.rows.filter(r => !r.encyclopedia?.archived);
   const out: SwitcherItem[] = [];
@@ -107,6 +119,7 @@ export function switcherItems(summary: CampaignSummary, options: SwitcherOptions
       ? { type: "folder", id: `f:${item.folder.id}`, folder: item.folder, depth: item.depth, count: item.count, open: item.open }
       : { type: "row", id: `c:${item.row.key}`, row: item.row, depth: item.depth, pinned: flag(item.row) });
   });
+  if (members.length) out.push({ type: "heading", id: "h-joined", label: "Campaigns you're in" }, ...members);
   return out;
 }
 
