@@ -282,6 +282,11 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
     party: seen.filter(e => e.kind === "character" && (e.character?.role === "pc" || e.character?.role === "companion"))
       .sort((a, b) => (a.character?.role === "pc" ? 0 : 1) - (b.character?.role === "pc" ? 0 : 1) || a.title.localeCompare(b.title))
       .map(e => ({ id: e.id, title: e.title, role: e.character!.role, group: e.character!.group, picture: e.picture ?? null })),
+    // Every character and faction, so the GM can choose who The party, Companions and Factions show.
+    people: seen.filter(e => e.kind === "character").sort((a, b) => a.title.localeCompare(b.title)).slice(0, 400)
+      .map(e => ({ id: e.id, title: e.title, role: e.character?.role ?? "npc", group: e.character?.group ?? "", picture: e.picture ?? null })),
+    factions: seen.filter(e => e.kind === "faction").sort((a, b) => a.title.localeCompare(b.title)).slice(0, 200)
+      .map(e => ({ id: e.id, title: e.title, type: e.org?.type ?? "", picture: e.picture ?? null })),
     recent: [...own].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12).map(e => ({ id: e.id, title: e.title, kind: e.kind, updatedAt: e.updatedAt, parent: titleOf(e.parentId) })),
     initiative: map && row.maptable ? lastEncounter(map, row.maptable.id) : null,
     tables: extras.tables?.tables ?? [],
