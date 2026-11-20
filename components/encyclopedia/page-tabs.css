@@ -1,0 +1,91 @@
+/* A page's tab row (page-tabs.tsx), the line under it (TabShare) and the character page header (character-head.tsx). */
+
+/* ---- Tab row: the tabs that fit, More, and the Tabs menu. No scrollbar. ---- */
+.page-tabs.article-tabs{position:relative;display:flex;align-items:flex-end;gap:2px;overflow:visible;margin:22px 0 0;padding-bottom:0}
+.page-tabs-list{display:flex;align-items:flex-end;gap:2px;flex:1;min-width:0}
+.page-tabs .page-tab{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;white-space:nowrap;padding:11px 13px;margin-bottom:-1px}
+.page-tabs .tab-gm{opacity:.5;flex-shrink:0}
+.page-tabs .page-tab[aria-selected=true] .tab-gm{opacity:.75}
+.page-tabs-measure{position:absolute;left:0;top:0;display:flex;gap:2px;visibility:hidden;pointer-events:none;height:0;overflow:hidden;white-space:nowrap}
+.page-tabs-pop{position:relative;flex-shrink:0}
+.page-tabs .page-tab-more{color:var(--muted)}
+.page-tab-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--raised);color:var(--muted);font-size:10.5px;font-weight:600;letter-spacing:0}
+.page-tabs-tools{margin-left:auto;align-self:center;padding-bottom:3px}
+.page-tabs .page-tabs-gear{position:relative;width:34px;height:34px;padding:0;display:grid;place-items:center;border-radius:var(--radius);color:var(--muted);background:none;border:1px solid transparent;box-shadow:none}
+.page-tabs .page-tabs-gear:hover,.page-tabs .page-tabs-gear[aria-expanded=true]{color:var(--ink);background:var(--raised);border-color:var(--line)}
+.page-tab-dot{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+/* Menus (More and Tabs). They reset what a campaign skin gives tab buttons. */
+.page-tabs .page-tabs-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:200px;max-width:min(300px,calc(100vw / var(--ui-zoom, 1) - 32px));max-height:min(420px,70vh / var(--ui-zoom, 1));overflow:auto;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:calc(var(--radius) + 2px);box-shadow:0 12px 32px var(--shadow-color,rgba(0,0,0,.25));display:flex;flex-direction:column;gap:1px;text-transform:none;letter-spacing:normal}
+.page-tabs .page-tabs-tools .page-tabs-menu{left:auto;right:0}
+.page-tabs .page-tabs-menu button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:var(--radius-sm,6px);font:inherit;font-family:var(--font-sans);font-size:13px;font-weight:400;letter-spacing:normal;text-transform:none;color:var(--ink);cursor:pointer;justify-content:space-between}
+.page-tabs .page-tabs-settings button{justify-content:flex-start}
+.page-tabs .page-tabs-menu button:hover:not(:disabled),.page-tabs .page-tabs-menu button:focus-visible{background:var(--raised)}
+.page-tabs .page-tabs-menu button:disabled{opacity:.45;cursor:default}
+.page-tabs .page-tabs-menu button.danger{color:var(--danger,#c0392b)}
+.page-tabs-menu-head{margin:8px 10px 3px;font-family:var(--font-sans);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.page-tabs-menu-head:first-child{margin-top:2px}
+.page-tabs-menu-note{margin:6px 10px 4px;font-family:var(--font-sans);font-size:11.5px;line-height:1.4;color:var(--muted);text-transform:none;letter-spacing:normal}
+.page-tabs-check{display:inline-grid;place-items:center;width:16px;height:16px;border:1px solid var(--line-strong,var(--line));border-radius:4px;color:var(--accent);flex-shrink:0}
+.page-tabs .page-tabs-menu [aria-checked=true] .page-tabs-check{border-color:var(--accent);background:var(--accent-soft)}
+
+/* ---- The line under the tabs: who sees it, and the tab's own buttons ---- */
+.tab-share{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px 0 16px;min-height:30px}
+.tab-share-switch{display:inline-flex;padding:2px;gap:2px;background:var(--raised);border:1px solid var(--line);border-radius:999px}
+.tab-share-switch button{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:500;color:var(--muted);background:none;border:0;line-height:1.3;cursor:pointer}
+.tab-share-switch button:hover{color:var(--ink)}
+.tab-share-switch button[aria-checked=true]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px var(--shadow-color,rgba(0,0,0,.15))}
+.tab-share-switch button[aria-checked=true]:last-child{color:var(--accent)}
+.tab-share-fixed{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted)}
+.tab-share-hint{font-size:12px;color:var(--muted);line-height:1.35}
+.tab-share-actions{margin-left:auto;display:inline-flex;gap:6px}
+/* On a character's Profile, the line also holds Arrange and Player view. */
+.char-profile .char-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.char-profile .char-tools>.tab-share{flex:1;min-width:0;padding:0}
+.char-tools-buttons{display:inline-flex;gap:6px;margin-left:auto}
+.char-tools-buttons .button.ghost{background:none;border-color:transparent;color:var(--muted)}
+.char-tools-buttons .button.ghost:hover,.char-tools-buttons .button.ghost[aria-pressed=true]{background:var(--raised);border-color:var(--line);color:var(--ink)}
+.char-profile>.char-tools{margin:12px 0 16px}
+
+/* ---- Character header: portrait beside the name ---- */
+.char-head{display:flex;gap:18px;align-items:center;margin:2px 0 4px}
+.char-portrait{flex-shrink:0;width:92px;height:92px;padding:0;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--raised);display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.char-portrait img{width:100%;height:100%;object-fit:cover;display:block}
+.char-portrait.is-empty{border:1.5px dashed var(--line-strong,var(--line));background:none;color:var(--accent);gap:2px;align-content:center;font-size:11px;font-weight:500}
+.char-portrait:hover{border-color:var(--accent)}
+.char-portrait:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.char-head-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:8px}
+.char-head .article-title{margin:0}
+.char-head-line{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.char-head-details{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 0;padding:4px 10px 4px 4px;border:1px solid var(--line);border-radius:999px;background:none;font-size:12.5px;color:var(--ink);cursor:pointer;line-height:1.3}
+.char-head-details>span+span::before{content:"·";margin:0 7px;color:var(--muted)}
+.char-head-details:hover{border-color:var(--accent);background:var(--accent-soft)}
+.char-head-edit{margin-left:8px;color:var(--muted)}
+.char-status{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 7px;border-radius:999px;background:var(--raised);font-weight:500}
+.char-status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.char-status.is-active::before{background:#3aa76d}
+.char-status.is-missing::before{background:#d39b2a}
+.char-status.is-deceased::before{background:#b4473d}
+.char-head-tags{margin:0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* Picture dialog: the old panel, given room. */
+.tool-dialog .picture-panel{margin:0}
+
+/* Aside: Use a template / Save as template */
+.template-actions{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+
+/* A co-GM who can only read sees who sees each tab, not the switches. */
+.co-gm-read :is(.tab-share-switch,.page-tabs-tools){display:none !important}
+
+@media(max-width:720px){
+ .page-tabs.article-tabs{margin-top:16px}
+ .page-tabs .page-tab{padding:10px 10px}
+ .char-head{gap:14px;align-items:flex-start}
+ .char-portrait{width:68px;height:68px;border-radius:12px}
+ .char-portrait.is-empty span{display:none}
+ .char-head .article-title h1{font-size:28px}
+ .tab-share{padding:10px 0 12px}
+ .tab-share-hint{flex-basis:100%;order:3}
+ .char-tools-buttons .button.small{padding:7px 9px}
+}

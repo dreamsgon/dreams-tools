@@ -1,10 +1,13 @@
 /*
  * Page templates: a world's ready-made pages (Settlement, Tavern, Organization…) with info box fields, tabs and
  * starting text. A page made from one keeps its templateId, so later fields and tabs reach it too.
+ * A template can belong to one campaign (campaignId) or to the whole world. A character template can also leave out
+ * ready-made tabs (hiddenTabs) and carry its own Profile layout (layout), so a campaign can have several kinds of
+ * character (a player character, a shopkeeper, a monster) instead of one shared layout.
  */
-import type { Entry, PageTemplate, TemplateField, Workspace } from "./world-model.ts";
+import type { CharacterData, Entry, HideableTab, PageTemplate, TemplateField, Workspace, World } from "./world-model.ts";
 import type { Org } from "./org-profile.ts";
-import type { Profile } from "./character-profile.ts";
+import { layOutProfile, profileFromLayout, profileLayoutOf, type Profile } from "./character-profile.ts";
 
 export const FIELD_TYPES: [TemplateField["type"], string][] = [["text", "Text"], ["textarea", "Long text"], ["number", "Number"], ["choice", "Choice"], ["page", "Page link"]];
 export const KIND_NAMES: Record<PageTemplate["kind"], string> = { note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", quest: "Quest" };
@@ -33,6 +36,51 @@ export function starterTemplates(newId: () => string, now = new Date().toISOStri
   ];
 }
 
+/**
+ * Three kinds of character to start from. A player character keeps every tab; an NPC is a face with a story (no rules
+ * tabs); a creature is a statblock. Each has its own fields at the top of the Profile.
+ */
+export function characterStarters(newId: () => string, now = new Date().toISOString()): PageTemplate[] {
+  const layout = (facts: string[], gmFacts: string[] = []) => ({
+    blocks: [{ id: newId(), kind: "beliefs" as const, title: "Beliefs", column: "left" as const }, { id: newId(), kind: "organizations" as const, title: "Organizations", column: "right" as const }, { id: newId(), kind: "ties" as const, title: "People", column: "right" as const }],
+    bar: { title: "Right now", fields: [{ id: newId(), label: "Wants" }, { id: newId(), label: "How" }, { id: newId(), label: "Trouble", gm: true }] },
+    facts: [...facts.map(label => ({ id: newId(), label })), ...gmFacts.map(label => ({ id: newId(), label, gm: true }))],
+  });
+  const t = (name: string, facts: string[], hiddenTabs: HideableTab[], tabs: { title: string; visibility: "gm" | "players" }[], body: string, gmFacts: string[] = []): PageTemplate =>
+    ({ id: newId(), name, kind: "character", fields: [], tabs, body, overviewVisibility: "players", updatedAt: now, ...(hiddenTabs.length ? { hiddenTabs } : {}), layout: layout(facts, gmFacts) });
+  return [
+    t("Player character", ["Player", "Species", "Class", "Level"], ["statblock"], [], "## Background\n\n## Goals\n"),
+    t("NPC", ["Species", "Occupation", "Where to find them"], ["statblock", "stats", "features", "inventory", "spells"], [{ title: "GM notes", visibility: "gm" }], "## First impression\nHow they look and sound.\n\n## What they want from the party\n", ["Secret"]),
+    t("Creature", ["Type", "Size", "Challenge"], ["stats", "features", "inventory", "spells"], [], "## Tactics\n\n## Lair and loot\n"),
+  ];
+}
+
+/** Ready-made character tabs that can be hidden, in tab order, with their usual names (Spells takes the campaign's own name in the UI). */
+export const HIDEABLE_TABS: [HideableTab, string][] = [["statblock", "Statblock"], ["stats", "Stats & Skills"], ["features", "Features"], ["inventory", "Inventory"], ["spells", "Spells"]];
+const hideOrder = (ids: Iterable<string>) => HIDEABLE_TABS.map(([id]) => id).filter(id => new Set(ids).has(id));
+
+/** The templates a campaign can use: the world's own, then this campaign's. Without a campaign, only the world's. */
+export const templatesFor = (world: Pick<World, "templates"> | undefined | null, campaignId: string | null | undefined): PageTemplate[] =>
+  (world?.templates ?? []).filter(t => !t.campaignId || t.campaignId === campaignId);
+
+/**
+ * A page's change to hide these ready-made tabs (and show the rest). A hidden tab is made GM only as well, so it stays
+ * hidden from players when it is shown again later. What is in it is kept.
+ */
+export function hideTabsPatch(e: Pick<Entry, "kind" | "character" | "hiddenTabs">, hide: Iterable<string>): Pick<Entry, "hiddenTabs" | "character"> {
+  const ids = hideOrder(hide) as HideableTab[];
+  if (e.kind !== "character") return { hiddenTabs: undefined };
+  const c = e.character;
+  const character: CharacterData | undefined = c && ids.length ? {
+    ...c,
+    ...(ids.includes("stats") ? { statsVisibility: "gm" as const } : {}),
+    ...(ids.includes("features") && c.featuresVisibility ? { featuresVisibility: "gm" as const } : {}),
+    ...(ids.includes("spells") && c.spellsVisibility ? { spellsVisibility: "gm" as const } : {}),
+    ...(ids.includes("inventory") && c.inventory ? { inventory: { ...c.inventory, visibility: "gm" as const } } : {}),
+  } : c;
+  return { hiddenTabs: ids.length ? ids : undefined, character };
+}
+
 /** The template a page was made from, if its world still has it. */
 export const templateOf = (s: Workspace, e: Entry) => e.templateId ? s.worlds.find(w => w.id === e.worldId)?.templates?.find(t => t.id === e.templateId) ?? null : null;
 export const templateUses = (s: Workspace, templateId: string) => s.entries.filter(e => e.templateId === templateId).length;
@@ -58,7 +106,7 @@ export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: str
   return {
     id: opts.id, worldId: opts.worldId, campaignId: opts.campaignId, parentId: opts.parentId, title: opts.title.trim().slice(0, 160), kind: t.kind,
     body: t.body, overviewVisibility: t.overviewVisibility ?? "gm", ...(t.tabs.length ? { tabs: t.tabs.map(x => ({ id: opts.newId(), title: x.title, body: "", visibility: x.visibility })) } : {}),
-    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && opts.profile ? { profile: opts.profile } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {} } } : {}),
+    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {} } } : {}),
     updatedAt: opts.now ?? new Date().toISOString(),
   };
 }
@@ -70,7 +118,32 @@ export function templateFromPage(s: Workspace, e: Entry, name: string, newId: ()
     id: newId(), name: name.trim().slice(0, 160) || e.title, kind, fields: from ? from.fields.map(f => ({ ...f })) : [],
     tabs: (e.tabs ?? []).slice(0, 20).map(t => ({ title: t.title, visibility: t.visibility })), body: e.body.slice(0, 20000),
     parentId: e.parentId, overviewVisibility: e.overviewVisibility ?? "gm", updatedAt: now,
+    ...(kind === "character" && e.hiddenTabs?.length ? { hiddenTabs: [...e.hiddenTabs] } : {}),
+    ...(kind === "character" && e.profile ? { layout: profileLayoutOf(e.profile) } : {}),
   };
+}
+
+/**
+ * Uses a template on a page that already exists: it remembers the template (so its info box shows), gets the tabs it
+ * doesn't have yet, hides the tabs the template leaves out, and a character's Profile is laid out like the template's.
+ * Nothing written is removed: values, text, traits and people stay.
+ */
+export function applyTemplate(s: Workspace, entryId: string, templateId: string, newId: () => string, now = new Date().toISOString()): Workspace {
+  const e = s.entries.find(x => x.id === entryId), t = s.worlds.find(w => w.id === e?.worldId)?.templates?.find(x => x.id === templateId);
+  if (!e || !t) throw new Error("That template is no longer in this world.");
+  if (t.kind !== e.kind) throw new Error(`${t.name} is for ${KIND_NAMES[t.kind].toLowerCase()} pages.`);
+  if (t.campaignId && e.campaignId && t.campaignId !== e.campaignId) throw new Error(`${t.name} belongs to another campaign.`);
+  const have = new Set((e.tabs ?? []).map(x => x.title.trim().toLowerCase()));
+  const missing = t.tabs.filter(x => !have.has(x.title.trim().toLowerCase())).slice(0, Math.max(0, 30 - (e.tabs?.length ?? 0)));
+  const next: Entry = {
+    ...e, templateId: t.id,
+    ...(missing.length ? { tabs: [...(e.tabs ?? []), ...missing.map(x => ({ id: newId(), title: x.title, body: "", visibility: x.visibility }))] } : {}),
+    ...(e.kind === "character" ? hideTabsPatch(e, t.hiddenTabs ?? []) : {}),
+    ...(e.kind === "character" && t.layout ? { profile: e.profile ? layOutProfile(e.profile, t.layout) : profileFromLayout(t.layout) } : {}),
+    updatedAt: now,
+  };
+  if (!next.hiddenTabs) delete next.hiddenTabs;
+  return { ...s, entries: s.entries.map(x => x.id === entryId ? next : x) };
 }
 
 /**

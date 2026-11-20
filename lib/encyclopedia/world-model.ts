@@ -93,10 +93,18 @@ export const templateFieldSchema = z.object({
   id, label:z.string().trim().min(1).max(60), type:z.enum(["text","number","choice","page","textarea"]),
   options:z.array(z.string().trim().min(1).max(60)).max(30).optional(), visibility:visibilitySchema,
 }).superRefine((f,ctx)=>{if(f.type==="choice"&&!f.options?.length)ctx.addIssue({code:"custom",message:`“${f.label}” needs at least one choice`});});
+/** Ready-made character tabs a GM can hide from a page (and a template can leave out). A hidden tab is GM only too. */
+export const hideableTabIds = ["statblock","stats","features","inventory","spells"] as const;
+export type HideableTab = typeof hideableTabIds[number];
 export const templateKinds = ["note","character","place","faction","lore","session","quest"] as const;
 export const pageTemplateSchema = z.object({
   id, name, kind:z.enum(templateKinds), fields:z.array(templateFieldSchema).max(30), tabs:z.array(z.object({title:name, visibility:visibilitySchema})).max(20),
   body:z.string().max(20000), parentId:id.nullable().optional(), overviewVisibility:visibilitySchema.optional(), updatedAt:z.string().datetime(),
+  // Optional (added later): a template only one campaign offers. Left out, every campaign in the world can use it.
+  campaignId:id.optional(),
+  // Optional (added later): ready-made tabs a page made from it leaves out (hideableTabs in templates.ts), and for a character its Profile layout.
+  hiddenTabs:z.array(z.enum(hideableTabIds)).max(hideableTabIds.length).optional(),
+  layout:characterLayoutSchema.optional(),
 });
 export type PageTemplate=z.infer<typeof pageTemplateSchema>;
 export type TemplateField=z.infer<typeof templateFieldSchema>;
@@ -180,6 +188,8 @@ export const entrySchema = z.object({
     ties:tiesSchema.optional(),
     // Optional (added later): the template this page was made from, and its info box values by field id.
     templateId:id.optional(), fields:z.record(id, z.union([z.string().max(2000), z.number().finite()])).optional(),
+    // Optional (added later): ready-made tabs hidden on this page (hideableTabIds). Players never get a hidden tab either.
+    hiddenTabs:z.array(z.enum(hideableTabIds)).max(hideableTabIds.length).optional(),
     // Optional (added later): on a session page, the recap an AI drafted (timeline, quotes, GM notes, things to check).
     recap:recapSchema.optional(),
     // Optional (added later): who last changed the page when it wasn't the GM: a co-GM, or a player on their own page.
@@ -336,7 +346,7 @@ export function campaignExport(s: Workspace, campaignId: string, opts: { linked?
         throw new Error("Campaign not found");
     const ids = opts.linked ? campaignLoreWorldIds(s, c) : [c.worldId];
     const own = visibleEntries(s, c.worldId, c.id), pages = opts.linked ? own : own.filter(e => e.worldId === c.worldId);
-    return workspaceSchema.parse({ schemaVersion: 1, worlds: ids.map(id => s.worlds.find(w => w.id === id)!), campaigns: [c], entries: pages.map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e).map(e=>e.codex?{...e,codex:{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).filter(([cid])=>cid===c.id))}}:e) });
+    return workspaceSchema.parse({ schemaVersion: 1, worlds: ids.map(id => s.worlds.find(w => w.id === id)!).map(w => w.templates?.some(t => t.campaignId && t.campaignId !== c.id) ? { ...w, templates: w.templates.filter(t => !t.campaignId || t.campaignId === c.id) } : w), campaigns: [c], entries: pages.map(e=>e.mapData?{...e,mapData:scopeMapWeather(e.mapData,c.id)}:e).map(e=>e.character?{...e,character:{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).filter(([cid])=>cid===c.id))}}:e).map(e=>e.codex?{...e,codex:{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).filter(([cid])=>cid===c.id))}}:e) });
 }
 export function importCopy(current: Workspace, input: unknown): Workspace {
     const incoming = workspaceSchema.parse(input);
@@ -344,7 +354,7 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
     const ref = (value: string) => ids.get(value)!;
     const links=(body:string)=>body.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,(full,target,label)=>ids.has(target)?`[[${ref(target)}${label??""}]]`:full);
     return workspaceSchema.parse({ schemaVersion: 1,
-        worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false }))],
+        worlds: [...current.worlds, ...incoming.worlds.map(w => ({ ...w, id: ref(w.id), name: (w.name + " (imported)").slice(0, 160), archived: false, ...(w.templates ? { templates: w.templates.map(t => { if (!t.campaignId) return t; const { campaignId, ...rest } = t; return ids.has(campaignId) ? { ...rest, campaignId: ref(campaignId) } : rest; }) } : {}) }))],
         campaigns: [...current.campaigns, ...incoming.campaigns.map(c => { const copy = { ...c, id: ref(c.id), worldId: ref(c.worldId), ...(c.linkedWorldIds?.some(w => ids.has(w)) ? { linkedWorldIds: c.linkedWorldIds.filter(w => ids.has(w)).map(ref) } : {}), ...(c.frontPage ? { frontPage: { widgets: c.frontPage.widgets.map(w => w.type === "links" ? { ...w, links: w.links.filter(l => !l.entryId || ids.has(l.entryId)).map(l => l.entryId ? { ...l, entryId: ref(l.entryId) } : l) } : w) } } : {}), ...(c.sidebar ? { sidebar: remapSidebarPages(c.sidebar, ids) } : {}) }; delete copy.maptableCampaignId; delete copy.discord; if (!c.linkedWorldIds?.some(w => ids.has(w))) delete copy.linkedWorldIds; return copy; })],
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,...(e.mapData.zoomOf?{zoomOf:ids.has(e.mapData.zoomOf.mapId)?{...e.mapData.zoomOf,mapId:ref(e.mapData.zoomOf.mapId)}:undefined}:{}),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, store:e.store?remapStore(e.store,id=>ids.get(id)):undefined, sector:e.sector?{...e.sector,systems:e.sector.systems.map(x=>({...x,pageId:x.pageId?ids.get(x.pageId):undefined}))}:undefined, starSystem:e.starSystem?remapSystem(e.starSystem,id=>ids.get(id)):undefined, planet:e.planet?{...e.planet,systemPageId:ids.get(e.planet.systemPageId)??e.planet.systemPageId,worldMapId:e.planet.worldMapId?ids.get(e.planet.worldMapId):undefined}:undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
@@ -431,19 +441,21 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  const world=s.worlds.find(w=>w.id===c.worldId),allById=new Map(s.entries.map(e=>[e.id,e]));
  const entries=candidates.flatMap(e=>{
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"||e.kind==="store"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
-   const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
+   // A tab the GM hid on this page is never sent, not even to the character's own player.
+   const hidden=new Set(e.hiddenTabs??[]);
+   const showStats=e.kind==="character"&&e.character?.statsVisibility==="players"&&!hidden.has("stats");
    const mapData=e.mapData?.visibility==="players"?playerMap(e.mapData):undefined;
    const codex=e.codex?playerCodex(e.codex,c.id,playerText):undefined;
    const shareOrg=(e.kind==='faction'&&e.org?.visibility==='players')||(e.kind==='character'&&e.profile?.visibility==='players')||(e.kind==='vehicle'&&e.vehicle?.visibility==='players');
-   const ownSheet=!!linker&&!!mine?.has(e.id)&&e.character?.sheet?.linkedById===linker;
+   const ownSheet=!hidden.has('stats')&&!!linker&&!!mine?.has(e.id)&&e.character?.sheet?.linkedById===linker;
    const sheet=(showStats||ownSheet)&&e.character?.sheet?playerSheet(e.character.sheet):undefined;
    // Trackers: on a character whose stats are shared, or one this member may edit (they change them there).
    const trackers:PlayerTracker[]=e.kind==='character'&&(showStats||!!mine?.has(e.id))?playerTrackers(e.character?.trackers):[];
    // Inventory and spells: on a page this member may edit, or when the GM shares them.
    const own=!!mine?.has(e.id),items=itemSettingsOf(c);
-   const inventory=e.kind==='character'&&e.character&&(own||e.character.inventory?.visibility==='players')&&(e.character.inventory||own)?playerInventory(e.character.inventory,items):undefined;
-   const spells=e.kind==='character'&&e.character&&items.spells.on&&(own||e.character.spellsVisibility==='players')&&(e.character.spells?.length||own)?playerSpells(e.character.spells):undefined;
-   const features=e.kind==='character'&&e.character?.features?.length&&(own||e.character.featuresVisibility==='players')?playerFeatures(e.character.features):undefined;
+   const inventory=e.kind==='character'&&e.character&&!hidden.has('inventory')&&(own||e.character.inventory?.visibility==='players')&&(e.character.inventory||own)?playerInventory(e.character.inventory,items):undefined;
+   const spells=e.kind==='character'&&e.character&&items.spells.on&&!hidden.has('spells')&&(own||e.character.spellsVisibility==='players')&&(e.character.spells?.length||own)?playerSpells(e.character.spells):undefined;
+   const features=e.kind==='character'&&e.character?.features?.length&&!hidden.has('features')&&(own||e.character.featuresVisibility==='players')?playerFeatures(e.character.features):undefined;
    // A store: when the GM shares it (and it is for one of this member's characters), or one of their characters runs it.
    const ownStore=!!e.store?.ownerId&&!!mine?.has(e.store.ownerId),forMe=!e.store?.who||e.store.who.some(id=>mine?.has(id));
    const store=e.kind==='store'&&e.store&&(ownStore||(e.store.visibility==='players'&&!e.store.awaiting&&forMe))?playerStore(e.store,mine??new Set(),Date.now()):undefined;

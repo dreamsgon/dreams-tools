@@ -1,5 +1,5 @@
 'use client';
-import {Fragment,useState} from 'react';
+import {Fragment,useState,type ReactNode} from 'react';
 import {ArrowLeft,ArrowRight,Check,Eye,EyeOff,LayoutGrid,Pencil,Plus,Sparkles,GripVertical,Trash2,WrapText} from 'lucide-react';
 import {defaultCharacter,newId,playerCampaign,type Campaign,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {emblemSymbols,moveBlockBy,placeBlock,switchColumn,type EmblemSymbol} from '@/lib/encyclopedia/org-profile';
@@ -21,7 +21,7 @@ import {fillable,suggestTrait} from '@/lib/encyclopedia/profile-suggest';
 import {itemSettingsOf} from '@/lib/encyclopedia/items';
 
 type Change=(s:Workspace|((latest:Workspace)=>Workspace))=>boolean|void;
-type Props={entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[];/** Opens another tab of this page (a pin's title). */onTab?:(tab:string)=>void};
+type Props={/** The tab's visibility line, shown beside Arrange and Player view. */head?:ReactNode;entry:Entry;data:Workspace;campaign?:Campaign;change:Change;onOpen:(id:string)=>void;/** Pages that mention this one (the article's MENTIONED IN). */linked:Entry[];/** Opens another tab of this page (a pin's title). */onTab?:(tab:string)=>void};
 
 type Ctx={
  entry:Entry;data:Workspace;change:Change;open:(id:string)=>void;
@@ -52,7 +52,7 @@ function TraitForm({initial,have=[],onSave,onCancel}:{initial?:{label:string;sym
  </form>;
 }
 
-function Traits({profile,setProfile}:{profile:Profile;setProfile:(f:(p:Profile)=>Profile)=>void}){
+function Traits({profile,setProfile,extra}:{profile:Profile;setProfile:(f:(p:Profile)=>Profile)=>void;/** More add buttons on the same line (+ Field when there are no fields yet). */extra?:ReactNode}){
  const [form,setForm]=useState<string|null>(null);
  const set=(f:(l:Profile['traits'])=>Profile['traits'])=>setProfile(p=>({...p,traits:f(p.traits)}));
  const editing=profile.traits.find(t=>t.id===form);
@@ -60,7 +60,7 @@ function Traits({profile,setProfile}:{profile:Profile;setProfile:(f:(p:Profile)=
   <div className="char-traits" role="list" aria-label="Traits">
    {profile.traits.map(t=><span role="listitem" className="org-item" key={t.id}><TraitChip label={t.label} symbol={t.symbol} gm={t.gm}>
     <ItemTools gm={t.gm} what={t.label||'this trait'} onEdit={()=>setForm(form===t.id?null:t.id)} onGm={()=>set(l=>l.map(x=>x.id===t.id?{...x,gm:x.gm?undefined:true}:x))} onRemove={()=>{set(l=>l.filter(x=>x.id!==t.id));if(form===t.id)setForm(null);}}/></TraitChip></span>)}
-   <button type="button" className="char-trait-add" disabled={profile.traits.length>=maxTraits} onClick={()=>setForm(form==='new'?null:'new')}><Plus size={13}/> Trait{profile.traits.length>=maxTraits?` (up to ${maxTraits})`:''}</button>
+   <button type="button" className="char-trait-add" disabled={profile.traits.length>=maxTraits} onClick={()=>setForm(form==='new'?null:'new')}><Plus size={13}/> Trait{profile.traits.length>=maxTraits?` (up to ${maxTraits})`:''}</button>{extra}
   </div>
   {form==='new'&&<TraitForm have={profile.traits.map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>[...l,{id:newId(),...t}]);setForm(null);}}/>}
   {editing&&<TraitForm key={editing.id} initial={editing} have={profile.traits.filter(t=>t.id!==editing.id).map(t=>t.label)} onCancel={()=>setForm(null)} onSave={t=>{set(l=>l.map(x=>x.id===editing.id?{id:x.id,...t}:x));setForm(null);}}/>}
@@ -70,14 +70,15 @@ function Traits({profile,setProfile}:{profile:Profile;setProfile:(f:(p:Profile)=
 /* ---- Facts: Species, Class, Level… ---- */
 
 type Fact=NonNullable<Profile['facts']>[number];
-function Facts({profile,setProfile,arranging}:{profile:Profile;setProfile:(f:(p:Profile)=>Profile)=>void;arranging:boolean}){
- const facts=profile.facts??[],[adding,setAdding]=useState(false),[label,setLabel]=useState('');
+function Facts({profile,setProfile,arranging,adding,setAdding}:{profile:Profile;setProfile:(f:(p:Profile)=>Profile)=>void;arranging:boolean;adding:boolean;setAdding:(v:boolean)=>void}){
+ const facts=profile.facts??[],[label,setLabel]=useState('');
  const set=(f:(l:Fact[])=>Fact[])=>setProfile(p=>{const next=f(p.facts??[]);const {facts:_old,...rest}=p;void _old;return next.length?{...rest,facts:next}:rest;});
  const patchFact=(id:string,x:Partial<Fact>)=>set(l=>l.map(f=>f.id===id?{...f,...x}:f));
  const add=(name:string)=>{const t=name.trim().slice(0,40);if(!t)return;const id=newId();set(l=>[...l,{id,label:t,value:''}]);setLabel('');setAdding(false);requestAnimationFrame(()=>document.getElementById(`fact-${id}`)?.focus());};
  const dnd=useDragOrder((id,target,after)=>set(l=>moveTo(l,id,target,after)));
  const free=factSuggestions.filter(x=>!facts.some(f=>f.label.trim().toLowerCase()===x.toLowerCase()));
- if(!facts.length&&!adding)return <div className="char-facts is-empty"><button type="button" className="char-fact-add" onClick={()=>setAdding(true)}><Plus size={13}/> Add fields like Species or Class</button></div>;
+ // With no fields yet, + Field sits on the traits line (CharacterProfile) and nothing shows here.
+ if(!facts.length&&!adding)return null;
  return <><div className="char-facts-frame"><div className={`char-facts${arranging?' is-arranging':''}`} role="list" aria-label="Facts">
   {facts.map((f,i)=><Fragment key={f.id}>{f.br&&i>0&&<span className="char-fact-break" aria-hidden="true"/>}<div role="listitem" className={`char-fact${f.gm?' is-gm':''}${f.size?` size-${f.size}`:''}`} {...dnd.item(f.id,{on:arranging,handle:true})}>
    <textarea id={`fact-${f.id}`} className="char-fact-value" rows={f.value.length>(f.size==='l'?90:f.size==='m'?40:22)?2:1} style={{fontSize:factFontSize(f.value)}} aria-label={f.label||'Fact'} maxLength={300} placeholder="—" value={f.value} onKeyDown={e=>{if(e.key==='Enter')e.preventDefault();}} onChange={e=>patchFact(f.id,{value:e.target.value.replace(/\s*\n\s*/g,' ')})}/>
@@ -158,11 +159,11 @@ function Block({b,ctx,arrange}:{b:ProfileBlock;ctx:Ctx;arrange:Arrange<ProfileBl
 }
 
 /** The GM's Profile tab of a character page. */
-export function CharacterProfile({entry,data,campaign,change,onOpen,linked,onTab}:Props){
+export function CharacterProfile({head,entry,data,campaign,change,onOpen,linked,onTab}:Props){
  const world=data.worlds.find(w=>w.id===entry.worldId),profile=profileOf(entry,world),coGm=!!memberRef();
  const [arranging,setArranging]=useState(false),[scope,setScope]=useState<'one'|'world'>('one'),[showPlayer,setShowPlayer]=useState(false);
  const [picker,setPicker]=useState<string|null>(null),[editing,setEditing]=useState<string|null>(null),[dragId,setDrag]=useState<string|null>(null),[overId,setOver]=useState<string|null>(null),[renaming,setRenaming]=useState<string|null>(null);
- const [barEdit,setBarEdit]=useState(false),[notice,setNotice]=useState('');
+ const [barEdit,setBarEdit]=useState(false),[notice,setNotice]=useState(''),[addingFact,setAddingFact]=useState(false);
  const titleOf=(id:string)=>data.entries.find(e=>e.id===id)?.title??'';
 
  // Every edit goes through here: it starts from the latest saved copy and makes the profile the page's own if it was still the default.
@@ -199,14 +200,17 @@ export function CharacterProfile({entry,data,campaign,change,onOpen,linked,onTab
 
  return <div className={`org-profile char-profile${arranging?' is-arranging':''}`}>
   <div className="char-tools">
-   <button type="button" className="button small" aria-pressed={arranging} onClick={()=>{if(arranging)void done();else{setArranging(true);setBarEdit(false);}}}><LayoutGrid size={14}/> Arrange</button>
-   <button type="button" className="button small" onClick={()=>setShowPlayer(true)}><Eye size={14}/> Player view</button>
+   {head}
+   <span className="char-tools-buttons">
+    <button type="button" className="button small ghost" aria-pressed={arranging} onClick={()=>{if(arranging)void done();else{setArranging(true);setBarEdit(false);}}}><LayoutGrid size={14}/> Arrange</button>
+    <button type="button" className="button small ghost" onClick={()=>setShowPlayer(true)}><Eye size={14}/> Player view</button>
+   </span>
   </div>
-  {profile.visibility==='gm'&&<p className="org-hint">Players can’t see this tab yet. Use Tab visibility above to share it.</p>}
   {notice&&<p role="status" className="info-note org-notice">{notice}</p>}
-  <Facts profile={profile} setProfile={setProfile} arranging={arranging}/>
-  <Traits profile={profile} setProfile={setProfile}/>
-  <CharacterSheetSection entry={entry} change={change} data={data} campaign={campaign}/>
+  <Facts profile={profile} setProfile={setProfile} arranging={arranging} adding={addingFact} setAdding={setAddingFact}/>
+  <Traits profile={profile} setProfile={setProfile} extra={!(profile.facts?.length)&&!addingFact&&<button type="button" className="char-trait-add" title="Short labelled fields at the top, like Species, Class or Level" onClick={()=>setAddingFact(true)}><Plus size={13}/> Field</button>}/>
+  {/* With Stats & Skills hidden (an NPC template, say), the sheet card goes too. */}
+  {!entry.hiddenTabs?.includes('stats')&&<CharacterSheetSection entry={entry} change={change} data={data} campaign={campaign}/>}
   <QuickFind entry={entry} campaign={campaign} profile={profile} setProfile={setProfile} arranging={arranging} onTab={onTab}/>
   {arranging&&<ArrangeBar what="characters" scope={scope} setScope={setScope} coGm={coGm} onDone={()=>void done()}/>}
   <Board blocks={profile.blocks} arranging={arranging} dragId={dragId} overId={overId} setOver={setOver} drop={arrange.drop} render={b=><Block key={b.id} b={b} ctx={ctx} arrange={arrange}/>}/>
