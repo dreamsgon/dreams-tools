@@ -5,30 +5,30 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Map as MapIcon, Pause, Pencil, Play, Plus, ScrollText, Search, Send, Trash2, Undo2, User, X } from "lucide-react";
-import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
+import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Folder, Map as MapIcon, Maximize2, Minimize2, PanelLeft, Pause, Play, Plus, ScrollText, Send, Undo2, User, X } from "lucide-react";
+import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, type ChatFolder, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
 import "./ai-connection.css";
 import { keepMoved, keyFields } from "@/lib/ai/device-keys";
+import { isChatModel } from "@/lib/ai/model-list";
+import { ChatList, ConnectionMenu, ModelMenu, type ChatConnection, type ModelList } from "./ai-chat-parts";
 
 type Line = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; undone?: string; canUndo: boolean };
 /** Where a suggested move would put a token, for the dashed token on the map. */
 export type SuggestedMove = { id: string; sceneId: string; tokenId: string; x: number; y: number; label: string };
 type Waiting = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; args: Record<string, unknown>; preview?: Omit<SuggestedMove, "id" | "label"> };
-/** A connection made with an API key: the GM can ask it from this panel. */
-type Chat = { id: string; name: string; provider: string; model: string };
-type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; connected: string[]; hasConnections: boolean; chat?: Chat[] };
+type State = { paused: boolean; waiting?: Waiting[]; entries: Line[]; connected: string[]; hasConnections: boolean; chat?: ChatConnection[] };
 type Step = { tool: string; title: string; ok: boolean; waiting?: string; summary?: string };
-type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true };
-/** The chat open in the panel. Chats are saved with the campaign on the server; this tab remembers which one was open. */
-type Open = { key: string; id: string | null; title?: string; savedAt?: string; turns: Said[] };
+/** An answer says which AI (`by`) and model wrote it, since a chat can switch partway. */
+type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true; by?: string; model?: string };
+/**
+ * The chat open in the panel. Chats are saved with the campaign on the server; this tab remembers which one was open.
+ * `folder` is the chat's folder, or for a new chat the folder it will be saved in.
+ */
+type Open = { key: string; id: string | null; title?: string; savedAt?: string; folder?: string; turns: Said[] };
 const remembered = (key: string) => { try { return sessionStorage.getItem(key); } catch { return null; } };
 const remember = (key: string, id: string | null) => { try { if (id) sessionStorage.setItem(key, id); else sessionStorage.removeItem(key); } catch { /* Private windows may block storage. */ } };
-/** Saved chats under Today, This week and Older. */
-const groups = (list: ChatMeta[]) => {
-  const today = new Date().toDateString(), week = Date.now() - 7 * 86_400_000, out: [string, ChatMeta[]][] = [["Today", []], ["This week", []], ["Older", []]];
-  for (const c of list) out[new Date(c.updatedAt).toDateString() === today ? 0 : Date.parse(c.updatedAt) > week ? 1 : 2][1].push(c);
-  return out.filter(([, l]) => l.length);
-};
+/** The panel opens as a side panel or as a full page; this tab remembers which. */
+const FULL_KEY = "rpg-ai-chat-full";
 
 /** The approve button says what it does. */
 const verb = (tool: string) => ({ move_token: "Move", roll: "Roll it", set_condition: "Add", damage: "Apply", heal: "Heal", reveal_fog: "Reveal", show_token: "Show", start_combat: "Start", next_turn: "Next turn", end_combat: "End", start_topic: "Post it" } as Record<string, string>)[tool] ?? "Approve";
@@ -62,8 +62,12 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const [state, setState] = useState<State | null>(null), [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [top, setTop] = useState(48);
   const [changing, setChanging] = useState<{ id: string; args: Record<string, unknown> } | null>(null);
   const [tab, setTab] = useState<"ask" | "activity">("ask"), [talkTo, setTalkTo] = useState(""), [chatLog, setChatLog] = useState<Open>({ key: "", id: null, turns: [] }), [draft, setDraft] = useState(""), [thinking, setThinking] = useState(false);
-  const [history, setHistory] = useState<{ key: string; list: ChatMeta[] | null }>({ key: "", list: null }), [menu, setMenu] = useState<"" | "list" | "export">(""), [find, setFind] = useState("");
-  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null), [deleting, setDeleting] = useState(""), [chatNote, setChatNote] = useState<{ text: string; href?: string; link?: string; error?: boolean } | null>(null);
+  const [history, setHistory] = useState<{ key: string; list: ChatMeta[] | null; folders: ChatFolder[] }>({ key: "", list: null, folders: [] }), [menu, setMenu] = useState<"" | "list" | "export" | "model" | "ai">("");
+  const [chatNote, setChatNote] = useState<{ text: string; href?: string; link?: string; error?: boolean } | null>(null);
+  /** Full page: the chat fills the window, with the saved chats and folders in a sidebar. `side` opens that sidebar on a phone. */
+  const [full, setFull] = useState(() => remembered(FULL_KEY) === "1"), [side, setSide] = useState(false);
+  /** The model picked for each connection in this tab (else the connection's own), and the models each one's key can use. */
+  const [modelFor, setModelFor] = useState<Record<string, string>>({}), [modelLists, setModelLists] = useState<Record<string, ModelList>>({});
   const [posting, setPosting] = useState<{ chat: SavedChat; campaign?: string; pick: RecapPick; title: string; text: string } | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const newest = useRef<string | null>(null), changed = useRef(onChanged), chip = useRef<HTMLButtonElement>(null), moves = useRef(onSuggestedMoves), lastMoves = useRef("[]");
@@ -110,14 +114,24 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const chats = state?.chat ?? [], chat = chats.find(c => c.id === talkTo) ?? chats[0];
   const campaignKey = campaignId ?? maptableCampaignId ?? "", openKey = `rpg-ai-chat-open:${campaignKey}`;
   const current: Open = chatLog.key === campaignKey ? chatLog : { key: campaignKey, id: null, turns: [] };
-  const said = current.turns, list = history.key === campaignKey ? history.list : null;
-  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [said.length, current.id, thinking, open, tab]);
+  const said = current.turns, list = history.key === campaignKey ? history.list : null, folders = history.key === campaignKey ? history.folders : [];
+  const model = chat ? modelFor[chat.id] ?? chat.model : "";
+  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [said.length, current.id, thinking, open, tab, full]);
+  // A click outside a drop-down closes it; so does Escape, which otherwise takes the full page back to the side panel.
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: MouseEvent) => { if (!(e.target as Element | null)?.closest?.("[data-ai-menu]")) setMenu(""); };
+    const key = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (menu) setMenu(""); else if (side) setSide(false); };
+    document.addEventListener("mousedown", down); document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key); };
+  }, [open, menu, side]);
+  function goFull(on: boolean) { setFull(on); setSide(false); setMenu(""); try { if (on) sessionStorage.setItem(FULL_KEY, "1"); else sessionStorage.removeItem(FULL_KEY); } catch { /* Private windows may block storage. */ } }
 
   const chatsUrl = (extra: Record<string, string> = {}) => `/api/encyclopedia/ai-chats?${new URLSearchParams({ ...which, ...extra })}`;
   async function loadList() {
     try {
-      const res = await fetch(chatsUrl(), { cache: "no-store" }), body = await res.json() as { chats?: ChatMeta[]; error?: string };
-      if (res.ok) setHistory({ key: campaignKey, list: body.chats ?? [] });
+      const res = await fetch(chatsUrl(), { cache: "no-store" }), body = await res.json() as { chats?: ChatMeta[]; folders?: ChatFolder[]; error?: string };
+      if (res.ok) setHistory({ key: campaignKey, list: body.chats ?? [], folders: body.folders ?? [] });
     } catch { /* The list loads again when the panel opens. */ }
   }
   async function fetchChat(id: string, full = false) {
@@ -129,12 +143,13 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     setMenu(""); setChatNote(null);
     try {
       const { chat: saved } = await fetchChat(id);
-      setChatLog({ key: campaignKey, id: saved.id, title: saved.title, savedAt: saved.updatedAt, turns: saved.turns.map(t => ({ role: t.role, text: t.text, ...(t.steps ? { steps: t.steps } : {}) })) });
-      remember(openKey, saved.id);
-      if (chats.some(c => c.id === saved.connectionId)) setTalkTo(saved.connectionId);
+      setChatLog({ key: campaignKey, id: saved.id, title: saved.title, savedAt: saved.updatedAt, folder: saved.folder, turns: saved.turns.map(t => ({ role: t.role, text: t.text, ...(t.steps ? { steps: t.steps } : {}), ...(t.by ? { by: t.by } : {}), ...(t.model ? { model: t.model } : {}) })) });
+      remember(openKey, saved.id); setSide(false);
+      // Carry on with the AI and model the chat last used.
+      if (chats.some(c => c.id === saved.connectionId)) { setTalkTo(saved.connectionId); if (saved.model) setModelFor(m => ({ ...m, [saved.connectionId]: saved.model! })); }
     } catch (e) { remember(openKey, null); setChatNote({ text: e instanceof Error ? e.message : "Could not open that chat.", error: true }); }
   }
-  function newChat() { setChatLog({ key: campaignKey, id: null, turns: [] }); remember(openKey, null); setMenu(""); setChatNote(null); }
+  function newChat(folder?: string) { setChatLog({ key: campaignKey, id: null, turns: [], ...(folder ? { folder } : {}) }); remember(openKey, null); setMenu(""); setChatNote(null); setSide(false); }
   /** Opening the panel loads the saved chats, and reopens the chat this tab had open. */
   function showPanel(chatId?: string) {
     setTop(chip.current?.closest("header")?.getBoundingClientRect().bottom ?? 48); setOpen(true);
@@ -161,29 +176,57 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     const next: Said[] = [...said.filter(m => !m.error), { role: "user", text }];
     setChatLog({ ...current, turns: next }); setDraft(""); setThinking(true); setMenu(""); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, ...(current.id ? { chatId: current.id } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, model, ...(current.id ? { chatId: current.id } : current.folder ? { folder: current.folder } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
       const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string; chat?: ChatMeta };
       if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
       const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");
-      const done: Said[] = [...next, { role: "assistant", text: reply, steps: body.steps ?? [] }], meta = body.chat;
-      setChatLog({ key: campaignKey, id: meta?.id ?? current.id, title: meta?.title ?? current.title, savedAt: meta?.updatedAt, turns: done });
-      if (meta) { remember(openKey, meta.id); setHistory({ key: campaignKey, list: [meta, ...(list ?? []).filter(c => c.id !== meta.id)] }); }
+      const done: Said[] = [...next, { role: "assistant", text: reply, steps: body.steps ?? [], by: chat.name, model }], meta = body.chat;
+      setChatLog({ key: campaignKey, id: meta?.id ?? current.id, title: meta?.title ?? current.title, savedAt: meta?.updatedAt, folder: meta ? meta.folder : current.folder, turns: done });
+      if (meta) { remember(openKey, meta.id); setHistory({ key: campaignKey, list: [meta, ...(list ?? []).filter(c => c.id !== meta.id)], folders }); }
       if (body.steps?.some(st => st.ok)) changed.current();
       await load();
     } catch (e) { setChatLog({ ...current, turns: [...next, { role: "assistant", text: e instanceof Error ? e.message : "Could not ask the AI.", error: true }] }); }
     finally { setThinking(false); }
   }
 
-  async function change(action: "rename" | "delete", id: string, title?: string) {
-    setBusy(`${action}:${id}`);
+  /** Renames, deletes or moves a saved chat, or adds, renames or deletes a folder. Says whether it worked. */
+  async function listAction(body: Record<string, unknown> & { action: string }, busyKey: string): Promise<boolean> {
+    setBusy(busyKey); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, chatId: id, action, ...(title !== undefined ? { title } : {}) }) });
-      const body = await res.json() as { chats?: ChatMeta[]; error?: string };
-      if (!res.ok) throw Error(body.error ?? "Could not change that chat.");
-      setHistory({ key: campaignKey, list: body.chats ?? [] }); setRenaming(null); setDeleting("");
-      if (action === "delete" && id === current.id) newChat();
-      if (action === "rename" && id === current.id) setChatLog({ ...current, title: body.chats?.find(c => c.id === id)?.title ?? title });
-    } catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Could not change that chat.", error: true }); }
+      const res = await fetch("/api/encyclopedia/ai-chats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...body }) });
+      const out = await res.json() as { chats?: ChatMeta[]; folders?: ChatFolder[]; error?: string };
+      if (!res.ok) throw Error(out.error ?? "Could not change that.");
+      const chatsNow = out.chats ?? [], foldersNow = out.folders ?? [];
+      setHistory({ key: campaignKey, list: chatsNow, folders: foldersNow });
+      if (current.id) {
+        const mine = chatsNow.find(c => c.id === current.id);
+        if (!mine) newChat(); else setChatLog({ ...current, title: mine.title, folder: mine.folder });
+      } else if (current.folder && !foldersNow.some(f => f.id === current.folder)) setChatLog({ ...current, folder: undefined });
+      return true;
+    } catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Could not change that.", error: true }); return false; }
+    finally { setBusy(""); }
+  }
+  /** The models the connection's key can chat with, from the provider (once per tab, unless asked again). */
+  async function loadModels(id: string, again = false) {
+    if (!again && modelLists[id] && modelLists[id].status !== "error") return;
+    setModelLists(m => ({ ...m, [id]: { status: "loading" } }));
+    try {
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(id), action: "models" }) });
+      const body = await res.json() as { models?: string[]; other?: string[]; error?: string };
+      if (!res.ok) throw Error(body.error ?? "Could not list the models.");
+      setModelLists(m => ({ ...m, [id]: { status: "ok", models: body.models ?? [], other: body.other ?? [] } }));
+    } catch (e) { setModelLists(m => ({ ...m, [id]: { status: "error", error: e instanceof Error ? e.message : "Could not list the models." } })); }
+  }
+  /** Makes a model the connection's model for new chats, here and in What it may do. */
+  async function makeDefault(id: string, pick: string) {
+    setBusy("default");
+    try {
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: id, action: "defaultModel", model: pick }) });
+      const body = await res.json() as { model?: string; error?: string };
+      if (!res.ok) throw Error(body.error ?? "Could not change the model.");
+      setState(s => s && { ...s, chat: (s.chat ?? []).map(c => c.id === id ? { ...c, model: body.model ?? pick } : c) });
+      setMenu(""); setChatNote({ text: `${pick} is now the default for new chats with ${chats.find(c => c.id === id)?.name ?? "this AI"}.` });
+    } catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Could not change the model.", error: true }); }
     finally { setBusy(""); }
   }
   /** Export: a Markdown file, the clipboard, a session page or a Discord recap. */
@@ -265,76 +308,122 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       {looked.length > 0 && <p className="ai-chat-used">Used: {looked.join(", ")}</p>}
     </>;
   };
+
+  // A chat that switched AI or model names the writer of each answer.
+  const writers = new Set(said.filter(m => m.role === "assistant" && !m.error).map(m => `${m.by ?? ""}|${m.model ?? ""}`)), mixed = writers.size > 1;
+  const folderName = folders.find(f => f.id === current.folder)?.name;
+  const chatList = (sidebar: boolean) => <ChatList list={list} folders={folders} current={current.id} busy={busy} sidebar={sidebar} onOpen={id => void openChat(id)}
+    onRename={(id, title) => listAction({ action: "rename", chatId: id, title }, `rename:${id}`)}
+    onDelete={id => listAction({ action: "delete", chatId: id }, `delete:${id}`)}
+    onMove={(id, folder) => listAction({ action: "move", chatId: id, folder }, `move:${id}`)}
+    onAddFolder={name => listAction({ action: "addFolder", name }, "addFolder")}
+    onRenameFolder={(id, name) => listAction({ action: "renameFolder", folderId: id, name }, `renameFolder:${id}`)}
+    onDeleteFolder={id => listAction({ action: "deleteFolder", folderId: id }, `deleteFolder:${id}`)}
+    onNewIn={id => newChat(id)}/>;
+  const exportButton = current.id && <button type="button" className="button small" aria-expanded={menu === "export"} aria-haspopup="true" data-ai-menu disabled={thinking || !!busy} onClick={() => setMenu(menu === "export" ? "" : "export")}><Download size={13}/> Export</button>;
+  const exportMenu = menu === "export" && <div className="ai-chat-menu ai-chat-export" role="menu" aria-label="Export this chat" data-ai-menu>
+    <button role="menuitem" onClick={() => void exportChat("markdown")}><Download size={15}/><span><strong>Download as Markdown</strong><small>A .md file you can keep, print or paste anywhere.</small></span></button>
+    <button role="menuitem" onClick={() => void exportChat("copy")}><Copy size={15}/><span><strong>Copy as text</strong><small>The whole chat, ready to paste.</small></span></button>
+    <button role="menuitem" onClick={() => void exportChat("session")}><BookOpen size={15}/><span><strong>Save as a session page</strong><small>A new Session page in the Wiki, kept as a GM secret until you share it.</small></span></button>
+    <button role="menuitem" onClick={() => void exportChat("discord")}><Send size={15}/><span><strong>Post to Discord as a recap</strong><small>Pick what to post and check it first. Goes to your recaps channel.</small></span></button>
+  </div>;
+  const noteLine = chatNote && <p className={`ai-chat-note${chatNote.error ? " error" : ""}`} role="status">{chatNote.text}{chatNote.href && <> <a href={chatNote.href}>{chatNote.link}</a></>}<button type="button" aria-label="Dismiss" onClick={() => setChatNote(null)}><X size={12}/></button></p>;
+  const conversation = chat && <div className="ai-chat" aria-live="polite"><div className="ai-chat-col">
+    {!said.length && <p className="ai-panel-empty">Ask {chat.name} about this campaign{scene ? " or the open scene" : ""}: what a monster does on its turn, a line of read-aloud, a name for the innkeeper. What it may change follows What it may do, so moves and rolls can wait for your OK here. Every chat is saved with the campaign{folderName ? `, this one in ${folderName}` : ""}, so you can come back to it.</p>}
+    {said.map((m, i) => m.role === "user" ? <p key={i} className="ai-chat-me">{m.text}</p> : <div key={i} className={`ai-chat-ai${m.error ? " error" : ""}`}>
+      {mixed && !m.error && (m.by || m.model) && <span className="ai-chat-by">{[m.by, m.model].filter(Boolean).join(" · ")}</span>}
+      {m.text.split(/\n{2,}/).map((para, j) => <p key={j}>{para}</p>)}{m.steps && steps(m.steps)}
+    </div>)}
+    {thinking && <p className="ai-chat-thinking">{chat.name} is thinking…</p>}
+    {!thinking && current.savedAt && <p className="ai-chat-saved"><Check size={12}/> Saved to this campaign{folderName ? ` · ${folderName}` : ""} · {time(current.savedAt)}</p>}
+    <div ref={bottom}/>
+  </div></div>;
+  const odd = !!model && !isChatModel(model);
+  const composer = chat && <form className="ai-chat-box" onSubmit={e => { e.preventDefault(); void ask(); }}><div className="ai-chat-col">
+    <div className="ai-chat-meta">
+      <div className="ai-pick-wrap">
+        <button type="button" className="ai-pick" aria-haspopup="true" aria-expanded={menu === "ai"} data-ai-menu title="Which AI to ask" onClick={() => setMenu(menu === "ai" ? "" : "ai")}><Bot size={12}/><span>{chat.name}</span><ChevronDown size={12}/></button>
+        {menu === "ai" && <ConnectionMenu chats={chats} current={chat.id} connectLink={settingsLink} onPick={id => { setTalkTo(id); setMenu(""); }}/>}
+      </div>
+      <div className="ai-pick-wrap">
+        <button type="button" className={`ai-pick${odd ? " odd" : ""}`} aria-haspopup="true" aria-expanded={menu === "model"} data-ai-menu title={odd ? `${model} can’t chat. Pick another model.` : "Which model to use"} onClick={() => { if (menu === "model") setMenu(""); else { setMenu("model"); void loadModels(chat.id); } }}><span>{model}</span><ChevronDown size={12}/></button>
+        {menu === "model" && <ModelMenu list={modelLists[chat.id]} current={model} fallback={chat.model} connection={chat.name} busy={busy === "default"}
+          onPick={m => { setModelFor(x => ({ ...x, [chat.id]: m })); setMenu(""); }} onDefault={m => void makeDefault(chat.id, m)} onRetry={() => void loadModels(chat.id, true)}/>}
+      </div>
+      {scene && <span className="ai-chat-sees">Sees: {scene}</span>}
+      {!current.id && folderName && <span className="ai-chat-sees"><Folder size={11}/> {folderName}</span>}
+    </div>
+    {odd && <p className="ai-chat-odd">{model} looks like a speech, image or embedding model, so it can’t answer here. Pick a chat model above.</p>}
+    <div className="ai-chat-row"><textarea value={draft} rows={full ? 3 : 2} placeholder={`Ask ${chat.name}…`} aria-label={`Ask ${chat.name}`} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(); } }}/><button type="submit" className="button primary" aria-label="Send" disabled={!draft.trim() || thinking}><ArrowUp size={16}/></button></div>
+  </div></form>;
+  const activity = <>
+    {combat && <p className="ai-panel-combat"><span>Round {combat.round}</span><strong>{combat.turn}’s turn</strong>{combat.next && <span>Next: {combat.next}</span>}</p>}
+    {note && <p className="ai-panel-note" role="status">{note}</p>}
+    <div className="ai-activity-body">
+    {waiting.length > 0 && <section className="ai-waiting" aria-label="Waiting for you">
+      <div className="ai-waiting-head"><h3>Waiting for you · {waiting.length}</h3>{waiting.length > 1 && <button className="button small" disabled={!!busy} onClick={() => void act("approveAll")}>{busy === "approveAll" ? "Approving…" : "Approve all"}</button>}</div>
+      <ol>{[...waiting].reverse().map(w => <li key={w.id}>{card(w)}</li>)}</ol>
+    </section>}
+    {waiting.length > 0 && state.entries.length > 0 && <h3 className="ai-done-head">Done</h3>}
+    {state.entries.length ? <ol className="ai-feed">{state.entries.map(e => <li key={e.id} className={e.undone ? "undone" : ""}>
+      <time dateTime={e.at}>{time(e.at)}</time>
+      <div><strong>{e.summary}</strong>{e.detail && <span>{e.detail}</span>}<small>{e.connection}{e.undone ? " · undone" : ""}</small></div>
+      {e.canUndo && <button className="button small" disabled={!!busy} onClick={() => void act("undo", e.id)}><Undo2 size={14}/> {busy === e.id ? "Undoing…" : "Undo"}</button>}
+    </li>)}</ol> : <p className="ai-panel-empty">Nothing yet. When a connected AI rolls dice or changes a page, it shows up here with an Undo button.</p>}
+    </div>
+    <div className="ai-panel-foot">
+      <button className="button small" disabled={!!busy} onClick={() => void act(state.paused ? "resume" : "pause")}>{state.paused ? <><Play size={14}/> Resume the AI</> : <><Pause size={14}/> Pause the AI</>}</button>
+      {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Wiki, under Connect an AI)</small></a>}
+      <p>{state.paused ? "The AI can still read, but every change is refused until you resume." : "While paused, the AI can still read but every change is refused until you resume."}</p>
+    </div>
+  </>;
+  const tabs = chat ? <div className="ai-panel-tabs" role="tablist">
+    <button role="tab" aria-selected={showing === "ask"} onClick={() => setTab("ask")}>{full ? "Chat" : `Ask ${chat.name}`}</button>
+    <button role="tab" aria-selected={showing === "activity"} onClick={() => setTab("activity")}>Activity{waiting.length ? ` · ${waiting.length} waiting` : ""}</button>
+  </div> : <><h2>AI activity</h2><span className="ai-panel-who">{state.paused ? "Paused" : who ?? "Not connected now"}</span></>;
+  const sizeButton = chat && <button type="button" className="icon-button" aria-label={full ? "Back to the side panel" : "Open as a full page"} title={full ? "Back to the side panel" : "Open as a full page"} onClick={() => goFull(!full)}>{full ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button>;
+  const closeButton = <button className="icon-button" aria-label="Close AI activity" onClick={() => setOpen(false)}><X size={16}/></button>;
+
+  const panel = full && chat ? <aside className={`ai-panel ai-full${side ? " side-open" : ""}`} id="ai-activity" aria-label="AI chat">
+    <nav className="ai-full-side" aria-label="Saved chats">
+      <div className="ai-full-side-head"><Bot size={16}/><strong>Chats</strong><button type="button" className="button small primary" disabled={thinking || (!current.id && !said.length && !current.folder)} onClick={() => newChat()}><Plus size={13}/> New chat</button></div>
+      <div className="ai-chat-list ai-full-list">{chatList(true)}</div>
+      <p className="ai-chat-menu-foot">Kept with this campaign on your account, so they’re here on any device. Only you see them, never your players.</p>
+    </nav>
+    {side && <button type="button" className="ai-full-scrim" aria-label="Close the chat list" onClick={() => setSide(false)}/>}
+    <div className="ai-full-main">
+      <div className="ai-panel-head">
+        <button type="button" className="icon-button ai-full-sidebtn" aria-label="Saved chats" aria-expanded={side} onClick={() => { setSide(!side); if (!side) void loadList(); }}><PanelLeft size={16}/></button>
+        <div className="ai-full-title"><strong>{current.title ?? "New chat"}</strong>{folderName && <small><Folder size={11}/> {folderName}</small>}</div>
+        {tabs}
+        <div className="ai-full-actions">{showing === "ask" && exportButton}{exportMenu}</div>
+        {sizeButton}{closeButton}
+      </div>
+      {showing === "ask" ? <>{noteLine}{conversation}{composer}</> : <div className="ai-full-activity">{activity}</div>}
+    </div>
+  </aside> : <aside className="ai-panel" id="ai-activity" aria-label="AI activity" style={{ top }}>
+    <div className="ai-panel-head"><Bot size={16}/>{tabs}{sizeButton}{closeButton}</div>
+    {showing === "ask" && chat && <>
+      <div className="ai-chat-bar">
+        <button type="button" className="ai-chat-title" aria-expanded={menu === "list"} aria-haspopup="true" data-ai-menu disabled={thinking} onClick={() => { setMenu(menu === "list" ? "" : "list"); if (menu !== "list") void loadList(); }}><span>{current.title ?? "New chat"}</span><ChevronDown size={14}/></button>
+        {exportButton}
+        <button type="button" className="button small" disabled={thinking || (!current.id && !said.length && !current.folder)} onClick={() => newChat()}><Plus size={13}/> New</button>
+        {menu === "list" && <div className="ai-chat-menu ai-chat-list" role="dialog" aria-label="Saved chats" data-ai-menu>
+          {chatList(false)}
+          <p className="ai-chat-menu-foot">Kept with this campaign on your account, so they’re here on any device. Only you see them, never your players. <button type="button" className="inline-link" onClick={() => goFull(true)}>Open the full page</button> to see them beside the chat.</p>
+        </div>}
+        {exportMenu}
+      </div>
+      {noteLine}{conversation}{composer}
+    </>}
+    {showing === "activity" && activity}
+  </aside>;
   return <>
     {!floating && <button ref={chip} className={`ai-chip${state.paused ? " paused" : waiting.length ? " asking" : who ? " live" : ""}`} onClick={() => { if (open) setOpen(false); else showPanel(); }} aria-expanded={open} aria-controls="ai-activity" title="AI activity">
       <Bot size={15}/><span>{state.paused ? "AI paused" : !waiting.length && chat && !who ? <>Ask<span className="ai-chip-name"> {chat.name}</span></> : waiting.length ? <><span className="ai-chip-name">{waiting[0].connection} is helping · </span>{waiting.length} to approve</> : who && combat ? "AI is running combat" : who ? <>AI connected<span className="ai-chip-name"> · {who}</span></> : "AI activity"}</span>
     </button>}
     {/* In document.body, so the panel sits above the map's own layers. */}
-    {open && createPortal(<aside className="ai-panel" id="ai-activity" aria-label="AI activity" style={{ top }}>
-      <div className="ai-panel-head"><Bot size={16}/>{chat ? <div className="ai-panel-tabs" role="tablist">
-        <button role="tab" aria-selected={showing === "ask"} onClick={() => setTab("ask")}>Ask {chat.name}</button>
-        <button role="tab" aria-selected={showing === "activity"} onClick={() => setTab("activity")}>Activity{waiting.length ? ` · ${waiting.length} waiting` : ""}</button>
-      </div> : <><h2>AI activity</h2><span className="ai-panel-who">{state.paused ? "Paused" : who ?? "Not connected now"}</span></>}<button className="icon-button" aria-label="Close AI activity" onClick={() => setOpen(false)}><X size={16}/></button></div>
-      {showing === "ask" && chat && <>
-        {chats.length > 1 && <label className="ai-chat-pick">Ask <select value={chat.id} onChange={e => setTalkTo(e.target.value)}>{chats.map(c => <option key={c.id} value={c.id}>{c.name} ({c.provider})</option>)}</select></label>}
-        <div className="ai-chat-bar">
-          <button type="button" className="ai-chat-title" aria-expanded={menu === "list"} aria-haspopup="true" disabled={thinking} onClick={() => { setMenu(menu === "list" ? "" : "list"); setFind(""); setRenaming(null); setDeleting(""); if (menu !== "list") void loadList(); }}><span>{current.title ?? "New chat"}</span><ChevronDown size={14}/></button>
-          {current.id && <button type="button" className="button small" aria-expanded={menu === "export"} aria-haspopup="true" disabled={thinking || !!busy} onClick={() => setMenu(menu === "export" ? "" : "export")}><Download size={13}/> Export</button>}
-          <button type="button" className="button small" disabled={thinking || (!current.id && !said.length)} onClick={newChat}><Plus size={13}/> New</button>
-          {menu === "list" && <div className="ai-chat-menu ai-chat-list" role="dialog" aria-label="Saved chats">
-            <label className="ai-chat-find"><Search size={13}/><input autoFocus value={find} placeholder="Search chats" aria-label="Search chats" onChange={e => setFind(e.target.value)}/></label>
-            {list === null ? <p className="ai-chat-menu-empty">Loading…</p> : !list.length ? <p className="ai-chat-menu-empty">No saved chats yet. Ask something and the chat is saved here.</p> : (() => {
-              const q = find.trim().toLowerCase(), shown = list.filter(c => !q || `${c.title} ${c.scene ?? ""} ${c.connectionName}`.toLowerCase().includes(q));
-              return shown.length ? groups(shown).map(([label, items]) => <section key={label}><h4>{label}</h4><ul>{items.map(c => <li key={c.id} className={c.id === current.id ? "on" : ""}>
-                {renaming?.id === c.id ? <form className="ai-chat-rename" onSubmit={e => { e.preventDefault(); void change("rename", c.id, renaming.title); }}><input autoFocus value={renaming.title} maxLength={80} aria-label="Chat name" onChange={e => setRenaming({ id: c.id, title: e.target.value })}/><button className="button small primary" disabled={!renaming.title.trim() || !!busy}>Save</button><button type="button" className="button small quiet" onClick={() => setRenaming(null)}>Cancel</button></form>
-                : deleting === c.id ? <div className="ai-chat-confirm"><span>Delete “{c.title}”?</span><button className="button small danger" disabled={!!busy} onClick={() => void change("delete", c.id)}>{busy === `delete:${c.id}` ? "Deleting…" : "Delete"}</button><button className="button small quiet" onClick={() => setDeleting("")}>Keep</button></div>
-                : <><button type="button" className="ai-chat-open" onClick={() => void openChat(c.id)}><strong>{c.title}</strong><small>{[c.connectionName, c.scene, `${c.count} messages`, time(c.updatedAt)].filter(Boolean).join(" · ")}</small></button>
-                  <button type="button" className="icon-button" aria-label={`Rename ${c.title}`} title="Rename" onClick={() => setRenaming({ id: c.id, title: c.title })}><Pencil size={13}/></button>
-                  <button type="button" className="icon-button" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => setDeleting(c.id)}><Trash2 size={13}/></button></>}
-              </li>)}</ul></section>) : <p className="ai-chat-menu-empty">No chats match “{find.trim()}”.</p>;
-            })()}
-            <p className="ai-chat-menu-foot">Kept with this campaign on your account, so they’re here on any device. Only you see them, never your players.</p>
-          </div>}
-          {menu === "export" && <div className="ai-chat-menu ai-chat-export" role="menu" aria-label="Export this chat">
-            <button role="menuitem" onClick={() => void exportChat("markdown")}><Download size={15}/><span><strong>Download as Markdown</strong><small>A .md file you can keep, print or paste anywhere.</small></span></button>
-            <button role="menuitem" onClick={() => void exportChat("copy")}><Copy size={15}/><span><strong>Copy as text</strong><small>The whole chat, ready to paste.</small></span></button>
-            <button role="menuitem" onClick={() => void exportChat("session")}><BookOpen size={15}/><span><strong>Save as a session page</strong><small>A new Session page in the Wiki, kept as a GM secret until you share it.</small></span></button>
-            <button role="menuitem" onClick={() => void exportChat("discord")}><Send size={15}/><span><strong>Post to Discord as a recap</strong><small>Pick what to post and check it first. Goes to your recaps channel.</small></span></button>
-          </div>}
-        </div>
-        {chatNote && <p className={`ai-chat-note${chatNote.error ? " error" : ""}`} role="status">{chatNote.text}{chatNote.href && <> <a href={chatNote.href}>{chatNote.link}</a></>}<button type="button" aria-label="Dismiss" onClick={() => setChatNote(null)}><X size={12}/></button></p>}
-        <div className="ai-chat" aria-live="polite">
-          {!said.length && <p className="ai-panel-empty">Ask {chat.name} about this campaign{scene ? " or the open scene" : ""}: what a monster does on its turn, a line of read-aloud, a name for the innkeeper. What it may change follows What it may do, so moves and rolls can wait for your OK here. Every chat is saved with the campaign, so you can come back to it.</p>}
-          {said.map((m, i) => m.role === "user" ? <p key={i} className="ai-chat-me">{m.text}</p> : <div key={i} className={`ai-chat-ai${m.error ? " error" : ""}`}>{m.text.split(/\n{2,}/).map((para, j) => <p key={j}>{para}</p>)}{m.steps && steps(m.steps)}</div>)}
-          {thinking && <p className="ai-chat-thinking">{chat.name} is thinking…</p>}
-          {!thinking && current.savedAt && <p className="ai-chat-saved"><Check size={12}/> Saved to this campaign · {time(current.savedAt)}</p>}
-          <div ref={bottom}/>
-        </div>
-        <form className="ai-chat-box" onSubmit={e => { e.preventDefault(); void ask(); }}>
-          <div className="ai-chat-meta">{scene && <span>Sees: {scene}</span>}<span>{chat.model}</span></div>
-          <div className="ai-chat-row"><textarea value={draft} rows={2} placeholder={`Ask ${chat.name}…`} aria-label={`Ask ${chat.name}`} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(); } }}/><button type="submit" className="button primary" aria-label="Send" disabled={!draft.trim() || thinking}><ArrowUp size={16}/></button></div>
-        </form>
-      </>}
-      {showing === "activity" && <>
-      {combat && <p className="ai-panel-combat"><span>Round {combat.round}</span><strong>{combat.turn}’s turn</strong>{combat.next && <span>Next: {combat.next}</span>}</p>}
-      {note && <p className="ai-panel-note" role="status">{note}</p>}
-      {waiting.length > 0 && <section className="ai-waiting" aria-label="Waiting for you">
-        <div className="ai-waiting-head"><h3>Waiting for you · {waiting.length}</h3>{waiting.length > 1 && <button className="button small" disabled={!!busy} onClick={() => void act("approveAll")}>{busy === "approveAll" ? "Approving…" : "Approve all"}</button>}</div>
-        <ol>{[...waiting].reverse().map(w => <li key={w.id}>{card(w)}</li>)}</ol>
-      </section>}
-      {waiting.length > 0 && state.entries.length > 0 && <h3 className="ai-done-head">Done</h3>}
-      {state.entries.length ? <ol className="ai-feed">{state.entries.map(e => <li key={e.id} className={e.undone ? "undone" : ""}>
-        <time dateTime={e.at}>{time(e.at)}</time>
-        <div><strong>{e.summary}</strong>{e.detail && <span>{e.detail}</span>}<small>{e.connection}{e.undone ? " · undone" : ""}</small></div>
-        {e.canUndo && <button className="button small" disabled={!!busy} onClick={() => void act("undo", e.id)}><Undo2 size={14}/> {busy === e.id ? "Undoing…" : "Undo"}</button>}
-      </li>)}</ol> : <p className="ai-panel-empty">Nothing yet. When a connected AI rolls dice or changes a page, it shows up here with an Undo button.</p>}
-      <div className="ai-panel-foot">
-        <button className="button small" disabled={!!busy} onClick={() => void act(state.paused ? "resume" : "pause")}>{state.paused ? <><Play size={14}/> Resume the AI</> : <><Pause size={14}/> Pause the AI</>}</button>
-        {onSettings ? <button type="button" className="ai-settings-link" onClick={onSettings}>What it may do</button> : <a className="ai-settings-link" href="/encyclopedia">What it may do <small>(in the Wiki, under Connect an AI)</small></a>}
-        <p>{state.paused ? "The AI can still read, but every change is refused until you resume." : "While paused, the AI can still read but every change is refused until you resume."}</p>
-      </div>
-      </>}
-    </aside>, document.body)}
+    {open && createPortal(panel, document.body)}
     {posting && createPortal(<div className="ai-post-backdrop" onClick={e => { if (e.target === e.currentTarget && busy !== "post") setPosting(null); }}>
       <form className="ai-post" role="dialog" aria-modal="true" aria-label={`Post “${posting.chat.title}” to Discord`} onSubmit={e => { e.preventDefault(); void postRecap(); }}>
         <div className="ai-post-head"><h2>Post “{posting.chat.title}” to Discord</h2><button type="button" className="icon-button" aria-label="Close" onClick={() => setPosting(null)}><X size={16}/></button></div>

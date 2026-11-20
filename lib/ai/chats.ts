@@ -9,18 +9,22 @@ import type { S3Bucket } from "../storage.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import type { Step } from "./chat.ts";
 
-import { chatTitle, type ChatMeta, type SavedChat, type SavedTurn } from "./chat-text.ts";
+import { chatTitle, type ChatFolder, type ChatMeta, type SavedChat, type SavedTurn } from "./chat-text.ts";
 export * from "./chat-text.ts";
 
 /** CHAT_LIMIT chats stay in the quick index; TURN_LIMIT turns stay in the chat file, the rest move to parts of PART_SIZE. */
 export const CHAT_LIMIT = 200, TURN_LIMIT = 400, PART_SIZE = 200, TITLE_MAX = 80;
+/** How many chat folders a campaign can have, and how long a folder's name can be. */
+export const FOLDER_LIMIT = 100, FOLDER_NAME_MAX = 60;
 
 const dir = (owner: string, campaignId: string) => encyclopediaPrefix(owner) + `ai-chats/${encodeURIComponent(campaignId)}/`;
 const indexPath = (owner: string, campaignId: string) => dir(owner, campaignId) + "index.json";
 const olderPath = (owner: string, campaignId: string) => dir(owner, campaignId) + "older.json";
+const foldersPath = (owner: string, campaignId: string) => dir(owner, campaignId) + "folders.json";
 const chatPath = (owner: string, campaignId: string, id: string) => dir(owner, campaignId) + `${encodeURIComponent(id)}.json`;
 const partPath = (owner: string, campaignId: string, id: string, n: number) => dir(owner, campaignId) + `${encodeURIComponent(id)}.part-${n}.json`;
 export const isChatId = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
+export const isFolderId = isChatId;
 const json = { httpMetadata: { contentType: "application/json" } };
 
 export function cleanTitle(v: unknown) {
@@ -95,13 +99,16 @@ export async function readChat(bucket: S3Bucket, owner: string, campaignId: stri
  */
 export async function saveExchange(bucket: S3Bucket, owner: string, campaignId: string, input: {
   id?: unknown; connectionId: string; connectionName: string; model?: string; scene?: string;
+  /** For a new chat: the folder it starts in, if that folder still exists. A saved chat keeps its own folder. */
+  folder?: unknown;
   question: string; answer: string; steps: Step[]; now?: Date; newId?: () => string;
 }): Promise<ChatMeta> {
   const now = (input.now ?? new Date()).toISOString();
   let chat: SavedChat | null = null;
   if (isChatId(input.id)) chat = await readChat(bucket, owner, campaignId, input.id).catch(() => null);
   const asked: SavedTurn = { role: "user", text: input.question, at: now };
-  const answered: SavedTurn = { role: "assistant", text: input.answer, at: now, ...(input.steps.length ? { steps: input.steps } : {}) };
+  const answered: SavedTurn = { role: "assistant", text: input.answer, at: now, ...(input.steps.length ? { steps: input.steps } : {}), by: input.connectionName, ...(input.model ? { model: input.model } : {}) };
+  const folder = chat ? chat.folder : isFolderId(input.folder) && (await listFolders(bucket, owner, campaignId)).some(f => f.id === input.folder) ? input.folder : undefined;
   let turns = [...(chat?.turns ?? []), asked, answered], parts = chat?.parts ?? 0, earlier = chat?.earlier ?? 0;
   const id = chat?.id ?? (input.newId ?? (() => crypto.randomUUID()))();
   // A long chat moves its oldest turns to the next part file before the chat file is shortened.
@@ -114,6 +121,7 @@ export async function saveExchange(bucket: S3Bucket, owner: string, campaignId: 
     id, title: chat?.title ?? chatTitle(input.question),
     connectionId: input.connectionId, connectionName: input.connectionName, ...(input.model ? { model: input.model } : {}),
     ...(input.scene ? { scene: input.scene.slice(0, 120) } : chat?.scene ? { scene: chat.scene } : {}),
+    ...(folder ? { folder } : {}),
     count: earlier + turns.length, createdAt: chat?.createdAt ?? now, updatedAt: now,
   };
   await bucket.put(chatPath(owner, campaignId, meta.id), JSON.stringify({ ...meta, ...(parts ? { parts, earlier } : {}), turns }), json);
@@ -136,4 +144,67 @@ export async function deleteChat(bucket: S3Bucket, owner: string, campaignId: st
   await updateIndex(bucket, owner, campaignId, chats => chats.filter(c => c.id !== id));
   await updateOlder(bucket, owner, campaignId, chats => chats.filter(c => c.id !== id));
   await Promise.all([chatPath(owner, campaignId, id), ...Array.from({ length: parts }, (_, i) => partPath(owner, campaignId, id, i + 1))].map(k => bucket.delete(k).catch(() => {})));
+}
+
+/** Puts a chat in a folder, or takes it out of any folder (`folder` null). */
+export async function moveChat(bucket: S3Bucket, owner: string, campaignId: string, id: unknown, folder: unknown) {
+  const chat = await readChat(bucket, owner, campaignId, id);
+  let to: string | undefined;
+  if (folder !== null && folder !== undefined && folder !== "") {
+    if (!isFolderId(folder) || !(await listFolders(bucket, owner, campaignId)).some(f => f.id === folder)) throw Error("That folder is gone.");
+    to = folder;
+  }
+  const { folder: _was, ...rest } = chat;
+  await bucket.put(chatPath(owner, campaignId, chat.id), JSON.stringify({ ...rest, ...(to ? { folder: to } : {}) }), json);
+  const placed = (chats: ChatMeta[]) => chats.map(c => { if (c.id !== chat.id) return c; const { folder: _old, ...meta } = c; return to ? { ...meta, folder: to } : meta; });
+  await updateIndex(bucket, owner, campaignId, placed);
+  await updateOlder(bucket, owner, campaignId, placed);
+}
+
+/* Folders: one small list per campaign. A chat names its folder by id, so renaming a folder touches only this list. */
+export function cleanFolderName(v: unknown) {
+  if (typeof v !== "string" || !v.trim()) throw Error("Give the folder a name.");
+  return v.replace(/\s+/g, " ").trim().slice(0, FOLDER_NAME_MAX);
+}
+async function readFolders(bucket: S3Bucket, owner: string, campaignId: string) {
+  const object = await bucket.get(foldersPath(owner, campaignId));
+  if (!object) return { folders: [] as ChatFolder[], etag: null as string | null };
+  const saved = await object.json<{ folders?: ChatFolder[] }>();
+  return { folders: Array.isArray(saved.folders) ? saved.folders.filter(f => isFolderId(f?.id) && typeof f.name === "string") : [], etag: object.etag };
+}
+const byName = (folders: ChatFolder[]) => folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+export async function listFolders(bucket: S3Bucket, owner: string, campaignId: string) {
+  return byName((await readFolders(bucket, owner, campaignId)).folders);
+}
+async function updateFolders(bucket: S3Bucket, owner: string, campaignId: string, edit: (folders: ChatFolder[]) => ChatFolder[]) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { folders, etag } = await readFolders(bucket, owner, campaignId);
+    const next = byName(edit(folders));
+    if (await bucket.put(foldersPath(owner, campaignId), JSON.stringify({ folders: next }), ifSame(etag))) return next;
+  }
+  throw Error("Your chat folders are busy. Try again.");
+}
+export async function addFolder(bucket: S3Bucket, owner: string, campaignId: string, name: unknown, opts: { now?: Date; newId?: () => string } = {}) {
+  const label = cleanFolderName(name), folder: ChatFolder = { id: (opts.newId ?? (() => crypto.randomUUID()))(), name: label, createdAt: (opts.now ?? new Date()).toISOString() };
+  await updateFolders(bucket, owner, campaignId, folders => {
+    if (folders.length >= FOLDER_LIMIT) throw Error(`A campaign can have ${FOLDER_LIMIT} chat folders.`);
+    if (folders.some(f => f.name.toLowerCase() === label.toLowerCase())) throw Error(`There is already a folder called “${label}”.`);
+    return [...folders, folder];
+  });
+  return folder;
+}
+export async function renameFolder(bucket: S3Bucket, owner: string, campaignId: string, id: unknown, name: unknown) {
+  const label = cleanFolderName(name);
+  await updateFolders(bucket, owner, campaignId, folders => {
+    if (!folders.some(f => f.id === id)) throw Error("That folder is gone.");
+    if (folders.some(f => f.id !== id && f.name.toLowerCase() === label.toLowerCase())) throw Error(`There is already a folder called “${label}”.`);
+    return folders.map(f => f.id === id ? { ...f, name: label } : f);
+  });
+}
+/** Deletes a folder. Its chats are kept and move out to the main list. */
+export async function deleteFolder(bucket: S3Bucket, owner: string, campaignId: string, id: unknown) {
+  if (!isFolderId(id)) throw Error("That folder is gone.");
+  await updateFolders(bucket, owner, campaignId, folders => folders.filter(f => f.id !== id));
+  const inside = (await listChats(bucket, owner, campaignId)).filter(c => c.folder === id);
+  for (const c of inside) await moveChat(bucket, owner, campaignId, c.id, null).catch(() => {});
 }

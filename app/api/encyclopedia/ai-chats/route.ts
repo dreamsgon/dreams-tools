@@ -5,22 +5,24 @@ import type {Entry} from '@/lib/encyclopedia/world-model';
 import {sendEncyclopediaPost} from '@/lib/encyclopedia/discord-send';
 import {getBucket} from '@/lib/storage';
 import {campaignFor} from '@/lib/mcp/campaign-for';
-import {chatRecap,chatSessionBody,deleteChat,listChats,readChat,renameChat} from '@/lib/ai/chats';
+import {addFolder,chatRecap,chatSessionBody,deleteChat,deleteFolder,listChats,listFolders,moveChat,readChat,renameChat,renameFolder} from '@/lib/ai/chats';
 export const dynamic='force-dynamic';
 const id=z.string().min(1).max(100);
-// The AI panel's saved chats for one campaign: list them, open one (full=1 includes a long chat's earlier turns), rename, delete, or export one as a session page or a Discord recap.
+// The AI panel's saved chats for one campaign: list them with their folders, open one (full=1 includes a long chat's earlier
+// turns), rename, delete, move one to a folder, or export one as a session page or a Discord recap; and add, rename or delete folders.
 export async function GET(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  const params=new URL(request.url).searchParams;
  try{
   const bucket=getBucket(),campaign=await campaignFor(bucket,owner,{campaignId:params.get('campaignId'),maptableCampaignId:params.get('maptableCampaignId')});
-  if(!campaign)return json({chats:[]});
+  if(!campaign)return json({chats:[],folders:[]});
   const chatId=params.get('chatId');
   if(chatId){
    const [chat,{data}]=await Promise.all([readChat(bucket,owner,campaign,chatId,{full:params.get('full')==='1'}),new EncyclopediaStore(bucket).read(owner)]);
    return json({chat,campaign:data.campaigns.find(c=>c.id===campaign)?.name});
   }
-  return json({chats:await listChats(bucket,owner,campaign)});
+  const [chats,folders]=await Promise.all([listChats(bucket,owner,campaign),listFolders(bucket,owner,campaign)]);
+  return json({chats,folders});
  }catch(e){return json({error:e instanceof Error&&!(e instanceof z.ZodError)?e.message:'Could not load your chats.'},400);}
 }
 const pick=z.object({answers:z.boolean(),questions:z.boolean(),steps:z.boolean()});
@@ -29,17 +31,27 @@ const action=z.discriminatedUnion('action',[
  z.object({action:z.literal('delete')}),
  z.object({action:z.literal('session'),title:z.string().max(120).optional()}),
  z.object({action:z.literal('discord'),pick:pick.optional(),text:z.string().max(4000).optional(),title:z.string().max(120).optional()}),
+ z.object({action:z.literal('move'),folder:id.nullable()}),
+ z.object({action:z.literal('addFolder'),name:z.string().max(200)}),
+ z.object({action:z.literal('renameFolder'),folderId:id,name:z.string().max(200)}),
+ z.object({action:z.literal('deleteFolder'),folderId:id}),
 ]);
 export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  if(!sameOrigin(request))return json({error:'Same-origin request required'},403);
  try{
   const raw=JSON.parse(await request.text());
-  const where=z.object({campaignId:id.optional(),maptableCampaignId:id.optional(),chatId:id}).parse(raw),input=action.parse(raw);
+  const where=z.object({campaignId:id.optional(),maptableCampaignId:id.optional(),chatId:id.optional()}).parse(raw),input=action.parse(raw);
   const bucket=getBucket(),campaign=await campaignFor(bucket,owner,where);
   if(!campaign)throw Error('This map has no Wiki campaign paired with it.');
-  if(input.action==='rename'){await renameChat(bucket,owner,campaign,where.chatId,input.title);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
-  if(input.action==='delete'){await deleteChat(bucket,owner,campaign,where.chatId);return json({ok:true,chats:await listChats(bucket,owner,campaign)});}
+  const lists=async(extra:Record<string,unknown>={})=>{const [chats,folders]=await Promise.all([listChats(bucket,owner,campaign),listFolders(bucket,owner,campaign)]);return json({ok:true,chats,folders,...extra});};
+  if(input.action==='addFolder')return lists({folder:await addFolder(bucket,owner,campaign,input.name)});
+  if(input.action==='renameFolder'){await renameFolder(bucket,owner,campaign,input.folderId,input.name);return lists();}
+  if(input.action==='deleteFolder'){await deleteFolder(bucket,owner,campaign,input.folderId);return lists();}
+  if(!where.chatId)throw Error('Choose a chat.');
+  if(input.action==='rename'){await renameChat(bucket,owner,campaign,where.chatId,input.title);return lists();}
+  if(input.action==='delete'){await deleteChat(bucket,owner,campaign,where.chatId);return lists();}
+  if(input.action==='move'){await moveChat(bucket,owner,campaign,where.chatId,input.folder);return lists();}
   const chat=await readChat(bucket,owner,campaign,where.chatId,{full:true});
   if(input.action==='discord'){
    const text=(input.text??chatRecap(chat,input.pick??{answers:true,questions:false,steps:false})).trim();
