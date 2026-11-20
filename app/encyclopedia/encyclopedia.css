@@ -1486,3 +1486,16 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .prose .wiki-link svg,.prose .gm-aside svg,.wiki-infobox dt svg,.wiki-cards strong svg,.wiki-list strong svg{display:inline-block;vertical-align:-1px}
 .write-pop:not(.wide){width:290px}.write-pop>button>span{flex:none}.write-pop>button small{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who-adders{margin-top:14px}.who-section{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:2px}.who-adders>.who-note{margin:2px 0 6px}
+/* Text settings for a page, a branch or the Wiki (page-text.ts, page-look.tsx) */
+.prose.t-set{font-size:var(--t-size,18px);line-height:var(--t-line,1.75);font-family:var(--t-font,var(--font-reading))}
+.prose.t-para-indent>p{margin:0;text-indent:1.6em}
+.prose.t-para-indent>.paragraph-gap{height:0}
+.prose.t-para-indent>p:first-of-type,.prose.t-para-indent>:is(h2,h3,h4,h5,.paragraph-gap)+p,.prose.t-para-indent>:is(h2,h3,h4)+.paragraph-gap+p{text-indent:0}
+.prose.t-heads-rule>:is(h2,h3){padding-bottom:6px;border-bottom:1px solid var(--line)}
+.prose.t-heads-caps>:is(h2,h3){font-variant:small-caps;letter-spacing:.05em}
+.prose.t-heads-center>:is(h2,h3){text-align:center}
+.prose.t-drop>p:first-of-type::first-letter{float:left;font:3.3em/.82 var(--wiki-font-hand);padding:.06em .08em 0 0;color:var(--accent)}
+.look-row>button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.look-scope select{display:block;width:100%;margin-top:6px;padding:7px 8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-size:12.5px}
+.look-from{margin:10px 0 2px}
+.write-pop.look-pop{max-height:min(640px,85vh / var(--ui-zoom, 1))}

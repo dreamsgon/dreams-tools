@@ -1,4 +1,5 @@
 import {scopeMapWeather} from './map-weather.ts';
+import { pageTextSchema, resolveText, textDiff, textSettingsSchema } from './page-text.ts';
 import { statRows } from './stat-rolls.ts';
 import { shownStats } from './stat-arrange.ts';
 import { playerPins } from './profile-pins.ts';
@@ -100,6 +101,8 @@ export const pageTemplateSchema = z.object({
 export type PageTemplate=z.infer<typeof pageTemplateSchema>;
 export type TemplateField=z.infer<typeof templateFieldSchema>;
 export const worldSchema = z.object({ id, name, description: z.string().max(1000), archived: z.boolean(), isTemplate:z.boolean().optional(),
+  // Optional (added later): how text is set on every page of this world's Wiki, unless a page or branch says otherwise (page-text.ts).
+  text:textSettingsSchema.optional(),
   // Optional (added later): page templates for this world.
   templates:z.array(pageTemplateSchema).max(60).optional(),
   // Optional (added later): the organization profile layout new organizations start with, and the organization types typed in for this world.
@@ -181,6 +184,8 @@ export const entrySchema = z.object({
     recap:recapSchema.optional(),
     // Optional (added later): who last changed the page when it wasn't the GM: a co-GM, or a player on their own page.
     editedBy:z.object({name:z.string().trim().min(1).max(80), as:z.enum(["co-gm","player"])}).optional(),
+    // Optional (added later): this page's text settings (size, font, spacing…), and with `branch` the pages inside it too (page-text.ts).
+    text:pageTextSchema.optional(),
     updatedAt: z.string().datetime(),
 });
 export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(5000) }).superRefine((s, ctx) => {
@@ -420,6 +425,8 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  // A draft recap never reaches players, whatever its tabs say.
  const candidates=visibleEntries(s,c.worldId,c.id).filter(e=>e.recap?.status!=='draft').map(e=>mine?.has(e.id)&&e.overviewVisibility!=="players"?{...e,overviewVisibility:"players" as const}:e);
  const fields=(c.statFields??[]).filter(f=>!f.archived&&f.visibility==="players");
+ // Text settings come down from pages above, even ones players can't open: only how the text looks, never what it says.
+ const world=s.worlds.find(w=>w.id===c.worldId),allById=new Map(s.entries.map(e=>[e.id,e]));
  const entries=candidates.flatMap(e=>{
    const tabs=[...(e.overviewVisibility==="players"?[{id:"overview",title:e.kind==="quest"?"Journal":e.kind==="vehicle"||e.kind==="store"?"Description":"Overview",body:playerText(e.body)}]:[]),...(e.tabs??[]).filter(t=>t.visibility==="players").map(t=>({id:t.id,title:t.title,body:playerText(t.body)})),...(e.overviewVisibility==="players"?playerRecapTabs(e.recap,playerText):[])];
    const showStats=e.kind==="character"&&e.character?.statsVisibility==="players";
@@ -441,7 +448,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!features?.length&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,parentId:undefined as string|undefined,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,parentId:undefined as string|undefined,text:textDiff(resolveText(e,id=>allById.get(id),world?.text).text),...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
