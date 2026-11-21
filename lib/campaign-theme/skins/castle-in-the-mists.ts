@@ -409,7 +409,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 /* With a banner picture: the picture under fog and shadow, the same blackletter title over it. */
 .board-head.has-art {
-  background: linear-gradient(180deg, rgba(6, 6, 9, .55) 0%, rgba(6, 6, 9, .1) 38%, rgba(6, 6, 9, .3) 64%, rgba(6, 6, 9, .9) 100%), radial-gradient(120% 100% at 50% 45%, transparent 50%, rgba(0, 0, 0, .66)), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: linear-gradient(180deg, rgba(6, 6, 9, .55) 0%, rgba(6, 6, 9, .1) 38%, rgba(6, 6, 9, .3) 64%, rgba(6, 6, 9, .9) 100%), radial-gradient(120% 100% at 50% 45%, transparent 50%, rgba(0, 0, 0, .66)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #dcd9d4; --head-title: #f0ece6; --head-shadow: 0 2px 16px #000, 0 0 3px #000; --head-nav: rgba(6, 6, 9, .72); --head-line: #3d3c47;
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 60px 40px 70px; }

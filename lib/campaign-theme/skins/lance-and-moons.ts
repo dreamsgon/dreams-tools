@@ -415,7 +415,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: #ffffff; border-bottom-color: #c8423f; }
 .board-nav a:focus-visible { outline: 2px solid #dfe5ef; outline-offset: -4px; }
 /* With a banner picture: the picture under a dark wash at the left, the same silver title over it. */
-.board-head.has-art { background: linear-gradient(90deg, rgba(5, 7, 15, .72) 0%, rgba(5, 7, 15, .3) 55%, rgba(5, 7, 15, .05) 100%), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --head-ink: #e9e3d6; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(90deg, rgba(5, 7, 15, .72) 0%, rgba(5, 7, 15, .3) 55%, rgba(5, 7, 15, .05) 100%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --head-ink: #e9e3d6; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 56px 44px; }
 
 /* Headings: the three moons, the words in Almendra, a fading rule out to the right. */

@@ -8,13 +8,33 @@ import {fontOption,fontStylesheetUrl} from '@/lib/appearance';
 import type {Campaign} from '@/lib/encyclopedia/world-model';
 import {uploadMapImage} from './map-transfer';
 import {usePictureSrc} from './character-picture';
+import {BannerFramer,bannerStyle,useBoxSize} from '../banner-frame';
+import {bannerBackground} from '@/lib/banner-frame';
 import './look.css';
 
-/** The campaign banner: the whole width, cropped to a strip, keeping the chosen height in view. */
+/** The campaign banner: the whole width, cropped to a strip, framed as the GM chose (what stays in view, and the zoom). */
 export function LookBanner({look,playerToken,className='',children}:{look?:Look;playerToken?:string;className?:string;children?:React.ReactNode}){
- const {src}=usePictureSrc(look?.banner?.imageId,playerToken);
+ const {src}=usePictureSrc(look?.banner?.imageId,playerToken),[ref,box]=useBoxSize<HTMLDivElement>();
  if(!look?.banner)return null;
- return <div className={`look-banner ${className}`} style={{backgroundImage:src?`url("${src}")`:undefined,backgroundPosition:`center ${Math.round(look.banner.y*100)}%`}}>{children}</div>;
+ return <div ref={ref} className={`look-banner ${className}`} style={bannerStyle(look.banner,src,box)}>{children}</div>;
+}
+
+const HERO_SHADE='linear-gradient(to top, rgb(8 8 10 / .82) 0%, rgb(8 8 10 / .45) 45%, rgb(8 8 10 / .08) 100%)';
+/**
+ * The campaign's banner picture behind a hero (the Wiki's front page, the campaign dashboard), under a dark fade so its
+ * title stays readable. `className` goes on the hero beside its own and `ref` on the hero itself (a zoomed picture is
+ * sized to it); the hero's CSS hides a theme's drawn art for it. `framing` shows another framing (while repositioning).
+ */
+export function useHeroPicture(look?:Look,playerToken?:string,framing?:NonNullable<Look['banner']>|null):{on:boolean;className:string;style?:CSSProperties;ref:(el:HTMLElement|null)=>void;box:{width:number;height:number}|null;src?:string}{
+ const banner=framing??look?.banner,{src}=usePictureSrc(banner?.imageId,playerToken),[ref,box]=useBoxSize();
+ if(!banner)return {on:false,className:'',ref,box};
+ const bg=bannerBackground(banner,box);
+ return {on:true,className:'has-picture',ref,box,src,style:{backgroundImage:`${HERO_SHADE}${src?`, url("${src}")`:''}`,backgroundPosition:`center, ${bg.position}`,backgroundSize:`cover, ${bg.size}`,backgroundRepeat:'no-repeat'}};
+}
+
+function LookBannerFramer({banner,onSave}:{banner:NonNullable<Look['banner']>;onSave:(b:NonNullable<Look['banner']>)=>void}){
+ const {src}=usePictureSrc(banner.imageId);
+ return <BannerFramer banner={banner} src={src} aspect={4} onSave={onSave}/>;
 }
 
 /** Loads the campaign's heading font, when it has one. */
@@ -39,8 +59,8 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
     <div className="button-row"><button className="button small" onClick={openThemeEditor}><Palette size={14}/> Open the Admin CP</button></div>
    </div>
    <div className="look-group"><h2>Banner</h2>
-    {look.banner?<><div className="look-banner-edit" onClick={e=>{const r=e.currentTarget.getBoundingClientRect();set({banner:{...look.banner!,y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}});}}><LookBanner look={look}/><span className="look-banner-dot" style={{top:`${look.banner.y*100}%`}}/></div>
-     <p className="muted small">Click the picture to choose what stays in view when it is cropped.</p>
+    {look.banner?<><LookBannerFramer banner={look.banner} onSave={banner=>set({banner})}/>
+     <p className="muted small">Drag the picture to choose what stays in view, and zoom in to show less of it.</p>
      <div className="button-row"><button className="button small" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={14}/> Replace</button><button className="button small" onClick={()=>set({banner:undefined})}><Trash2 size={14}/> Remove</button></div></>
     :<button className="look-banner-empty" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={20}/><span><strong>{busy?'Uploading…':'Add a banner'}</strong><small>A wide picture works best. PNG, JPEG or WebP up to 8 MB.</small></span></button>}
     <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f);}}/>

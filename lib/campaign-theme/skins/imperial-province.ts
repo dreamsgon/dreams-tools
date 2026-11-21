@@ -421,7 +421,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: var(--ip-red); background: ${MARKER} center 3px / 12px 10px no-repeat; }
 .board-nav a:focus-visible { outline: 2px solid var(--ip-red); outline-offset: -4px; }
 /* With a banner picture: the picture under a parchment-dark wash at the left, the title in parchment over it. */
-.board-head.has-art { background: linear-gradient(90deg, rgba(26, 17, 8, .74) 0%, rgba(26, 17, 8, .3) 55%, rgba(26, 17, 8, .05) 100%), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --head-ink: #f0e2bd; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(90deg, rgba(26, 17, 8, .74) 0%, rgba(26, 17, 8, .3) 55%, rgba(26, 17, 8, .05) 100%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --head-ink: #f0e2bd; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 56px 46px; }
 .board-head.has-art .board-title a { color: #f6e7bd; text-shadow: 0 2px 4px rgba(15, 9, 3, .8); }
 .board-head.has-art .board-tagline { text-shadow: 0 1px 3px rgba(15, 9, 3, .8); }

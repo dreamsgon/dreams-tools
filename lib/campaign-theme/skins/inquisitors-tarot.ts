@@ -304,7 +304,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: #f3e2a8; background: var(--it-line) left top / 100% 1px no-repeat, linear-gradient(90deg, transparent, rgba(212, 176, 100, .14) 20% 80%, transparent); }
 .board-nav a:focus-visible { outline: 1px solid #d4b064; outline-offset: -5px; }
 /* With a banner picture: the picture under a dark wash at its middle, the same gold title and rule over it. */
-.board-head.has-art { background: radial-gradient(ellipse 70% 80% at 50% 50%, rgba(5, 8, 7, .62), rgba(5, 8, 7, .2) 75%), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --head-ink: #e9e2cf; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: radial-gradient(ellipse 70% 80% at 50% 50%, rgba(5, 8, 7, .62), rgba(5, 8, 7, .2) 75%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --head-ink: #e9e2cf; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-title a { background: linear-gradient(180deg, #f7e9b8 0%, #d9b867 50%, #a07c30 100%); background: linear-gradient(180deg, #f7e9b8 0%, #d9b867 50%, #a07c30 100%) 0 0 / 100% 1lh repeat-y; -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .8)); }
 .board-head.has-art .board-title::after { color: #d4b064; background: linear-gradient(90deg, transparent, #d4b064 35%, transparent 46% 54%, #d4b064 65%, transparent) center / 100% 1px no-repeat; }
 

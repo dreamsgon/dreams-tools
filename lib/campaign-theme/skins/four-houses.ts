@@ -406,7 +406,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid #ecc76e; outline-offset: -4px; }
 .board-head::after { content: ""; display: block; height: 8px; ${RIBBON} }
 /* With a banner picture: the picture under a dark wash, the title in gold. */
-.board-head.has-art { background: linear-gradient(180deg, rgba(10, 8, 20, .3), rgba(10, 8, 20, .68)), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --fh-title: #f0cf7a; --fh-tagline: #f4ecd8; --fh-title-shadow: 0 2px 12px rgba(0, 0, 0, .75); --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(180deg, rgba(10, 8, 20, .3), rgba(10, 8, 20, .68)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --fh-title: #f0cf7a; --fh-tagline: #f4ecd8; --fh-title-shadow: 0 2px 12px rgba(0, 0, 0, .75); --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 80px 40px 60px; }
 .board-head.has-art .board-nav { background: rgba(7, 6, 13, .72); }
 

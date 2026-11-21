@@ -24,13 +24,27 @@
 .home-hero.has-picture .linked-worlds .chip { color: #fff; border-color: rgb(255 255 255 / .35); }
 .home-hero.has-picture .hero-action { background: rgb(10 10 12 / .5) !important; color: #fff !important; border: 1px solid rgb(255 255 255 / .28) !important; backdrop-filter: blur(6px); }
 .home-hero.has-picture .hero-action:hover { background: rgb(10 10 12 / .7) !important; }
+/* Reposition: the hero is the frame. The text fades so the picture shows; the bar holds the zoom, Cancel and Save. */
+.dashboard-intro.home-hero.is-framing { position: relative; cursor: grab; touch-action: none; user-select: none; outline: 2px solid var(--accent); outline-offset: 3px; }
+.dashboard-intro.home-hero.is-framing.is-dragging { cursor: grabbing; }
+.home-hero.is-framing .home-hero-text { opacity: .35; pointer-events: none; transition: opacity .15s; }
+.home-hero .home-frame-hint { position: absolute !important; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgb(10 10 12 / .62); color: #fff; font-size: 13px; font-weight: 500; pointer-events: none; white-space: nowrap; }
+.home-hero.is-dragging .home-frame-hint { opacity: 0; }
+.home-hero-wrap .home-frame-bar { position: absolute; top: 16px; right: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 32px); cursor: default; }
+.home-frame-bar .hero-action { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: var(--radius); background: rgb(10 10 12 / .55); color: #fff; border: 1px solid rgb(255 255 255 / .28); backdrop-filter: blur(6px); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.home-frame-bar .hero-action:hover:not(:disabled) { background: rgb(10 10 12 / .75); }
+.home-frame-bar .hero-action:disabled { opacity: .5; cursor: default; }
+.home-frame-bar .home-frame-save { background: var(--accent); color: var(--on-accent, #fff); border-color: transparent; }
+.home-frame-bar .home-frame-save:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.home-frame-zoom { height: 36px; padding: 0 8px 0 4px; border-radius: var(--radius); background: rgb(10 10 12 / .55); border: 1px solid rgb(255 255 255 / .28); backdrop-filter: blur(6px); }
+.home-frame-zoom button { width: 28px; height: 28px; background: transparent; color: #fff; border: 0; }
+.home-frame-zoom output { color: rgb(255 255 255 / .85); }
+.home-reposition { display: inline-flex; align-items: center; gap: 6px; justify-self: start; }
 .home-hero.is-dropping { outline: 2px dashed var(--accent); outline-offset: 4px; }
 .home-hero-drop { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--ink); font-weight: 600; pointer-events: none; z-index: 5; }
 
 /* The Banner popover: below the hero's buttons, outside the hero so a theme's clipping never cuts it off. */
 .home-banner-pop { position: absolute; z-index: 25; top: 78px; right: 12px; width: 360px; max-width: calc(100% - 24px); display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: 0 14px 36px var(--shadow-color, rgb(0 0 0 / .25)); }
-.home-banner-pick { position: relative; display: block; width: 100%; height: 110px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised) center / cover no-repeat; cursor: crosshair; overflow: hidden; }
-.home-banner-line { position: absolute; left: 0; right: 0; border-top: 2px dashed #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .35); pointer-events: none; }
 .home-banner-empty { width: 100%; background: none; cursor: pointer; }
 .home-banner-empty small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; }
 .home-pop-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
@@ -111,4 +125,13 @@
   .home-recent button { grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; padding: 12px 4px; }
   .home-recent-excerpt { display: none; }
   .home-banner-pop { right: 0; top: 64px; }
+  .home-hero-wrap .home-frame-bar { position: static; margin-top: 10px; max-width: none; justify-content: flex-start; }
+  .home-frame-bar .hero-action, .home-frame-zoom { background: var(--panel) !important; color: var(--ink) !important; border-color: var(--line) !important; backdrop-filter: none; }
+  .home-frame-zoom button { color: var(--ink) !important; }
+  .home-frame-zoom output { color: var(--muted) !important; }
+  .home-frame-bar .home-frame-save { background: var(--accent) !important; color: var(--on-accent, #fff) !important; border-color: transparent !important; }
+  .home-frame-bar .hero-action, .home-frame-zoom { height: 44px; }
+  .home-frame-zoom button { width: 40px; height: 40px; }
+  .home-frame-reset span { display: none; }
+  .home-hero .home-frame-hint { top: auto; bottom: 14px; }
 }

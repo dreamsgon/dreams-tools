@@ -838,9 +838,6 @@ body:has(.app-shell>.main-panel>.main-footer){padding-bottom:0}
 .look-group{border-top:1px solid var(--line);padding:16px 0;display:flex;flex-direction:column;gap:10px}
 .look-group h2{font-family:var(--font-sans);font-size:14px;font-weight:600;letter-spacing:0}
 .muted.small,.small.muted{font-size:12.5px}
-.look-banner-edit{position:relative;cursor:crosshair}
-.look-banner-edit .look-banner{height:120px}
-.look-banner-dot{position:absolute;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #0008;pointer-events:none}
 .look-banner-empty{display:flex;align-items:center;gap:12px;border:1px dashed var(--line-strong);border-radius:var(--radius);padding:18px;text-align:left;color:var(--muted)}
 .look-banner-empty strong{display:block;color:var(--accent);font-weight:500}
 .look-swatches,.look-surfaces{display:flex;gap:10px;flex-wrap:wrap}
@@ -1510,7 +1507,6 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .article-layout.page-wide{grid-template-columns:minmax(0,1fr) 220px}
 @media(max-width:1200px){.article-layout.page-wide{grid-template-columns:minmax(0,1fr) 155px}}
 .prose.box-left .wiki-infobox:not(.right){float:left;margin:4px 28px 18px 0}
-.page-style-pop .look-banner-edit .look-banner{height:84px}
 .page-style-pop .look-banner-empty{width:100%;padding:12px;background:none;cursor:pointer}
 .page-style-pop .look-banner-empty small{display:block;font-size:12px}
 .page-style-pop .button-row{gap:6px;margin:6px 0 4px}

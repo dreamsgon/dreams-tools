@@ -213,8 +213,13 @@ export function themeColours(t: Theme, scope: string): string {
 /** What a page needs for the live theme: the CSS and the fonts to load. */
 export function liveTheme(t: Theme | null, area: ThemeArea = "forum") {
   if (!t) return null;
-  return { key: `${t.id}:${t.updatedAt ?? ""}:${area}`, name: t.name, mode: t.mode, banner: t.banner, css: themeCss(t, SKIN_SCOPE, area).css, fonts: themeFontsUrl(t) };
+  return { key: `${t.id}:${t.updatedAt ?? ""}:${area}`, name: t.name, mode: t.mode, banner: t.banner, css: framedBanner(themeCss(t, SKIN_SCOPE, area).css), fonts: themeFontsUrl(t) };
 }
+/**
+ * A theme saved before banners could be moved sideways and zoomed draws the picture `center var(--banner-y, 50%) / cover`;
+ * it reads the forum's --banner-x and --banner-size too, so the GM's framing shows in every theme.
+ */
+export const framedBanner = (css: string) => css.replace(/var\(--banner\)\s+center\s+var\(--banner-y(,\s*50%)?\)\s*\/\s*cover\b/g, "var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover)");
 export type LiveTheme = NonNullable<ReturnType<typeof liveTheme>>;
 
 /**

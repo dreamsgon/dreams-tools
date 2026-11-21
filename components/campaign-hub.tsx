@@ -16,7 +16,7 @@ import { allStyles, isBuiltIn, styleFor, styleSummary } from "@/lib/encyclopedia
 import { when } from "./home-shared";
 import { RollPanel } from "./roll-widget";
 import { TagRow } from "./tags";
-import { LookBanner, LookFont } from "./encyclopedia/look-section";
+import { LookFont, useHeroPicture } from "./encyclopedia/look-section";
 import { PictureToken, usePictureSrc } from "./encyclopedia/character-picture";
 import { tokenPicture } from "@/lib/encyclopedia/picture";
 import { campaignTargets } from "@/lib/tags";
@@ -63,6 +63,8 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   // A theme belongs to the campaign's Encyclopedia campaign; Theme opens the Admin CP beside the dashboard.
   const skinKey = hub ? (hub.row.encyclopedia ? `c-${hub.row.encyclopedia.id}` : null) : error ? null : undefined, themeDock = useThemeDock(skinKey, "dashboard", true);
   const skin = useCampaignSkin(skinKey, "dashboard", undefined, themeDock.editing);
+  // The campaign's banner picture fills the header, in place of a theme's drawn art.
+  const hero = useHeroPicture(hub?.look ?? undefined);
   useDiceTarget(hub ? hubDiceTarget(hub.row) : NO_CAMPAIGN);
   useCampaignOpened(hub?.row.key ?? null);
   const [members, setMembers] = useState<MembersView | null>(null), [membersError, setMembersError] = useState("");
@@ -191,8 +193,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       else if (notice === "forum") { setForumError(""); setForumDialog(true); }
       else window.location.assign(L.startNotes);
     }} />}
-    {look?.banner && <LookBanner look={look} className="hub-banner" />}
-    <div className="hub-head">
+    <div ref={hero.ref} className={`hub-head ${hero.className}`} style={hero.style}>
       <div className="hub-title">
         <p className="hub-kicker">Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>
