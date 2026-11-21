@@ -5,10 +5,9 @@
  * (real stars around the Sun). Generating again keeps the systems the GM has changed.
  */
 import {useMemo,useState} from 'react';
-import {Dices} from 'lucide-react';
 import {galaxyRandom} from '@/lib/encyclopedia/galaxies';
 import {MAX_COLS,MAX_ROWS,backdropNames,backdrops,generateSector,localBubble,maxSystems,sectorColour,sectorName,sectorSizes,type Backdrop,type Sector,type SectorSizeId} from '@/lib/encyclopedia/sectors';
-import {ToolDialog} from './tool-dialog';
+import {Actions,Check,Choice,Field,GenDialog,Generator,Hint,Picture,Range,Section,Seed,Summary} from '../generator/generator';
 import {SectorMap} from './sector-map';
 
 type SizeChoice=SectorSizeId|'custom';
@@ -37,34 +36,34 @@ export function SectorDialog({title,name:startName,sector,realAllowed,at,onApply
  const pickSize=(k:SizeChoice)=>{if(k!=='custom'){setCols(sectorSizes[k].cols);setRows(sectorSizes[k].rows);setCount(c=>Math.min(c,maxSystems(sectorSizes[k].cols,sectorSizes[k].rows)));}else{setCols(c=>c+1);}};
  const reroll=()=>{const r=galaxyRandom(`${Date.now()}:${Math.random()}`),n=sectorName(r);if(!start)setName(n);setSeed(n);setSeedTouched(false);};
  const keepLook=()=>start&&onApply({...start,color,backdrop},name.trim());
- return <ToolDialog title={title} wide onClose={onClose}>
-  <div className="world-generate">
-   <div className="world-generate-options">
-    <label className="world-field">Name<input type="text" value={name} maxLength={160} onChange={e=>{setName(e.target.value);if(!start&&!seedTouched)setSeed(e.target.value||'sector');}}/></label>
-    {realAllowed&&<label className="world-check"><input type="checkbox" checked={real} onChange={e=>{setReal(e.target.checked);if(e.target.checked)setBackdrop('deep');}}/><span>The Local Bubble<small>The Sun and real stars within about 25 ly, placed by distance and rough direction.</small></span></label>}
-    {!real&&<>
-     <div className="world-field">Size<div className="world-seg" role="group" aria-label="Size">{(Object.keys(sectorSizes) as SectorSizeId[]).map(k=><button key={k} type="button" aria-pressed={size===k} onClick={()=>pickSize(k)}>{sectorSizes[k].name}</button>)}<button type="button" aria-pressed={size==='custom'} onClick={()=>pickSize('custom')}>Custom</button></div>
-      <small className="sector-size-note">{cols} × {rows} hexes, {cols*5} × {rows*5} ly</small></div>
-     {size==='custom'&&<div className="sector-custom"><label className="world-field">Columns<input type="number" min={4} max={MAX_COLS} value={cols} onChange={e=>setCols(clamp(+e.target.value,4,MAX_COLS))}/></label><label className="world-field">Rows<input type="number" min={3} max={MAX_ROWS} value={rows} onChange={e=>setRows(clamp(+e.target.value,3,MAX_ROWS))}/></label></div>}
-     <label className="world-field">Systems <output>{Math.min(count,max)}</output><input type="range" min={1} max={max} value={Math.min(count,max)} onChange={e=>setCount(+e.target.value)}/></label>
-     <label className="world-field">Rumours <output>{rumours}%</output><input type="range" min={0} max={100} step={5} value={rumours} onChange={e=>setRumours(+e.target.value)}/></label>
-     <label className="world-check"><input type="checkbox" checked={lanes} onChange={e=>setLanes(e.target.checked)}/><span>Join charted systems with lanes<small>Each charted system to its nearest charted neighbour.</small></span></label>
-    </>}
-    <div className="world-field">Backdrop<div className="world-seg sector-backdrops" role="group" aria-label="Backdrop">{backdrops.map(b=><button key={b} type="button" aria-pressed={backdrop===b} onClick={()=>setBackdrop(b)}>{backdropNames[b]}</button>)}</div></div>
-    <label className="world-field sector-colour">Colour on the galaxy map<input type="color" value={color} onChange={e=>setColor(e.target.value)}/></label>
-    {kept.length>0&&!real&&<p className="aside-hint">{kept.length===1?'The system you changed stays':`The ${kept.length} systems you changed stay`} where {kept.length===1?'it is':'they are'}.</p>}
-   </div>
-   <div className="world-generate-preview">
-    {!real&&<div className="world-field world-seed-field">Seed<div className="world-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={seed} maxLength={80} onChange={e=>{setSeed(e.target.value);setSeedTouched(true);}}/><button type="button" className="button" onClick={reroll}><Dices size={15}/> Reroll</button></div></div>}
-    <SectorMap className="sector-preview" sector={{...made,backdrop}} label="Preview of the sector"/>
-    <p className="aside-hint">{made.systems.length} systems, {made.systems.filter(s=>s.status==='rumour').length} of them rumours. One hex is 5 light years.</p>
-   </div>
-  </div>
-  <div className="button-row galaxy-dialog-actions">
-   {!name.trim()&&<span className="galaxy-dialog-why" role="status">Give the sector a name first.</span>}
-   <button type="button" className="button" onClick={onClose}>Cancel</button>
-   {start&&<button type="button" className="button" disabled={!name.trim()} onClick={keepLook}>Save name and look only</button>}
-   <button type="button" className="button primary" disabled={!name.trim()||(!real&&!seed.trim())} onClick={()=>onApply({...made,backdrop},name.trim())}>{start?'Generate again':'Make this sector'}</button>
-  </div>
- </ToolDialog>;
+ const rumoured=made.systems.filter(s=>s.status==='rumour').length,summary=`${made.systems.length} systems, ${rumoured} of them rumours. One hex is 5 light years.`;
+ return <GenDialog title={title} onClose={onClose}>
+  <Generator
+   settings={<>
+    <Section title="Sector" summary={real?'The Local Bubble':`${cols} × ${rows} hexes`} open>
+     <Field label="Name"><input type="text" value={name} maxLength={160} onChange={e=>{setName(e.target.value);if(!start&&!seedTouched)setSeed(e.target.value||'sector');}}/></Field>
+     {realAllowed&&<Check label="The Local Bubble" hint="The Sun and real stars within about 25 ly, placed by distance and rough direction." checked={real} onChange={v=>{setReal(v);if(v)setBackdrop('deep');}}/>}
+     {!real&&<Choice label="Size" value={size} options={[...(Object.keys(sectorSizes) as SectorSizeId[]).map(k=>[k,sectorSizes[k].name] as const),['custom','Custom'] as const]} onChange={pickSize} hint={`${cols} × ${rows} hexes, ${cols*5} × ${rows*5} ly`}/>}
+     {!real&&size==='custom'&&<div className="gen-pair"><Field label="Columns"><input type="number" min={4} max={MAX_COLS} value={cols} onChange={e=>setCols(clamp(+e.target.value,4,MAX_COLS))}/></Field><Field label="Rows"><input type="number" min={3} max={MAX_ROWS} value={rows} onChange={e=>setRows(clamp(+e.target.value,3,MAX_ROWS))}/></Field></div>}
+    </Section>
+    {!real&&<Section title="Systems" summary={`${Math.min(count,max)}, ${rumours}% rumours`} open>
+     <Range label="Systems" value={Math.min(count,max)} min={1} max={max} shown={String(Math.min(count,max))} onChange={setCount}/>
+     <Range label="Rumours" value={rumours} min={0} max={100} step={5} shown={`${rumours}%`} onChange={setRumours} hint="Systems only spoken of, not yet charted."/>
+     <Check label="Join charted systems with lanes" hint="Each charted system to its nearest charted neighbour." checked={lanes} onChange={setLanes}/>
+     {kept.length>0&&<Hint>{kept.length===1?'The system you changed stays':`The ${kept.length} systems you changed stay`} where {kept.length===1?'it is':'they are'}.</Hint>}
+    </Section>}
+    <Section title="Look" summary={backdropNames[backdrop]} open>
+     <Choice label="Backdrop" value={backdrop} options={backdrops.map(b=>[b,backdropNames[b]] as const)} onChange={setBackdrop}/>
+     <Field label="Colour on the galaxy map"><input type="color" value={color} onChange={e=>setColor(e.target.value)}/></Field>
+    </Section>
+   </>}
+   seed={!real&&<Seed value={seed} maxLength={80} onChange={v=>{setSeed(v);setSeedTouched(true);}} rerolls={[{label:'Reroll',onClick:reroll,title:start?'A new seed':'A new name and seed'}]}/>}
+   picture={<Picture><SectorMap className="sector-preview" sector={{...made,backdrop}} label={`Preview of the sector: ${summary}`}/></Picture>}
+   summary={<Summary text={summary}/>}
+   actions={<Actions why={!name.trim()&&'Give the sector a name first.'} start={start&&<button type="button" className="gen-btn" disabled={!name.trim()} onClick={keepLook}>Save name and look only</button>}>
+    <button type="button" className="gen-btn" onClick={onClose}>Cancel</button>
+    <button type="button" className="gen-btn primary" disabled={!name.trim()||(!real&&!seed.trim())} onClick={()=>onApply({...made,backdrop},name.trim())}>{start?'Generate again':'Make this sector'}</button>
+   </Actions>}
+  />
+ </GenDialog>;
 }

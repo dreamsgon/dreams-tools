@@ -44,7 +44,7 @@ Press **Generate** in the editor (or *Generate a new landscape* on a map page). 
 
 ### The planet panel
 
-Tabs **Planet**, **Land**, **Biomes** and **Places**:
+Folding sections **Planet**, **Land**, **Biomes** and **Places**:
 
 - **Planet**: nine kinds shown as small previews (Earth-like, Supercontinent, Many islands, Ocean, Desert, Ice, Jungle, Tidally locked, Volcanic), plus water, temperature, rain, day and night, tilt, life and size.
 - **Land**: continents, one supercontinent, mountains, volcanoes, coastline and islands.
