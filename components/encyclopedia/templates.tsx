@@ -7,7 +7,7 @@ import { Fragment, useState } from "react";
 import { arrangeStats, moveStat, moveStatGroup, statGroups, statOff, tidy, toggleStat, type StatArrangement } from "@/lib/encyclopedia/stat-arrange";
 import { ArrowDown, ArrowUp, Copy, EyeOff, LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
 import { compareEntries, folderPath, newId, templateKinds, type Entry, type HideableTab, type PageTemplate, type StatField, type TemplateField, type Workspace } from "@/lib/encyclopedia/world-model";
-import { applyTemplate, characterStarters, cleanValue, deleteTemplate, FIELD_TYPES, HIDEABLE_TABS, infoRows, KIND_NAMES, saveTemplate, starterTemplates, templateFromPage, templateOf, templatesFor, templateUses, type FieldValue } from "@/lib/encyclopedia/templates";
+import { applyTemplate, characterStarters, cleanValue, readMulti, readScore, readTrack, deleteTemplate, FIELD_TYPES, HIDEABLE_TABS, infoRows, KIND_NAMES, saveTemplate, starterTemplates, templateFromPage, templateOf, templatesFor, templateUses, type FieldValue } from "@/lib/encyclopedia/templates";
 import { defaultCharacterLayout, maxFacts, profileBlockInfo, type CharacterLayout } from "@/lib/encyclopedia/character-profile";
 import { ToolDialog } from "./tool-dialog";
 import { confirmDialog } from "../confirm-dialog";
@@ -22,7 +22,28 @@ function FieldInput({ f, value, data, worldId, onChange }: { f: TemplateField; v
   if (f.type === "choice") return <select aria-label={label} value={value ?? ""} onChange={e => onChange(cleanValue(f, e.target.value))}><option value="">—</option>{f.options?.map(o => <option key={o}>{o}</option>)}</select>;
   if (f.type === "page") return <select aria-label={label} value={value ?? ""} onChange={e => onChange(e.target.value || undefined)}><option value="">—</option>{linkable(data, worldId).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select>;
   if (f.type === "textarea") return <textarea aria-label={label} rows={2} maxLength={2000} value={value ?? ""} onChange={e => onChange(e.target.value || undefined)}/>;
+  if (f.type === "check") return <span className="field-check"><input type="checkbox" aria-label={label} checked={value === "yes"} onChange={e => onChange(e.target.checked ? "yes" : undefined)}/> {value === "yes" ? "Yes" : "No"}</span>;
+  if (f.type === "multi") { const picked = readMulti(f, value); return <span className="field-multi" role="group" aria-label={label}>{f.options?.map(o => <button type="button" key={o} aria-pressed={picked.includes(o)} onClick={() => onChange(cleanValue(f, (picked.includes(o) ? picked.filter(x => x !== o) : [...picked, o]).join(",")))}>{o}</button>)}</span>; }
+  if (f.type === "score") { const { score, mod } = readScore(f, value), typed = f.mod === "typed";
+    const put = (sc: number | null, md: number | null) => onChange(cleanValue(f, typed && md !== null ? `${sc ?? ""}|${md}` : sc === null ? "" : String(sc)));
+    return <span className="field-score"><NumBox label={`${label} score`} value={score} onChange={v => put(v, mod)}/>{typed ? <NumBox label={`${label} modifier`} value={mod} signed onChange={v => put(score, v)}/> : <output aria-label={`${label} modifier`}>{mod === null ? "—" : mod >= 0 ? `+${mod}` : `−${Math.abs(mod)}`}</output>}</span>; }
+  if (f.type === "track") { const { cur, max } = readTrack(value), put = (c: number | null, m: number | null) => onChange(cleanValue(f, `${c ?? ""}/${m ?? ""}`));
+    return <span className="field-track"><NumBox label={`${label} now`} value={cur} onChange={v => put(v, max)}/><span aria-hidden="true">/</span><NumBox label={`${label} max`} value={max} onChange={v => put(cur, v)}/></span>; }
+  if (f.type === "url") return <UrlBox label={label} value={value} onChange={onChange} f={f}/>;
   return <input aria-label={label} inputMode={f.type === "number" ? "numeric" : undefined} maxLength={2000} value={value ?? ""} onChange={e => onChange(f.type === "number" ? (e.target.value.trim() === "" ? undefined : (cleanValue(f, e.target.value) ?? e.target.value)) : e.target.value || undefined)}/>;
+}
+
+/** A number box that keeps what's being typed ("-", "+") and passes on numbers only. */
+function NumBox({ label, value, onChange, signed = false }: { label: string; value: number | null; onChange: (v: number | null) => void; signed?: boolean }) {
+  const show = (v: number | null) => v === null ? "" : signed && v > 0 ? `+${v}` : String(v);
+  const [text, setText] = useState(show(value));
+  const shown = Number(text.replace("−", "-")) === value || (text === "" && value === null) || /^[-+−]$/.test(text) ? text : show(value);
+  return <input aria-label={label} inputMode="numeric" maxLength={8} value={shown} placeholder="—" onChange={e => { const t = e.target.value; setText(t); const n = Number(t.replace("−", "-")); onChange(t.trim() === "" || /^[-+−]$/.test(t.trim()) ? null : Number.isFinite(n) ? n : value); }}/>;
+}
+/** A web link: kept as typed, saved when it is a real http(s) address. */
+function UrlBox({ label, value, onChange, f }: { label: string; value: FieldValue | undefined; onChange: (v: FieldValue | undefined) => void; f: TemplateField }) {
+  const [text, setText] = useState(String(value ?? "")), ok = !text.trim() || cleanValue(f, text) !== undefined;
+  return <input aria-label={label} type="url" inputMode="url" placeholder="https://…" maxLength={2000} value={text} aria-invalid={!ok} onChange={e => { setText(e.target.value); const v = cleanValue(f, e.target.value); if (v !== undefined || !e.target.value.trim()) onChange(v); }}/>;
 }
 
 /** The info box on a page made from a template. Edit shows every field; reading shows the ones with a value. */
@@ -34,7 +55,7 @@ export function InfoBox({ entry, data, update, onOpen }: { entry: Entry; data: W
   return <div className="aside-section info-box">
     <div className="aside-heading"><span className="eyebrow">{t.name.toUpperCase()}</span><button className="text-button" onClick={() => setEditing(!editing)}>{editing ? "Done" : <><Pencil size={12}/> Edit</>}</button></div>
     {editing ? <div className="info-box-edit">{t.fields.map(f => <label key={f.id}><span>{f.label}{f.visibility === "gm" && <EyeOff size={11} aria-label="GM only"/>}</span><FieldInput f={f} value={entry.fields?.[f.id]} data={data} worldId={entry.worldId} onChange={v => set(f.id, v)}/></label>)}</div>
-      : rows.length ? <dl>{rows.map(r => <div key={r.id} className={r.gm ? "gm" : ""}><dt>{r.label}{r.gm && <EyeOff size={11} aria-label="GM only"/>}</dt><dd>{r.pageId ? <button className="wiki-link" onClick={() => onOpen(r.pageId!)}>{r.value}</button> : r.value}</dd></div>)}</dl>
+      : rows.length ? <dl>{rows.map(r => <div key={r.id} className={r.gm ? "gm" : ""}><dt>{r.label}{r.gm && <EyeOff size={11} aria-label="GM only"/>}</dt><dd>{r.pageId ? <button className="wiki-link" onClick={() => onOpen(r.pageId!)}>{r.value}</button> : r.href ? <a href={r.href} target="_blank" rel="noopener noreferrer">{r.value}</a> : r.score !== undefined && r.mod ? <span className="info-score"><b>{r.mod}</b><small>{r.score}</small></span> : r.value}</dd></div>)}</dl>
       : <p className="aside-hint">Nothing filled in yet. Choose Edit to add {t.fields.slice(0, 3).map(f => f.label.toLowerCase()).join(", ")}.</p>}
   </div>;
 }
@@ -155,8 +176,10 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
         <div role="row" className="head"><span role="columnheader">Name</span><span role="columnheader">Type</span><span role="columnheader">Choices</span><span role="columnheader">Who sees it</span><span/></div>
         {t.fields.map(f => <div role="row" key={f.id}>
           <input aria-label="Field name" maxLength={60} value={f.label} onChange={e => editField(f.id, { label: e.target.value })}/>
-          <select aria-label={`${f.label} type`} value={f.type} onChange={e => editField(f.id, { type: e.target.value as TemplateField["type"], ...(e.target.value === "choice" && !f.options?.length ? { options: ["One", "Two"] } : {}) })}>{FIELD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-          {f.type === "choice" ? <input aria-label={`${f.label} choices`} placeholder="Village, Town, City" defaultValue={f.options?.join(", ")} onBlur={e => editField(f.id, { options: [...new Set(e.target.value.split(",").map(x => x.trim()).filter(Boolean))].slice(0, 30) })}/> : <span className="muted">{f.type === "page" ? "Any page in this world" : "—"}</span>}
+          <select aria-label={`${f.label} type`} value={f.type} onChange={e => editField(f.id, { type: e.target.value as TemplateField["type"], ...((e.target.value === "choice" || e.target.value === "multi") && !f.options?.length ? { options: ["One", "Two"] } : {}), ...(e.target.value === "score" && !f.mod ? { mod: "d20" as const } : {}) })}>{FIELD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          {f.type === "choice" || f.type === "multi" ? <input key={f.type} aria-label={`${f.label} choices`} placeholder={f.type === "multi" ? "Brave, Cunning, Loyal" : "Village, Town, City"} defaultValue={f.options?.join(", ")} onBlur={e => editField(f.id, { options: [...new Set(e.target.value.split(",").map(x => x.trim()).filter(Boolean))].slice(0, 30) })}/>
+            : f.type === "score" ? <select aria-label={`${f.label}: modifier`} value={f.mod ?? "d20"} onChange={e => editField(f.id, { mod: e.target.value as "d20" | "typed" })}><option value="d20">Modifier = (score − 10) ÷ 2</option><option value="typed">Modifier typed in</option></select>
+            : <span className="muted">{({ page: "Any page in this world", track: "Like HP 12 / 20", check: "A tick box", url: "An https:// link" } as Record<string, string>)[f.type] ?? "—"}</span>}
           <select aria-label={`${f.label}: who sees it`} value={f.visibility} onChange={e => editField(f.id, { visibility: e.target.value as "gm" | "players" })}><option value="players">Players</option><option value="gm">GM only</option></select>
           <button className="icon-button" aria-label={`Remove ${f.label}`} onClick={() => edit({ fields: t.fields.filter(x => x.id !== f.id) })}><X size={14}/></button>
         </div>)}
