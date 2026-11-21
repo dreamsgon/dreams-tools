@@ -9,7 +9,29 @@ import type { CharacterData, Entry, HideableTab, PageTemplate, TemplateField, Wo
 import type { Org } from "./org-profile.ts";
 import { layOutProfile, profileFromLayout, profileLayoutOf, type Profile } from "./character-profile.ts";
 
-export const FIELD_TYPES: [TemplateField["type"], string][] = [["text", "Text"], ["textarea", "Long text"], ["number", "Number"], ["choice", "Choice"], ["page", "Page link"]];
+export const FIELD_TYPES: [TemplateField["type"], string][] = [["text", "Text"], ["textarea", "Long text"], ["number", "Number"], ["score", "Score + modifier"], ["track", "Current / max"], ["choice", "Choice"], ["multi", "Several choices"], ["check", "Yes / no"], ["page", "Page link"], ["url", "Web link"]];
+
+/* ---- Field values that hold more than one thing ---- */
+
+/** A score's modifier by the d20 rule: (score − 10) ÷ 2, rounded down. */
+export const scoreMod = (score: number) => Math.floor((score - 10) / 2);
+const signed = (n: number) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
+/** A score field's value: the score, and the modifier typed beside it (stored "14|+3") or worked out. */
+export function readScore(f: Pick<TemplateField, "mod">, v: FieldValue | undefined): { score: number | null; mod: number | null } {
+  if (v === undefined || v === "") return { score: null, mod: null };
+  const [a, b] = String(v).split("|"), score = a.trim() === "" ? NaN : Number(a), typed = b === undefined || b.trim() === "" ? NaN : Number(b.replace("−", "-"));
+  const s = Number.isFinite(score) ? score : null;
+  return { score: s, mod: f.mod === "typed" ? (Number.isFinite(typed) ? typed : null) : s === null ? null : scoreMod(s) };
+}
+/** Current / max, stored "12/20". */
+export function readTrack(v: FieldValue | undefined): { cur: number | null; max: number | null } {
+  if (v === undefined || v === "") return { cur: null, max: null };
+  const [a, b = ""] = String(v).split("/"), n = (x: string) => x.trim() === "" || !Number.isFinite(Number(x)) ? null : Number(x);
+  return { cur: n(a), max: n(b) };
+}
+/** Several choices, stored "Stealthy, Brave" in the template's order. */
+export const readMulti = (f: Pick<TemplateField, "options">, v: FieldValue | undefined) => { const have = new Set(String(v ?? "").split(",").map(x => x.trim()).filter(Boolean)); return (f.options ?? []).filter(o => have.has(o)); };
+const webLink = (text: string) => { try { const u = new URL(/^[a-z]+:\/\//i.test(text) ? text : `https://${text}`); return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null; } catch { return null; } };
 export const KIND_NAMES: Record<PageTemplate["kind"], string> = { note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", quest: "Quest" };
 export type FieldValue = string | number;
 
@@ -52,7 +74,7 @@ export function characterStarters(newId: () => string, now = new Date().toISOStr
     t("Player character", ["Player", "Species", "Class", "Level"], ["statblock"], [], "## Background\n\n## Goals\n"),
     t("NPC", ["Species", "Occupation", "Where to find them"], ["statblock", "stats", "features", "inventory", "spells"], [{ title: "GM notes", visibility: "gm" }], "## First impression\nHow they look and sound.\n\n## What they want from the party\n", ["Secret"]),
     t("Creature", ["Type", "Size", "Challenge"], ["stats", "features", "inventory", "spells"], [], "## Tactics\n\n## Lair and loot\n"),
-  ];
+  ].map(x => x.name === "Creature" ? { ...x, fields: [{ id: newId(), label: "Armor Class", type: "number", visibility: "gm" }, { id: newId(), label: "Hit points", type: "track", visibility: "gm" }] } : x);
 }
 
 /** A copy of a stat arrangement (order and switched-off stats), with empty lists left out. */
@@ -93,6 +115,17 @@ export const templateUses = (s: Workspace, templateId: string) => s.entries.filt
 export function cleanValue(f: TemplateField, raw: unknown): FieldValue | undefined {
   if (raw === null || raw === undefined) return undefined;
   if (f.type === "number") { const n = typeof raw === "number" ? raw : Number(String(raw).replace(/,/g, "").trim()); return String(raw).trim() === "" || !Number.isFinite(n) ? undefined : n; }
+  if (f.type === "check") return raw === true || /^(yes|true|1|on)$/i.test(String(raw).trim()) ? "yes" : undefined;
+  if (f.type === "score") {
+    // A bare number is a score; "14|+3" is a score with its typed modifier. Only the typed rule keeps the modifier.
+    const [a, b] = String(raw).split("|"), s = Number(String(a).trim()), m = b === undefined ? NaN : Number(b.trim().replace("−", "-"));
+    const score = String(a).trim() !== "" && Number.isFinite(s) ? Math.round(s * 100) / 100 : null, mod = f.mod === "typed" && b !== undefined && b.trim() !== "" && Number.isFinite(m) ? Math.round(m) : null;
+    if (score === null && mod === null) return undefined;
+    return mod === null ? (score ?? undefined) : `${score ?? ""}|${mod}`;
+  }
+  if (f.type === "track") { const { cur, max } = readTrack(String(raw)); return cur === null && max === null ? undefined : `${cur ?? ""}/${max ?? ""}`; }
+  if (f.type === "multi") { const picked = readMulti(f, String(raw)); return picked.length ? picked.join(", ") : undefined; }
+  if (f.type === "url") { const text = String(raw).trim().slice(0, 2000); return text ? webLink(text) ?? undefined : undefined; }
   const text = String(raw).trim().slice(0, 2000);
   if (!text) return undefined;
   if (f.type === "choice" && !f.options?.includes(text)) return undefined;
@@ -174,7 +207,7 @@ export function deleteTemplate(s: Workspace, worldId: string, templateId: string
   return { ...s, worlds: s.worlds.map(w => w.id !== worldId ? w : { ...w, templates: (w.templates ?? []).filter(t => t.id !== templateId) }), entries: s.entries.map(e => { if (e.templateId !== templateId) return e; const rest = { ...e }; delete rest.templateId; delete rest.fields; return rest; }) };
 }
 
-export type InfoRow = { id: string; label: string; value: string; pageId?: string; gm: boolean };
+export type InfoRow = { id: string; label: string; value: string; pageId?: string; gm: boolean; /** A web link field's address. */ href?: string; /** A score field's score and signed modifier, for a score box. */ score?: number; mod?: string };
 /** The info box rows with a value. `players` leaves out GM-only fields. Page links show the page's title. */
 export function infoRows(s: Pick<Workspace, "entries">, t: PageTemplate, e: Entry, players = false): InfoRow[] {
   return t.fields.flatMap(f => {
@@ -182,6 +215,12 @@ export function infoRows(s: Pick<Workspace, "entries">, t: PageTemplate, e: Entr
     const v = e.fields?.[f.id];
     if (v === undefined || v === "") return [];
     if (f.type === "page") { const page = s.entries.find(x => x.id === v); return page ? [{ id: f.id, label: f.label, value: page.title, pageId: page.id, gm: f.visibility === "gm" }] : []; }
+    const row = (value: string, extra: Partial<InfoRow> = {}) => value ? [{ id: f.id, label: f.label, value, gm: f.visibility === "gm", ...extra }] : [];
+    if (f.type === "score") { const { score, mod } = readScore(f, v); return row([score ?? "", mod === null ? "" : `(${signed(mod)})`].filter(x => x !== "").join(" "), { ...(score !== null ? { score } : {}), ...(mod !== null ? { mod: signed(mod) } : {}) }); }
+    if (f.type === "track") { const { cur, max } = readTrack(v); return row(max === null ? String(cur ?? "") : `${cur ?? "—"} / ${max}`); }
+    if (f.type === "check") return row(v === "yes" ? "Yes" : "");
+    if (f.type === "multi") return row(readMulti(f, v).join(", "));
+    if (f.type === "url") { const href = webLink(String(v)); return href ? row(new URL(href).host.replace(/^www\./, "") + (new URL(href).pathname.length > 1 ? new URL(href).pathname : ""), { href }) : []; }
     return [{ id: f.id, label: f.label, value: typeof v === "number" ? v.toLocaleString("en-US") : v, gm: f.visibility === "gm" }];
   });
 }

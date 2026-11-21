@@ -1587,3 +1587,18 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .template-stat .icon-button,.template-stat-head .icon-button{width:26px;height:26px;padding:0}
 .template-stat .template-check{font-size:13.5px}
 .template-stat>span,.template-stat-head>span{display:inline-flex;gap:2px;flex:none}.template-stat .icon-button,.template-stat-head .icon-button{min-width:0;min-height:0;display:grid;place-items:center;border:0;background:none}.template-stat .icon-button:disabled,.template-stat-head .icon-button:disabled{opacity:.25}
+/* Template field types: score + modifier, current / max, several choices, yes / no (templates.tsx). */
+.field-score,.field-track{display:flex;align-items:center;gap:6px}
+.field-score input,.field-track input{width:64px;min-width:0;text-align:center}
+.field-score output{min-width:44px;padding:6px 8px;border-radius:var(--radius);background:var(--raised);text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.field-track>span{color:var(--muted)}
+.field-check{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.field-check input{width:auto}
+.field-multi{display:flex;flex-wrap:wrap;gap:5px}
+.field-multi button{padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;cursor:pointer}
+.field-multi button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:500}
+.info-score{display:inline-flex;align-items:baseline;gap:6px}
+.info-score b{font-size:1.15em;font-variant-numeric:tabular-nums}
+.info-score small{padding:0 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-variant-numeric:tabular-nums}
+input[aria-invalid=true]{border-color:var(--danger,#c0392b)}
+@media(min-width:901px){.template-fields-table>div{grid-template-columns:minmax(120px,1.3fr) 160px minmax(120px,1.4fr) 120px 32px}}
