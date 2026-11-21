@@ -155,8 +155,8 @@ export default function HexMapPanel({ close, start, from, regenerate }: { close:
         </Section>
       </div>
       <div className="creator-preview hexmap-preview">
-        <div className="creator-field"><span>Seed (the same seed always makes the same map)</span>
-          <div className="creator-seed"><input aria-label="Seed" value={o.seed} maxLength={40} spellCheck={false} onChange={e => set("seed", e.target.value)}/>
+        <div className="creator-field"><span>Seed</span>
+          <div className="creator-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={o.seed} maxLength={40} spellCheck={false} onChange={e => set("seed", e.target.value)}/>
             <button type="button" onClick={() => set("seed", randomHexSeed())}><Dices size={15}/> Reroll</button>
             {(o.settlements > 0 || o.sites > 0) && <button type="button" title="Move the places and keep the land" onClick={() => set("placesRoll", (o.placesRoll + 1) % 10000)}><Dices size={15}/> Reroll places</button>}</div></div>
         <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated hex map" data-stale={shown !== o || undefined}>

@@ -249,11 +249,11 @@ export function WorldGenerateDialog({ map, ai, survey, onClose, onUse }: {
         </div>
         <label className="world-check"><input type="checkbox" checked={o.places} onChange={e => set({ places: e.target.checked })}/><span>Add towns and roads<small>{o.places ? `${added} place${added === 1 ? '' : 's'} with made-up names, GM only until you share them. Places you have written notes for always stay.` : 'Places already on the map stay.'}</small></span></label>
         </>}
-        <div className="world-field">Seed (the same seed always makes the same world)
-          <div className="world-seed"><input aria-label="Seed" value={o.seed} maxLength={100} onChange={e => setSeed(e.target.value)}/><button type="button" className="button" onClick={() => setSeed(randomWorldSeed())}><Dices size={15}/> Reroll</button></div>
-        </div>
       </div>
       <div className="world-generate-preview">
+        <div className="world-field world-seed-field">Seed
+          <div className="world-seed"><input aria-label="Seed" title="The same seed and settings always make the same world" value={o.seed} maxLength={100} onChange={e => setSeed(e.target.value)}/><button type="button" className="button" onClick={() => setSeed(randomWorldSeed())}><Dices size={15}/> Reroll</button></div>
+        </div>
         {world && <div className="world-seg planet-view" role="group" aria-label="View"><button type="button" aria-pressed={!globe} onClick={() => setGlobe(false)}>Flat map</button><button type="button" aria-pressed={globe} onClick={() => setGlobe(true)}>Globe</button></div>}
         <div className={`world-generate-map${globe && world ? ' is-globe' : ''}`} aria-busy={(planet && planetOptions !== p) || (fromPicture && pictureOptions !== po)}>
           {globe && pixels && world ? <PlanetGlobe pixels={pixels} width={world.w} height={world.h} locked={options.rotation === 'locked'} label="The planet as a globe"/> : preview ? <MapCanvas map={preview}/> : <p className="world-generate-empty">Upload a picture, or try the sample sketch, to see the map it makes.</p>}
