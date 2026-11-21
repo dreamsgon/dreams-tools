@@ -177,10 +177,10 @@ export default function NewMapDialog({ grid, close, start, trace }: {
             <div className="creator-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={o.seed} maxLength={40} onChange={e => set("seed", e.target.value)}/>
               <button type="button" onClick={() => setO(p => ({ ...p, seed: randomSeed(), dressing: 0 }))} title="A new seed: new rooms and new dressing"><Dices size={15}/> Reroll layout</button>{kind !== "wilderness" && <button type="button" onClick={() => set("dressing", o.dressing + 1)} title="The same rooms, with new things in them"><Sparkles size={15}/> Reroll dressing</button>}</div>
           </div>
-          <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated map">
+          <div className="creator-preview-map"><svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated map">
             <DrawingBackground drawing={map.drawing} width={map.width} height={map.height}/>
             {orderedShapes(map.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={map.drawing} prefix="preview"/>)}
-          </svg>
+          </svg></div>
           {"key" in map && Array.isArray(map.key) && map.key.length > 0 && <details className="creator-room-key" open><summary>Room key <small>GM only</small></summary><ol>
             {map.key.map(k => <li key={k.number}><b>{k.name}</b> {keyNote(k)}</li>)}
           </ol></details>}
