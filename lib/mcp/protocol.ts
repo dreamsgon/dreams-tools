@@ -5,7 +5,8 @@
 import { callTool, listTools, serverInstructions, type McpContext } from "./tools.ts";
 import { getPrompt, listPrompts } from "./prompts.ts";
 
-export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+/** The first is the answer to a version this server does not know. 2025-11-25 is what current SDK clients (Antigravity, Gemini CLI) ask for first. */
+export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"];
 export const MAX_BODY = 64_000;
 type Message = { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
 type Reply = { status: number; body: unknown };
