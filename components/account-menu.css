@@ -56,3 +56,9 @@
 
 /* In the site header the account always comes last, after the bell (which phones reorder). */
 .site-header .site-end .acct { order:5; }
+
+/* Touch screens: the account button is at least 44px to the finger. */
+@media (pointer:coarse) {
+  .acct .acct-trigger { height:44px; min-height:44px; }
+  .acct.acct-compact .acct-trigger { width:44px; }
+}

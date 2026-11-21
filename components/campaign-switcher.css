@@ -3,7 +3,8 @@
 .csw-btn { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; box-sizing:border-box; padding:10px 16px; margin:0; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
 .csw-btn:hover { background:var(--hover, var(--accent-soft)); }
 .csw-btn:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-.csw-art { width:30px; height:30px; flex:none; box-sizing:border-box; border-radius:var(--radius, 4px); border:1px solid var(--accent); background:repeating-linear-gradient(135deg, var(--accent-soft) 0 6px, transparent 6px 12px); }
+.csw-art { position:relative; overflow:hidden; width:30px; height:30px; flex:none; box-sizing:border-box; border-radius:var(--radius, 4px); border:1px solid color-mix(in oklab, var(--accent) 45%, var(--line)); background:var(--accent-soft); }
+.csw-art::after, .csw-mini::after { content:""; position:absolute; inset:0; background:var(--accent); opacity:.5; -webkit-mask:var(--hex-grid) 2px -4px / 14px auto; mask:var(--hex-grid) 2px -4px / 14px auto; }
 .csw-name { flex:1; min-width:0; }
 .csw-name b { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-family:var(--font-display, inherit); font-size:15px; font-weight:600; line-height:1.2; letter-spacing:0; }
 .csw-name small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--muted); font-size:12px; line-height:1.3; }
@@ -25,14 +26,14 @@
 .csw-search input:focus-visible { outline:0; box-shadow:none; }
 .csw-search kbd { flex:none; padding:0 4px; border:1px solid var(--line); border-radius:3px; background:none; color:var(--muted); font:inherit; font-size:11px; }
 .csw-body { overflow:auto; overscroll-behavior:contain; padding:6px; }
-.csw-head { display:flex; align-items:center; gap:6px; margin:8px 8px 4px; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+.csw-head { display:flex; align-items:center; gap:6px; margin:8px 8px 4px; color:var(--muted); font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .08em); text-transform:var(--label-case,uppercase); }
 .csw-head:first-child { margin-top:4px; }
 .csw-head svg { width:13px; height:13px; }
 .csw-row, .csw-fold { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; box-sizing:border-box; padding:6px 8px; margin:0; border:0; border-radius:var(--radius, 4px); background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
 .csw-row:hover, .csw-fold:hover, .csw-row.kb, .csw-fold.kb { background:var(--hover, var(--accent-soft)); }
 .csw-row.cur { background:var(--accent-soft); }
 .csw-row.nohalf { opacity:.62; }
-.csw-mini { width:22px; height:22px; flex:none; box-sizing:border-box; border-radius:3px; border:1px solid var(--line-strong, var(--line)); background:repeating-linear-gradient(135deg, var(--accent-soft) 0 4px, transparent 4px 8px); }
+.csw-mini { position:relative; overflow:hidden; width:22px; height:22px; flex:none; box-sizing:border-box; border-radius:3px; border:1px solid var(--line-strong, var(--line)); background:var(--accent-soft); }
 .csw-text { flex:1; min-width:0; }
 .csw-text strong { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:500; }
 .csw-text small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--muted); font-size:11px; }

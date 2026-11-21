@@ -16,7 +16,7 @@
 .ency-token-search input:focus{outline:none}
 .ency-token-search:focus-within{outline:2px solid var(--accent);outline-offset:1px}
 .ency-token-hint{margin:8px 0 6px;font-size:12px;line-height:1.5;color:var(--muted)}
-.ency-token-world{margin:14px 0 2px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ency-token-world{margin:14px 0 2px;font-size:max(11px,var(--label-min,0px));font-weight:600;letter-spacing:calc(var(--label-track,1) * .08em);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .ency-token-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px;border-bottom:1px solid var(--line)}
 .ency-token-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:600}
 .ency-token-picture{flex:none;background-color:var(--raised,#333);background-repeat:no-repeat}

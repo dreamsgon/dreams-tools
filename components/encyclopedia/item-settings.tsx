@@ -39,7 +39,7 @@ export function ItemSettingsDialog({campaign,onSave,onClose}:{campaign:Campaign;
    <p className="modal-intro">For every character in {campaign.name}: money, what they carry, and {sp.tab.toLowerCase()}. Start from a ready-made setup, then change any word.</p>
    <div className="inv-chips" role="group" aria-label="Start from">{starts.map(x=><button type="button" key={x.name} onClick={()=>setS(x.apply)}>{x.name}</button>)}<button type="button" onClick={()=>setS({...defaultItemSettings(),catalog:s.catalog})}>Plain</button></div>
    <div className="store-settings">
-    <section className="inv-box"><span className="eyebrow">MONEY</span>
+    <section className="inv-box"><span className="eyebrow">Money</span>
      {s.coins.map((c,i)=><div className="spell-cost" key={i}>
       <input className="inv-input" aria-label="Coin name" maxLength={30} value={c.name} onChange={e=>setCoin(i,{name:e.target.value})}/>
       <input className="inv-input" style={{width:64}} aria-label="Short name" maxLength={10} value={c.abbr} onChange={e=>setCoin(i,{abbr:e.target.value})}/>
@@ -49,13 +49,13 @@ export function ItemSettingsDialog({campaign,onSave,onClose}:{campaign:Campaign;
      {s.coins.length<6&&<button type="button" className="text-button" onClick={()=>set({coins:[...s.coins,{name:'Coin',abbr:`c${s.coins.length+1}`,rate:10}]})}><Plus size={13}/> A coin</button>}
      <small className="muted">The number is what one is worth in the smallest coin, which is worth 1. 1234 reads as {formatMoney(1234,s.coins)}.</small>
     </section>
-    <section className="inv-box"><span className="eyebrow">CARRYING</span>
+    <section className="inv-box"><span className="eyebrow">Carrying</span>
      <label className="field-label">Count a load in<select value={s.carry} onChange={e=>set({carry:e.target.value as ItemSettings['carry']})}>{carryUnits.map(u=><option key={u} value={u}>{carryUnitNames[u]}</option>)}</select></label>
-     <span className="eyebrow">COLUMNS</span>
+     <span className="eyebrow">Columns</span>
      {([['weight','Weight'],['value','Value'],['uses','Uses'],['equipped','Worn or in hand']] as const).map(([k,l])=><label key={k} className="check-line"><input type="checkbox" checked={s.show[k]} onChange={e=>set({show:{...s.show,[k]:e.target.checked}})}/> {l}</label>)}
     </section>
     <section className="inv-box"><Words label="Item categories" value={s.categories} max={20} len={40} placeholder="Weapons, Cyberware, Rations…" onChange={categories=>set({categories})}/></section>
-    <section className="inv-box"><span className="eyebrow">SPELLS, POWERS…</span>
+    <section className="inv-box"><span className="eyebrow">Spells, powers…</span>
      <label className="check-line"><input type="checkbox" checked={sp.on} onChange={e=>set({spells:{...sp,on:e.target.checked}})}/> Characters have this tab</label>
      {sp.on&&<>
       <div className="store-two"><label className="field-label">Tab name<input className="inv-input" maxLength={30} value={sp.tab} onChange={e=>set({spells:{...sp,tab:e.target.value}})}/></label><label className="field-label">One of them<input className="inv-input" maxLength={30} value={sp.one} onChange={e=>set({spells:{...sp,one:e.target.value}})}/></label></div>
@@ -64,11 +64,11 @@ export function ItemSettingsDialog({campaign,onSave,onClose}:{campaign:Campaign;
       <Words label="Details each one lists" value={sp.columns} max={6} len={30} placeholder="Range, Duration…" onChange={columns=>set({spells:{...sp,columns}})}/>
      </>}
     </section>
-    <section className="inv-box"><span className="eyebrow">PLAYERS MAY</span>
+    <section className="inv-box"><span className="eyebrow">Players may</span>
      {([['items',`Change their own items and ${sp.tab.toLowerCase()}`],['coins','Change their own money'],['values','See what things are worth'],['give','Give things to other characters']] as const).map(([k,l])=><label key={k} className="check-line"><input type="checkbox" checked={p[k]} onChange={e=>set({players:{...p,[k]:e.target.checked}})}/> {l}</label>)}
      {([['containers','Set up containers and stashes'],['shops','Set up stalls to sell from']] as const).map(([k,l])=><label key={k} className="field-label">{l}<select value={p[k]} onChange={e=>set({players:{...p,[k]:e.target.value as 'yes'|'ask'|'no'}})}><option value="yes">Yes</option><option value="ask">After my OK</option><option value="no">No</option></select></label>)}
     </section>
-    <section className="inv-box"><span className="eyebrow">ITEM LIST</span>
+    <section className="inv-box"><span className="eyebrow">Item list</span>
      {(s.catalog??[]).map(i=><div className="spell-cost" key={i.id}><span style={{flex:1}}>{i.name}{i.price!==undefined&&<small className="muted"> · {formatMoney(i.price,s.coins)}</small>}</span><button type="button" className="icon-button" aria-label={`Remove ${i.name} from the list`} onClick={()=>set({catalog:(s.catalog??[]).filter(x=>x.id!==i.id)})}><Trash2 size={13}/></button></div>)}
      <small className="muted">{(s.catalog??[]).length?'Add these to any character or shop.':'Empty. On a character’s Inventory, open an item and choose Save to the item list.'}</small>
     </section>

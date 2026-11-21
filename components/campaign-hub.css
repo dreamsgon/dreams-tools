@@ -26,7 +26,7 @@
 .hub-note svg { flex:none; color:var(--accent); }
 .hub-card { display:flex; flex-direction:column; gap:8px; min-width:0; padding:18px 20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); }
 .hub-card-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-.hub-card h2 { margin:0 0 4px; font-family:inherit; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.hub-card h2 { margin:0 0 4px; font-family:inherit; font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .1em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .hub-card-head a, .hub-muted a, .hub-empty a { color:var(--accent); font-size:14px; font-weight:500; }
 .hub-muted { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
 .hub-big { font-family:var(--font-display); font-size:22px; font-weight:600; }
@@ -50,7 +50,7 @@
 .hub-card .hub-text-button { font-size:14px; padding:0; }
 .hub-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
 .hub-subblock { margin-top:10px; padding-top:12px; border-top:1px solid var(--line); }
-.hub-subblock h3 { margin:0 0 4px; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.hub-subblock h3 { margin:0 0 4px; font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .1em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .hub-subblock p { margin:0; font-size:15px; }
 .hub-next-form { display:flex; flex-direction:column; gap:10px; }
 .hub-next-form label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
@@ -272,3 +272,10 @@
 .hub-head.has-picture .hub-button:not(.hub-button-primary), .hub-head.has-picture .tag-add, .hub-head.has-picture .hub-chip { background:rgb(10 10 12 / .5) !important; color:#fff !important; border-color:rgb(255 255 255 / .3) !important; backdrop-filter:blur(6px); }
 .hub-head.has-picture .hub-button:not(.hub-button-primary):hover { background:rgb(10 10 12 / .7) !important; }
 @media (max-width:720px) { .hub-head.has-picture { min-height:200px !important; padding:18px !important; } }
+
+/* Base skin only: card titles read as titles, and cards lift a little off the page. Inside .campaign-skin the skin's own look applies. */
+@scope (:root) to (.campaign-skin) {
+  .hub-card { box-shadow:var(--shadow-sm); }
+  .hub-card:not(.hub-empty) > h2, .hub-card-head h2 { font-size:13px; color:var(--ink); }
+  .hub-actions button { border-color:var(--control-line); }
+}

@@ -81,10 +81,10 @@ export const FONT_ROLES: Record<FontRole, { label: string; cssVar: string; stora
     ],
   },
   title: {
-    label: "Titles", cssVar: "--font-display", storageKey: "rpg-tools:font-title", defaultId: "schibsted",
+    label: "Titles", cssVar: "--font-display", storageKey: "rpg-tools:font-title", defaultId: "literata",
     sample: "The Sunless Citadel",
     options: [
-      { id: "schibsted", label: "Schibsted Grotesk", stack: sans("Schibsted Grotesk"), query: null },
+      { id: "literata", label: "Literata", stack: serif("Literata"), query: null },
       { id: "alegreya-sc", label: "Alegreya SC", stack: serif("Alegreya SC"), query: "Alegreya+SC:wght@500;700" },
       { id: "bricolage", label: "Bricolage Grotesque", stack: sans("Bricolage Grotesque"), query: "Bricolage+Grotesque:wght@500;600;700" },
       { id: "cinzel", label: "Cinzel", stack: serif("Cinzel"), query: "Cinzel:wght@500;600;700" },
@@ -93,23 +93,24 @@ export const FONT_ROLES: Record<FontRole, { label: string; cssVar: string; stora
       { id: "fraunces", label: "Fraunces", stack: serif("Fraunces"), query: "Fraunces:wght@500;600;700" },
       { id: "marcellus", label: "Marcellus", stack: serif("Marcellus"), query: "Marcellus" },
       { id: "playfair", label: "Playfair Display", stack: serif("Playfair Display"), query: "Playfair+Display:wght@500;600;700" },
+      { id: "schibsted", label: "Schibsted Grotesk", stack: sans("Schibsted Grotesk"), query: "Schibsted+Grotesk:wght@500;600;700" },
       { id: "space-grotesk", label: "Space Grotesk", stack: sans("Space Grotesk"), query: "Space+Grotesk:wght@500;600;700" },
       { id: "spectral", label: "Spectral", stack: serif("Spectral"), query: "Spectral:wght@500;600;700" },
       SAME_AS_UI,
     ],
   },
   reading: {
-    label: "Reading (Wiki articles)", cssVar: "--font-reading", storageKey: "rpg-tools:font-reading", defaultId: "source-serif",
+    label: "Reading (Wiki articles)", cssVar: "--font-reading", storageKey: "rpg-tools:font-reading", defaultId: "literata",
     sample: "A quiet village at the edge of the Ashenwood.",
     options: [
-      { id: "source-serif", label: "Source Serif 4", stack: serif("Source Serif 4"), query: null },
+      { id: "literata", label: "Literata", stack: serif("Literata"), query: null },
       { id: "alegreya", label: "Alegreya", stack: serif("Alegreya"), query: "Alegreya:ital,wght@0,400;0,600;1,400" },
       { id: "atkinson", label: "Atkinson Hyperlegible", stack: sans("Atkinson Hyperlegible"), query: "Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400" },
       { id: "crimson-pro", label: "Crimson Pro", stack: serif("Crimson Pro"), query: "Crimson+Pro:ital,wght@0,400;0,600;1,400" },
       { id: "eb-garamond", label: "EB Garamond", stack: serif("EB Garamond"), query: "EB+Garamond:ital,wght@0,400;0,600;1,400" },
-      { id: "literata", label: "Literata", stack: serif("Literata"), query: "Literata:ital,wght@0,400;0,600;1,400" },
       { id: "lora", label: "Lora", stack: serif("Lora"), query: "Lora:ital,wght@0,400;0,600;1,400" },
       { id: "merriweather", label: "Merriweather", stack: serif("Merriweather"), query: "Merriweather:ital,wght@0,400;0,700;1,400" },
+      { id: "source-serif", label: "Source Serif 4", stack: serif("Source Serif 4"), query: null },
       SAME_AS_UI,
     ],
   },
@@ -195,5 +196,9 @@ const bootFonts = FONT_ROLE_IDS.map((role) => {
  */
 export const appearanceBootScript = `(function(){try{var d=document.documentElement,s=window.localStorage,m=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(m!=="light"&&m!=="dark"&&m!=="system"){m="system";var k=${JSON.stringify(LEGACY_THEME_KEYS)};for(var i=0;i<k.length;i++){var o=s.getItem(k[i]);if(o==="light"||o==="dark"){m=o;break;}}}var dark=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);d.dataset.theme=dark?"dark":"light";d.dataset.themeMode=m;var a=s.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)});d.dataset.accent=${JSON.stringify(ACCENTS.map((a) => a.id))}.indexOf(a)>=0?a:${JSON.stringify(DEFAULT_ACCENT)};if(s.getItem(${JSON.stringify(MOTION_STORAGE_KEY)})==="reduced")d.dataset.motion="reduced";var z=s.getItem(${JSON.stringify(TEXT_SIZE_STORAGE_KEY)});if(${JSON.stringify(TEXT_SIZES.map((x) => x.id).filter((id) => id !== DEFAULT_TEXT_SIZE))}.indexOf(z)>=0)d.dataset.textSize=z;var pw=s.getItem(${JSON.stringify(PAGE_WIDTH_STORAGE_KEY)});if(${JSON.stringify(PAGE_WIDTHS.map((x) => x.id).filter((id) => id !== DEFAULT_PAGE_WIDTH))}.indexOf(pw)>=0)d.dataset.pageWidth=pw;var f=${JSON.stringify(bootFonts)};for(var j=0;j<f.length;j++){var c=f[j].options[s.getItem(f[j].key)];if(!c)continue;d.style.setProperty(f[j].cssVar,c[0]);if(c[1]){var l=document.createElement("link");l.rel="stylesheet";l.href=c[1];l.id="rpg-font-"+f[j].role;document.head.appendChild(l);}}}catch(e){}})();`;
 
-/** The three default faces, always loaded by the root layout. */
-export const DEFAULT_FONTS_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Schibsted+Grotesk:wght@500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap";
+/**
+ * The default faces, always loaded by the root layout: Inter for the interface and Literata for titles and reading
+ * (with its optical sizes, so small headings stay sturdy and large titles fine). Source Serif 4 stays for map labels
+ * (lib/map-style.ts) and for anyone who reads in it.
+ */
+export const DEFAULT_FONTS_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap";

@@ -90,7 +90,7 @@
 .stat-box{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 8px 22px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));box-shadow:inset 0 0 0 3px color-mix(in srgb,var(--panel) 70%,transparent),0 1px 2px rgb(0 0 0/.12);min-width:0;margin-bottom:12px;transition:border-color .15s}
 .stat-box:hover,.stat-box:focus-within,.stat-box.is-open{border-color:color-mix(in srgb,var(--accent) 65%,var(--line))}
 .stat-box.is-hidden{border-style:dashed}
-.stat-box-label{border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;cursor:pointer;display:inline-flex;gap:4px;align-items:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-box-label{border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:max(10.5px,var(--label-min,0px));font-weight:700;letter-spacing:calc(var(--label-track,1) * .09em);text-transform:var(--label-case,uppercase);cursor:pointer;display:inline-flex;gap:4px;align-items:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stat-box-label:hover{color:var(--accent)}
 .stat-box-mod{width:100%;max-width:92px;border:0;background:transparent;color:var(--ink);text-align:center;font-size:30px;line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 0;border-radius:6px;font-family:inherit}
 .stat-box-mod::placeholder{color:var(--muted);opacity:.55}
@@ -140,7 +140,7 @@
 @media(max-width:620px){.stat-box-label{font-size:9.5px;letter-spacing:.03em}.stat-box{padding-left:4px;padding-right:4px}}
 /* Saves under score boxes, and the Quick strip at the top of the sheet (Initiative and the like). */
 .stat-box-save{display:inline-flex;align-items:center;gap:4px;margin-top:2px;font-size:11px;color:var(--muted)}
-.stat-box-save-name{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:9.5px}
+.stat-box-save-name{font-weight:700;letter-spacing:calc(var(--label-track,1) * .06em);text-transform:var(--label-case,uppercase);font-size:max(9.5px,var(--label-min,0px))}
 .stat-box-save-input{width:42px;border:1px solid transparent;background:transparent;color:var(--ink);text-align:center;font:inherit;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;border-radius:6px;padding:1px 2px}
 .stat-box-save-input::placeholder{color:var(--muted);opacity:.7}
 .stat-box-save-input:hover{border-color:var(--line)}
@@ -157,7 +157,7 @@
 .stat-quick-card{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}
 .stat-quick-card.is-hidden{border-style:dashed}
 .stat-quick-card.is-open,.stat-quick-card:focus-within{border-color:color-mix(in srgb,var(--accent) 65%,var(--line))}
-.stat-quick-label{border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.stat-quick-label{border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:max(10.5px,var(--label-min,0px));font-weight:700;letter-spacing:calc(var(--label-track,1) * .08em);text-transform:var(--label-case,uppercase);cursor:pointer;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
 button.stat-quick-label:hover{color:var(--accent)}
 .stat-quick-input{width:56px;border:1px solid var(--line);border-radius:8px;background:var(--surface,var(--panel));color:var(--ink);text-align:center;font:inherit;font-weight:700;padding:2px 4px}
 .stat-quick-value,.stat-quick-mod{font-weight:700;font-variant-numeric:tabular-nums}

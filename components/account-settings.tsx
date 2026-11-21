@@ -44,7 +44,7 @@ export default function AccountSettings({user}:{user:AccountUser}){
  const disabled=!!busy;
  return <div className="account-settings">
   {picked&&<AvatarCrop file={picked} onCancel={()=>setPicked(null)} onSave={async blob=>{setPicked(null);await sendAvatar(blob);}}/>}
-  <p className="rpg-eyebrow">YOUR RPG TOOLS ACCOUNT</p>
+  <p className="rpg-eyebrow">Your RPG Tools account</p>
   <h1>Account settings</h1>
   <p className="account-lead">Your profile is what players and other GMs see. Sign-in details stay private to you.</p>
   <div className="account-layout">

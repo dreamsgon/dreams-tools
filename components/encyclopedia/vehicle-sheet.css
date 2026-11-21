@@ -52,7 +52,7 @@
 .vehicle-gauge-name{flex:1;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;min-width:0}
 .vehicle-gauge-num{font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap;margin-right:4px}
 .vehicle-gauge-num small{color:var(--muted)}
-.vehicle-low{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--danger-soft,var(--raised));color:var(--danger)}
+.vehicle-low{font-size:max(10px,var(--label-min,0px));font-weight:700;letter-spacing:calc(var(--label-track,1) * .04em);text-transform:var(--label-case,uppercase);padding:1px 6px;border-radius:999px;background:var(--danger-soft,var(--raised));color:var(--danger)}
 .vehicle-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
 .vehicle-bar i{display:block;height:100%;border-radius:4px;transition:width .2s}
 .vehicle-pips{display:flex;gap:4px}

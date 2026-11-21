@@ -23,8 +23,8 @@
 .segmented button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); font-weight:700; }
 .gallery-party-marker { margin:0; font-size:12px; color:var(--muted); }
 .gallery-party-marker .text-button { min-height:0; padding:0 4px; border:0; background:none; color:var(--accent); font-size:12px; text-decoration:underline; }
-.gallery-group h3 { margin:0; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
-.gallery-group h3 > button { display:flex; align-items:center; justify-content:flex-start; gap:4px; width:100%; min-height:24px; padding:2px 0; border:0; background:none; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; text-align:left; }
+.gallery-group h3 { margin:0; font-size:max(11px,var(--label-min,0px)); letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); }
+.gallery-group h3 > button { display:flex; align-items:center; justify-content:flex-start; gap:4px; width:100%; min-height:24px; padding:2px 0; border:0; background:none; color:var(--muted); font-size:max(11px,var(--label-min,0px)); font-weight:700; letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); text-align:left; }
 .gallery-group h3 > button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gallery-group h3 > button small { color:var(--muted); font-weight:500; margin-left:2px; }
 .gallery-empty, .gallery-hint { margin:0; font-size:12px; line-height:1.5; color:var(--muted); }
@@ -180,7 +180,7 @@ details.editor-card > summary span { margin-left:6px; font-size:12px; color:var(
   .te-note { display:none; }
   .token-editor-modal.modal { padding:0; }
 }
-.ency-token-world-heading { margin:0; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.ency-token-world-heading { margin:0; font-size:max(11px,var(--label-min,0px)); font-weight:700; letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .context-menu-title { display:flex; align-items:center; gap:8px; }
 .context-menu-title > span { overflow:hidden; text-overflow:ellipsis; }
 .context-menu-face { flex:none; }

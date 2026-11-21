@@ -60,7 +60,7 @@ export function PlayerSheetSection({title,entryId,sheet,state,memberRef,onChange
    else void rollInline(`${title} · ${name}`,formula,{mode,log:true});
   }}/>
   {!serverRolls&&<p className="sheet-local-hint">Rolls here stay on this device.</p>}
-  <div className="sheet-log"><span className="eyebrow">ROLL LOG</span><SheetRollLog character={title}/></div></>:undefined;
+  <div className="sheet-log"><span className="eyebrow">Roll log</span><SheetRollLog character={title}/></div></>:undefined;
  return <>
   <SheetView sheet={sheet} rolling={rolling}
    subtitle={mine?'Linked by you. Only you and your GM can change it.':canLink||serverRolls?'Shared by your GM. Read only.':'Shared by your GM. Read only. Rolls stay on this device.'}

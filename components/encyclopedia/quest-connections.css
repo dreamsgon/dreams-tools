@@ -20,11 +20,11 @@
 .qc-node.people rect{stroke:color-mix(in srgb,var(--accent) 60%,var(--line-strong))}
 .qc-node:hover rect{stroke:var(--accent);stroke-width:2}
 .qc-node text{fill:var(--ink);font-size:11.5px;font-weight:600}
-.qc-node .qc-why{fill:var(--muted);font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.qc-node .qc-why{fill:var(--muted);font-size:max(9px,var(--label-min,0px));font-weight:600;letter-spacing:calc(var(--label-track,1) * .06em);text-transform:var(--label-case,uppercase)}
 .qc-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
 .qc-group{display:flex;flex-direction:column;gap:8px;min-width:0}
 .qc-group .eyebrow{display:inline-flex;align-items:center;gap:6px;margin:0}
-.qc-group .eyebrow small{font-size:11px;color:var(--muted);letter-spacing:0}
+.qc-group .eyebrow small{font-size:max(11px,var(--label-min,0px));color:var(--muted);letter-spacing:0}
 .qc-group ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .qc-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding-right:4px;border:1px solid var(--line);border-radius:var(--radius-lg,6px);background:var(--panel);min-width:0}
 .qc-row:hover{border-color:var(--line-strong)}

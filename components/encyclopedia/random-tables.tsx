@@ -43,7 +43,7 @@ export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter
  const roll=(id:string)=>{if(!lib)return;try{record(rollTable(lib,id));}catch(e){setError(e instanceof Error?e.message:'Could not roll.');}};
  const defaultScope=campaignId?[campaignId]:null;
 
- if(!lib)return <section className="page-content tables-page"><span className="eyebrow">RANDOM TABLES</span><h1>Random tables</h1>{error?<p className="form-error" role="alert">{error}</p>:<p className="subtitle">Loading your tables…</p>}</section>;
+ if(!lib)return <section className="page-content tables-page"><span className="eyebrow">Random tables</span><h1>Random tables</h1>{error?<p className="form-error" role="alert">{error}</p>:<p className="subtitle">Loading your tables…</p>}</section>;
  const table=open?lib.tables.find(t=>t.id===open):undefined;
  const shown=lib.tables.filter(t=>(scope==='all'||inCampaign(t,campaignId))&&(!category||t.category===category)&&(t.name+' '+(t.description??'')+' '+categoryLabel(t.category)).toLowerCase().includes(query.toLowerCase()));
  const logAside=<RollLog log={log} onClear={()=>setLog([])}/>;
@@ -58,7 +58,7 @@ export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter
 
  const groups=TABLE_CATEGORIES.map(([c,label])=>({c,label,tables:shown.filter(t=>t.category===c).sort((a,b)=>a.name.localeCompare(b.name))})).filter(g=>g.tables.length);
  return <div className="tables-layout"><section className="page-content tables-page">{banner}
-  <div className="dashboard-intro"><div><span className="eyebrow">ROLL FOR WHAT HAPPENS NEXT</span><h1>Random tables</h1><p className="subtitle">Your table library. Use any table in any of your campaigns.</p></div>
+  <div className="dashboard-intro"><div><span className="eyebrow">Roll for what happens next</span><h1>Random tables</h1><p className="subtitle">Your table library. Use any table in any of your campaigns.</p></div>
    <div className="button-row"><button className="button" onClick={()=>setImporting(true)}><Upload size={15}/> Import</button><button className="button" disabled={!shown.length} onClick={()=>download(`${fileName(campaign?.name??'random-tables')}.tables.json`,JSON.stringify(exportTables(lib,shown.map(t=>t.id)),null,2))}><Download size={15}/> Export{query||category||scope==='here'?' shown':''}</button><button className="button primary" onClick={()=>setCreating(true)}><Plus size={15}/> New table</button></div></div>
   <div className="tables-toolbar"><label className="search-box"><Search size={15}/><input aria-label="Find a table" placeholder="Find a table…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
    <div className="tables-chips" role="group" aria-label="Kind of table"><button className={!category?'on':''} aria-pressed={!category} onClick={()=>setCategory('')}>All</button>{TABLE_CATEGORIES.filter(([c])=>lib.tables.some(t=>t.category===c)).map(([c,label])=><button key={c} className={category===c?'on':''} aria-pressed={category===c} onClick={()=>setCategory(category===c?'':c)}>{label}</button>)}</div></div>
@@ -80,7 +80,7 @@ function sample(t:RandomTable,lib:TableLibrary){if(t.kind==='generator')return (
 
 function RollLog({log,onClear}:{log:LogItem[];onClear:()=>void}){
  const [copied,setCopied]=useState(0);
- return <aside className="tables-log" aria-label="Roll log"><div className="tables-log-head"><span className="eyebrow">ROLL LOG</span>{log.length>0&&<button className="text-button" onClick={onClear}>Clear</button>}</div>
+ return <aside className="tables-log" aria-label="Roll log"><div className="tables-log-head"><span className="eyebrow">Roll log</span>{log.length>0&&<button className="text-button" onClick={onClear}>Clear</button>}</div>
   {!log.length?<p className="aside-hint">Rolls from this page show here, newest first. They aren’t saved.</p>:log.map(r=><div key={r.n} className="tables-log-item"><div className="tables-log-meta"><span>{r.title}{r.roll?` · ${r.roll}`:''}</span><time>{new Date(r.at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</time></div>
    {r.question&&<div className="tables-log-question">“{r.question}”</div>}<div className="tables-log-text">{r.text}</div>{r.twist&&<div className="tables-log-twist"><span>Twist</span> {r.twist}</div>}
    {r.steps.length>0&&<div className="tables-log-steps">{r.steps.map((s,i)=><span key={i}>{s.table}{s.roll?` (${s.roll})`:''}: {s.text}</span>)}</div>}

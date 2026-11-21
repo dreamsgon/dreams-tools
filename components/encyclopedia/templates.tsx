@@ -59,7 +59,7 @@ export function InfoBox({ entry, data, update, onOpen }: { entry: Entry; data: W
   const rows = infoRows(data, t, entry);
   const set = (id: string, v: FieldValue | undefined) => { const next = { ...entry.fields }; if (v === undefined) delete next[id]; else next[id] = v; update({ fields: Object.keys(next).length ? next : undefined }); };
   return <div className="aside-section info-box">
-    <div className="aside-heading"><span className="eyebrow">{t.name.toUpperCase()}</span><button className="text-button" onClick={() => setEditing(!editing)}>{editing ? "Done" : <><Pencil size={12}/> Edit</>}</button></div>
+    <div className="aside-heading"><span className="eyebrow">{t.name}</span><button className="text-button" onClick={() => setEditing(!editing)}>{editing ? "Done" : <><Pencil size={12}/> Edit</>}</button></div>
     {editing ? <div className="info-box-edit">{t.fields.map(f => <label key={f.id}><span>{f.label}{f.visibility === "gm" && <EyeOff size={11} aria-label="GM only"/>}</span><FieldInput f={f} value={entry.fields?.[f.id]} data={data} worldId={entry.worldId} onChange={v => set(f.id, v)}/></label>)}</div>
       : rows.length ? <dl>{rows.map(r => <div key={r.id} className={r.gm ? "gm" : ""}><dt>{r.label}{r.gm && <EyeOff size={11} aria-label="GM only"/>}</dt><dd>{r.pageId ? <button className="wiki-link" onClick={() => onOpen(r.pageId!)}>{r.value}</button> : r.href ? <a href={r.href} target="_blank" rel="noopener noreferrer">{r.value}</a> : r.score !== undefined && r.mod ? <span className="info-score"><b>{r.mod}</b><small>{r.score}</small></span> : r.value}</dd></div>)}</dl>
       : <p className="aside-hint">Nothing filled in yet. Choose Edit to add {t.fields.slice(0, 3).map(f => f.label.toLowerCase()).join(", ")}.</p>}

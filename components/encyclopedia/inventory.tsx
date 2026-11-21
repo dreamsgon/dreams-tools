@@ -66,7 +66,7 @@ function Money({coins,settings,canEdit,act}:{coins:number;settings:PlayerItemSet
  const go=async(sign:1|-1)=>{const n=parseMoney(amount,settings.coins);if(n===null||n<=0){setBad(true);return;}setBad(false);if(await act({action:'coins',delta:sign*n}))setAmount('');};
  const parts=moneyParts(coins,settings.coins);
  return <section className="inv-box">
-  <span className="eyebrow">MONEY</span>
+  <span className="eyebrow">Money</span>
   <div className="inv-coins">{parts.map((c,i)=><span key={c.abbr} className={`inv-coin c${i}`}><i aria-hidden="true"/><strong>{c.n.toLocaleString()}</strong> <small>{c.abbr}</small></span>)}</div>
   {canEdit&&<form className="inv-money-form" onSubmit={e=>{e.preventDefault();void go(1);}}>
    <input className={`inv-input${bad?' bad':''}`} aria-label="Amount" aria-invalid={bad} placeholder={`Amount: 5 ${settings.coins[0]?.abbr??''}`} value={amount} onChange={e=>{setAmount(e.target.value);setBad(false);}}/>
@@ -80,7 +80,7 @@ function Money({coins,settings,canEdit,act}:{coins:number;settings:PlayerItemSet
 function Carrying({used,capacity,unit,gm,act,name}:{used:number;capacity?:number;unit:string;gm:boolean;act:Act;name:string}){
  const over=capacity!==undefined&&used>capacity,share=capacity?Math.min(1,used/capacity):0;
  return <section className={`inv-box inv-carry${over?' over':''}`}>
-  <span className="eyebrow">CARRYING</span>
+  <span className="eyebrow">Carrying</span>
   <div className="inv-carry-top"><span>{capacity===undefined?'No limit set':over?'Over the limit':'Within the limit'}</span><span className="inv-carry-num"><strong>{fmt(used)}</strong>{capacity!==undefined&&<small> / {fmt(capacity)}</small>} {unit}</span></div>
   {capacity!==undefined&&<div className="inv-bar" role="img" aria-label={`${fmt(used)} of ${fmt(capacity)} ${unit}`}><i style={{width:`${Math.round(share*100)}%`}}/></div>}
   {gm&&<label className="inv-capacity">{name} can carry <Field value={capacity===undefined?'':String(capacity)} label="Can carry" number max={10} placeholder="No limit" onSave={v=>{const n=v?num(v):null;if(v&&n===null)return;void act({action:'capacity',value:n});}}/> {unit}</label>}

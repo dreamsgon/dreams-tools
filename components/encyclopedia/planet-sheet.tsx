@@ -49,11 +49,11 @@ export function PlanetSheet({entry,data,change,onOpen}:Props){
    <div className="planet-main"><WorldFields world={w} system={system} orgs={orgs} set={set}/>
     <p className="aside-hint">These are the same fields as on the survey chart of {systemPage.title}: a change here shows there too. The Overview tab is this world’s story.</p></div>
    <aside className="system-side">
-    <span className="eyebrow">{parent?`ALSO AROUND ${parent.name.toUpperCase()}`:'MOONS'}</span>
+    <span className="eyebrow">{parent?`Also around ${parent.name}`:'Moons'}</span>
     {kids.length?<div className="planet-kids">{kids.map(x=>{const p=pageFor(x);return <div key={x.id} className="planet-kid"><WorldDot world={x} size={22}/><span><b>{x.name}</b><small>{x.type} {worldKindNames[x.kind].toLowerCase()} · {x.temp} °C</small></span>
      {p?<button type="button" className="text-button" onClick={()=>onOpen(p.id)}>Open</button>:<button type="button" className="text-button" onClick={()=>chart(x)}><Flag size={13}/> Chart</button>}</div>;})}</div>:<p className="aside-hint">No moons.</p>}
     <button type="button" className="button" onClick={()=>onOpen(systemPage.id)}><Orbit size={15}/> Survey chart of {systemPage.title}</button>
-    <span className="eyebrow">WORLD MAP</span>
+    <span className="eyebrow">World map</span>
     {worldMap}
    </aside>
   </div>

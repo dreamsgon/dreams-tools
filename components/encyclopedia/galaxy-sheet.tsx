@@ -39,7 +39,7 @@ export function GalaxySheet({entry,data,update,change,onOpen}:{entry:Entry;data:
     <input key={`${k}${galaxy.facts[k]}`} defaultValue={galaxy.facts[k]} maxLength={120} placeholder="—" onBlur={e=>{const v=e.target.value.trim();if(v!==galaxy.facts[k])save({facts:{...galaxy.facts,[k]:v}});}} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();}}/></label>)}</div>
    <button type="button" className="button" onClick={()=>setChoosing(true)}><Telescope size={15}/> Real galaxy or generate</button>
    {real&&<p className="aside-hint">Facts are rounded published estimates. Change any of them for your setting.</p>}
-   <div className="galaxy-sectors"><span className="eyebrow">SECTORS</span>
+   <div className="galaxy-sectors"><span className="eyebrow">Sectors</span>
     {sectors.map(s=><button key={s.id} type="button" className="galaxy-sector-row" onClick={()=>onOpen(s.id)}><span className="sector-swatch" style={{background:s.sector!.color}}/><span><strong>{s.title}</strong><small>{s.sector!.cols} × {s.sector!.rows} hexes · {s.sector!.systems.length} systems</small></span></button>)}
     {!sectors.length&&<p className="aside-hint">Sectors are hex maps of parts of this galaxy, one hex to 5 light years. Use New sector on the picture to place one.</p>}
     <button type="button" className="button small" onClick={()=>setPlacing(true)}><Hexagon size={14}/> New sector</button>

@@ -59,7 +59,7 @@ export function SectorSheet({entry,data,update,change,onOpen}:{entry:Entry;data:
      {!sorted.length&&<p className="aside-hint">No systems yet. Tap a hex to add one, or generate the sector.</p>}</div>
    </>:<>
     <button type="button" className="text-button sector-back" onClick={()=>{setHex(null);setJoining(null);}}><ArrowLeft size={14}/> {entry.title}</button>
-    <span className="eyebrow">HEX {hexLabel(hex)}</span>
+    <span className="eyebrow">Hex {hexLabel(hex)}</span>
     {here?<>
      <input key={`n${here.id}${here.name}`} className="sector-name" aria-label="System name" defaultValue={here.name} maxLength={80} onBlur={e=>{const v=e.target.value.trim();if(v&&v!==here.name)edit(here.id,{name:v});else e.target.value=here.name;}} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();}}/>
      <div className="world-seg" role="group" aria-label="Status"><button type="button" aria-pressed={here.status==='charted'} onClick={()=>edit(here.id,{status:'charted'})}>Charted</button><button type="button" aria-pressed={here.status==='rumour'} onClick={()=>edit(here.id,{status:'rumour'})}>Rumour</button></div>

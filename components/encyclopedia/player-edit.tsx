@@ -47,7 +47,7 @@ export function PlayerSubPages({page,memberRef,open,readable,onChanged}:{page:Pa
  const [error,setError]=useState(''),[busy,setBusy]=useState('');
  if(!page.children.length)return null;
  async function share(id:string,shared:boolean){setBusy(id);setError('');try{await send({action:'share',ref:memberRef,entryId:id,shared});onChanged();}catch(e){setError(e instanceof Error?e.message:'Could not change it.');}finally{setBusy('');}}
- return <section className="player-subpages"><span className="eyebrow">SUB-PAGES</span>
+ return <section className="player-subpages"><span className="eyebrow">Sub-pages</span>
   {page.children.map(c=><div key={c.id} className="player-subpage"><FileText size={14}/>{readable(c.id)?<button className="inline-link" onClick={()=>open(c.id)}>{c.title}</button>:<span>{c.title}</span>}
    {c.made?<button className={`player-seen ${c.shared?'shared':''}`} disabled={busy===c.id} title={c.shared?'Keep it to you and the GMs':'Let the other players see it'} onClick={()=>void share(c.id,!c.shared)}>{seen(c.shared)}</button>:<span className={`player-seen ${c.shared?'shared':''}`}>{seen(c.shared)}</span>}</div>)}
   {error&&<p className="player-edit-error" role="alert">{error}</p>}

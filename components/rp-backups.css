@@ -86,7 +86,7 @@ a.rpb-primary { color:var(--on-accent); }
 .rpb-changes li:last-child { border-bottom:0; }
 .rpb-path { min-width:0; flex:1; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap:anywhere; }
 .rpb-changes li small { flex:none; color:var(--muted); font-size:11.5px; }
-.rpb-tag { flex:none; min-width:54px; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; text-align:center; text-transform:uppercase; letter-spacing:.02em; }
+.rpb-tag { flex:none; min-width:54px; padding:1px 6px; border-radius:4px; font-size:max(11px,var(--label-min,0px)); font-weight:700; text-align:center; text-transform:var(--label-case,uppercase); letter-spacing:calc(var(--label-track,1) * .02em); }
 .rpb-tag-new { background:color-mix(in srgb, #2fa36b 22%, transparent); color:color-mix(in srgb, #2fa36b 65%, var(--ink)); }
 .rpb-tag-edit { background:var(--line); color:var(--ink); }
 .rpb-tag-removed { background:var(--danger-soft); color:var(--danger); }
