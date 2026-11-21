@@ -7,6 +7,7 @@
 - **Maptable and Wiki stay separate**: pairing links them but maps do not sync automatically.
 - **Maptable fog**: manual fog; automatic wall-based vision is not built.
 - **Offline mode** is not available.
+- **Your own entry types**: the AI connection and the VTT bridges can make Page and Other pages, but not pages of a type you made.
 - **Email**: signup, confirmation and reset email for ordinary users needs custom SMTP set up by the site owner.
 - **Some integrations are unverified in the real world**: Google sign-in (needs the owner's Google project), writing HP back to a sheet, the Foundry module in a real world, and real-key AI checks (tested with mocked answers).
 

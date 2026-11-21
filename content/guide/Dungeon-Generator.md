@@ -1,6 +1,6 @@
 # Dungeon generator
 
-The generator makes a whole map from a **seed**: rooms and passages, doors, floors, furniture, lights and a room key. Find it in **Start a new map › Generate** in the Map Creator. Everything it makes is ordinary shapes, so you can move, restyle or delete any of it afterwards.
+The generator makes a whole map from a **seed**: rooms and passages, doors, floors, furniture, lights and a room key. Find it in the Map Creator under **Start a new map › Generate**. Everything it makes is ordinary shapes, so you can move, restyle or delete any of it afterwards.
 
 ![The generator dialog with lighting controls and a preview](images/dungeon-generator-dialog.jpg)
 
@@ -19,6 +19,16 @@ Generate shows a row of cards:
 | **Hex map** | A region of hexes; see [Hex map generator](Hex-Map-Generator) |
 
 A live preview sits beside the settings. The same seed and settings always make the same map.
+
+## The generator dialog
+
+Every map generator (Dungeon, Hex map and Regenerate in the Map Creator; World, Sector, Survey and Galaxy in the Wiki) uses the same dialog:
+
+- **Cards** across the top for the kind of map. Move between them with the arrow keys.
+- **Settings** on the left, in sections that fold. A folded section shows its current choice, so you can see the whole setup at a glance.
+- On the right, the **Seed** with its reroll buttons, the **live preview** and a one-line **summary** of what the preview shows (screen readers hear it a moment after you stop changing things).
+- The main button stays at the bottom, and says why when it can't be pressed yet (*Give the sector a name first.*).
+- **Escape** or a click outside closes it. On a phone the preview comes first, then the settings.
 
 ## Layout settings
 

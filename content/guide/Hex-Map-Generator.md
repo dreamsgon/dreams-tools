@@ -1,12 +1,12 @@
 # Hex map generator
 
-The hex map generator makes regional hex maps for hex crawls and overland travel. Find it in **Start a new map › Hex map** in the Map Creator.
+The hex map generator makes regional hex maps for hex crawls and overland travel. Find it in the Map Creator under **Start a new map › Generate**, on the **Hex map** card.
 
 ![A generated hex map](images/hexmap-fire-isles.jpg)
 
 ## How it works
 
-Settings are folded into **Presets**, **Biomes**, **Land**, **Terrain**, **Places**, **Size**, **Look** and **Settings code** sections with a **live preview**, a **seed** and **Reroll**. On a phone the preview sits on top. The same seed and settings always give the same map.
+The dialog works like every map generator (see [the generator dialog](Dungeon-Generator#the-generator-dialog)). Settings are folded into **Presets**, **Biomes**, **Land**, **Terrain**, **Places**, **Size**, **Look** and **Settings code** sections; a folded section shows its current choice. The **seed**, **Reroll**, a **live preview** and a summary (size, miles per hex and the main biomes) sit on the right. On a phone the preview comes first. The same seed and settings always give the same map.
 
 ### Land and terrain
 
@@ -29,6 +29,8 @@ For Climate and Custom mix there is **Biome size** (Small to Huge), **Borders** 
 ### Look
 
 Pick **Painted** (colour with trees, peaks and dunes), **Flat colours**, **Old atlas** (brown ink on parchment in a ruled frame, like the world maps' Old atlas, for handouts) or **Ink** (black and white on paper for printing). Turn hex outlines on or off, show **hex numbers** (column then row, like 0412), and add a **legend** in any corner listing biomes, terrain, water and rivers with the miles per hex. The same Look settings live in the Map Creator's Map tab, so you can change them later.
+
+![The Old atlas look with hex numbers and a legend](images/hexmap-old-atlas.jpg)
 
 ![Ink look in Maptable](images/hexmap-ink-in-maptable.jpg)
 
