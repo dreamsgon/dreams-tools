@@ -23,9 +23,9 @@ export type ViewId = typeof viewIds[number];
 export const viewLabels: Record<ViewId, string> = { ...navLabels, look: "Look" };
 
 /** Tools a link can open. */
-export const toolIds = ["form", "share", "items", "dice", "log", "search", "tags", "ai", "backups"] as const;
+export const toolIds = ["form", "share", "items", "dice", "log", "search", "tags", "ai", "backups", "transfer"] as const;
 export type ToolId = typeof toolIds[number];
-export const toolLabels: Record<ToolId, string> = { form: "Stat form", share: "Player view", items: "Items and spells", dice: "Dice", log: "Roll log", search: "Quick search", tags: "Tags", ai: "Connect an AI", backups: "Workspace & backups" };
+export const toolLabels: Record<ToolId, string> = { form: "Stat form", share: "Player view", items: "Items and spells", dice: "Dice", log: "Roll log", search: "Quick search", tags: "Tags", ai: "Connect an AI", backups: "Workspace & backups", transfer: "Export & import" };
 
 export const builtInSections = ["lore", "notes", "sessions", "orgs"] as const;
 export type BuiltInSection = typeof builtInSections[number];

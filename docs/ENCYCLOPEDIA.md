@@ -124,6 +124,10 @@ NEXT_PUBLIC_GOOGLE_APP_ID=<the project number>
 
 Until all three are set, the dialog shows Sign in with Google disabled with "The site owner hasn't set up Google sign-in yet. Use a published link for now." The app sends no Content-Security-Policy header today, so nothing needs allowing. If one is added later, the Google option loads scripts from `accounts.google.com` and `apis.google.com`, frames the picker from `docs.google.com`, opens a sign-in pop-up on `accounts.google.com`, and calls `sheets.googleapis.com` and `www.googleapis.com`. Check the browser console for refusals after adding a policy, because the picker may also load assets from other Google hosts.
 
+## Export & import content
+
+Export & import (bottom of the sidebar, More on phones, or Workspace & backups) saves reusable things from the open world or campaign as one `.content.json` file: random tables (with any tables they roll on), templates, character stats, calendars, quest categories, the world's own kinds of tie, vehicle types and items and spells settings. Import it in another world or campaign, in this account or another: each item is added as a copy with new ids. Names already in use are renamed with (2) for tables, templates and calendars, and skipped for stats, quest categories, kinds of tie and vehicle types. Campaign things (stats, calendars, quest categories, item settings) need a campaign open. Random table and calendar export files import here too. Pages are not included; use the campaign backup ZIP for those.
+
 ## Remaining acceptance checks
 
 Source/model tests and production build checks are documented in VALIDATION.md. Real account/email/S3 setup, authenticated desktop/mobile interactions, deployed MCP access, and migration of your live content remain owner setup tasks in TODO.md. No external service was deployed by this integration.

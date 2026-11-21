@@ -1,6 +1,6 @@
 "use client";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Backpack, CalendarDays, Check, ChevronDown, ChevronRight, Dices, Eye, EyeOff, Globe, Goal, GripVertical, LayoutTemplate, Library, Link as LinkIcon, ListChecks, Map as MapIcon, Network, Palette, Pencil, Plus, ScrollText, Search, Settings, SlidersHorizontal, Sparkles, Tag, Trash2, Users, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpRight, Backpack, CalendarDays, Check, ChevronDown, ChevronRight, Dices, Eye, EyeOff, Globe, Goal, GripVertical, LayoutTemplate, Library, Link as LinkIcon, ListChecks, Map as MapIcon, Network, Palette, Pencil, Plus, ScrollText, Search, Settings, SlidersHorizontal, Sparkles, Tag, Trash2, Users, X } from "lucide-react";
 import "./sidebar-nav.css";
 import { ToolDialog } from "./tool-dialog";
 import { TagChip, useTags } from "../tags";
@@ -22,7 +22,7 @@ import {
 
 type Page = { id: string; title: string; kind: string; campaignId: string | null; templateId?: string; pageLook?: { icon?: PageIcon } };
 const viewIcons: Record<ViewId, typeof Goal> = { quests: Goal, codex: Library, relationships: Network, characters: Users, maps: MapIcon, calendar: CalendarDays, tables: Dices, templates: LayoutTemplate, look: Palette };
-const toolIcons: Record<ToolId, typeof Goal> = { form: ListChecks, share: Eye, items: Backpack, dice: Dices, log: ScrollText, search: Search, tags: Tag, ai: Sparkles, backups: Settings };
+const toolIcons: Record<ToolId, typeof Goal> = { form: ListChecks, share: Eye, items: Backpack, dice: Dices, log: ScrollText, search: Search, tags: Tag, ai: Sparkles, backups: Settings, transfer: ArrowLeftRight };
 const newLinkId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const isBuiltIn = (id: string): id is BuiltInSection => (builtInSections as readonly string[]).includes(id);
 
