@@ -137,3 +137,15 @@ test('a theme’s colours alone, for the Admin CP', () => {
   const dark = themeColours({ ...THEME_PRESETS[0], mode: 'dark' }, '.admin-cp');
   assert.equal(dark.split('\n')[0].replace('.admin-cp', ''), dark.split('\n')[1].replace(':root[data-theme="dark"] .admin-cp', ''), 'a one-version theme shows that version to everyone');
 });
+
+test('an open dialog stays above a theme’s drawing', async () => {
+  const { liveTheme } = await import('../lib/campaign-theme/model.ts');
+  // A theme that tries to hide or lower the parts holding a dialog still gets the lift, after its own rules.
+  const t = { ...THEME_PRESETS[0], id: 'x', css: '.hub-head { isolation: isolate } .hub-head > * { z-index: 2 }', areas: { dashboard: '.hub-head > * { z-index: 2 }' } };
+  for (const area of ['forum', 'dashboard', 'encyclopedia', 'maptable']) {
+    const css = themeCss(t, '.campaign-skin', area).css;
+    assert.ok(css.endsWith('.campaign-skin :has([aria-modal="true"]) { z-index: var(--z-modal, 200) !important; }'), area);
+  }
+  // Browsers drop the stylesheets they kept from before the lift.
+  assert.match(liveTheme(t, 'dashboard').key, /:dashboard:v2$/);
+});
