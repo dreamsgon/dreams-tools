@@ -235,3 +235,11 @@
 .creator-room-key summary small { color:var(--muted); font-weight:400; margin-left:6px; }
 .creator-room-key ol { margin:8px 0 2px; padding-left:22px; display:grid; gap:4px; font-size:13px; color:var(--muted); }
 .creator-room-key b { color:var(--ink); margin-right:4px; }
+/* Seed and rerolls sit above the preview, as in the hex map generator. On a phone the preview comes first, then the settings, then the room key. */
+.creator-new-map .creator-seed { flex-wrap:wrap; }
+.creator-new-map .creator-seed input { min-width:120px; }
+@media(max-width:700px) {
+  .creator-new-map .creator-preview:not(.hexmap-preview) { display:contents; }
+  .creator-new-map .creator-preview:not(.hexmap-preview) > .creator-seed-field,
+  .creator-new-map .creator-preview:not(.hexmap-preview) > svg { order:-1; }
+}

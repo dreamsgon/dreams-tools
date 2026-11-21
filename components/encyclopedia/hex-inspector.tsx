@@ -7,6 +7,8 @@ import { advanceDate, formatDate, type Calendar } from '@/lib/encyclopedia/calen
 import { weatherOn } from '@/lib/encyclopedia/weather-model';
 import { inCampaign, rollTable, type TableLibrary } from '@/lib/encyclopedia/tables';
 import type { Campaign } from '@/lib/encyclopedia/world-model';
+import { HookButton } from '../hook-button';
+import { hexHook } from '@/lib/hooks';
 
 const hoursText = (h: number) => { const r = Math.round(h * 2) / 2; return `${r} hour${r === 1 ? '' : 's'}`; };
 const checkOptions = [[0, 'No checks'], [8, '1 in 8 per hex'], [6, '1 in 6 per hex'], [4, '1 in 4 per hex']] as const;
@@ -65,6 +67,7 @@ export function HexInspector({ map, cell, plan, pace, setPace, campaign, library
     <input className="hex-title" aria-label={`${word} name`} placeholder={`Name this ${word.toLowerCase()}`} value={note.title} maxLength={100} onChange={e => save({ title: e.target.value })}/>
     <span className="hex-meta">{[terrain, note.exploredOn ? `explored on ${note.exploredOn}` : map.fog?.enabled ? (revealed ? 'explored' : 'not explored yet') : null].filter(Boolean).join(' · ')}</span>
     <label className="world-field">Notes<textarea rows={4} value={note.notes} maxLength={4000} placeholder="What the party finds here: ruins, lairs, people, secrets." onChange={e => save({ notes: e.target.value })}/></label>
+    <HookButton className="text-button" roll={seed => hexHook(map.source === 'generated' ? terrains[map.tiles[cell] ?? 1]?.id : null, seed)} notes={note.notes} max={4000} onAdd={notes => save({ notes })} shared={note.visibility === 'players' && 'Players can read these notes once the hex is explored.'}/>
     <label className="world-field">Who can see these notes<select value={note.visibility} onChange={e => save({ visibility: e.target.value as HexNote['visibility'] })}><option value="gm">GM only</option><option value="players">Players, once explored</option></select></label>
 
     <h3 className="world-sub"><Dices size={16}/> Random encounters here</h3>
@@ -83,7 +86,7 @@ export function HexInspector({ map, cell, plan, pace, setPace, campaign, library
 
     <h3 className="world-sub"><Users size={16}/> The party</h3>
     {!map.party ? <>
-      <p className="aside-hint">Put the party on the map to track where they are. Moving them spends travel time, explores the {word.toLowerCase()}es they pass, and can roll for encounters.</p>
+      <p className="aside-hint">Put the party on the map to track where they are. Moving them spends travel time, explores the {word === 'Hex' ? 'hexes' : 'squares'} they pass, and can roll for encounters.</p>
       <button type="button" className="button primary" onClick={() => { onRevealInParents?.(); setMap({ party: placeParty(map, cell), ...(map.fog?.enabled ? { fog: { ...map.fog, revealed: [...new Set([...map.fog.revealed, cell])].sort((a, b) => a - b) } } : {}) }); }}><Footprints size={15}/> Put the party here</button>
     </> : map.party.cell === cell ? <>
       <p>The party is here. {hoursText(map.party.hours)} of {HOURS_PER_DAY} travel hours used today.</p>

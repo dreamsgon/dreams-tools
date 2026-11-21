@@ -15,6 +15,8 @@ import {SectorDialog} from './sector-dialog';
 import {FtlDialog,galaxyOf} from './ftl-dialog';
 import {confirmDialog} from '../confirm-dialog';
 import './galaxy.css';
+import {HookButton} from '../hook-button';
+import {rumourHook} from '@/lib/hooks';
 
 const starLine=(s:StarClass)=>`Class ${s}, ${starInfo[s].colour.toLowerCase()}`;
 
@@ -63,6 +65,7 @@ export function SectorSheet({entry,data,update,change,onOpen}:{entry:Entry;data:
      <div className="world-seg" role="group" aria-label="Status"><button type="button" aria-pressed={here.status==='charted'} onClick={()=>edit(here.id,{status:'charted'})}>Charted</button><button type="button" aria-pressed={here.status==='rumour'} onClick={()=>edit(here.id,{status:'rumour'})}>Rumour</button></div>
      <label className="world-field">Star<select value={here.star} onChange={e=>edit(here.id,{star:e.target.value as StarClass})}>{starClasses.map(c=><option key={c} value={c}>{starLine(c)}: {starInfo[c].note}</option>)}</select></label>
      <label className="world-field">{here.status==='rumour'?'The rumour':'Notes'}<textarea key={`t${here.id}${here.note}`} className="sector-note" defaultValue={here.note} maxLength={400} rows={3} placeholder={here.status==='rumour'?'What people say about it.':'What is known about it.'} onBlur={e=>{const v=e.target.value.trim();if(v!==here.note)edit(here.id,{note:v});}}/></label>
+     <HookButton className="text-button" roll={rumourHook} notes={here.note} max={400} onAdd={note=>edit(here.id,{note})}/>
      {from&&<div className="sector-travel">
       <label className="world-field">From<select value={from.id} onChange={e=>setFromId(e.target.value)}>{others.map(s=><option key={s.id} value={s.id}>{s.name} ({hexLabel(s)})</option>)}</select></label>
       {(()=>{const ly=distanceBetween(from,here),steps=laneSteps(sector,from.id,here.id),hexes=hexDistance(from,here);return <div className="galaxy-facts">

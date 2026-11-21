@@ -26,6 +26,8 @@ import SaveChip from "./save-chip";
 import { WHEEL_IDLE_MS, CREATOR_LABEL_MAX, CREATOR_LABEL_MIN, accumulateWheel, stepLabelSize, wheelAmount, wheelScalable, wheelScaleShape } from "@/lib/wheel-resize";
 import { toolsFor, toolForKey, wallSegments, nearestWall, openingOnWall, touchingRooms, isRoom, rectCorners, type WallSegment, defaultCreatorGrid, sizeLabel, shapeBounds, isArea, toUnits, fromUnits, distance, resizeShape, offsetShape, snapPoint, resizeMap, eraseWall, shiftSceneContents, type MapAnchor, type CreatorTool, type CreatorGrid } from "@/lib/map-creator";
 import { layerState, mergeRooms, simplifyPoints, orderedShapes, layerIds, shapePath } from "@/lib/map-drawing";
+import { HookButton } from "./hook-button";
+import { roomHook } from "@/lib/hooks";
 /** `shift` is how far the drawing has moved since it was opened, from growing or shrinking on its top or left; the scene's tokens and fog follow it on save. */
 type Draft = { name:string; width:number; height:number; drawing:MapDrawing; shift?:{x:number;y:number} };
 const WALL_TOOLS:readonly CreatorTool[]=["line","curve","path"];
@@ -506,7 +508,8 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <label>Colour<input type="color" value={single.stroke} onChange={e=>patchShape({stroke:e.target.value})}/></label>
     {single.fill&&<>
       <label>Room name (GM only)<input key={`${single.id}-kn`} maxLength={80} defaultValue={single.key?.name??""} placeholder="Tomb" onBlur={e=>{const name=e.target.value.trim();if(name!==(single.key?.name??""))patchShape({key:name||single.key?.note?{name,note:single.key?.note??""}:null});}}/></label>
-      <label>GM note<textarea key={`${single.id}-kt`} rows={3} maxLength={1000} defaultValue={single.key?.note??""} placeholder="What is in the room" onBlur={e=>{const note=e.target.value.trim();if(note!==(single.key?.note??""))patchShape({key:note||single.key?.name?{name:single.key?.name??"",note}:null});}}/></label>
+      <label>GM note<textarea key={`${single.id}-kt-${single.key?.note??""}`} rows={3} maxLength={1000} defaultValue={single.key?.note??""} placeholder="What is in the room" onBlur={e=>{const note=e.target.value.trim();if(note!==(single.key?.note??""))patchShape({key:note||single.key?.name?{name:single.key?.name??"",note}:null});}}/></label>
+      <HookButton roll={roomHook} notes={single.key?.note??""} max={1000} onAdd={note=>patchShape({key:{name:single.key?.name??"",note}})}/>
       <small className="muted">In Maptable the number becomes a GM marker with this name and note.</small>
     </>}
   </>;

@@ -18,7 +18,7 @@ On the galaxy's picture choose **New sector** and tap where it lies. A **Sector*
 
 - **Sector settings**: size (Small 8 × 5, Medium 12 × 7, Large 18 × 8 or Custom up to 30 × 20), number of systems, share that are only **rumours**, lanes, backdrop, colour and seed, with a live preview. **Generate again** keeps systems you changed.
 - On a Milky Way page, start from the **Local Bubble**: the Sun and 13 real stars within 25 ly at about their real distances.
-- On the **Hex map**, tap a hex to rename its system, change its star class, mark it charted or a rumour, write a note, see distance and light-speed time from another system, join or remove **lanes**, remove it, or add a system or rumour to an empty hex.
+- On the **Hex map**, tap a hex to rename its system, change its star class, mark it charted or a rumour, write a note (**Roll a hook** adds a rumour and the truth behind it), see distance and light-speed time from another system, join or remove **lanes**, remove it, or add a system or rumour to an empty hex.
 
 ## 3. Star system
 

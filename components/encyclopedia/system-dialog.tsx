@@ -93,15 +93,16 @@ export function SystemDialog({name:startName,system,orgs,ai,onApply,onClose}:{na
      {orgs.length>0&&<div className="world-field">Footholds<div className="system-orgs">{orgs.map(org=><label key={org.id} className="world-check"><input type="checkbox" checked={o.holders.includes(org.id)} disabled={!o.holders.includes(org.id)&&o.holders.length>=4} onChange={e=>opt('holders',e.target.checked?[...o.holders,org.id]:o.holders.filter(h=>h!==org.id))}/><span>{org.title}</span></label>)}</div></div>}
     </>}
     <div className="world-field">Backdrop<div className="world-seg sector-backdrops" role="group" aria-label="Backdrop">{backdrops.map(b=><button key={b} type="button" aria-pressed={backdrop===b} onClick={()=>setBackdrop(b)}>{backdropNames[b]}</button>)}</div></div>
-    {!real&&!fromSetting&&<div className="world-field">Seed<div className="world-seed"><input aria-label="Seed" value={seed} maxLength={80} onChange={e=>setSeed(e.target.value)}/><button type="button" className="button" onClick={reroll}><Dices size={15}/> Reroll</button></div></div>}
    </div>
    <div className="world-generate-preview">
+    {!real&&!fromSetting&&<div className="world-field world-seed-field">Seed<div className="world-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={seed} maxLength={80} onChange={e=>setSeed(e.target.value)}/><button type="button" className="button" onClick={reroll}><Dices size={15}/> Reroll</button></div></div>}
     <SystemOrbit className="system-preview" system={{...made,backdrop}} seed={seed} playing={false} showZones selected={null} label="Preview of the system"/>
     {fromSetting&&!drafted?<p className="aside-hint">Ask your AI, or paste its answer, to see the system here.{kept?` ${kept===1?'The world you locked or charted stays':`The ${kept} worlds you locked or charted stay`}.`:''}</p>
     :<p className="aside-hint">{drafted&&fromSetting?`Built by ${drafted.by}. `:''}{made.bodies.length} worlds and {moons} {moons===1?'moon':'moons'}, {green} in the green zone{made.belts.length?`, ${made.belts.length} ${made.belts.length===1?'belt':'belts'}`:''}.{!real&&!fromSetting&&kept?` ${kept===1?'The world you locked or charted stays':`The ${kept} worlds you locked or charted stay`}.`:''}</p>}
    </div>
   </div>
   <div className="button-row galaxy-dialog-actions">
+   {!name.trim()&&<span className="galaxy-dialog-why" role="status">Give the system a name first.</span>}
    <button type="button" className="button" onClick={onClose}>Cancel</button>
    <button type="button" className="button primary" disabled={!name.trim()||(fromSetting?!drafted:!real&&!seed.trim())} onClick={()=>onApply({...made,backdrop},name.trim())}>{fromSetting?'Use this system':'Run the survey'}</button>
   </div>

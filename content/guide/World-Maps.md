@@ -19,7 +19,7 @@ On a map page choose **Open map editor** for the full-screen editor: tools on a 
 | F | Fog |
 
 - Terrain is painted onto a finer raster than the map cells. Maps draw as smooth shapes with mountains, hills, trees and marsh symbols.
-- **Places** have a kind (City, Town, Village, Castle, Dungeon, Ruin, Landmark, Camp) with its own symbol or a numbered pin, can link an **area map** that opens from the inspector, and can link a campaign page.
+- **Places** have a kind (City, Town, Village, Castle, Dungeon, Ruin, Landmark, Camp) with its own symbol or a numbered pin, can link an **area map** that opens from the inspector, and can link a campaign page. In a place's notes, **Roll a hook** adds a lure, some trouble and someone to meet (who they are, what they want and what they hide), suited to its kind.
 - **Rivers, roads and borders** are smooth curves with names written along them, either GM only or shared. Select a line or name to rename, restyle or delete it. Undo takes it back.
 - **Labels** write names across the map in three sizes.
 - A **compass** and **scale bar** are optional.
@@ -71,7 +71,7 @@ The **Zoom in (Z)** tool frames a spot on a painted map and makes a closer **Con
 
 On a map with a hex or square grid:
 
-- Select a cell to **name it, write notes** (GM only, or shared once explored) and pick an **encounter table** from your Random tables library (or a default for the map) with a **Roll** button.
+- Select a cell to **name it, write notes** (GM only, or shared once explored; **Roll a hook** adds what is there and a twist, by terrain) and pick an **encounter table** from your Random tables library (or a default for the map) with a **Roll** button.
 - **Put the party on the map.** Select another cell to see distance, travel time at a **slow, normal or fast** pace (18, 24, 30 miles a day) and extra time for forest, hills, marsh, mountains and snow. Roads ignore terrain; open water blocks the way.
 - **Move party here** walks the hex line, explores the cells passed and around the destination, stamps when noted hexes were explored, advances the **campaign calendar** with weather forecasts, and rolls encounter checks (1 in 8, 6 or 4 per hex). **Make camp** starts the next day.
 - A place on a world map has **New area map**, which makes a 20 × 14 crawl of 6-mile hexes named after it and linked back.

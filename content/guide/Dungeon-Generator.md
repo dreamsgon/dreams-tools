@@ -61,13 +61,15 @@ Tick **Add lights** and set **How many**, which **Kinds** (Torches, Braziers, Ca
 
 ## Seed, rerolls and presets
 
+The seed and the reroll buttons sit above the preview.
+
 - **Reroll layout** gives a new seed: new rooms and new dressing.
 - **Reroll dressing** keeps the rooms and puts new things in them.
 - **Your presets** save the layout, settings, style, floor and theme on this device. **Save these settings** adds one, the **X** removes it. *Crypt, 9 rooms* and *Tavern* come ready made.
 
 ## The room key
 
-With **Number the rooms** on, each room carries a number. The **Room key** under the preview (GM only) lists each room's name, what is in it, and whether it is dark or has a secret door. The numbers keep that text: select a number label and edit **Room name (GM only)** and **GM note** in the Selected tab. In **Use in Maptable**, *Numbered rooms become markers* makes them GM-only markers named and noted from the key.
+With **Number the rooms** on, each room carries a number. The **Room key** under the preview (GM only) lists each room's name, what is in it, and whether it is dark or has a secret door. The numbers keep that text: select a number label and edit **Room name (GM only)** and **GM note** in the Selected tab. **Roll a hook** under the note adds something to find in the room and a twist; press it again for another. In **Use in Maptable**, *Numbered rooms become markers* makes them GM-only markers named and noted from the key.
 
 > **Tutorial: a haunted crypt with a key**
 > 1. Start a new map › Generate › **Branching passages**, size Medium, 9 rooms.

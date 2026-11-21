@@ -167,16 +167,16 @@ export default function NewMapDialog({ grid, close, start, trace }: {
               {range("Rooms left dark", o.darkRooms, v => set("darkRooms", v), pct(o.darkRooms), "Dark rooms keep their lamps, unlit. The room key says which.")}
             </>}
           </>)}
-          <div className="creator-field"><span>Seed (the same seed and settings always make the same map)</span>
-            <div className="creator-seed"><input aria-label="Seed" value={o.seed} maxLength={40} onChange={e => set("seed", e.target.value)}/></div>
-            <div className="creator-seed"><button type="button" onClick={() => setO(p => ({ ...p, seed: randomSeed(), dressing: 0 }))} title="A new seed: new rooms and new dressing"><Dices size={15}/> Reroll layout</button>{kind !== "wilderness" && <button type="button" onClick={() => set("dressing", o.dressing + 1)} title="The same rooms, with new things in them"><Sparkles size={15}/> Reroll dressing</button>}</div>
-          </div>
           {layoutKind && <div className="creator-field"><span>Your presets</span>
             <div className="creator-presets">{presets.map((p, i) => <span key={i} className="creator-preset"><button type="button" onClick={() => usePreset(p)}>{p.name}</button><button type="button" aria-label={`Delete preset ${p.name}`} onClick={() => dropPreset(i)}><X size={13}/></button></span>)}
               <button type="button" onClick={savePreset}><Save size={14}/> Save these settings</button></div>
           </div>}
         </div>
         <div className="creator-preview">
+          <div className="creator-field creator-seed-field"><span>Seed</span>
+            <div className="creator-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={o.seed} maxLength={40} onChange={e => set("seed", e.target.value)}/>
+              <button type="button" onClick={() => setO(p => ({ ...p, seed: randomSeed(), dressing: 0 }))} title="A new seed: new rooms and new dressing"><Dices size={15}/> Reroll layout</button>{kind !== "wilderness" && <button type="button" onClick={() => set("dressing", o.dressing + 1)} title="The same rooms, with new things in them"><Sparkles size={15}/> Reroll dressing</button>}</div>
+          </div>
           <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated map">
             <DrawingBackground drawing={map.drawing} width={map.width} height={map.height}/>
             {orderedShapes(map.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={map.drawing} prefix="preview"/>)}
