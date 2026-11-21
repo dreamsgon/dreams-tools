@@ -131,3 +131,5 @@ Export & import (bottom of the sidebar, More on phones, or Workspace & backups) 
 ## Remaining acceptance checks
 
 Source/model tests and production build checks are documented in VALIDATION.md. Real account/email/S3 setup, authenticated desktop/mobile interactions, deployed MCP access, and migration of your live content remain owner setup tasks in TODO.md. No external service was deployed by this integration.
+
+**Character sheet templates.** Templates › Import brings in a character template with its stats (and starting trackers) from the ready-made D&D 5E file, a pasted AI reply or a `.json` file, in the same `rpg-tools-content` format. Copy prompt gives an AI app the format; the guide page Character sheet templates describes it. Stats join the open campaign's stat form (same names are reused) and the form's other stats start off on the imported template. See `lib/encyclopedia/sheet-template.ts` and `lib/encyclopedia/authored-pack.ts`.

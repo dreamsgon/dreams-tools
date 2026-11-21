@@ -897,8 +897,9 @@ body:has(.app-shell>.main-panel>.main-footer){padding-bottom:0}
 /* Page templates: the Templates page, the info box on a page, the template choice in New entry. */
 .templates-page{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:start}
 .templates-list{display:flex;flex-direction:column;gap:2px;position:sticky;top:16px}
-.templates-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.templates-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .templates-list-head h1{margin:0;font-size:26px}
+.templates-list-head .button-row{gap:6px;flex-wrap:nowrap}.templates-list-head .button{display:inline-flex;align-items:center;gap:5px}
 .templates-list>button{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0;border-radius:var(--radius);background:none;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
 .templates-list>button span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .templates-list>button small{color:var(--muted);font-variant-numeric:tabular-nums}
@@ -908,7 +909,7 @@ body:has(.app-shell>.main-panel>.main-footer){padding-bottom:0}
 .templates-list>button.active svg{color:var(--accent)}
 .templates-list .aside-hint{margin-top:10px}
 .templates-empty{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px dashed var(--line-strong);border-radius:var(--radius-lg);font-size:13px;line-height:1.5;color:var(--muted)}
-.templates-empty p{margin:0}.templates-empty .button{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}
+.templates-empty p{margin:0}.templates-empty .button,.templates-empty .text-button{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}
 .template-editor{min-width:0;display:flex;flex-direction:column;gap:12px}
 .template-editor h2{margin:14px 0 0;font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .template-editor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}

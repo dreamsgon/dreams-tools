@@ -7,6 +7,7 @@ import { maxVehicleTypes, vehicleTypeSchema, vehicleTypesOf, type VehicleType } 
 import { maxQuestCategories, questCategories, questCategorySchema, type QuestCategory } from './quests.ts';
 import { itemSettingsSchema } from './items.ts';
 import { KIND_NAMES, templatesFor } from './templates.ts';
+import { authoredPack } from './authored-pack.ts';
 
 /**
  * Content packs: reusable things made in one world or campaign, saved as a JSON file and added to another
@@ -127,8 +128,10 @@ export function buildPack(data: Workspace, library: TableLibrary, where: Where, 
 }
 export const packCount = (pack: ContentPack) => packGroups(pack).reduce((n, g) => n + g.items.length, 0);
 
-/** Reads a file: a content pack, a random tables export or a calendar export. */
-export function readPack(input: unknown): ContentPack {
+/** Reads a file: a content pack (made with Export, by hand or by an AI app), a random tables export or a calendar export. */
+export function readPack(raw: unknown): ContentPack {
+  // A file written by hand or by an AI app gets its ids and defaults first (authored-pack.ts).
+  const input = authoredPack(raw);
   const o = (input && typeof input === 'object' ? input : {}) as { format?: unknown; version?: unknown; tables?: unknown; calendar?: unknown };
   if (o.format === TABLES_FORMAT) return packSchema.parse({ format: PACK_FORMAT, version: 1, tables: z.object({ version: z.literal(1), tables: z.array(tableSchema).max(2000) }).parse(o).tables });
   if (o.format === 'world-manager-calendar' && o.version === 1) return packSchema.parse({ format: PACK_FORMAT, version: 1, calendars: [calendarSchema.parse(o.calendar)] });
@@ -214,11 +217,18 @@ export function importPack(data: Workspace, library: TableLibrary, pack: Content
     const have = world.templates ?? [], taken = new Set(have.map(t => lower(t.name)));
     if (have.length + templates.length > 60) throw Error(`A world holds up to 60 templates, and this would make ${have.length + templates.length}.`);
     const remap = (ids?: string[]) => ids?.map(id => statIds.get(id)).filter((x): x is string => !!x);
-    const added: PageTemplate[] = templates.map(({ campaignId: _c, parentId: _p, stats: st, ...t }) => ({
-      ...t, id: newId(), name: freeName(t.name, taken, 160), updatedAt: now,
-      ...(opts.templates === 'campaign' && campaign ? { campaignId: campaign.id } : {}),
-      ...(st && (st.order || st.off) ? { stats: { ...(st.order ? { order: remap(st.order) } : {}), ...(st.off ? { off: remap(st.off) } : {}) } } : {}),
-    }));
+    // A sheet template (a file with its own stats): the campaign's other stats start switched off on it, so a D&D sheet
+    // doesn't pick up another game's stats already on the form. They can be switched on in the template.
+    const ownStats = new Set(stats.map(f => statIds.get(f.id)).filter((x): x is string => !!x));
+    const others = ownStats.size ? (nextCampaign?.statFields ?? []).filter(f => !f.archived && !ownStats.has(f.id)).map(f => f.id) : [];
+    const added: PageTemplate[] = templates.map(({ campaignId: _c, parentId: _p, stats: st, ...t }) => {
+      const order = st?.order ? remap(st.order) : undefined, off = [...new Set([...(remap(st?.off) ?? []), ...(t.kind === 'character' && st?.order ? others.filter(id => !order?.includes(id)) : [])])];
+      return {
+        ...t, id: newId(), name: freeName(t.name, taken, 160), updatedAt: now,
+        ...(opts.templates === 'campaign' && campaign ? { campaignId: campaign.id } : {}),
+        ...(order?.length || off.length ? { stats: { ...(order?.length ? { order } : {}), ...(off.length ? { off } : {}) } } : {}),
+      };
+    });
     nextWorld.templates = [...have, ...added]; report('templates', added.length, 0);
   }
 

@@ -8,6 +8,7 @@
 import type { CharacterData, Entry, HideableTab, PageTemplate, TemplateField, Workspace, World } from "./world-model.ts";
 import type { Org } from "./org-profile.ts";
 import { layOutProfile, profileFromLayout, profileLayoutOf, type Profile } from "./character-profile.ts";
+import { maxTrackers, type Tracker } from "./trackers.ts";
 
 export const FIELD_TYPES: [TemplateField["type"], string][] = [["text", "Text"], ["textarea", "Long text"], ["number", "Number"], ["score", "Score + modifier"], ["track", "Current / max"], ["choice", "Choice"], ["multi", "Several choices"], ["check", "Yes / no"], ["page", "Page link"], ["url", "Web link"]];
 
@@ -80,6 +81,10 @@ export function characterStarters(newId: () => string, now = new Date().toISOStr
 /** A copy of a stat arrangement (order and switched-off stats), with empty lists left out. */
 const copyStats = (a: { order?: string[]; off?: string[] }) => ({ ...(a.order?.length ? { order: [...a.order] } : {}), ...(a.off?.length ? { off: [...a.off] } : {}) });
 
+/** A character template's trackers for a new character, with fresh ids. Empty when it has none. */
+export const templateTrackers = (t: Pick<PageTemplate, "trackers">, newId: () => string): { trackers?: Tracker[] } =>
+  t.trackers?.length ? { trackers: t.trackers.map(x => ({ ...x, id: newId() })) } : {};
+
 /** Ready-made character tabs that can be hidden, in tab order, with their usual names (Spells takes the campaign's own name in the UI). */
 export const HIDEABLE_TABS: [HideableTab, string][] = [["statblock", "Statblock"], ["stats", "Stats & Skills"], ["features", "Features"], ["inventory", "Inventory"], ["spells", "Spells"]];
 const hideOrder = (ids: Iterable<string>) => HIDEABLE_TABS.map(([id]) => id).filter(id => new Set(ids).has(id));
@@ -143,7 +148,7 @@ export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: str
   return {
     id: opts.id, worldId: opts.worldId, campaignId: opts.campaignId, parentId: opts.parentId, title: opts.title.trim().slice(0, 160), kind: t.kind,
     body: t.body, overviewVisibility: t.overviewVisibility ?? "gm", ...(t.tabs.length ? { tabs: t.tabs.map(x => ({ id: opts.newId(), title: x.title, body: "", visibility: x.visibility })) } : {}),
-    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.icon ? { pageLook: { icon: t.icon } } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {}, ...(t.stats ? { statLayout: copyStats(t.stats) } : {}) } } : {}),
+    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.icon ? { pageLook: { icon: t.icon } } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {}, ...(t.stats ? { statLayout: copyStats(t.stats) } : {}), ...templateTrackers(t, opts.newId) } } : {}),
     updatedAt: opts.now ?? new Date().toISOString(),
   };
 }
@@ -158,6 +163,7 @@ export function templateFromPage(s: Workspace, e: Entry, name: string, newId: ()
     ...(kind === "character" && e.hiddenTabs?.length ? { hiddenTabs: [...e.hiddenTabs] } : {}),
     ...(kind === "character" && e.profile ? { layout: profileLayoutOf(e.profile) } : {}),
     ...(kind === "character" && e.character?.statLayout ? { stats: copyStats(e.character.statLayout) } : {}),
+    ...(kind === "character" && e.character?.trackers?.length ? { trackers: e.character.trackers.map(x => ({ ...x })) } : {}),
   };
 }
 
@@ -178,12 +184,19 @@ export function applyTemplate(s: Workspace, entryId: string, templateId: string,
     ...(missing.length ? { tabs: [...(e.tabs ?? []), ...missing.map(x => ({ id: newId(), title: x.title, body: "", visibility: x.visibility }))] } : {}),
     ...(e.kind === "character" ? hideTabsPatch(e, t.hiddenTabs ?? []) : {}),
     // The template's stats: which are on and their order. Values stay; a template without stats leaves the character's own.
-    ...(e.kind === "character" && t.stats && e.character ? { character: { ...(hideTabsPatch(e, t.hiddenTabs ?? []).character ?? e.character), statLayout: copyStats(t.stats) } } : {}),
+    ...(e.kind === "character" && (t.stats || t.trackers?.length) && e.character ? { character: withTemplateTrackers({ ...(hideTabsPatch(e, t.hiddenTabs ?? []).character ?? e.character), ...(t.stats ? { statLayout: copyStats(t.stats) } : {}) }, t, newId) } : {}),
     ...(e.kind === "character" && t.layout ? { profile: e.profile ? layOutProfile(e.profile, t.layout) : profileFromLayout(t.layout) } : {}),
     updatedAt: now,
   };
   if (!next.hiddenTabs) delete next.hiddenTabs;
   return { ...s, entries: s.entries.map(x => x.id === entryId ? next : x) };
+}
+
+/** A character given a template: the template's trackers it doesn't have yet (by name) are added, full, up to the limit. */
+function withTemplateTrackers(c: CharacterData, t: Pick<PageTemplate, "trackers">, newId: () => string): CharacterData {
+  const have = c.trackers ?? [], names = new Set(have.map(x => x.label.trim().toLowerCase()));
+  const add = (templateTrackers(t, newId).trackers ?? []).filter(x => !names.has(x.label.trim().toLowerCase())).slice(0, Math.max(0, maxTrackers - have.length));
+  return add.length ? { ...c, trackers: [...have, ...add] } : c;
 }
 
 /**

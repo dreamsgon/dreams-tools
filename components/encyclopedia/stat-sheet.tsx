@@ -109,7 +109,7 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
   </div>;
  };
  const quickCard=(f:StatField)=>{
-  const v=values[f.id]??null,box=f.look==='score',shownMod=box?statModifier({derived:f.derived,value:v,mod:values[modKey(f.id)]},sheet):f.derived?derivedValue({derived:f.derived,value:v},sheet):null;
+  const v=values[f.id]??null,box=f.look==='score',shownMod=box?statModifier({derived:f.derived,value:v,mod:values[modKey(f.id)]},sheet):f.derived?derivedValue({derived:f.derived,value:v,type:f.type},sheet):null;
   return <div role="listitem" key={f.id} className={`stat-quick-card${f.visibility==='gm'?' is-hidden':''}${open.has(f.id)?' is-open':''}`}>
    <button type="button" className="stat-quick-label" aria-expanded={open.has(f.id)} title={f.description??'Details, Change and Remove'} onClick={()=>toggle(f.id)}>{f.label}{f.visibility==='gm'&&<EyeOff size={11} aria-label="GM only"/>}</button>
    {!box&&f.type==='number'&&<input type="number" className="stat-quick-input" aria-label={`${f.label} value`} step="any" placeholder="—" value={typeof v==='number'?v:''} onChange={e=>set(f.id,e.target.value===''?null:Number(e.target.value))}/>}
@@ -121,7 +121,7 @@ export function StatSheet({entry,data,campaign,onChange,onFields,onArrange,chang
  };
  const row=(f:StatField)=>{
   const isOpen=open.has(f.id),v=values[f.id]??null,rolls=statRolls(f),hint=rolls.map(r=>({r,dice:statRollDice(r.formula,v,sheet)})).find(x=>!x.dice);
-  const worked=f.derived?derivedValue({derived:f.derived,value:v},sheet):null;
+  const worked=f.derived?derivedValue({derived:f.derived,value:v,type:f.type},sheet):null;
   return <div role="listitem" key={f.id} className={`inv-row stat-row${f.visibility==='gm'?' is-hidden':''}`}>
    <div className="inv-line stat-line">
     <span className="stat-main">
