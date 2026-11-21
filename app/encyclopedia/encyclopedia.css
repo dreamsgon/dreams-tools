@@ -838,9 +838,6 @@ body:has(.app-shell>.main-panel>.main-footer){padding-bottom:0}
 .look-group{border-top:1px solid var(--line);padding:16px 0;display:flex;flex-direction:column;gap:10px}
 .look-group h2{font-family:var(--font-sans);font-size:14px;font-weight:600;letter-spacing:0}
 .muted.small,.small.muted{font-size:12.5px}
-.look-banner-edit{position:relative;cursor:crosshair}
-.look-banner-edit .look-banner{height:120px}
-.look-banner-dot{position:absolute;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #0008;pointer-events:none}
 .look-banner-empty{display:flex;align-items:center;gap:12px;border:1px dashed var(--line-strong);border-radius:var(--radius);padding:18px;text-align:left;color:var(--muted)}
 .look-banner-empty strong{display:block;color:var(--accent);font-weight:500}
 .look-swatches,.look-surfaces{display:flex;gap:10px;flex-wrap:wrap}
@@ -1510,7 +1507,6 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .article-layout.page-wide{grid-template-columns:minmax(0,1fr) 220px}
 @media(max-width:1200px){.article-layout.page-wide{grid-template-columns:minmax(0,1fr) 155px}}
 .prose.box-left .wiki-infobox:not(.right){float:left;margin:4px 28px 18px 0}
-.page-style-pop .look-banner-edit .look-banner{height:84px}
 .page-style-pop .look-banner-empty{width:100%;padding:12px;background:none;cursor:pointer}
 .page-style-pop .look-banner-empty small{display:block;font-size:12px}
 .page-style-pop .button-row{gap:6px;margin:6px 0 4px}
@@ -1623,3 +1619,18 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .template-icon-row{display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;margin:4px 0 8px}
 .template-icons{grid-template-columns:repeat(14,minmax(0,1fr))}
 @media(max-width:720px){.type-group{grid-template-columns:1fr;gap:6px}.type-group-name{padding-top:0}.new-type-icons{grid-template-columns:repeat(8,minmax(0,1fr))!important}.new-type-row{grid-template-columns:1fr}.template-icon-row{grid-template-columns:1fr}.template-icons{grid-template-columns:repeat(8,minmax(0,1fr))}}
+/* Template field types: score + modifier, current / max, several choices, yes / no (templates.tsx). */
+.field-score,.field-track{display:flex;align-items:center;gap:6px}
+.field-score input,.field-track input{width:64px;min-width:0;text-align:center}
+.field-score output{min-width:44px;padding:6px 8px;border-radius:var(--radius);background:var(--raised);text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.field-track>span{color:var(--muted)}
+.field-check{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.field-check input{width:auto}
+.field-multi{display:flex;flex-wrap:wrap;gap:5px}
+.field-multi button{padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;cursor:pointer}
+.field-multi button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:500}
+.info-score{display:inline-flex;align-items:baseline;gap:6px}
+.info-score b{font-size:1.15em;font-variant-numeric:tabular-nums}
+.info-score small{padding:0 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-variant-numeric:tabular-nums}
+input[aria-invalid=true]{border-color:var(--danger,#c0392b)}
+@media(min-width:901px){.template-fields-table>div{grid-template-columns:minmax(120px,1.3fr) 160px minmax(120px,1.4fr) 120px 32px}}

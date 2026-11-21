@@ -144,7 +144,7 @@ export default function ForumApp() {
     <div className="campaign-skin">
     <div className="forum-page">
       <TopBar frame={frame} k={k} go={go} setPlayer={setPlayer} />
-      <Banner frame={frame} k={k} go={go} plain={skin?.banner === 'plain'} />
+      <Banner frame={frame} k={k} go={go} />
       <Notices frame={frame} />
       <SheetContext.Provider value={page.kind === 'topic' ? page.features : {}}><main className="board-main">
         {error && <p className="form-error banner-error" role="alert">{error}</p>}

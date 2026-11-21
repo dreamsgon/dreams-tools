@@ -93,9 +93,13 @@ export const defaultCharacter=():CharacterData=>({role:"npc",group:"",tags:[],lo
  * so every campaign in it can use them. Pages remember theirs (templateId) and keep their values in `fields`.
  */
 export const templateFieldSchema = z.object({
-  id, label:z.string().trim().min(1).max(60), type:z.enum(["text","number","choice","page","textarea"]),
+  id, label:z.string().trim().min(1).max(60), type:z.enum(["text","number","choice","page","textarea",
+    // Added later: a score with its modifier, current / max, several choices, yes or no, and a web link (templates.ts).
+    "score","track","multi","check","url"]),
+  // Optional (added later): for a score, how its modifier is found: d20 is (score − 10) ÷ 2 rounded down, typed is written beside it.
+  mod:z.enum(["d20","typed"]).optional(),
   options:z.array(z.string().trim().min(1).max(60)).max(30).optional(), visibility:visibilitySchema,
-}).superRefine((f,ctx)=>{if(f.type==="choice"&&!f.options?.length)ctx.addIssue({code:"custom",message:`“${f.label}” needs at least one choice`});});
+}).superRefine((f,ctx)=>{if((f.type==="choice"||f.type==="multi")&&!f.options?.length)ctx.addIssue({code:"custom",message:`“${f.label}” needs at least one choice`});});
 /** Ready-made character tabs a GM can hide from a page (and a template can leave out). A hidden tab is GM only too. */
 export const hideableTabIds = ["statblock","stats","features","inventory","spells"] as const;
 export type HideableTab = typeof hideableTabIds[number];
@@ -470,7 +474,7 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const store=e.kind==='store'&&e.store&&(ownStore||(e.store.visibility==='players'&&!e.store.awaiting&&forMe))?playerStore(e.store,mine??new Set(),Date.now()):undefined;
    if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!features?.length&&!statblock&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
-   const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
+   const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{}),...(r.href?{href:r.href}:{})})):[];
    return [{id:e.id,title:e.title,kind:e.kind,parentId:undefined as string|undefined,text:textDiff(resolveText(e,id=>allById.get(id),world?.text).text),pageLook:e.pageLook?{...e.pageLook,toc:undefined}:undefined,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(statblock?{statblock:statblock as {text:string;rolls?:false}}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);

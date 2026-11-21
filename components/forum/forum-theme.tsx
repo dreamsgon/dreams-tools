@@ -266,9 +266,9 @@ function BasicsTab({ t, set, scheme, pick, beside }: { t: Theme; set: (t: Theme)
         {Object.entries(THEME_FONTS).map(([id, f]) => <option key={id} value={id}>{f.label}</option>)}
       </select></label>)}</div>
     <label className="f-field">Corners · {t.radius}px<input type="range" min={0} max={16} value={t.radius} onChange={e => set({ ...t, radius: Number(e.target.value) })} /></label>
-    <label className="f-field">Banner<select value={t.banner} onChange={e => set({ ...t, banner: e.target.value as Theme['banner'] })}>
-      <option value="picture">The campaign’s banner picture</option><option value="plain">The theme’s colours, no picture</option>
-    </select><small>The picture itself is set in the Banner tab. In the forum it shows when Forum settings uses it.</small></label>
+    <label className="f-field">Banner without a picture<select value={t.banner} onChange={e => set({ ...t, banner: e.target.value as Theme['banner'] })}>
+      <option value="picture">The app’s own header colours</option><option value="plain">The theme’s colours</option>
+    </select><small>When the campaign has a banner picture (the Banner tab), it always shows and the theme’s art gives way to it.</small></label>
   </div>;
 }
 
@@ -304,7 +304,7 @@ const CLASSES: Record<ThemeArea, [string, string][]> = {
   ],
   dashboard: [
     ['.hub-crumbs, .hub-head, .hub-title, .hub-actions', 'The top: the campaign’s name and its buttons'],
-    ['.hub-banner', 'The campaign’s banner picture, from its look'],
+    ['.hub-head.has-picture', 'The header when the campaign has a banner picture (the theme’s drawn art gives way to it)'],
     ['.hub-tabs', 'Dashboard, Front page and Members'],
     ['.hub-grid, .hub-card', 'The dashboard’s cards'],
     ['.hub-button, .hub-button-primary', 'Buttons'],

@@ -407,7 +407,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid var(--ag-nav-ink); outline-offset: -4px; }
 /* With a banner picture: the picture under a soft wash on the left, the same capitals over it. */
 .board-head.has-art {
-  background: linear-gradient(90deg, rgba(6, 14, 30, .72) 0%, rgba(6, 14, 30, .35) 50%, rgba(6, 14, 30, .08) 100%), linear-gradient(180deg, transparent 62%, rgba(6, 14, 30, .6) 100%), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: linear-gradient(90deg, rgba(6, 14, 30, .72) 0%, rgba(6, 14, 30, .35) 50%, rgba(6, 14, 30, .08) 100%), linear-gradient(180deg, transparent 62%, rgba(6, 14, 30, .6) 100%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #eef0ea; --head-title: #f3e3b0; --head-shadow: 0 2px 14px rgba(0, 0, 0, .85); --head-nav: #050b16; --head-line: transparent;
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 60px 44px 70px; }

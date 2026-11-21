@@ -1607,9 +1607,30 @@ test('request: the GM sets the campaign banner from the Admin CP, from any part 
   // The Admin CP reads it with the themes; from Maptable too, through the paired campaign.
   assert.equal((await (await gm.post({ action: 'themes', campaign: KEY })).json()).banner.imageId, 'banner1');
   assert.equal((await (await gm.post({ action: 'banner', campaign: 'mt-maps1', y: .8 })).json()).banner.y, .8);
+  // Dragged and zoomed in the Admin CP: x and zoom; back to the middle and no zoom leaves them out again.
+  assert.deepEqual((await (await banner({ x: .25, zoom: 1.75 })).json()).banner, { imageId: 'banner1', width: 1600, height: 400, y: .8, x: .25, zoom: 1.75 });
+  assert.deepEqual((await (await banner({ x: .5, zoom: 1 })).json()).banner, { imageId: 'banner1', width: 1600, height: 400, y: .8 });
+  assert.equal((await banner({ zoom: 9 })).status, 400);
   // Players can't; a picture and a remove at once is refused.
   assert.equal((await player.post({ action: 'banner', campaign: KEY, remove: true })).status, 403);
   assert.equal((await banner({ remove: true, y: .2 })).status, 400);
   assert.equal((await (await banner({ remove: true })).json()).banner, null);
   assert.equal(look, undefined, 'an empty look is left out');
+});
+
+test('request: the campaign banner picture for Maptable’s scene list, signed, for the GM and the players', async () => {
+  const gm = harness({ user: OWNER, forum: false }), player = harness({ user: 'p1', forum: false }), stranger = harness({ user: 'stranger', forum: false });
+  let look;
+  for (const h of [gm, player, stranger]) h.deps.workspace = async () => ({ ...workspace, campaigns: workspace.campaigns.map(c => c.id === 'camp' ? { ...c, look, maptableCampaignId: 'maps1' } : c) });
+  const hero = async (h, campaign = KEY) => (await (await h.post({ action: 'heroBanner', campaign })).json()).banner;
+  assert.equal(await hero(gm), null, 'no picture yet');
+  look = { banner: { imageId: IMG.banner, width: 1600, height: 400, y: .3 } };
+  assert.deepEqual(await hero(gm, 'mt-maps1'), { url: 'https://img.test/' + IMG.banner, width: 1600, height: 400, y: .3 }, 'from Maptable, through the paired campaign');
+  look = { banner: { ...look.banner, x: .2, zoom: 1.5 } };
+  assert.deepEqual(await hero(player), { url: 'https://img.test/' + IMG.banner, width: 1600, height: 400, y: .3, x: .2, zoom: 1.5 }, 'with how the GM framed it');
+  assert.equal((await stranger.post({ action: 'heroBanner', campaign: KEY })).status, 404, 'not for someone outside the campaign');
+  // A look kept from the players keeps its picture from them too.
+  look = { ...look, players: false };
+  assert.equal(await hero(player), null);
+  assert.equal((await hero(gm)).y, .3);
 });

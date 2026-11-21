@@ -406,7 +406,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: var(--head-title); border-bottom-color: transparent; }
 /* With a banner picture: the picture under a soft dark sky, the same thin title over it. */
 .board-head.has-art {
-  background: linear-gradient(180deg, rgba(4, 6, 10, .6) 0%, rgba(4, 6, 10, .18) 40%, rgba(4, 6, 10, .3) 66%, rgba(4, 6, 10, .88) 100%), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: linear-gradient(180deg, rgba(4, 6, 10, .6) 0%, rgba(4, 6, 10, .18) 40%, rgba(4, 6, 10, .3) 66%, rgba(4, 6, 10, .88) 100%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #e6e8ea; --head-title: #f3f5f6; --head-shadow: 0 2px 14px rgba(0, 0, 0, .85); --head-nav: rgba(0, 0, 0, .55); --head-line: transparent;
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 60px 40px 70px; }

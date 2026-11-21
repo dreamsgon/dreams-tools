@@ -397,7 +397,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid #e3b23c; outline-offset: -4px; }
 .board-title a:focus-visible { outline-color: #f6d77e; }
 /* With a banner picture: the picture under a dark wash, with the winged sun and the title over it. */
-.board-head.has-art { background: linear-gradient(180deg, rgba(8, 12, 30, .35), rgba(8, 12, 30, .68)), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --nk-title: #fff4d6; --nk-title-shadow: 0 2px 12px rgba(0, 0, 0, .8); --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(180deg, rgba(8, 12, 30, .35), rgba(8, 12, 30, .68)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --nk-title: #fff4d6; --nk-title-shadow: 0 2px 12px rgba(0, 0, 0, .8); --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 90px 40px 56px; background: ${WINGS}; }
 .board-head.has-art .board-nav { background: rgba(7, 9, 23, .74); }
 

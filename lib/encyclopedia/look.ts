@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ACCENTS, FONT_ROLES, fontOption, fontStylesheetUrl } from "../appearance.ts";
 import { imageIdSchema } from "./map-model.ts";
+import { BANNER_ZOOM_MAX } from "../banner-frame.ts";
 
 /*
  * A campaign's look: its accent, heading font, page surface and banner. It applies inside the
@@ -19,7 +20,7 @@ export const lookSchema = z.object({
   accent: z.enum(accentIds).optional(),
   headingFont: z.enum(lookFonts).optional(),
   surface: z.enum(surfaces).optional(),
-  banner: z.object({ imageId: imageIdSchema, width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000), y: z.number().min(0).max(1) }).optional(),
+  banner: z.object({ imageId: imageIdSchema, width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000), y: z.number().min(0).max(1), x: z.number().min(0).max(1).optional(), zoom: z.number().min(1).max(BANNER_ZOOM_MAX).optional() }).optional(),
   /** Use the look on the player site and shared links (on unless turned off). */
   players: z.boolean().optional(),
 });

@@ -377,7 +377,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: var(--gc-nav-on); border-bottom-color: var(--gc-yellow); }
 .board-nav a:focus-visible { outline: 2px solid var(--gc-yellow); outline-offset: -4px; }
 /* With a banner picture: the picture under a dark wash, the title in solid yellow over it (hollow letters need a plain sky behind them). */
-.board-head.has-art { background: linear-gradient(180deg, rgba(0, 0, 0, .45), rgba(0, 0, 0, .7)), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(180deg, rgba(0, 0, 0, .45), rgba(0, 0, 0, .7)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 56px 40px; }
 .board-head.has-art .board-title a { color: #ffd83d; -webkit-text-stroke: 0; }
 .board-head.has-art .board-tagline { color: #ffd83d; }

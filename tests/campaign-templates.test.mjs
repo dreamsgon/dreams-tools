@@ -102,3 +102,29 @@ test('a template carries which stats are on and their order',()=>{
   assert.deepEqual(got.statLayout,stats);assert.equal(got.statsByCampaign[c.id].acr,3);
   assert.ok(workspaceSchema.safeParse(w).success);
 });
+
+test('new field types: score + modifier, current / max, several choices, yes / no, web link',async()=>{
+  const {cleanValue,infoRows,scoreMod}=await import('../lib/encyclopedia/templates.ts');
+  const f=(type,extra={})=>({id:type,label:type,type,visibility:'players',...extra});
+  assert.equal(scoreMod(14),2);assert.equal(scoreMod(9),-1);assert.equal(scoreMod(10),0);
+  assert.equal(cleanValue(f('score',{mod:'d20'}),'14'),14);
+  assert.equal(cleanValue(f('score',{mod:'d20'}),'14|+5'),14,'the d20 rule drops a typed modifier');
+  assert.equal(cleanValue(f('score',{mod:'typed'}),'14|+5'),'14|5');
+  assert.equal(cleanValue(f('score',{mod:'typed'}),'|−1'),'|-1');
+  assert.equal(cleanValue(f('track'),'12/20'),'12/20');assert.equal(cleanValue(f('track'),'/'),undefined);
+  const multi=f('multi',{options:['Brave','Cunning','Loyal']});
+  assert.equal(cleanValue(multi,'Loyal, Brave, Nope'),'Brave, Loyal');assert.equal(cleanValue(multi,'Nope'),undefined);
+  assert.equal(cleanValue(f('check'),true),'yes');assert.equal(cleanValue(f('check'),'no'),undefined);
+  assert.equal(cleanValue(f('url'),'example.com/wiki'),'https://example.com/wiki');
+  assert.equal(cleanValue(f('url'),'javascript:alert(1)'),undefined);
+  const t=tpl('x',{fields:[f('score',{mod:'d20',label:'STR'}),f('score',{mod:'typed',label:'Luck',id:'luck'}),f('track',{label:'HP'}),multi,f('check',{label:'Sworn'}),f('url',{label:'Sheet'})]});
+  const e={id:'e',fields:{score:15,luck:'8|-2',track:'7/12',multi:'Cunning',check:'yes',url:'https://example.com/a'}};
+  const rows=infoRows({entries:[]},t,e);
+  assert.deepEqual(rows.map(r=>r.value),['15 (+2)','8 (−2)','7 / 12','Cunning','Yes','example.com/a']);
+  assert.equal(rows[0].mod,'+2');assert.equal(rows.at(-1).href,'https://example.com/a');
+  // The schema takes the new types, and a several-choices field needs its choices.
+  const {s,c}=base();
+  const w={...s,worlds:s.worlds.map(x=>x.id===c.worldId?{...x,templates:[t]}:x)};
+  assert.ok(workspaceSchema.safeParse(w).success);
+  assert.equal(workspaceSchema.safeParse({...w,worlds:w.worlds.map(x=>x.id===c.worldId?{...x,templates:[{...t,fields:[f('multi')]}]}:x)}).success,false);
+});

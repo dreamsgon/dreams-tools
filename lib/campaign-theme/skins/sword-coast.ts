@@ -422,7 +422,7 @@ a { text-underline-offset: 3px; }
 .board-tagline::after { ${TAPER_RIGHT} flex: none; width: 54px; height: 4px; }
 /* With a banner picture: the picture under a vignette, the same gilded title over it. */
 .board-head.has-art {
-  background: linear-gradient(180deg, rgba(8, 5, 6, .5) 0%, rgba(8, 5, 6, .08) 36%, rgba(8, 5, 6, .2) 62%, rgba(8, 5, 6, .86) 100%), radial-gradient(120% 100% at 50% 45%, transparent 52%, rgba(0, 0, 0, .62)), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: linear-gradient(180deg, rgba(8, 5, 6, .5) 0%, rgba(8, 5, 6, .08) 36%, rgba(8, 5, 6, .2) 62%, rgba(8, 5, 6, .86) 100%), radial-gradient(120% 100% at 50% 45%, transparent 52%, rgba(0, 0, 0, .62)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #eadfcd; --head-nav: rgba(8, 5, 5, .7); --head-line: var(--sc-trim);
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 60px 24px 70px; }

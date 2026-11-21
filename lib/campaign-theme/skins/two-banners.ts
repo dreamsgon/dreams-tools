@@ -450,7 +450,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid #ffd100; outline-offset: -4px; }
 /* With a banner picture: the picture under a soft dark wash in the middle, the same gold title over it. */
 .board-head.has-art {
-  background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(8, 9, 16, .55), rgba(8, 9, 16, .15) 70%, transparent), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(8, 9, 16, .55), rgba(8, 9, 16, .15) 70%, transparent), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #f3e6c0; --head-title: #ffd94a; --head-shadow: none; --head-nav: #121420; --head-line: transparent;
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 60px 40px; }

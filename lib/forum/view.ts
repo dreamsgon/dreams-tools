@@ -349,7 +349,7 @@ export function frameOf(ctx: Context) {
   const waiting = waitingOf(ctx, entries), online = onlineOf(ctx.presence, now).filter(id => id === ctx.owner || ctx.list.members.some(m => m.userId === id));
   const newest = [...ctx.list.members].sort((a, b) => b.joinedAt.localeCompare(a.joinedAt))[0];
   const counts = Object.entries(f.counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
-  const banner = s.banner && c.look?.banner && (ctx.viewer.rights.gm || c.look.players !== false) ? { imageId: c.look.banner.imageId, y: c.look.banner.y } : null;
+  const banner = s.banner && c.look?.banner && (ctx.viewer.rights.gm || c.look.players !== false) ? c.look.banner : null;
   return {
     campaign: { name: c.name },
     settings: { title: s.title || c.name, tagline: s.tagline, links: s.links, banner: s.banner, notices: s.notices ?? [], markup: s.markup ?? "markdown" },

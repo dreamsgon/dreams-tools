@@ -456,7 +456,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid var(--lc-on); outline-offset: -5px; }
 /* With a banner picture: the picture inside the same frame, darker toward the title. */
 .board-head.has-art {
-  background: var(--lc-scrim), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: var(--lc-scrim), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #f3ead9; --head-title: #ffab52; --head-shadow: 0 2px 14px rgba(0, 0, 0, .9); --head-nav: transparent; --head-line: transparent;
 }
 .board-head.has-art .board-tagline { color: #e3d2ff; text-shadow: 0 1px 8px #000; }

@@ -2,7 +2,6 @@
 .hub { padding:20px 0 64px; color:var(--ink); }
 .hub a { text-decoration:none; }
 /* A plain header: no box around it, so the tag menu can open freely. The banner comes from the campaign look. */
-.hub-banner { height:150px; margin-bottom:20px; border-radius:var(--radius-lg, 8px); }
 .hub-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px 24px; flex-wrap:wrap; margin-bottom:12px; }
 .hub-title { min-width:0; }
 .hub-title > p { margin:0; font-size:13px; font-weight:500; color:var(--muted); }
@@ -211,7 +210,7 @@
   .hub-grid > .hub-card { grid-column:span 6 !important; }
   .hub-grid > .hub-w-quests, .hub-grid > .hub-w-board, .hub-grid > .hub-w-scenes, .hub-grid > .hub-w-recap { grid-column:1/-1 !important; }
   .hub-tabs { flex-wrap:wrap; }
-  .hub-banner { height:96px; }
+
 }
 @media (max-width:640px) {
   .hub-grid > .hub-card { grid-column:1/-1 !important; grid-row:auto !important; min-height:0; }
@@ -264,3 +263,12 @@
 .hub-notice { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:0 0 16px; padding:8px 8px 8px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--accent-soft); font-size:14px; }
 .hub-notice > span { flex:1 1 auto; min-width:0; }
 .hub-notice .hub-icon { flex:none; }
+
+/* The campaign's banner picture fills the header (useHeroPicture), with the name over it; a theme's drawn art gives way. */
+.hub-head.has-picture { min-height:260px !important; align-items:flex-end !important; padding:28px 32px !important; border:0 !important; border-radius:var(--radius-lg, 8px); background-color:#16161a; color:#fff !important; }
+.hub-head.has-picture::before, .hub-head.has-picture::after { display:none !important; }
+.hub-head.has-picture .hub-title > p, .hub-head.has-picture .hub-title h1 { color:#fff !important; text-shadow:0 2px 14px rgb(0 0 0 / .5) !important; }
+.hub-head.has-picture .hub-title > p { color:rgb(255 255 255 / .86) !important; }
+.hub-head.has-picture .hub-button:not(.hub-button-primary), .hub-head.has-picture .tag-add, .hub-head.has-picture .hub-chip { background:rgb(10 10 12 / .5) !important; color:#fff !important; border-color:rgb(255 255 255 / .3) !important; backdrop-filter:blur(6px); }
+.hub-head.has-picture .hub-button:not(.hub-button-primary):hover { background:rgb(10 10 12 / .7) !important; }
+@media (max-width:720px) { .hub-head.has-picture { min-height:200px !important; padding:18px !important; } }
