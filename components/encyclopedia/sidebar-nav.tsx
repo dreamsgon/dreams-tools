@@ -10,6 +10,7 @@ import type { PageIcon } from "@/lib/encyclopedia/page-text";
 import {
   addCategory, addCategoryLink, addQuick, builtInSections, campaignOnlyNav, categoryItems, categoryKinds, defaultSidebar, maxCategories, maxQuickLinks,
   moveCategoryLink, moveNav, moveQuick, moveSection, navLabels, removeCategory, removeCategoryLink, removeQuick, renameCategory, sectionLabels,
+  addGroup, groupOf, maxGroups, removeGroup, renameGroup, sectionsUnder, setCategoryTypes,
   setCategoryKinds, setCategoryTags, showNav, showSection, toolIds, toolLabels, viewIds, viewLabels,
   type BuiltInSection, type CategoryKind, type NavId, type Sidebar, type SidebarCategory, type SidebarLink, type ToolId, type ViewId,
 } from "@/lib/encyclopedia/sidebar";
@@ -19,7 +20,7 @@ import {
  * Customize sidebar (lib/encyclopedia/sidebar.ts), and the Customize mode that arranges them.
  */
 
-type Page = { id: string; title: string; kind: string; campaignId: string | null; pageLook?: { icon?: PageIcon } };
+type Page = { id: string; title: string; kind: string; campaignId: string | null; templateId?: string; pageLook?: { icon?: PageIcon } };
 const viewIcons: Record<ViewId, typeof Goal> = { quests: Goal, codex: Library, relationships: Network, characters: Users, maps: MapIcon, calendar: CalendarDays, tables: Dices, templates: LayoutTemplate, look: Palette };
 const toolIcons: Record<ToolId, typeof Goal> = { form: ListChecks, share: Eye, items: Backpack, dice: Dices, log: ScrollText, search: Search, tags: Tag, ai: Sparkles, backups: Settings };
 const newLinkId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -35,12 +36,16 @@ export type SidebarNavProps = {
   selected: string | null;
   pages: Page[];
   kindLabels: Record<string, string>;
+  /** The GM's own entry types (templates) this campaign can use, for categories that list every page of a type. */
+  types?: { id: string; name: string }[];
   pageIcon: (kind: string) => ReactNode;
   onView: (v: ViewId) => void;
   onTool: (t: ToolId) => void;
   onPage: (id: string) => void;
   /** The built-in sections' bodies, or null where they don't show (Campaign Notes without a campaign). */
   builtIn: Record<BuiltInSection, ReactNode | null>;
+  /** A category's +: a new page that shows in it. */
+  onNewIn?: (c: SidebarCategory) => void;
   /** Section headings' extra controls (the shared tag, the new-note button). */
   headingExtra?: Partial<Record<BuiltInSection, ReactNode>>;
   isOpen: (key: string) => boolean;
@@ -66,6 +71,8 @@ export function SidebarNav(p: SidebarNavProps) {
   const { layout, campaign, member } = p;
   const nav = layout.nav.filter(x => x.on && (campaign || !campaignOnlyNav.includes(x.id)) && !(member && x.id === "tables"));
   const quick = campaign && !member ? layout.quick.filter(l => l.type !== "page" || p.pages.some(x => x.id === l.page)) : [];
+  // Headings the GM folded (or switched off) hide the sections under them.
+  const hiddenGroups = new Set(sectionsUnder(layout).filter(s => s.heading && (!s.on || !p.isOpen(`grp:${s.id}`))).map(s => s.id));
   return <>
     <div className="character-nav">
       {nav.map(x => { const Icon = viewIcons[x.id]; return <button key={x.id} className={`campaign-link ${p.view === x.id ? "active" : ""}`} onClick={() => p.onView(x.id)}><Icon size={16} /> {navLabels[x.id]}</button>; })}
@@ -77,7 +84,8 @@ export function SidebarNav(p: SidebarNavProps) {
       </div>}
     </div>
     <div className="navigation-trees">
-      {layout.sections.filter(s => s.on).map(s => {
+      {sectionsUnder(layout).filter(s => s.on && (s.heading || !s.group || !hiddenGroups.has(s.group.id))).map(s => {
+        if (s.heading && s.group) { const key = `grp:${s.group.id}`, open = p.isOpen(key); return <div key={s.id} className="sb-group-heading"><button className="section-toggle" aria-expanded={open} onClick={() => p.toggle(key)}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span>{s.group.name}</span></button></div>; }
         if (isBuiltIn(s.id)) {
           const body = p.builtIn[s.id];
           return body === null ? null : <BuiltIn key={s.id} id={s.id} open={p.isOpen(s.id)} toggle={() => p.toggle(s.id)} extra={p.headingExtra?.[s.id]}>{body}</BuiltIn>;
@@ -87,7 +95,7 @@ export function SidebarNav(p: SidebarNavProps) {
         const key = `cat:${c.id}`, open = p.isOpen(key);
         const items = categoryItems(c, p.pages, member || !tags ? undefined : tagsOf(tags)).filter(({ link }) => !(member && link.type === "tool") && !(link.type === "view" && member && link.view === "tables"));
         return <section key={c.id} className="navigation-section sb-category">
-          <div className="side-heading"><button className="section-toggle" aria-expanded={open} aria-controls={`sb-cat-${c.id}`} onClick={() => p.toggle(key)}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {c.name}</button></div>
+          <div className="side-heading"><button className="section-toggle" aria-expanded={open} aria-controls={`sb-cat-${c.id}`} onClick={() => p.toggle(key)}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {c.name}</button>{p.onNewIn && !member && <button className="add-note" aria-label={`New page in ${c.name}`} title={`New page in ${c.name}`} onClick={() => p.onNewIn!(c)}><Plus size={15} /></button>}</div>
           {open && <div id={`sb-cat-${c.id}`}>
             {items.map(({ link, page }) => <CategoryRow key={link.id} link={link} page={page} p={p} />)}
             {!items.length && <p className="side-empty">Nothing here yet. Add links with Customize sidebar.</p>}
@@ -137,6 +145,7 @@ function Customize(p: SidebarNavProps & { draft: Sidebar }) {
   const { draft, setDraft } = p;
   const edit = (f: (s: Sidebar) => Sidebar) => setDraft(d => d && f(d));
   const [dragging, setDragging] = useState<Dragging>(null), [picking, setPicking] = useState(false), [editing, setEditing] = useState<string | null>(null), [naming, setNaming] = useState<string | null>(null);
+  const [groupNaming, setGroupNaming] = useState<string | null>(null), [renamingGroup, setRenamingGroup] = useState<string | null>(null), [groupName, setGroupName] = useState("");
   const editingCat = draft.categories.find(c => c.id === editing);
 
   function rowDrag(list: "nav" | "quick" | "sections", id: string, index: (s: Sidebar) => number, move: (s: Sidebar, from: number, to: number) => Sidebar) {
@@ -180,18 +189,28 @@ function Customize(p: SidebarNavProps & { draft: Sidebar }) {
     <h3>Sections</h3>
     <ol className="sb-list">
       {draft.sections.map((s, i) => {
-        const cat = isBuiltIn(s.id) ? null : draft.categories.find(c => c.id === s.id);
-        const label = isBuiltIn(s.id) ? sectionLabels[s.id] : cat?.name ?? "";
+        const cat = isBuiltIn(s.id) ? null : draft.categories.find(c => c.id === s.id), group = groupOf(draft, s.id), under = !group && sectionsUnder(draft)[i]?.group;
+        const label = isBuiltIn(s.id) ? sectionLabels[s.id] : cat?.name ?? group?.name ?? "";
         const move = (by: number) => edit(d => moveSection(d, d.sections.findIndex(y => y.id === s.id), d.sections.findIndex(y => y.id === s.id) + by));
-        return <li key={s.id} className={`${s.on ? "" : "off"} ${dragging?.id === s.id ? "dragging" : ""}`} {...rowDrag("sections", s.id, d => d.sections.findIndex(y => y.id === s.id), moveSection)}>
+        return <li key={s.id} className={`${s.on ? "" : "off"} ${dragging?.id === s.id ? "dragging" : ""} ${group ? "sb-group-row" : under ? "sb-under" : ""}`} {...rowDrag("sections", s.id, d => d.sections.findIndex(y => y.id === s.id), moveSection)}>
           <button className="sb-grip" aria-label={`Move ${label}. Use the arrow keys.`} onKeyDown={keys(move)}><GripVertical size={14} /></button>
-          <span className="sb-label">{label}{cat && <small> · your category</small>}</span>
+          {group && renamingGroup === group.id
+            ? <form className="sb-name sb-group-name" onSubmit={e => { e.preventDefault(); edit(d => renameGroup(d, group.id, groupName)); setRenamingGroup(null); }}><input autoFocus value={groupName} maxLength={40} aria-label="Heading name" onChange={e => setGroupName(e.target.value)} onBlur={() => { edit(d => renameGroup(d, group.id, groupName)); setRenamingGroup(null); }} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setRenamingGroup(null); } }} /></form>
+            : <span className="sb-label">{label}{cat && <small> · your category</small>}{group && <small> · heading</small>}</span>}
           {cat && <button className="sb-eye" aria-label={`Edit ${label}`} title="Edit name and links" onClick={() => setEditing(cat.id)}><Pencil size={14} /></button>}
+          {group && renamingGroup !== group.id && <button className="sb-eye" aria-label={`Rename ${label}`} title="Rename" onClick={() => { setGroupName(group.name); setRenamingGroup(group.id); }}><Pencil size={14} /></button>}
+          {group && <button className="sb-eye" aria-label={`Remove the ${label} heading`} title="Remove the heading. Its sections stay." onClick={() => edit(d => removeGroup(d, group.id))}><X size={15} /></button>}
           <Arrows label={label} first={i === 0} last={i === draft.sections.length - 1} move={move} />
           <button className="sb-eye" aria-pressed={s.on} aria-label={s.on ? `Hide ${label}` : `Show ${label}`} title={s.on ? "Shown. Click to hide" : "Hidden. Click to show"} onClick={() => edit(d => showSection(d, s.id, !s.on))}>{s.on ? <Eye size={15} /> : <EyeOff size={15} />}</button>
         </li>;
       })}
     </ol>
+    {(draft.groups?.length ?? 0) < maxGroups && (groupNaming === null
+      ? <button className="text-button sb-add" onClick={() => setGroupNaming("")}><Plus size={14} /> Add a heading</button>
+      : <form className="sb-name" onSubmit={e => { e.preventDefault(); const made = addGroup(draft, groupNaming, newLinkId); if (made) setDraft(made.sidebar); setGroupNaming(null); }}>
+        <input autoFocus value={groupNaming} maxLength={40} placeholder="Heading name, such as The World" aria-label="New heading name" onChange={e => setGroupNaming(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setGroupNaming(null); } }} />
+        <button className="button small" type="submit" disabled={!groupNaming.trim()}>Add</button>
+      </form>)}
     {draft.categories.length < maxCategories && (naming === null
       ? <button className="text-button sb-add" onClick={() => setNaming("")}><Plus size={14} /> Add a category</button>
       : <form className="sb-name" onSubmit={e => { e.preventDefault(); const made = addCategory(draft, naming, newLinkId); if (made) { setDraft(made.sidebar); setEditing(made.id); } setNaming(null); }}>
@@ -200,10 +219,10 @@ function Customize(p: SidebarNavProps & { draft: Sidebar }) {
       </form>)}
 
     <div className="sb-custom-foot">
-      <button className="text-button" onClick={() => setDraft(defaultSidebar(draft.categories))}>Reset to the starting layout</button>
+      <button className="text-button" onClick={() => setDraft(defaultSidebar(draft.categories, draft.groups))}>Reset to the starting layout</button>
       <button className="text-button" onClick={() => p.setDraft(null)}>Cancel</button>
     </div>
-    <p className="sb-hint">Reset keeps your categories.</p>
+    <p className="sb-hint">A heading sits at the top level, like World Lore. Drag sections under it to group them; folding it folds them all. Reset keeps your categories and headings.</p>
 
     {/* Escape closes the dialog only, not the phone's page sheet around it. */}
     <div className="sb-dialogs" onKeyDown={e => { if (e.key === "Escape") e.stopPropagation(); }}>
@@ -282,6 +301,8 @@ function CategoryDialog({ cat, p, edit, onClose, onDelete }: { cat: SidebarCateg
       <LinkPicker pages={p.pages} kindLabels={p.kindLabels} pageIcon={p.pageIcon} has={l => cat.links.some(x => sameTarget(x, l))} onAdd={l => edit(s => addCategoryLink(s, cat.id, l, newLinkId))} />
       <h3>Also list every page that is a…</h3>
       <div className="sb-kinds">{categoryKinds.map(k => <label key={k}><input type="checkbox" checked={kinds.has(k)} onChange={e => { const next = new Set(kinds); if (e.target.checked) next.add(k); else next.delete(k); edit(s => setCategoryKinds(s, cat.id, [...next] as CategoryKind[])); }} />{p.kindLabels[k] ?? k}</label>)}</div>
+      {(p.types?.length ?? 0) > 0 && <><h3>Also list every page of your types…</h3>
+      <div className="sb-kinds">{p.types!.map(t => { const on = (cat.types ?? []).includes(t.id); return <label key={t.id}><input type="checkbox" checked={on} onChange={e => edit(s => setCategoryTypes(s, cat.id, e.target.checked ? [...(cat.types ?? []), t.id] : (cat.types ?? []).filter(x => x !== t.id)))} />{t.name}</label>; })}</div></>}
       <h3>Also list every page tagged…</h3>
       {tags.length ? <div className="sb-tags" role="group" aria-label="Tags">{tags.map(t => <label key={t.id} className={chosen.has(t.id) ? "on" : ""}><input type="checkbox" checked={chosen.has(t.id)} onChange={e => { const next = new Set(chosen); if (e.target.checked) next.add(t.id); else next.delete(t.id); edit(s => setCategoryTags(s, cat.id, [...next])); }} /><TagChip tag={t} small /></label>)}</div>
         : <p className="sb-hint">{tagLib ? "No Wiki tags yet. Tag pages with # on a page, then pick them here." : "Loading tags…"}</p>}

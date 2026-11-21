@@ -32,7 +32,7 @@ export function readTrack(v: FieldValue | undefined): { cur: number | null; max:
 /** Several choices, stored "Stealthy, Brave" in the template's order. */
 export const readMulti = (f: Pick<TemplateField, "options">, v: FieldValue | undefined) => { const have = new Set(String(v ?? "").split(",").map(x => x.trim()).filter(Boolean)); return (f.options ?? []).filter(o => have.has(o)); };
 const webLink = (text: string) => { try { const u = new URL(/^[a-z]+:\/\//i.test(text) ? text : `https://${text}`); return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null; } catch { return null; } };
-export const KIND_NAMES: Record<PageTemplate["kind"], string> = { note: "Note", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", quest: "Quest" };
+export const KIND_NAMES: Record<PageTemplate["kind"], string> = { page: "Page", note: "Note", other: "Other", character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session", quest: "Quest" };
 export type FieldValue = string | number;
 
 const field = (id: string, label: string, type: TemplateField["type"], visibility: TemplateField["visibility"] = "players", options?: string[]): TemplateField => ({ id, label, type, visibility, ...(options ? { options } : {}) });
@@ -143,18 +143,18 @@ export function pageFromTemplate(t: PageTemplate, opts: { id: string; title: str
   return {
     id: opts.id, worldId: opts.worldId, campaignId: opts.campaignId, parentId: opts.parentId, title: opts.title.trim().slice(0, 160), kind: t.kind,
     body: t.body, overviewVisibility: t.overviewVisibility ?? "gm", ...(t.tabs.length ? { tabs: t.tabs.map(x => ({ id: opts.newId(), title: x.title, body: "", visibility: x.visibility })) } : {}),
-    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {}, ...(t.stats ? { statLayout: copyStats(t.stats) } : {}) } } : {}),
+    templateId: t.id, ...(Object.keys(fields).length ? { fields } : {}), ...(t.icon ? { pageLook: { icon: t.icon } } : {}), ...(t.kind === "faction" && opts.org ? { org: opts.org } : {}), ...(t.kind === "character" && (t.layout || opts.profile) ? { profile: t.layout ? profileFromLayout(t.layout) : opts.profile } : {}), ...(t.kind === "character" && t.hiddenTabs?.length ? { hiddenTabs: hideOrder(t.hiddenTabs) as HideableTab[] } : {}), ...(t.kind === "character" ? { character: { role: "npc", group: "", tags: [], location: "", faction: "", status: "active", statsVisibility: "gm", statsByCampaign: {}, ...(t.stats ? { statLayout: copyStats(t.stats) } : {}) } } : {}),
     updatedAt: opts.now ?? new Date().toISOString(),
   };
 }
 
 /** Save any page as a template: its kind, tab names, text and (from its own template) fields. */
 export function templateFromPage(s: Workspace, e: Entry, name: string, newId: () => string, now = new Date().toISOString()): PageTemplate {
-  const from = templateOf(s, e), kind = (["note", "character", "place", "faction", "lore", "session", "quest"] as const).find(k => k === e.kind) ?? "note";
+  const from = templateOf(s, e), kind = (["page", "note", "other", "character", "place", "faction", "lore", "session", "quest"] as const).find(k => k === e.kind) ?? "page";
   return {
     id: newId(), name: name.trim().slice(0, 160) || e.title, kind, fields: from ? from.fields.map(f => ({ ...f })) : [],
     tabs: (e.tabs ?? []).slice(0, 20).map(t => ({ title: t.title, visibility: t.visibility })), body: e.body.slice(0, 20000),
-    parentId: e.parentId, overviewVisibility: e.overviewVisibility ?? "gm", updatedAt: now,
+    parentId: e.parentId, overviewVisibility: e.overviewVisibility ?? "gm", updatedAt: now, ...(e.pageLook?.icon ? { icon: e.pageLook.icon } : {}),
     ...(kind === "character" && e.hiddenTabs?.length ? { hiddenTabs: [...e.hiddenTabs] } : {}),
     ...(kind === "character" && e.profile ? { layout: profileLayoutOf(e.profile) } : {}),
     ...(kind === "character" && e.character?.statLayout ? { stats: copyStats(e.character.statLayout) } : {}),

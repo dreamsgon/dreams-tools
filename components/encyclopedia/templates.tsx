@@ -10,6 +10,9 @@ import { compareEntries, folderPath, newId, templateKinds, type Entry, type Hide
 import { applyTemplate, characterStarters, cleanValue, readMulti, readScore, readTrack, deleteTemplate, FIELD_TYPES, HIDEABLE_TABS, infoRows, KIND_NAMES, saveTemplate, starterTemplates, templateFromPage, templateOf, templatesFor, templateUses, type FieldValue } from "@/lib/encyclopedia/templates";
 import { defaultCharacterLayout, maxFacts, profileBlockInfo, type CharacterLayout } from "@/lib/encyclopedia/character-profile";
 import { ToolDialog } from "./tool-dialog";
+import { PAGE_ICONS } from "@/lib/encyclopedia/page-text";
+import { PAGE_ICON_GLYPHS } from "./page-icons";
+import { typeIcon } from "./entry-types";
 import { confirmDialog } from "../confirm-dialog";
 
 type Change = (s: Workspace | ((latest: Workspace) => Workspace)) => boolean | void;
@@ -60,16 +63,11 @@ export function InfoBox({ entry, data, update, onOpen }: { entry: Entry; data: W
   </div>;
 }
 
-/** New entry: Blank or a template, and the template's fields to fill in now. */
-export function TemplateChoice({ templates, chosen, onChoose, values, setValues, data, worldId }: { templates: PageTemplate[]; chosen: string; onChoose: (t: PageTemplate | null) => void; values: Record<string, FieldValue>; setValues: (v: Record<string, FieldValue>) => void; data: Workspace; worldId: string }) {
-  const t = templates.find(x => x.id === chosen);
-  return <>
-    <div className="template-choice" role="radiogroup" aria-label="Template">
-      <button type="button" role="radio" aria-checked={!t} className={!t ? "on" : ""} onClick={() => onChoose(null)}>Blank</button>
-      {templates.map(x => <button type="button" key={x.id} role="radio" aria-checked={t?.id === x.id} className={t?.id === x.id ? "on" : ""} onClick={() => onChoose(x)}>{x.name}</button>)}
-    </div>
-    {t && t.fields.length > 0 && <div className="template-fields">{t.fields.filter(f => f.type !== "textarea").slice(0, 6).map(f => <label key={f.id}>{f.label}<FieldInput f={f} value={values[f.id]} data={data} worldId={worldId} onChange={v => { const next = { ...values }; if (v === undefined) delete next[f.id]; else next[f.id] = v; setValues(next); }}/></label>)}</div>}
-  </>;
+/** New entry, with one of the GM's own types picked: its info box fields to fill in now. */
+export function TemplateFields({ template: t, values, setValues, data, worldId }: { template: PageTemplate; values: Record<string, FieldValue>; setValues: (v: Record<string, FieldValue>) => void; data: Workspace; worldId: string }) {
+  const shown = t.fields.filter(f => f.type !== "textarea").slice(0, 6);
+  if (!shown.length) return null;
+  return <div className="template-fields">{shown.map(f => <label key={f.id}>{f.label}<FieldInput f={f} value={values[f.id]} data={data} worldId={worldId} onChange={v => { const next = { ...values }; if (v === undefined) delete next[f.id]; else next[f.id] = v; setValues(next); }}/></label>)}</div>;
 }
 
 /** Who a template is for: one campaign, or every campaign in the world. */
@@ -152,10 +150,10 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
     <div className="templates-list">
       <div className="templates-list-head"><h1>Templates</h1><button className="button small" onClick={() => add([{ id: newId(), name: "New template", kind: "note", fields: [], tabs: [], body: "", overviewVisibility: "gm", updatedAt: new Date().toISOString(), ...(campaign ? { campaignId: campaign.id } : {}) }])}><Plus size={14}/> New</button></div>
       {templates.map((x, i) => <Fragment key={x.id}>{(i === 0 || !!templates[i - 1].campaignId !== !!x.campaignId) && <p className="templates-group">{x.campaignId ? campaign?.name ?? "This campaign" : `Whole world · ${world?.name ?? ""}`}</p>}
-        <button className={x.id === t?.id ? "active" : ""} onClick={() => { setOpenId(x.id); setDraft(null); setNote(""); }}><LayoutTemplate size={15}/><span>{x.name}<em>{KIND_NAMES[x.kind]}</em></span><small>{templateUses(data, x.id)}</small></button></Fragment>)}
+        <button className={x.id === t?.id ? "active" : ""} onClick={() => { setOpenId(x.id); setDraft(null); setNote(""); }}>{(() => { const G = typeIcon(x); return <G size={15}/>; })()}<span>{x.name}<em>{KIND_NAMES[x.kind]}</em></span><small>{templateUses(data, x.id)}</small></button></Fragment>)}
       {templates.length > 0 && !templates.some(x => x.kind === "character") && <button className="text-button templates-add-chars" onClick={() => add(characterStarters(newId).map(x => campaign ? { ...x, campaignId: campaign.id } : x))}><Plus size={13}/> Add character templates</button>}
       {!templates.length && <div className="templates-empty"><p>Templates give new pages ready-made info box fields, tabs and starting text.</p><button className="button primary" onClick={() => add([...characterStarters(newId).map(x => campaign ? { ...x, campaignId: campaign.id } : x), ...starterTemplates(newId)])}><Plus size={14}/> Add starter templates</button><small>Settlement, Tavern, Faction, Item and Session. Change them to suit your game.</small></div>}
-      {templates.length > 0 && <p className="aside-hint">Or open any page and choose Save as template.</p>}
+      {templates.length > 0 && <p className="aside-hint">Each template is also an entry type in New entry. Or open any page and choose Save as template.</p>}
     </div>
     {t && <div className="template-editor">
       <div className="template-editor-head"><div><input className="template-name" aria-label="Template name" maxLength={160} value={t.name} onChange={e => edit({ name: e.target.value })}/><small>Used by {uses} page{uses === 1 ? "" : "s"} · {t.campaignId ? `only ${campaign?.name ?? "one campaign"}` : `every campaign in ${world.name}`}</small></div>
@@ -163,10 +161,12 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
           <button className="button small" onClick={async () => { if (!await confirmDialog({ title: `Delete ${t.name}?`, message: uses ? `The ${uses} page${uses === 1 ? "" : "s"} made from it keep their text and tabs, but lose their info box.` : "No pages use it.", confirm: "Delete template" })) return; if (change(s => deleteTemplate(s, worldId, t.id)) !== false) { setDraft(null); setOpenId(""); } }}><Trash2 size={14}/> Delete</button>
           <button className="button small primary" disabled={!dirty || !t.name.trim()} onClick={save}>Save changes</button></div></div>
       {note && !dirty && <p className="info-note" role="status">{note}</p>}
+      <div className="template-icon-row"><span className="template-layout-label">Icon in New entry and the sidebar</span>
+        <div className="page-icon-grid template-icons" role="radiogroup" aria-label="Icon"><button type="button" role="radio" aria-checked={!t.icon} className={!t.icon ? "on" : ""} onClick={() => edit({ icon: undefined })} title="The usual icon for its kind">Usual</button>{PAGE_ICONS.map(id => { const G = PAGE_ICON_GLYPHS[id]; return <button key={id} type="button" role="radio" aria-checked={t.icon === id} aria-label={id} title={id} className={t.icon === id ? "on" : ""} onClick={() => edit({ icon: id })}><G size={15} aria-hidden="true"/></button>; })}</div></div>
       <div className="template-settings">
         <label>Who can use it<select value={t.campaignId ? "campaign" : "world"} onChange={e => { const { campaignId: _c, ...rest } = t; void _c; setDraft(e.target.value === "campaign" && campaign ? { ...rest, campaignId: campaign.id } : rest); }}>
           <option value="campaign" disabled={!campaign && !t.campaignId}>{campaign ? `This campaign (${campaign.name})` : "One campaign"}</option><option value="world">Every campaign in {world.name}</option></select></label>
-        <label>Kind of page<select value={t.kind} onChange={e => edit({ kind: e.target.value as PageTemplate["kind"] })}>{templateKinds.map(k => <option key={k} value={k}>{KIND_NAMES[k]}</option>)}</select></label>
+        <label>Works like<select value={t.kind} onChange={e => edit({ kind: e.target.value as PageTemplate["kind"] })}>{templateKinds.map(k => <option key={k} value={k}>{KIND_NAMES[k]}</option>)}</select></label>
         <label>New pages go inside<select value={t.parentId ?? ""} onChange={e => edit({ parentId: e.target.value || null })}><option value="">Wherever you are</option>{parents.map(p => <option key={p.id} value={p.id}>{[folderPath(data, p), p.title].filter(Boolean).join(" › ")}</option>)}</select></label>
         <label className="template-check"><input type="checkbox" checked={t.overviewVisibility === "players"} onChange={e => edit({ overviewVisibility: e.target.checked ? "players" : "gm" })}/> Players can see new pages’ Overview</label>
       </div>

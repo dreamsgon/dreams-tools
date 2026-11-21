@@ -6,6 +6,8 @@ import { playerPins } from './profile-pins.ts';
 import {calendarSchema,publicCalendar} from './calendar-model.ts';
 import {mapSchema,playerMap,imageIdSchema} from "./map-model.ts";
 import { z } from "zod";
+import { ENTRY_KINDS } from './entry-kinds.ts';
+import { PAGE_ICONS } from './page-text.ts';
 import {playerInline} from './inline.ts';
 import {infoRows,templateOf} from './templates.ts';
 import {frontPageSchema,resolveFrontPage} from './front-page.ts';
@@ -101,7 +103,7 @@ export const templateFieldSchema = z.object({
 /** Ready-made character tabs a GM can hide from a page (and a template can leave out). A hidden tab is GM only too. */
 export const hideableTabIds = ["statblock","stats","features","inventory","spells"] as const;
 export type HideableTab = typeof hideableTabIds[number];
-export const templateKinds = ["note","character","place","faction","lore","session","quest"] as const;
+export const templateKinds = ["page","note","other","character","place","faction","lore","session","quest"] as const;
 export const pageTemplateSchema = z.object({
   id, name, kind:z.enum(templateKinds), fields:z.array(templateFieldSchema).max(30), tabs:z.array(z.object({title:name, visibility:visibilitySchema})).max(20),
   body:z.string().max(20000), parentId:id.nullable().optional(), overviewVisibility:visibilitySchema.optional(), updatedAt:z.string().datetime(),
@@ -112,6 +114,8 @@ export const pageTemplateSchema = z.object({
   layout:characterLayoutSchema.optional(),
   // Optional (added later): for a character, which of the campaign's stats are on and their order (like character.statLayout).
   stats:z.object({order:z.array(id).max(500).optional(),off:z.array(id).max(500).optional()}).optional(),
+  // Optional (added later): the icon pages made from it get, and the template shows as an entry type of its own in New entry.
+  icon:z.enum(PAGE_ICONS).optional(),
 });
 export type PageTemplate=z.infer<typeof pageTemplateSchema>;
 export type TemplateField=z.infer<typeof templateFieldSchema>;
@@ -173,7 +177,7 @@ export const pictureSchema = z.object({
 export type Picture = z.infer<typeof pictureSchema>;
 export const entrySchema = z.object({
     id, worldId: id, campaignId: id.nullable(), parentId: id.nullable(), title: name,
-    kind: z.enum(["folder", "note", "character", "place", "faction", "lore", "session", "tasks", "map", "quest", "vehicle", "store", "galaxy", "sector", "system"]),
+    kind: z.enum(ENTRY_KINDS),
     order:z.number().finite().optional(), body: z.string().max(100000), overviewVisibility:visibilitySchema.optional(), tabs:z.array(tabSchema).max(30).optional(), character:characterSchema.optional(), mapData:mapSchema.optional(), picture:pictureSchema.optional(), quest:questSchema.optional(), codex:codexSchema.optional(),
     // Optional (added later): on an organization (faction) page, its Profile tab.
     org:orgSchema.optional(),
