@@ -21,17 +21,17 @@ export function StatblockText({title,text,detect=true}:{title:string;text:string
 }
 
 export function StatblockView({entry,onChange}:{entry:Entry;onChange:(c:CharacterData)=>void}){
- const c=entry.character??defaultCharacter(),text=c.statblock??"",detect=c.statblockRolls!==false;
+ const c=entry.character??defaultCharacter(),text=c.statblock??"",detect=c.statblockRolls!==false,shared=c.statblockVisibility==="players";
  const [draft,setDraft]=useState<string|null>(null),[auto,setAuto]=useState(detect);
  const editing=draft!==null,found=statblockRolls(draft??text,editing?auto:detect);
  if(editing)return <div className="statblock-editor">
   <h2>Paste a statblock</h2>
-  <p className="aside-hint">Paste from any book, site or system. It stays exactly as you pasted it, and rolls are found and made clickable. Only you see it.</p>
+  <p className="aside-hint">Paste from any book, site or system. It stays exactly as you pasted it, and rolls are found and made clickable. {shared?"Players see it, and can roll from it.":"Only you see it until you switch it to Players."}</p>
   <textarea className="editor statblock-input" aria-label="Statblock" autoFocus maxLength={50000} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={"Mire hound\nLarge beast, unaligned\nArmor Class 13\nHit Points 37 (5d10 + 10)\n…"}/>
   <label className="check-row"><input type="checkbox" checked={auto} onChange={e=>setAuto(e.target.checked)}/> Find rolls automatically (turn off if a statblock reads oddly; [[1d20+5]] always works)</label>
   <div className="statblock-found"><span className="eyebrow">Found {found.length} roll{found.length===1?"":"s"}</span><div>{found.slice(0,14).map((s,i)=><RollChip key={i} title={entry.title} formula={s.formula!} label={[s.context,s.text.trim()].filter(Boolean).join(" ")}/>)}{found.length>14&&<span className="aside-hint">+{found.length-14} more</span>}</div></div>
   <div className="button-row"><button className="button primary" onClick={()=>{onChange({...c,statblock:draft.trim()?draft:undefined,statblockRolls:auto?undefined:false});setDraft(null);}}>Save statblock</button><button className="button" onClick={()=>{setDraft(null);setAuto(detect);}}>Cancel</button></div>
  </div>;
- if(!text)return <div className="character-empty"><h3>Paste any statblock.</h3><p>From a book, a website or your own notes. Rolls like “+5 to hit”, “2d8 + 3” and “Stealth +6” become clickable.</p><button className="button primary" onClick={()=>setDraft("")}><ClipboardPaste size={15}/> Paste a statblock</button></div>;
- return <div className="statblock-view"><div className="statblock-bar"><span>Pasted statblock · {found.length} roll{found.length===1?"":"s"}{detect?" found for you":""} · only you see this</span><button className="text-button" onClick={()=>{setDraft(text);setAuto(detect);}}><Pencil size={13}/> Edit statblock</button></div><StatblockText title={entry.title} text={text} detect={detect}/></div>;
+ if(!text)return <div className="character-empty"><h3>Paste any statblock.</h3><p>From a book, a website or your own notes. Rolls like “+5 to hit”, “2d8 + 3” and “Stealth +6” become clickable. Switch the tab to Players for a familiar, summon or companion the party runs.</p><button className="button primary" onClick={()=>setDraft("")}><ClipboardPaste size={15}/> Paste a statblock</button></div>;
+ return <div className="statblock-view"><div className="statblock-bar"><span>Pasted statblock · {found.length} roll{found.length===1?"":"s"}{detect?" found for you":""} · {shared?"players see this":"only you see this"}</span><button className="text-button" onClick={()=>{setDraft(text);setAuto(detect);}}><Pencil size={13}/> Edit statblock</button></div><StatblockText title={entry.title} text={text} detect={detect}/></div>;
 }

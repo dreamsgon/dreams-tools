@@ -84,7 +84,7 @@ function gmCards(entry:Entry,profile:Profile,campaign?:Campaign):Card[]{
    return {...base,...featureCard(f),gmOnly};
   }
   const line=pinnedLine(c.statblock,p.ref);
-  return line?{...base,title:line,statblock:line,gmOnly:'Only you see the statblock.'}:{...base,title:'A statblock line that was edited away',missing:true};
+  return line?{...base,title:line,statblock:line,gmOnly:c.statblockVisibility==='players'&&!entry.hiddenTabs?.includes('statblock')?undefined:'Players don’t see this: the Statblock tab is GM only.'}:{...base,title:'A statblock line that was edited away',missing:true};
  });
 }
 
@@ -95,6 +95,7 @@ function playerCards(pins:PlayerPin[],settings?:PinSettings):Card[]{
   if(p.kind==='feature')return {...head,kind:'feature',source:'Features',...featureCard(p.feature),tab:undefined};
   if(p.kind==='stat'){const s=p.stat,box=s.look==='score';return {...head,kind:'stat',source:pinKindNames.stat,title:s.label,rolls:s.rolls.flatMap(r=>r.dice?[{name:r.name,dice:r.dice}]:[]),...(box?{big:s.worked===undefined?'—':signed(s.worked),score:shown(s.value)}:s.type==='none'?{}:{value:`${s.type==='textarea'?String(s.value??'').slice(0,140)||'—':shown(s.value)}${s.worked!==undefined?` (${signed(s.worked)})`:''}`}),...(s.note?{sub:s.note}:{})};}
   if(p.kind==='item'){const i=p.item;return {...head,kind:'item',source:'Inventory',title:i.qty>1?`${i.name} ×${i.qty}`:i.name,rolls:itemRolls(i.rolls),sub:itemSub(i,settings)||undefined};}
+  if(p.kind==='statblock')return {...head,kind:'statblock',source:pinKindNames.statblock,title:p.line,statblock:p.line,rolls:[]};
   const s=p.spell;return {...head,kind:'spell',source:settings?.spells.tab??'Spells',title:s.name,rolls:itemRolls(s.rolls),sub:spellSub(s,settings)||undefined};
  });
 }

@@ -6,8 +6,8 @@ import type { StatRow } from './stat-rolls.ts';
 /*
  * Quick find on a character's Profile tab: things the GM pins from the Statblock, Stats & Skills, Inventory, Spells and Features tabs, so
  * the profile works as a summary. A pin stores only what it points at; the value is always read from its tab. Players
- * get a pin only when they already get the thing it points at (a shared tab, not marked GM only). Statblock lines are
- * GM only. Everything here is pure.
+ * get a pin only when they already get the thing it points at (a shared tab, not marked GM only). Statblock lines only
+ * when the GM shares the statblock. Everything here is pure.
  */
 
 export type PinKind = ProfilePin['kind'];
@@ -37,16 +37,16 @@ export function movePin(pins: readonly ProfilePin[], id: string, dir: -1 | 1): P
   return out;
 }
 
-export type PlayerPin = { id: string; size?: CellSize } & ({ kind: 'stat'; stat: StatRow } | { kind: 'item'; item: PlayerItem } | { kind: 'spell'; spell: PlayerSpell } | { kind: 'feature'; feature: PlayerFeature });
+export type PlayerPin = { id: string; size?: CellSize } & ({ kind: 'stat'; stat: StatRow } | { kind: 'item'; item: PlayerItem } | { kind: 'spell'; spell: PlayerSpell } | { kind: 'feature'; feature: PlayerFeature } | { kind: 'statblock'; line: string });
 
 /** Sets a pin's width; S is the default and isn't stored. */
 export const sizePin = (pins: readonly ProfilePin[], id: string, size: CellSize): ProfilePin[] => pins.map(p => { if (p.id !== id) return p; const { size: _s, ...rest } = p; void _s; return size === 's' ? rest : { ...rest, size }; });
 
 /**
  * The pins players may see, in order, built only from the player copies of the stats, items and spells (already left
- * out when their tab isn't shared or they are GM only). Statblock pins and pins whose target players don't get are dropped.
+ * out when their tab isn't shared or they are GM only). Statblock pins need the shared statblock; pins whose target players don't get are dropped.
  */
-export function playerPins(pins: readonly ProfilePin[] | undefined, shown: { stats?: readonly StatRow[]; items?: readonly PlayerItem[]; spells?: readonly PlayerSpell[]; features?: readonly PlayerFeature[] }): PlayerPin[] {
+export function playerPins(pins: readonly ProfilePin[] | undefined, shown: { stats?: readonly StatRow[]; items?: readonly PlayerItem[]; spells?: readonly PlayerSpell[]; features?: readonly PlayerFeature[]; statblock?: string }): PlayerPin[] {
   const out: PlayerPin[] = [];
   for (const p of pins ?? []) {
     const head = { id: p.id, ...(p.size ? { size: p.size } : {}) };
@@ -54,6 +54,7 @@ export function playerPins(pins: readonly ProfilePin[] | undefined, shown: { sta
     else if (p.kind === 'item') { const item = shown.items?.find(x => x.id === p.ref); if (item) out.push({ ...head, kind: 'item', item }); }
     else if (p.kind === 'spell') { const spell = shown.spells?.find(x => x.id === p.ref); if (spell) out.push({ ...head, kind: 'spell', spell }); }
     else if (p.kind === 'feature') { const feature = shown.features?.find(x => x.id === p.ref); if (feature) out.push({ ...head, kind: 'feature', feature }); }
+    else if (p.kind === 'statblock') { const line = pinnedLine(shown.statblock, p.ref); if (line) out.push({ ...head, kind: 'statblock', line }); }
   }
   return out;
 }

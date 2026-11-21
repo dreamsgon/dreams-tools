@@ -302,6 +302,7 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 @media(max-width:720px){.roll-result{left:16px;right:16px;bottom:72px;width:auto}}
 /* Rolls part B: statblocks, sheet rolls, Discord */
 .statblock-view{max-width:680px}
+.player-statblock{margin-top:18px}
 .statblock-bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:12px;color:var(--muted)}
 .statblock-bar .text-button{margin:0 0 0 auto}
 .statblock{font-family:var(--font-reading);font-size:16px;line-height:1.6;color:var(--ink)}
