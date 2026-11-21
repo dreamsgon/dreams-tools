@@ -18,18 +18,18 @@ export type Biome = {
 export type TreeKind = "round" | "pine" | "snowpine" | "acacia" | "jungle" | "willow" | "cactus" | "dead" | "twisted" | "mushroom";
 
 export const biomes: Record<BiomeId, Biome> = {
-  temperate: { name: "Temperate", hint: "Fields and broadleaf woods", heat: 2, flat: "#a9c57b", forest: "#8fb466", tree: "#3e7a3a", mount: "#8f8a76", treeKind: "round" },
-  boreal: { name: "Boreal", hint: "Pine forest and cool lakes", heat: 1, flat: "#97b083", forest: "#80a077", tree: "#2c5d45", mount: "#7f8580", treeKind: "pine" },
-  tundra: { name: "Tundra", hint: "Moss, wind and thin trees", heat: 0.45, flat: "#c6cdb8", forest: "#b4c0ac", tree: "#4f7262", mount: "#9aa2a3", treeKind: "snowpine" },
-  glacier: { name: "Glacier", hint: "Ice sheets and snowfields", heat: 0, flat: "#e8eff2", forest: "#dbe6ea", tree: "#7f9eab", mount: "#b9c9d1", treeKind: "snowpine" },
-  desert: { name: "Desert", hint: "Dunes and dry stone", heat: 4, flat: "#ecd69e", forest: "#e2cc8e", tree: "#6f8f45", mount: "#c39a62", treeKind: "cactus" },
-  savanna: { name: "Savanna", hint: "A sea of grass, lone trees", heat: 3.2, flat: "#d9c37b", forest: "#c8b86c", tree: "#6e7537", mount: "#a68a5c", treeKind: "acacia" },
-  jungle: { name: "Jungle", hint: "Dense, wet canopy", heat: 3.5, flat: "#8cbd5d", forest: "#6aa449", tree: "#255f2a", mount: "#6f7d5a", treeKind: "jungle" },
-  swamp: { name: "Swamp", hint: "Bogs, reeds and willows", heat: 2.4, flat: "#9db088", forest: "#87a077", tree: "#46613f", mount: "#7a816c", treeKind: "willow" },
-  badlands: { name: "Badlands", hint: "Mesas and red rock", heat: 3.7, flat: "#d49c6b", forest: "#c98f60", tree: "#6f4a30", mount: "#a7653e", treeKind: "dead" },
-  volcanic: { name: "Volcanic", hint: "Ash fields and lava", heat: 3, flat: "#6c6461", forest: "#615a57", tree: "#2e2927", mount: "#4d4644", treeKind: "dead", special: true },
-  blighted: { name: "Blighted", hint: "Cursed, twisted land", heat: 2, flat: "#b8a0bf", forest: "#a58bac", tree: "#55345f", mount: "#7b6880", treeKind: "twisted", special: true },
-  fey: { name: "Fey wilds", hint: "Glowing, strange woods", heat: 2, flat: "#a8dcc3", forest: "#8fcab0", tree: "#2f7f6c", mount: "#7aa597", treeKind: "mushroom", special: true },
+  temperate: { name: "Temperate", hint: "Fields and broadleaf woods", heat: 2, flat: "#91c076", forest: "#77ab65", tree: "#3e7a3a", mount: "#8f8a76", treeKind: "round" },
+  boreal: { name: "Boreal", hint: "Pine forest and cool lakes", heat: 1, flat: "#5f8978", forest: "#517c6d", tree: "#15352b", mount: "#7f8580", treeKind: "pine" },
+  tundra: { name: "Tundra", hint: "Moss, wind and thin trees", heat: 0.45, flat: "#c2c6aa", forest: "#abb095", tree: "#4f7262", mount: "#9aa2a3", treeKind: "snowpine" },
+  glacier: { name: "Glacier", hint: "Ice sheets and snowfields", heat: 0, flat: "#e8eff2", forest: "#d1d8db", tree: "#7f9eab", mount: "#b9c9d1", treeKind: "snowpine" },
+  desert: { name: "Desert", hint: "Dunes and dry stone", heat: 4, flat: "#feeab3", forest: "#e4d49d", tree: "#6f8f45", mount: "#c39a62", treeKind: "cactus" },
+  savanna: { name: "Savanna", hint: "A sea of grass, lone trees", heat: 3.2, flat: "#efcd85", forest: "#d5b86f", tree: "#6e7537", mount: "#a68a5c", treeKind: "acacia" },
+  jungle: { name: "Jungle", hint: "Dense, wet canopy", heat: 3.5, flat: "#428446", forest: "#2f7c40", tree: "#0f3512", mount: "#6f7d5a", treeKind: "jungle" },
+  swamp: { name: "Swamp", hint: "Bogs, reeds and willows", heat: 2.4, flat: "#88a98c", forest: "#719479", tree: "#46613f", mount: "#7a816c", treeKind: "willow" },
+  badlands: { name: "Badlands", hint: "Mesas and red rock", heat: 3.7, flat: "#c6885b", forest: "#b67b4b", tree: "#6f4a30", mount: "#a7653e", treeKind: "dead" },
+  volcanic: { name: "Volcanic", hint: "Ash fields and lava", heat: 3, flat: "#6c6461", forest: "#58514d", tree: "#2e2927", mount: "#4d4644", treeKind: "dead", special: true },
+  blighted: { name: "Blighted", hint: "Cursed, twisted land", heat: 2, flat: "#a689a3", forest: "#9c7e97", tree: "#3f2447", mount: "#7b6880", treeKind: "twisted", special: true },
+  fey: { name: "Fey wilds", hint: "Glowing, strange woods", heat: 2, flat: "#aee4cd", forest: "#96cdb9", tree: "#2f7f6c", mount: "#7aa597", treeKind: "mushroom", special: true },
 };
 
 export const terrainIds = ["deep", "shallow", "lake", "beach", "flat", "forest", "hills", "mountain", "peak", "marsh"] as const;
