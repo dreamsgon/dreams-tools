@@ -1626,3 +1626,5 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .info-score small{padding:0 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-variant-numeric:tabular-nums}
 input[aria-invalid=true]{border-color:var(--danger,#c0392b)}
 @media(min-width:901px){.template-fields-table>div{grid-template-columns:minmax(120px,1.3fr) 160px minmax(120px,1.4fr) 120px 32px}}
+/* A hex map that takes the arrow keys shows a clear ring while it has keyboard focus. */
+.map-canvas:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}

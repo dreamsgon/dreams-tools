@@ -176,3 +176,4 @@
 .planet-kid>span{display:flex;flex-direction:column;flex:1;min-width:0}.planet-kid small{font-size:11.5px;color:var(--muted)}
 @media (max-width:900px){.planet-cols{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:600px){.planet-hero-over{bottom:46px;gap:10px}.planet-hero-over strong{font-size:18px}.planet-hero-cap{font-size:11px}}
+.sector-canvas:focus-visible{outline:3px solid #8fe3d6;outline-offset:-3px}

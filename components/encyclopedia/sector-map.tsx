@@ -2,9 +2,12 @@
 /*
  * A sector's hex map: a space backdrop, pointy-topped hexes in offset rows with their numbers, lanes as dashed lines,
  * charted systems as glowing stars and rumours as dashed rings. Tapping a hex calls onHex. One hex is 5 light years.
+ * With onHex the map also takes the keyboard: the arrow keys move a ring between hexes (its hex is read out) and
+ * Enter or Space picks it.
  * The star and backdrop drawing is shared with the sector dialog's preview.
  */
-import {useEffect,useRef} from 'react';
+import {useEffect,useRef,useState} from 'react';
+import {gridStep} from '@/lib/encyclopedia/grid-keys';
 import {galaxyRandom} from '@/lib/encyclopedia/galaxies';
 import {hexLabel,starInfo,type Backdrop,type Hex,type Sector,type StarClass} from '@/lib/encyclopedia/sectors';
 
@@ -38,9 +41,16 @@ export function drawStar(g:CanvasRenderingContext2D,star:StarClass,x:number,y:nu
  g.fillStyle=gr;g.beginPath();g.arc(x,y,rad*2.2,0,Math.PI*2);g.fill();
 }
 
+/** A hex read out: its number, then the system in it (charted or rumoured, and its star) or empty space. */
+function hexSpoken(sector:Sector,h:Hex){
+ const sy=sector.systems.find(s=>s.c===h.c&&s.r===h.r);
+ return `Hex ${hexLabel(h)}, ${sy?(sy.status==='rumour'?`${sy.name}, rumoured`:`${sy.name}, class ${sy.star} star`):'empty space'}`;
+}
 type Props={sector:Sector;selected?:Hex|null;from?:string|null;lanes?:boolean;onHex?:(h:Hex)=>void;className?:string;label:string};
 export function SectorMap({sector,selected,from,lanes=true,onHex,className,label}:Props){
  const canvas=useRef<HTMLCanvasElement>(null),geo=useRef<ReturnType<typeof hexGeometry>|null>(null);
+ const [cursor,setCursor]=useState<Hex|null>(null),[focused,setFocused]=useState(false);
+ const ring=focused&&onHex?cursor??selected??null:null,ringC=ring?.c??-1,ringR=ring?.r??-1;
  useEffect(()=>{
   const c=canvas.current;if(!c)return;
   const paint=()=>{const box=c.getBoundingClientRect();if(box.width<4||box.height<4)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=box.width,h=box.height;
@@ -51,6 +61,7 @@ export function SectorMap({sector,selected,from,lanes=true,onHex,className,label
    for(let r=0;r<sector.rows;r++)for(let cc=0;cc<sector.cols;cc++){const [x,y]=G.center(cc,r);hexPath(x,y,G.s*0.98);
     const on=selected&&selected.c===cc&&selected.r===r;
     if(on){g.fillStyle='rgba(143,227,214,.18)';g.fill();g.strokeStyle='#8fe3d6';g.lineWidth=2;}else{g.strokeStyle='rgba(200,220,240,.16)';g.lineWidth=1;}g.stroke();
+    if(ringC===cc&&ringR===r){hexPath(x,y,G.s*0.86);g.strokeStyle='#ffd37a';g.lineWidth=2.5;g.setLineDash([]);g.stroke();}
     if(G.s>17){g.fillStyle='rgba(200,220,240,.32)';g.font=`500 ${Math.max(7,Math.min(9,G.s*0.28))}px ui-monospace,monospace`;g.textAlign='center';g.fillText(hexLabel({c:cc,r}),x,y-G.s*0.6);}}
    const byId=new Map(sector.systems.map(s=>[s.id,s]));
    if(lanes)for(const l of sector.lanes){const A=byId.get(l.a),B=byId.get(l.b);if(!A||!B)continue;const p=G.center(A.c,A.r),q=G.center(B.c,B.r);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.strokeStyle='rgba(143,227,214,.55)';g.lineWidth=1.5;g.setLineDash([5,4]);g.stroke();g.setLineDash([]);}
@@ -67,7 +78,17 @@ export function SectorMap({sector,selected,from,lanes=true,onHex,className,label
   let last=`${c.clientWidth}x${c.clientHeight}`;
   const watch=new ResizeObserver(()=>{const now=`${c.clientWidth}x${c.clientHeight}`;if(now!==last){last=now;paint();}});
   watch.observe(c);return ()=>watch.disconnect();
- },[sector,selected,from,lanes]);
- const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{if(!onHex||!geo.current)return;const box=e.currentTarget.getBoundingClientRect();const h=geo.current.at(e.clientX-box.left,e.clientY-box.top);if(h)onHex(h);};
- return <canvas ref={canvas} className={className} role="img" aria-label={label} onClick={click} style={onHex?{cursor:'pointer'}:undefined}/>;
+ },[sector,selected,from,lanes,ringC,ringR]);
+ const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{if(!onHex||!geo.current)return;const box=e.currentTarget.getBoundingClientRect();const h=geo.current.at(e.clientX-box.left,e.clientY-box.top);if(h){setCursor(h);onHex(h);}};
+ if(!onHex)return <canvas ref={canvas} className={className} role="img" aria-label={label}/>;
+ const start=():Hex=>{if(selected)return selected;const first=sector.systems.reduce<Hex|null>((a,b)=>!a||b.r<a.r||(b.r===a.r&&b.c<a.c)?{c:b.c,r:b.r}:a,null);return first??{c:Math.floor(sector.cols/2),r:Math.floor(sector.rows/2)};};
+ const key=(e:React.KeyboardEvent<HTMLCanvasElement>)=>{if(e.altKey||e.ctrlKey||e.metaKey)return;const at=cursor??start();
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();onHex(at);setCursor(at);return;}
+  const next=gridStep(e.key,at,sector.cols,sector.rows);if(!next)return;e.preventDefault();setFocused(true);setCursor(next);};
+ const spoken=ring?hexSpoken(sector,ring):'';
+ return <>
+  <canvas ref={canvas} className={className} role="application" aria-roledescription="hex map" aria-label={`${label}. Use the arrow keys to move between hexes, and Enter to open one.`} tabIndex={0}
+   onClick={click} onKeyDown={key} onFocus={e=>{if(!e.currentTarget.matches(':focus-visible'))return;setFocused(true);if(!cursor)setCursor(start());}} onPointerDown={()=>setFocused(false)} onBlur={()=>setFocused(false)} style={{cursor:'pointer'}}/>
+  <span className="sr-only" role="status" aria-live="polite">{spoken}</span>
+ </>;
 }

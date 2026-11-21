@@ -483,7 +483,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
     <h3><Lightbulb size={15}/> Light tool</h3>
     <p className="creator-empty">Pick a kind of light, then click the map. Each light gives bright light near it and dim light further out, like a torch in your rules. Walls and closed doors stop it; openings and windows let it through.</p>
     {kindPicker(lightKindId,setLightKindId)}
-    <p className="muted">Torches, braziers, candles, lanterns, chandeliers, orbs, crystals, campfires and fireplaces from the stamp library give light too. Select one to change its light or put it out.</p>
+    <p className="muted">Light stamps (torches, braziers, candles, campfires and more) give light too. Select one to change its light or put it out.</p>
   </>;
   const stampPanel=single?.type==="stamp"&&<>
     <div className="creator-actions">

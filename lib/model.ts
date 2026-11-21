@@ -226,7 +226,7 @@ export const hexLayerSchema = z.object({
   rivers: z.array(z.array(z.number().int().min(0).max(7999)).min(2).max(400)).max(40).default([]),
   options: z.record(z.string().max(40), z.union([z.string().max(80), finite, z.boolean()])).refine(o => Object.keys(o).length <= 80, "Too many hex map options").default({}),
   // How it is drawn. Maps saved before these existed keep the painted look with outlines.
-  look: z.enum(["painted", "flat", "ink"]).default("painted"),
+  look: z.enum(["painted", "flat", "atlas", "ink"]).default("painted"),
   lines: z.boolean().default(true),
   numbers: z.boolean().default(false),
   legend: z.enum(["none", "nw", "ne", "sw", "se"]).default("none"),

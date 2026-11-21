@@ -5,6 +5,7 @@ import {terrainLayers,terrainGlyphs,scaleBarLength,smoothLine,type TerrainGlyph}
 import {MapWeather} from './map-weather';
 import type {Calendar} from '@/lib/encyclopedia/calendar-model';
 import {MapViewport} from './map-viewport';
+import {gridStep} from '@/lib/encyclopedia/grid-keys';
 import {legendItems,mapLookOf,mapLooks,type MapLook} from '@/lib/encyclopedia/map-looks';
 import {imageSrc} from './member-view';
 import {iconMarkup,mapIcon} from '@/lib/encyclopedia/map-icons';
@@ -130,7 +131,7 @@ function MapDecor({map,width,height,style,paint,iconUrls}:{map:MapData;width:num
  </g>;
 }
 export type PaintBrush={radius:number;onStroke:(x:number,y:number,start:boolean)=>void;onEnd:()=>void};
-export function MapCanvas({map,imageUrl,iconUrls,onCell,onPlace,onPin,selectedPin,thumbnail=false,fogMode='gm',onStrokeStart,fogEditing=false,paint:livePaint,brush:paintBrush,show,selectedItem,onItem,draft,selectedCell,route,tints}:{tints?:Record<string,string>;map:MapData;imageUrl?:string;iconUrls?:Record<string,string>;onCell?:(i:number)=>void;onPlace?:(x:number,y:number)=>void;onPin?:(id:string)=>void;selectedPin?:string;thumbnail?:boolean;fogMode?:'gm'|'player';onStrokeStart?:()=>void;fogEditing?:boolean;paint?:MapPaint;brush?:PaintBrush;show?:{art?:boolean;pins?:boolean;routes?:boolean;paths?:boolean;labels?:boolean};selectedItem?:string;onItem?:(id:string)=>void;draft?:MapPath|null;selectedCell?:number;route?:number[]}){
+export function MapCanvas({map,imageUrl,iconUrls,onCell,onPlace,onPin,selectedPin,thumbnail=false,fogMode='gm',onStrokeStart,fogEditing=false,paint:livePaint,brush:paintBrush,show,selectedItem,onItem,draft,selectedCell,route,tints,onStep}:{onStep?:(i:number)=>void;tints?:Record<string,string>;map:MapData;imageUrl?:string;iconUrls?:Record<string,string>;onCell?:(i:number)=>void;onPlace?:(x:number,y:number)=>void;onPin?:(id:string)=>void;selectedPin?:string;thumbnail?:boolean;fogMode?:'gm'|'player';onStrokeStart?:()=>void;fogEditing?:boolean;paint?:MapPaint;brush?:PaintBrush;show?:{art?:boolean;pins?:boolean;routes?:boolean;paths?:boolean;labels?:boolean};selectedItem?:string;onItem?:(id:string)=>void;draft?:MapPath|null;selectedCell?:number;route?:number[]}){
  const maskId=useId().replace(/:/g,''),drawing=useRef(false),lastCell=useRef(-1),[hover,setHover]=useState<{x:number;y:number}|null>(null);
  const terrainPaint=livePaint??cachedPaint(map);
  const showPins=show?.pins!==false,showRoutes=show?.routes!==false;
@@ -140,7 +141,10 @@ export function MapCanvas({map,imageUrl,iconUrls,onCell,onPlace,onPin,selectedPi
  const point=(e:React.PointerEvent<SVGSVGElement>)=>{const r=e.currentTarget.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
  const style=mapLookOf(map),look=style.look;
  const fog=map.fog?.enabled,all=map.fog?.revealed.length===count,soft=fogMode==='player'&&!thumbnail,painted=map.source==='generated'&&!!terrainPaint;
- return <svg className="map-canvas" viewBox={`0 0 ${size.width} ${size.height}`} style={{aspectRatio:`${size.width}/${size.height}`}} aria-label={thumbnail?'Map preview':'Map canvas'} role={onCell||onPlace||(onPin&&map.pins.length)?'group':'img'} onClick={click}
+ return <svg className="map-canvas" viewBox={`0 0 ${size.width} ${size.height}`} style={{aspectRatio:`${size.width}/${size.height}`}} aria-label={thumbnail?'Map preview':onStep?`Map canvas. Use the arrow keys to move between ${map.grid==='hex'?'hexes':'squares'}.`:'Map canvas'} role={onCell||onPlace||onStep||(onPin&&map.pins.length)?'group':'img'} onClick={click}
+ tabIndex={onStep?0:undefined} onKeyDown={onStep?e=>{if(e.target!==e.currentTarget||e.altKey||e.ctrlKey||e.metaKey)return;const at=(selectedCell??-1)>=0?selectedCell!:Math.floor(map.rows/2)*map.columns+Math.floor(map.columns/2);
+  const next=(selectedCell??-1)<0&&e.key.startsWith('Arrow')?{c:at%map.columns,r:Math.floor(at/map.columns)}:gridStep(e.key,{c:at%map.columns,r:Math.floor(at/map.columns)},map.columns,map.rows);if(!next)return;
+  e.preventDefault();e.stopPropagation();const i=next.r*map.columns+next.c;onStep(i);const svg=e.currentTarget;requestAnimationFrame(()=>svg.querySelector(`[data-cell="${i}"]`)?.scrollIntoView({block:'nearest',inline:'nearest'}));}:undefined}
  onPointerDown={paintBrush?e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();drawing.current=true;e.currentTarget.setPointerCapture(e.pointerId);const p=point(e);paintBrush.onStroke(p.x,p.y,true);}:onCell?e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();drawing.current=true;lastCell.current=-1;onStrokeStart?.();e.currentTarget.setPointerCapture(e.pointerId);brush(e);}:undefined}
  onPointerMove={paintBrush?e=>{const p=point(e);setHover(p);if(drawing.current)paintBrush.onStroke(p.x,p.y,false);}:onCell?e=>{if(drawing.current)brush(e);}:undefined}
  onPointerLeave={paintBrush?()=>setHover(null):undefined}
@@ -151,7 +155,7 @@ export function MapCanvas({map,imageUrl,iconUrls,onCell,onPlace,onPin,selectedPi
  {map.source==='image'&&imageUrl&&<image href={imageUrl} width={size.width} height={size.height} preserveAspectRatio="none"/>}
  {painted&&<TerrainArt paint={terrainPaint!} look={look} uid={maskId} width={size.width} height={size.height} glyphs={!thumbnail&&show?.art!==false}/>}
  {(map.grid!=='none'||onCell||(map.coordinates&&!thumbnail))&&Array.from({length:count},(_,i)=>{const cell=cellShape(map,i),terrain=map.tiles[i]??1,coord=`${String(i%map.columns+1).padStart(2,'0')}.${String(Math.floor(i/map.columns)+1).padStart(2,'0')}`,name=terrains[terrain].name;
- return <g key={i} role={onCell?'button':undefined} tabIndex={onCell?0:undefined} aria-label={onCell?`${map.grid==='hex'?'Hex':'Cell'} ${coord} ${fogEditing?(map.fog?.revealed.includes(i)?'Revealed':'Hidden'):name}`:undefined} aria-pressed={fogEditing?map.fog?.revealed.includes(i):undefined} onClick={onCell?e=>e.stopPropagation():undefined} onKeyDown={onCell?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onStrokeStart?.();onCell(i);}}:undefined}>
+ return <g key={i} data-cell={i} role={onCell?'button':undefined} tabIndex={onCell?0:undefined} aria-label={onCell?`${map.grid==='hex'?'Hex':'Cell'} ${coord} ${fogEditing?(map.fog?.revealed.includes(i)?'Revealed':'Hidden'):name}`:undefined} aria-pressed={fogEditing?map.fog?.revealed.includes(i):undefined} onClick={onCell?e=>e.stopPropagation():undefined} onKeyDown={onCell?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onStrokeStart?.();onCell(i);}}:undefined}>
  <polygon points={cell.points} fill="transparent" stroke="#253f3b" strokeOpacity={map.grid==='none'?(onCell?.16:0):.28} strokeWidth={Math.max(size.width/1200,.6)}/>
  {map.coordinates&&!thumbnail&&<text x={cell.x} y={cell.y+cell.h*.36} textAnchor="middle" fontSize={Math.min(cell.w*.18,12)} fill="#283e38" opacity={.7} pointerEvents="none">{coord}</text>}
  </g>;})}

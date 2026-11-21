@@ -37,7 +37,7 @@ export function readHexSettingsCode(code: string): { options: HexMapOptions; loo
       if (k in defaultHexLook && typeof value === typeof defaultHexLook[k]) (look as Record<string, unknown>)[k] = value;
     } else options[key] = value;
   }
-  if (!["painted", "flat", "ink"].includes(look.look)) look.look = defaultHexLook.look;
+  if (!["painted", "flat", "atlas", "ink"].includes(look.look)) look.look = defaultHexLook.look;
   if (!["none", "nw", "ne", "sw", "se"].includes(look.legend)) look.legend = defaultHexLook.legend;
   // Settings a code leaves out are today's defaults, not the older maps' ones.
   return { options: normalizeHexOptions(options), look };

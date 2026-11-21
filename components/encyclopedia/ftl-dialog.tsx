@@ -24,9 +24,9 @@ export function FtlDialog({galaxy,change,onClose}:{galaxy?:Entry;change:(s:Works
  const edit=(id:string,patch:Partial<Drive>)=>setDrives(ds=>ds.map(d=>d.id===id?{...d,...patch}:d));
  const add=()=>setDrives(ds=>{let n=ds.length+1;while(ds.some(d=>d.id===`drive${n}`))n++;return [...ds,newDrive(n)];});
  const done=()=>{if(galaxy)change(w=>({...w,entries:w.entries.map(e=>e.id===galaxy.id&&e.galaxy?{...e,galaxy:{...e.galaxy,drives:drives.map(d=>({...d,name:d.name.trim()||'Drive'}))},updatedAt:new Date().toISOString()}:e)}));onClose();};
- if(!galaxy)return <ToolDialog title="FTL drives" onClose={onClose}><p className="aside-hint">FTL drives belong to a galaxy, so every sector and system in it travels the same way. Put this page inside a galaxy page (or inside a sector that is in one) to set them.</p><div className="button-row galaxy-dialog-actions"><button type="button" className="button" onClick={onClose}>Close</button></div></ToolDialog>;
+ if(!galaxy)return <ToolDialog title="FTL drives" onClose={onClose}><p className="aside-hint">FTL drives belong to a galaxy, so everything in it travels the same way. Move this page into a galaxy page, or into a sector inside one, to set them.</p><div className="button-row galaxy-dialog-actions"><button type="button" className="button" onClick={onClose}>Close</button></div></ToolDialog>;
  return <ToolDialog title={`FTL drives in ${galaxy.title}`} wide onClose={onClose}>
-  <p className="aside-hint">Light speed is always there. Add the drives your setting uses: travel times on hex maps and survey charts include them.</p>
+  <p className="aside-hint">Light speed is always included. Add your setting&apos;s drives to see their travel times on hex maps and survey charts.</p>
   <div className="ftl-list">{drives.map(d=><fieldset key={d.id} className="ftl-drive">
    <div className="ftl-row"><label className="world-field ftl-name">Name<input value={d.name} maxLength={60} onChange={e=>edit(d.id,{name:e.target.value})}/></label>
     <button type="button" className="icon-button" aria-label={`Remove ${d.name||'drive'}`} onClick={()=>setDrives(ds=>ds.filter(x=>x.id!==d.id))}><Trash2 size={15}/></button></div>

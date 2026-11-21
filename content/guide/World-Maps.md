@@ -71,7 +71,7 @@ The **Zoom in (Z)** tool frames a spot on a painted map and makes a closer **Con
 
 On a map with a hex or square grid:
 
-- Select a cell to **name it, write notes** (GM only, or shared once explored; **Roll a hook** adds what is there and a twist, by terrain) and pick an **encounter table** from your Random tables library (or a default for the map) with a **Roll** button.
+- Select a cell (or focus the map and use the **arrow keys**, Home and End; the cell is read out) to **name it, write notes** (GM only, or shared once explored; **Roll a hook** adds what is there and a twist, by terrain) and pick an **encounter table** from your Random tables library (or a default for the map) with a **Roll** button.
 - **Put the party on the map.** Select another cell to see distance, travel time at a **slow, normal or fast** pace (18, 24, 30 miles a day) and extra time for forest, hills, marsh, mountains and snow. Roads ignore terrain; open water blocks the way.
 - **Move party here** walks the hex line, explores the cells passed and around the destination, stamps when noted hexes were explored, advances the **campaign calendar** with weather forecasts, and rolls encounter checks (1 in 8, 6 or 4 per hex). **Make camp** starts the next day.
 - A place on a world map has **New area map**, which makes a 20 × 14 crawl of 6-mile hexes named after it and linked back.
