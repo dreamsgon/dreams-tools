@@ -82,7 +82,8 @@ export function hexFill(b: BiomeId, t: TerrainId, i = 0, look: HexLook["look"] =
   if (t === "beach") return shade("#ead9a8", j);
   if (t === "mountain" || t === "peak") return shade(look === "flat" ? B.mount : B.flat, j - 0.06);
   if (t === "hills") return shade(B.flat, j - 0.05);
-  if (t === "forest") return look === "flat" ? shade(shade(B.tree, 0.35), j) : shade(B.forest, j);
+  // Flat colours has no tree symbols, so a forest keeps its biome's colour, only darker.
+  if (t === "forest") return shade(B.forest, look === "flat" ? j - 0.15 : j);
   if (t === "marsh") return shade(B.flat, j - 0.04);
   return shade(B.flat, j);
 }
