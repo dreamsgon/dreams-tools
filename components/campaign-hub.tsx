@@ -193,7 +193,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       else if (notice === "forum") { setForumError(""); setForumDialog(true); }
       else window.location.assign(L.startNotes);
     }} />}
-    <div className={`hub-head ${hero.className}`} style={hero.style}>
+    <div ref={hero.ref} className={`hub-head ${hero.className}`} style={hero.style}>
       <div className="hub-title">
         <p className="hub-kicker">Campaign{e?.worldName ? ` · ${e.worldName}` : ""}</p>
         <h1>{row.name}</h1>

@@ -5,6 +5,7 @@ import { countLabel } from "@/lib/plural";
 import { scenesInOrder } from "@/lib/scene-order";
 import type { Scene, Workspace } from "@/lib/model";
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
+import { useCampaignHero } from "./campaign-hero";
 
 type Kind = Scene["mapType"] | "all";
 const KINDS: [Kind, string][] = [["all", "All"], ["encounter", "Encounters"], ["area", "Areas"], ["world", "World"]];
@@ -13,13 +14,16 @@ const KINDS: [Kind, string][] = [["all", "All"], ["encounter", "Encounters"], ["
  * The Scene Picker: a campaign's scenes as a picture grid, grouped by folder, with Continue at the top.
  * It is where Maptable opens. The campaign bar above it names the campaign, so the page itself just says "Scenes".
  */
-export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, unfiled }: {
+export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, unfiled, heroKey }: {
   workspace: Workspace; campaignId: string | null; lastSceneId: string | null;
+  /** The campaign's forum key, for its banner picture behind the heading. */
+  heroKey?: string | null;
   open: (sceneId: string) => void; addScenes: () => void;
   /** Maps not in a campaign, offered at the bottom of a campaign's picker when there are any. */
   unfiled?: { count: number; open: () => void } | null;
 }) {
   const [query, setQuery] = useState(""), [kind, setKind] = useState<Kind>("all");
+  const hero = useCampaignHero(campaignId ? heroKey : null);
   const all = useMemo(() => scenesInOrder(w, campaignId), [w, campaignId]);
   const q = query.trim().toLowerCase();
   const shown = all.filter(i => (kind === "all" || i.scene.mapType === kind) && (!q || `${i.scene.name} ${i.folders.map(f => f.name).join(" ")}`.toLowerCase().includes(q)));
@@ -32,7 +36,7 @@ export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, 
   const last = all.find(i => i.scene.id === lastSceneId)?.scene ?? all[0]?.scene;
   const image = (s: Scene) => s.mapId ? w.assets.find(a => a.id === s.mapId)?.src : undefined;
   return <div className="campaign-scenes">
-    <div className="campaign-scenes-head">
+    <div ref={hero.ref} className={`campaign-scenes-head ${hero.className}`} style={hero.style}>
       <div>{!campaignId && <small>Maps not in a campaign</small>}<h1>Scenes</h1></div>
       <button className="primary" onClick={addScenes}><Plus size={16} aria-hidden="true" />Add scenes</button>
     </div>

@@ -3,6 +3,8 @@
  * The forum's pieces. Class names follow the campaign theme contract (the Campaign Skin Studio prototype), so a
  * campaign theme can restyle them later: .board-head, .category, .forum, .location, .topic-row, .post, .mini…
  */
+import { useBoxSize } from '../banner-frame';
+import { bannerBackground } from '@/lib/banner-frame';
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Archive, ArrowUp, Crown, UserRound, Bot, Dices, Flag, EyeOff, Hourglass, Swords, Lock, Pin, MessageSquare, ScrollText, Trash2, Users, X } from 'lucide-react';
 import type { ProseBlock } from '@/lib/encyclopedia/player-prose';
@@ -225,11 +227,14 @@ function Waiting({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
   </div>;
 }
 
-/** The banner the GM sets: title, tagline, campaign picture and links. */
-/** The banner. `plain`: the campaign theme draws it in its own colours, without the picture. */
-export function Banner({ frame, k, go, plain = false }: { frame: Frame; k: string; go: Go; plain?: boolean }) {
-  const src = usePicture(k, plain ? null : frame.banner?.imageId);
-  return <header className={`board-head${src ? ' has-art' : ''}`} style={src ? { '--banner': `url("${src}")`, '--banner-y': `${(frame.banner!.y * 100).toFixed(1)}%` } as CSSProperties : undefined}>
+/**
+ * The banner the GM sets: title, tagline, campaign picture and links. The campaign's banner picture shows whenever there
+ * is one and Forum settings uses it; a theme's own art and colours are for when there isn't.
+ */
+export function Banner({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  const src = usePicture(k, frame.banner?.imageId), [ref, box] = useBoxSize<HTMLElement>();
+  const bg = frame.banner ? bannerBackground(frame.banner, box) : null, [bx, by] = bg?.position.split(' ') ?? [];
+  return <header ref={ref} className={`board-head${src ? ' has-art' : ''}`} style={src && bg ? { '--banner': `url("${src}")`, '--banner-x': bx, '--banner-y': by, '--banner-size': bg.size } as CSSProperties : undefined}>
     <div className="board-head-text">
       <h1 className="board-title"><Link k={k} go={go} to={{ view: 'index' }}>{frame.settings.title}</Link></h1>
       {frame.settings.tagline && <p className="board-tagline">{frame.settings.tagline}</p>}

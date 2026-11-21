@@ -342,7 +342,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:hover { color: #ffd60a; border-bottom-color: #ffd60a; }
 .board-nav a:focus-visible { outline: 2px solid #ffd60a; outline-offset: -4px; }
 /* With a banner picture: the picture as the cover's art, the same title and caption over it. */
-.board-head.has-art { background: linear-gradient(180deg, rgba(20, 20, 20, .1), rgba(20, 20, 20, .45)), var(--banner) center var(--banner-y, 50%) / cover no-repeat; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
+.board-head.has-art { background: linear-gradient(180deg, rgba(20, 20, 20, .1), rgba(20, 20, 20, .45)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; --head-shadow: none; --head-nav: transparent; --head-line: transparent; }
 .board-head.has-art .board-head-text { padding: 70px 30px 50px; }
 
 /* Headings: slanted caption boxes, yellow, blue and pink in turn. */

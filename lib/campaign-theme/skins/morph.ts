@@ -453,7 +453,7 @@ a { text-underline-offset: 3px; }
 .board-nav a:focus-visible { outline: 2px solid var(--mo-1); outline-offset: -4px; }
 /* With a banner picture: the picture under a soft wash on the left, the same chrome title over it. */
 .board-head.has-art {
-  background: linear-gradient(90deg, rgba(11, 8, 32, .7) 0%, rgba(11, 8, 32, .3) 55%, rgba(11, 8, 32, .05) 100%), var(--banner) center var(--banner-y, 50%) / cover no-repeat;
+  background: linear-gradient(90deg, rgba(11, 8, 32, .7) 0%, rgba(11, 8, 32, .3) 55%, rgba(11, 8, 32, .05) 100%), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat;
   --head-ink: #fff3e3; --head-title: #ffffff; --head-shadow: none; --head-nav: #0b0820; --head-line: transparent;
 }
 .board-head.has-art .board-head-text { justify-content: center; padding: 56px 40px 60px; }

@@ -11,6 +11,7 @@ import type { Look } from '@/lib/encyclopedia/look';
 import { usePictureSrc } from '../encyclopedia/character-picture';
 import { bannerChanged } from '../campaign-theme-entry';
 import { forumCall } from './forum-api';
+import { BannerFramer } from '../banner-frame';
 
 type Banner = NonNullable<Look['banner']>;
 const TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -39,12 +40,9 @@ export function BannerTab({ k, banner, setBanner, owner, onSaved }: { k: string;
     <h3>Banner picture</h3>
     <p className="muted small">One picture for the whole campaign: across the top of the Wiki’s front page, the dashboard and the player site, and behind the forum’s title when Forum settings uses it.</p>
     {banner ? <>
-      <button type="button" className="cp-banner-pick" title="Click to choose what stays in view" aria-label="Choose what stays in view: click the part of the picture to keep" disabled={!!busy}
-        onClick={e => { const r = e.currentTarget.getBoundingClientRect(); void send({ y: Math.round(Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) * 100) / 100 }, 'Saving…'); }}
-        style={{ backgroundImage: src ? `url("${src}")` : undefined, backgroundPosition: `center ${Math.round(banner.y * 100)}%` }}>
-        <span className="cp-banner-line" style={{ top: `${banner.y * 100}%` }} aria-hidden="true" />
-      </button>
-      <p className="muted small">Wide pictures are cropped to a strip. Click the part that should stay in view.</p>
+      <BannerFramer banner={banner} src={src} aspect={4} busy={busy === 'Saving…'} buttons={{ save: 'f-btn small', plain: 'f-btn ghost small' }}
+        onSave={b => void send({ y: b.y, x: b.x ?? .5, zoom: b.zoom ?? 1 }, 'Saving…')} />
+      <p className="muted small">Drag the picture to choose what stays in view, and zoom in to show less of it. Each page crops it to its own strip, keeping that part in view.</p>
       <div className="cp-banner-actions">
         <button className="f-btn ghost small" disabled={!!busy} onClick={() => file.current?.click()}><ImagePlus size={14} aria-hidden="true" /> Replace</button>
         <button className="f-btn ghost small danger" disabled={!!busy} onClick={() => void send({ remove: true }, 'Removing…')}><Trash2 size={14} aria-hidden="true" /> Remove</button>

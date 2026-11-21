@@ -78,7 +78,7 @@ body { background: #ece5d6; }
 
 /* Banner. */
 .board-head { position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 200px; border: 1px solid var(--line); background: var(--head-bg, radial-gradient(ellipse at 50% 0%, #4a3a1a 0%, #241b0e 55%, #15100a 100%)); color: var(--head-ink, #f4ecd8); text-align: center; overflow: hidden; }
-.board-head.has-art { background: linear-gradient(rgba(10, 8, 4, .25), rgba(10, 8, 4, .7)), var(--banner) center var(--banner-y, 50%) / cover no-repeat; }
+.board-head.has-art { background: linear-gradient(rgba(10, 8, 4, .25), rgba(10, 8, 4, .7)), var(--banner) var(--banner-x, 50%) var(--banner-y, 50%) / var(--banner-size, cover) no-repeat; }
 .board-head-text { padding: 34px 20px 18px; }
 .board-title { margin: 0; font: 900 44px/1.05 var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
 .board-title a { color: var(--head-title, #f0d68c); text-decoration: none; text-shadow: var(--head-shadow, 0 2px 14px rgba(0, 0, 0, .7)); }

@@ -10,7 +10,8 @@ import {PAGE_ICONS,TEXT_KEYS,TEXT_OPTIONS,cleanPageLook,proseLook,resolveText,ty
 import type {Entry,Workspace} from '@/lib/encyclopedia/world-model';
 import {memberRef} from './member-view';
 import {uploadMapImage} from './map-transfer';
-import {LookBanner} from './look-section';
+import {BannerFramer} from '../banner-frame';
+import {usePictureSrc} from './character-picture';
 import {PAGE_ICON_GLYPHS} from './page-icons';
 
 const worldText=(data:Workspace,entry:Entry)=>data.worlds.find(w=>w.id===entry.worldId)?.text;
@@ -80,8 +81,8 @@ export function PageStyle({entry,update}:{entry:Entry;update:(p:Partial<Entry>)=
   <button type="button" className="button small" aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(!open)}><LayoutPanelTop size={15} aria-hidden="true"/>Page<ChevronDown size={12} aria-hidden="true"/></button>
   {open&&<div className="write-pop wide look-pop page-style-pop" role="dialog" aria-label="How this page looks">
    <span className="write-pop-label">Banner</span>
-   {look.banner?<><div className="look-banner-edit page-banner-edit" title="Click to choose what stays in view" onClick={e=>{const r=e.currentTarget.getBoundingClientRect();set({banner:{...look.banner!,y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}});}}><LookBanner look={{banner:look.banner}}/><span className="look-banner-dot" style={{top:`${look.banner.y*100}%`}}/></div>
-    <p className="write-pop-hint">Click the picture to choose what stays in view.</p>
+   {look.banner?<><PageBannerFramer banner={look.banner} onSave={banner=>set({banner})}/>
+    <p className="write-pop-hint">Drag the picture to choose what stays in view; zoom in to show less of it.</p>
     <div className="button-row"><button type="button" className="button small" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={14} aria-hidden="true"/> {busy?'Uploading…':'Replace'}</button><button type="button" className="button small" onClick={()=>set({banner:undefined})}><Trash2 size={14} aria-hidden="true"/> Remove</button></div></>
    :<button type="button" className="look-banner-empty" disabled={busy} onClick={()=>file.current?.click()}><ImagePlus size={18} aria-hidden="true"/><span><strong>{busy?'Uploading…':'Add a banner'}</strong><small>A wide picture across the top of the page. PNG, JPEG or WebP up to 8 MB.</small></span></button>}
    <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f);}}/>
@@ -94,4 +95,10 @@ export function PageStyle({entry,update}:{entry:Entry;update:(p:Partial<Entry>)=
    <p className="write-pop-hint">Only this page, not the pages inside it. Players see its banner, icon and info box side too.</p>
   </div>}
  </div>;
+}
+
+type PageBanner=NonNullable<NonNullable<Entry['pageLook']>['banner']>;
+function PageBannerFramer({banner,onSave}:{banner:PageBanner;onSave:(b:PageBanner)=>void}){
+ const {src}=usePictureSrc(banner.imageId);
+ return <BannerFramer banner={banner} src={src} aspect={3.8} onSave={onSave}/>;
 }

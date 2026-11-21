@@ -5,6 +5,7 @@
  * own text size in Appearance still scales everything. Pure: world-model.ts keeps the schemas on pages and worlds.
  */
 import { z } from 'zod';
+import { BANNER_ZOOM_MAX } from '../banner-frame.ts';
 
 export const TEXT_OPTIONS = {
   size: { name: 'Size', values: [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']] },
@@ -83,7 +84,7 @@ export const PAGE_ICONS = [
 export type PageIcon = (typeof PAGE_ICONS)[number];
 export const pageLookSchema = z.object({
   /** A picture across the top of the page; `y` is which part of it shows, 0 the top and 1 the bottom. */
-  banner: z.object({ imageId: z.string().uuid(), width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000), y: z.number().min(0).max(1) }).optional(),
+  banner: z.object({ imageId: z.string().uuid(), width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000), y: z.number().min(0).max(1), x: z.number().min(0).max(1).optional(), zoom: z.number().min(1).max(BANNER_ZOOM_MAX).optional() }).optional(),
   icon: z.enum(PAGE_ICONS).optional(),
   /** The side info boxes sit on when they don't say (`::: infobox left` or `right` still wins). */
   box: z.enum(['left', 'right']).optional(),

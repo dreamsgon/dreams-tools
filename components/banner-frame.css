@@ -1,0 +1,27 @@
+/* Framing a banner picture (banner-frame.tsx): a draggable preview, the zoom, Save. Reads the page's own tokens. */
+.banner-framer { display: grid; gap: 8px; }
+.banner-framer-box {
+  position: relative; width: 100%; border: 1px solid var(--line); border-radius: var(--radius, 6px); background-color: var(--raised, #222);
+  cursor: grab; touch-action: none; user-select: none; overflow: hidden;
+}
+.banner-framer-box.is-dragging { cursor: grabbing; }
+.banner-framer-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.banner-framer-hint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px; background: rgb(10 10 12 / .62); color: #fff; font-size: 12px; font-weight: 500; pointer-events: none; white-space: nowrap;
+}
+.banner-framer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.banner-framer-reset { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 6px; border: 0; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.banner-framer-reset:hover:not(:disabled) { color: var(--ink); }
+.banner-framer-reset:disabled { opacity: .45; cursor: default; }
+.banner-framer-save { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.banner-zoom { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.banner-zoom button {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 1px solid var(--line);
+  border-radius: var(--radius, 6px); background: var(--panel, transparent); color: var(--ink); cursor: pointer;
+}
+.banner-zoom button:disabled { opacity: .4; cursor: default; }
+.banner-zoom input[type="range"] { width: 130px; min-width: 0; accent-color: var(--accent); margin: 0; padding: 0; border: 0; background: none; box-shadow: none; min-height: 0; }
+.banner-zoom output { min-width: 40px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+@media (max-width: 720px) { .banner-zoom button { width: 44px; height: 44px; } .banner-zoom input[type="range"] { width: 110px; } }

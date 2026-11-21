@@ -7,16 +7,17 @@
  * (campaign.look.banner), the same one Look and the Admin CP's Banner tab set. A live campaign theme draws its own art
  * in the hero; a banner picture takes its place.
  */
-import { useRef, useState, type ComponentType, type DragEvent } from "react";
-import { ArrowUpRight, ChevronRight, Flag, Goal, ImagePlus, Map as MapIcon, Palette, Plus, ScrollText, Settings, Trash2, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type DragEvent } from "react";
+import { ArrowUpRight, Check, ChevronRight, Flag, Goal, ImagePlus, Map as MapIcon, Move, Palette, Plus, RotateCcw, ScrollText, Settings, Trash2, Users } from "lucide-react";
 import type { Campaign, Entry, Workspace, World } from "@/lib/encyclopedia/world-model";
 import type { Look } from "@/lib/encyclopedia/look";
 import { column, nextStep, questProgress } from "@/lib/encyclopedia/quests";
-import { usePictureSrc } from "./character-picture";
 import { uploadMapImage } from "./map-transfer";
 import { usePopover } from "./page-look";
 import { openThemeEditor } from "../campaign-theme-dock";
 import { useHeroPicture } from "./look-section";
+import { BannerZoom, useBannerDrag } from "../banner-frame";
+import { cleanFraming } from "@/lib/banner-frame";
 import "./campaign-home.css";
 
 type Kind = Entry["kind"];
@@ -125,8 +126,14 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
 function Hero({ world, campaign, linkedWorlds, gm, onEdit, onUnlink, setLook }: {
   world: World; campaign: Campaign | null; linkedWorlds: World[]; gm: boolean; onEdit: () => void; onUnlink: (id: string) => void; setLook: (look: Look | undefined) => void;
 }) {
-  const look = campaign?.look, banner = look?.banner, { src } = usePictureSrc(banner?.imageId), hero = useHeroPicture(look);
+  const look = campaign?.look, banner = look?.banner;
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [dropping, setDropping] = useState(false);
+  // Reposition: the hero itself becomes the frame. Drag the picture, zoom it, then Save or Cancel.
+  const [framing, setFraming] = useState<NonNullable<Look["banner"]> | null>(null);
+  const hero = useHeroPicture(look, undefined, framing), drag = useBannerDrag(framing, hero.box, setFraming);
+  const heroEl = useRef<HTMLDivElement | null>(null), heroRef = hero.ref;
+  const setHeroEl = useCallback((el: HTMLDivElement | null) => { heroEl.current = el; heroRef(el); }, [heroRef]);
+  useEffect(() => { if (framing) heroEl.current?.focus({ preventScroll: true }); }, [framing !== null]); // eslint-disable-line react-hooks/exhaustive-deps -- focus once, when Reposition starts
   const box = usePopover(open, setOpen), file = useRef<HTMLInputElement>(null);
   const canBanner = gm && !!campaign;
   const set = (next: Look["banner"]) => { const l: Look = { ...look, banner: next }; if (!next) delete l.banner; setLook(Object.keys(l).length ? l : undefined); };
@@ -144,28 +151,46 @@ function Hero({ world, campaign, linkedWorlds, gm, onEdit, onUnlink, setLook }: 
     onDrop: (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); setDropping(false); const f = e.dataTransfer.files[0]; if (f) void upload(f); },
   } : {};
 
+  const stopFraming = () => setFraming(null);
+  const saveFraming = () => { if (framing) set(cleanFraming(framing)); setFraming(null); };
+  const centred = framing && cleanFraming({ ...framing, x: .5, y: .5, zoom: 1 });
+  const framingKeys = framing ? {
+    tabIndex: 0, role: "application", "aria-label": "Banner picture: drag to move it, or use the arrow keys; + and − zoom. Enter saves, Escape cancels.",
+    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") { e.preventDefault(); stopFraming(); }
+      else if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); saveFraming(); }
+      else drag.handlers.onKeyDown?.(e);
+    },
+  } : {};
+
   return <div className="home-hero-wrap" ref={box}>
-    <div className={`dashboard-intro home-hero ${hero.className}${dropping ? " is-dropping" : ""}`} style={hero.style} {...drop}>
+    <div ref={setHeroEl} className={`dashboard-intro home-hero ${hero.className}${dropping ? " is-dropping" : ""}${framing ? " is-framing" : ""}${drag.dragging ? " is-dragging" : ""}`} style={hero.style}
+      {...(framing ? { ...drag.handlers, ...framingKeys } : drop)}>
       <div className="home-hero-text">
         <span className="eyebrow">{campaign ? world.name : "World"}</span>
         <h1>{campaign?.name ?? world.name}</h1>
         {(campaign?.description ?? world.description) && <p className="subtitle">{campaign?.description ?? world.description}</p>}
         {campaign && linkedWorlds.length > 0 && <p className="linked-worlds"><span>Also uses lore from:</span> {linkedWorlds.map(w => <span className="chip" key={w.id}>{w.name}<button aria-label={`Stop using lore from ${w.name}`} title="Stop showing this lore here" onClick={() => onUnlink(w.id)}>×</button></span>)}</p>}
       </div>
-      {gm && <div className="home-hero-actions">
+      {framing && <>
+        <span className="home-frame-hint" aria-hidden="true"><Move size={14} /> Drag the picture to move it</span>
+      </>}
+      {gm && !framing && <div className="home-hero-actions">
         {canBanner && <button className="icon-button hero-action hero-banner-button" aria-expanded={open} aria-haspopup="dialog" aria-label={banner ? "Banner picture" : "Add a banner picture"} title={banner ? "Change the banner picture" : "Add a banner picture"} onClick={() => setOpen(!open)}><ImagePlus size={17} /><span>{busy ? "Uploading…" : banner ? "Banner" : "Add banner"}</span></button>}
         <button className="icon-button hero-action" title="Edit name and description" aria-label="Edit name and description" onClick={onEdit}><Settings size={17} /></button>
       </div>}
       {dropping && <span className="home-hero-drop" aria-hidden="true">Drop to use as the banner</span>}
     </div>
+    {framing && <div className="home-frame-bar" role="group" aria-label="Reposition the banner">
+        <BannerZoom banner={framing} onChange={setFraming} className="home-frame-zoom" />
+        <button type="button" className="hero-action home-frame-reset" title="Centre the picture with no zoom" disabled={JSON.stringify(cleanFraming(framing)) === JSON.stringify(centred)} onClick={() => centred && setFraming(centred)}><RotateCcw size={14} aria-hidden="true" /><span>Reset</span></button>
+        <button type="button" className="hero-action" onClick={stopFraming}>Cancel</button>
+        <button type="button" className="hero-action home-frame-save" onClick={saveFraming}><Check size={15} aria-hidden="true" />Save position</button>
+      </div>}
     {open && canBanner && <div className="home-banner-pop" role="dialog" aria-label="Banner picture">
       {banner ? <>
-        <button type="button" className="home-banner-pick" title="Click to choose what stays in view" aria-label="Choose what stays in view: click the part of the picture to keep"
-          onClick={e => { const r = e.currentTarget.getBoundingClientRect(); set({ ...banner, y: Math.round(Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) * 100) / 100 }); }}
-          style={{ backgroundImage: src ? `url("${src}")` : undefined, backgroundPosition: `center ${Math.round(banner.y * 100)}%` }}>
-          <span className="home-banner-line" style={{ top: `${banner.y * 100}%` }} aria-hidden="true" />
-        </button>
-        <p className="home-pop-hint">Click the part of the picture that should stay in view.</p>
+        <p className="home-pop-hint">Drag the picture right in the banner to choose what stays in view, and zoom in to show less of it.</p>
+        <button type="button" className="button small primary home-reposition" onClick={() => { setOpen(false); setFraming(banner); }}><Move size={14} aria-hidden="true" /> Reposition and zoom</button>
         <div className="button-row"><button className="button small" disabled={busy} onClick={() => file.current?.click()}><ImagePlus size={14} /> {busy ? "Uploading…" : "Replace"}</button><button className="button small" onClick={() => { set(undefined); setOpen(false); }}><Trash2 size={14} /> Remove</button></div>
       </> : <button type="button" className="look-banner-empty home-banner-empty" disabled={busy} onClick={() => file.current?.click()}><ImagePlus size={20} /><span><strong>{busy ? "Uploading…" : "Upload a picture"}</strong><small>Wide pictures work best. PNG, JPEG or WebP up to 8 MB. You can also drop one on the banner.</small></span></button>}
       {error && <p className="form-error" role="alert">{error}</p>}

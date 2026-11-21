@@ -26,6 +26,7 @@ import { isSolo, soloCharacters } from "../solo.ts";
 import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea } from "../campaign-theme/model.ts";
 import type { ThemeStore } from "../campaign-theme/store.ts";
 import type { Look } from "../encyclopedia/look.ts";
+import { BANNER_ZOOM_MAX, cleanFraming } from "../banner-frame.ts";
 
 /** The made-up member a solo player's view is worked out for: one of the built-in Players group. */
 const SOLO_PLAYER = "solo-player";
@@ -131,6 +132,27 @@ async function skinOf(deps: Deps, body: z.infer<typeof skinSchema>) {
   return json({ theme: theme && body.theme === theme.key ? { key: theme.key, name: theme.name, mode: theme.mode, banner: theme.banner, same: true } : theme });
 }
 
+/**
+ * `heroBanner`: the campaign's banner picture for a part's header (Maptable's Scene Picker), as a short-lived signed
+ * address, for anyone who may open the campaign. Players get it only when the campaign's look goes to them.
+ */
+const heroBannerSchema = z.object({ action: z.literal("heroBanner"), campaign: partKey });
+async function heroBannerOf(deps: Deps, body: z.infer<typeof heroBannerSchema>) {
+  const userId = await deps.user();
+  if (!userId) return json({ error: signIn }, 401);
+  if (readThrottle.hit(userId)) return json({ error: "Slow down a moment, then try again." }, 429);
+  const key = await pairedKey(deps, userId, body.campaign);
+  if (!key) return json({ banner: null });
+  const found = await deps.campaign(userId, key);
+  if (!found) return json({ error: notMember }, 404);
+  const look = (await deps.workspace(found.owner)).campaigns.find(c => c.id === found.campaignId)?.look;
+  if (!look?.banner || !deps.image) return json({ banner: null });
+  if (look.players === false && !forumRights(found.list, userId, found.owner).gm) return json({ banner: null });
+  const image = await deps.image(found.owner, look.banner.imageId).catch(() => null);
+  const { width, height, y, x, zoom } = look.banner;
+  return json({ banner: image ? { url: image.url, width, height, y, ...(x !== undefined ? { x } : {}), ...(zoom !== undefined ? { zoom } : {}) } : null });
+}
+
 /** A part's key as the forum's: `mt-<Maptable campaign>` becomes the paired Encyclopedia campaign's, or null when none is. */
 async function pairedKey(deps: Deps, userId: string, key: string) {
   if (!key.startsWith("mt-")) return key;
@@ -161,8 +183,13 @@ const bannerSchema = z.object({
   action: z.literal("banner"), campaign: partKey,
   picture: z.object({ transferId: z.string().min(1).max(200), width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000) }).optional(),
   y: z.number().min(0).max(1).optional(),
+  x: z.number().min(0).max(1).optional(),
+  zoom: z.number().min(1).max(BANNER_ZOOM_MAX).optional(),
   remove: z.literal(true).optional(),
-}).refine(b => [b.picture, b.y, b.remove].filter(v => v !== undefined).length >= 1 && !(b.remove && (b.picture || b.y !== undefined)), { message: "Send a picture, a position or remove." });
+}).refine(b => {
+  const framing = b.y !== undefined || b.x !== undefined || b.zoom !== undefined;
+  return (b.picture || framing || b.remove) && !(b.remove && (b.picture || framing));
+}, { message: "Send a picture, a position or remove." });
 async function bannerOf(deps: Deps, body: z.infer<typeof bannerSchema>) {
   const userId = await deps.user();
   if (!userId) return json({ error: signIn }, 401);
@@ -176,7 +203,7 @@ async function bannerOf(deps: Deps, body: z.infer<typeof bannerSchema>) {
   let picture: NonNullable<Look["banner"]> | undefined;
   if (body.picture) {
     if (!deps.savePicture) return json({ error: "Pictures can't be added right now." }, 404);
-    try { picture = { imageId: await deps.savePicture(found.owner, userId, body.picture.transferId, PICTURE_BYTES), width: body.picture.width, height: body.picture.height, y: body.y ?? .5 }; }
+    try { picture = cleanFraming({ imageId: await deps.savePicture(found.owner, userId, body.picture.transferId, PICTURE_BYTES), width: body.picture.width, height: body.picture.height, y: body.y ?? .5, x: body.x, zoom: body.zoom }); }
     catch (e) { return json({ error: e instanceof Error && e.message ? e.message : "That picture couldn't be added." }, 400); }
   }
   let missing = false;
@@ -184,7 +211,7 @@ async function bannerOf(deps: Deps, body: z.infer<typeof bannerSchema>) {
     const next: Look = { ...now };
     if (body.remove) delete next.banner;
     else if (picture) next.banner = picture;
-    else if (now?.banner && body.y !== undefined) next.banner = { ...now.banner, y: body.y };
+    else if (now?.banner) next.banner = cleanFraming({ ...now.banner, y: body.y ?? now.banner.y, x: body.x ?? now.banner.x, zoom: body.zoom ?? now.banner.zoom });
     else { missing = true; return now; }
     return Object.keys(next).length ? next : undefined;
   });
@@ -617,6 +644,7 @@ export async function handleForum(request: Request, deps: Deps) {
     const action = typeof raw === "object" && raw !== null ? (raw as { action?: unknown }).action : undefined;
     if (action === "skin") return await skinOf(deps, skinSchema.parse(raw));
     if (action === "banner") return await bannerOf(deps, bannerSchema.parse(raw));
+    if (action === "heroBanner") return await heroBannerOf(deps, heroBannerSchema.parse(raw));
     if (typeof action === "string" && THEME_ACTIONS.has(action)) return await themesOf(deps, themeBodySchema.parse(raw), deps.now?.() ?? new Date());
     const body = bodySchema.parse(raw), now = deps.now?.() ?? new Date();
     // The player view of a campaign's owner (contextOf): a solo campaign's, or any other's read-only preview. Ignored for anyone else.
