@@ -22,7 +22,7 @@ export const mapsHref = (r: CampaignRow) => r.maptable ? `/maptable?campaign=${e
 /** The campaign's forum, once the GM has set it up. */
 export const forumHref = (r: CampaignRow) => r.encyclopedia?.forum ? `/forum#c-${encodeURIComponent(r.encyclopedia.id)}` : null;
 export const pageHref = (p: { id: string }) => `/encyclopedia?entry=${encodeURIComponent(p.id)}`;
-const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Page", vehicle: "Vehicle", galaxy: "Galaxy", sector: "Sector", system: "Star system", store: "Store", quest: "Quest" };
+const kindNames: Record<string, string> = { character: "Character", place: "Place", faction: "Organization", lore: "Lore", session: "Session notes", tasks: "Checklist", map: "Map", note: "Note", page: "Page", other: "Other", vehicle: "Vehicle", galaxy: "Galaxy", sector: "Sector", system: "Star system", store: "Store", quest: "Quest" };
 export const kindName = (kind: string) => kindNames[kind] ?? "Page";
 export function KindIcon({ kind }: { kind: string }) {
   return kind === "character" ? <User size={15} aria-hidden="true" /> : kind === "map" ? <MapIcon size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />;

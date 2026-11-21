@@ -32,10 +32,10 @@ export type BuiltInSection = typeof builtInSections[number];
 export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", sessions: "Sessions", orgs: "Organizations" };
 
 /** Page kinds a category can list on its own (the same kinds as Entry, less folders). */
-export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system"] as const;
+export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system", "page", "other"] as const;
 export type CategoryKind = typeof categoryKinds[number];
 
-export const maxQuickLinks = 12, maxCategories = 30, maxCategoryLinks = 60, maxCategoryTags = 20;
+export const maxQuickLinks = 12, maxGroups = 8, maxCategoryTypes = 20, maxCategories = 30, maxCategoryLinks = 60, maxCategoryTags = 20;
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const label = z.string().trim().min(1).max(60);
 const url = z.string().trim().max(500).refine(v => /^https?:\/\/[^\s]+$/i.test(v), "Links must start with http:// or https://");
@@ -55,6 +55,8 @@ export const sidebarCategorySchema = z.object({
   kinds: z.array(z.enum(categoryKinds)).max(categoryKinds.length).optional(),
   /** Optional (added later): also every page with any of these Wiki tags (the GM's own tags, lib/tags.ts). */
   tags: z.array(id).max(maxCategoryTags).optional(),
+  /** Optional (added later): also every page of these GM entry types (page templates, by id). */
+  types: z.array(id).max(maxCategoryTypes).optional(),
 });
 export type SidebarCategory = z.infer<typeof sidebarCategorySchema>;
 
@@ -62,26 +64,35 @@ const unique = <T>(list: T[], key: (x: T) => string) => new Set(list.map(key)).s
 export const sidebarSchema = z.object({
   nav: z.array(z.object({ id: z.enum(navIds), on: z.boolean() })).max(navIds.length),
   quick: z.array(sidebarLinkSchema).max(maxQuickLinks),
-  sections: z.array(z.object({ id, on: z.boolean() })).max(builtInSections.length + maxCategories),
+  sections: z.array(z.object({ id, on: z.boolean() })).max(builtInSections.length + maxCategories + maxGroups),
   categories: z.array(sidebarCategorySchema).max(maxCategories),
+  /**
+   * Optional (added later): the GM's own top-level headings. Each sits in `sections` like a section does, and heads
+   * the sections after it, up to the next heading. Folding a heading folds its sections.
+   */
+  groups: z.array(z.object({ id, name: z.string().trim().min(1).max(40) })).max(maxGroups).optional(),
 }).superRefine((s, ctx) => {
   if (!unique(s.nav, x => x.id)) ctx.addIssue({ code: "custom", message: "Each menu item can only be in the sidebar once" });
   if (!unique(s.sections, x => x.id)) ctx.addIssue({ code: "custom", message: "Each section can only be in the sidebar once" });
   if (!unique(s.categories, x => x.id)) ctx.addIssue({ code: "custom", message: "Category IDs must be unique" });
   if (s.categories.some(c => (builtInSections as readonly string[]).includes(c.id))) ctx.addIssue({ code: "custom", message: "A category cannot use a built-in section's ID" });
+  const groups = s.groups ?? [];
+  if (!unique(groups, x => x.id) || groups.some(g => (builtInSections as readonly string[]).includes(g.id) || s.categories.some(c => c.id === g.id))) ctx.addIssue({ code: "custom", message: "Heading IDs must be unique" });
 });
 export type Sidebar = z.infer<typeof sidebarSchema>;
 
 const startingQuick: SidebarLink[] = [{ id: "q-form", type: "tool", tool: "form" }, { id: "q-items", type: "tool", tool: "items" }, { id: "q-share", type: "tool", tool: "share" }, { id: "q-look", type: "view", view: "look" }];
 /** The layout every campaign starts with, and what Reset goes back to. Categories are kept by Reset. */
-export function defaultSidebar(keep: SidebarCategory[] = []): Sidebar {
+export function defaultSidebar(keep: SidebarCategory[] = [], groups: SidebarGroup[] = []): Sidebar {
   return {
     nav: navIds.map(id => ({ id, on: true })),
     quick: startingQuick.map(l => ({ ...l })),
-    sections: [...builtInSections.map(id => ({ id, on: true })), ...keep.map(c => ({ id: c.id, on: true }))],
+    sections: [...builtInSections.map(id => ({ id, on: true })), ...groups.map(g => ({ id: g.id, on: true })), ...keep.map(c => ({ id: c.id, on: true }))],
     categories: keep,
+    ...(groups.length ? { groups } : {}),
   };
 }
+export type SidebarGroup = { id: string; name: string };
 
 /**
  * The sidebar to show: the campaign's own layout made whole. Menu items and sections it does not
@@ -92,10 +103,41 @@ export function sidebarOf(saved: Sidebar | undefined | null): Sidebar {
   if (!saved) return defaultSidebar();
   const nav = saved.nav.filter((x, i, a) => navIds.includes(x.id) && a.findIndex(y => y.id === x.id) === i);
   for (const id of navIds) if (!nav.some(x => x.id === id)) nav.push({ id, on: true });
-  const known = new Set<string>([...builtInSections, ...saved.categories.map(c => c.id)]);
+  const known = new Set<string>([...builtInSections, ...saved.categories.map(c => c.id), ...(saved.groups ?? []).map(g => g.id)]);
   const sections = saved.sections.filter((x, i, a) => known.has(x.id) && a.findIndex(y => y.id === x.id) === i);
   for (const id of known) if (!sections.some(x => x.id === id)) sections.push({ id, on: true });
-  return { nav, quick: saved.quick, sections, categories: saved.categories };
+  return { nav, quick: saved.quick, sections, categories: saved.categories, ...(saved.groups?.length ? { groups: saved.groups } : {}) };
+}
+
+/** A heading's id, or null when the section is a section. */
+export const groupOf = (s: Pick<Sidebar, "groups">, sectionId: string) => s.groups?.find(g => g.id === sectionId) ?? null;
+
+/**
+ * The sections in their order, each with the heading it sits under (the nearest heading above it), and the headings
+ * themselves. Sections above every heading have none.
+ */
+export function sectionsUnder(s: Sidebar): { id: string; on: boolean; group: SidebarGroup | null; heading: boolean }[] {
+  let under: SidebarGroup | null = null;
+  return s.sections.map(x => { const g = groupOf(s, x.id); if (g) { under = g; return { ...x, group: g, heading: true }; } return { ...x, group: under, heading: false }; });
+}
+
+/** A new top-level heading at the end of the sections, so the GM can drag sections under it. */
+export function addGroup(s: Sidebar, name: string, makeId: () => string): { sidebar: Sidebar; id: string } | null {
+  const clean = name.trim().slice(0, 40), groups = s.groups ?? [];
+  if (!clean || groups.length >= maxGroups) return null;
+  let gid = makeId();
+  while ((builtInSections as readonly string[]).includes(gid) || s.categories.some(c => c.id === gid) || groups.some(g => g.id === gid)) gid = makeId();
+  return { id: gid, sidebar: { ...s, groups: [...groups, { id: gid, name: clean }], sections: [...s.sections, { id: gid, on: true }] } };
+}
+export function renameGroup(s: Sidebar, gid: string, name: string): Sidebar {
+  const clean = name.trim().slice(0, 40);
+  return clean && s.groups ? { ...s, groups: s.groups.map(g => g.id === gid ? { ...g, name: clean } : g) } : s;
+}
+/** Takes the heading away; its sections stay where they are, under the heading above, if any. */
+export function removeGroup(s: Sidebar, gid: string): Sidebar {
+  const groups = (s.groups ?? []).filter(g => g.id !== gid), out: Sidebar = { ...s, sections: s.sections.filter(x => x.id !== gid) };
+  if (groups.length) out.groups = groups; else delete out.groups;
+  return out;
 }
 
 /** Move one item of a list from one place to another; the same list when nothing moves. */
@@ -167,12 +209,17 @@ export function setCategoryKinds(s: Sidebar, catId: string, kinds: CategoryKind[
   return updateCategory(s, catId, c => { const rest = { ...c }; delete rest.kinds; return ordered.length ? { ...rest, kinds: ordered } : rest; });
 }
 
+export function setCategoryTypes(s: Sidebar, catId: string, types: string[]): Sidebar {
+  const clean = [...new Set(types)].slice(0, maxCategoryTypes);
+  return updateCategory(s, catId, c => { const rest = { ...c }; delete rest.types; return clean.length ? { ...rest, types: clean } : rest; });
+}
+
 export function setCategoryTags(s: Sidebar, catId: string, tags: string[]): Sidebar {
   const clean = [...new Set(tags)].slice(0, maxCategoryTags);
   return updateCategory(s, catId, c => { const rest = { ...c }; delete rest.tags; return clean.length ? { ...rest, tags: clean } : rest; });
 }
 
-type PageLike = { id: string; title: string; kind: string };
+type PageLike = { id: string; title: string; kind: string; templateId?: string };
 /**
  * What a category lists: its own links first, in the GM's order, then every page of its kinds, or with any of its
  * tags, not already linked, by title. Links to pages that are gone, or that this campaign cannot see, are skipped.
@@ -187,10 +234,10 @@ export function categoryItems<P extends PageLike>(c: SidebarCategory, pages: P[]
     if (page) out.push({ link, page });
   }
   const tags = new Set(tagsOf ? c.tags ?? [] : []);
-  if (c.kinds?.length || tags.size) {
+  if (c.kinds?.length || tags.size || c.types?.length) {
     const linked = new Set(c.links.flatMap(l => l.type === "page" ? [l.page] : []));
-    const kinds = new Set<string>(c.kinds ?? []);
-    pages.filter(p => (kinds.has(p.kind) || (tags.size > 0 && tagsOf!(p.id).some(t => tags.has(t)))) && !linked.has(p.id)).sort((a, b) => a.title.localeCompare(b.title)).forEach(p => out.push({ link: { id: `auto-${p.id}`, type: "page", page: p.id }, page: p }));
+    const kinds = new Set<string>(c.kinds ?? []), types = new Set(c.types ?? []);
+    pages.filter(p => (kinds.has(p.kind) || (!!p.templateId && types.has(p.templateId)) || (tags.size > 0 && tagsOf!(p.id).some(t => tags.has(t)))) && !linked.has(p.id)).sort((a, b) => a.title.localeCompare(b.title)).forEach(p => out.push({ link: { id: `auto-${p.id}`, type: "page", page: p.id }, page: p }));
   }
   return out;
 }

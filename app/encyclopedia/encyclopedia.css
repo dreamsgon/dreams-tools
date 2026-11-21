@@ -1587,3 +1587,39 @@ body:has(.enc-bar) .standard-dice-dock{bottom:calc(74px + env(safe-area-inset-bo
 .template-stat .icon-button,.template-stat-head .icon-button{width:26px;height:26px;padding:0}
 .template-stat .template-check{font-size:13.5px}
 .template-stat>span,.template-stat-head>span{display:inline-flex;gap:2px;flex:none}.template-stat .icon-button,.template-stat-head .icon-button{min-width:0;min-height:0;display:grid;place-items:center;border:0;background:none}.template-stat .icon-button:disabled,.template-stat-head .icon-button:disabled{opacity:.25}
+/* Entry types: the New entry / Change type picker (built-in kinds in groups, then the GM's own), the New type form, and what a change removes. */
+.type-picker{display:flex;flex-direction:column;gap:12px}
+.type-picker-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.type-picker-label{font-size:11px;color:var(--muted)}
+.type-picker-hint{font-size:11.5px;color:var(--accent)}
+.type-group{display:grid;grid-template-columns:118px minmax(0,1fr);gap:10px;align-items:start}
+.type-group-name{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:8px;font-weight:600}
+.type-pills{display:flex;flex-wrap:wrap;gap:6px}
+.type-pills button{display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font-size:12.5px;line-height:1.2;transition:border-color .15s,background .15s}
+.type-pills button svg{color:var(--muted)}
+.type-pills button:hover{border-color:var(--accent)}
+.type-pills button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.type-pills button[aria-checked=true] svg{color:var(--accent)}
+.type-pills .type-new{border-style:dashed;color:var(--accent);background:transparent}
+.type-pills .type-new svg{color:var(--accent)}
+.modal:has(.type-picker){max-width:620px}
+.new-type{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--accent);border-radius:var(--radius-lg);background:var(--accent-soft)}
+.new-type-head{display:flex;align-items:center;gap:10px}
+.new-type-head input{margin-top:0!important;flex:1}
+.new-type-preview{width:40px;height:40px;flex:none;display:grid;place-items:center;border-radius:var(--radius);background:var(--panel);color:var(--accent);border:1px solid var(--line)}
+.new-type-icons{grid-template-columns:repeat(11,minmax(0,1fr))!important;padding:1px}
+.new-type-icons button:first-child{grid-column:auto!important}
+.page-icon-grid button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.new-type-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.new-type-row label{font-size:11px;color:var(--muted)}
+.new-type-hint{font-size:11.5px;color:var(--muted);margin:0}
+.new-type-actions{justify-content:flex-end}
+.new-type-actions .button{margin-top:0!important;align-self:auto!important}
+.change-type .button-row{justify-content:flex-end}
+.change-type .button-row .button{margin-top:0;align-self:auto}
+.type-loses{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.55;padding:10px 12px;border-radius:var(--radius);background:var(--warning-soft);color:var(--warning);margin:0}
+.type-loses svg{flex:none;margin-top:2px}
+.kind-change{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.template-icon-row{display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:start;margin:4px 0 8px}
+.template-icons{grid-template-columns:repeat(14,minmax(0,1fr))}
+@media(max-width:720px){.type-group{grid-template-columns:1fr;gap:6px}.type-group-name{padding-top:0}.new-type-icons{grid-template-columns:repeat(8,minmax(0,1fr))!important}.new-type-row{grid-template-columns:1fr}.template-icon-row{grid-template-columns:1fr}.template-icons{grid-template-columns:repeat(8,minmax(0,1fr))}}

@@ -482,9 +482,9 @@ const tools: Tool[] = [
   },
   {
     name: "create_page", title: "Create a page", level: "assist", readOnly: false,
-    description: "Create a new Encyclopedia page in this campaign: a note, character, place, faction, lore, session, quest or vehicle (a ship, airship, carriage, car… of one of the world's vehicle types). GM-only unless playersSee is true; a vehicle's sheet always starts GM only.",
+    description: "Create a new Encyclopedia page in this campaign: a page (a plain article), note, other, character, place, faction, lore, session, quest or vehicle (a ship, airship, carriage, car… of one of the world's vehicle types). GM-only unless playersSee is true; a vehicle's sheet always starts GM only.",
     inputSchema: obj({
-      title: str("The page title.", 120), kind: { type: "string", enum: ["note", "character", "place", "faction", "lore", "session", "quest", "vehicle"], description: "What kind of page." },
+      title: str("The page title.", 120), kind: { type: "string", enum: ["page", "note", "other", "character", "place", "faction", "lore", "session", "quest", "vehicle"], description: "What kind of page." },
       text: { type: "string", maxLength: 20000, description: "The page text, in Markdown. Put GM-only parts in a ':::secret' … ':::' block." },
       folder: str("An existing folder's name or id to put it in.", 120), playersSee: { type: "boolean", description: "Players can read the page (default false)." },
       role: { type: "string", enum: ["pc", "companion", "npc", "creature"], description: "For a character: who they are (default npc)." },
@@ -494,7 +494,7 @@ const tools: Tool[] = [
     }, ["title", "kind"]),
     write: a => {
       const title = text(a, "title", true, 120)!, kind = text(a, "kind") as Entry["kind"], body = optionalText(a, "text", 20000);
-      if (!["note", "character", "place", "faction", "lore", "session", "quest", "vehicle"].includes(kind)) fail("kind must be note, character, place, faction, lore, session, quest or vehicle.");
+      if (!["page", "note", "other", "character", "place", "faction", "lore", "session", "quest", "vehicle"].includes(kind)) fail("kind must be page, note, other, character, place, faction, lore, session, quest or vehicle.");
       const vehicleTypeName = text(a, "vehicleType", false, 60), rollUp = bool(a, "rollUp"), templateName = text(a, "template", false, 40);
       const role = text(a, "role", false) as "pc" | "companion" | "npc" | "creature" | undefined;
       if (role && !["pc", "companion", "npc", "creature"].includes(role)) fail("role must be pc, companion, npc or creature.");

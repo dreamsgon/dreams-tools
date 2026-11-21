@@ -26,7 +26,7 @@ export class BridgeError extends Error {
 }
 
 /** Page kinds sent as pages. Characters, quests, recaps and maps have their own kinds of sync. */
-export const pageKinds: readonly Entry["kind"][] = ["folder", "note", "place", "faction", "lore", "vehicle"];
+export const pageKinds: readonly Entry["kind"][] = ["folder", "page", "note", "other", "place", "faction", "lore", "vehicle"];
 
 export function need(grant: Pick<BridgeGrant, "sync">, kind: SyncKind, way: "to" | "from") {
   if (!allows(grant.sync, kind, way)) throw new BridgeError(403, `${syncInfo[kind].name}: this bridge key is set to ${grant.sync[kind] === "off" ? "Off" : grant.sync[kind] === "to" ? "RPG Tools → your table only" : "your table → RPG Tools only"}. Change it under AI & GitHub › Other tables.`);

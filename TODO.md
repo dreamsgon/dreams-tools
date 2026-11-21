@@ -81,6 +81,14 @@ Updated 2026-11-21. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
 
+## Wiki entry types and sidebar headings
+
+- Done: Page (a plain article, now the default) and Other are new kinds of Wiki page. New entry picks the type from grouped pills (Your types, Writing, People and places, At the table, Space) instead of one long dropdown.
+- Done: the GM's own entry types are templates with an icon. New type in New entry (name, icon, works like, who can use it) makes one; the Templates page sets its icon, fields and tabs. Pages made from one get its icon, and the page's type pill shows its name.
+- Done: Change type, from the type pill while writing or the page's side column. It keeps text, tabs, tags and links, warns before removing what only the old kind had (a map, an organization profile, an info box's values), and the icon follows the type unless the GM chose one. Page history can undo it. Lib: lib/encyclopedia/entry-kinds.ts, entry-type.ts.
+- Done: Customize sidebar has Add a heading: a top-level heading the GM names, with the sections below it folded together. Custom categories have a + that makes a page shown in them, and can list every page of one of the GM's types.
+- Next: the MCP and bridge tools create Page and Other pages but not pages of a GM type. Not checked on the live site; checked locally (dark theme, 1440px and iPhone 13) against a sample workspace.
+
 ## Wiki bottom space
 
 - Done: the 64px strip that global-dice.css reserves under every page no longer shows under the Wiki. The Wiki's footer row is now the home of the floating AI and Dice buttons (taller footer, right padding so its text never sits under them). Phones are unchanged.
