@@ -4,8 +4,9 @@
  * the template choice in New entry, and Save as template.
  */
 import { Fragment, useState } from "react";
+import dynamic from "next/dynamic";
 import { arrangeStats, moveStat, moveStatGroup, statGroups, statOff, tidy, toggleStat, type StatArrangement } from "@/lib/encyclopedia/stat-arrange";
-import { ArrowDown, ArrowUp, Copy, EyeOff, LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, EyeOff, FileUp, LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
 import { compareEntries, folderPath, newId, templateKinds, type Entry, type HideableTab, type PageTemplate, type StatField, type TemplateField, type Workspace } from "@/lib/encyclopedia/world-model";
 import { applyTemplate, characterStarters, cleanValue, readMulti, readScore, readTrack, deleteTemplate, FIELD_TYPES, HIDEABLE_TABS, infoRows, KIND_NAMES, saveTemplate, starterTemplates, templateFromPage, templateOf, templatesFor, templateUses, type FieldValue } from "@/lib/encyclopedia/templates";
 import { defaultCharacterLayout, maxFacts, profileBlockInfo, type CharacterLayout } from "@/lib/encyclopedia/character-profile";
@@ -14,6 +15,8 @@ import { PAGE_ICONS } from "@/lib/encyclopedia/page-text";
 import { PAGE_ICON_GLYPHS } from "./page-icons";
 import { typeIcon } from "./entry-types";
 import { confirmDialog } from "../confirm-dialog";
+
+const TemplateImport = dynamic(() => import("./template-import").then(m => m.TemplateImport));
 
 type Change = (s: Workspace | ((latest: Workspace) => Workspace)) => boolean | void;
 /** Pages a link field can point at: any page in this world, except folders. */
@@ -124,6 +127,7 @@ function templateSummary(t: PageTemplate) {
     t.fields.length ? `${t.fields.length} field${t.fields.length === 1 ? "" : "s"}` : "",
     t.stats?.off?.length ? `${t.stats.off.length} stat${t.stats.off.length === 1 ? "" : "s"} off` : t.stats?.order?.length ? "Own stat order" : "",
     t.layout?.facts?.length ? t.layout.facts.map(f => f.label).slice(0, 4).join(", ") : "",
+    t.trackers?.length ? `${t.trackers.length} tracker${t.trackers.length === 1 ? "" : "s"}` : "",
     [...shown, ...t.tabs.map(x => x.title)].length ? `Tabs: ${[...shown, ...t.tabs.map(x => x.title)].slice(0, 5).join(", ")}${[...shown, ...t.tabs].length > 5 ? "…" : ""}` : "",
   ].filter(Boolean);
   return parts.join(" · ") || "Starting text only";
@@ -136,7 +140,7 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
   // This campaign's templates first, then the world's. Other campaigns' templates aren't shown.
   const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId && c.worldId === worldId);
   const all = templatesFor(world, campaign?.id), templates = [...all.filter(x => x.campaignId), ...all.filter(x => !x.campaignId)];
-  const [openId, setOpenId] = useState(templates[0]?.id ?? ""), [draft, setDraft] = useState<PageTemplate | null>(null), [note, setNote] = useState("");
+  const [openId, setOpenId] = useState(templates[0]?.id ?? ""), [draft, setDraft] = useState<PageTemplate | null>(null), [note, setNote] = useState(""), [importing, setImporting] = useState(false);
   const saved = templates.find(t => t.id === openId) ?? templates[0], t = draft?.id === saved?.id ? draft : saved;
   const edit = (p: Partial<PageTemplate>) => t && setDraft({ ...t, ...p });
   const editField = (id: string, p: Partial<TemplateField>) => t && edit({ fields: t.fields.map(f => f.id === id ? { ...f, ...p } : f) });
@@ -147,12 +151,13 @@ export function TemplatesSection({ data, worldId, campaignId = null, change }: {
   const uses = t ? templateUses(data, t.id) : 0;
   if (!world) return null;
   return <section className="page-content templates-page">
+    {importing && <TemplateImport data={data} worldId={worldId} campaignId={campaign?.id ?? null} change={change} onClose={() => setImporting(false)} onDone={(id, message) => { setImporting(false); setDraft(null); if (id) setOpenId(id); setNote(message); }}/>}
     <div className="templates-list">
-      <div className="templates-list-head"><h1>Templates</h1><button className="button small" onClick={() => add([{ id: newId(), name: "New template", kind: "note", fields: [], tabs: [], body: "", overviewVisibility: "gm", updatedAt: new Date().toISOString(), ...(campaign ? { campaignId: campaign.id } : {}) }])}><Plus size={14}/> New</button></div>
+      <div className="templates-list-head"><h1>Templates</h1><span className="button-row"><button className="button small" title="A character sheet template: D&D 5E, a shared file, or one an AI makes" onClick={() => setImporting(true)}><FileUp size={14}/> Import</button><button className="button small" onClick={() => add([{ id: newId(), name: "New template", kind: "note", fields: [], tabs: [], body: "", overviewVisibility: "gm", updatedAt: new Date().toISOString(), ...(campaign ? { campaignId: campaign.id } : {}) }])}><Plus size={14}/> New</button></span></div>
       {templates.map((x, i) => <Fragment key={x.id}>{(i === 0 || !!templates[i - 1].campaignId !== !!x.campaignId) && <p className="templates-group">{x.campaignId ? campaign?.name ?? "This campaign" : `Whole world · ${world?.name ?? ""}`}</p>}
         <button className={x.id === t?.id ? "active" : ""} onClick={() => { setOpenId(x.id); setDraft(null); setNote(""); }}>{(() => { const G = typeIcon(x); return <G size={15}/>; })()}<span>{x.name}<em>{KIND_NAMES[x.kind]}</em></span><small>{templateUses(data, x.id)}</small></button></Fragment>)}
       {templates.length > 0 && !templates.some(x => x.kind === "character") && <button className="text-button templates-add-chars" onClick={() => add(characterStarters(newId).map(x => campaign ? { ...x, campaignId: campaign.id } : x))}><Plus size={13}/> Add character templates</button>}
-      {!templates.length && <div className="templates-empty"><p>Templates give new pages ready-made info box fields, tabs and starting text.</p><button className="button primary" onClick={() => add([...characterStarters(newId).map(x => campaign ? { ...x, campaignId: campaign.id } : x), ...starterTemplates(newId)])}><Plus size={14}/> Add starter templates</button><small>Settlement, Tavern, Faction, Item and Session. Change them to suit your game.</small></div>}
+      {!templates.length && <div className="templates-empty"><p>Templates give new pages ready-made info box fields, tabs and starting text.</p><button className="button primary" onClick={() => add([...characterStarters(newId).map(x => campaign ? { ...x, campaignId: campaign.id } : x), ...starterTemplates(newId)])}><Plus size={14}/> Add starter templates</button><small>Settlement, Tavern, Faction, Item and Session. Change them to suit your game.</small><button className="text-button" onClick={() => setImporting(true)}><FileUp size={13}/> Import a character sheet template (D&amp;D 5E or any game)</button></div>}
       {templates.length > 0 && <p className="aside-hint">Each template is also an entry type in New entry. Or open any page and choose Save as template.</p>}
     </div>
     {t && <div className="template-editor">
@@ -208,6 +213,10 @@ function CharacterTemplateParts({ t, edit, worldLayout, form = [], campaignName 
     <div className="template-tab-switches">{HIDEABLE_TABS.map(([id, name]) => <label key={id} className="template-check"><input type="checkbox" checked={!hidden.has(id)} onChange={e => setHidden(id, !e.target.checked)}/> {name}</label>)}</div>
     <p className="aside-hint">Profile, Overview and Connections are always there. A tab left out can be shown again from the page’s Tabs menu.</p>
     {!hidden.has("stats") && <TemplateStats t={t} edit={edit} form={form} campaignName={campaignName}/>}
+    {!hidden.has("stats") && <><h2>Trackers</h2>
+      {t.trackers?.length ? <span className="template-chips">{t.trackers.map(x => <span key={x.id} className="template-chip">{x.label} <span className="muted">{x.value}/{x.max}</span>{x.gm && <EyeOff size={11} aria-label="GM only"/>}<button type="button" aria-label={`Remove ${x.label}`} onClick={() => { const rest = t.trackers!.filter(y => y.id !== x.id); edit({ trackers: rest.length ? rest : undefined }); }}><X size={11}/></button></span>)}</span>
+        : <p className="aside-hint">None. New characters start with no trackers.</p>}
+      <p className="aside-hint">New characters start with these, such as Hit points or Hit dice. To change them, set up trackers on a character’s Stats tab, then Save as template and pick Update “{t.name}”.</p></>}
     <h2>Profile layout</h2>
     {layout ? <div className="template-layout">
       <div className="template-layout-row"><span className="template-layout-label">Fields at the top</span><span className="template-chips">{facts.map(f => <span key={f.id} className="template-chip">{f.label}{f.gm && <EyeOff size={11} aria-label="GM only"/>}<button type="button" aria-label={`Remove ${f.label}`} onClick={() => setFacts(facts.filter(x => x.id !== f.id))}><X size={11}/></button></span>)}

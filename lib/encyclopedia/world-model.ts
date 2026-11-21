@@ -116,6 +116,8 @@ export const pageTemplateSchema = z.object({
   stats:z.object({order:z.array(id).max(500).optional(),off:z.array(id).max(500).optional()}).optional(),
   // Optional (added later): the icon pages made from it get, and the template shows as an entry type of its own in New entry.
   icon:z.enum(PAGE_ICONS).optional(),
+  // Optional (added later): for a character, the trackers (HP, hit dice…) a new character starts with, each at its maximum.
+  trackers:trackersSchema.optional(),
 });
 export type PageTemplate=z.infer<typeof pageTemplateSchema>;
 export type TemplateField=z.infer<typeof templateFieldSchema>;

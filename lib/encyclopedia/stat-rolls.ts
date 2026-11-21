@@ -52,9 +52,11 @@ export function statNumber(v: unknown): number | null {
   if (typeof v === 'string' && /^\s*[+-]?\d+(\.\d+)?\s*$/.test(v)) return Number(v);
   return null;
 }
+/** A checkbox never ticked reads as unticked (0), so a formula like {Proficiency bonus}*{value} works before it is touched. */
+const filled = (type: string, v: unknown) => type === 'checkbox' && blank(v) ? false : v;
 /** The sheet a formula reads: the form's stats with this character's values. */
 export function sheetOf(fields: { id: string; label: string; type: string; derived?: string; archived?: boolean; look?: string }[], values: Record<string, unknown>): SheetStat[] {
-  return fields.filter(f => !f.archived).map(f => ({ label: f.label, type: f.type, derived: f.derived, value: values[f.id], ...(f.look === 'score' ? { score: true, mod: values[modKey(f.id)] } : {}) }));
+  return fields.filter(f => !f.archived).map(f => ({ label: f.label, type: f.type, derived: f.derived, value: filled(f.type, values[f.id]), ...(f.look === 'score' ? { score: true, mod: values[modKey(f.id)] } : {}) }));
 }
 
 const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -98,9 +100,10 @@ function braceNumber(inner: string, self: unknown, sheet: SheetStat[], depth: nu
 }
 
 /** A stat's worked-out value (its `derived` formula, like floor(({value}-10)/2)), or null when it can't be worked out. */
-export function derivedValue(st: Pick<SheetStat, 'derived' | 'value'>, sheet: SheetStat[], depth = 0): number | null {
+export function derivedValue(st: Pick<SheetStat, 'derived' | 'value'> & { type?: string }, sheet: SheetStat[], depth = 0): number | null {
   if (!st.derived?.trim() || depth > 3) return null;
-  try { return Math.floor(arithmetic(st.derived.replace(/\{([^{}]*)\}/g, (_, inner: string) => `(${braceNumber(inner, st.value, sheet, depth)})`))); }
+  const value = filled(st.type ?? '', st.value);
+  try { return Math.floor(arithmetic(st.derived.replace(/\{([^{}]*)\}/g, (_, inner: string) => `(${braceNumber(inner, value, sheet, depth)})`))); }
   catch { return null; }
 }
 
@@ -224,7 +227,7 @@ const rowHint = (h: string | null) => h === null ? undefined : h.startsWith('Its
 export function statRows(fields: RowField[], values: Record<string, unknown>): StatRow[] {
   const live = fields.filter(f => !f.archived), sheet = sheetOf(live, values);
   return live.map(f => {
-    const v = values[f.id] ?? null, box = f.look === 'score', worked = box ? statModifier({ derived: f.derived, value: v, mod: values[modKey(f.id)] }, sheet) : f.derived ? derivedValue({ derived: f.derived, value: v }, sheet) : null;
+    const v = values[f.id] ?? null, box = f.look === 'score', worked = box ? statModifier({ derived: f.derived, value: v, mod: values[modKey(f.id)] }, sheet) : f.derived ? derivedValue({ derived: f.derived, value: v, type: f.type }, sheet) : null;
     const save = box && f.save ? saveBonus(f, values, sheet) : null;
     const rolls = sheetRolls(f, values, sheet).map(r => {
       const dice = statRollDice(r.formula, v, sheet), n = r.success ? targetNumber(r.success, v, sheet) : null;

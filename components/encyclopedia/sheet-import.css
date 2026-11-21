@@ -46,3 +46,18 @@
 .import-done{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--radius);background:var(--accent-soft);color:var(--accent);padding:12px 14px}
 .import-done strong{display:block;color:var(--ink);font-size:13px;font-weight:600}
 .import-done small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+/* Import a sheet template (components/encyclopedia/template-import.tsx). */
+.template-ready{display:flex;flex-direction:column;gap:8px}
+.template-ready-card{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);padding:10px 12px}
+.template-ready-card>svg{color:var(--accent);flex-shrink:0}
+.template-ready-card>span{flex:1;min-width:0}
+.template-ready-card b{display:block;font-size:13px;font-weight:600}
+.template-ready-card small{display:block;color:var(--muted);font-size:12px;line-height:1.5;margin-top:2px}
+.template-ready-card .button{flex-shrink:0;display:inline-flex;align-items:center;gap:5px}
+.import-paste.template-paste{min-height:140px}
+.template-scope{border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px 10px;margin:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.template-scope legend{font-size:11px;color:var(--muted);padding:0 4px}
+.template-scope label{display:flex;align-items:center;gap:8px}
+.template-scope input{accent-color:var(--accent);margin:0}
+p.import-warn{margin:0;line-height:1.6}
+@media (max-width:620px){.template-ready-card{flex-wrap:wrap}.template-ready-card .button{margin-left:30px}}
