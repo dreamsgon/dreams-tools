@@ -17,6 +17,16 @@ export function LookBanner({look,playerToken,className='',children}:{look?:Look;
  return <div className={`look-banner ${className}`} style={{backgroundImage:src?`url("${src}")`:undefined,backgroundPosition:`center ${Math.round(look.banner.y*100)}%`}}>{children}</div>;
 }
 
+/**
+ * The campaign's banner picture behind a hero (the Wiki's front page, the campaign dashboard), under a dark fade so its
+ * title stays readable. `className` goes on the hero beside its own; the hero's CSS hides a theme's drawn art for it.
+ */
+export function useHeroPicture(look?:Look,playerToken?:string):{on:boolean;className:string;style?:CSSProperties}{
+ const banner=look?.banner,{src}=usePictureSrc(banner?.imageId,playerToken);
+ if(!banner)return {on:false,className:''};
+ return {on:true,className:'has-picture',style:{backgroundImage:`linear-gradient(to top, rgb(8 8 10 / .82) 0%, rgb(8 8 10 / .45) 45%, rgb(8 8 10 / .08) 100%)${src?`, url("${src}")`:''}`,backgroundPosition:`center, center ${Math.round(banner.y*100)}%`,backgroundSize:'cover, cover',backgroundRepeat:'no-repeat'}};
+}
+
 /** Loads the campaign's heading font, when it has one. */
 export function LookFont({look}:{look?:Look}){const url=lookFontUrl(look);return url?<link rel="stylesheet" href={url}/>:null;}
 

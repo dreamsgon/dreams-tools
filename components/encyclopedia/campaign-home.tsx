@@ -7,7 +7,7 @@
  * (campaign.look.banner), the same one Look and the Admin CP's Banner tab set. A live campaign theme draws its own art
  * in the hero; a banner picture takes its place.
  */
-import { useRef, useState, type ComponentType, type CSSProperties, type DragEvent } from "react";
+import { useRef, useState, type ComponentType, type DragEvent } from "react";
 import { ArrowUpRight, ChevronRight, Flag, Goal, ImagePlus, Map as MapIcon, Palette, Plus, ScrollText, Settings, Trash2, Users } from "lucide-react";
 import type { Campaign, Entry, Workspace, World } from "@/lib/encyclopedia/world-model";
 import type { Look } from "@/lib/encyclopedia/look";
@@ -16,6 +16,7 @@ import { usePictureSrc } from "./character-picture";
 import { uploadMapImage } from "./map-transfer";
 import { usePopover } from "./page-look";
 import { openThemeEditor } from "../campaign-theme-dock";
+import { useHeroPicture } from "./look-section";
 import "./campaign-home.css";
 
 type Kind = Entry["kind"];
@@ -124,7 +125,7 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
 function Hero({ world, campaign, linkedWorlds, gm, onEdit, onUnlink, setLook }: {
   world: World; campaign: Campaign | null; linkedWorlds: World[]; gm: boolean; onEdit: () => void; onUnlink: (id: string) => void; setLook: (look: Look | undefined) => void;
 }) {
-  const look = campaign?.look, banner = look?.banner, { src } = usePictureSrc(banner?.imageId);
+  const look = campaign?.look, banner = look?.banner, { src } = usePictureSrc(banner?.imageId), hero = useHeroPicture(look);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [dropping, setDropping] = useState(false);
   const box = usePopover(open, setOpen), file = useRef<HTMLInputElement>(null);
   const canBanner = gm && !!campaign;
@@ -142,11 +143,9 @@ function Hero({ world, campaign, linkedWorlds, gm, onEdit, onUnlink, setLook }: 
     onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false); },
     onDrop: (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); setDropping(false); const f = e.dataTransfer.files[0]; if (f) void upload(f); },
   } : {};
-  const pictured = !!banner;
-  const style: CSSProperties | undefined = pictured ? { backgroundImage: `linear-gradient(to top, rgb(8 8 10 / .82) 0%, rgb(8 8 10 / .45) 45%, rgb(8 8 10 / .08) 100%)${src ? `, url("${src}")` : ""}`, backgroundPosition: `center, center ${Math.round(banner.y * 100)}%`, backgroundSize: "cover, cover" } : undefined;
 
   return <div className="home-hero-wrap" ref={box}>
-    <div className={`dashboard-intro home-hero${pictured ? " has-picture" : ""}${dropping ? " is-dropping" : ""}`} style={style} {...drop}>
+    <div className={`dashboard-intro home-hero ${hero.className}${dropping ? " is-dropping" : ""}`} style={hero.style} {...drop}>
       <div className="home-hero-text">
         <span className="eyebrow">{campaign ? world.name : "World"}</span>
         <h1>{campaign?.name ?? world.name}</h1>

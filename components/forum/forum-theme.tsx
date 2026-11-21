@@ -304,7 +304,7 @@ const CLASSES: Record<ThemeArea, [string, string][]> = {
   ],
   dashboard: [
     ['.hub-crumbs, .hub-head, .hub-title, .hub-actions', 'The top: the campaign’s name and its buttons'],
-    ['.hub-banner', 'The campaign’s banner picture, from its look'],
+    ['.hub-head.has-picture', 'The header when the campaign has a banner picture (the theme’s drawn art gives way to it)'],
     ['.hub-tabs', 'Dashboard, Front page and Members'],
     ['.hub-grid, .hub-card', 'The dashboard’s cards'],
     ['.hub-button, .hub-button-primary', 'Buttons'],
