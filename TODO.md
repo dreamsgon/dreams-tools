@@ -82,6 +82,11 @@ Updated 2026-11-21. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
 
+## Wiki bottom space
+
+- Done: the 64px strip that global-dice.css reserves under every page no longer shows under the Wiki. The Wiki's footer row is now the home of the floating AI and Dice buttons (taller footer, right padding so its text never sits under them). Phones are unchanged.
+- Not checked on the live site with a campaign skin; checked locally in dark theme at 1440px and on an iPhone 13 size.
+
 ## Account settings
 
 - [x] Account page for signed-in users: display name (1–40 characters, separate from the registration username), profile picture, email change, password change, Sign out and Sign out everywhere.

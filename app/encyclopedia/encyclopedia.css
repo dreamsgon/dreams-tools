@@ -171,6 +171,10 @@ h1,h2,h3,.brand{font-weight:600;letter-spacing:-.02em}
 .prose h3{font-family:var(--font-display);font-size:18px;font-weight:600}
 .article-aside{padding-top:92px}
 .main-footer{border-top:1px solid var(--line)}
+/* The floating AI and Dice buttons sit in the footer row instead of in an empty strip under the whole page.
+   global-dice.css pads the body by 64px so content can scroll clear of them; the wiki's footer already gives that room. */
+body:has(.app-shell>.main-panel>.main-footer){padding-bottom:0}
+@media(min-width:721px){.main-panel>.main-footer{min-height:76px;align-items:center;padding-top:12px;padding-bottom:12px;padding-right:calc(38px + var(--dock-room,232px))}}
 .topbar .appearance-trigger{border-color:transparent}
 .topbar .tool-account{border-radius:50%;padding:0;justify-content:center}
 @media(max-width:1180px){.search-box input,.search-box input:focus{width:140px}}
