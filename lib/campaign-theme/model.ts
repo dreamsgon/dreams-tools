@@ -197,8 +197,18 @@ export function themeCss(t: Theme, scope = SKIN_SCOPE, area: ThemeArea = "forum"
     : t.mode === "light" ? `${light}\n:root[data-theme="dark"] ${light}`
     : `${dark}\n:root[data-theme="dark"] ${dark}`;
   const sheet = cleanCss(areaCss(t, area), scope);
-  return { css: `${vars}\n${sheet.css}`, problems: sheet.problems };
+  return { css: `${vars}\n${sheet.css}\n${dialogsOnTop(scope)}`, problems: sheet.problems };
 }
+
+/**
+ * Keeps an open dialog above the theme's own drawing. A theme often makes a stacking layer of a part (a banner with
+ * `isolation: isolate` and its content raised), and a dialog opened from inside that part can rise no higher than the part
+ * itself, so a later heading's slanted mark or a drawn frame paints over the dialog. While a dialog is open, every part
+ * that holds it is lifted to the dialogs' layer. Added after the theme's own rules, and not something a theme can turn off.
+ */
+export const dialogsOnTop = (scope: string) => `${scope} :has([aria-modal="true"]) { z-index: var(--z-modal, 200) !important; }`;
+/** Changes whenever the CSS added around every theme changes, so browsers drop the copies they kept. */
+const THEME_CSS_VERSION = 2;
 
 /**
  * Only a theme's colours, inside `scope`: for a part that keeps its own fonts, corners and layout, like the Admin CP,
@@ -213,7 +223,7 @@ export function themeColours(t: Theme, scope: string): string {
 /** What a page needs for the live theme: the CSS and the fonts to load. */
 export function liveTheme(t: Theme | null, area: ThemeArea = "forum") {
   if (!t) return null;
-  return { key: `${t.id}:${t.updatedAt ?? ""}:${area}`, name: t.name, mode: t.mode, banner: t.banner, css: framedBanner(themeCss(t, SKIN_SCOPE, area).css), fonts: themeFontsUrl(t) };
+  return { key: `${t.id}:${t.updatedAt ?? ""}:${area}:v${THEME_CSS_VERSION}`, name: t.name, mode: t.mode, banner: t.banner, css: framedBanner(themeCss(t, SKIN_SCOPE, area).css), fonts: themeFontsUrl(t) };
 }
 /**
  * A theme saved before banners could be moved sideways and zoomed draws the picture `center var(--banner-y, 50%) / cover`;
