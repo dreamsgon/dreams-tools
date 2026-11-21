@@ -22,7 +22,7 @@ const intOf=(v:string,min=-1000,max=10000)=>{const n=Math.round(Number(v));retur
 
 function Log({log}:{log:{at:string;who:string;what:string}[]}){
  if(!log.length)return null;
- return <section><span className="eyebrow">LOG</span><div className="store-log">{[...log].reverse().map((l,i)=><div key={i}><span><strong>{l.who}</strong> {l.what}</span><time>{when(l.at)}</time></div>)}</div></section>;
+ return <section><span className="eyebrow">Log</span><div className="store-log">{[...log].reverse().map((l,i)=><div key={i}><span><strong>{l.who}</strong> {l.what}</span><time>{when(l.at)}</time></div>)}</div></section>;
 }
 
 function Pills({type,shop,lock,owner,awaiting}:{type:StoreType;shop?:{open:boolean;hours?:string};lock?:{state:string};owner?:string;awaiting?:boolean}){
@@ -111,48 +111,48 @@ export function StoreTab({entry,store,data,campaign,update,change,onOpen,setNoti
   </div>
   <h3 className="section-heading" style={{margin:'8px 0 0'}}>Settings for this {storeTypeNames[store.type].toLowerCase()}</h3>
   <div className="store-settings">
-   <section className="inv-box"><span className="eyebrow">KIND</span><select className="inv-input" aria-label="Kind" value={store.type} onChange={e=>void switchType(e.target.value as StoreType)}>{storeTypes.map(t=><option key={t} value={t}>{storeTypeNames[t]}</option>)}</select><small className="muted">{storeTypeHints[store.type]}</small>
+   <section className="inv-box"><span className="eyebrow">Kind</span><select className="inv-input" aria-label="Kind" value={store.type} onChange={e=>void switchType(e.target.value as StoreType)}>{storeTypes.map(t=><option key={t} value={t}>{storeTypeNames[t]}</option>)}</select><small className="muted">{storeTypeHints[store.type]}</small>
     <label className="field-label">Run by<select value={store.ownerId??''} onChange={e=>save({...store,ownerId:e.target.value||undefined})}><option value="">The GM</option>{people.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select><small>{store.ownerId?'Their player manages the stock and takes the coin.':'Only you change the stock.'}</small></label>
     {owner&&<button type="button" className="text-button" onClick={()=>onOpen(owner.id)}>Open {owner.title}</button>}
    </section>
    {isShop&&shop&&<>
-    <section className="inv-box"><span className="eyebrow">OPEN OR CLOSED</span>
+    <section className="inv-box"><span className="eyebrow">Open or closed</span>
      <div className="segmented"><button type="button" className={shop.open?'on':''} onClick={()=>save({...store,shop:{...shop,open:true}})}>Open</button><button type="button" className={!shop.open?'on':''} onClick={()=>save({...store,shop:{...shop,open:false}})}>Closed</button></div>
      <label className="field-label">Opening hours<Field value={shop.hours??''} label="Opening hours" max={120} placeholder="Dawn to dusk. Closed on holy days." onSave={v=>save({...store,shop:{...shop,hours:v||undefined}})}/></label>
     </section>
-    <section className="inv-box"><span className="eyebrow">PRICES</span>
+    <section className="inv-box"><span className="eyebrow">Prices</span>
      <div className="store-two"><label className="field-label">Players pay<span className="inv-with-unit"><Field number value={String(shop.sell)} label="Players pay, percent" max={4} onSave={v=>{const n=pctOf(v);if(n!==null)save({...store,shop:{...shop,sell:n}});}}/>%</span></label>
       <label className="field-label">Shop pays<span className="inv-with-unit"><Field number value={String(shop.buy)} label="Shop pays, percent" max={4} onSave={v=>{const n=pctOf(v);if(n!==null)save({...store,shop:{...shop,buy:n}});}}/>%</span></label></div>
      <small className="muted">Both are a share of what each item is worth. A category or a character can have its own % on top, such as dearer weapons or a friend’s discount.</small>
      {pctRows('categoryPct',settings.categories.map(c=>({id:c,label:c})))}
      {pctRows('characterPct',people.map(p=>({id:p.id,label:p.title})))}
     </section>
-    <section className="inv-box"><span className="eyebrow">BUYING FROM PLAYERS</span>
+    <section className="inv-box"><span className="eyebrow">Buying from players</span>
      <label className="check-line"><input type="checkbox" checked={shop.buys} onChange={e=>save({...store,shop:{...shop,buys:e.target.checked}})}/> Buys from players</label>
      {shop.buys&&settings.categories.length>0&&<><small className="muted">What it buys (none picked: anything)</small><div className="inv-chips">{settings.categories.map(c=>{const on=!!shop.buyCategories?.includes(c);return <button type="button" key={c} className={on?'on':''} aria-pressed={on} onClick={()=>{const l=on?(shop.buyCategories??[]).filter(x=>x!==c):[...(shop.buyCategories??[]),c];save({...store,shop:{...shop,buyCategories:l.length?l:undefined}});}}>{c}</button>;})}</div></>}
      <label className="check-line"><input type="checkbox" checked={!!shop.hideSoldOut} onChange={e=>save({...store,shop:{...shop,hideSoldOut:e.target.checked||undefined}})}/> Hide sold-out lines from players</label>
     </section>
-    <section className="inv-box"><span className="eyebrow">HAGGLING</span>
+    <section className="inv-box"><span className="eyebrow">Haggling</span>
      <label className="check-line"><input type="checkbox" checked={!!shop.haggle} onChange={e=>save({...store,shop:{...shop,haggle:e.target.checked?{roll:'1d20',target:15,pct:10}:undefined}})}/> Players can haggle once every few hours</label>
      {shop.haggle&&<><label className="field-label">Roll<small> A roll on their sheet or a stat by name (Persuasion), or dice.</small><Field value={shop.haggle.roll} label="Haggle roll" max={100} onSave={v=>v&&save({...store,shop:{...shop,haggle:{...shop.haggle!,roll:v}}})}/></label>
       <div className="store-two"><label className="field-label">Needs at least<Field number value={String(shop.haggle.target)} label="Needs at least" max={6} onSave={v=>{const n=intOf(v);if(n!==null)save({...store,shop:{...shop,haggle:{...shop.haggle!,target:n}}});}}/></label>
        <label className="field-label">Then<span className="inv-with-unit"><Field number value={String(shop.haggle.pct)} label="Percent off" max={2} onSave={v=>{const n=intOf(v,1,90);if(n!==null)save({...store,shop:{...shop,haggle:{...shop.haggle!,pct:n}}});}}/>% off</span></label></div></>}
     </section>
-    <section className="inv-box"><span className="eyebrow">SALES</span>
+    <section className="inv-box"><span className="eyebrow">Sales</span>
      <div className="segmented"><button type="button" className={!shop.approve?'on':''} onClick={()=>save({...store,shop:{...shop,approve:undefined}})}>Go through at once</button><button type="button" className={shop.approve?'on':''} onClick={()=>save({...store,shop:{...shop,approve:true}})}>Wait for my OK</button></div>
     </section>
    </>}
-   {store.type==='container'&&<section className="inv-box"><span className="eyebrow">LOCK</span>
+   {store.type==='container'&&<section className="inv-box"><span className="eyebrow">Lock</span>
     <div className="segmented">{(['open','closed','locked'] as const).map(s=><button type="button" key={s} className={(store.lock?.state??'open')===s?'on':''} onClick={()=>save({...store,lock:{...(store.lock??{}),state:s}})}>{s==='open'?'Open':s==='closed'?'Closed':'Locked'}</button>)}</div>
     {store.lock?.state==='locked'&&<><label className="field-label">Opened by a key called<Field value={store.lock.key??''} label="Key" max={80} placeholder="Iron key" onSave={v=>save({...store,lock:{...store.lock!,key:v||undefined}})}/></label>
      <div className="store-two"><label className="field-label">Or a roll<Field value={store.lock.roll??''} label="Lock roll" max={100} placeholder="Thievery" onSave={v=>save({...store,lock:{...store.lock!,roll:v||undefined}})}/></label>
       <label className="field-label">Needs at least<Field number value={store.lock.target===undefined?'':String(store.lock.target)} label="Lock target" max={6} onSave={v=>{const n=v?intOf(v):undefined;if(n!==null)save({...store,lock:{...store.lock!,target:n}});}}/></label></div></>}
     <small className="muted">Closed: anyone can open it. Locked: a key the character carries, a roll, or you open it.</small>
    </section>}
-   {!isShop&&<section className="inv-box"><span className="eyebrow">WHAT PLAYERS MAY DO</span>
+   {!isShop&&<section className="inv-box"><span className="eyebrow">What players may do</span>
     {([['take','Take things out'],['put','Put things in'],['takeAll','Take everything at once'],['split','Split the coins between the party']] as const).map(([k,l])=><label key={k} className="check-line"><input type="checkbox" checked={share[k]} onChange={e=>save({...store,share:{...share,[k]:e.target.checked}})}/> {l}</label>)}
    </section>}
-   <section className="inv-box"><span className="eyebrow">WHO CAN USE IT</span>
+   <section className="inv-box"><span className="eyebrow">Who can use it</span>
     <div className="segmented"><button type="button" className={!store.who?'on':''} onClick={()=>save({...store,who:undefined})}>The whole party</button><button type="button" className={store.who?'on':''} onClick={()=>save({...store,who:store.who??[]})}>Picked characters</button></div>
     {store.who&&<div className="inv-chips">{people.filter(p=>p.character?.role==='pc'||store.who!.includes(p.id)).map(p=>{const on=store.who!.includes(p.id);return <button type="button" key={p.id} className={on?'on':''} aria-pressed={on} onClick={()=>save({...store,who:on?store.who!.filter(x=>x!==p.id):[...store.who!,p.id]})}>{p.title}</button>;})}</div>}
     <small className="muted">Players also need the Stock tab shared (the eye on the tab above).</small>
@@ -226,14 +226,14 @@ export function PlayerStoreView({entryId,title,store,settings,memberRef,mine,own
     {share?.takeAll&&store.items.length+(store.coins??0)>0&&<button type="button" className="button" disabled={busy} onClick={()=>void send({action:'take-all'})}>Take everything</button>}
     {share?.split&&(store.coins??0)>0&&<button type="button" className="button" disabled={busy} onClick={()=>void send({action:'split'})}><Coins size={14}/> Split the coins</button>}
    </div>}
-   {store.coins!==null&&(store.coins>0||store.owner||share?.put)&&<section className="inv-box"><span className="eyebrow">COINS {isShop?'TAKEN':'IN IT'}</span><strong>{money(store.coins)}</strong>
+   {store.coins!==null&&(store.coins>0||store.owner||share?.put)&&<section className="inv-box"><span className="eyebrow">Coins {isShop?'TAKEN':'IN IT'}</span><strong>{money(store.coins)}</strong>
     <div className="inv-money-form">
      {isShop&&store.owner?<button type="button" className="button small" disabled={busy||!store.coins} onClick={()=>void send({action:'collect'})}><Coins size={14}/> Collect</button>:<>
       <input className="inv-input" aria-label="Amount" placeholder={`Amount: 5 ${coins[0]?.abbr??''}`} value={coinAmt} onChange={e=>setCoinAmt(e.target.value)}/>
       {(share?.take||store.owner)&&<button type="button" className="button small" disabled={busy} onClick={()=>{const n=parseMoney(coinAmt,coins);if(n)void send({action:'take-coins',amount:n});}}>Take</button>}
       {(share?.put||store.owner)&&<button type="button" className="button small" disabled={busy} onClick={()=>{const n=parseMoney(coinAmt,coins);if(n)void send({action:'put-coins',amount:n});}}>Put in</button>}</>}
     </div></section>}
-   {((isShop&&!store.owner&&store.shop?.buys&&sellable.length>0)||(!isShop&&(share?.put||store.owner))||(isShop&&store.owner))&&inv&&<section className="inv-box store-sell"><span className="eyebrow">{isShop?(store.owner?'PUT OUT FOR SALE':'SELL'):'PUT IN'}</span>
+   {((isShop&&!store.owner&&store.shop?.buys&&sellable.length>0)||(!isShop&&(share?.put||store.owner))||(isShop&&store.owner))&&inv&&<section className="inv-box store-sell"><span className="eyebrow">{isShop?(store.owner?'Put out for sale':'Sell'):'Put in'}</span>
     <div className="inv-add">
      <select className="inv-input" aria-label="Item" value={putId} onChange={e=>setPutId(e.target.value)}><option value="">Choose from {me.title}’s things</option>{(isShop&&!store.owner?sellable:inv.items).map(i=><option key={i.id} value={i.id}>{i.name} ({i.qty}){isShop&&!store.owner?` · ${money(sellPrice(i))} each`:''}</option>)}</select>
      <input className="inv-input inv-add-qty" type="number" min={1} aria-label="How many" value={putQty} onChange={e=>setPutQty(e.target.value)}/>

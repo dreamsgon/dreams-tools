@@ -220,13 +220,13 @@ export function RecapCheck({entry,data,change,onOpen,setNotice}:{entry:Entry;dat
   <SessionFileButton entry={entry} data={data} setNotice={setNotice}/>
  </div>;
  return <div className="aside-section recap-check">
-  <div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
+  <div className="aside-heading"><span className="eyebrow">Check before publishing</span><small className="muted">{open.length?`${open.length} left`:'All done'}</small></div>
   <p className="aside-hint">What the AI found in this session. Nothing changes in your pages until you press a button.</p>
-  {auto.length>0&&<div className="check-group check-auto"><div className="check-auto-head"><span className="eyebrow">ADDED FOR YOU</span>{auto.length>1&&<button className="button small" onClick={()=>undo(auto.map(r=>r.id))}><Undo2 size={13}/> Undo all</button>}</div>
+  {auto.length>0&&<div className="check-group check-auto"><div className="check-auto-head"><span className="eyebrow">Added for you</span>{auto.length>1&&<button className="button small" onClick={()=>undo(auto.map(r=>r.id))}><Undo2 size={13}/> Undo all</button>}</div>
    <p className="aside-hint">You set these to Add automatically. New pages are GM only.</p>
    {auto.map(r=><div key={r.id} className="check-auto-row"><Check size={13} aria-hidden="true"/><span><span className="check-tag">{tagOf[r.kind]}</span> {r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:r.name}</span><button className="button small" aria-label={`Undo ${r.name}`} onClick={()=>undo([r.id])}><Undo2 size={13}/> Undo</button></div>)}
   </div>}
-  {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g.toUpperCase()}</span>{items.map(r=><div key={r.id} className="check-item">
+  {groups.map(({g,items})=><div key={g} className="check-group"><span className="eyebrow">{g}</span>{items.map(r=><div key={r.id} className="check-item">
    <div className="check-title"><span className={`check-tag ${r.kind==='update'?'update':r.kind==='questLog'?'journal':''}`}>{tagOf[r.kind]}</span>{r.pageId&&r.kind!=='loot'?<button className="inline-link" onClick={()=>onOpen(r.pageId!)}>{r.name}</button>:<strong>{r.name}</strong>}</div>
    {editing===r.id?<><textarea className="check-text" aria-label={`Text for ${r.name}`} rows={4} maxLength={4000} value={text} onChange={e=>setText(e.target.value)}/><div className="check-actions"><button className="button primary small" onClick={()=>{editItem(r.id,{text:text.trim()});setEditing(null);}}>Save</button><button className="button small" onClick={()=>setEditing(null)}>Cancel</button></div></>
    :same===r.id?<><label className="field-label">Same as<select autoFocus aria-label={`${r.name} is the same as`} defaultValue="" onChange={e=>{const p=others.find(x=>x.id===e.target.value);if(p){editItem(r.id,{kind:'update',pageId:p.id,name:p.title,pageKind:undefined});setSame(null);}}}><option value="" disabled>Choose a page</option>{others.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label><div className="check-actions"><button className="button small" onClick={()=>setSame(null)}>Cancel</button></div></>
@@ -326,7 +326,7 @@ function CheckWithAi({entry,data,setNotice}:{entry:Entry;data:Workspace;setNotic
 
 /** A session page with no recap yet: write it yourself, or have the AI draft it. */
 export function RecapStart({entry,onStart,onWrite}:{entry:Entry;onStart?:()=>void;onWrite?:()=>void}){
- return <div className="aside-section recap-check"><span className="eyebrow">RECAP</span><p className="aside-hint">Write the recap yourself, or have the AI draft it from a transcript, an RP thread, or notes in Notion, Google Drive or GitHub. Either way, players see nothing until you publish it.</p>
+ return <div className="aside-section recap-check"><span className="eyebrow">Recap</span><p className="aside-hint">Write the recap yourself, or have the AI draft it from a transcript, an RP thread, or notes in Notion, Google Drive or GitHub. Either way, players see nothing until you publish it.</p>
   {(onWrite||onStart)&&<div className="recap-start-choices">
    {onWrite&&<button className="recap-choice" onClick={onWrite}><PenLine size={15} aria-hidden="true"/><span><strong>Write it myself</strong><small>A recap you write. Publish it, post it to Discord, and The story so far uses it like any other.</small></span></button>}
    {onStart&&<button className="recap-choice ai" onClick={onStart}><Sparkles size={15} aria-hidden="true"/><span><strong>Draft it with AI…</strong><small>From a transcript, a chat export, or a Notion, Drive or GitHub link.</small></span></button>}
@@ -336,5 +336,5 @@ export function RecapStart({entry,onStart,onWrite}:{entry:Entry;onStart?:()=>voi
 
 /** A recap asked for in the New session recap dialog that the AI hasn't saved yet. */
 export function RecapWaiting({recap,onShow}:{recap:Recap;onShow?:()=>void}){
- return <div className="aside-section recap-check"><div className="aside-heading"><span className="eyebrow">CHECK BEFORE PUBLISHING</span></div><div className="handoff-wait"><Clock size={15}/> Waiting for your AI’s draft.</div><p className="aside-hint">Asked {new Date(recap.request!.at).toLocaleString('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}. When your AI app saves it, it shows up here with what it found.</p>{onShow&&<button className="button small" onClick={onShow}>Show the prompt again</button>}</div>;
+ return <div className="aside-section recap-check"><div className="aside-heading"><span className="eyebrow">Check before publishing</span></div><div className="handoff-wait"><Clock size={15}/> Waiting for your AI’s draft.</div><p className="aside-hint">Asked {new Date(recap.request!.at).toLocaleString('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}. When your AI app saves it, it shows up here with what it found.</p>{onShow&&<button className="button small" onClick={onShow}>Show the prompt again</button>}</div>;
 }

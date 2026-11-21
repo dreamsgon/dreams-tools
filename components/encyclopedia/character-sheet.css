@@ -1,7 +1,7 @@
 /* The Character sheet section (character-sheet.tsx, sheet-view.tsx) and its link dialog (sheet-dialog.tsx). Colours come from the shared tokens. */
 .sheet-card{display:flex;flex-direction:column;gap:16px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);padding:22px 24px;font-family:var(--font-sans)}
 .sheet-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.sheet-head .eyebrow{font-size:11px;letter-spacing:1.6px;font-weight:600;color:var(--ink)}
+.sheet-head .eyebrow{font-size:max(11px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.6px);font-weight:600;color:var(--ink)}
 .sheet-head small{font-size:12px;color:var(--muted)}
 .sheet-source{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);padding:12px 14px}
 .sheet-source>svg{color:var(--accent);flex:none}
@@ -20,7 +20,7 @@
 .sheet-tiles,.sheet-stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 .sheet-stats{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
 .sheet-tile{display:flex;flex-direction:column;gap:3px;border:1px solid var(--line);border-radius:var(--radius);padding:11px 13px;min-width:0}
-.sheet-tile small{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600;overflow-wrap:anywhere}
+.sheet-tile small{font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.2px);text-transform:var(--label-case,uppercase);color:var(--muted);font-weight:600;overflow-wrap:anywhere}
 .sheet-tile strong{font-size:24px;line-height:1.15;font-weight:600;overflow-wrap:anywhere}
 .sheet-stats .sheet-tile strong{font-size:20px}
 .sheet-max{font-size:15px;font-weight:400;color:var(--muted)}
@@ -29,8 +29,8 @@
 .sheet-bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
 .sheet-tile-hp{grid-column:span 2}
 .sheet-rolls{display:flex;flex-direction:column;gap:10px}
-.sheet-rolls .eyebrow{font-size:11px;letter-spacing:1.6px;font-weight:600}
-.sheet-roll-group h4{margin:0 0 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sheet-rolls .eyebrow{font-size:max(11px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.6px);font-weight:600}
+.sheet-roll-group h4{margin:0 0 6px;font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.2px);text-transform:var(--label-case,uppercase);color:var(--muted);font-weight:600}
 .sheet-roll-group ul{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
 .sheet-roll-group li{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;font-size:13px;min-width:0}
 .sheet-roll-group li span{overflow-wrap:anywhere}
@@ -51,7 +51,7 @@
 .sheet-way.is-main{border-color:var(--accent);border-width:2px}
 .sheet-way h3{margin:0;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .sheet-way p{margin:0;font-size:13px;color:var(--muted);line-height:1.6}
-.sheet-pill{font-size:10px;letter-spacing:1px;text-transform:uppercase;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;font-weight:600}
+.sheet-pill{font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1px);text-transform:var(--label-case,uppercase);background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;font-weight:600}
 .sheet-link-row{display:flex;gap:8px;flex-wrap:wrap}
 .sheet-link-row input{flex:1 1 240px;min-width:0}
 .sheet-warn{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--warning);border-radius:var(--radius);background:color-mix(in srgb,var(--warning) 10%,var(--panel));padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink)}
@@ -60,7 +60,7 @@
 .sheet-template>div{flex:1 1 220px;font-size:13px;color:var(--muted);line-height:1.6}
 .sheet-template strong{display:block;color:var(--ink)}
 .sheet-sees{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 24px;border-top:1px solid var(--line);padding-top:14px}
-.sheet-sees h4{margin:0 0 6px;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+.sheet-sees h4{margin:0 0 6px;font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.4px);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .sheet-sees ul{margin:0;padding-left:18px;list-style:disc;font-size:13px;line-height:1.7}
 .sheet-foot-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
 
@@ -84,7 +84,7 @@
 .sheet-tabs button{border:0;background:none;padding:7px 12px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
 .sheet-tabs button[aria-pressed="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 .sheet-side{display:flex;flex-direction:column;gap:14px;min-width:0}
-.sheet-side h3{margin:0;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sheet-side h3{margin:0;font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1.4px);text-transform:var(--label-case,uppercase);color:var(--muted);font-weight:600}
 .sheet-chips{display:flex;gap:6px;flex-wrap:wrap}
 .sheet-chips button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
 .sheet-chips button:hover{border-color:var(--accent)}
@@ -96,7 +96,7 @@
 .sheet-kinds button{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
 .sheet-kinds button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .sheet-picked{width:100%;border-collapse:collapse;font-size:12px}
-.sheet-picked th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 6px}
+.sheet-picked th{text-align:left;font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1px);text-transform:var(--label-case,uppercase);color:var(--muted);font-weight:600;padding:4px 6px}
 .sheet-picked td{padding:4px 6px;border-top:1px solid var(--line);vertical-align:middle}
 .sheet-picked input,.sheet-picked select{width:100%;min-width:0;font-size:12px;padding:4px 6px}
 .sheet-picked td:first-child{min-width:140px}

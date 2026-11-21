@@ -47,7 +47,7 @@
 .gen-section[open] > summary::after { transform:translateY(2px) rotate(-135deg); }
 .gen-section > summary:hover { background:var(--hover); }
 .gen-dialog .gen-section > summary:focus-visible { outline-offset:-2px; }
-.gen-section-title { color:var(--ink); font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.gen-section-title { color:var(--ink); font-size:12px; font-weight:600; letter-spacing:calc(var(--label-track,1) * .05em); text-transform:var(--label-case,uppercase); }
 .gen-section-value { min-width:0; margin-left:auto; overflow:hidden; color:var(--muted); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
 .gen-section[open] > summary .gen-section-value { display:none; }
 .gen-section-body { display:flex; flex-direction:column; gap:16px; padding:4px 20px 20px; }

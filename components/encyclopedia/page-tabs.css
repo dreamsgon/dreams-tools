@@ -23,7 +23,7 @@
 .page-tabs .page-tabs-menu button:hover:not(:disabled),.page-tabs .page-tabs-menu button:focus-visible{background:var(--raised)}
 .page-tabs .page-tabs-menu button:disabled{opacity:.45;cursor:default}
 .page-tabs .page-tabs-menu button.danger{color:var(--danger,#c0392b)}
-.page-tabs-menu-head{margin:8px 10px 3px;font-family:var(--font-sans);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.page-tabs-menu-head{margin:8px 10px 3px;font-family:var(--font-sans);font-size:max(10.5px,var(--label-min,0px));font-weight:600;letter-spacing:calc(var(--label-track,1) * .08em);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .page-tabs-menu-head:first-child{margin-top:2px}
 .page-tabs-menu-note{margin:6px 10px 4px;font-family:var(--font-sans);font-size:11.5px;line-height:1.4;color:var(--muted);text-transform:none;letter-spacing:normal}
 .page-tabs-check{display:inline-grid;place-items:center;width:16px;height:16px;border:1px solid var(--line-strong,var(--line));border-radius:4px;color:var(--accent);flex-shrink:0}

@@ -13,7 +13,7 @@
 .bridge-row small{display:block;color:var(--muted);font-size:12px}
 .bridge-sync{display:flex;flex-direction:column;gap:8px;overflow-x:auto}
 .bridge-table{width:100%;border-collapse:collapse;font-size:12px}
-.bridge-table th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 6px}
+.bridge-table th{text-align:left;font-size:max(10px,var(--label-min,0px));letter-spacing:calc(var(--label-track,1) * 1px);text-transform:var(--label-case,uppercase);color:var(--muted);font-weight:600;padding:4px 6px}
 .bridge-table td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 .bridge-table td:first-child b{font-weight:600;margin-right:6px}
 .bridge-table td:nth-child(2){color:var(--muted)}

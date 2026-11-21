@@ -7,7 +7,7 @@
 .map-note-badge.is-shared { background:var(--accent-soft); color:var(--accent); }
 .map-note-body { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:12px; padding:12px; }
 .map-note-section { display:flex; flex-direction:column; gap:6px; }
-.map-note-label { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.map-note-label { display:inline-flex; align-items:center; gap:5px; font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .map-note-text { margin:0; white-space:pre-wrap; line-height:1.5; overflow-wrap:anywhere; }
 .map-note-read { margin:0; padding:8px 10px; border-left:3px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; background:var(--accent-soft); font-style:italic; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
 .map-note footer { display:flex; align-items:center; gap:6px; padding:8px 10px; border-top:1px solid var(--line); background:var(--hover, transparent); }

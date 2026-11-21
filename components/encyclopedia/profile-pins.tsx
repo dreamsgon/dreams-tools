@@ -107,7 +107,7 @@ export function QuickFind({entry,campaign,profile,setProfile,arranging,onTab}:{e
  const setPins=(f:(l:ProfilePin[])=>ProfilePin[])=>setProfile(p=>{const next=f(p.pins??[]);const {pins:_old,...rest}=p;void _old;return next.length?{...rest,pins:next}:rest;});
  const dnd=useDragOrder((id,target,after)=>setPins(l=>moveTo(l,id,target,after)));
  return <section className="pin-section" aria-label="Quick find">
-  <div className="pin-section-head"><span className="eyebrow">QUICK FIND</span>
+  <div className="pin-section-head"><span className="eyebrow">Quick find</span>
    <button type="button" className="button small" onClick={()=>setPicking(true)}><Pin size={13}/> {cards.length?'Change pins':'Pin to profile'}</button></div>
   {cards.length?<div className="pin-grid" role="list">{cards.map((card,i)=><PinCard key={card.id} card={card} who={entry.title} onOpen={onTab} drag={dnd.item(card.id,{on:arranging})} tools={<span className="pin-tools">{arranging&&<span className="drag-grip" title="Drag to move" aria-hidden="true"><GripVertical size={13}/></span>}
    {arranging&&<><button type="button" className="icon-button" aria-label={`Move ${card.title} earlier`} disabled={i===0} onClick={()=>setPins(l=>movePin(l,card.id,-1))}><ArrowUp size={12}/></button><button type="button" className="icon-button" aria-label={`Move ${card.title} later`} disabled={i===cards.length-1} onClick={()=>setPins(l=>movePin(l,card.id,1))}><ArrowDown size={12}/></button><SizePick size={card.size} name={card.title} onSize={sz=>setPins(l=>sizePin(l,card.id,sz))}/></>}
@@ -158,6 +158,6 @@ function PinPicker({entry,campaign,pins,onToggle,onClose}:{entry:Entry;campaign?
 /** Quick find as players see it. */
 export function QuickFindReadOnly({pins,who,settings}:{pins:PlayerPin[];who:string;settings?:PinSettings}){
  if(!pins.length)return null;
- return <section className="pin-section" aria-label="Quick find"><div className="pin-section-head"><span className="eyebrow">QUICK FIND</span></div>
+ return <section className="pin-section" aria-label="Quick find"><div className="pin-section-head"><span className="eyebrow">Quick find</span></div>
   <div className="pin-grid" role="list">{playerCards(pins,settings).map(card=><PinCard key={card.id} card={card} who={who}/>)}</div></section>;
 }

@@ -33,7 +33,7 @@ export function OrgPanel({org,title,world,canEditWorld,update,addType,onClose}:{
  const pick=(what:'emblem'|'banner')=><input ref={what==='emblem'?emblemFile:bannerFile} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void upload(f,what);}}/>;
  const typeValue=other||custom?OTHER:org.type??'';
  return <aside className="org-panel" role="dialog" aria-label="Edit profile" ref={root} tabIndex={-1} onKeyDown={e=>{if(e.key==='Escape')onClose();}}>
-  <header className="org-panel-head"><div><span className="org-eyebrow">EDIT PROFILE</span><h2>{title}</h2></div><button type="button" className="icon-button" aria-label="Close the panel" onClick={onClose}><X size={16}/></button></header>
+  <header className="org-panel-head"><div><span className="org-eyebrow">Edit profile</span><h2>{title}</h2></div><button type="button" className="icon-button" aria-label="Close the panel" onClick={onClose}><X size={16}/></button></header>
   <p className="org-panel-saved">Saved as you go.</p>
   <div className="org-panel-body">
    <label className="org-field">Type

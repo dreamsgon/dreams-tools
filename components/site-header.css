@@ -11,3 +11,9 @@
   .rpg-hub .site-header.site-header .site-links { display:flex; order:3; flex:0 0 100%; width:100%; margin:0; gap:18px; flex-wrap:nowrap; overflow:hidden; }
   .rpg-hub .site-header.site-header .site-links .site-nav-link { padding:8px 0; }
 }
+
+/* Touch screens: every control in the header is at least 44px to the finger. */
+@media (pointer:coarse) {
+  .site-header.site-header .site-links .site-nav-link { display:inline-flex; align-items:center; min-height:44px; }
+  .site-header.site-header .site-end :is(.appearance-trigger, .bell-button) { width:44px; height:44px; min-height:44px; }
+}

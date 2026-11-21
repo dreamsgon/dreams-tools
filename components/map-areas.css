@@ -18,12 +18,12 @@
 .map-area-text { display:flex; flex-direction:column; gap:9px; font-size:13.5px; line-height:1.55; }
 .map-area-text p, .map-area-text ul { margin:0; overflow-wrap:anywhere; }
 .map-area-text ul { padding-left:18px; }
-.map-area-text h4 { margin:4px 0 0; font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.map-area-text h4 { margin:4px 0 0; font-size:12px; font-weight:650; letter-spacing:calc(var(--label-track,1) * .04em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .map-area-text code { font-size:12px; }
 .map-area-roll { display:inline-block; padding:0 6px; border-radius:4px; background:var(--accent-soft); color:var(--accent); font-size:12px; font-weight:600; }
 .map-area-link { color:var(--accent); }
 .map-area-secret { padding:8px 10px; border-radius:var(--radius); background:color-mix(in srgb, #d08245 14%, var(--panel)); color:color-mix(in srgb, #7a3f16 80%, var(--ink)); }
-.map-area-secret > span { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
+.map-area-secret > span { display:inline-flex; align-items:center; gap:4px; font-size:max(10.5px,var(--label-min,0px)); font-weight:650; letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); }
 .map-area-secret p { margin:4px 0 0; }
 .map-area-card footer { flex-wrap:wrap; }
 .map-area-card footer > button:not(.note-icon) { display:inline-flex; align-items:center; gap:2px; }

@@ -7,7 +7,7 @@
 .sb-custom{padding:4px 4px 18px;border-top:1px solid var(--line);margin-top:8px}
 .sb-custom-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 8px 2px}
 .sb-custom-head strong{font-size:14px}
-.sb-custom h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 8px 6px}
+.sb-custom h3{font-size:max(11px,var(--label-min,0px));font-weight:600;letter-spacing:calc(var(--label-track,1) * .08em);text-transform:var(--label-case,uppercase);color:var(--muted);margin:16px 8px 6px}
 .sb-hint{font-size:12px;line-height:1.5;color:var(--muted);margin:6px 8px}
 .sb-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .sb-list li{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 4px 0 2px;border-radius:var(--radius-sm);background:var(--raised);font-size:13px}
@@ -58,9 +58,9 @@
 .sb-tags label{display:flex;align-items:center;gap:5px;cursor:pointer}
 /* The GM's own top-level headings: in the sidebar above the sections they hold, and in Customize as a heading row. */
 .sb-group-heading{margin:22px 0 10px;padding:0 6px}
-.sb-group-heading .section-toggle{display:flex;align-items:center;gap:6px;width:100%;padding:4px 6px;font-family:var(--font-display);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:8px;text-align:left}
+.sb-group-heading .section-toggle{display:flex;align-items:center;gap:6px;width:100%;padding:4px 6px;font-family:var(--font-display);font-size:13px;letter-spacing:calc(var(--label-track,1) * .14em);text-transform:var(--label-case,uppercase);color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:8px;text-align:left}
 .sb-group-heading .section-toggle svg{color:var(--muted)}
-.sb-list li.sb-group-row{background:transparent;border:1px solid var(--line);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:12px;margin-top:6px}
+.sb-list li.sb-group-row{background:transparent;border:1px solid var(--line);font-weight:600;text-transform:var(--label-case,uppercase);letter-spacing:calc(var(--label-track,1) * .06em);font-size:12px;margin-top:6px}
 .sb-list li.sb-under{padding-left:14px;box-shadow:inset 3px 0 0 var(--line)}
 .sb-group-name{margin:0;flex:1}
 .sb-list:has(.sb-group-row){grid-template-columns:minmax(0,1fr)}

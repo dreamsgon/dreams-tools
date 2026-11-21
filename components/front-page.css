@@ -2,7 +2,7 @@
 .front-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
 .front-widget { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; padding:18px 20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); color:var(--ink); }
 .front-wide { grid-column:span 2; }
-.front-widget h2 { margin:0 0 6px; font-family:inherit; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.front-widget h2 { margin:0 0 6px; font-family:inherit; font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .1em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .front-big { font-family:var(--font-display); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.2; }
 .front-heading { font-size:17px; font-weight:600; }
 .front-muted { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }

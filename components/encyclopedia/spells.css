@@ -3,7 +3,7 @@
 .spell-card{display:flex;flex-direction:column;gap:8px;min-width:0;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));padding:12px;transition:border-color .15s}
 .spell-card:hover,.spell-card:focus-within{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 .spell-card.is-hidden{border-style:dashed}
-.spell-card-kicker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.spell-card-kicker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:max(11px,var(--label-min,0px));font-weight:600;letter-spacing:calc(var(--label-track,1) * .06em);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .spell-card-name{appearance:none;border:0;background:none;padding:0;margin:0;font:inherit;font-size:15px;font-weight:700;color:var(--ink);text-align:left;cursor:pointer;overflow-wrap:anywhere}
 .spell-card-name:hover{color:var(--accent)}
 .spell-card-details{display:flex;flex-wrap:wrap;gap:2px 12px;margin:0;font-size:12px}

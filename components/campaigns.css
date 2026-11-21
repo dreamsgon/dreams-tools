@@ -63,7 +63,7 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 
 .campaigns-details { align-self:start; position:sticky; top:16px; padding:22px; border:1px solid var(--line); border-radius:var(--radius-lg, 8px); background:var(--panel); }
 .campaigns-details-head { display:flex; align-items:center; justify-content:space-between; }
-.campaigns-details-head small { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.campaigns-details-head small { color:var(--muted); font-size:max(11px,var(--label-min,0px)); font-weight:700; letter-spacing:calc(var(--label-track,1) * .12em); text-transform:var(--label-case,uppercase); }
 .campaigns-icon, button.campaigns-icon { min-height:32px; width:32px; padding:0; border:0; background:none; color:var(--muted); }
 .campaigns-details h2 { margin:6px 0 0; font-size:22px; line-height:1.2; }
 .campaigns-details-open { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 6px; }
@@ -236,3 +236,13 @@ button.campaigns-delete-open:hover:not(:disabled) { text-decoration:underline; }
 .campaigns-delete-backup > span { flex:1 1 220px; }
 .campaigns-delete-backup small { flex:1 1 100%; }
 .campaigns-form strong { font-weight:700; }
+
+/* The list sits on its own sheet, so its rows read as one table and not as lines on the page. */
+.campaigns-table { border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--panel); box-shadow:var(--shadow-sm); }
+.campaigns-table > .campaigns-row:last-child { border-bottom:0; border-radius:0 0 var(--radius-lg) var(--radius-lg); }
+.campaigns-row-head { border-radius:var(--radius-lg) var(--radius-lg) 0 0; background:var(--raised); font-weight:500; }
+.campaigns-name strong { font-family:var(--font-display); font-size:17px; }
+.campaigns-search { background:var(--control); border-color:var(--field-line); }
+.campaigns-primary, button.campaigns-primary { box-shadow:var(--primary-shadow); }
+.campaigns-secondary, button.campaigns-secondary, .campaigns-open a { border-color:var(--control-line); }
+@media (max-width: 720px) { .campaigns-row { padding:14px 12px; } }

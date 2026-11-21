@@ -19,7 +19,7 @@ function useNow(){
 export function SheetView({sheet,subtitle,actions,note,rolling,hpTools,children}:{sheet:PlayerSheet;subtitle?:ReactNode;actions?:ReactNode;note?:ReactNode;/** The GM's rollable rolls and roll log. Players never get this: they see the plain list. */rolling?:ReactNode;/** The GM's HP controls and write-back switch, shown under the tiles. Never passed on the player site. */hpTools?:ReactNode;children?:ReactNode}){
  const now=useNow(),{tiles,stats,rolls,initFormula}=sheetLayout(sheet.items),groups=rollGroups(rolls),ago=timeAgo(sheet.readAt,now);
  return <section className="sheet-card" aria-label="Character sheet">
-  <div className="sheet-head"><span className="eyebrow">CHARACTER SHEET</span>{ago&&<small>Read {ago}</small>}</div>
+  <div className="sheet-head"><span className="eyebrow">Character sheet</span>{ago&&<small>Read {ago}</small>}</div>
   <div className="sheet-source"><FileSpreadsheet size={22} aria-hidden="true"/><div className="sheet-source-text"><strong>{sheet.title}</strong>{subtitle&&<small>{subtitle}</small>}</div>{actions&&<div className="sheet-actions">{actions}</div>}</div>
   {children}
   {tiles.length>0&&<div className="sheet-tiles">{tiles.map(t=><div className={`sheet-tile sheet-tile-${t.kind}`} key={t.kind}>
@@ -30,7 +30,7 @@ export function SheetView({sheet,subtitle,actions,note,rolling,hpTools,children}
   </div>)}</div>}
   {hpTools}
   {stats.length>0&&<div className="sheet-stats">{stats.map(s=><div className="sheet-tile" key={s.id}><small>{s.name}</small><strong>{s.value||'—'}</strong></div>)}</div>}
-  {rolling?<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{rolling}</div>:groups.length>0&&<div className="sheet-rolls"><span className="eyebrow">ROLLS</span>{groups.map(g=><div className="sheet-roll-group" key={g.title}>
+  {rolling?<div className="sheet-rolls"><span className="eyebrow">Rolls</span>{rolling}</div>:groups.length>0&&<div className="sheet-rolls"><span className="eyebrow">Rolls</span>{groups.map(g=><div className="sheet-roll-group" key={g.title}>
    {(groups.length>1||g.title!=='Rolls')&&<h4>{g.title}</h4>}
    <ul>{g.rolls.map(r=><li key={r.id}><span>{r.name}</span>{r.formula?<code>{r.formula}</code>:<em>no formula</em>}</li>)}</ul>
   </div>)}</div>}

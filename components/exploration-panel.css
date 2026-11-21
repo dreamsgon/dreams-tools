@@ -8,7 +8,7 @@
 .explore-segments button[aria-pressed="true"] { background:var(--panel); color:var(--ink); font-weight:600; box-shadow:0 1px 2px #0000001f; }
 .explore-segments button svg { flex:none; }
 .explore-back { display:flex; flex-direction:column; gap:4px; padding:8px; border-radius:var(--radius); background:var(--accent-soft); }
-.explore-label { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.explore-label { font-size:max(11px,var(--label-min,0px)); font-weight:600; letter-spacing:calc(var(--label-track,1) * .06em); text-transform:var(--label-case,uppercase); color:var(--muted); }
 .explore-back button { justify-content:flex-start; min-height:32px; padding:4px 6px; border-color:transparent; background:none; text-align:left; }
 .explore-back button span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .explore-back button small { color:var(--muted); font-weight:400; overflow:hidden; text-overflow:ellipsis; max-width:45%; }

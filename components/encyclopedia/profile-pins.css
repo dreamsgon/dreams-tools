@@ -1,14 +1,14 @@
 /* Quick find on a character's Profile tab (profile-pins.tsx) */
 .pin-section{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
 .pin-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.pin-section-head .eyebrow{letter-spacing:.12em}
+.pin-section-head .eyebrow{letter-spacing:calc(var(--label-track,1) * .12em)}
 .pin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
 .pin-card{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px 12px 12px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--raised,var(--panel)),var(--panel));box-shadow:0 1px 2px rgb(0 0 0/.1);transition:border-color .15s,transform .15s}
 .pin-card:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
 .pin-card.is-missing{border-style:dashed;opacity:.7}
 .pin-card.pin-statblock{grid-column:span 2}
 .pin-head{display:flex;align-items:center;gap:6px;min-height:20px}
-.pin-source{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.pin-source{display:inline-flex;align-items:center;gap:4px;font-size:max(10px,var(--label-min,0px));font-weight:700;letter-spacing:calc(var(--label-track,1) * .09em);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .pin-stat .pin-source svg{color:#86a8ea}.pin-item .pin-source svg{color:#d9b25e}.pin-spell .pin-source svg{color:#b39be6}.pin-statblock .pin-source svg{color:#ef8a99}
 .pin-gm{display:inline-flex;color:var(--muted)}
 .pin-tools{display:inline-flex;gap:2px;margin-left:auto;opacity:.55;transition:opacity .15s}
@@ -24,7 +24,7 @@ button.pin-title:hover{color:var(--accent);text-decoration:underline;text-underl
 /* A score box pinned: the modifier big and the score in its oval, like the Stats tab */
 .pin-card.is-box{align-items:center;text-align:center;padding-bottom:12px}
 .pin-card.is-box .pin-head{align-self:stretch}
-.pin-card.is-box .pin-title{text-align:center;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pin-card.is-box .pin-title{text-align:center;font-size:max(11px,var(--label-min,0px));font-weight:700;letter-spacing:calc(var(--label-track,1) * .08em);text-transform:var(--label-case,uppercase);color:var(--muted)}
 .pin-big{font-size:32px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
 .pin-score{min-width:46px;padding:0 10px;height:24px;line-height:22px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .pin-card.is-box .pin-rolls{justify-content:center}

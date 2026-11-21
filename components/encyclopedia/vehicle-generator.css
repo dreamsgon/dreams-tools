@@ -14,7 +14,7 @@
 .vgen-name .muted{font-size:13px}
 .vgen-specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:0}
 .vgen-specs div{padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);min-width:0}
-.vgen-specs dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.vgen-specs dt{font-size:max(11px,var(--label-min,0px));text-transform:var(--label-case,uppercase);letter-spacing:calc(var(--label-track,1) * .04em);color:var(--muted)}
 .vgen-specs dd{margin:2px 0 0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
 .vgen-gauges{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
 .vgen-gauges strong{color:var(--ink)}
