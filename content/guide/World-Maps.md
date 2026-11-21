@@ -25,6 +25,8 @@ On a map page choose **Open map editor** for the full-screen editor: tools on a 
 - A **compass** and **scale bar** are optional.
 - Clicking a place, a named line or a label opens a card with its linked page's opening lines and info box, GM secrets and the pages inside it, plus *Open page*, *Area map* and *Change page*.
 
+![A place's notes with two rolled hooks](images/roll-a-hook-place.jpg)
+
 ### Icons and stamps
 
 38 built-in icons in Settlements, Strongholds, Sci-fi, Nature, Wonders and Strange. The Place tool picks a settlement icon before you click; the **Stamp tool (S)** puts a landmark straight onto the map, named after its icon. A selected place can change icon or go back to a pin. **Your own icons**: PNG, JPEG or WebP up to 1 MB, up to 40 per map. Players see only the uploaded icons used by places they can see.
@@ -35,7 +37,7 @@ Map settings › **Style**: **Painted**, **Old atlas** (parchment, brown ink, wa
 
 ## Generate a world
 
-Press **Generate** in the editor (or *Generate a new landscape* on a map page). A live preview updates as you change things; the same seed gives the same world.
+Press **Generate** in the editor (or *Generate a new landscape* on a map page). The dialog works like every map generator (see [the generator dialog](Dungeon-Generator#the-generator-dialog)): pick a card, change settings on the left, and the live preview on the right updates as you go. The same seed gives the same world.
 
 - **Continent, Coast, Archipelago, Inland**: choose how far it spans (Region 200 mi, Kingdom 600 mi, Continent 2,000 mi), sea level, mountains, climate (Cold, Temperate, Warm, Mixed) and a seed. Named rivers run mountains to sea, towns can be added near the coast, roads join them. Regenerating keeps anything you drew or added notes to.
 - **Whole planet**: a 2:1 map that wraps east to west, built from 14 tectonic plates, wind and rain with rain shadows, and biomes from warmth and rain.

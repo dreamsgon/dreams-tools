@@ -10,7 +10,8 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 
 - **Drag** a page in the sidebar onto another to nest it, or onto a row's edge to place it before or after. Rows show how many pages are inside.
 - **Arrange** (the arrows beside World Lore and Campaign Notes) shows every page with its name to rename in place and buttons to move it up, down, out of the page it is in, or into the page above. Press **Done** when you finish.
-- **Customize sidebar** categories can list pages you pick, every page of some kinds, or every page with some of your Wiki tags. New pages join by themselves.
+- **Customize sidebar** categories can list pages you pick, every page of some kinds or of one of [your own types](#entry-types), or every page with some of your Wiki tags. New pages join by themselves, and the **+** beside a category makes a new page that shows in it.
+- **Add a heading** (in Customize sidebar) puts a heading you name, such as *The World* or *At the table*, above the sections that follow it. Folding the heading folds them all.
 - Beside a page: its **sub-pages** (with **+ Sub-page**), **Mentioned in** (pages that link here, with the words around the link) and **Named but not linked** with **Link all**.
 - In **Write** mode, type `[[` or `@` to list pages to link, and create a new page inside this one on the spot.
 - **Hover** a link to preview the page. `{{word|note}}` adds a hover note to text.
@@ -32,9 +33,47 @@ Any page can hold sub-pages in the same campaign or shared lore; folders are not
 - **Page history**: the text a page had before a save is kept (at most one version per ten minutes, the newest 20). Open history to compare and **restore**; a restore keeps the current text first.
 - **Ctrl/Cmd+K** quick search, `#tag` for tags.
 
+## Entry types
+
+![New entry with Your types at the top and Deity chosen](images/new-entry-types.jpg)
+
+**New entry** asks for a name and a type. Types are pills in groups, with a line on the right saying what the chosen one is. A type with info box fields shows them under the picker, ready to fill in.
+
+| Group | Types |
+|---|---|
+| **Your types** | This world's [templates](#page-templates) (Settlement, Tavern, Creature…), the types you made, and **New type** |
+| **Writing** | **Page** (a plain article, the default), Note, Lore, **Other** (anything else), Folder, Checklist |
+| **People and places** | Character, Place, Organization, Map |
+| **At the table** | Session, Quest, Store, Vehicle |
+| **Space** | Galaxy, Sector, Star system |
+
+### Your own types
+
+Press **New type** to make one: give it a name (*Deity*, *Spell*, *Ship class*), pick an icon, choose what it **works like** (Page, Note, Other, Character, Place, Organization, Lore, Session or Quest) and who can use it (this campaign, or every campaign in the world). A type is a [template](#page-templates) with an icon, so add its info box fields, tabs and starting text on the **Templates** page. Pages made from it get its icon, and their type pill shows its name.
+
+### Change type
+
+A page's type pill (while writing) and its side column have **Change type**. The page keeps its title, text, tabs, tags, links and place in the Wiki. If the old type had something the new one can't hold, such as a map, an organization profile or info box values, the dialog names it before you change. The icon follows the new type unless you picked one yourself. **Page history** can undo the change.
+
+![Change type, turning an organization into a plain page](images/change-type.jpg)
+
 ## Page templates
 
-Each world keeps templates (Settlement, Tavern, Organization, Item and Session to start) with info box fields, tabs and starting text. **New entry** offers them, any page can be **saved as a template**. A page's info box sits at the top of its sidebar; players see only the fields marked for players.
+Each world keeps templates (Settlement, Tavern, Organization, Item and Session to start; the Templates page can add Player character, NPC and Creature) with info box fields, tabs and starting text. **New entry** offers them, any page can be **saved as a template**, and **Use a template** applies one to a page you already have. A template can belong to one campaign or the whole world. A page's info box sits at the top of its sidebar; players see only the fields marked for players.
+
+Info box fields can be:
+
+| Field | Holds |
+|---|---|
+| Text, Long text, Number | Words or a number |
+| **Score + modifier** | A score shown as its modifier, such as **+4** with 19 beside it. The modifier is (score − 10) ÷ 2 rounded down, or one you type in |
+| **Current / max** | Two numbers, like hit points 68 / 90 |
+| Choice, **Several choices** | One, or any number, of the choices you list |
+| **Yes / no** | A tick box |
+| Page link | Another page in the world |
+| **Web link** | An `https://` address that opens in a new tab, for players too |
+
+![An info box with a score, current / max, yes / no and a web link](images/template-fields.jpg)
 
 ## Organizations and character profiles
 
@@ -74,6 +113,18 @@ See [Quests and the Codex](Quests-and-Codex).
 
 Calendars support moons and seasons, with weather and travel tied to map regions. The world map [hex crawl](World-Maps) advances the calendar as the party moves and uses the nearest weather region's forecast. A calendar templates reference is in the repository docs.
 
+## Export & import
+
+**Export & import** in the sidebar moves reusable things between worlds and campaigns, in this account or someone else's: random tables, templates (and so your own types), character stats, calendars, quest categories, kinds of tie, vehicle types and items and spells settings.
+
+- **Export**: tick what to take (whole groups or single items) and press **Export**. You get one `.content.json` file. A table that rolls on another table brings that one along.
+- **Import**: open the world or campaign it should go into, choose the file, untick anything you don't want and press **Import**. Everything comes in as a copy with new ids, so nothing already there changes (Items and spells settings are the exception: they are replaced). Stats, calendars, quest categories and item settings need a campaign open. You choose whether imported tables are used in this campaign or every campaign, and whether templates are offered in this campaign or the whole world.
+- Pages are not included. To move a whole campaign with its pages, use **Download backup** on the Campaigns page.
+
+![Export & import, choosing templates to export](images/export-import.jpg)
+
 ## Settings, import and backup
 
 Settings can export all worlds or one campaign as JSON, and import JSON (imports make separate copies). The workspace limit is 2 MB; atlas images allow up to 8 MB each. Backups can contain GM-only material: keep them private.
+
+The floating **AI** and **Dice** buttons sit in the Wiki's footer row, so they never cover the end of a page.

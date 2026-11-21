@@ -199,4 +199,4 @@ The GM can always add HTML. Co-GMs and players need **Use HTML in Wiki pages** o
 - `[[table:Rumours]]` in a sentence rolls a random table.
 - `[[maptable:<scene>|The bridge]]` opens a battle map in Maptable. Players don't get these links.
 
-See [Wiki basics](Encyclopedia-Basics) for pages, templates and the sidebar.
+See [Wiki basics](Encyclopedia-Basics) for pages, entry types, templates and the sidebar.

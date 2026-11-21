@@ -2,16 +2,20 @@
 
 ## The campaign hub and front page
 
-![A campaign hub on its Dashboard](images/campaign-hub.jpg)
+![A campaign's Dashboard with its banner picture](images/campaign-hub.jpg)
 
-`/campaigns/<campaign>` is one campaign across both tools.
+`/campaigns/<campaign>` is one campaign across both tools. **Dashboard** in the campaign bar opens it. The campaign's banner picture fills the header behind its name, and the header has **Customize**, **Theme** and **GitHub & backups**. Its tabs are **Prep**, **Front page** and **Members**.
 
-- **Dashboard**: a grid of widgets pulled from the campaign, such as the next session, recent pages, the party and your scenes.
+- **Prep**: a grid of widgets pulled from the campaign, such as the next session, active quests, links, the party, loose threads and your scenes.
 - **Front page**: a list of widgets that players see first on their player site. Widgets include **The story so far** (see [Session recaps and AI writing](Session-Recaps-and-AI-Writing)). Players get only what the front page resolves from shared material; secrets and GM-only pages never reach it.
 
 ## Campaign looks
 
-Each campaign can have its own look: a **banner** (choose which part stays in view), an **accent colour**, a **heading font** (Cinzel, Spectral, Schibsted Grotesk, Marcellus, Cormorant Garamond or Space Grotesk) and a **page surface** (plain, parchment, stone, night). Each has light and dark versions. The look applies to the campaign's Wiki pages and, unless you turn it off, to the player site.
+Each campaign can have its own look: a **banner** picture (drag it and zoom in, up to 4×, to frame it), an **accent colour**, a **heading font** (Cinzel, Spectral, Schibsted Grotesk, Marcellus, Cormorant Garamond or Space Grotesk) and a **page surface** (plain, parchment, stone, night). Each has light and dark versions. The look applies to the campaign's Wiki pages and, unless you turn it off, to the player site.
+
+The banner shows on the Wiki front page, the campaign dashboard, Maptable's Scene Picker and the forum, framed the same way everywhere. Set it with **Banner** on the Wiki front page or the Admin CP's **Banner** tab. **Reposition and zoom** turns the picture into a frame: drag it (or use the arrow keys), zoom with **+** and **−**, then **Save position** (or press Enter). **Reset** centres it with no zoom, and **Cancel** (or Escape) leaves it as it was.
+
+![Reposition and zoom on the Wiki front page](images/banner-reposition.jpg)
 
 ## Sharing with players
 

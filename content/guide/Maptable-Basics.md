@@ -6,7 +6,7 @@ Maptable is the table-running tool: scenes with a map image or a drawn map, toke
 
 ![A Maptable scene with tokens and the Tokens panel](images/maptable-board.jpg)
 
-- Maptable opens on the **Scene Picker** for the campaign you were last in: its **scenes as a picture grid** grouped by folder, with a **Continue** card at the top. Switch campaigns with the campaign switcher at the top. Maps not in a campaign have a picker of their own, linked at the bottom.
+- Maptable opens on the **Scene Picker** for the campaign you were last in: its **scenes as a picture grid** grouped by folder, with a **Continue** card at the top, under the campaign's banner picture when it has one. Switch campaigns with the campaign switcher at the top. Maps not in a campaign have a picker of their own, linked at the bottom.
 - Each campaign's home page is its **dashboard** on the Campaigns page (`/campaigns/<campaign>`). The **Dashboard** link at the start of Maptable's header goes there; Maptable has no list of every campaign of its own. Make and organize campaigns on the **Campaigns** page.
 - **All scenes** in the left rail (and **Scenes** at the top on a phone) goes back to the Scene Picker from a map.
 - The **Scenes** panel has one **New** menu: upload a map, blank scene, area, world, split, copy from another campaign, or new folder. Each scene has a settings button (General, Map image and Size tabs, saved as you go).

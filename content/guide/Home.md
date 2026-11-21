@@ -28,7 +28,7 @@ This guide covers features that are finished and live. Each page explains what t
 
 ## The Wiki
 
-10. [Wiki basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, templates, random tables.
+10. [Wiki basics](Encyclopedia-Basics): pages, links, secrets, rolls in text, entry types and templates, random tables, export and import.
 11. [Characters and the rollable sheet](Characters-and-the-Rollable-Sheet)
 12. [Sheet import, export and Google Sheets](Sheet-Import-Export-and-Google-Sheets)
 13. [Inventory, spells and stores](Inventory-Spells-and-Stores)
