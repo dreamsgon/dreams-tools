@@ -8,7 +8,7 @@ import { MAX_ICON_BYTES, decodePaint, encodePaint, fogBrush, isWater, terrainInd
 import { newId, playerCampaign, visibleEntries, type Campaign, type Entry, type Workspace } from '@/lib/encyclopedia/world-model';
 import { holdersByPlace, pinTints, playerHoldersByPlace } from '@/lib/encyclopedia/org-holdings';
 import { paintStroke, thinLine } from '@/lib/encyclopedia/terrain-art';
-import { crawlPlan, type Pace } from '@/lib/encyclopedia/hex-crawl';
+import { cellLabel, cellWord, crawlPlan, type Pace } from '@/lib/encyclopedia/hex-crawl';
 import type { Calendar } from '@/lib/encyclopedia/calendar-model';
 import type { TableLibrary } from '@/lib/encyclopedia/tables';
 import { HexInspector } from './hex-inspector';
@@ -55,6 +55,12 @@ const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
 const frameStyle = (f: ZoomFrame) => ({ left: pct(f.x), top: pct(f.y), width: pct(f.w), height: pct(f.h) });
 
 /** The full-screen world and area map editor: tools on a rail, the map in the middle, and an inspector. */
+/** What a screen reader hears for a selected cell: where it is, its terrain, its name and whether the party is there. */
+function cellSpoken(map: MapData, i: number) {
+  const title = map.hexes?.find(h => h.cell === i)?.title, terrain = terrains[map.tiles[i] ?? 1]?.name ?? '';
+  return [`${cellWord(map)} ${cellLabel(map, i)}`, terrain, title, map.party?.cell === i ? 'the party is here' : ''].filter(Boolean).join(', ');
+}
+
 export function WorldMapStudio({ entry, data, campaign, setMap, close, start, onOpen, onCalendarChange, onNewAreaMap, onNewMap, onRevealInParents }: {
   entry: Entry; data: Workspace; campaign?: Campaign; setMap: (patch: Partial<MapData>) => void; close: () => void; start?: 'generate'; onOpen?: (id: string) => void;
   onCalendarChange?: (c: Calendar) => boolean; onNewAreaMap?: (pinId: string) => void; onRevealInParents?: () => void;
@@ -302,7 +308,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
       </nav>
       <section className="world-studio-map">
         <MapViewport map={map} editing={tool !== 'select' && !playerView}>
-          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <div className="zoom-host"><MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells}
+          {playerView ? <MapCanvas map={seen} imageUrl={url} fogMode="player" tints={tints}/> : <div className="zoom-host"><MapCanvas map={map} tints={tints} paint={live ?? undefined} imageUrl={url} selectedPin={selected} show={show} draft={draft} selectedCell={cell} route={plan?.cells} onStep={tool === 'select' && gridded ? i => { setSelected(''); setCell(i); } : undefined}
             brush={brush} fogEditing={tool === 'fog'} onCell={tool === 'fog' ? explore : undefined}
             selectedItem={selected} onItem={tool === 'select' ? select : undefined}
             onPlace={tool === 'zoom' ? (x, y) => frameAt(x, y) : tool === 'place' ? place : tool === 'stamp' ? stamp : tool === 'label' ? addLabel : tool === 'select' ? (x, y) => { setSelected(''); setCell(gridded ? pointCell(map, x, y) : -1); } : undefined} onPin={id => { select(id); if (tool !== 'select') setTool('select'); }}/>
@@ -312,7 +318,8 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
             </div>}
           </div>}
         </MapViewport>
-        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : tool === 'shape' ? (shaperReady ? 'Drag to shape the land. [ and ] change the brush size.' : 'Getting the land tools ready…') : tool === 'zoom' ? 'Click a spot to frame it, then make a closer map of it. Click a frame’s name to open a map made before.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Pick an icon, then click the map to add a place.' : tool === 'stamp' ? 'Pick a landmark, then click the map to stamp it. Select a stamp afterwards to rename it.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
+        <span className="sr-only" role="status" aria-live="polite">{cell >= 0 && tool === 'select' && !playerView ? cellSpoken(map, cell) : ''}</span>
+        <p className="world-studio-tip">{playerView ? 'What players see. Choose a tool to go back to editing.' : tool === 'terrain' ? 'Drag to paint. [ and ] change the brush size.' : tool === 'shape' ? (shaperReady ? 'Drag to shape the land. [ and ] change the brush size.' : 'Getting the land tools ready…') : tool === 'zoom' ? 'Click a spot to frame it, then make a closer map of it. Click a frame’s name to open a map made before.' : drawing ? `Drag to draw a ${tool}. Name it in the inspector afterwards.` : tool === 'label' ? 'Click the map to write a name, like a sea, a region or a mountain range.' : tool === 'place' ? 'Pick an icon, then click the map to add a place.' : tool === 'stamp' ? 'Pick a landmark, then click the map to stamp it. Select a stamp afterwards to rename it.' : tool === 'fog' ? `Click or drag to ${fogMode === 'reveal' ? 'reveal' : 'hide'} areas for players.` : gridded ? `Click a ${map.grid === 'hex' ? 'hex' : 'square'} (or focus the map and use the arrow keys) to write notes, roll encounters or move the party. Click a place to see its notes.` : 'Select a place to see its notes. Drag to move around when zoomed in.'}</p>
       </section>
       <aside className="world-studio-inspector" aria-label="Inspector">
         {playerView ? <>

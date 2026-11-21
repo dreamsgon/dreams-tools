@@ -167,14 +167,14 @@ export default function HexMapPanel({ close, start, from, regenerate, kinds }: {
   />;
 }
 
-const LOOKS: [HexLook["look"], string][] = [["painted", "Painted"], ["flat", "Flat colours"], ["ink", "Ink"]];
+const LOOKS: [HexLook["look"], string][] = [["painted", "Painted"], ["flat", "Flat colours"], ["atlas", "Old atlas"], ["ink", "Ink"]];
 const LEGENDS: [HexLook["legend"], string][] = [["none", "No legend"], ["nw", "Top left"], ["ne", "Top right"], ["sw", "Bottom left"], ["se", "Bottom right"]];
 const lookSummary = (look: HexLook) => [LOOKS.find(l => l[0] === look.look)![1], look.numbers && "numbers", look.legend !== "none" && "legend"].filter(Boolean).join(", ");
 
 /** How a hex map is drawn: here before it is made, and in the Map Creator's Map tab afterwards. */
 export function HexLookFields({ look, change }: { look: HexLook; change: (part: Partial<HexLook>) => void }) {
   return <>
-    <Choice label="Art" value={look.look} options={LOOKS} onChange={v => change({ look: v })} hint={look.look === "painted" ? "Colour with trees, peaks and dunes drawn on." : look.look === "flat" ? "Plain colours, easy to read at a glance." : "Black and white, for printing."}/>
+    <Choice label="Art" value={look.look} options={LOOKS} onChange={v => change({ look: v })} hint={look.look === "painted" ? "Colour with trees, peaks and dunes drawn on." : look.look === "flat" ? "Plain colours, easy to read at a glance." : look.look === "atlas" ? "Brown ink on parchment, for handouts. Matches the world maps' Old atlas." : "Black and white, for printing."}/>
     <Check label="Hex outlines" checked={look.lines} onChange={v => change({ lines: v })}/>
     <Check label="Hex numbers (column, then row)" checked={look.numbers} onChange={v => change({ numbers: v })}/>
     <Check label="Place names on the map" checked={look.labels} onChange={v => change({ labels: v })}/>

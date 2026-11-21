@@ -28,7 +28,7 @@ For Climate and Custom mix there is **Biome size** (Small to Huge), **Borders** 
 
 ### Look
 
-Pick **Painted** (colour with trees, peaks and dunes), **Flat colours**, or **Ink** (black and white on paper for printing). Turn hex outlines on or off, show **hex numbers** (column then row, like 0412), and add a **legend** in any corner listing biomes, terrain, water and rivers with the miles per hex. The same Look settings live in the Map Creator's Map tab, so you can change them later.
+Pick **Painted** (colour with trees, peaks and dunes), **Flat colours**, **Old atlas** (brown ink on parchment in a ruled frame, like the world maps' Old atlas, for handouts) or **Ink** (black and white on paper for printing). Turn hex outlines on or off, show **hex numbers** (column then row, like 0412), and add a **legend** in any corner listing biomes, terrain, water and rivers with the miles per hex. The same Look settings live in the Map Creator's Map tab, so you can change them later.
 
 ![Ink look in Maptable](images/hexmap-ink-in-maptable.jpg)
 

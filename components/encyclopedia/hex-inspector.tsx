@@ -86,7 +86,7 @@ export function HexInspector({ map, cell, plan, pace, setPace, campaign, library
 
     <h3 className="world-sub"><Users size={16}/> The party</h3>
     {!map.party ? <>
-      <p className="aside-hint">Put the party on the map to track where they are. Moving them spends travel time, explores the {word === 'Hex' ? 'hexes' : 'squares'} they pass, and can roll for encounters.</p>
+      <p className="aside-hint">Track where the party is. Moving them spends travel time, explores the {word === 'Hex' ? 'hexes' : 'squares'} they pass and can roll encounters.</p>
       <button type="button" className="button primary" onClick={() => { onRevealInParents?.(); setMap({ party: placeParty(map, cell), ...(map.fog?.enabled ? { fog: { ...map.fog, revealed: [...new Set([...map.fog.revealed, cell])].sort((a, b) => a - b) } } : {}) }); }}><Footprints size={15}/> Put the party here</button>
     </> : map.party.cell === cell ? <>
       <p>The party is here. {hoursText(map.party.hours)} of {HOURS_PER_DAY} travel hours used today.</p>

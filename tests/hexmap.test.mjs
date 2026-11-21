@@ -5,7 +5,7 @@ import { applyHexPreset, hexPresets, matchingHexPreset } from "../lib/hexmap/pre
 import { hashText } from "../lib/hexmap/noise.ts";
 import { hexCells, hexGridFor, hexMapSize, hexNeighbours, fittingHexSize } from "../lib/hexmap/layout.ts";
 import { readHex, isWaterTerrain, biomeIds, biomes } from "../lib/hexmap/biomes.ts";
-import { hexLayerOps, hexLegendRows, hexSiteOps } from "../lib/hexmap/art.ts";
+import { hexFill, hexLayerOps, hexLegendRows, hexSiteOps } from "../lib/hexmap/art.ts";
 import { isSettlement } from "../lib/hexmap/places.ts";
 import { hexSettingsCode, readHexSettingsCode } from "../lib/hexmap/code.ts";
 import { hexDistance } from "../lib/hexmap/layout.ts";
@@ -293,6 +293,21 @@ test("Flat colours draws no symbols, Ink draws on paper, and outlines can be hid
   assert.equal(outlines(painted), 1);
   assert.equal(outlines(hexLayerOps({ ...layer, lines: false })), 0);
   assert.notEqual(hexLayerOps({ ...layer }), ink, "each look is drawn on its own");
+});
+
+test("Old atlas draws brown ink on parchment in a frame, with biomes still told apart", () => {
+  const { layer } = generateHexMap(small({ rivers: 4, settlements: 3, sites: 0 }));
+  const atlas = hexLayerOps({ ...layer, look: "atlas", legend: "sw" });
+  const colours = new Set(atlas.flatMap(op => [op.fill, op.stroke]).filter(Boolean));
+  assert.ok(colours.has("#5a3e22"), "sepia ink");
+  assert.ok(![...colours].some(c => ["#4d84a5", "#7db1c6", "#4f8fb4", "#ff7a3d"].includes(c)), "no painted water, rivers or lava");
+  const frame = atlas.slice(-2);
+  assert.ok(frame.every(op => op.stroke === "#5a3e22" && !op.fill), "two frame rules around the map");
+  const grounds = new Set(["temperate", "desert", "boreal", "jungle"].map(b => hexFill(b, "flat", 1, "atlas")));
+  assert.equal(grounds.size, 4, "each biome keeps its own parchment tint");
+  for (const c of grounds) { const n = parseInt(c.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255; assert.ok(l > 0.6, `${c} stays light enough for ink`); }
+  assert.ok(hexLegendRows(layer, "atlas").some(r => r.fill && !r.river), "the legend shows the tints");
+  assert.equal(mapDrawingSchema.parse(drawingOf({ ...layer, look: "atlas" })).hexes.look, "atlas");
 });
 
 test("hex numbers give every hex inside the outline its column and row", () => {

@@ -7,8 +7,9 @@ import { isSettlement, placeKindNames, type HexPlace, type HexPlaceKind } from "
 /**
  * Draws a hex map as a short list of paths, grouped by colour, so the Map Creator (SVG) and
  * Maptable (canvas) draw it the same way and quickly. Every symbol is a simple shape drawn here.
- * Three looks: Painted (colour and symbols), Flat colours (colour only) and Ink (black and white,
- * for printing), with optional hex numbers and a legend.
+ * Four looks: Painted (colour and symbols), Flat colours (colour only), Old atlas (brown ink on
+ * parchment, like the world maps' Old atlas) and Ink (black and white, for printing), with optional
+ * hex numbers and a legend.
  */
 type Role = "main" | "dark" | "trunk" | "snow" | "lava" | "light" | "gold";
 /** A symbol's piece: filled (or stroked, `stroke` wide) in its role's colour, with an optional `edge` around a fill. */
@@ -66,8 +67,23 @@ export function shade(hex: string, amount: number) {
   return "#" + ((1 << 24) | (f(n >> 16) << 16) | (f((n >> 8) & 255) << 8) | f(n & 255)).toString(16).slice(1);
 }
 const WATER = { deep: "#4d84a5", shallow: "#7db1c6", lake: "#76aec0", ice: "#dbe8ee", iceDeep: "#c7dbe4", river: "#4f8fb4", coldRiver: "#bcd6e2" };
+/** Looks drawn in one ink: symbols are outlined in `ink` and filled with `paper` or `shadow`. */
+type Inked = { ink: string; paper: string; shadow: string; deep: string; shallow: string; lake: string; ice: string; wave: string; river: string; road: string; lines: number; numbers: string; place: { main: string; light: string; lava: string } };
 /** The Ink look: dark ink on paper, pale blue-grey water. */
-const INK = { ink: "#2f2b26", paper: "#f8f5ee", shadow: "#d5d0c4", deep: "#dfe7ea", shallow: "#edf2f3", ice: "#f3f6f7", wave: "#6f8d99", river: "#4e6b78" };
+const INK: Inked = { ink: "#2f2b26", paper: "#f8f5ee", shadow: "#d5d0c4", deep: "#dfe7ea", shallow: "#edf2f3", lake: "#edf2f3", ice: "#f3f6f7", wave: "#6f8d99", river: "#4e6b78", road: "#2f2b26", lines: 0.33, numbers: "#2f2b26b3", place: { main: "#2b2620", light: "#fbf7ee", lava: "#7a1f1a" } };
+/** The Old atlas look: sepia ink on parchment, the sea a deeper parchment with wave strokes, as on the world maps. */
+const ATLAS: Inked = { ink: "#5a3e22", paper: "#f1e7cc", shadow: "#d2bf96", deep: "#b0bfbd", shallow: "#c6d1cb", lake: "#c0ccc6", ice: "#eceee4", wave: "#5f6a5c", river: "#6b5a43", road: "#8a5a3b", lines: 0.3, numbers: "#5a3e22b3", place: { main: "#4a3218", light: "#f4ecd5", lava: "#7a3a2a" } };
+const inkedLook = (look: HexLook["look"]): Inked | null => look === "ink" ? INK : look === "atlas" ? ATLAS : null;
+/** Mixes two #rrggbb colours: 0 gives a, 1 gives b. */
+function mix(a: string, b: string, t: number) {
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16), f = (s: number) => Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t);
+  return "#" + ((1 << 24) | (f(16) << 16) | (f(8) << 8) | f(0)).toString(16).slice(1);
+}
+/** A colour turned sepia, keeping how light it is, so biomes stay apart as tints of parchment. */
+function sepia(hex: string) {
+  const n = parseInt(hex.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255;
+  return mix(mix("#4a3520", "#f6ecd2", l), hex, 0.22);
+}
 
 /** A small, fixed random number for a hex, so its look never changes between draws. */
 const wobble = (i: number, salt: number) => { let n = Math.imul(i + 1, 374761393) ^ Math.imul(salt, 668265263); n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -76,6 +92,11 @@ const wobble = (i: number, salt: number) => { let n = Math.imul(i + 1, 374761393
 export function hexFill(b: BiomeId, t: TerrainId, i = 0, look: HexLook["look"] = "painted") {
   const B = biomes[b], j = [-0.035, 0, 0.035][Math.floor(wobble(i, 1) * 3)], frozen = b === "glacier";
   if (look === "ink") return isWaterTerrain(t) ? (frozen ? INK.ice : t === "deep" ? INK.deep : INK.shallow) : INK.paper;
+  if (look === "atlas") {
+    if (isWaterTerrain(t)) return shade(frozen ? ATLAS.ice : t === "deep" ? ATLAS.deep : t === "lake" ? ATLAS.lake : ATLAS.shallow, j / 2);
+    const tint = t === "forest" ? B.forest : t === "mountain" || t === "peak" ? B.mount : t === "beach" ? "#ead9a8" : B.flat;
+    return shade(mix(sepia(tint), ATLAS.paper, t === "forest" ? 0.45 : 0.6), j / 2);
+  }
   if (t === "deep") return frozen ? WATER.iceDeep : WATER.deep;
   if (t === "shallow") return frozen ? WATER.ice : WATER.shallow;
   if (t === "lake") return frozen ? WATER.ice : WATER.lake;
@@ -90,9 +111,9 @@ export function hexFill(b: BiomeId, t: TerrainId, i = 0, look: HexLook["look"] =
 
 class Painter {
   private groups = new Map<string, { op: DrawOp; parts: string[] }>();
-  private k: number; private ink: boolean;
-  /** `ink`: draw symbols as ink outlines on paper instead of in colour. */
-  constructor(k: number, ink = false) { this.k = k; this.ink = ink; }
+  private k: number; private ink: Inked | null;
+  /** `ink`: draw symbols as outlines in that look's ink, filled with its paper, instead of in colour. */
+  constructor(k: number, ink: Inked | null = null) { this.k = k; this.ink = ink; }
   add(d: string, paint: { fill?: string; stroke?: string; width?: number; opacity?: number }) {
     const key = `${paint.fill ?? ""}|${paint.stroke ?? ""}|${paint.width ?? ""}|${paint.opacity ?? ""}`;
     let g = this.groups.get(key);
@@ -103,13 +124,14 @@ class Painter {
     for (const part of SYMBOLS[name]) {
       const colour = colours[part.role]; if (!colour) continue;
       const d = place(part.d, x, y, this.k * scale), width = (w: number) => round(w * this.k * scale * 10) / 10;
-      if (this.ink) {
-        // Ink keeps the shapes but not the colours; lava and glints have no ink version.
+      const ink = this.ink;
+      if (ink) {
+        // Inked looks keep the shapes but not the colours; lava and glints have no ink version.
         if (part.role === "lava" || part.role === "gold") continue;
-        if (part.stroke) this.add(d, { stroke: part.role === "light" ? INK.wave : INK.ink, width: width(part.stroke) });
-        else if (part.role === "main" || part.role === "snow") this.add(d, { fill: INK.paper, stroke: INK.ink, width: width(part.role === "snow" ? 0.3 : 0.45) });
-        else if (part.role === "dark") this.add(d, { fill: INK.shadow });
-        else if (part.role === "trunk") this.add(d, { fill: INK.ink });
+        if (part.stroke) this.add(d, { stroke: part.role === "light" ? ink.wave : ink.ink, width: width(part.stroke) });
+        else if (part.role === "main" || part.role === "snow") this.add(d, { fill: ink.paper, stroke: ink.ink, width: width(part.role === "snow" ? 0.3 : 0.45) });
+        else if (part.role === "dark") this.add(d, { fill: ink.shadow });
+        else if (part.role === "trunk") this.add(d, { fill: ink.ink });
         continue;
       }
       if (part.stroke) this.add(d, { stroke: colour, width: width(part.stroke) });
@@ -179,9 +201,9 @@ function hexMarks(marks: Painter, b: BiomeId, t: TerrainId, x: number, y: number
 }
 
 function buildOps(layer: Drawable, look: HexLook): DrawOp[] {
-  const k = layer.size / 10, orient: HexOrient = layer.orient, ink = look.look === "ink";
+  const k = layer.size / 10, orient: HexOrient = layer.orient, inked = inkedLook(look.look), ink = !!inked;
   const cells = hexCells({ cols: layer.cols, rows: layer.rows, orient, outline: "rect", size: layer.size });
-  const ground = new Painter(k), marks = new Painter(k, ink), lines: string[] = [], numbers: DrawOp[] = [];
+  const ground = new Painter(k), marks = new Painter(k, inked), lines: string[] = [], numbers: DrawOp[] = [];
   const pad = (n: number) => String(n).padStart(2, "0");
   for (const h of cells) {
     const hex = readHex(layer.cells, h.i); if (!hex) continue;
@@ -190,38 +212,39 @@ function buildOps(layer: Drawable, look: HexLook): DrawOp[] {
     ground.add(outline, { fill, stroke: fill, width: round(0.6 * k * 10) / 10 });
     if (look.lines) lines.push(outline);
     if (look.look !== "flat") hexMarks(marks, b, t, x, y, k, h.i, ink);
-    if (look.numbers) numbers.push({ d: "", fill: ink ? "#2f2b26b3" : "#1c2329a6", text: { value: pad(h.c + 1) + pad(h.r + 1), x: round(x), y: round(y + layer.size * (orient === "flat" ? 0.64 : 0.72)), size: round(2.4 * k * 10) / 10, weight: 500 } });
+    if (look.numbers) numbers.push({ d: "", fill: inked ? inked.numbers : "#1c2329a6", text: { value: pad(h.c + 1) + pad(h.r + 1), x: round(x), y: round(y + layer.size * (orient === "flat" ? 0.64 : 0.72)), size: round(2.4 * k * 10) / 10, weight: 500 } });
   }
   const ops = ground.ops();
-  if (lines.length) ops.push({ d: lines.join(""), stroke: ink ? INK.ink : "#000000", width: round(0.5 * k * 10) / 10, opacity: ink ? 0.33 : 0.14 });
+  if (lines.length) ops.push({ d: lines.join(""), stroke: inked ? inked.ink : "#000000", width: round(0.5 * k * 10) / 10, opacity: inked ? inked.lines : 0.14 });
   ops.push(...marks.ops());
   for (const river of layer.rivers) {
     const points = river.filter(i => i >= 0 && i < cells.length).map(i => ({ x: cells[i].x + layer.x, y: cells[i].y + layer.y }));
     if (points.length < 2) continue;
     const source = readHex(layer.cells, river[0]), cold = !!source && biomes[source.biome].heat < 1.2;
-    ops.push({ d: smoothPath(points), stroke: ink ? INK.river : cold ? WATER.coldRiver : WATER.river, width: round((ink ? 1.4 : 2.2) * k * 10) / 10, opacity: 0.95 });
+    ops.push({ d: smoothPath(points), stroke: inked ? inked.river : cold ? WATER.coldRiver : WATER.river, width: round((ink ? 1.4 : 2.2) * k * 10) / 10, opacity: 0.95 });
   }
   for (const road of layer.roads ?? []) {
     const points = road.filter(i => i >= 0 && i < cells.length).map(i => ({ x: cells[i].x + layer.x, y: cells[i].y + layer.y }));
-    if (points.length >= 2) ops.push({ d: smoothPath(points), stroke: ink ? INK.ink : ROAD, width: round(1.1 * k * 10) / 10, opacity: 0.85, dash: [round(2.6 * k), round(1.8 * k)] });
+    if (points.length >= 2) ops.push({ d: smoothPath(points), stroke: inked ? inked.road : ROAD, width: round(1.1 * k * 10) / 10, opacity: 0.85, dash: [round(2.6 * k), round(1.8 * k)] });
   }
   ops.push(...numbers);
   // Settlements are on the map for everyone; ruins and lairs are GM-only, see `hexSiteOps`.
-  ops.push(...placeOps(layer, cells, (layer.places ?? []).filter(p => isSettlement(p.kind)), look.labels));
+  ops.push(...placeOps(layer, cells, (layer.places ?? []).filter(p => isSettlement(p.kind)), look.labels, inked));
   if (look.legend !== "none") ops.push(...legendOps(layer, look, cells.length));
+  if (look.look === "atlas") ops.push(...frameOps(layer));
   return ops;
 }
 
 const ROAD = "#7a5a3a", PLACE_COLOURS = { main: "#2b2620", light: "#fbf7ee", lava: "#7a1f1a" };
 const LABEL_SIZE: Record<HexPlaceKind, number> = { city: 7, town: 6, village: 5, ruin: 4.6, tower: 4.6, cave: 4.6, shrine: 4.6, lair: 4.6 };
 /** Place symbols and, with `labels`, their names above them. */
-function placeOps(layer: Drawable, cells: { x: number; y: number }[], places: HexPlace[], labels: boolean): DrawOp[] {
-  const k = layer.size / 10, marks = new Painter(k), names: DrawOp[] = [];
+function placeOps(layer: Drawable, cells: { x: number; y: number }[], places: HexPlace[], labels: boolean, inked: Inked | null = null): DrawOp[] {
+  const k = layer.size / 10, marks = new Painter(k), names: DrawOp[] = [], colours = inked?.place ?? PLACE_COLOURS;
   for (const p of places) {
     const c = cells[p.i]; if (!c) continue;
     const x = c.x + layer.x, y = c.y + layer.y, size = LABEL_SIZE[p.kind] * k;
-    marks.symbol(p.kind, x, y, 1.15, PLACE_COLOURS);
-    if (labels) names.push({ d: "", fill: "#221d18", text: { value: p.name, x: round(x), y: round(y - 5.6 * k - size * 0.5), size: round(size), weight: p.kind === "city" ? 600 : 500, serif: true, italic: !isSettlement(p.kind), halo: "#fbf7eecc" } });
+    marks.symbol(p.kind, x, y, 1.15, colours);
+    if (labels) names.push({ d: "", fill: inked === ATLAS ? ATLAS.place.main : "#221d18", text: { value: p.name, x: round(x), y: round(y - 5.6 * k - size * 0.5), size: round(size), weight: p.kind === "city" ? 600 : 500, serif: true, italic: !isSettlement(p.kind), halo: `${colours.light}cc` } });
   }
   return [...marks.ops(), ...names];
 }
@@ -230,7 +253,7 @@ const siteCache = new WeakMap<Drawable, DrawOp[]>();
 export function hexSiteOps(layer: Drawable): DrawOp[] {
   const hit = siteCache.get(layer); if (hit) return hit;
   const sites = (layer.places ?? []).filter(p => !isSettlement(p.kind));
-  const ops = sites.length ? placeOps(layer, hexCells({ cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: "rect", size: layer.size }), sites, lookOf(layer).labels) : [];
+  const look = lookOf(layer), ops = sites.length ? placeOps(layer, hexCells({ cols: layer.cols, rows: layer.rows, orient: layer.orient, outline: "rect", size: layer.size }), sites, look.labels, inkedLook(look.look)) : [];
   siteCache.set(layer, ops);
   return ops;
 }
@@ -267,7 +290,7 @@ export function hexLegendRows(layer: Pick<HexLayer, "cells" | "rivers"> & Partia
 /** The legend: a box in one corner of the map with a row for each biome and kind of terrain on it. */
 function legendOps(layer: Drawable, look: HexLook, count: number): DrawOp[] {
   const rows = hexLegendRows(layer, look.look, count); if (!rows.length) return [];
-  const ink = look.look === "ink", { width: W, height: H } = hexMapSize(layer);
+  const inked = inkedLook(look.look), ink = !!inked, { width: W, height: H } = hexMapSize(layer);
   const title = `One hex: ${+layer.miles.toFixed(1)} ${layer.miles === 1 ? "mile" : "miles"}`;
   const chars = Math.max(title.length * 1.08, ...rows.map(r => r.label.length));
   // Sized in "legend units": a little bigger than a hex's symbols, but never more than 35% of the map's width or 60% of its height.
@@ -276,21 +299,31 @@ function legendOps(layer: Drawable, look: HexLook, count: number): DrawOp[] {
   const left = layer.x + (look.legend === "nw" || look.legend === "sw" ? m : W - m - boxW * u), top = layer.y + (look.legend === "nw" || look.legend === "ne" ? m : H - m - boxH * u);
   const at = (n: number) => Math.round(n * 10) / 10;
   const ops: DrawOp[] = [
-    { d: `M${at(left)} ${at(top)}h${at(boxW * u)}v${at(boxH * u)}h${at(-boxW * u)}Z`, fill: ink ? INK.paper : "#fbf8f0", stroke: ink ? INK.ink : "#5a4632", width: at(0.4 * u), opacity: 0.95 },
-    { d: "", fill: ink ? INK.ink : "#2b241d", text: { value: title, x: at(left + 4 * u), y: at(top + 8 * u), size: at(4.6 * u), align: "start", weight: 600 } },
+    { d: `M${at(left)} ${at(top)}h${at(boxW * u)}v${at(boxH * u)}h${at(-boxW * u)}Z`, fill: inked ? inked.paper : "#fbf8f0", stroke: inked ? inked.ink : "#5a4632", width: at(0.4 * u), opacity: 0.95 },
+    { d: "", fill: inked ? inked.ink : "#2b241d", text: { value: title, x: at(left + 4 * u), y: at(top + 8 * u), size: at(4.6 * u), align: "start", weight: 600 } },
   ];
-  const icons = new Painter(u * 0.5, ink), swatches = new Painter(u), places = new Painter(u);
+  const icons = new Painter(u * 0.5, inked), swatches = new Painter(u), places = new Painter(u);
   rows.forEach((row, n) => {
     const cx = left + 8.5 * u, cy = top + (17.5 + n * 9) * u;
-    if (row.place) places.symbol(row.place, cx, cy, 1, PLACE_COLOURS);
-    else if (row.road) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy)}L${at(cx + 4 * u)} ${at(cy)}`, stroke: ink ? INK.ink : ROAD, width: at(1.1 * u * 0.8), dash: [at(2 * u), at(1.4 * u)] });
-    else if (row.river) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy + 1.5 * u)}Q${at(cx - 2 * u)} ${at(cy - 2 * u)} ${at(cx)} ${at(cy)}T${at(cx + 4 * u)} ${at(cy - 1.5 * u)}`, stroke: ink ? INK.river : WATER.river, width: at((ink ? 1.4 : 2.2) * u * 0.8) });
+    if (row.place) places.symbol(row.place, cx, cy, 1, inked?.place ?? PLACE_COLOURS);
+    else if (row.road) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy)}L${at(cx + 4 * u)} ${at(cy)}`, stroke: inked ? inked.road : ROAD, width: at(1.1 * u * 0.8), dash: [at(2 * u), at(1.4 * u)] });
+    else if (row.river) ops.push({ d: `M${at(cx - 4 * u)} ${at(cy + 1.5 * u)}Q${at(cx - 2 * u)} ${at(cy - 2 * u)} ${at(cx)} ${at(cy)}T${at(cx + 4 * u)} ${at(cy - 1.5 * u)}`, stroke: inked ? inked.river : WATER.river, width: at((ink ? 1.4 : 2.2) * u * 0.8) });
     else {
-      swatches.add(hexOutline(cx, cy, 4 * u, "flat"), { fill: row.fill, stroke: ink ? INK.ink : "#00000040", width: at(0.3 * u) });
+      swatches.add(hexOutline(cx, cy, 4 * u, "flat"), { fill: row.fill, stroke: inked ? inked.ink : "#00000040", width: at(0.3 * u) });
       if (row.symbol) hexMarks(icons, row.symbol.biome, row.symbol.terrain, cx, cy - 0.4 * u, u * 0.5, 7, ink);
     }
-    ops.push({ d: "", fill: ink ? INK.ink : "#2b241d", text: { value: row.label, x: at(left + 15 * u), y: at(cy), size: at(4.2 * u), align: "start", weight: 500 } });
+    ops.push({ d: "", fill: inked ? inked.ink : "#2b241d", text: { value: row.label, x: at(left + 15 * u), y: at(cy), size: at(4.2 * u), align: "start", weight: 500 } });
   });
   ops.splice(2, 0, ...swatches.ops(), ...icons.ops(), ...places.ops());
   return ops;
+}
+
+/** The Old atlas frame: a heavy rule and a thin one inside it around the map, like an engraved plate. */
+function frameOps(layer: Drawable): DrawOp[] {
+  const { width: W, height: H } = hexMapSize(layer), k = layer.size / 10, at = (n: number) => round(n);
+  const box = (inset: number) => `M${at(layer.x + inset)} ${at(layer.y + inset)}h${at(W - 2 * inset)}v${at(H - 2 * inset)}h${at(-(W - 2 * inset))}Z`;
+  return [
+    { d: box(1.2 * k), stroke: ATLAS.ink, width: round(1.6 * k * 10) / 10, opacity: 0.9 },
+    { d: box(3.4 * k), stroke: ATLAS.ink, width: round(0.5 * k * 10) / 10, opacity: 0.7 },
+  ];
 }

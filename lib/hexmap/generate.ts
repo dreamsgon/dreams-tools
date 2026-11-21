@@ -155,7 +155,7 @@ export type HexLayer = {
  * hex outlines, hex numbers (column then row, as in "0412"), a legend in one corner and settlement names.
  * Kept apart from the options, so changing the look never changes the map.
  */
-export type HexLook = { look: "painted" | "flat" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se"; labels: boolean };
+export type HexLook = { look: "painted" | "flat" | "atlas" | "ink"; lines: boolean; numbers: boolean; legend: "none" | "nw" | "ne" | "sw" | "se"; labels: boolean };
 export const defaultHexLook: HexLook = { look: "painted", lines: true, numbers: false, legend: "none", labels: true };
 export type GeneratedHexMap = { layer: HexLayer; width: number; height: number; landShare: Partial<Record<BiomeId, number>> };
 /** Hexes to keep as they are, by column and row, so they survive a change of map size. */
