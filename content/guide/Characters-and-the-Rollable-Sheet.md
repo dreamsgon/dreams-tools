@@ -48,7 +48,7 @@ At the top of the Stats tab, **Trackers** are small gauges (up to 8): Shields, S
 
 ## Statblocks
 
-A GM-only **Statblock** tab takes any pasted statblock as-is and finds dice, "+5 to hit" and ability and skill modifiers, turning them into click-to-roll chips (turn this off per statblock; `[[…]]` always works). Statblocks never reach players. Maptable tokens linked to the character show the statblock read-only on the token's Statblock tab.
+The **Statblock** tab takes any pasted statblock as-is and finds dice, "+5 to hit" and ability and skill modifiers, turning them into click-to-roll chips (turn this off per statblock; `[[…]]` always works). It starts GM only. Switch it to **Players** for a familiar, summon or companion the party runs: players then see it on a Statblock tab in their player view and can roll from its chips, and any statblock lines pinned to the Profile show there too. Hiding the tab makes it GM only again. Maptable tokens linked to the character show the statblock read-only on the token's Statblock tab.
 
 ## Players rolling
 

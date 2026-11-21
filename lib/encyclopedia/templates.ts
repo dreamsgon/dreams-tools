@@ -78,6 +78,7 @@ export function hideTabsPatch(e: Pick<Entry, "kind" | "character" | "hiddenTabs"
     ...c,
     ...(ids.includes("stats") ? { statsVisibility: "gm" as const } : {}),
     ...(ids.includes("features") && c.featuresVisibility ? { featuresVisibility: "gm" as const } : {}),
+    ...(ids.includes("statblock") && c.statblockVisibility ? { statblockVisibility: "gm" as const } : {}),
     ...(ids.includes("spells") && c.spellsVisibility ? { spellsVisibility: "gm" as const } : {}),
     ...(ids.includes("inventory") && c.inventory ? { inventory: { ...c.inventory, visibility: "gm" as const } } : {}),
   } : c;

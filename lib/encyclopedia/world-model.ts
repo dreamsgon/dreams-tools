@@ -67,8 +67,9 @@ export const characterSchema = z.object({
   location:z.string().max(160), faction:z.string().max(160), status:z.enum(["active","inactive","missing","deceased"]),
   statsVisibility:visibilitySchema,
   statsByCampaign:z.record(id,z.record(id,statValueSchema)),
-  // Optional (added later): a pasted statblock, kept exactly as pasted. GM-only; never sent to players.
-  statblock:z.string().max(50000).optional(), statblockRolls:z.boolean().optional(),
+  // Optional (added later): a pasted statblock, kept exactly as pasted. GM only unless statblockVisibility is "players"
+  // (a familiar, summon or companion the party runs); then players get it as pasted, with its rolls.
+  statblock:z.string().max(50000).optional(), statblockRolls:z.boolean().optional(), statblockVisibility:visibilitySchema.optional(),
   // Optional (added later): one linked Google Sheet and the cells read from it (see sheet-link.ts). GM data; players get playerSheet() only when stats are player visible.
   sheet:sheetSchema.optional(),
   // Optional (added later): small gauges such as Shields or Stress (trackers.ts). Players get the shown ones when stats are shared or the page is theirs to edit.
@@ -458,13 +459,15 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
    const inventory=e.kind==='character'&&e.character&&!hidden.has('inventory')&&(own||e.character.inventory?.visibility==='players')&&(e.character.inventory||own)?playerInventory(e.character.inventory,items):undefined;
    const spells=e.kind==='character'&&e.character&&items.spells.on&&!hidden.has('spells')&&(own||e.character.spellsVisibility==='players')&&(e.character.spells?.length||own)?playerSpells(e.character.spells):undefined;
    const features=e.kind==='character'&&e.character?.features?.length&&!hidden.has('features')&&(own||e.character.featuresVisibility==='players')?playerFeatures(e.character.features):undefined;
+   // The pasted statblock: only when the GM shares it (a familiar, summon or companion), never just because the page is a player's.
+   const statblock=e.kind==='character'&&e.character?.statblock?.trim()&&!hidden.has('statblock')&&e.character.statblockVisibility==='players'?{text:e.character.statblock,...(e.character.statblockRolls===false?{rolls:false as const}:{})}:undefined;
    // A store: when the GM shares it (and it is for one of this member's characters), or one of their characters runs it.
    const ownStore=!!e.store?.ownerId&&!!mine?.has(e.store.ownerId),forMe=!e.store?.who||e.store.who.some(id=>mine?.has(id));
    const store=e.kind==='store'&&e.store&&(ownStore||(e.store.visibility==='players'&&!e.store.awaiting&&forMe))?playerStore(e.store,mine??new Set(),Date.now()):undefined;
-   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!features?.length&&!store)return [];
+   if(!tabs.length&&!(showStats&&fields.length)&&!sheet&&!mapData&&!codex&&!shareOrg&&!trackers.length&&!inventory&&!spells&&!features?.length&&!statblock&&!store)return [];
    const values=e.character?.statsByCampaign[c.id]??{};
    const template=e.overviewVisibility==="players"?templateOf(s,e):null,info=template?infoRows(s,template,e,true).map(r=>({label:r.label,value:r.value,...(r.pageId?{pageId:r.pageId}:{})})):[];
-   return [{id:e.id,title:e.title,kind:e.kind,parentId:undefined as string|undefined,text:textDiff(resolveText(e,id=>allById.get(id),world?.text).text),pageLook:e.pageLook?{...e.pageLook,toc:undefined}:undefined,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
+   return [{id:e.id,title:e.title,kind:e.kind,parentId:undefined as string|undefined,text:textDiff(resolveText(e,id=>allById.get(id),world?.text).text),pageLook:e.pageLook?{...e.pageLook,toc:undefined}:undefined,...(info.length?{info}:{}),role:e.kind==="character"?(e.character?.role??"npc"):undefined,tabs,mapData,picture:e.overviewVisibility==="players"||codex||(e.kind==='vehicle'&&e.vehicle?.visibility==='players')?e.picture:undefined,codex,org:undefined as PlayerOrg|undefined,vehicle:undefined as PlayerVehicle|undefined,rides:undefined as {id:string;title:string;roles:string[]}[]|undefined,profile:undefined as PlayerProfile|undefined,ties:undefined as PlayerTie[]|undefined,quest:e.kind==="quest"&&e.overviewVisibility==="players"?playerQuest(e.quest??newQuest(),()=>true,playerText,questCategories(c),linker):undefined,sheet,...(trackers.length?{trackers}:{}),...(inventory?{inventory:inventory as PlayerInventory}:{}),...(spells?{spells:spells as PlayerSpell[]}:{}),...(features?.length?{features:features as PlayerFeature[]}:{}),...(statblock?{statblock:statblock as {text:string;rolls?:false}}:{}),...(store?{store:store as PlayerStore}:{}),stats:showStats?statRows(shownStats(fields,e.character?.statLayout),values):[]}];
  });
  const calendars=(c.calendars??[]).filter(x=>x.visibility==='players').map(publicCalendar);
  const readable=new Set(entries.map(e=>e.id));
@@ -478,8 +481,8 @@ export function playerCampaign(s:Workspace,campaignId:string,mine?:ReadonlySet<s
  // A shared character Profile: organizations only where the page and its own Profile are shared and the character's place isn't GM only.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='character'||src.profile?.visibility!=='players')continue;
   e.profile=playerProfile(src.profile,id=>readable.has(id),playerText,playerOrganizations(candidates,src.id,id=>readable.has(id),playerText),{title,linked:playerLinkedPages(s,src,candidates.filter(x=>readable.has(x.id)))});
-  // Pinned stats, items and spells: only from what this payload already gives players (shared tabs, GM-only lines left out). Statblock lines never.
-  const pins=playerPins(src.profile.pins,{stats:e.stats,items:e.inventory?.items,spells:e.spells,features:e.features});if(pins.length)e.profile.pins=pins;}
+  // Pinned stats, items, spells and statblock lines: only from what this payload already gives players (shared tabs, GM-only lines left out).
+  const pins=playerPins(src.profile.pins,{stats:e.stats,items:e.inventory?.items,spells:e.spells,features:e.features,statblock:e.statblock?.text});if(pins.length)e.profile.pins=pins;}
  // A shared vehicle: GM-only values left out, and its owner, commander and location only when players can read those pages.
  for(const e of entries){const src=byId.get(e.id);if(src?.kind!=='vehicle'||src.vehicle?.visibility!=='players')continue;
   e.vehicle=playerVehicle(src.vehicle,vehicleTypeOf(src.vehicle,s.worlds.find(w=>w.id===src.worldId)),id=>readable.has(id),playerText);}
