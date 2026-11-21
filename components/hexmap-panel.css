@@ -1,22 +1,6 @@
-/* Start a new map › Hex map: settings in folding sections on the left, the live preview on the right (on top on a phone). */
-.hexmap-body { flex:1; min-height:0; grid-template-columns:minmax(0, 340px) minmax(0, 1fr); padding:0; gap:0; overflow:hidden; }
-.hexmap-settings { min-width:0; border-right:1px solid var(--line); overflow:auto; }
-.hexmap-section { border-bottom:1px solid var(--line); }
-.hexmap-section > summary { display:flex; align-items:center; gap:10px; padding:13px 18px 11px; cursor:pointer; list-style:none; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-.hexmap-section > summary::-webkit-details-marker { display:none; }
-.hexmap-section > summary::after { content:""; flex:none; width:7px; height:7px; margin-left:auto; border-right:1.6px solid currentColor; border-bottom:1.6px solid currentColor; transform:translateY(-2px) rotate(45deg); }
-.hexmap-section[open] > summary::after { transform:translateY(2px) rotate(-135deg); }
-.hexmap-section > summary:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-.hexmap-summary { min-width:0; overflow:hidden; color:var(--ink); font-size:12px; font-weight:500; letter-spacing:0; text-overflow:ellipsis; text-transform:none; white-space:nowrap; }
-.hexmap-section > .creator-panel { gap:14px; padding:2px 18px 16px; }
-.hexmap-row { display:grid; grid-template-columns:86px minmax(0, 1fr) 74px; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
-.hexmap-row input[type=range] { width:100%; min-width:0; accent-color:var(--accent); }
-.hexmap-row output { color:var(--accent); font-size:12px; font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
+/* Hex map generator: the controls that the shared generator layout (components/generator) doesn't cover. */
 .creator-panel .hexmap-select select { height:34px; }
 .hexmap-select small { color:var(--muted); font-size:12px; }
-/* Four ways to start no longer fit a phone's width, so the tabs scroll sideways. */
-.creator-dialog > .creator-tabs { overflow-x:auto; scrollbar-width:none; }
-.creator-dialog > .creator-tabs button { flex:none; white-space:nowrap; }
 .hexmap-biomes { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
 .hexmap-biomes button { display:flex; flex-direction:column; align-items:center; gap:3px; min-height:0; padding:6px 2px 5px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:11px; font-weight:500; box-shadow:none; white-space:normal; }
 .hexmap-biomes button svg { width:30px; height:27px; }
@@ -24,24 +8,10 @@
 .hexmap-sides { display:flex; gap:6px; }
 .hexmap-sides button { width:40px; min-height:32px; padding:0; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--muted); font-size:12px; font-weight:600; box-shadow:none; }
 .hexmap-sides button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
-.hexmap-preview { padding:16px 18px; overflow:auto; }
-.hexmap-preview svg { background:#cfc8b4; }
-.hexmap-preview svg[data-stale] { opacity:.75; transition:opacity .15s .1s; }
 .hexmap-share { display:flex; flex-wrap:wrap; gap:4px 12px; color:var(--muted); font-size:12px; }
 .hexmap-share-bar { display:flex; flex-basis:100%; height:8px; overflow:hidden; border-radius:2px; }
 .hexmap-share i { display:inline-block; width:9px; height:9px; margin-right:5px; border:1px solid #0002; border-radius:2px; vertical-align:-1px; }
-@media(max-width:700px) {
-  .hexmap-body { display:flex; flex-direction:column; overflow:auto; }
-  .hexmap-preview { order:-1; overflow:visible; border-bottom:1px solid var(--line); padding:12px 14px; }
-  .hexmap-settings { border-right:0; overflow:visible; }
-  .hexmap-section > summary { padding:13px 14px 11px; }
-  .hexmap-section > .creator-panel { padding:2px 14px 16px; }
-}
-@media(prefers-reduced-motion:reduce) { .hexmap-preview svg[data-stale] { transition:none; } }
-/* Presets as chips; the custom mix as rows of biome, share, move up and remove. */
-.hexmap-presets { display:flex; flex-wrap:wrap; gap:6px; }
-.hexmap-presets button { min-height:30px; padding:4px 10px; border:1px solid var(--line); border-radius:99px; background:var(--panel); color:var(--ink); font-size:12px; font-weight:500; box-shadow:none; }
-.hexmap-presets button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600; }
+/* The custom mix: rows of biome, share, move up and remove. */
 .hexmap-mix { display:flex; flex-direction:column; gap:6px; }
 .hexmap-mix-row { display:grid; grid-template-columns:28px minmax(0, 1fr) minmax(60px, 92px) 28px 28px; align-items:center; gap:6px; font-size:12px; }
 .hexmap-mix-row svg { width:28px; height:25px; }
@@ -53,12 +23,7 @@
 .hexmap-mix-row button:disabled { opacity:.35; }
 /* Settings code: the whole code in one line of small monospace text. */
 .creator-panel input.hexmap-code { min-width:0; height:32px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:11px; }
-.hexmap-preview .creator-seed { flex-wrap:wrap; }
-/* Regenerate: the generator over the Map Creator, with "Keep the hexes you painted" beside Defaults. */
-.creator-dialog .hexmap-keep { margin-left:6px; font-size:13px; }
-@media(max-width:700px) { .creator-dialog .hexmap-keep { flex-basis:100%; order:-1; margin-left:0; } }
 /* Paint hexes: the biome grid sits in the narrow inspector, so the buttons are a little smaller. */
 .hexmap-paint .hexmap-biomes button { font-size:10.5px; }
 .hexmap-paint .hexmap-biomes button svg { width:24px; height:22px; }
 .hexmap-paint > * { flex-shrink:0; }
-.creator-dialog .hexmap-keep { display:inline-flex; align-items:center; gap:8px; }

@@ -1,0 +1,153 @@
+/*
+ * The shared generator shell (components/generator/generator.tsx). It is used in the Map Creator and in the
+ * Encyclopedia, so it sets its own sizes and borders and uses only the shared appearance tokens.
+ */
+.gen-dialog { width:min(1080px, calc(100% - 32px)); height:min(860px, calc(94vh / var(--ui-zoom, 1))); max-width:none; max-height:none; margin:auto; padding:0; border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--panel); color:var(--ink); box-shadow:0 24px 70px var(--shadow-color, #0003); overflow:hidden; font-size:13px; }
+.gen-dialog[open] { display:flex; flex-direction:column; }
+.gen-dialog::backdrop { background:var(--overlay, #16191c80); }
+.gen-dialog button, .gen-dialog input, .gen-dialog select, .gen-dialog textarea { font:inherit; }
+.gen-dialog :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.gen-dialog-head { display:flex; align-items:center; gap:12px; padding:16px 20px 12px; }
+.gen-dialog-head h2 { flex:1; margin:0; font-family:var(--font-display); font-size:21px; font-weight:600; letter-spacing:-.2px; }
+.gen-icon { display:grid; place-items:center; width:36px; height:36px; min-height:0; padding:0; border:0; border-radius:var(--radius); background:none; color:var(--muted); box-shadow:none; cursor:pointer; }
+.gen-icon:hover { background:var(--hover); color:var(--ink); }
+
+/* Tabs under the title */
+.gen-tabs { display:flex; gap:4px; padding:0 20px; border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:none; }
+.gen-tabs button { flex:none; min-height:38px; padding:0 10px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--muted); font-weight:500; box-shadow:none; cursor:pointer; white-space:nowrap; }
+.gen-tabs button[aria-selected="true"] { border-bottom-color:var(--accent); color:var(--ink); }
+.gen-tabs button:hover { color:var(--ink); }
+
+/* Layout: kinds across the top, settings | preview, actions at the bottom. */
+.gen { flex:1; min-height:0; display:flex; flex-direction:column; }
+.gen-kinds { flex:none; padding:12px 20px; border-bottom:1px solid var(--line); }
+.gen-panes { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0, 360px) minmax(0, 1fr); }
+.gen-settings { min-width:0; overflow:auto; border-right:1px solid var(--line); }
+.gen-preview { min-width:0; overflow:auto; padding:16px 20px; display:flex; flex-direction:column; gap:14px; }
+.gen-preview-top { display:flex; flex-direction:column; gap:10px; }
+.gen-extras { display:flex; flex-direction:column; gap:12px; }
+.gen-simple { flex:1; min-height:0; overflow:auto; padding:18px 20px; max-width:560px; }
+
+/* Kinds as cards */
+.gen-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(176px, 1fr)); gap:8px; }
+.gen-cards button { display:flex; align-items:center; gap:10px; min-height:54px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); text-align:left; box-shadow:none; cursor:pointer; white-space:normal; }
+.gen-cards button:hover { background:var(--hover); }
+.gen-cards button.is-wide { grid-column:span 2; }
+.gen-cards button svg { flex:none; width:36px; height:36px; border-radius:5px; }
+.gen-cards button span { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.gen-cards button b { font-size:13px; font-weight:600; }
+.gen-cards button small { color:var(--muted); font-size:12px; line-height:1.3; }
+.gen-cards button[aria-checked="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:var(--accent-soft); }
+
+/* Sections */
+.gen-section { border-bottom:1px solid var(--line); }
+.gen-section > summary { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 20px; cursor:pointer; list-style:none; }
+.gen-section > summary::-webkit-details-marker { display:none; }
+.gen-section > summary::after { content:""; flex:none; width:7px; height:7px; margin-left:auto; border-right:1.6px solid var(--muted); border-bottom:1.6px solid var(--muted); transform:translateY(-2px) rotate(45deg); }
+.gen-section[open] > summary::after { transform:translateY(2px) rotate(-135deg); }
+.gen-section > summary:hover { background:var(--hover); }
+.gen-dialog .gen-section > summary:focus-visible { outline-offset:-2px; }
+.gen-section-title { color:var(--ink); font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.gen-section-value { min-width:0; margin-left:auto; overflow:hidden; color:var(--muted); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.gen-section[open] > summary .gen-section-value { display:none; }
+.gen-section-body { display:flex; flex-direction:column; gap:16px; padding:4px 20px 20px; }
+
+/* Fields */
+.gen-field { display:flex; flex-direction:column; gap:6px; min-width:0; margin:0; }
+.gen-label { display:flex; align-items:baseline; justify-content:space-between; gap:10px; color:var(--ink); font-size:12.5px; font-weight:500; }
+.gen-label output { color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; text-align:right; }
+.gen-hint { margin:0; color:var(--muted); font-size:12px; line-height:1.45; }
+.gen-alert { color:var(--danger); }
+.gen-field input[type=range] { width:100%; margin:2px 0; accent-color:var(--accent); }
+.gen-field select, .gen-field input:not([type]), .gen-field input[type=text], .gen-field input[type=number], .gen-field textarea, .gen-seed input {
+  width:100%; min-width:0; min-height:36px; padding:0 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--control, var(--panel)); color:var(--ink); font-size:13px; font-weight:400; box-sizing:border-box; }
+.gen-field textarea { padding:8px 10px; resize:vertical; }
+.gen-field input[type=color] { width:100%; height:36px; padding:3px; border:1px solid var(--line); border-radius:var(--radius); background:var(--control, var(--panel)); }
+.gen-check { display:flex; align-items:flex-start; gap:9px; color:var(--ink); font-size:13px; line-height:1.4; cursor:pointer; }
+.gen-check input { flex:none; width:16px; height:16px; margin:1px 0 0; accent-color:var(--accent); }
+.gen-check small { display:block; margin-top:2px; color:var(--muted); font-size:12px; }
+.gen-check:has(input:disabled) { opacity:.55; cursor:default; }
+.gen-pair { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+/* Pick one */
+.gen-choice { display:grid; gap:4px; }
+.gen-choice button { min-width:0; min-height:34px; padding:4px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:12.5px; font-weight:500; line-height:1.25; box-shadow:none; cursor:pointer; }
+.gen-choice button:hover { background:var(--hover); }
+.gen-choice button[aria-checked="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600; box-shadow:inset 0 0 0 1px var(--accent); }
+.gen-chips { display:flex; flex-wrap:wrap; }
+.gen-chips button { flex:none; min-width:0; min-height:32px; border-radius:99px; padding:4px 12px; }
+.gen-tiles { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
+.gen-tiles button { display:flex; flex-direction:column; align-items:center; gap:3px; min-width:0; padding:6px 2px 5px; font-size:11.5px; }
+.gen-tiles button svg { width:30px; height:27px; }
+
+/* Buttons */
+.gen-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:36px; padding:0 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); color:var(--ink); font-size:13px; font-weight:500; white-space:nowrap; box-shadow:none; cursor:pointer; text-decoration:none; }
+.gen-btn:hover:not(:disabled) { background:var(--hover); }
+.gen-btn.primary { border-color:var(--accent); background:var(--accent); color:var(--on-accent, #fff); }
+.gen-btn.primary:hover:not(:disabled) { background:var(--accent-hover, var(--accent)); }
+.gen-btn:disabled { opacity:.5; cursor:not-allowed; }
+.gen-btn.small { min-height:30px; padding:0 10px; font-size:12px; }
+.gen-row { display:flex; flex-wrap:wrap; gap:8px; }
+
+/* Seed and preview */
+.gen-seed { display:flex; flex-direction:column; gap:6px; }
+.gen-seed-row { display:flex; flex-wrap:wrap; gap:8px; }
+.gen-seed-row input { flex:1 1 140px; width:auto; }
+.gen-picture { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); }
+.gen-picture > svg, .gen-picture > canvas, .gen-picture > img { display:block; width:100%; height:auto; }
+.gen-picture[aria-busy="true"] > * { opacity:.7; transition:opacity .15s .1s; }
+.gen-summary { margin:0; color:var(--muted); font-size:12.5px; line-height:1.5; }
+.gen-summary b { color:var(--ink); font-weight:600; }
+.gen-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* Actions */
+.gen-actions { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 20px; border-top:1px solid var(--line); background:var(--panel); }
+.gen-why { flex:1; min-width:0; color:var(--muted); font-size:12.5px; text-align:right; }
+.gen-why:empty { flex:1; }
+
+@media (max-width:760px) {
+  .gen-dialog { width:100%; height:100%; max-height:calc(100dvh / var(--ui-zoom, 1)); border:0; border-radius:0; }
+  .gen-dialog-head { padding:12px 14px 8px; }
+  .gen-tabs { padding:0 14px; }
+  .gen-kinds { padding:10px 14px; }
+  .gen-cards { display:flex; overflow-x:auto; scrollbar-width:thin; padding-bottom:2px; }
+  .gen-cards button { flex:none; width:168px; }
+  .gen-panes { display:flex; flex-direction:column; overflow:auto; }
+  .gen-settings { order:1; overflow:visible; border-right:0; }
+  .gen-preview { display:contents; }
+  .gen-preview-top { order:0; padding:14px; border-bottom:1px solid var(--line); }
+  .gen-extras { order:2; padding:14px; }
+  .gen-section > summary { padding:0 14px; }
+  .gen-section-body { padding:4px 14px 18px; }
+  .gen-actions { padding:10px 14px; justify-content:flex-end; }
+  .gen-why { flex-basis:100%; order:-1; text-align:left; }
+  .gen-why:empty { display:none; }
+  .gen-simple { padding:14px; }
+}
+@media (prefers-reduced-motion:reduce) { .gen-picture[aria-busy="true"] > * { transition:none; } }
+
+/* Smaller pieces some generators use */
+.gen-group { display:flex; flex-direction:column; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); }
+.gen-group > .gen-btn { align-self:flex-start; }
+.gen-tiles button canvas { width:100%; max-width:84px; height:auto; border-radius:3px; }
+.gen-btn:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+.gen-flat { padding:0; }
+.gen-mix { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px 12px; }
+.gen-mix label { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--ink); font-size:12.5px; }
+.gen-mix input { width:58px; min-height:32px; padding:0 6px; border:1px solid var(--line); border-radius:var(--radius); background:var(--control, var(--panel)); color:var(--ink); }
+.gen-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.gen-preset { display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:99px; overflow:hidden; }
+.gen-preset button { min-height:32px; padding:0 4px 0 12px; border:0; background:var(--panel); color:var(--ink); font-size:12.5px; font-weight:500; box-shadow:none; cursor:pointer; }
+.gen-preset button + button { display:grid; place-items:center; width:32px; padding:0; color:var(--muted); }
+.gen-preset button:hover { background:var(--hover); color:var(--ink); }
+.gen-key { border:1px solid var(--line); border-radius:var(--radius); padding:8px 12px; }
+.gen-key summary { cursor:pointer; font-weight:600; }
+.gen-key summary small { margin-left:6px; color:var(--muted); font-weight:400; }
+.gen-key ol { display:grid; gap:4px; margin:8px 0 2px; padding-left:22px; color:var(--muted); font-size:12.5px; }
+.gen-key b { margin-right:4px; color:var(--ink); }
+.gen-dialog:focus-visible { outline:none; }
+.gen-simple.gen-wide { max-width:none; display:flex; flex-direction:column; gap:14px; }
+/* The look fields also sit in the Map Creator's Map tab, whose panel styles every label as a muted column. */
+.creator-panel .gen-check { flex-direction:row; gap:9px; color:var(--ink); font-size:13px; }
+.creator-panel .gen-field { color:var(--ink); }
+.creator-panel .gen-field select { height:34px; }

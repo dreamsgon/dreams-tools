@@ -5,10 +5,10 @@
  * arms, size and seed. Sectors, star systems and worlds hang off this page in later parts.
  */
 import {useMemo,useState} from 'react';
-import {Dices,Hexagon,Plus,Telescope,X} from 'lucide-react';
+import {Hexagon,Plus,Telescope,X} from 'lucide-react';
 import {compareEntries,newId,type Entry,type Workspace} from '@/lib/encyclopedia/world-model';
 import {factLabels,galaxyPresetIds,galaxyPresets,galaxyRandom,galaxyShapes,galaxySizes,generateGalaxy,hasArms,newGalaxy,presetGalaxy,randomGalaxySettings,shapeNames,sizeNames,type Galaxy,type GalaxyFacts,type GalaxyPresetId,type GalaxyShape,type GalaxySize} from '@/lib/encyclopedia/galaxies';
-import {ToolDialog} from './tool-dialog';
+import {Actions,Check,Choice,Field,GenDialog,GenTabs,Generator,Hint,Picture,Range,Section,Seed,Summary,useRoving} from '../generator/generator';
 import {GalaxyArt} from './galaxy-art';
 import {SectorDialog} from './sector-dialog';
 import './galaxy.css';
@@ -53,7 +53,7 @@ export function GalaxySheet({entry,data,update,change,onOpen}:{entry:Entry;data:
 type Settings={shape:GalaxyShape;arms:number;size:GalaxySize;seed:string};
 
 /** Pick a real galaxy, or generate one. Nothing changes until "Use…". */
-function GalaxyDialog({entry,galaxy,onClose,onPick}:{entry:Entry;galaxy:Galaxy;onClose:()=>void;onPick:(g:Galaxy,title?:string)=>void}){
+export function GalaxyDialog({entry,galaxy,onClose,onPick}:{entry:Entry;galaxy:Galaxy;onClose:()=>void;onPick:(g:Galaxy,title?:string)=>void}){
  const [tab,setTab]=useState<'real'|'generate'>(galaxy.preset?'real':'generate');
  const [chosen,setChosen]=useState<GalaxyPresetId>(galaxy.preset??'milky'),[rename,setRename]=useState(true);
  const [o,setO]=useState<Settings>({shape:galaxy.shape,arms:galaxy.arms||3,size:galaxy.size,seed:galaxy.preset?entry.title:galaxy.seed});
@@ -61,31 +61,30 @@ function GalaxyDialog({entry,galaxy,onClose,onPick}:{entry:Entry;galaxy:Galaxy;o
  const made=useMemo(()=>generateGalaxy(o),[o]);
  const reroll=()=>{const r=randomGalaxySettings(galaxyRandom(`${Date.now()}:${Math.random()}`));setO({shape:r.shape,arms:r.arms||3,size:r.size,seed:r.seed});setName(r.name);};
  const preset=galaxyPresets[chosen];
- return <ToolDialog title="Real galaxy or generate" wide onClose={onClose}>
-  <div className="world-seg galaxy-tabs" role="group" aria-label="Start from"><button type="button" aria-pressed={tab==='real'} onClick={()=>setTab('real')}>Real galaxies</button><button type="button" aria-pressed={tab==='generate'} onClick={()=>setTab('generate')}>Generate</button></div>
+ const roving=useRoving(galaxyPresetIds,chosen,setChosen);
+ const lower=(t:string)=>t.charAt(0).toLowerCase()+t.slice(1),summary=`${shapeNames[made.shape]}: ${lower(made.facts.across)} across, ${lower(made.facts.stars)} stars.`;
+ return <GenDialog title="Real galaxy or generate" onClose={onClose} tabs={<GenTabs label="Start from" value={tab} onChange={setTab} tabs={[['real','Real galaxies'],['generate','Generate']]}/>}>
   {tab==='real'?<>
-   <div className="galaxy-presets" role="radiogroup" aria-label="Real galaxies">{galaxyPresetIds.map(id=>{const p=galaxyPresets[id];return <button key={id} type="button" role="radio" aria-checked={chosen===id} className="galaxy-preset" onClick={()=>setChosen(id)}>
-    <GalaxyArt className="galaxy-preset-art" spec={{seed:id,shape:p.shape,arms:p.arms}} label=""/>
-    <span className="galaxy-preset-text"><strong>{p.name}</strong><small>{p.facts.type}</small><small>{p.facts.across} · {p.facts.stars} stars · {p.facts.distance==='Home'?'our galaxy':`${p.facts.distance} away`}</small></span></button>;})}</div>
-   <p className="aside-hint">{preset.summary} Figures are rounded published estimates.</p>
-   {entry.title!==preset.name&&<label className="world-check"><input type="checkbox" checked={rename} onChange={e=>setRename(e.target.checked)}/><span>Rename this page to {preset.name}</span></label>}
-   <div className="button-row galaxy-dialog-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="button" className="button primary" onClick={()=>onPick(presetGalaxy(chosen),rename&&entry.title!==preset.name?preset.name:undefined)}>Use {preset.name}</button></div>
-  </>:<>
-   <div className="world-generate">
-    <div className="world-generate-options">
-     <label className="world-field">Name<input type="text" value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
-     <div className="world-field">Shape<div className="world-seg" role="group" aria-label="Shape">{galaxyShapes.map(s=><button key={s} type="button" aria-pressed={o.shape===s} onClick={()=>setO(v=>({...v,shape:s}))}>{shapeNames[s].replace(' spiral','')}</button>)}</div></div>
-     {hasArms(o.shape)&&<label className="world-field">Arms <output>{o.arms}</output><input type="range" min={2} max={6} value={o.arms} onChange={e=>setO(v=>({...v,arms:+e.target.value}))}/></label>}
-     <div className="world-field">Size<div className="world-seg" role="group" aria-label="Size">{galaxySizes.map(s=><button key={s} type="button" aria-pressed={o.size===s} onClick={()=>setO(v=>({...v,size:s}))}>{sizeNames[s]}</button>)}</div></div>
-     <div className="world-field">Seed<div className="world-seed"><input aria-label="Seed" value={o.seed} maxLength={80} onChange={e=>setO(v=>({...v,seed:e.target.value}))}/><button type="button" className="button" onClick={reroll}><Dices size={15}/> Reroll</button></div></div>
-     <p className="aside-hint">Reroll picks a new name, shape and seed. The same settings always make the same galaxy.</p>
-    </div>
-    <div className="world-generate-preview">
-     <GalaxyArt className="galaxy-preview" spec={made} label="Preview of the generated galaxy"/>
-     <div className="galaxy-facts is-preview">{factKeys.filter(k=>k!=='distance').map(k=><div key={k} className="galaxy-fact"><span>{factLabels[k]}</span><b>{made.facts[k]}</b></div>)}</div>
-    </div>
+   <div className="gen-simple gen-wide">
+    <div className="galaxy-presets" role="radiogroup" aria-label="Real galaxies" onKeyDown={roving.onKeyDown}>{galaxyPresetIds.map((id,i)=>{const p=galaxyPresets[id];return <button key={id} ref={roving.ref(i)} tabIndex={roving.tabIndex(i)} type="button" role="radio" aria-checked={chosen===id} className="galaxy-preset" onClick={()=>setChosen(id)}>
+     <GalaxyArt className="galaxy-preset-art" spec={{seed:id,shape:p.shape,arms:p.arms}} label=""/>
+     <span className="galaxy-preset-text"><strong>{p.name}</strong><small>{p.facts.type}</small><small>{p.facts.across} · {p.facts.stars} stars · {p.facts.distance==='Home'?'our galaxy':`${p.facts.distance} away`}</small></span></button>;})}</div>
+    <Hint>{preset.summary} Figures are rounded published estimates.</Hint>
+    {entry.title!==preset.name&&<Check label={`Rename this page to ${preset.name}`} checked={rename} onChange={setRename}/>}
    </div>
-   <div className="button-row galaxy-dialog-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button type="button" className="button primary" disabled={!o.seed.trim()||!name.trim()} onClick={()=>onPick({...made,summary:galaxy.preset?'':galaxy.summary},name.trim()!==entry.title?name.trim():undefined)}>Use this galaxy</button></div>
-  </>}
- </ToolDialog>;
+   <Actions><button type="button" className="gen-btn" onClick={onClose}>Cancel</button><button type="button" className="gen-btn primary" onClick={()=>onPick(presetGalaxy(chosen),rename&&entry.title!==preset.name?preset.name:undefined)}>Use {preset.name}</button></Actions>
+  </>:<Generator
+   settings={<Section title="Galaxy" summary={shapeNames[o.shape]} open>
+    <Field label="Name"><input type="text" value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></Field>
+    <Choice label="Shape" value={o.shape} options={galaxyShapes.map(sh=>[sh,shapeNames[sh].replace(' spiral','')] as const)} onChange={sh=>setO(v=>({...v,shape:sh}))}/>
+    {hasArms(o.shape)&&<Range label="Arms" value={o.arms} min={2} max={6} shown={String(o.arms)} onChange={n=>setO(v=>({...v,arms:n}))}/>}
+    <Choice label="Size" value={o.size} options={galaxySizes.map(sz=>[sz,sizeNames[sz]] as const)} onChange={sz=>setO(v=>({...v,size:sz}))}/>
+   </Section>}
+   seed={<Seed value={o.seed} maxLength={80} onChange={v=>setO(x=>({...x,seed:v}))} rerolls={[{label:'Reroll',title:'A new name, shape and seed',onClick:reroll}]} hint="The same seed and settings always make the same galaxy. Reroll also picks a new name and shape."/>}
+   picture={<Picture className="galaxy-picture"><GalaxyArt className="galaxy-preview" spec={made} label={`Preview of the galaxy: ${summary}`}/></Picture>}
+   summary={<Summary text={summary}/>}
+   extras={<div className="galaxy-facts is-preview">{factKeys.filter(k=>k!=='distance').map(k=><div key={k} className="galaxy-fact"><span>{factLabels[k]}</span><b>{made.facts[k]}</b></div>)}</div>}
+   actions={<Actions why={!name.trim()?'Give the galaxy a name first.':!o.seed.trim()?'Type a seed or press Reroll.':null}><button type="button" className="gen-btn" onClick={onClose}>Cancel</button><button type="button" className="gen-btn primary" disabled={!o.seed.trim()||!name.trim()} onClick={()=>onPick({...made,summary:galaxy.preset?'':galaxy.summary},name.trim()!==entry.title?name.trim():undefined)}>Use this galaxy</button></Actions>}
+  />}
+ </GenDialog>;
 }

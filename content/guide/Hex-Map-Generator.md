@@ -6,7 +6,7 @@ The hex map generator makes regional hex maps for hex crawls and overland travel
 
 ## How it works
 
-Settings are folded into **Biomes**, **Land**, **Terrain**, **Size**, **Look** and **Places** sections with a **live preview**, a **seed** and **Reroll**. On a phone the preview sits on top. The same seed and settings always give the same map.
+Settings are folded into **Presets**, **Biomes**, **Land**, **Terrain**, **Places**, **Size**, **Look** and **Settings code** sections with a **live preview**, a **seed** and **Reroll**. On a phone the preview sits on top. The same seed and settings always give the same map.
 
 ### Land and terrain
 

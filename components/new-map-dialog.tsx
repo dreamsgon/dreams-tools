@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
-import { Dices, ImageUp, Save, Sparkles, X } from "lucide-react";
+import { Save, Sparkles, X } from "lucide-react";
 import { generateMap, randomSeed, generatorStyle, type GeneratedMap } from "@/lib/map-generator";
 import { buildDungeonMap, defaultLookOptions, dungeonLayouts, dungeonSizes, floorPatterns, keyNote, layoutFloor, type DungeonOptions, type DungeonSize, type FloorPattern } from "@/lib/dungeon/drawing";
 import { defaultDressOptions, layoutTheme, themeById, themesFor } from "@/lib/dungeon/dressing";
@@ -9,6 +9,7 @@ import { mapStylePresets } from "@/lib/map-style";
 import { orderedShapes } from "@/lib/map-drawing";
 import DrawingShape, { DrawingBackground } from "./drawing-shape";
 import HexMapPanel from "./hexmap-panel";
+import { Actions, Cards, Check, Choice, Field, GenDialog, GenTabs, Generator, Hint, Picture, Range, Section, Seed, Summary } from "./generator/generator";
 
 type Tab = "generate" | "trace" | "blank";
 /** What the generator makes: one of the dungeon layouts, the older wilderness map, or a hex map. */
@@ -87,14 +88,14 @@ export default function NewMapDialog({ grid, close, start, trace }: {
     const look = style ? generatorStyle(style, grid) : null;
     return { name: "New drawn map", width: cols * grid, height: rows * grid, drawing: { background: look?.background ?? "#8b9b75", style: look?.style ?? null, shapes: [], folders: [], layerOrder: [] } };
   };
-  const squares = (value: number, change: (n: number) => void, label: string) => <label>{label}<input type="number" min={3} max={Math.floor(8000 / grid)} value={value} onChange={e => { const v = Math.round(+e.target.value); if (v >= 3 && v <= 8000 / grid) change(v); }}/></label>;
-  const range = (label: string, value: number, change: (v: number) => void, shown: string, hint?: string) => <label>{label} <output>{shown}</output><input type="range" min={0} max={1} step={.05} value={value} onChange={e => change(+e.target.value)}/>{hint && <small className="muted">{hint}</small>}</label>;
-  const seg = <T extends string | number>(label: string, value: T, options: [T, string][], change: (v: T) => void) => <div className="creator-field"><span>{label}</span><div className="creator-seg" role="group" aria-label={label}>{options.map(([v, name]) => <button key={String(v)} type="button" aria-pressed={value === v} onClick={() => change(v)}>{name}</button>)}</div></div>;
-  const check = (label: string, value: boolean, change: (v: boolean) => void, hint?: string) => <label className="creator-check"><input type="checkbox" checked={value} onChange={e => change(e.target.checked)}/><span>{label}{hint && <small>{hint}</small>}</span></label>;
+  const squares = (value: number, change: (n: number) => void, label: string) => <Field label={label}><input type="number" min={3} max={Math.floor(8000 / grid)} value={value} onChange={e => { const v = Math.round(+e.target.value); if (v >= 3 && v <= 8000 / grid) change(v); }}/></Field>;
+  const range = (label: string, value: number, change: (v: number) => void, shown: string, hint?: string) => <Range label={label} value={value} min={0} max={1} step={.05} shown={shown} onChange={change} hint={hint}/>;
+  const seg = <T extends string | number>(label: string, value: T, options: [T, string][], change: (v: T) => void) => <Choice label={label} value={value} options={options} onChange={change}/>;
+  const check = (label: string, value: boolean, change: (v: boolean) => void, hint?: string) => <Check label={label} checked={value} onChange={change} hint={hint}/>;
   const is = (...ids: Kind[]) => ids.includes(kind);
   const c = kind !== "hex" ? counts[kind] : null;
   const pickKind = (k: Kind) => { setKind(k); setStyle(null); setFloor(null); setTheme(null); };
-  const usePreset = (p: Preset) => { setKind(p.kind); setO(prev => ({ ...prev, ...p.o })); setCount(prev => ({ ...prev, [p.kind]: p.count })); setStyle(p.style); setFloor(p.floor); setTheme(p.theme); if (p.mix && p.theme) setMixes(prev => ({ ...prev, [p.theme!]: p.mix! })); };
+  const applyPreset = (p: Preset) => { setKind(p.kind); setO(prev => ({ ...prev, ...p.o })); setCount(prev => ({ ...prev, [p.kind]: p.count })); setStyle(p.style); setFloor(p.floor); setTheme(p.theme); if (p.mix && p.theme) setMixes(prev => ({ ...prev, [p.theme!]: p.mix! })); };
   const savePreset = () => {
     if (!layoutKind) return;
     const { seed: _s, dressing: _d, ...rest } = o; void _s; void _d;
@@ -102,23 +103,23 @@ export default function NewMapDialog({ grid, close, start, trace }: {
     const list = [...presets, p].slice(-8); setPresets(list); savePresets(list);
   };
   const dropPreset = (i: number) => { const list = presets.filter((_, k) => k !== i); setPresets(list); savePresets(list); };
-  const section = (title: string, body: ReactNode, open = false) => <details className="creator-gen-section" open={open}><summary>{title}</summary><div>{body}</div></details>;
   const isDungeon = is("branching", "halls", "caves"), lit = o.lights, furnished = o.populate;
-  return <div className="creator-dialog-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-    <div className="creator-dialog creator-new-map" role="dialog" aria-modal="true" aria-labelledby="new-map-title" onKeyDown={e => { if (e.key === "Escape") close(); }}>
-      <header><h2 id="new-map-title">Start a new map</h2><button className="creator-icon" aria-label="Close" onClick={close}><X size={18}/></button></header>
-      <div className="creator-tabs" role="tablist" aria-label="How to start">
-        {([["generate", "Generate"], ["trace", "Trace an image"], ["blank", "Blank map"]] as [Tab, string][]).map(([id, name]) =>
-          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{name}</button>)}
-      </div>
-      {tab === "generate" && <div className="creator-layouts" role="group" aria-label="What to generate">
-        {kinds.map(k => <button key={k.id} type="button" aria-pressed={kind === k.id} onClick={() => pickKind(k.id)}><svg viewBox="0 0 34 34" aria-hidden="true">{icons[k.id]}</svg><span><b>{k.name}</b><small>{k.hint}</small></span></button>)}
-      </div>}
-      {tab === "generate" && kind !== "hex" && map && c && <div className="creator-dialog-body">
-        <div className="creator-panel">
-          {section("Layout", <>
+  const kindCards = <Cards label="What to generate" value={kind} onChange={pickKind} cards={kinds.map(k => ({ ...k, icon: <svg viewBox="0 0 34 34" aria-hidden="true">{icons[k.id]}</svg> }))}/>;
+  const size = dungeonSizes[o.size], summary = map && c ? `${Math.min(c.max, n)} ${c.label.toLowerCase()} on ${size.cols} × ${size.rows} squares.` : "";
+  const mirrored = o.symmetry !== "off" && is("branching", "halls") && (o.entry === "any" || (o.symmetry === "lr") === (o.entry === "E" || o.entry === "W"));
+  return <GenDialog title="Start a new map" onClose={close} tabs={<GenTabs<Tab> label="How to start" value={tab} onChange={setTab} tabs={[["generate", "Generate"], ["trace", "Trace an image"], ["blank", "Blank map"]]}/>}>
+    {tab === "generate" && kind === "hex" && <HexMapPanel kinds={kindCards} close={close} start={start}/>}
+    {tab === "generate" && kind !== "hex" && map && c && <Generator
+      kinds={kindCards}
+      settings={<>
+        {layoutKind && <Section title="Presets" summary={`${presets.length} saved`} open>
+          <div className="gen-presets">{presets.map((p, i) => <span key={i} className="gen-preset"><button type="button" onClick={() => applyPreset(p)}>{p.name}</button><button type="button" aria-label={`Delete preset ${p.name}`} onClick={() => dropPreset(i)}><X size={13}/></button></span>)}</div>
+          <div className="gen-row"><button type="button" className="gen-btn small" onClick={savePreset}><Save size={14}/> Save these settings</button></div>
+          <Hint>Presets save the layout, look, floor and theme on this device.</Hint>
+        </Section>}
+        <Section title="Layout" summary={`${size.name}, ${Math.min(c.max, n)} ${c.label.toLowerCase()}`} open>
           {seg<DungeonSize>("Map size", o.size, (Object.keys(dungeonSizes) as DungeonSize[]).map(s => [s, `${dungeonSizes[s].name} ${dungeonSizes[s].cols}×${dungeonSizes[s].rows}`]), v => set("size", v))}
-          <label>{c.label} <output>{Math.min(c.max, n)}</output><input type="range" min={c.min} max={c.max} value={Math.min(c.max, n)} onChange={e => setCount({ ...count, [kind]: +e.target.value })}/></label>
+          <Range label={c.label} value={Math.min(c.max, n)} min={c.min} max={c.max} shown={String(Math.min(c.max, n))} onChange={v => setCount({ ...count, [kind]: v })}/>
           {is(...dungeon) && range("Room size", o.roomSize, v => set("roomSize", v), sizeWord(o.roomSize))}
           {is("building") && range("Building size", o.roomSize, v => set("roomSize", v), sizeWord(o.roomSize))}
           {is("branching") && range("Branching", o.branching, v => set("branching", v), pct(o.branching), "Low follows one main route. High grows side passages.")}
@@ -132,81 +133,74 @@ export default function NewMapDialog({ grid, close, start, trace }: {
           {is("branching", "halls", "caves") && seg("Symmetry", o.symmetry, [["off", "Off"], ["lr", "Left–right"], ["tb", "Top–bottom"]], v => set("symmetry", v))}
           {is(...dungeon) && range("Curved rooms", o.curved, v => set("curved", v), pct(o.curved))}
           {is("branching", "halls", "caves", "building") && seg("Entrance", o.entry, [["any", "Any"], ["N", "N"], ["S", "S"], ["E", "E"], ["W", "W"]], v => set("entry", v))}
-          </>, true)}
-          {section("Look", <>
-          <label>Style<select value={chosenStyle} onChange={e => setStyle(e.target.value)}>{styles.map(([id, name]) => <option key={id} value={id}>{name}{id === suggested ? " (suggested)" : ""}</option>)}</select></label>
+          {mirrored && <Hint>A mirrored map is entered on its mirror line, so the entrance may move.</Hint>}
+        </Section>
+        <Section title="Look" summary={styles.find(([id]) => id === chosenStyle)?.[1]}>
+          <Field label="Style"><select value={chosenStyle} onChange={e => setStyle(e.target.value)}>{styles.map(([id, name]) => <option key={id} value={id}>{name}{id === suggested ? " (suggested)" : ""}</option>)}</select></Field>
           {layoutKind && <>
-            <label>Floor<select value={chosenFloor} onChange={e => setFloor(e.target.value as FloorPattern)}>{floorPatterns.map(f => <option key={f.id} value={f.id}>{f.name}{f.id === layoutFloor[layoutKind] ? " (suggested)" : ""}</option>)}</select></label>
+            <Field label="Floor"><select value={chosenFloor} onChange={e => setFloor(e.target.value as FloorPattern)}>{floorPatterns.map(f => <option key={f.id} value={f.id}>{f.name}{f.id === layoutFloor[layoutKind] ? " (suggested)" : ""}</option>)}</select></Field>
             {seg("Walls", o.walls, [["thin", "Thin"], ["medium", "Medium"], ["thick", "Thick"]], v => set("walls", v))}
             {isDungeon && seg("Outside", o.outside, [["hatched", "Hatched"], ["solid", "Solid"]], v => set("outside", v))}
             {seg("Doors", o.doors, [["wood", "Wood"], ["iron", "Iron"], ["arch", "Open arch"], ["mixed", "Mixed"]], v => set("doors", v))}
             {is("branching", "halls", "building") && range("Secret doors", o.secret, v => set("secret", v), pct(o.secret), "A secret door looks like wall. The Map Creator marks it with an S.")}
             {check("Grid on the floor", o.gridLines, v => set("gridLines", v))}
           </>}
-          </>)}
-          {layoutKind && section("Dressing", <>
-            {check("Furnish rooms", o.populate, v => set("populate", v))}
-            {furnished && <>
-              <label>Theme<select value={chosenTheme} onChange={e => setTheme(e.target.value)}>{themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-              <div className="creator-field"><span>Room mix</span><div className="creator-mix">{Object.entries(themeById(chosenTheme).rooms).map(([id, p]) =>
-                <label key={id}><span>{p.name}</span><input type="number" min={0} max={9} value={mix[id] ?? 0} onChange={e => { const v = Math.max(0, Math.min(9, Math.round(+e.target.value) || 0)); setMixes(prev => ({ ...prev, [chosenTheme]: { ...mix, [id]: v } })); }}/></label>)}</div>
-                <small className="muted">How many rooms of each kind, as a share. {isDungeon ? "The entrance and the last room have their own." : "Bigger rooms get the grander purposes."}</small></div>
-              {range("Clutter", o.clutter, v => set("clutter", v), few(o.clutter))}
-            </>}
-            {is("branching", "halls", "building") && check("Columns", o.columns, v => set("columns", v))}
-            {is("branching", "halls", "building") && o.columns && range("Column density", o.columnDensity, v => set("columnDensity", v), few(o.columnDensity))}
-            {check("Number the rooms", o.numbers, v => set("numbers", v), "Numbers become GM-only markers in Maptable, named from the room key.")}
-          </>)}
-          {layoutKind && section("Lighting", <>
-            {check("Add lights", o.lights, v => set("lights", v), "Lights show in the Map Creator and Maptable.")}
-            {lit && <>
-              {range("How many", o.lightDensity, v => set("lightDensity", v), few(o.lightDensity))}
-              <div className="creator-field"><span>Kinds</span><div className="creator-kinds-row">
-                {check("Torches", o.torches, v => set("torches", v))}{check("Braziers", o.braziers, v => set("braziers", v))}{check("Candles", o.candles, v => set("candles", v))}{check("Magic", o.magic, v => set("magic", v))}
-              </div></div>
-              {range("Rooms left dark", o.darkRooms, v => set("darkRooms", v), pct(o.darkRooms), "Dark rooms keep their lamps, unlit. The room key says which.")}
-            </>}
-          </>)}
-          {layoutKind && <div className="creator-field"><span>Your presets</span>
-            <div className="creator-presets">{presets.map((p, i) => <span key={i} className="creator-preset"><button type="button" onClick={() => usePreset(p)}>{p.name}</button><button type="button" aria-label={`Delete preset ${p.name}`} onClick={() => dropPreset(i)}><X size={13}/></button></span>)}
-              <button type="button" onClick={savePreset}><Save size={14}/> Save these settings</button></div>
-          </div>}
-        </div>
-        <div className="creator-preview">
-          <div className="creator-field creator-seed-field"><span>Seed</span>
-            <div className="creator-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={o.seed} maxLength={40} onChange={e => set("seed", e.target.value)}/>
-              <button type="button" onClick={() => setO(p => ({ ...p, seed: randomSeed(), dressing: 0 }))} title="A new seed: new rooms and new dressing"><Dices size={15}/> Reroll layout</button>{kind !== "wilderness" && <button type="button" onClick={() => set("dressing", o.dressing + 1)} title="The same rooms, with new things in them"><Sparkles size={15}/> Reroll dressing</button>}</div>
-          </div>
-          <div className="creator-preview-map"><svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="Preview of the generated map">
-            <DrawingBackground drawing={map.drawing} width={map.width} height={map.height}/>
-            {orderedShapes(map.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={map.drawing} prefix="preview"/>)}
-          </svg></div>
-          {"key" in map && Array.isArray(map.key) && map.key.length > 0 && <details className="creator-room-key" open><summary>Room key <small>GM only</small></summary><ol>
-            {map.key.map(k => <li key={k.number}><b>{k.name}</b> {keyNote(k)}</li>)}
-          </ol></details>}
-          <p className="creator-measure">Every room, door and stamp is an ordinary shape, so you can move, restyle or delete any of it afterwards.{o.symmetry !== "off" && is("branching", "halls") && (o.entry === "any" || (o.symmetry === "lr") === (o.entry === "E" || o.entry === "W")) ? " A mirrored map is entered on its mirror line, so the entrance may move." : ""}</p>
-        </div>
-      </div>}
-      {tab === "trace" && <div className="creator-dialog-body single">
-        <div className="creator-panel">
-          <p className="creator-measure">Put a sketch, a scanned module map or a screenshot under the drawing at half strength, line it up with the grid, and draw over it. The image stays on this device and is left out when you save.</p>
-          <label className="creator-file"><ImageUp size={18}/>{file ? file.name : "Choose an image"}<input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}/></label>
-          <div className="creator-pair">{squares(cols, setCols, "Map width (squares)")}{squares(rows, setRows, "Map length (squares)")}</div>
-          <p className="creator-measure">Count the squares on your image if it has a grid. You can change the size and line the image up after.</p>
-        </div>
-      </div>}
-      {tab === "blank" && <div className="creator-dialog-body single">
-        <div className="creator-panel">
-          <div className="creator-pair">{squares(cols, setCols, "Width (squares)")}{squares(rows, setRows, "Length (squares)")}</div>
-          <label>Style<select value={style ?? ""} onChange={e => setStyle(e.target.value || null)}><option value="">Plain</option>{styles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-        </div>
-      </div>}
-      {tab === "generate" && kind === "hex" ? <HexMapPanel close={close} start={start}/> : <footer>
-        <button onClick={close}>Cancel</button>
-        {tab === "generate" && map && <button className="primary" onClick={() => start({ name: map.name, width: map.width, height: map.height, drawing: map.drawing })}>Use this map</button>}
-        {tab === "trace" && <button className="primary" disabled={!file} onClick={() => file && trace(file, { cols, rows })}>Start tracing</button>}
-        {tab === "blank" && <button className="primary" onClick={() => start(blank())}>Start drawing</button>}
-      </footer>}
-    </div>
-  </div>;
+        </Section>
+        {layoutKind && <Section title="Dressing" summary={furnished ? themeById(chosenTheme).name : "Bare rooms"}>
+          {check("Furnish rooms", o.populate, v => set("populate", v))}
+          {furnished && <>
+            <Field label="Theme"><select value={chosenTheme} onChange={e => setTheme(e.target.value)}>{themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
+            <div className="gen-field"><span className="gen-label">Room mix</span><div className="gen-mix">{Object.entries(themeById(chosenTheme).rooms).map(([id, p]) =>
+              <label key={id}><span>{p.name}</span><input type="number" min={0} max={9} value={mix[id] ?? 0} onChange={e => { const v = Math.max(0, Math.min(9, Math.round(+e.target.value) || 0)); setMixes(prev => ({ ...prev, [chosenTheme]: { ...mix, [id]: v } })); }}/></label>)}</div>
+              <small className="gen-hint">How many rooms of each kind, as a share. {isDungeon ? "The entrance and the last room have their own." : "Bigger rooms get the grander purposes."}</small></div>
+            {range("Clutter", o.clutter, v => set("clutter", v), few(o.clutter))}
+          </>}
+          {is("branching", "halls", "building") && check("Columns", o.columns, v => set("columns", v))}
+          {is("branching", "halls", "building") && o.columns && range("Column density", o.columnDensity, v => set("columnDensity", v), few(o.columnDensity))}
+          {check("Number the rooms", o.numbers, v => set("numbers", v), "They become GM-only markers in Maptable, named from the room key.")}
+        </Section>}
+        {layoutKind && <Section title="Lighting" summary={lit ? `${few(o.lightDensity)} lights` : "No lights"}>
+          {check("Add lights", o.lights, v => set("lights", v), "Lights show in the Map Creator and Maptable.")}
+          {lit && <>
+            {range("How many", o.lightDensity, v => set("lightDensity", v), few(o.lightDensity))}
+            <div className="gen-field"><span className="gen-label">Kinds</span><div className="gen-pair">
+              {check("Torches", o.torches, v => set("torches", v))}{check("Braziers", o.braziers, v => set("braziers", v))}{check("Candles", o.candles, v => set("candles", v))}{check("Magic", o.magic, v => set("magic", v))}
+            </div></div>
+            {range("Rooms left dark", o.darkRooms, v => set("darkRooms", v), pct(o.darkRooms), "Dark rooms keep their lamps, unlit. The room key says which.")}
+          </>}
+        </Section>}
+      </>}
+      seed={<Seed value={o.seed} maxLength={40} onChange={v => set("seed", v)} rerolls={[
+        { label: "Reroll layout", title: "A new seed: new rooms and new dressing", onClick: () => setO(p => ({ ...p, seed: randomSeed(), dressing: 0 })) },
+        ...(kind !== "wilderness" ? [{ label: "Reroll dressing", title: "The same rooms, with new things in them", icon: <Sparkles size={15} aria-hidden="true"/>, onClick: () => set("dressing", o.dressing + 1) }] : [])]}/>}
+      picture={<Picture><svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label={`Preview of the map: ${summary}`}>
+        <DrawingBackground drawing={map.drawing} width={map.width} height={map.height}/>
+        {orderedShapes(map.drawing).map(s => <DrawingShape key={s.id} shape={s} drawing={map.drawing} prefix="preview"/>)}
+      </svg></Picture>}
+      summary={<Summary text={summary}/>}
+      extras={<>
+        {"key" in map && Array.isArray(map.key) && map.key.length > 0 && <details className="gen-key" open><summary>Room key <small>GM only</small></summary><ol>
+          {map.key.map(k => <li key={k.number}><b>{k.name}</b> {keyNote(k)}</li>)}
+        </ol></details>}
+        <Hint>Every room, door and stamp is an ordinary shape you can move, restyle or delete.</Hint>
+      </>}
+      actions={<Actions><button type="button" className="gen-btn" onClick={close}>Cancel</button><button type="button" className="gen-btn primary" onClick={() => start({ name: map.name, width: map.width, height: map.height, drawing: map.drawing })}>Use this map</button></Actions>}
+    />}
+    {tab === "trace" && <>
+      <div className="gen-simple"><div className="gen-section-body gen-flat">
+        <Hint>Put a sketch, module map or screenshot under the drawing at half strength and draw over it. The image stays on this device and isn&apos;t saved with the map.</Hint>
+        <Field label="Image"><input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}/></Field>
+        <div className="gen-pair">{squares(cols, setCols, "Width (squares)")}{squares(rows, setRows, "Length (squares)")}</div>
+        <Hint>If your image has a grid, count its squares. You can resize it and line it up afterwards.</Hint>
+      </div></div>
+      <Actions><button type="button" className="gen-btn" onClick={close}>Cancel</button><button type="button" className="gen-btn primary" disabled={!file} onClick={() => file && trace(file, { cols, rows })}>Start tracing</button></Actions>
+    </>}
+    {tab === "blank" && <>
+      <div className="gen-simple"><div className="gen-section-body gen-flat">
+        <div className="gen-pair">{squares(cols, setCols, "Width (squares)")}{squares(rows, setRows, "Length (squares)")}</div>
+        <Field label="Style"><select value={style ?? ""} onChange={e => setStyle(e.target.value || null)}><option value="">Plain</option>{styles.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field>
+      </div></div>
+      <Actions><button type="button" className="gen-btn" onClick={close}>Cancel</button><button type="button" className="gen-btn primary" onClick={() => start(blank())}>Start drawing</button></Actions>
+    </>}
+  </GenDialog>;
 }

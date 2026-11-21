@@ -12,16 +12,12 @@ import {galaxyRandom} from '@/lib/encyclopedia/galaxies';
 import {backdropNames,backdrops,randomStar,starClasses,starInfo,type Backdrop,type StarClass} from '@/lib/encyclopedia/sectors';
 import {amounts,eras,formatAU,solSystem,starPhysics,survey,word,zoneOf,zones,type StarSystem,type SurveyOptions} from '@/lib/encyclopedia/star-systems';
 import {parsePastedDraft,readSystemDraft,systemDraftPrompt,type SystemDraftRequest} from '@/lib/encyclopedia/system-draft';
-import {ToolDialog} from './tool-dialog';
+import {Actions,Check,Choice,Field,GenDialog,Generator,Hint,Picture,Range,Section,Seed,Summary} from '../generator/generator';
 import {useKeys} from './world-ai-check';
 import {SystemOrbit} from './system-art';
 import {keyFields} from '@/lib/ai/device-keys';
 
 const amountNames={auto:'Auto',none:'None',some:'Some',many:'Many'};
-function Seg<T extends string>({label,values,value,set,names}:{label:string;values:readonly T[];value:T;set:(v:T)=>void;names:(v:T)=>string}){
- return <div className="world-field">{label}<div className="world-seg" role="group" aria-label={label}>{values.map(v=><button key={v} type="button" aria-pressed={value===v} onClick={()=>set(v)}>{names(v)}</button>)}</div></div>;
-}
-
 export type SystemAi={campaignId:string|null;campaign:{name:string;description?:string}};
 export function SystemDialog({name:startName,system,orgs,ai,onApply,onClose}:{name:string;system:StarSystem;orgs:Entry[];ai?:SystemAi;onApply:(s:StarSystem,name:string)=>void;onClose:()=>void}){
  const [name,setName]=useState(startName),[star,setStar]=useState<StarClass>(system.star),[companions,setCompanions]=useState(system.companions);
@@ -50,61 +46,76 @@ export function SystemDialog({name:startName,system,orgs,ai,onApply,onClose}:{na
  const z=zones(made),moons=made.bodies.reduce((n,b)=>n+b.moons.length,0),green=made.bodies.filter(b=>zoneOf(b.au,z)==='Green').length,kept=system.bodies.filter(b=>b.locked||b.pageId).length;
  const reroll=()=>setSeed(Math.floor(galaxyRandom(`${Date.now()}:${Math.random()}`)()*1e9).toString(36));
  const solAllowed=real||name.trim().toLowerCase()==='sol';
- return <ToolDialog title="Survey settings" wide onClose={onClose}>
-  <div className="world-generate">
-   <div className="world-generate-options">
-    <label className="world-field">Name<input type="text" value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
-    {!real&&<div className="world-field">Start from<div className="world-seg" role="group" aria-label="Start from"><button type="button" aria-pressed={mode==='generator'} onClick={()=>setMode('generator')}>The generator</button><button type="button" aria-pressed={mode==='setting'} onClick={()=>setMode('setting')}>A setting (AI)</button></div></div>}
-    {fromSetting&&<>
-     <label className="world-field">Setting<input type="text" value={setting} maxLength={160} placeholder="A book, game, film or your own" onChange={e=>setSetting(e.target.value)}/></label>
-     <label className="world-field">System in it<input type="text" value={which} maxLength={160} placeholder="Leave empty and the AI picks one" onChange={e=>setWhich(e.target.value)}/></label>
-     <label className="world-field">Keep in mind (optional)<textarea className="sector-note" rows={2} maxLength={500} value={note} placeholder="Before the war; the colony is new" onChange={e=>setNote(e.target.value)}/></label>
-     <Seg label="Science" values={['realistic','pulp'] as const} value={o.science} set={v=>opt('science',v)} names={v=>v==='pulp'?'Pulp':'Realistic'}/>
-     <p className="aside-hint">Your own AI builds it from what it knows of that setting, for your campaign only. RPG Tools ships no setting&apos;s content. {key?`It uses about 4,000 tokens from ${key.name}’s monthly limit.`:keys===null?'Looking for your AI connections…':ai?.campaignId?'Add an API key with Connect an AI to ask here, or copy the prompt into your AI app.':'Open a campaign to ask with an API key, or copy the prompt into your AI app.'}</p>
-     <div className="button-row world-ai-actions">
-      <button type="button" className="button small" disabled={!draftRequest.setting} onClick={()=>void copy()}><ClipboardCopy size={13}/> Copy prompt</button>
-      {key&&<button type="button" className="button small primary" disabled={busy||!draftRequest.setting} onClick={()=>void ask()}><Sparkles size={13}/> {busy?`Asking ${key.name}…`:drafted?`Ask ${key.name} again`:`Ask ${key.name}`}</button>}
+ const summary=fromSetting&&!drafted?'Ask your AI, or paste its answer, to see the system here.'
+  :`${drafted&&fromSetting?`Built by ${drafted.by}. `:''}${made.bodies.length} worlds and ${moons} ${moons===1?'moon':'moons'}, ${green} in the green zone${made.belts.length?`, ${made.belts.length} ${made.belts.length===1?'belt':'belts'}`:''}.`;
+ const keptNote=!real&&kept?` ${kept===1?'The world you locked or charted stays':`The ${kept} worlds you locked or charted stay`}.`:'';
+ const science=<Choice label="Science" value={o.science} options={[['realistic','Realistic'],['pulp','Pulp']]} onChange={v=>opt('science',v)} hint={o.science==='pulp'?'Pulp bends the rules for adventure: breathable air and life where real physics would say no.':'Temperatures, water, air and life follow each world’s distance from the star.'}/>;
+ const amountOptions=amounts.map(a=>[a,amountNames[a]] as const);
+ return <GenDialog title="Survey settings" onClose={onClose}>
+  <Generator
+   settings={<>
+    <Section title="System" summary={real?'Real data':fromSetting?'From a setting':name} open>
+     <Field label="Name"><input type="text" value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></Field>
+     {!real&&<Choice label="Start from" value={mode} options={[['generator','The generator'],['setting','A setting (AI)']]} onChange={setMode}/>}
+     {!fromSetting&&solAllowed&&<Check label="Real data" hint="The Sun, its eight planets and their main moons, with rounded real figures." checked={real} onChange={v=>{setReal(v);if(v)setBackdrop('deep');}}/>}
+    </Section>
+    {fromSetting&&<Section title="From a setting" summary={setting} open>
+     <Field label="Setting"><input type="text" value={setting} maxLength={160} placeholder="A book, game, film or your own" onChange={e=>setSetting(e.target.value)}/></Field>
+     <Field label="System in it"><input type="text" value={which} maxLength={160} placeholder="Leave empty and the AI picks one" onChange={e=>setWhich(e.target.value)}/></Field>
+     <Field label="Keep in mind (optional)"><textarea rows={2} maxLength={500} value={note} placeholder="Before the war; the colony is new" onChange={e=>setNote(e.target.value)}/></Field>
+     {science}
+     <Hint>Your own AI builds it from what it knows of that setting, for your campaign only. RPG Tools ships no setting&apos;s content. {key?`It uses about 4,000 tokens from ${key.name}’s monthly limit.`:keys===null?'Looking for your AI connections…':ai?.campaignId?'Add an API key with Connect an AI to ask here, or copy the prompt into your AI app.':'Open a campaign to ask with an API key, or copy the prompt into your AI app.'}</Hint>
+     <div className="gen-row">
+      <button type="button" className="gen-btn small" disabled={!draftRequest.setting} onClick={()=>void copy()}><ClipboardCopy size={13}/> Copy prompt</button>
+      {key&&<button type="button" className="gen-btn small primary" disabled={busy||!draftRequest.setting} onClick={()=>void ask()}><Sparkles size={13}/> {busy?`Asking ${key.name}…`:drafted?`Ask ${key.name} again`:`Ask ${key.name}`}</button>}
      </div>
-     {copied&&<p className="aside-hint" role="status">{copied}</p>}
+     {copied&&<p className="gen-hint" role="status">{copied}</p>}
      <details className="world-ai-prompt"><summary>Paste your AI app&apos;s answer</summary><textarea rows={5} aria-label="Your AI app's answer" value={pasted} placeholder="Paste the JSON here" onChange={e=>setPasted(e.target.value)}/>
-      <button type="button" className="button small" disabled={!pasted.trim()} onClick={()=>{try{took(parsePastedDraft(pasted),'your AI app');}catch(e){setError(e instanceof Error?e.message:'Could not read that answer.');}}}>Use this answer</button></details>
-     {error&&<p className="form-error" role="alert">{error}</p>}
-    </>}
-    {!fromSetting&&solAllowed&&<label className="world-check"><input type="checkbox" checked={real} onChange={e=>{setReal(e.target.checked);if(e.target.checked)setBackdrop('deep');}}/><span>Real data<small>The Sun, its eight planets and their main moons, with rounded real figures.</small></span></label>}
+      <button type="button" className="gen-btn small" disabled={!pasted.trim()} onClick={()=>{try{took(parsePastedDraft(pasted),'your AI app');}catch(e){setError(e instanceof Error?e.message:'Could not read that answer.');}}}>Use this answer</button></details>
+     {error&&<Hint alert>{error}</Hint>}
+    </Section>}
     {!real&&!fromSetting&&<>
-     <div className="world-field">Star<div className="world-seg" role="group" aria-label="Star">{starClasses.map(c=><button key={c} type="button" aria-pressed={star===c} title={`Class ${c}, ${starInfo[c].colour.toLowerCase()}`} onClick={()=>setStar(c)}>{c}</button>)}<button type="button" aria-label="Random star, weighted like a real galaxy" onClick={()=>setStar(randomStar(galaxyRandom(`${Date.now()}`)))}><Dices size={14}/></button></div>
-      <small className="sector-size-note">Class {star}, {starInfo[star].colour.toLowerCase()}. {starPhysics[star].note} Green zone {formatAU(0.95*Math.sqrt(starPhysics[star].L))} to {formatAU(1.37*Math.sqrt(starPhysics[star].L))} AU.</small></div>
-     {companions.map((c,i)=><div key={i} className="system-companion"><label className="world-field">Companion {i+1}<select value={c.star} onChange={e=>setCompanions(cs=>cs.map((x,k)=>k===i?{...x,star:e.target.value as StarClass}:x))}>{starClasses.map(s=><option key={s} value={s}>Class {s}, {starInfo[s].colour.toLowerCase()}</option>)}</select></label>
-      <div className="world-seg" role="group" aria-label={`Companion ${i+1} distance`}><button type="button" aria-pressed={c.separation==='close'} onClick={()=>setCompanions(cs=>cs.map((x,k)=>k===i?{...x,separation:'close'}:x))}>Close pair</button><button type="button" aria-pressed={c.separation==='wide'} onClick={()=>setCompanions(cs=>cs.map((x,k)=>k===i?{...x,separation:'wide'}:x))}>Far out</button></div>
-      <button type="button" className="icon-button" aria-label={`Remove companion ${i+1}`} onClick={()=>setCompanions(cs=>cs.filter((_,k)=>k!==i))}><Trash2 size={15}/></button></div>)}
-     {companions.length<2&&<button type="button" className="button small system-add" onClick={()=>setCompanions(cs=>[...cs,{star:'M',separation:'wide'}])}><Plus size={14}/> Add a companion star</button>}
-     <label className="world-field">Premise<input type="text" value={premise} maxLength={300} placeholder="What this system is for, in a line" onChange={e=>setPremise(e.target.value)}/></label>
-     <label className="world-field">Worlds <output>{o.count}</output><input type="range" min={1} max={12} value={o.count} onChange={e=>opt('count',+e.target.value)}/></label>
-     <Seg label="Green-zone worlds" values={amounts} value={o.habitable} set={v=>opt('habitable',v)} names={v=>amountNames[v]}/>
-     <Seg label="Giants" values={amounts} value={o.giants} set={v=>opt('giants',v)} names={v=>amountNames[v]}/>
-     <Seg label="Belts" values={amounts} value={o.belts} set={v=>opt('belts',v)} names={v=>amountNames[v]}/>
-     <Seg label="Moons" values={['none','few','normal','many'] as const} value={o.moons} set={v=>opt('moons',v)} names={v=>({none:'None',few:'Few',normal:'Normal',many:'Many'})[v]}/>
-     <label className="world-check"><input type="checkbox" checked={o.rings} onChange={e=>opt('rings',e.target.checked)}/><span>Rings on some giants</span></label>
-     <Seg label="Era" values={eras} value={o.era} set={v=>opt('era',v)} names={word}/>
-     <Seg label="Science" values={['realistic','pulp'] as const} value={o.science} set={v=>opt('science',v)} names={v=>v==='pulp'?'Pulp':'Realistic'}/>
-     <small className="sector-size-note">{o.science==='pulp'?'Pulp bends the rules for adventure: breathable air, jungles and life where real physics would say no.':'Temperatures, water, air and life follow each world\'s distance from the star.'}</small>
-     <label className="world-field">Points of interest <output>{o.poi}</output><input type="range" min={0} max={5} value={o.poi} onChange={e=>opt('poi',+e.target.value)}/></label>
-     <Seg label="Naming" values={['roman','letters'] as const} value={o.naming} set={v=>opt('naming',v)} names={v=>v==='roman'?`${name.trim()||'Name'}-II`:`${name.trim()||'Name'} b`}/>
-     {orgs.length>0&&<div className="world-field">Footholds<div className="system-orgs">{orgs.map(org=><label key={org.id} className="world-check"><input type="checkbox" checked={o.holders.includes(org.id)} disabled={!o.holders.includes(org.id)&&o.holders.length>=4} onChange={e=>opt('holders',e.target.checked?[...o.holders,org.id]:o.holders.filter(h=>h!==org.id))}/><span>{org.title}</span></label>)}</div></div>}
+     <Section title="Stars" summary={`Class ${star}${companions.length?` + ${companions.length}`:''}`} open>
+      <Choice label="Star" value={star} options={starClasses.map(c=>[c,c,`Class ${c}, ${starInfo[c].colour.toLowerCase()}`] as const)} onChange={setStar} hint={`Class ${star}, ${starInfo[star].colour.toLowerCase()}. ${starPhysics[star].note} Green zone ${formatAU(0.95*Math.sqrt(starPhysics[star].L))} to ${formatAU(1.37*Math.sqrt(starPhysics[star].L))} AU.`}/>
+      <div className="gen-row"><button type="button" className="gen-btn small" onClick={()=>setStar(randomStar(galaxyRandom(`${Date.now()}`)))}><Dices size={14}/> Random star</button>
+       {companions.length<2&&<button type="button" className="gen-btn small" onClick={()=>setCompanions(cs=>[...cs,{star:'M',separation:'wide'}])}><Plus size={14}/> Add a companion star</button>}</div>
+      {companions.map((c,i)=><div key={i} className="gen-group">
+       <Field label={`Companion ${i+1}`}><select value={c.star} onChange={e=>setCompanions(cs=>cs.map((x,k)=>k===i?{...x,star:e.target.value as StarClass}:x))}>{starClasses.map(s=><option key={s} value={s}>Class {s}, {starInfo[s].colour.toLowerCase()}</option>)}</select></Field>
+       <Choice label={`Companion ${i+1} distance`} hideLabel value={c.separation} options={[['close','Close pair'],['wide','Far out']]} onChange={v=>setCompanions(cs=>cs.map((x,k)=>k===i?{...x,separation:v}:x))}/>
+       <button type="button" className="gen-btn small" onClick={()=>setCompanions(cs=>cs.filter((_,k)=>k!==i))}><Trash2 size={14}/> Remove companion {i+1}</button>
+      </div>)}
+     </Section>
+     <Section title="Worlds" summary={`${o.count} worlds`} open>
+      <Field label="Premise"><input type="text" value={premise} maxLength={300} placeholder="What this system is for, in a line" onChange={e=>setPremise(e.target.value)}/></Field>
+      <Range label="Worlds" value={o.count} min={1} max={12} shown={String(o.count)} onChange={v=>opt('count',v)}/>
+      <Choice label="Green-zone worlds" value={o.habitable} options={amountOptions} onChange={v=>opt('habitable',v)}/>
+      <Choice label="Giants" value={o.giants} options={amountOptions} onChange={v=>opt('giants',v)}/>
+      <Choice label="Belts" value={o.belts} options={amountOptions} onChange={v=>opt('belts',v)}/>
+      <Choice label="Moons" value={o.moons} options={[['none','None'],['few','Few'],['normal','Normal'],['many','Many']]} onChange={v=>opt('moons',v)}/>
+      <Check label="Rings on some giants" checked={o.rings} onChange={v=>opt('rings',v)}/>
+      <Range label="Points of interest" value={o.poi} min={0} max={5} shown={o.poi?String(o.poi):'None'} onChange={v=>opt('poi',v)}/>
+     </Section>
+     <Section title="Era and science" summary={`${word(o.era)}, ${o.science==='pulp'?'pulp':'realistic'}`}>
+      <Choice label="Era" value={o.era} options={eras.map(e=>[e,word(e)] as const)} onChange={v=>opt('era',v)}/>
+      {science}
+      <Choice label="Naming" value={o.naming} options={[['roman',`${name.trim()||'Name'}-II`],['letters',`${name.trim()||'Name'} b`]]} onChange={v=>opt('naming',v)}/>
+     </Section>
+     {orgs.length>0&&<Section title="Footholds" summary={o.holders.length?`${o.holders.length} of ${orgs.length}`:'None'}>
+      <Hint>Organizations with a presence here, up to four.</Hint>
+      {orgs.map(org=><Check key={org.id} label={org.title} checked={o.holders.includes(org.id)} disabled={!o.holders.includes(org.id)&&o.holders.length>=4} onChange={v=>opt('holders',v?[...o.holders,org.id]:o.holders.filter(h=>h!==org.id))}/>)}
+     </Section>}
     </>}
-    <div className="world-field">Backdrop<div className="world-seg sector-backdrops" role="group" aria-label="Backdrop">{backdrops.map(b=><button key={b} type="button" aria-pressed={backdrop===b} onClick={()=>setBackdrop(b)}>{backdropNames[b]}</button>)}</div></div>
-   </div>
-   <div className="world-generate-preview">
-    {!real&&!fromSetting&&<div className="world-field world-seed-field">Seed<div className="world-seed"><input aria-label="Seed" title="The same seed and settings always make the same map" value={seed} maxLength={80} onChange={e=>setSeed(e.target.value)}/><button type="button" className="button" onClick={reroll}><Dices size={15}/> Reroll</button></div></div>}
-    <SystemOrbit className="system-preview" system={{...made,backdrop}} seed={seed} playing={false} showZones selected={null} label="Preview of the system"/>
-    {fromSetting&&!drafted?<p className="aside-hint">Ask your AI, or paste its answer, to see the system here.{kept?` ${kept===1?'The world you locked or charted stays':`The ${kept} worlds you locked or charted stay`}.`:''}</p>
-    :<p className="aside-hint">{drafted&&fromSetting?`Built by ${drafted.by}. `:''}{made.bodies.length} worlds and {moons} {moons===1?'moon':'moons'}, {green} in the green zone{made.belts.length?`, ${made.belts.length} ${made.belts.length===1?'belt':'belts'}`:''}.{!real&&!fromSetting&&kept?` ${kept===1?'The world you locked or charted stays':`The ${kept} worlds you locked or charted stay`}.`:''}</p>}
-   </div>
-  </div>
-  <div className="button-row galaxy-dialog-actions">
-   {!name.trim()&&<span className="galaxy-dialog-why" role="status">Give the system a name first.</span>}
-   <button type="button" className="button" onClick={onClose}>Cancel</button>
-   <button type="button" className="button primary" disabled={!name.trim()||(fromSetting?!drafted:!real&&!seed.trim())} onClick={()=>onApply({...made,backdrop},name.trim())}>{fromSetting?'Use this system':'Run the survey'}</button>
-  </div>
- </ToolDialog>;
+    <Section title="Look" summary={backdropNames[backdrop]}>
+     <Choice label="Backdrop" value={backdrop} options={backdrops.map(b=>[b,backdropNames[b]] as const)} onChange={setBackdrop}/>
+    </Section>
+   </>}
+   seed={!real&&!fromSetting&&<Seed value={seed} maxLength={80} onChange={setSeed} rerolls={[{label:'Reroll',onClick:reroll}]} hint="The same seed and settings always make the same system."/>}
+   picture={<Picture><SystemOrbit className="system-preview" system={{...made,backdrop}} seed={seed} playing={false} showZones selected={null} label={`Preview of the system: ${summary}`}/></Picture>}
+   summary={<Summary text={summary+keptNote}/>}
+   actions={<Actions why={!name.trim()?'Give the system a name first.':fromSetting&&!drafted?'Ask your AI or paste its answer first.':null}>
+    <button type="button" className="gen-btn" onClick={onClose}>Cancel</button>
+    <button type="button" className="gen-btn primary" disabled={!name.trim()||(fromSetting?!drafted:!real&&!seed.trim())} onClick={()=>onApply({...made,backdrop},name.trim())}>{fromSetting?'Use this system':'Run the survey'}</button>
+   </Actions>}
+  />
+ </GenDialog>;
 }
