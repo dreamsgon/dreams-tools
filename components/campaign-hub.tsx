@@ -403,7 +403,7 @@ function WidgetBody({ type, size, h = 1, hub, layout, save, saveFront, bare }: {
         : <p className="hub-muted">No codex entries yet. <a href={L.notes("codex")!}>Start the codex</a></p>}</>;
     case "threads": return <Threads layout={layout} save={save} head={head} />;
     case "recap": return <>{head(hub.lastSession && <a href={L.entry(hub.lastSession.id)}>Open</a>)}
-      {hub.lastSession ? <><strong className="hub-recap-title">{hub.lastSession.title}</strong><p className="hub-muted">{hub.lastSession.excerpt || "This session page is empty."}</p></>
+      {hub.lastSession ? <><strong className="hub-recap-title">{hub.lastSession.title}</strong><p className="hub-muted hub-recap-text">{hub.lastSession.excerpt || "This session page is empty."}</p></>
         : <p className="hub-muted">No session pages yet. Session pages you write in the Wiki show up here.</p>}</>;
     case "ai": return <>{head()}<AiWidget campaignId={e?.id} maptableCampaignId={e ? undefined : m?.id} bare={bare} rows={h} /></>;
     case "notes": return <Notes layout={layout} save={save} head={head} />;

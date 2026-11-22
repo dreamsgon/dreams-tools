@@ -715,6 +715,22 @@ export function snap(p: Point, g: Grid, tokenSize = 1): Point {
     y: (Math.round((p.y - g.offsetY) / g.size - half) + half) * g.size + g.offsetY,
   };
 }
+/** Where a new token goes: the free cell nearest `center` inside the map, so tokens added one after another don't pile up on one square. */
+export function freeSpotNear(center: Point, tokens: readonly Point[], g: Grid, bounds: { width: number; height: number }, tokenSize = 1): Point {
+  const step = g.type === "none" || !(g.size > 0) ? 70 : g.size;
+  const taken = (p: Point) => tokens.some(t => Math.hypot(t.x - p.x, t.y - p.y) < step * 0.5);
+  const inside = (p: Point) => p.x >= 0 && p.y >= 0 && p.x <= bounds.width && p.y <= bounds.height;
+  for (let ring = 0; ring <= 12; ring++) {
+    const cells: Point[] = [];
+    for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) cells.push({ x: dx, y: dy });
+    cells.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
+    for (const c of cells) {
+      const p = snap({ x: center.x + c.x * step, y: center.y + c.y * step }, g, tokenSize);
+      if (inside(p) && !taken(p)) return p;
+    }
+  }
+  return snap(center, g, tokenSize);
+}
 export function address(p: Point, g: Grid) {
   if (g.type === "none") return "";
   let col: number, row: number;

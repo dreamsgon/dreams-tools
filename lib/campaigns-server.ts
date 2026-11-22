@@ -292,7 +292,7 @@ export function hubOf(both: { map: { workspace: MapWorkspace } | null; book: { d
     tables: extras.tables?.tables ?? [],
     library: extras.tables?.library ?? { schemaVersion: 1 as const, tables: [] },
     quests, codex,
-    lastSession: session ? { id: session.id, title: session.title, updatedAt: session.updatedAt, excerpt: excerpt(session.body) } : null,
+    lastSession: session ? { id: session.id, title: session.title, updatedAt: session.updatedAt, excerpt: excerpt(session.body, 280, { lines: true }) } : null,
     gameDate: calendar ? { name: calendar.name, date: formatDate(calendar, calendar.current) } : null,
     // Notes keep the dashboard in the Encyclopedia campaign; a Maptable-only campaign (or one whose notes have none saved yet) uses the one in the home file.
     dashboard: campaign?.dashboard ?? (row.maptable ? extras.dashboards?.[`m:${row.maptable.id}`] ?? null : null),

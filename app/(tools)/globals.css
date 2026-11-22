@@ -866,6 +866,15 @@ small {
   padding-top: 17px;
   border-top: 1px solid var(--line);
 }
+/* A long dialog keeps its buttons in view: the footer sticks to the bottom edge while the rest scrolls under it. */
+.modal > .modal-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--modal-pad-bottom, 24px));
+  margin-bottom: calc(-1 * var(--modal-pad-bottom, 24px));
+  padding-bottom: var(--modal-pad-bottom, 24px);
+  z-index: 2;
+  background: inherit;
+}
 .upload-zone {
   width: 100%;
   border: 1px dashed var(--ui-border-bdcfb7);
@@ -1828,7 +1837,7 @@ h3 { color:var(--ink); font-size:13px; }
  body:has(.app-shell) .dice-tray-toggle {padding:8px 14px;min-height:44px;}
  body:has(.app-shell) .standard-dice-tray {max-height:calc(calc(100dvh / var(--ui-zoom, 1)) - 110px);}
  body:has(.app-shell) .modal-backdrop {padding:0;align-items:stretch;}
- body:has(.app-shell) .modal {width:100%;max-width:100%;max-height:calc(100dvh / var(--ui-zoom, 1));border-radius:0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));overscroll-behavior:contain;}
+ body:has(.app-shell) .modal {width:100%;max-width:100%;max-height:calc(100dvh / var(--ui-zoom, 1));border-radius:0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));--modal-pad-bottom:calc(16px + env(safe-area-inset-bottom));overscroll-behavior:contain;}
  body:has(.app-shell) .modal-header {position:sticky;top:-12px;background:var(--panel);z-index:3;padding:12px 0;}
  body:has(.app-shell) .modal-header button {min-width:44px;min-height:44px;}
  body:has(.app-shell) .token-editor-tablist {position:sticky;top:56px;z-index:2;background:var(--panel);flex-wrap:nowrap;overflow-x:auto;padding:8px 0;}
@@ -2437,11 +2446,22 @@ button.primary, .rpg-open { font-weight:500; }
  .app-shell .zoom-controls span {padding:0 4px;}
  .app-shell .zoom-controls button[aria-label="Fit map"] {border-top:0;border-left:1px solid var(--line);border-radius:0 var(--radius) var(--radius) 0;}
 }
-/* Short tool names where the full ones would be cut off. */
+/* Short tool names where the full ones would be cut off: on every phone for the map tools (Drag select reads Box), and for Add token too on the narrowest. */
 .toolbar .toolbar-short {display:none;}
+@media(max-width:799px) {
+ .app-shell .toolbar [data-tool] .toolbar-label {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+ .app-shell .toolbar [data-tool] .toolbar-short {display:inline;}
+}
 @media(max-width:379px) and (min-height:501px) {
  .app-shell .toolbar .toolbar-label {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
  .app-shell .toolbar .toolbar-short {display:inline;}
+}
+/* Phones have no map top bar: its toggles are in the More sheet with their names, and Undo and Redo sit in the scene row. */
+.phone-preview-exit {display:none;}
+@media(max-width:799px) {
+ .app-shell .map-topbar {display:none;}
+ .maptable-phone-row > .icon-button {flex:none;min-width:40px;min-height:40px;padding:0;display:inline-flex;align-items:center;justify-content:center;}
+ .maptable-phone-row > .phone-preview-exit {display:inline-flex;flex:none;align-items:center;gap:6px;min-height:40px;padding:0 10px;border-radius:var(--radius);border:1px solid var(--accent);background:color-mix(in oklab, var(--accent) 12%, transparent);color:var(--text);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;}
 }
 
 /* The campaign dashboard's part of the page, below the site header, which a campaign theme fills edge to edge. */

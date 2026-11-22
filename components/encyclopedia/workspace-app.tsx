@@ -480,7 +480,7 @@ export default function WorkspaceApp() {
           { id: "askai", label: "Ask AI", icon: <Bot size={18}/>, onSelect: later(() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT))) },
           { id: "form", label: "Stat form", icon: <ListChecks size={18}/>, onSelect: () => setTool("form") },
           { id: "items", label: "Items and spells", icon: <Backpack size={18}/>, onSelect: () => setTool("items") },
-          { id: "share", label: "Player view", icon: <Users size={18}/>, onSelect: () => setTool("share") },
+          { id: "share", label: "Share with players", icon: <Users size={18}/>, onSelect: () => setTool("share") },
           { id: "look", label: "Look", icon: <Palette size={18}/>, current: view === "look", onSelect: () => showSection("look") }] : []),
         ...(world && !member ? [{ id: "transfer", label: "Export & import", icon: <ArrowLeftRight size={18}/>, onSelect: () => setTool("transfer") }] : [])] },
       { heading: "Settings", items: [

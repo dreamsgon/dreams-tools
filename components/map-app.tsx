@@ -127,6 +127,7 @@ import {
   uid,
   address,
   snap,
+  freeSpotNear,
   workspaceSchema,
   type EffectPreset,
   type Workspace,
@@ -241,7 +242,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     [tokenGalleryOpen,setTokenGalleryOpen]=useState(false),
     [galleryTab,setGalleryTab]=useState<"saved"|"encyclopedia">("saved"),
     [armed,setArmed]=useState<ArmedToken|null>(null),
-    [quickOpen,setQuickOpen]=useState(false),[quickSide,setQuickSide]=useState<TokenSide>("enemy"),
+    [quickOpen,setQuickOpen]=useState(false),[quickSide,setQuickSide]=useState<TokenSide>("enemy"),[quickName,setQuickName]=useState(""),
     [tool, setTool] = useState<Tool>("select"),
     [player, setPlayer] = useState(false),
     [hideFog,setHideFog]=useState(false),
@@ -1038,10 +1039,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const addToken = (side: TokenSide) => {
     setSelectedIds([]);
     setFogSelectedIndices([]);
-    const t = { ...newToken(`Token ${(scene?.tokens.length || 0) + 1}`), disposition: side, sideColours: true, color: SIDE_COLOURS[side].fill };
-    setQuickOpen(false);
+    const named = quickName.trim().slice(0, 80);
+    const t = { ...newToken(placedName(named || `Token ${(scene?.tokens.length || 0) + 1}`, scene?.tokens.map(x => x.name) ?? [])), disposition: side, sideColours: true, color: SIDE_COLOURS[side].fill };
+    setQuickOpen(false); setQuickName("");
     updateScene((s) => {
-      Object.assign(t, snap({ x: s.width / 2, y: s.height / 2 }, s.grid));
+      Object.assign(t, freeSpotNear({ x: s.width / 2, y: s.height / 2 }, s.tokens, s.grid, s));
       s.tokens.push(t);
     });
     setSelected(t.id);
@@ -1321,6 +1323,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     }} />}
   </main></>;
   }
+  const togglePreview = () => { setPlayer(!player); setArmed(null); setSelected(null); };
+  // Phones have no map top bar: the scene row keeps Undo and Redo, and a way back from the players' preview.
+  const phoneSceneActions = player
+    ? <button className="phone-preview-exit" onClick={togglePreview} title="Back to the GM view"><Eye size={16} aria-hidden="true" />Player preview<X size={15} aria-hidden="true" /></button>
+    : <><button className="icon-button" aria-label="Undo" title="Undo" disabled={!history.current.length} onClick={undo}><Undo2 size={18} aria-hidden="true" /></button><button className="icon-button" aria-label="Redo" title="Redo" disabled={!future.current.length} onClick={redo}><Redo2 size={18} aria-hidden="true" /></button></>;
   return (
     <>{themeDock.node}<main className={"app-shell" + (member ? " is-co-gm" : "") + (skin.on ? " campaign-skin" : "")} data-mobile-tools={mobileToolsOpen} data-panel-expanded={mobilePanelExpanded}>{skin.nodes}
       {barRef(campaignId) ? <>
@@ -1351,7 +1358,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             </div>
           </>} />
         <div className="maptable-phone-row"><button className="header-campaigns-compact" aria-label="Back to the Scene Picker" title="Back to the Scene Picker" onClick={toPicker}><ChevronLeft size={17} aria-hidden="true" /><span className="header-campaigns-label">Scenes</span></button>
-          <div className="header-scene-phone"><SceneSwitcher phone workspace={workspace} campaignId={campaignId} scene={scene} open={(id) => { activate(id); setSelected(null); }} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} /></div></div>
+          <div className="header-scene-phone"><SceneSwitcher phone workspace={workspace} campaignId={campaignId} scene={scene} open={(id) => { activate(id); setSelected(null); }} settings={()=>{setSceneTab("general");setPanel("scene");setSidebar(true);}} /></div>
+          {phoneSceneActions}</div>
       </> : <header className="app-header">
         <ToolSwitch active="maptable" encyclopediaHref={encyclopediaHref} />
         <div className="header-scene">
@@ -1436,6 +1444,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           </button>
           <button className="mobile-only" aria-expanded={dicePanel==="dice"} aria-controls="standard-dice-tray" onClick={()=>toggleDicePanel("dice")} title="Dice tray"><Dices size={21} aria-hidden="true" /><span>Dice</span></button>
           <button className="mobile-only" aria-expanded={dicePanel==="log"} aria-controls="local-roll-log" onClick={()=>toggleDicePanel("log")} title="Roll log"><ScrollText size={21} aria-hidden="true" /><span>Roll log</span></button>
+          {!barRef(campaignId) && <button className="mobile-only" disabled={!history.current.length} onClick={undo} title="Undo"><Undo2 size={21} aria-hidden="true" /><span>Undo</span></button>}
+          {!barRef(campaignId) && <button className="mobile-only" disabled={!future.current.length} onClick={redo} title="Redo"><Redo2 size={21} aria-hidden="true" /><span>Redo</span></button>}
+          {!player && <button className={"mobile-only" + (measureTokenMovement ? " active" : "")} aria-pressed={measureTokenMovement} onClick={() => changeMeasureTokenMovement(!measureTokenMovement)} title="Measure token movement"><Ruler size={21} aria-hidden="true" /><span>Measure moves</span></button>}
+          {!player && <button className={"mobile-only" + (hideFog ? " active" : "")} aria-pressed={hideFog} onClick={() => setHideFog(v => !v)} title="Hide fog in your GM view only"><EyeOff size={21} aria-hidden="true" /><span>{hideFog ? "Restore fog" : "Hide fog"}</span></button>}
+          <button className={"mobile-only" + (player ? " active" : "")} aria-pressed={player} onClick={togglePreview} title="Preview exactly what players see"><Eye size={21} aria-hidden="true" /><span>Preview as players</span></button>
           <div className="rail-spacer" />
 
           <button onClick={() => setDialog("help")} title="Help">
@@ -1656,13 +1669,14 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                     </button>
                   </div>
                   {quickOpen && <div className="quick-token" role="group" aria-label="Quick token">
+                    <label className="quick-token-name"><span>Name</span><input value={quickName} maxLength={80} autoFocus placeholder={`Token ${(scene?.tokens.length || 0) + 1}`} onChange={e => setQuickName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addToken(quickSide); } }} /></label>
                     <h4>Which side is it on?</h4>
                     <div className="side-chips" role="group" aria-label="Side">
                       {(["party","ally","neutral","enemy"] as const).map(s => <button key={s} type="button" aria-pressed={quickSide === s} onClick={() => setQuickSide(s)}>
                         <i style={{ background: SIDE_COLOURS[s].ring }} aria-hidden="true" />{s === "party" ? "Party" : s === "ally" ? "Ally" : s === "neutral" ? "Neutral" : "Enemy"}</button>)}
                     </div>
                     <div className="button-row"><button className="primary" onClick={() => addToken(quickSide)}>Add</button><button onClick={() => setQuickOpen(false)}>Cancel</button></div>
-                    <small>Enemy is picked to start, since most quick tokens are foes. It gets its side&apos;s colour and its initials; change either in Edit.</small>
+                    <small>Leave the name empty for a numbered token. Enemy is picked to start, since most quick tokens are foes. It gets its side&apos;s colour and its initials, and goes on the free square nearest the middle of the map.</small>
                   </div>}
                   <button className="token-gallery-link" onClick={()=>setTokenGalleryOpen(true)}><LayoutGrid size={16} />Add from the token gallery</button>
                   {token ? (
@@ -2181,17 +2195,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
               {hideFog ? <Eye size={17}/> : <EyeOff size={17}/>}
               <span>{hideFog ? "Restore fog" : "Hide fog"}</span>
             </button>}
-            <button
-              className={player ? "active" : ""}
-              onClick={() => {
-                setPlayer(!player);
-                setArmed(null);
-                setSelected(null);
-              }}
-              aria-label={player?"Player view":"GM view"} title="Preview exactly what players see"
-            >
-              {player ? <Eye size={17} /> : <Shield size={17} />}
-              <span>{player ? "Player view" : "GM view"}</span>
+            <button className={player ? "active" : ""} aria-pressed={player} onClick={togglePreview} title={player ? "Back to the GM view" : "Preview exactly what players see on this map"}>
+              <Eye size={17} aria-hidden="true" />
+              <span>Preview as players</span>
             </button>
           </div>
           {saveRecovery}
@@ -2300,6 +2306,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             {tools.map(({ id, label, short, Icon }) => (
               <button
                 key={id}
+                data-tool={id}
                 className={tool === id && !player ? "active" : ""}
                 aria-pressed={tool === id && !player}
                 onClick={() => { chooseTool(id); setMobileToolsOpen(false); }}
@@ -2334,7 +2341,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           <footer className="map-footer">
             <span>
               {player
-                ? "Player view · editing disabled"
+                ? "Previewing as players · editing is off"
                 : tool === "poi" ? "Click the map to place a point of interest or transition"
                 : tool === "select"
                   ? selectedIds.length > 1
