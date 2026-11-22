@@ -34,10 +34,10 @@ export const totalLimitOk = (n: unknown): n is number => typeof n === 'number' &
 
 export const worldKey = (id: string) => `w:${id}`;
 export const campaignKey = (id: string) => `c:${id}`;
-const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
+export const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 
 /** Which part a page is kept in: its campaign's, else its world's shared lore. */
-function partOf(e: Entry, campaigns: Set<string>, worlds: Set<string>): PartKey {
+export function partOf(e: Entry, campaigns: ReadonlySet<string>, worlds: ReadonlySet<string>): PartKey {
   if (e.campaignId && campaigns.has(e.campaignId)) return campaignKey(e.campaignId);
   return worlds.has(e.worldId) ? worldKey(e.worldId) : 'o';
 }
@@ -102,7 +102,11 @@ export function partSizes(w: Workspace): PartSize[] {
 export const formatMb = (n: number) => `${(n / MB).toFixed(n < 10 * MB ? 1 : 0).replace(/\.0$/, '')} MB`;
 /** Why this workspace can't be saved under `limit` per part and `total` for the whole Wiki, or null when it can. */
 export function sizeProblem(w: Workspace, limit = DEFAULT_PART_LIMIT, total = DEFAULT_TOTAL_LIMIT): string | null {
-  const sizes = partSizes(w), sum = sizes.reduce((n, s) => n + s.bytes, 0), big = sizes.find(s => s.bytes > limit), many = sizes.find(s => s.pages > PAGE_LIMIT);
+  return sizesProblem(partSizes(w), limit, total);
+}
+/** sizeProblem from the sizes of every part, for a save that knows them without having every page. */
+export function sizesProblem(sizes: PartSize[], limit = DEFAULT_PART_LIMIT, total = DEFAULT_TOTAL_LIMIT): string | null {
+  const sum = sizes.reduce((n, s) => n + s.bytes, 0), big = sizes.find(s => s.bytes > limit), many = sizes.find(s => s.pages > PAGE_LIMIT);
   const named = (s: PartSize) => s.kind === 'campaign' ? `The campaign “${s.name}”` : s.name;
   if (many) return `${named(many)} has ${many.pages.toLocaleString('en-US')} pages, over the ${PAGE_LIMIT.toLocaleString('en-US')} pages one campaign can hold. Move some pages out, or into another campaign.`;
   if (big) return `${named(big)} is ${formatMb(big.bytes)}, over the ${formatMb(limit)} limit for one campaign. Raise the limit in Wiki settings, Storage, or move some pages out.`;

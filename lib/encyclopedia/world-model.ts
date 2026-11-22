@@ -222,7 +222,7 @@ export const entrySchema = z.object({
     pageLook:pageLookSchema.optional(),
     updatedAt: z.string().datetime(),
 });
-export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema).max(100), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(100000) }).superRefine((s, ctx) => {
+export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(100000) }).superRefine((s, ctx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
     const all = [...s.worlds, ...s.campaigns, ...s.entries];
     if (new Set(all.map(x => x.id)).size !== all.length)

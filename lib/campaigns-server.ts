@@ -2,7 +2,7 @@ import type { Bucket } from "./storage-types";
 import { loadWorkspace, saveWorkspace } from "./workspace-storage.ts";
 import { canMoveCollection, initialWorkspace, uid, type Workspace as MapWorkspace } from "./model.ts";
 import { EncyclopediaStore, encyclopediaPrefix } from "./encyclopedia/store.ts";
-import { campaignLoreWorldIds, newId, playerCampaign, visibleEntries, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
+import { campaignLoreWorldIds, emptyWorkspace as emptyBook, newId, playerCampaign, visibleEntries, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import { defaultFrontPage, frontPageSchema } from "./encyclopedia/front-page.ts";
 import { scenesInOrder } from "./scene-order.ts";
 import { dashboardSchema, excerpt, type Dashboard } from "./encyclopedia/dashboard.ts";
@@ -18,7 +18,7 @@ import { moveSibling, placeBeside, sortSiblings } from "./folder-order.ts";
 import { ForumStore } from "./forum/store.ts";
 import { applyForumAccess, defaultForumSetup, forumFromSetup, forumSetupSchema } from "./forum/setup.ts";
 import { MemberStore } from "./members-server.ts";
-import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey } from "./campaign-links.ts";
+import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey, type BookIndex } from "./campaign-links.ts";
 import { slugProblem, toSlug } from "./campaign-slug.ts";
 
 /*
@@ -37,6 +37,17 @@ export async function readBoth(s: Session) {
   const [map, book] = await Promise.all([loadWorkspace(s.bucket, s.prefix), s.book.read(s.owner)]);
   return { map, book };
 }
+
+/**
+ * Maptable and what the campaign list needs of the Wiki: its index (every world and campaign, and a few numbers about
+ * each) when it has one, so listing campaigns doesn't read every page. Falls back to the whole Wiki for an index that
+ * doesn't have those numbers yet.
+ */
+export async function readListing(s: Session): Promise<{ map: Awaited<ReturnType<typeof loadWorkspace>>; book: BookWorkspace | BookIndex }> {
+  const [map, index] = await Promise.all([loadWorkspace(s.bucket, s.prefix), s.book.readIndex(s.owner)]);
+  return { map, book: index ?? (await s.book.read(s.owner)).data };
+}
+export const listingSummary = (l: Awaited<ReturnType<typeof readListing>>, recentLimit = 6) => campaignSummary(l.map?.workspace ?? null, l.book, recentLimit);
 
 export const backupKey = (owner: string) => encyclopediaPrefix(owner) + "backups/before-campaigns-page.json";
 
@@ -330,9 +341,11 @@ export type CampaignHub = ReturnType<typeof hubOf>;
 
 /** The hub with everything its dashboard needs, including saved Maptable-only dashboards and the campaign's starred tables. */
 export async function loadHub(s: Session, key: string) {
-  const both = await readBoth(s), row = rowByKey(summaryOf(both).rows, key);
+  const listing = await readListing(s), row = rowByKey(listingSummary(listing).rows, key);
   if (!row) throw new Error("Campaign not found");
   const eid = row.encyclopedia?.id ?? null;
+  // Only this campaign's pages and its worlds' lore: everything its dashboard shows (EncyclopediaStore.readScoped).
+  const both = { map: listing.map, book: { data: eid ? (await s.book.readScoped(s.owner, { campaignId: eid })).data : emptyBook() } };
   const [home, tables] = await Promise.all([
     row.maptable ? readHome(s.bucket, s.owner).then(h => h.layout.campaignDashboards).catch(() => undefined) : undefined,
     starredTables(s, t => inCampaign(t, eid)).catch(() => undefined),
@@ -345,12 +358,12 @@ export async function loadHub(s: Session, key: string) {
  * A campaign with Encyclopedia notes keeps it on that campaign; a Maptable-only campaign keeps it in the account's home file.
  */
 export async function saveDashboard(s: Session, key: string, input: unknown) {
-  const both = await readBoth(s);
-  const row = rowByKey(summaryOf(both).rows, key);
+  const row = rowByKey(listingSummary(await readListing(s)).rows, key);
   if (!row) throw new Error("Campaign not found");
   const parsed = dashboardSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That dashboard could not be saved.");
-  if (row.encyclopedia) await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, dashboard: parsed.data } : c) });
+  // Only this campaign's own part is read and written (EncyclopediaStore.updateCampaign).
+  if (row.encyclopedia) { if (!(await s.book.updateCampaign(s.owner, row.encyclopedia.id, c => ({ ...c, dashboard: parsed.data })))) throw busy(); }
   else if (row.maptable) await changeHome(s.bucket, s.owner, l => applyHomeAction(l, { action: "campaignDashboard", key: `m:${row.maptable!.id}`, dashboard: parsed.data }));
   else throw new Error("Campaign not found");
   return loadHub(s, key);
@@ -358,13 +371,13 @@ export async function saveDashboard(s: Session, key: string, input: unknown) {
 
 /** Saves the front page of an Encyclopedia campaign and returns the updated hub. */
 export async function saveFrontPage(s: Session, key: string, input: unknown) {
-  const both = await readBoth(s);
-  const row = rowByKey(summaryOf(both).rows, key);
+  const row = rowByKey(listingSummary(await readListing(s)).rows, key);
   if (!row?.encyclopedia) throw new Error("Start a Wiki for this campaign to give it a front page.");
   const parsed = frontPageSchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "That front page could not be saved.");
   const frontPage = parsed.data;
-  await backupOnce(s, both);
-  await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === row.encyclopedia!.id ? { ...c, frontPage } : c) });
+  // The one-time backup reads everything, but only the first time this page changes anything.
+  if (!(await s.bucket.head(backupKey(s.owner)))) await backupOnce(s, await readBoth(s));
+  if (!(await s.book.updateCampaign(s.owner, row.encyclopedia.id, c => ({ ...c, frontPage })))) throw busy();
   return loadHub(s, key);
 }

@@ -1,5 +1,5 @@
 import { MemberStore } from "./members-server.ts";
-import { readBoth, summaryOf, type Session } from "./campaigns-server.ts";
+import { listingSummary, readBoth, readListing, summaryOf, type Session } from "./campaigns-server.ts";
 import { recentPage, type CampaignSummary, type RecentPage } from "./campaign-links.ts";
 import { questsIn, questProgress, nextStep } from "./encyclopedia/quests.ts";
 import { campaignLoreWorldIds } from "./encyclopedia/world-model.ts";
@@ -43,8 +43,10 @@ export async function homeData(s: Session, layout: HomeLayout, all = false): Pro
   const jobs: Promise<void>[] = [];
   if (all ? true : needsWorkspaces(layout)) {
     jobs.push((async () => {
-      const both = await readBoth(s);
-      const summary = summaryOf(both, on("recent") ? 10 : 6), book = both.book.data;
+      // Quests and pinned pages need pages; everything else comes from the Wiki's index, without reading every page.
+      const pages = on("quests") || on("pinned");
+      const listing = pages ? null : await readListing(s), both = pages ? await readBoth(s) : null;
+      const summary = both ? summaryOf(both, on("recent") ? 10 : 6) : listingSummary(listing!, on("recent") ? 10 : 6), book = both ? both.book.data : { schemaVersion: 1 as const, worlds: listing!.book.worlds, campaigns: listing!.book.campaigns, entries: [] };
       data.summary = summary;
       const worlds = new Map(book.worlds.map(w => [w.id, w]));
       const live = book.campaigns.filter(c => !worlds.get(c.worldId)?.isTemplate && !worlds.get(c.worldId)?.archived);
