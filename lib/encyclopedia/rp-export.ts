@@ -9,7 +9,7 @@
  * random tables, a draft recap) go to the same path under 6-GM-Only/, and only when includeGm is true. With includeGm false
  * there is no 6-GM-Only folder and no .rpg-tools/campaign.json (the full restore copy would hold every GM secret).
  */
-import { campaignExport, playerText, stripSecrets, SECRET_OPEN, SECRET_CLOSE, type Workspace, type Entry, type Campaign } from "./world-model.ts";
+import { campaignExport, playerText, stripSecrets, visibleEntries, SECRET_OPEN, SECRET_CLOSE, type Workspace, type Entry, type Campaign } from "./world-model.ts";
 import { formatDate, publicCalendar, moonPhase, seasonOn, dateOrdinal, type Calendar } from "./calendar-model.ts";
 import { playerMap, mapKinds, type MapData, type MapPin } from "./map-model.ts";
 import { routeTotals } from "./travel-model.ts";
@@ -17,6 +17,7 @@ import { goalStatus, questCategories, categoryOf, stateNames, newQuest, type Que
 import { timelineMarkdown, quotesMarkdown, momentsMarkdown, nextMarkdown, type RecapItem } from "./recap-schema.ts";
 import { recapIn, inFile, itemKind, extractNames } from "./recap-extract.ts";
 import { tieTypesOf, tieTypeById } from "./ties.ts";
+import { playerTimeline, readTimeline, timelineMarkdown as timelinePageMarkdown } from "./timelines.ts";
 import { infoRows, templateOf } from "./templates.ts";
 import { campaignTables, rangeLabel, rollLabel, type TableLibrary, type RandomTable } from "./tables.ts";
 import { rollTarget, tableTarget } from "./inline.ts";
@@ -147,6 +148,7 @@ function whereOf(e: Entry): Where | null {
     case "map": return { dir: "4-World/Maps", fallback: "Map" };
     case "vehicle": return { dir: "4-World/Vehicles", fallback: "Vehicle" };
     case "store": return { dir: "4-World/Stores", fallback: "Store" };
+    case "timeline": return { dir: "2-Story/Timelines", fallback: "Timeline" };
     default: return { dir: "4-World/Space", fallback: "Space" };
   }
 }
@@ -225,6 +227,13 @@ function entryChunks(cx: Ctx, e: Entry): { chunks: Chunk[]; leadPub: string; lea
   if (e.kind === "character" && e.character) cs.push(...characterChunks(cx, e, draft));
   if (e.kind === "character" && e.profile) cs.push(...profileChunks(cx, e, draft));
   if (e.mapData) cs.push(...mapChunks(cx, e, draft));
+  if (e.kind === "timeline" && e.timeline) {
+    // Players' copy when the tab is shared; the GM twin has the whole timeline (GM-only events and eras, every gathered thing).
+    const pages = visibleEntries(ws, cx.c.worldId, cx.c.id), readable = new Set(pages.filter(p => cx.ok(p.id, false)).map(p => p.id));
+    const pub = playerTimeline(e, pages, cx.c, readable, playerText), all = readTimeline({ ...e, timeline: e.timeline }, pages, cx.c);
+    if (pub && pub.items.length) cs.push({ gm: false, text: `## Timeline\n\n${timelinePageMarkdown(pub, id => ref(cx, id, false))}` });
+    if (all.items.length) cs.push({ gm: true, text: `## Timeline (everything, with GM-only events)\n\n${timelinePageMarkdown(all, id => ref(cx, id, true))}` });
+  }
   const first = (gm: boolean) => lead(body.filter(b => b.gm === gm).map(b => b.text).join("\n\n"));
   return { chunks: cs, leadPub: first(false), leadGm: first(true) };
 }
