@@ -14,6 +14,12 @@ test('remembered cookies persist; session cookies expire on browser close; delet
 });
 const userCode=await compile('../lib/app-user.ts');
 const getUser=({result,chat=null,cookie=true})=>new Function('cookies','createServerClient','getChatGPTUser','supabaseUrl','supabaseKey',userCode+';return getAppUser;')(async()=>({getAll:()=>cookie?[{name:'sb-test',value:'untrusted'}]:[]}),()=>({auth:{getUser:async()=>result}}),async()=>chat,supabaseUrl,supabaseKey)();
+test('WebP uploads are on unless the account turned them off',async()=>{
+ const user=meta=>({data:{user:{id:'id1',email:'a@example.com',email_confirmed_at:'now',user_metadata:meta}},error:null});
+ assert.equal((await getUser({result:user({})})).webpUploads,true);
+ assert.equal((await getUser({result:user({webp_uploads:false})})).webpUploads,false);
+ assert.equal((await getUser({result:user({webp_uploads:'false'})})).webpUploads,true);
+});
 test('identity comes from verified Supabase user and is namespaced, never from matching email',async()=>{
  const result={data:{user:{id:'id1',email:'same@example.com',email_confirmed_at:'now',user_metadata:{username:'Hero'}}},error:null};
  const user=await getUser({result,chat:{userId:'chat1',email:'same@example.com'}});assert.equal(user.userId,'supabase:id1');assert.equal(user.displayName,'Hero');
@@ -66,6 +72,16 @@ test('display names are trimmed, allow spaces and accents, and reject control ch
  assert.equal((await post(signedReq({action:'profile',displayName:'x'.repeat(41)}))).status,400);
  assert.equal((await post(signedReq({action:'profile',displayName:'   '}))).status,400);
  assert.equal(updates.length,1);
+});
+test('the WebP upload choice is saved to the verified account only, and needs a true or false',async()=>{
+ const updates=[];let post=settingsRoute({updates});
+ assert.equal((await post(signedReq({action:'uploads',webpUploads:false}))).status,200);
+ assert.deepEqual(updates[0][0],{data:{webp_uploads:false}});
+ assert.equal((await post(signedReq({action:'uploads'}))).status,400);
+ assert.equal((await post(signedReq({action:'uploads',webpUploads:'no'}))).status,400);
+ assert.equal(updates.length,1);
+ post=settingsRoute({updates,user:{...verifiedUser,email_confirmed_at:null}});
+ assert.equal((await post(signedReq({action:'uploads',webpUploads:true}))).status,400);assert.equal(updates.length,1);
 });
 test('password changes check the current password first, on a separate client',async()=>{
  const updates=[],checks=[];

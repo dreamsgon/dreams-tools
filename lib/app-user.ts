@@ -20,6 +20,8 @@ export async function getAppUser() {
         avatar:typeof meta.avatar==="string"&&/^\d{1,16}$/.test(meta.avatar)?meta.avatar:"",
         /** An email change waiting for its confirmation link. */
         pendingEmail:typeof user.new_email==="string"?user.new_email:"",
+        /** Uploaded PNG and JPEG pictures become WebP unless this is turned off (lib/webp-upload.ts). */
+        webpUploads:meta.webp_uploads!==false,
       };
     }
   }

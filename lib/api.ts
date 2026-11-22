@@ -1,5 +1,6 @@
 import { readJsonResponse, stageTransfer } from "./transfer-client.ts";
 import { assetsUrl, mapMemberRef } from "./maptable-member.ts";
+import { toWebp } from "./webp-upload.ts";
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   let data: (T & { error?: string }) | undefined;
@@ -15,8 +16,10 @@ export async function uploadAsset(
   blob: Blob,
   name: string,
   storage = "hosted",
+  /** Restoring a backup keeps each picture's own format; everything else becomes WebP unless the account turned that off. */
+  keepFormat = false,
 ) {
-  const transferId = await stageTransfer(blob, "image");
+  const transferId = await stageTransfer(keepFormat ? blob : await toWebp(blob), "image");
   // A co-GM's pictures go to the GM's hosted storage, never S3.
   return api<{ src: string }>(assetsUrl(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transferId, storage: mapMemberRef() ? "hosted" : storage }) });
 }

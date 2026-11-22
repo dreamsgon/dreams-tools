@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AtSign, Brush, Code2, Dices, Gem, ImagePlus, Link2, Map as MapIcon, PanelTopClose, Search, Smile, Upload } from 'lucide-react';
 import { stageTransfer } from '@/lib/transfer-client';
+import { toWebp } from '@/lib/webp-upload';
 import { forumCall, usePicture, when, type Frame } from './forum-api';
 import { Emoji } from './forum-parts';
 
@@ -14,9 +15,12 @@ const TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 /** Stores a picture for the forum: for posts (up to 8 MB) or as an emoji (up to 256 KB). Returns its id. */
 export async function uploadForumPicture(k: string, file: File, kind: 'post' | 'emoji') {
   if (!TYPES.includes(file.type)) throw new Error('Choose a PNG, JPEG or WebP picture.');
-  const max = kind === 'emoji' ? 256 * 1024 : 8 * 1024 * 1024;
-  if (file.size > max) throw new Error(kind === 'emoji' ? 'Emoji can be up to 256 KB each.' : 'Choose a picture up to 8 MB.');
-  const transferId = await stageTransfer(file, 'image');
+  const max = kind === 'emoji' ? 256 * 1024 : 8 * 1024 * 1024, tooBig = kind === 'emoji' ? 'Emoji can be up to 256 KB each.' : 'Choose a picture up to 8 MB.';
+  // A PNG or JPEG over the limit may still fit once it is WebP (lib/webp-upload.ts), so the limit applies to what is uploaded.
+  if (file.size > (file.type === 'image/webp' ? 1 : 4) * max) throw new Error(tooBig);
+  const upload = await toWebp(file);
+  if (upload.size > max) throw new Error(tooBig);
+  const transferId = await stageTransfer(upload, 'image');
   return (await forumCall<{ id: string }>({ action: 'upload', campaign: k, transferId, kind })).id;
 }
 

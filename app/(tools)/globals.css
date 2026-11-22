@@ -2409,6 +2409,8 @@ button.primary, .rpg-open { font-weight:500; }
 .account-settings .account-link { background:transparent; border:0; padding:0; min-height:0; color:var(--accent); font-size:12px; font-weight:500; }
 .account-settings .account-danger { background:transparent; color:var(--danger); border-color:var(--danger-soft); }
 .account-settings .account-danger:hover:not(:disabled) { background:var(--danger-soft); }
+.account-check { display:flex; align-items:center; gap:10px; cursor:pointer; }
+.account-check input { width:18px; height:18px; flex:0 0 18px; }
 .account-current { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; background:var(--raised); border-radius:var(--radius); margin-bottom:16px; }
 .account-current strong { display:block; overflow-wrap:anywhere; }
 .account-current span { color:var(--muted); font-size:12px; }
