@@ -66,6 +66,7 @@ import {
   Users,
   MoreHorizontal,
   Images as ImagesIcon,
+  Sparkles,
 } from "lucide-react";
 import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
@@ -118,6 +119,8 @@ import {
 import { api, loadImage, uploadAsset, download } from "@/lib/api";
 import {
   initialWorkspace,
+  isStarterScene,
+  withoutStarterScene,
   fitImageDimensions,
   newScene,
   newToken,
@@ -141,7 +144,7 @@ import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/worl
 import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
 import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
-import { campaignSceneKey, campaignTableScene, maptableSearch, readMaptablePlace, rememberedCampaignScene } from "@/lib/maptable-place";
+import { campaignSceneKey, campaignTableScene, lastCampaignKey, lastUsedCampaign, maptableSearch, readMaptablePlace, rememberedCampaignScene } from "@/lib/maptable-place";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { maptableTitle } from "@/lib/page-title";
 import { usePageTitle } from "./use-page-title";
@@ -330,6 +333,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   /** Scene Picker: the campaign whose scenes are shown (id null = maps not in a campaign); null itself = the open scene's campaign. */
   const [overview, setOverview] = useState<{ id: string | null } | null>(null);
   const [creatorOpen, setCreatorOpen] = useState(false);
+  /** Map Creator opened from Add scenes' "Generate a map": it starts on the generator and saves into this folder or campaign. */
+  const [creatorStart, setCreatorStart] = useState<{ destination: string | null } | null>(null);
+  /** Upload or split started from an empty campaign's Scene Picker, before any scene is open: the folder or campaign it goes into. */
+  const [pickerDialog, setPickerDialog] = useState<{ kind: "map" | "split-map"; destination: string | null } | null>(null);
   /** Add scenes opened from an empty campaign's Scene Picker, before any scene exists to open. */
   const [pickerAdd, setPickerAdd] = useState(false);
   useEffect(() => {
@@ -363,6 +370,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   }, [navigationReady, campaignId, openSceneId, sceneScope]);
   // The Scene Picker shows the campaign picked there (a campaign that was removed falls back), else the open scene's campaign.
   const pickerCampaignId = overview && (overview.id === null || workspace?.collections.some(c => c.id === overview.id && c.kind === "campaign")) ? overview.id : campaignId;
+  // The campaign used last, so a bare /maptable can open it rather than the untouched starter scene.
+  const usedCampaign = dashboard ? pickerCampaignId : campaignId;
+  useEffect(() => {
+    if (navigationReady && usedCampaign) remember(lastCampaignKey(sceneScope), usedCampaign);
+  }, [navigationReady, usedCampaign, sceneScope]);
   // The address names the open scene (or the Scene Picker's campaign), so it can be bookmarked. Other parameters stay.
   const overviewCampaignId = dashboard ? pickerCampaignId : null;
   // The campaign's live theme (lib/campaign-theme), through the Wiki campaign paired with this one. A co-GM asks
@@ -443,9 +455,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       }>(mapWorkspaceUrl());
       memberInfo.current = result.member ?? null;
       setMember(result.member ?? null);
-      let data = result.workspace
+      // The untouched starter scene goes once there is another scene (lib/model.ts).
+      let data = withoutStarterScene(result.workspace
         ? workspaceSchema.parse(result.workspace)
-        : initialWorkspace();
+        : initialWorkspace());
       loadEpoch.current++;
       acknowledged.current=result.workspace?data:null;
       let saved = null;
@@ -457,6 +470,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       let requested: string | null = null, requestedCampaign: string | null = null, sceneList = false, unfiled = false;
       if (!navigationRestored.current) { try { const place = readMaptablePlace(window.location.search, data); requested = place.sceneId; requestedCampaign = place.campaignId; sceneList = place.view === "scenes"; unfiled = sceneList && !requestedCampaign; } catch { requested = null; } }
       const remembered = navigationRestored.current ? state.current?.activeId : saved?.activeId;
+      // A bare /maptable whose open scene would be only the untouched starter scene opens the campaign used last instead.
+      if (!navigationRestored.current && !requested && !requestedCampaign && !sceneList) {
+        const open = data.scenes.find(s => s.id === (remembered ?? data.activeId));
+        if (!open || isStarterScene(open)) requestedCampaign = lastUsedCampaign(data, readRemembered(lastCampaignKey(scopeOf(navigationScope) ?? "local")));
+      }
       if (!requested && requestedCampaign && !sceneList) requested = campaignTableScene(data, requestedCampaign, rememberedCampaignScene(data, requestedCampaign, readRemembered(campaignSceneKey(scopeOf(navigationScope) ?? "local", requestedCampaign))) ?? remembered ?? data.activeId);
       const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
       const activeId = linked ?? remembered;
@@ -862,7 +880,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setPlayer(false);
     if(next!=="select")setFogSelectedIndices([]);
     if (next === "reveal" || next === "cover") {setPanel("fog");setSelected(null);setSidebar(true);}
-    if (next === "measure") {setPanel("grid");setSidebar(true);}
+    // The grid panel keeps Measure armed. On a phone its sheet would cover half the map, so it stays closed there.
+    if (next === "measure") {setPanel("grid");setSidebar(!phoneWidth());}
     if (["circle","square","line","cone","custom"].includes(next)) {setPanel("effects");setSidebar(true);}
   };
   const select = useCallback((id: string | null) => {
@@ -896,21 +915,37 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     setExplorationHistory(h=>[...h,scene.id].slice(-30));
     activate(id);setPanel("exploration");setSidebar(true);
   };
+  // A new scene whose map is an uploaded picture or Universal VTT export.
+  const sceneFromAsset = (asset: Asset, name: string, mapType: Scene["mapType"], containerId: string | null, settings?: MapImportSettings) => {
+    const s = newScene(name);
+    s.mapType = mapType;
+    s.containerId = containerId;
+    Object.assign(s, fitImageDimensions(asset.width, asset.height, 8000));
+    s.mapId = asset.id;
+    s.grid.size = Math.max(20, Math.round(s.width / 20));
+    if(settings){s.width=settings.width;s.height=settings.height;Object.assign(s.grid,settings.grid,{type:"square"});}
+    return s;
+  };
+  // Opens the new scene on the board, as entering a scene from the Scene Picker does.
+  const openNewScene = (id: string, containerId: string | null) => {
+    setLocation(containerId); setPanel("scenes"); setSidebar(!phoneWidth()); setDashboard(false); setOverview(null); setSearch(""); setSelected(null);
+  };
+  // Upload from an empty campaign's Scene Picker: the uploaded map becomes the campaign's first scene.
+  const pickerImport = async (asset: Asset, name: string, _color: string, settings?: MapImportSettings) => {
+    const target = pickerDialog?.destination ?? null, s = sceneFromAsset(asset, name, newMapType, target, settings);
+    commit(w => { w.assets.push(asset); w.assetCampaigns[asset.id] = campaignFor(target); w.scenes.push(s); w.activeId = s.id; });
+    setPickerDialog(null); openNewScene(s.id, target);
+  };
+  const openGenerator = (target: string | null) => { setGridAdjust(false); setCreatorStart({ destination: target }); setCreatorOpen(true); };
   const importAsset = async (asset: Asset, name: string, color: string, settings?:MapImportSettings) => {
     commit((w) => {
       w.assets.push(asset);
       w.assetCampaigns[asset.id] = campaignId;
       if (dialog === "scene-map") {
         const target = w.scenes.find(item=>item.id===w.activeId)!;
-        attachSceneMap(target,asset,settings);
+        attachSceneMap(target,asset,settings,name);
       } else if (dialog === "map") {
-        const s = newScene(name);
-        s.mapType = newMapType;
-        s.containerId = destination;
-        Object.assign(s, fitImageDimensions(asset.width, asset.height, 8000));
-        s.mapId = asset.id;
-        s.grid.size = Math.max(20, Math.round(s.width / 20));
-        if(settings){s.width=settings.width;s.height=settings.height;Object.assign(s.grid,settings.grid,{type:"square"});}
+        const s = sceneFromAsset(asset, name, newMapType, destination, settings);
         w.scenes.push(s);
         w.activeId = s.id;
       } else {
@@ -1190,7 +1225,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         )}
       </main>
     );
-  const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null).length : 0;
+  const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null && !isStarterScene(s)).length : 0;
   /** A campaign's dashboard is its home page: Maptable's way back out goes there (saving first). Co-GMs and maps not in a campaign go to the Campaigns page. */
   const dashboardHref = (id: string | null) => member ? "/campaigns" : maptableHubHref(id);
   const toDashboard = (id: string | null) => { setGridAdjust(false); void leaveSaved().then(ok => { if (ok) window.location.assign(dashboardHref(id)); }); };
@@ -1243,7 +1278,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   const setAutosave=(on:boolean)=>{autosave.set(on);if(on&&generation.current!==savedGeneration.current)void save();};
   const saveChip=<SaveChip status={saveStatus} error={saveError} conflict={blocked.current} onSave={()=>void manualSave()} autosave={{on:autosave.on,set:setAutosave,changes:unsaved,lastSaved}}/>;
   const saveRecovery=saveError&&<SaveConflictNotice status={{phase:blocked.current?'conflict':'error',message:saveError}} onDownload={backupLocalChanges} onReload={recoverCloud} onRetry={()=>void save()} disabled={busy||saveStatus==='Saving…'} detail="Download preserves scene data and image links. A full backup with image files is available in Backups."/>;
-  if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={scene.drawing ? scene.id : null} destination={destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
+  if (creatorOpen) return <>{saveRecovery}<MapCreator workspace={workspace} initialId={!creatorStart && scene.drawing ? scene.id : null} startNew={!!creatorStart} destination={creatorStart ? creatorStart.destination : destination} commit={commit} persist={manualSave} saveStatus={saveError || saveStatus} close={(id)=>{setCreatorOpen(false);setCreatorStart(null);if(id){activate(id);setDashboard(false);setPanel("scenes");}}}/></>;
   const coGmBar = member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true" /><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a co-GM here. Your changes save to their maps.</span><a href={`/encyclopedia#m-${mapMemberRef()}`}>Open the Wiki</a><NextLink href="/campaigns">Back to Campaigns</NextLink></div>;
   // The Wiki link outside a campaign (the header's ToolSwitch) follows the Scene Picker's or the open scene's campaign. Co-GMs keep their own link.
   const activeCampaignId = dashboard ? pickerCampaignId : campaignId;
@@ -1273,7 +1308,17 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       lastSceneId={campaignFor(scene.containerId) === pickerCampaignId ? scene.id : rememberedCampaignScene(workspace, pickerCampaignId ?? "", pickerCampaignId ? readRemembered(campaignSceneKey(sceneScope, pickerCampaignId)) : null)} open={enterScene}
       unfiled={pickerCampaignId && unfiledCount ? { count: unfiledCount, open: () => setOverview({ id: null }) } : null}
       addScenes={() => { const target = campaignFor(scene.containerId) === pickerCampaignId ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === pickerCampaignId); setNewMapType("encounter"); if (target) { enterScene(target.id); setDialog("add-scenes"); } else setPickerAdd(true); }} /></div>
-    {pickerAdd && <AddScenes workspace={workspace} campaignId={pickerCampaignId} initialDestination={pickerCampaignId} initialMapType={newMapType} boardOnly commit={commit} close={() => setPickerAdd(false)} splitMap={() => {}} importMap={() => {}} openScene={id => { setPickerAdd(false); enterScene(id); }} />}
+    {pickerAdd && <AddScenes workspace={workspace} campaignId={pickerCampaignId} initialDestination={pickerCampaignId} initialMapType={newMapType} commit={commit} close={() => setPickerAdd(false)}
+      splitMap={target => { setPickerAdd(false); setPickerDialog({ kind: "split-map", destination: target }); }}
+      importMap={(target, type) => { setPickerAdd(false); setNewMapType(type); setPickerDialog({ kind: "map", destination: target }); }}
+      generateMap={target => { setPickerAdd(false); openGenerator(target); }}
+      openScene={id => { setPickerAdd(false); enterScene(id); }} />}
+    {pickerDialog?.kind === "map" && <ImportDialog kind="map" title={`Upload ${newMapType === "world" ? "World" : newMapType === "area" ? "Area" : "Encounter"} Map`} s3={settings.s3Configured} close={() => setPickerDialog(null)} onImport={pickerImport} />}
+    {pickerDialog?.kind === "split-map" && <MapSplitDialog containerId={pickerDialog.destination} close={() => setPickerDialog(null)} onImport={(assets, scenes) => {
+      const target = pickerDialog.destination;
+      commit(w => { w.assets.push(...assets); for (const asset of assets) w.assetCampaigns[asset.id] = campaignFor(target); w.scenes.push(...scenes); w.activeId = scenes[0].id; });
+      setPickerDialog(null); openNewScene(scenes[0].id, target); setPanel("exploration"); setTool("select"); setNotice(`${scenes.length} linked map sections created. Use the direction markers to travel between them.`);
+    }} />}
   </main></>;
   }
   return (
@@ -1443,6 +1488,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       {icon:<Grid3x3 size={16}/>,label:"Blank encounter map",hint:"A grid to draw on and place tokens",onClick:()=>{const s=newScene();s.containerId=destination;commit(w=>{w.scenes.push(s);w.activeId=s.id;});setSelected(null);}},
                       {icon:<MapIcon size={16}/>,label:"Area map",hint:"A town, dungeon level or region with pins",onClick:()=>{setNewMapType("area");setDialog("add-scenes");}},
                       {icon:<Globe size={16}/>,label:"World map",hint:"The whole world, for travel and weather",onClick:()=>{setNewMapType("world");setDialog("add-scenes");}},
+                      {icon:<Sparkles size={16}/>,label:"Generate a map",hint:"A dungeon, cave, village or hex region",onClick:()=>openGenerator(destination)},
                       {icon:<LayoutGrid size={16}/>,label:"Split a large map",hint:campaignId?"Cut one big image into linked areas":"Open a campaign first",disabled:!campaignId,divider:true,onClick:()=>{setLocation(destination);setDialog("split-map");}},
                       {icon:<Copy size={16}/>,label:"Copy from another campaign",hint:"Bring scenes with their tokens and fog",onClick:()=>{setNewMapType("encounter");setDialog("add-scenes");}},
                       {icon:<FolderPlus size={16}/>,label:"New folder",hint:"Group scenes by act, chapter or session",divider:true,onClick:()=>setFolderRequest(n=>n+1)},
@@ -2334,7 +2380,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         commit(w=>{w.assets.push(...assets);for(const asset of assets)w.assetCampaigns[asset.id]=campaignId;w.scenes.push(...scenes);w.activeId=scenes[0].id;});
         setDialog(null);setPanel("exploration");setSidebar(true);setSelected(null);setTool("select");setNotice(`${scenes.length} linked map sections created. Use the direction markers to travel between them.`);
       }}/>}
-      {dialog === "add-scenes" && <AddScenes workspace={workspace} campaignId={campaignId} initialDestination={destination} initialMapType={newMapType} splitMap={id=>{setLocation(id);setDialog("split-map");}} commit={commit} close={()=>setDialog(null)} importMap={(id,type)=>{setLocation(id);setNewMapType(type);setDialog("map");}} openScene={id=>{activate(id);setDialog(null);setPanel("scenes");setSidebar(true);}}/>}
+      {dialog === "add-scenes" && <AddScenes workspace={workspace} campaignId={campaignId} initialDestination={destination} initialMapType={newMapType} splitMap={id=>{setLocation(id);setDialog("split-map");}} commit={commit} close={()=>setDialog(null)} importMap={(id,type)=>{setLocation(id);setNewMapType(type);setDialog("map");}} generateMap={id=>{setDialog(null);openGenerator(id);}} openScene={id=>{activate(id);setDialog(null);setPanel("scenes");setSidebar(true);}}/>}
       {(dialog === "map" || dialog === "scene-map" || dialog === "token") && (
         <ImportDialog
           kind={dialog === "scene-map" ? "map" : dialog}

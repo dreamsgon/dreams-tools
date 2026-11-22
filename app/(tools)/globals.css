@@ -1814,6 +1814,7 @@ h3 { color:var(--ink); font-size:13px; }
  .app-shell .panel-title h2 {flex:1;font-size:15px;}
  .app-shell .panel-title button {min-height:44px;min-width:44px;}
  .app-shell .panel-content {padding:12px;overscroll-behavior:contain;}
+ .app-shell .measure-hint {top:8px;left:8px;right:84px;transform:none;white-space:normal;font-size:12px;line-height:1.35;max-width:none;}
  .app-shell .crop-controls {top:8px;left:8px;right:8px;display:flex;align-items:flex-end;flex-direction:column;gap:6px;}
  .app-shell .crop-menu-toggle {pointer-events:auto;min-height:44px;}
  .app-shell .crop-control-actions {display:none;}
@@ -2511,4 +2512,11 @@ button.primary, .rpg-open { font-weight:500; }
   input, select, textarea { border-color: var(--field-line); }
   button.primary, :root[data-theme="dark"] button.primary { box-shadow: var(--primary-shadow); }
   h1, h2 { letter-spacing: -.012em; }
+}
+
+/* Measure hint: the keyboard version for a mouse, the short one for touch. */
+.measure-tool-hint .hint-touch { display: none; }
+@media (pointer: coarse) {
+  .measure-tool-hint .hint-pointer { display: none; }
+  .measure-tool-hint .hint-touch { display: inline; }
 }

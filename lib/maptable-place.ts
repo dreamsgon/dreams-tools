@@ -52,3 +52,15 @@ export function rememberedCampaignScene(data: Data, campaignId: string, remember
 
 /** Where the last open scene of one campaign is kept (per tab and per browser, like the rest of Maptable's navigation state). */
 export const campaignSceneKey = (scope: string, campaignId: string) => `maptable:last-scene:v1:${encodeURIComponent(scope)}:${encodeURIComponent(campaignId)}`;
+
+/** Where the campaign last used in Maptable is kept (per tab and per browser). */
+export const lastCampaignKey = (scope: string) => `maptable:last-campaign:v1:${encodeURIComponent(scope)}`;
+
+/**
+ * The campaign a bare /maptable opens when the open scene is only the untouched starter scene: the campaign used last,
+ * if it is still there, else the first campaign. Null with no campaigns.
+ */
+export function lastUsedCampaign(data: Data, last: string | null | undefined): string | null {
+  const campaigns = data.collections.filter(c => c.kind === "campaign");
+  return (campaigns.find(c => c.id === last) ?? campaigns[0])?.id ?? null;
+}

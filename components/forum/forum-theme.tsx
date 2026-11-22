@@ -133,7 +133,7 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
   return <aside className={`admin-cp dock-${dock}${floating ? ' floating' : ''}`} aria-label="Admin CP">
     {colours && <style data-cp-colours="">{colours}</style>}
     <div className="cp-head">
-      <Palette size={16} aria-hidden="true" /><b>Admin CP</b><span className="cp-sub">Campaign theme</span>
+      <Palette size={16} aria-hidden="true" /><b>Campaign theme</b><span className="cp-sub">Admin CP</span>
       <span className="cp-spacer" />
       <span className="cp-seg" role="group" aria-label="Dock the Admin CP">
         <button aria-pressed={dock === 'left'} title="Dock on the left" onClick={() => setDock('left')}><PanelLeft size={15} aria-hidden="true" /><span className="sr-only">Left</span></button>

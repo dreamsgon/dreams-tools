@@ -274,17 +274,22 @@ function BoardRow({ row, subs, k, go }: { row: Row; subs: Row[]; k: string; go: 
 }
 
 export function IndexPage({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
+  // A category with no boards yet (a new forum's Locations) stays off the index; whoever can add boards gets one line about it.
+  const topOf = (id: string) => frame.boards.filter(b => b.categoryId === id && !b.parentId);
+  const empty = frame.categories.filter(c => !topOf(c.id).length);
   return <>{frame.categories.map(c => {
-    const top = frame.boards.filter(b => b.categoryId === c.id && !b.parentId), kinds = new Set(top.map(b => b.kind));
-    // The category's tag says in or out of character only while its boards agree.
-    const kind = kinds.size > 1 ? null : top[0]?.kind ?? c.kind;
+    const top = topOf(c.id), kinds = new Set(top.map(b => b.kind));
+    if (!top.length) return null;
+    // The category's tag says in or out of character only while its boards agree, and not when the name already says it.
+    const kind = kinds.size > 1 ? null : top[0]?.kind ?? c.kind, label = kind === 'ic' ? 'In character' : 'Out of character';
     return <section key={c.id} className={`category category-${c.kind}`}>
-      <h2 className="category-title">{c.name}{kind && <span className="tag">{kind === 'ic' ? 'In character' : 'Out of character'}</span>}</h2>
+      <h2 className="category-title">{c.name}{kind && label.toLowerCase() !== c.name.trim().toLowerCase() && <span className="tag">{label}</span>}</h2>
       <div className="category-forums">
-        {top.length ? top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />) : <p className="muted empty">No boards here yet.{frame.you.rights.boards && <> <Link k={k} go={go} to={{ view: 'settings' }}>Add one in Forum settings</Link>.</>}</p>}
+        {top.map(b => <BoardRow key={b.id} row={b} subs={frame.boards.filter(x => x.parentId === b.id)} k={k} go={go} />)}
       </div>
     </section>;
   })}
+    {frame.you.rights.boards && empty.length > 0 && <p className="muted empty-categories">{empty.length === 1 ? `${empty[0].name} has` : `${empty.map(c => c.name).join(', ').replace(/, ([^,]*)$/, ' and $1')} have`} no boards yet, so players don’t see {empty.length === 1 ? 'it' : 'them'}. <Link k={k} go={go} to={{ view: 'settings' }}>Add a board in Forum settings</Link>{empty.some(c => c.kind === 'ic') && <>, or use Start a forum scene here on a Wiki place page</>}.</p>}
     {frame.you.rights.moderate && <section className="category category-staff">
       <h2 className="category-title">Staff only <span className="tag">Moderators</span></h2>
       <div className="category-forums"><article className="forum forum-ooc trash-row">

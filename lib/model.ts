@@ -620,8 +620,27 @@ export function newToken(name = "New token"): Token {
     conditions: [],
   };
 }
+/** The name of the scene a new Maptable starts with (the workspace always holds at least one scene). */
+export const STARTER_SCENE_NAME = "First encounter";
+const stableJson = (value: unknown) => JSON.stringify(value, (_key, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : v);
+/**
+ * True for the scene a new Maptable starts with, still untouched: its name, outside every campaign, no map, drawing,
+ * tokens or anything else changed. It isn't counted as a map not in a campaign, and goes once there is another scene.
+ */
+export function isStarterScene(scene: Scene) {
+  if (scene.name !== STARTER_SCENE_NAME || scene.containerId) return false;
+  const fresh = sceneSchema.safeParse({ ...newScene(STARTER_SCENE_NAME), id: scene.id }), mine = sceneSchema.safeParse(scene);
+  return fresh.success && mine.success && stableJson(fresh.data) === stableJson(mine.data);
+}
+/** Drops the untouched starter scene once the workspace has another one. */
+export function withoutStarterScene<W extends { scenes: Scene[]; activeId: string }>(w: W): W {
+  if (w.scenes.length < 2) return w;
+  const scenes = w.scenes.filter(s => !isStarterScene(s));
+  if (!scenes.length || scenes.length === w.scenes.length) return w;
+  return { ...w, scenes, activeId: scenes.some(s => s.id === w.activeId) ? w.activeId : scenes[0].id };
+}
 export function initialWorkspace(): Workspace {
-  const scene = newScene("First encounter");
+  const scene = newScene(STARTER_SCENE_NAME);
   return {
     version: 1,
     collections: [],

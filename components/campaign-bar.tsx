@@ -7,6 +7,7 @@ import { campaignToolLinks, matchesRef, memberCampaign, ownCampaign, type BarCam
 import CampaignSwitcher, { useCampaignSwitcherShortcut } from "./campaign-switcher";
 import NotificationBell from "./notification-bell";
 import { AccountLink } from "./tool-switch";
+import { diceSlotRef } from "@/lib/dice-slot";
 import "./campaign-bar.css";
 
 /*
@@ -94,6 +95,8 @@ export default function CampaignBar({ tool, campaign: ref, name, trail, actions,
     {trail && <div className="cbar-trail">{trail}</div>}
     <div className="cbar-end">
       {actions}
+      {/* The dice, roll log and AI buttons (components/global-dice.tsx). Maptable has its own. */}
+      {tool !== "maptable" && <span className="cbar-dice" ref={diceSlotRef} />}
       {bell && !member && <NotificationBell />}
       <AccountLink />
     </div>

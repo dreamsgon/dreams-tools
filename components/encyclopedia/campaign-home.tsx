@@ -68,7 +68,7 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
     ] : [
       { id: "campaigns", Icon: Flag, label: "Campaigns", sub: campaigns.length ? plural(campaigns.length, "campaign") : "Begin a campaign", go: () => campaigns[0] ? onCampaign(campaigns[0].id) : onNewCampaign() },
     ]),
-    { id: "maps", Icon: MapIcon, label: "Maps", sub: count("map") ? plural(count("map"), "map") : "Add a map", go: () => onSection("maps") },
+    { id: "maps", Icon: MapIcon, label: "World maps", sub: count("map") ? plural(count("map"), "world map") : "Add a world map", go: () => onSection("maps") },
   ];
   const icon = (kind: Kind) => { const I = icons[kind]; return <I size={16} />; };
 

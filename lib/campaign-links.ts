@@ -1,4 +1,4 @@
-import type { Workspace as MapWorkspace } from "./model";
+import { isStarterScene, type Workspace as MapWorkspace } from "./model.ts";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model";
 import { scenesInOrder } from "./scene-order.ts";
 import { sortSiblings } from "./folder-order.ts";
@@ -97,7 +97,8 @@ export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"
   return {
     rows: rows.sort(byName), folders,
     worlds: book.worlds.filter(w => !w.isTemplate).map(w => ({ id: w.id, name: w.name, archived: w.archived })),
-    loose: (map?.scenes ?? []).filter(s => !inCampaign.has(s.id)).length,
+    // The untouched scene a new Maptable starts with is not a map anyone has to sort.
+    loose: (map?.scenes ?? []).filter(s => !inCampaign.has(s.id) && !isStarterScene(s)).length,
     recent: recentPages(book, recentLimit),
   };
 }

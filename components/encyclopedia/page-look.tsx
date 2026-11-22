@@ -59,7 +59,7 @@ export function PageLook({entry,data,update,change}:{entry:Entry;data:Workspace;
  }
  const source=wikiMode?'the Wiki’s default':from==='page'?(own?.branch?'this page, and the pages inside it':'this page'):from==='branch'?`${byId.get(fromId??'')?.title??'a page above'}, for the pages inside it`:'the Wiki’s default';
  return <div className="write-menu page-look" ref={box}>
-  <button type="button" className="button small" aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(!open)}><CaseSensitive size={15} aria-hidden="true"/>Text<ChevronDown size={12} aria-hidden="true"/></button>
+  <button type="button" className="button small" aria-expanded={open} aria-haspopup="dialog" title="Text on this page" onClick={()=>setOpen(!open)}><CaseSensitive size={15} aria-hidden="true"/><span className="write-menu-label">Text</span><ChevronDown size={12} aria-hidden="true"/></button>
   {open&&<div className="write-pop wide look-pop" role="dialog" aria-label="Text on this page">
    <p className="write-pop-hint">How the text on {wikiMode?'every page in the Wiki':'this page'} is set. Each reader’s text size in Appearance still scales it.</p>
    {TEXT_KEYS.map(k=><div key={k}><span className="write-pop-label">{TEXT_OPTIONS[k].name}</span><div className="write-pop-row look-row" role="group" aria-label={TEXT_OPTIONS[k].name}>{TEXT_OPTIONS[k].values.map(([v,label])=><button key={v} type="button" aria-pressed={shown[k]===v} className={shown[k]===v?'on':''} style={k==='font'?{fontFamily:FONT_PREVIEW[v]}:undefined} onClick={()=>pick(k,v)}>{label}</button>)}</div></div>)}
@@ -78,7 +78,7 @@ export function PageStyle({entry,update}:{entry:Entry;update:(p:Partial<Entry>)=
  async function upload(f:File){setBusy(true);setError('');try{const image=await uploadMapImage(f);set({banner:{imageId:image.imageId,width:image.imageWidth,height:image.imageHeight,y:.5}});}catch(e){setError(e instanceof Error?e.message:'Could not upload the picture.');}finally{setBusy(false);}}
  const choice=<K extends 'box'|'toc'|'wide'>(label:string,key:K,options:[Look[K],string][])=><div><span className="write-pop-label">{label}</span><div className="write-pop-row look-row" role="group" aria-label={label}>{options.map(([v,name])=>{const on=(look[key]??options[0]![0])===v;return <button key={name} type="button" aria-pressed={on} className={on?'on':''} onClick={()=>set({[key]:v} as Partial<Look>)}>{name}</button>;})}</div></div>;
  return <div className="write-menu page-look" ref={box}>
-  <button type="button" className="button small" aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(!open)}><LayoutPanelTop size={15} aria-hidden="true"/>Page<ChevronDown size={12} aria-hidden="true"/></button>
+  <button type="button" className="button small" aria-expanded={open} aria-haspopup="dialog" title="Page look" onClick={()=>setOpen(!open)}><LayoutPanelTop size={15} aria-hidden="true"/><span className="write-menu-label">Page</span><ChevronDown size={12} aria-hidden="true"/></button>
   {open&&<div className="write-pop wide look-pop page-style-pop" role="dialog" aria-label="How this page looks">
    <span className="write-pop-label">Banner</span>
    {look.banner?<><PageBannerFramer banner={look.banner} onSave={banner=>set({banner})}/>

@@ -38,3 +38,8 @@
   .campaign-bar--no-phone-places .cbar-places { display:none; }
   .campaign-bar--phone-trail .cbar-trail { order:4; display:flex; flex:1 0 100%; min-height:40px; margin:0 -8px; padding:0 8px; border-left:0; border-top:1px solid var(--chrome-line, var(--line)); overflow-x:auto; }
 }
+
+/* The Appearance button in the bar: the same quiet icon button as the bell, also on pages without the tools' global styles (the forum). */
+.cbar-end .appearance-trigger { display:inline-grid; place-items:center; width:34px; height:34px; padding:0; border:1px solid transparent; border-radius:var(--radius, 6px); background:transparent; color:var(--chrome-text, var(--ink)); cursor:pointer; }
+.cbar-end .appearance-trigger:hover, .cbar-end .appearance-trigger[aria-expanded="true"] { background:var(--chrome-hover, var(--accent-soft)); }
+.cbar-end .appearance-trigger:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }

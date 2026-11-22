@@ -152,7 +152,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
   return <div className={`campaigns-page${selected ? " has-details" : ""}`}>
     <div className="campaigns-main">
       <div className="campaigns-head">
-        <div><h1>Campaigns</h1><p>Each campaign has its maps in Maptable and its notes in the Wiki. Manage both here.</p></div>
+        <div><h1>Campaigns</h1><p>Each campaign has its scenes in Maptable and its notes in the Wiki. Manage both here.</p></div>
         <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "import" })} disabled={!summary}><Upload size={16} aria-hidden="true" />Import</button>
         <button type="button" className="campaigns-secondary" onClick={() => setDialog({ kind: "folder" })} disabled={!summary}><FolderPlus size={16} aria-hidden="true" />New folder</button>
         <button type="button" className="campaigns-primary" onClick={() => setDialog({ kind: "new" })} disabled={!summary}><Plus size={16} aria-hidden="true" />New campaign</button>
@@ -203,7 +203,7 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
         </div>
         <div className="campaigns-foot">
           {archivedCount > 0 && <span>{plural(archivedCount, "campaign")} in archived worlds <button type="button" className="campaigns-link" onClick={() => setArchived(!archived)}>{archived ? "Hide" : "Show"}</button></span>}
-          {summary.loose > 0 && <span><MapIcon size={15} aria-hidden="true" />{plural(summary.loose, "map")} not in a campaign <a className="campaigns-link" href="/maptable?view=unfiled">Sort them</a></span>}
+          {summary.loose > 0 && <span><MapIcon size={15} aria-hidden="true" />{plural(summary.loose, "scene")} not in a campaign <a className="campaigns-link" href="/maptable?view=unfiled">Sort them</a></span>}
           <span><TagIcon size={15} aria-hidden="true" /><button type="button" className="campaigns-link" onClick={() => setTagsOpen(true)}>Manage tags</button></span>
           <span><Download size={15} aria-hidden="true" /><a className="campaigns-link" href="/api/campaigns?download=backup">Download a backup of both tools</a></span>
         </div>
@@ -473,7 +473,7 @@ function Match({ summary, busy, close, send }: { summary: CampaignSummary; busy:
   const suggested = useMemo(() => new Set(suggestPairs(summary).map(p => `${p.maptableId}:${p.encyclopediaId}`)), [summary]);
   const pairs = Object.entries(choice).filter(([, e]) => e).map(([maptableId, encyclopediaId]) => ({ maptableId, encyclopediaId }));
   const used = new Set(pairs.map(p => p.encyclopediaId));
-  return <Modal wide title="Match your campaigns" intro="Maptable and the Wiki keep separate campaign lists. Pair them once, and each campaign shows up here with its maps and its notes. Nothing is moved or copied." close={close} footer={<>
+  return <Modal wide title="Match your campaigns" intro="Maptable and the Wiki keep separate campaign lists. Pair them once, and each campaign shows up here with its scenes and its notes. Nothing is moved or copied." close={close} footer={<>
     <small>A private copy of both tools&apos; data is kept before the first change. You can change a pairing later from the campaign&apos;s details.</small>
     <button type="button" className="campaigns-secondary" onClick={close}>Later</button>
     <button type="button" className="campaigns-primary" disabled={busy || !pairs.length} onClick={() => send({ action: "pair", pairs }, `Paired ${plural(pairs.length, "campaign")}.`, close)}>{pairs.length ? `Pair ${plural(pairs.length, "campaign")}` : "Pair campaigns"}</button>

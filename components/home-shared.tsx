@@ -32,7 +32,8 @@ export function KindIcon({ kind }: { kind: string }) {
 export function facts(r: CampaignRow): [string, string][] {
   const e = r.encyclopedia, m = r.maptable, out: [string, string][] = [];
   if (e) out.push([String(e.pages), e.pages === 1 ? "page" : "pages"]);
-  if (e) out.push([String(e.maps), e.maps === 1 ? "map" : "maps"]);
+  // The Wiki's maps are world maps; Maptable's are scenes. A campaign without world maps doesn't list "0".
+  if (e?.maps) out.push([String(e.maps), e.maps === 1 ? "world map" : "world maps"]);
   if (m) out.push([String(m.scenes), m.scenes === 1 ? "scene" : "scenes"]);
   return out;
 }

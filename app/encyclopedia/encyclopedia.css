@@ -1644,3 +1644,26 @@ h1,h2,h3,.brand{letter-spacing:-.012em}
 input,select,textarea{border-color:var(--field-line)}
 .search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 }
+/* A page on a phone: the controls above the text take about one screen-third, so the first lines of text show without scrolling. */
+@media(max-width:720px){
+.article-layout{padding-top:12px}
+.article-layout .article-meta{margin-bottom:6px;row-gap:4px}
+.article-layout .article-access .who-button{padding:3px 9px}
+.article-layout .article-title h1{font-size:28px}
+.article-layout .article-tags{margin:4px 0 8px}
+/* With no tags yet, the add button waits for Write. */
+.article:not(.is-editing) .article-tags:not(:has(.tag-chip)){display:none}
+.article-layout .page-tabs.article-tabs{margin-top:8px}
+.article-layout .page-tabs .page-tab{padding:8px 11px}
+.article-layout .tab-share{padding:8px 0 4px;min-height:0}
+.article-layout .article-toolbar{gap:6px;padding:6px 0 8px;margin-bottom:16px}
+/* Reading: one row. Writing keeps its tools wrapping onto more rows. */
+.article:not(.is-editing) .article-toolbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.article:not(.is-editing) .article-toolbar>*{flex-shrink:0}
+.article-layout .article-toolbar .word-count{display:none}
+.article-layout .article-toolbar .segmented button{padding-left:9px;padding-right:9px}
+.article-layout .article-toolbar .write-menu>.button{gap:3px;padding-left:8px;padding-right:8px}
+.article-layout .article-toolbar .write-menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.article:not(.is-editing) .article-toolbar>.segmented:first-child+*{margin-left:auto}
+.article-layout .prose>:first-child{margin-top:0}
+}

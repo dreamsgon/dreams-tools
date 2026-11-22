@@ -214,3 +214,10 @@ test('Maptable links a campaign dashboard by its own campaign id, even when the 
   assert.equal(maptableHubHref('map1'),'/campaigns/m%3Amap1');
   assert.equal(maptableHubHref(null),'/campaigns');
 });
+
+test('the untouched starter scene is not counted as a map to sort', async () => {
+  const {initialWorkspace}=await import('../lib/model.ts');
+  const starter=initialWorkspace().scenes[0];
+  assert.equal(campaignSummary({...map,scenes:[...map.scenes,starter]},book()).loose,1);
+  assert.equal(campaignSummary({...map,scenes:[...map.scenes,{...starter,name:'Harbor'}]},book()).loose,2);
+});

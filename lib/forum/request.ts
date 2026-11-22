@@ -53,6 +53,8 @@ export type Deps = {
   sameOrigin: (r: Request) => boolean;
   /** The signed-in person's account id, or null. */
   user: () => Promise<string | null>;
+  /** The signed-in person's display name, for the GM's name before the member list has one. */
+  userName?: () => Promise<string | null>;
   /** The campaign a key names for this person, with its member list; null when they may not open it. */
   campaign: (userId: string, key: string) => Promise<Found | null>;
   workspace: (owner: string) => Promise<Workspace>;
@@ -293,6 +295,8 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, 
   if (!userId) return { fail: json({ error: signIn }, 401) };
   const found = await deps.campaign(userId, campaign);
   if (!found) return { fail: json({ error: notMember }, 404) };
+  // The GM's own name stands in until the member list stores one (it does once the GM changes members), not "The GM".
+  if (userId === found.owner && !found.list.ownerName && deps.userName) { const name = (await deps.userName())?.trim(); if (name) found.list = { ...found.list, ownerName: name.slice(0, 80) }; }
   let rights = forumRights(found.list, userId, found.owner);
   if (!rights.read) return { fail: json({ error: "Your group can't read the forum." }, 403) };
   const workspace = await deps.workspace(found.owner);

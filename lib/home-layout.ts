@@ -228,3 +228,11 @@ export function applyHomeAction(l: HomeLayout, body: HomeAction): HomeLayout {
 
 /** The widgets whose data needs the Maptable and Encyclopedia workspaces. */
 export const needsWorkspaces = (l: HomeLayout) => l.widgets.some(w => ["continue", "campaigns", "folders", "recent", "sessions", "quests", "pinned", "todo"].includes(w.type));
+
+/** Sections with nothing in them yet stay hidden until they have something (Customize still lists them): Your campaigns and Recently edited. */
+export function hiddenUntilUsed(type: HomeWidget, summary: { rows: unknown[]; recent?: unknown[] } | undefined) {
+  if (!summary) return false;
+  if (type === "campaigns") return !summary.rows.length;
+  if (type === "recent") return !summary.recent?.length;
+  return false;
+}
