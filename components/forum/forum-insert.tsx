@@ -103,7 +103,7 @@ function PicturePicker({ k, onPick, onBack }: { k: string; onPick: (id: string, 
       : list && !list.pictures.length ? <small className="muted">No pictures in the forum yet. Upload the first.</small>
       : <span className="pic-grid">{shown.map(p => <Thumb key={p.id} k={k} id={p.id} on={picked === p.id} label={`Added by ${p.mine ? 'you' : p.by}, ${when(p.at)}`} onClick={() => setPicked(p.id)} />)}</span>}
     {list && list.pictures.length > shown.length && <button type="button" className="f-btn ghost small" onClick={() => setMore(true)}>Show more</button>}
-    {picked && <label className="f-field small">What it shows <small className="muted">(for readers who can’t see it)</small><input value={alt} maxLength={120} placeholder="A gull on the harbour wall" onChange={e => setAlt(e.target.value)} /></label>}
+    {picked && <label className="f-field small">What it shows <small className="muted">(for readers who can’t see it)</small><input value={alt} maxLength={120} placeholder="e.g. A gull on the harbour wall" onChange={e => setAlt(e.target.value)} /></label>}
     {error && <small className="form-error" role="alert">{error}</small>}
     <span className="pop-foot"><button type="button" className="f-btn ghost small" onClick={onBack}>Back</button><button type="button" className="f-btn small" disabled={!picked} onClick={() => onPick(picked, alt.trim())}>Put it in</button></span>
   </span>;

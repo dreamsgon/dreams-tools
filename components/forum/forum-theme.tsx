@@ -9,7 +9,7 @@
  * its forum, so this works before a forum is set up. For those who may arrange the forum: the GM, and the groups the GM
  * lets. Nothing reaches members until a theme is saved and made live.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, PanelLeft, PanelRight, Palette, X } from 'lucide-react';
 import { COLOUR_ROLES, PRESET_NOTES, THEME_AREAS, THEME_FONTS, THEME_LIMITS, THEME_PRESETS, ThemeError, areaCss, contrastChecks, cssSize, importTheme, themeColours, themeCss, themeFontsUrl, type ColourRole, type FontId, type Theme, type ThemeArea } from '@/lib/campaign-theme/model';
 import { leavePreview, refreshSkins } from '../campaign-skin';
@@ -126,11 +126,28 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
   });
   const pick = (s: 'light' | 'dark') => { setScheme(s); setSchemeState(s); };
 
+  // Escape closes the Admin CP, and so does a click on the page beside a floating one (each asks first when there are unsaved changes).
+  // Not while a dialog is open over it, and not for the buttons that open it.
+  const panel = useRef<HTMLElement>(null), closing = useRef({ leave, onClose });
+  closing.current = { leave, onClose };
+  useEffect(() => {
+    const done = async () => { if (await closing.current.leave()) closing.current.onClose(); };
+    const overlay = () => !!document.querySelector('dialog[open], [role="dialog"][aria-modal="true"], .modal-backdrop');
+    const key = (e: KeyboardEvent) => { if (e.key !== 'Escape' || e.defaultPrevented || overlay()) return; e.preventDefault(); void done(); };
+    const down = (e: PointerEvent) => {
+      const at = e.target instanceof Element ? e.target : null;
+      if (!floating || !at || panel.current?.contains(at) || overlay() || at.closest('[data-opens-admin-cp], [role="dialog"], [role="menu"]')) return;
+      void done();
+    };
+    document.addEventListener('keydown', key); document.addEventListener('pointerdown', down);
+    return () => { document.removeEventListener('keydown', key); document.removeEventListener('pointerdown', down); };
+  }, [floating]);
+
   // The Admin CP wears the colours of the theme being edited, else the live one: only colours, so it stays usable.
   const shown = draft ?? themes?.live ?? null;
   const colours = useMemo(() => shown ? themeColours(shown, '.admin-cp') : '', [shown]);
 
-  return <aside className={`admin-cp dock-${dock}${floating ? ' floating' : ''}`} aria-label="Admin CP">
+  return <aside ref={panel} className={`admin-cp dock-${dock}${floating ? ' floating' : ''}`} aria-label="Campaign theme">
     {colours && <style data-cp-colours="">{colours}</style>}
     <div className="cp-head">
       <Palette size={16} aria-hidden="true" /><b>Campaign theme</b><span className="cp-sub">Admin CP</span>
@@ -147,9 +164,9 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
     </div>}
     <nav className="cp-tabs" role="tablist" aria-label="Admin CP">
       <div className="cp-tab-row">{([['themes', 'Themes'], ['basics', 'Basics'], ['banner', 'Banner'], ['help', 'Help']] as const).map(([id, label]) =>
-        <button key={id} role="tab" aria-selected={tab === id} disabled={!draft && id === 'basics'} onClick={() => setTab(id)}>{label}</button>)}</div>
+        <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}</div>
       <div className="cp-tab-row parts"><span className="cp-tab-label" aria-hidden="true">Stylesheets</span>{THEME_AREAS.map(a =>
-        <button key={a.id} role="tab" aria-selected={tab === a.id} disabled={!draft} title={draft ? `${a.label} stylesheet` : 'Pick a theme to edit first'} onClick={() => setTab(a.id)}>{a.label}<span className="sr-only"> stylesheet</span>{draft && areaCss(draft, a.id).trim() && <i className="cp-dot" aria-hidden="true" />}</button>)}</div>
+        <button key={a.id} role="tab" aria-selected={tab === a.id} title={`${a.label} stylesheet`} onClick={() => setTab(a.id)}>{a.label}<span className="sr-only"> stylesheet</span>{draft && areaCss(draft, a.id).trim() && <i className="cp-dot" aria-hidden="true" />}</button>)}</div>
     </nav>
     <div className="cp-body">
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -158,6 +175,10 @@ export function AdminCp({ k, host = 'forum', floating = false, dock, setDock, on
         edit={async (t, saved) => { if (await leave()) edit(t, saved); }}
         live={id => run({ action: 'liveTheme', id }, () => setNote(id ? 'Members see that theme now.' : 'The campaign is back to the app’s own look.'))}
         remove={async t => { if (await confirmDialog({ title: `Delete ${t.name}?`, message: themes.live?.id === t.id ? 'It stays live until you pick another theme, but you won’t be able to edit it.' : 'This can’t be undone.', confirm: 'Delete', danger: true })) await run({ action: 'deleteTheme', id: t.id }, () => { if (draft?.id === t.id) { setDraft(null); setBase(null); } }); }} />}
+      {!draft && themes && (tab === 'basics' || THEME_AREAS.some(a => a.id === tab)) && <div className="cp-pick-first">
+        <p>{tab === 'basics' ? 'Basics sets a theme’s colours and fonts.' : 'Each stylesheet adds CSS for one part of the campaign.'} Pick a theme to edit first, or start one from a preset.</p>
+        <button className="f-btn small" onClick={() => setTab('themes')}>Go to Themes</button>
+      </div>}
       {draft && tab === 'basics' && <BasicsTab t={draft} set={setDraft} scheme={scheme} pick={pick} beside={hostLabel} />}
       {draft && THEME_AREAS.some(a => a.id === tab) && <CssTab key={tab} t={draft} set={setDraft} area={tab as ThemeArea} beside={tab === host} href={tab === host ? null : previewHref(k, where, tab as ThemeArea)} />}
       {themes && tab === 'banner' && <BannerTab k={k} banner={banner ?? null} setBanner={setBanner} owner={!!where?.owner} onSaved={onSaved} />}

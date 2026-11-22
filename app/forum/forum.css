@@ -399,9 +399,11 @@ ol.foot-list li { flex-direction: row; justify-content: space-between; gap: 8px;
 .tools button:hover:not(:disabled), .tools button.on { background: var(--accent-soft); color: var(--accent); }
 .tools button:disabled { opacity: .45; cursor: default; }
 .tools .sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line-strong); }
+.tools > .tool-more { display: none; }
+.tools > .tool-extra-wrap { display: contents; }
 /* Markdown or BBCode, chosen per post. */
 .fmt-switch { display: inline-flex; gap: 0; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius); }
-.tools .fmt-switch button { padding: 3px 8px; font-size: 11.5px; }
+.tools .fmt-switch button { padding: 3px 8px; font-size: 12px; }
 .tools .fmt-switch button.on { background: var(--accent); color: var(--on-accent, #fff); }
 .pop-wrap { display: inline-flex; }
 /* Insert and emoji popovers hang under the toolbar. */
@@ -725,13 +727,17 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
   .as-btn { min-width: 0; flex: 1; }
   .as-pick { flex: 1; min-width: 0; }
   .composer { padding: 10px; }
-  .tools { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+  /* One row of icons (Bold, Italic, Speech, Insert, Emoji, Preview, More); More shows the rest in a row under it. */
+  .tools { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .tools .sep { display: none; }
+  .tools:not(.more-open) .tool-extra { display: none; }
+  .tools > .tool-extra, .tools > .tool-extra-wrap > .pop-wrap { order: 2; }
+  .tools > .tool-more { display: inline-flex; }
   /* The toolbar's own buttons, not the ones inside its popovers. */
-  .tools > .pop-wrap { display: grid; }
-  .tools > button, .tools > .pop-wrap > button { flex-direction: column; justify-content: center; gap: 2px; min-height: 44px; padding: 4px 0; border: 1px solid var(--line); background: var(--panel); }
-  .tools .tl { font-size: 10px; color: var(--muted); }
-  .tools > .fmt-switch { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; }
+  .tools > .pop-wrap, .tools > .tool-extra-wrap > .pop-wrap { display: grid; }
+  .tools > button, .tools > .pop-wrap > button, .tools > .tool-extra-wrap > .pop-wrap > button { justify-content: center; min-height: 44px; padding: 4px 0; border: 1px solid var(--line); background: var(--panel); }
+  .tools .tl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tools > .fmt-switch { grid-column: span 3; display: grid; grid-template-columns: 1fr 1fr; }
   .tools > .fmt-switch button { justify-content: center; min-height: 40px; }
   .emoji-wrap { display: contents; }
   .tool-pop { left: 0; right: 0; width: auto; }

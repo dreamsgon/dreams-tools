@@ -644,7 +644,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
       <button disabled={saving} className="primary" onClick={()=>setUsing(true)}>Use in Maptable</button>
     </header>
     <div className="creator-layout" inert={saving}>
-      <nav className="creator-rail" aria-label="Drawing tools">{tools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>pickTool(t.id)}>{TOOL_ICONS[t.id]}<span>{t.key}</span></button>)}</nav>
+      <nav className="creator-rail" aria-label="Drawing tools">{tools.map(t=><button key={t.id} aria-pressed={tool===t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} className={tool===t.id?"active":""} onClick={()=>pickTool(t.id)}>{TOOL_ICONS[t.id]}<span aria-hidden="true">{t.short}</span></button>)}</nav>
       <div className="creator-canvas">
       <section ref={stage} className="creator-stage" aria-label="Map drawing area" data-panning={spaceHeld||undefined}
         onPointerDown={e=>{if(!spaceHeld&&e.button!==1)return;e.preventDefault();const el=stage.current!;pan.current={x:e.clientX,y:e.clientY,left:el.scrollLeft,top:el.scrollTop};e.currentTarget.setPointerCapture(e.pointerId);}}

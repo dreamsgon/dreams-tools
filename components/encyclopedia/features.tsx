@@ -30,7 +30,7 @@ function FeatureForm({start,groups,gm,onSave,onClose}:{start?:Feature;groups:str
    const {uses:_u,...rest}=f;void _u;
    onSave({...rest,name:f.name.trim(),group:f.group?.trim()||undefined,note:f.note?.trim()||undefined,text:f.text?.trim()||undefined,...(uses?{uses}:{}),...(f.rolls?.length?{rolls:f.rolls}:{rolls:undefined}),gm:f.gm||undefined});onClose();}}>
    <div className="spell-form-grid">
-    <label className="field-label">Name<input className="inv-input" autoFocus required maxLength={80} placeholder="Second Wind" value={f.name} onChange={e=>set({name:e.target.value})}/></label>
+    <label className="field-label">Name<input className="inv-input" autoFocus required maxLength={80} placeholder="e.g. Second Wind" value={f.name} onChange={e=>set({name:e.target.value})}/></label>
     <label className="field-label">Group<input className="inv-input" list="feature-groups" maxLength={40} placeholder="Class, Species, Feat…" value={f.group??''} onChange={e=>set({group:e.target.value||undefined})}/><datalist id="feature-groups">{names.map(g=><option key={g} value={g}/>)}</datalist></label>
     <label className="field-label">Short note<input className="inv-input" maxLength={120} placeholder="Level 2 · Bonus action" value={f.note??''} onChange={e=>set({note:e.target.value})}/></label>
     <label className="field-label">Uses<small> Leave empty if it has no limit</small><input className="inv-input" type="number" min={1} max={1000} placeholder="—" value={max} onChange={e=>setMax(e.target.value)}/></label>

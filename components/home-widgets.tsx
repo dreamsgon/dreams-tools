@@ -119,7 +119,7 @@ export function Links({ layout, act, size }: Part & { size: string }) {
       {!adding && <button type="button" className="home-qlink home-qlink-add" onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />Add a link</button>}
     </div>
     {adding && <form className="home-form" onSubmit={e => { e.preventDefault(); add(); }}>
-      <label>Name<input value={label} maxLength={80} placeholder="Monster Manual" onChange={e => setLabel(e.target.value)} autoFocus /></label>
+      <label>Name<input value={label} maxLength={80} placeholder="e.g. Monster Manual" onChange={e => setLabel(e.target.value)} autoFocus /></label>
       <label>Address<input value={address} maxLength={500} placeholder="https://… or a page here, like /maptable" onChange={e => setAddress(e.target.value)} /></label>
       {error && <p className="home-error" role="alert">{error}</p>}
       <div className="home-form-row"><button type="button" className="home-button home-button-small home-button-quiet" onClick={() => { setAdding(false); setError(""); }}>Done</button><button className="home-button home-button-small home-button-primary">Add link</button></div>

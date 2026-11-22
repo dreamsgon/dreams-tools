@@ -2148,7 +2148,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
             
           </ResizableSidebar>
         )}
-        <section className="map-workspace">
+        <section className="map-workspace" id="main-content" tabIndex={-1} aria-label="Map">
           <div className="map-topbar">
             <div className="button-row">
               <button

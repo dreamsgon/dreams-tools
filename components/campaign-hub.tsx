@@ -204,7 +204,7 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         {draft ? <button className="hub-button hub-button-primary" onClick={() => { void save(draft); setDraft(null); }}><Check size={15} aria-hidden="true" />Done</button> : <>
           {tab === "dashboard" && <button className="hub-button" onClick={() => setDraft(layout)}><Pencil size={14} aria-hidden="true" />Customize</button>}
           {tab === "front" && hub.frontConfig && !editing && <button className="hub-button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Customize</button>}
-          {e && <button className="hub-button" title="The campaign theme: colours, fonts and a stylesheet for every part of the campaign" onClick={openThemeEditor}><Palette size={15} aria-hidden="true" />Theme</button>}
+          {e && <button className="hub-button" data-opens-admin-cp title="The campaign theme: colours, fonts and a stylesheet for every part of the campaign" onClick={openThemeEditor}><Palette size={15} aria-hidden="true" />Theme</button>}
           {e && <BackupsButton campaignId={e.id} campaignName={row.name} />}
         </>}
       </div>
@@ -483,7 +483,7 @@ function NextSession({ hub, saveFront, showDate, bare }: { hub: CampaignHub; sav
   return <>
     {editing ? <div className="hub-next-form">
       <label>Date and time<input type="datetime-local" value={whenAt} onChange={ev => setWhen(ev.target.value)} /></label>
-      <label>Where<input maxLength={120} value={where} placeholder="On Discord" onChange={ev => setWhere(ev.target.value)} /></label>
+      <label>Where<input maxLength={120} value={where} placeholder="e.g. On Discord" onChange={ev => setWhere(ev.target.value)} /></label>
       <div className="hub-row"><button className="hub-button hub-button-primary" onClick={() => void done()}>Save</button><button className="hub-button" onClick={() => setEditing(false)}>Cancel</button></div>
     </div> : <>
       {time ? <><strong className="hub-big">{time.label}</strong><p className="hub-muted">{[time.relative[0].toUpperCase() + time.relative.slice(1), next?.where].filter(Boolean).join(" · ")}</p></>
@@ -588,7 +588,7 @@ function Fields({ widget: w, hub, update }: { widget: FrontWidget; hub: Campaign
   switch (w.type) {
     case "next": return <div className="hub-edit-row">
       <label>Date and time<input type="datetime-local" value={toLocal(w.when)} onChange={ev => update({ when: ev.target.value ? new Date(ev.target.value).toISOString() : "" })} /></label>
-      <label>Where<input maxLength={120} value={w.where} placeholder="On Discord" onChange={ev => update({ where: ev.target.value })} /></label>
+      <label>Where<input maxLength={120} value={w.where} placeholder="e.g. On Discord" onChange={ev => update({ where: ev.target.value })} /></label>
     </div>;
     case "date": {
       const shared = hub.calendars.filter(c => c.shared);

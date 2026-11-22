@@ -56,7 +56,7 @@ export function LookSection({campaign,setLook}:{campaign:Campaign;setLook:(look:
    <p className="muted">How {campaign.name} looks for you and your players. Light or dark still follows each person’s own setting.</p>
    <div className="look-group look-theme"><h2>Campaign theme</h2>
     <p className="muted small">A theme dresses the whole campaign at once: the Wiki, Maptable, the campaign’s dashboard and its forum, with colours, fonts and a stylesheet for each part. While a theme is live, it takes the place of the look below.</p>
-    <div className="button-row"><button className="button small" onClick={openThemeEditor}><Palette size={14}/> Open the Admin CP</button></div>
+    <div className="button-row"><button className="button small" data-opens-admin-cp onClick={openThemeEditor}><Palette size={14}/> Open the Admin CP</button></div>
    </div>
    <div className="look-group"><h2>Banner</h2>
     {look.banner?<><LookBannerFramer banner={look.banner} onSave={banner=>set({banner})}/>

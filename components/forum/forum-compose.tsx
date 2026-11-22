@@ -5,7 +5,7 @@
  * posting. The same box is the Quick reply under a topic, the full reply page and the edit page.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Bold, ChevronDown, Eye, Italic, MessageSquareQuote, PanelTopClose, Quote, Search, Underline } from 'lucide-react';
+import { Bold, ChevronDown, Eye, Italic, MessageSquareQuote, MoreHorizontal, PanelTopClose, Quote, Search, Underline } from 'lucide-react';
 import { EmojiPicker, InsertMenu, TagPicker } from './forum-insert';
 import { fillStyle, wordCount, type PostFormat } from '@/lib/forum/markup';
 import { type Frame } from './forum-api';
@@ -79,24 +79,27 @@ function Toolbar({ frame, k, box, set, preview, setPreview, as, html, format, se
   const lines = (prefix: string, placeholder: string) => edit(sel => { const text = (sel || placeholder).split('\n').map(l => prefix + l.replace(/^> ?/, '')).join('\n'); return { text, select: sel ? undefined : [prefix.length, text.length] }; });
   // What this post is written in (the poster's choice): the toolbar writes it.
   const bb = format === 'bbcode';
+  // On a phone the toolbar is one row (Bold, Italic, Speech, Insert, Emoji, Preview); More shows the rest under it.
+  const [more, setMore] = useState(false);
   const tool = (label: string, icon: ReactNode, run: () => void, extra?: string) => <button type="button" title={label} aria-label={label} className={extra} disabled={preview} onClick={run}>{icon}<span className="tl">{label}</span></button>;
-  return <div className="tools" role="toolbar" aria-label="Formatting">
+  return <div className={`tools${more ? ' more-open' : ''}`} role="toolbar" aria-label="Formatting">
     {tool('Bold', <Bold size={15} />, () => bb ? wrap('[b]', '[/b]', 'bold text') : wrap('**', '**', 'bold text'))}
     {tool('Italic', <Italic size={15} />, () => bb ? wrap('[i]', '[/i]', 'italic text') : wrap('*', '*', 'italic text'))}
-    {tool('Underline', <Underline size={15} />, () => bb ? wrap('[u]', '[/u]', 'underlined text') : wrap('__', '__', 'underlined text'))}
+    {tool('Underline', <Underline size={15} />, () => bb ? wrap('[u]', '[/u]', 'underlined text') : wrap('__', '__', 'underlined text'), 'tool-extra')}
     <span className="sep" />
     {tool('Speech', <MessageSquareQuote size={15} />, () => wrap('“', '”', 'What they say'))}
-    {tool('Quote', <Quote size={15} />, () => bb ? wrap('[quote]', '[/quote]', 'Quoted text') : lines('> ', 'Quoted text'))}
-    {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }))}
+    {tool('Quote', <Quote size={15} />, () => bb ? wrap('[quote]', '[/quote]', 'Quoted text') : lines('> ', 'Quoted text'), 'tool-extra')}
+    {tool('Collapse', <PanelTopClose size={15} />, () => edit(sel => { const head = '[collapse=Read more]\n', inner = sel || 'Text readers open when they want it'; return { text: `${head}${inner}\n[/collapse]`, select: [head.length, head.length + inner.length] }; }), 'tool-extra')}
     <span className="sep" />
     <InsertMenu frame={frame} k={k} disabled={preview} wrap={wrap} style={body => edit(sel => fillStyle(body, sel || 'Your text'))} as={as} html={html} insert={text => edit(() => ({ text }))} />
     <EmojiPicker frame={frame} k={k} disabled={preview} insert={text => edit(() => ({ text }))} />
-    <TagPicker frame={frame} disabled={preview} insert={text => edit(() => ({ text }))} />
+    <span className="tool-extra tool-extra-wrap"><TagPicker frame={frame} disabled={preview} insert={text => edit(() => ({ text }))} /></span>
     <span className="sep" />
-    <span className="fmt-switch" role="group" aria-label="Write in">
+    <span className="fmt-switch tool-extra" role="group" aria-label="Write in">
       {(['markdown', 'bbcode'] as const).map(f => <button type="button" key={f} aria-pressed={format === f} className={format === f ? 'on' : ''} disabled={preview} title={f === 'bbcode' ? 'Write this post in BBCode: [b]bold[/b]. Markdown marks show as typed.' : 'Write this post in Markdown: **bold**. BBCode tags show as typed.'} onClick={() => setFormat(f)}>{f === 'bbcode' ? 'BBCode' : 'Markdown'}</button>)}
     </span>
     <button type="button" title="Preview" aria-label="Preview" aria-pressed={preview} className={preview ? 'on' : ''} onClick={() => setPreview(!preview)}><Eye size={15} /><span className="tl">Preview</span></button>
+    <button type="button" className="tool-more" aria-expanded={more} aria-label={more ? 'Fewer formatting tools' : 'More formatting tools'} title={more ? 'Fewer tools' : 'More tools'} onClick={() => setMore(!more)}><MoreHorizontal size={15} /><span className="tl">{more ? 'Less' : 'More'}</span></button>
   </div>;
 }
 
