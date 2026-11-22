@@ -49,7 +49,13 @@ export default function ForumApp() {
         return;
       }
       setView(v); setError(''); setStatus(0); setNoForum(false);
-      const at = forumHash(k, p);
+      // A topic opened where the reader's new posts start keeps that page, so a refresh doesn't move on to the next.
+      if (p.view === 'topic' && !p.page && !p.post && v.page.kind === 'topic') {
+        const pinned = { ...p, page: v.page.paging.page };
+        history.replaceState(history.state, '', forumHash(k, pinned));
+        shown.current = forumHash(k, pinned); setPlace(pinned);
+      }
+      const at = forumHash(k, p.view === 'topic' && !p.page && !p.post && v.page.kind === 'topic' ? { ...p, page: v.page.paging.page } : p);
       if (shown.current !== at) { shown.current = at; if (!quiet) window.scrollTo({ top: 0 }); }
       document.title = `${v.page.kind === 'topic' ? v.page.topic.title + ' · ' : ''}${v.frame.settings.title} · Forum`;
     } catch (e) {
@@ -153,7 +159,7 @@ export default function ForumApp() {
         {page.kind === 'topic' && place.view === 'reply' && <ReplyView key={'r' + page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
         {page.kind === 'topic' && place.view === 'edit' && <EditView key={'e' + place.post} frame={frame} page={page} k={k} go={go} done={done} postId={place.post} />}
         {page.kind === 'topic' && place.view === 'print' && <PrintView key={'p' + page.topic.id} frame={frame} page={page} k={k} go={go} />}
-        {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && place.view !== 'print' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} />}
+        {page.kind === 'topic' && place.view !== 'reply' && place.view !== 'edit' && place.view !== 'print' && <TopicView key={page.topic.id} frame={frame} page={page} k={k} go={go} done={done} focus={place.view === 'topic' ? place.post : undefined} />}
         {page.kind === 'search' && <SearchView key={forumHash(k, place)} frame={frame} page={page} k={k} go={go} />}
         {page.kind === 'trash' && <TrashView frame={frame} page={page} k={k} go={go} done={() => done()} />}
         {page.kind === 'reports' && <ReportsView frame={frame} page={page} k={k} go={go} done={() => done()} />}

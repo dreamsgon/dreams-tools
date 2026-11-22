@@ -16,8 +16,9 @@ import { campaignSession, readBoth, summaryOf, type Session } from "./campaigns-
 import { rowByKey } from "./campaign-links.ts";
 import { saveWorkspace } from "./workspace-storage.ts";
 import { encyclopediaPrefix } from "./encyclopedia/store.ts";
-import { forumKey, presenceKey, readsKey, alertsKey } from "./forum/store.ts";
-import { forumSchema, topicSchema } from "./forum/model.ts";
+import { ForumStore, forumKey, forumV1Key, presenceKey, readsKey, alertsKey } from "./forum/store.ts";
+import { forumSchema, postPageSchema, topicSchema } from "./forum/model.ts";
+import { forumCoreSchema, topicShardSchema } from "./forum/pages.ts";
 import { MemberStore, listKey } from "./members-server.ts";
 import { emptyMemberList, memberListSchema } from "./members.ts";
 import { readHome, changeHome } from "./home-store.ts";
@@ -90,14 +91,12 @@ async function campaignFiles(s: Session, bucket: S3Bucket, backup: CampaignBacku
   if (!eid) return { files: [] as string[], images: [] as ImageRef[] };
   const files: string[] = [], images: ImageRef[] = [];
   if (await bucket.head(themeKey(s.owner, eid)).catch(() => null)) files.push("theme.json");
-  const forum = await bucket.get(forumKey(s.owner, eid));
-  if (forum) {
-    const parsed = forumSchema.safeParse(await forum.json().catch(() => null));
-    files.push("forum/forum.json");
-    if (parsed.success) {
-      for (const t of parsed.data.topics) files.push(`forum/topics/${t.id}.json`);
-      for (const u of parsed.data.uploads ?? []) images.push({ tool: "encyclopedia", id: u.id });
-    }
+  // The forum file, its index files and topic files; a long topic's pages are found in its topic file (topicPageFiles).
+  const store = new ForumStore(bucket);
+  if (await store.exists(s.owner, eid)) {
+    files.push(...(await store.files(s.owner, eid).catch(() => ["forum.json"])).map(f => `forum/${f}`));
+    const forum = await store.read(s.owner, eid).then(r => r.forum, () => null);
+    for (const u of forum?.uploads ?? []) images.push({ tool: "encyclopedia", id: u.id });
   }
   const chats = await listChats(bucket, s.owner, eid).catch(() => []);
   if (chats.length) files.push("ai-chats/index.json", "ai-chats/older.json", ...chats.map(c => `ai-chats/${c.id}.json`));
@@ -210,7 +209,7 @@ export async function duplicateCampaign(s: Session, bucket: S3Bucket, key: strin
   const backup = await backupData(s, bucket, both, key);
   const extra = await campaignFiles(s, bucket, backup);
   const made = await addCampaign(s, bucket, both, backup, { name: options.name, copyWorld: options.copyWorld, folderId: row.folderId }, "Some of this campaign's data could not be read, so nothing was copied.");
-  const files = extra.files.filter(f => f.startsWith("forum/topics/") ? options.posts : f.startsWith("ai-chats/") ? options.chats : true);
+  const files = extra.files.filter(f => f.startsWith("forum/topics/") || f.startsWith("forum/index/") ? options.posts : f.startsWith("ai-chats/") ? options.chats : true);
   return { ...made, from: key, files, posts: options.posts };
 }
 
@@ -225,8 +224,14 @@ export async function importFiles(s: Session, bucket: S3Bucket, campaignId: unkn
     const path = f?.path, text = f?.text;
     if (!isBackupFile(path) || typeof text !== "string" || text.length > 4_000_000) throw new Error("One of the campaign's files is damaged.");
     let body = text, type = "application/json";
-    if (path === "forum/forum.json") body = json(forumSchema.parse(JSON.parse(text)));
-    else if (path.startsWith("forum/topics/")) {
+    if (path === "forum/forum.json") { const raw = JSON.parse(text); body = json(raw?.schemaVersion === 2 ? forumCoreSchema.parse(raw) : forumSchema.parse(raw)); }
+    else if (path.startsWith("forum/index/")) body = json(topicShardSchema.parse(JSON.parse(text)));
+    else if (/^forum\/topics\/[^/]+\/[^/]+\.json$/.test(path)) {
+      // A long topic's page of older posts.
+      const page = postPageSchema.parse(JSON.parse(text));
+      if (!path.startsWith(`forum/topics/${page.topicId}/`)) throw new Error("One of the forum's topics is damaged.");
+      body = json(page);
+    } else if (path.startsWith("forum/topics/")) {
       const topic = topicSchema.parse(JSON.parse(text));
       if (`forum/topics/${topic.id}.json` !== path) throw new Error("One of the forum's topics is damaged.");
       body = json(topic);
@@ -255,6 +260,8 @@ export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, 
   if (typeof confirm !== "string" || confirm.trim().toLocaleLowerCase() !== row.name.trim().toLocaleLowerCase()) throw new Error(`Type the campaign's name, ${row.name}, to delete it.`);
   const eid = row.encyclopedia?.id ?? null, mid = row.maptable?.id ?? null;
   const backup = await backupData(s, bucket, both, key, now), extra = await campaignFiles(s, bucket, backup);
+  // Every forum file goes with it, long topics' pages too (read from each topic file before anything is deleted).
+  const forumFiles = eid ? (await new ForumStore(bucket).files(s.owner, eid, true).catch(() => [] as string[])).map(f => `forum/${f}`) : [];
   const kept = deletedKey(s.owner, eid ?? mid!, now);
   if (!await bucket.put(kept, json({ ...backup, files: extra.files }), { onlyIf: { etagDoesNotMatch: "*" }, ...jsonType })) throw busy();
 
@@ -301,11 +308,11 @@ export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, 
   }
   if (eid) {
     const readers = [s.owner, ...(members?.list.members.map(m => m.userId) ?? [])];
-    const forumFiles = extra.files.filter(f => f.startsWith("forum/")).map(f => fileKey(s.owner, eid, f));
-    const others = [presenceKey(s.owner, eid), ...readers.flatMap(u => [readsKey(s.owner, eid, u), alertsKey(s.owner, eid, u)])];
+    const forumKeys = [...new Set([...extra.files.filter(f => f.startsWith("forum/")), ...forumFiles])].map(f => fileKey(s.owner, eid, f));
+    const others = [presenceKey(s.owner, eid), forumV1Key(s.owner, eid), ...readers.flatMap(u => [readsKey(s.owner, eid, u), alertsKey(s.owner, eid, u)])];
     const transcripts = extra.files.filter(f => f.startsWith("transcripts/")).map(f => fileKey(s.owner, eid, f));
     // Topics first and the forum file last, so a half-finished delete never leaves a forum listing missing topics.
-    await each([...forumFiles.filter(k => k !== forumKey(s.owner, eid)), ...others, ...transcripts], k => quietly(bucket.delete(k)));
+    await each([...forumKeys.filter(k => k !== forumKey(s.owner, eid)), ...others, ...transcripts], k => quietly(bucket.delete(k)));
     await quietly(bucket.delete(forumKey(s.owner, eid)));
     const chats = await listChats(bucket, s.owner, eid).catch(() => []);
     await each(chats, c => quietly(deleteChat(bucket, s.owner, eid, c.id)), 8);

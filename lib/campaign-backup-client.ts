@@ -6,7 +6,7 @@ import { zipFiles } from "./bridge/zip.ts";
 import { readZip } from "./zip-read.ts";
 import { readJsonResponse, stageTransfer } from "./transfer-client.ts";
 import {
-  BACKUP_JSON, FILES_DIR, IMAGES_DIR, checkBackup, fileOrder, forumSetupOnly, imageExtension, isBackupFile, isImageId, remapFile, sniffImage,
+  BACKUP_JSON, FILES_DIR, IMAGES_DIR, checkBackup, fileOrder, forumSetupOnly, topicPageFiles, imageExtension, isBackupFile, isImageId, remapFile, sniffImage,
   type CampaignBackup, type ImageRef, type ImageTool,
 } from "./campaign-backup.ts";
 import type { CampaignSummary } from "./campaign-links.ts";
@@ -60,6 +60,8 @@ async function readCampaignFiles(key: string, paths: string[], progress: Progres
       // A long AI chat keeps its older turns in part files.
       const parts = /^ai-chats\/[A-Za-z0-9-]+\.json$/.test(path) && !/(index|older)\.json$/.test(path) ? Number((JSON.parse(text) as { parts?: number }).parts ?? 0) : 0;
       for (let n = 1; n <= Math.min(parts, 10_000); n++) { const p = path.replace(/\.json$/, `.part-${n}.json`); if (isBackupFile(p) && !done.has(p)) queue.push(p); }
+      // A long forum topic keeps its older posts in page files.
+      for (const p of topicPageFiles(path, text)) if (!done.has(p)) queue.push(p);
     }
   }
   return out;

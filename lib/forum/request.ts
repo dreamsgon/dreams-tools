@@ -11,8 +11,9 @@ import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
 import { createThrottle } from "../encyclopedia/throttle.ts";
 import {
   FORUM_LIMITS, EMOJI_BYTES, PICTURE_BYTES, ForumError, accessOn, addBoard, addUpload, mayUpload, setEmoji, setTopicTags, setCardDesign, setStrip, setProfile, DEFAULT_STRIP, decideSuggestion, dismissReports, reportPost, setAi, boardAccess, setCombat, setMasks, addCategory, canSee, deleteBoard, deleteCategory, deletePost, deleteTopic, editBoard, editCategory, editPost, expiredTrash, forumRights, kindOf, moveItem, reply, setSettings, setTopic, startTopic, trashTopic,
-  type Change, type Forum, type Poster, type Topic, type TopicSummary,
+  postTotal, type Change, type Forum, type Post, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
+import { MAX_PER_PAGE, PER_PAGE, pageFor } from "./pages.ts";
 import { cardFields, cardSample, profilePage, picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
@@ -21,7 +22,7 @@ import { CHECK_SYSTEM, DRAFT_SYSTEM, SUMMARY_SYSTEM, aiFor, checkPrompt, checkTo
 import { orderFromScene, slotSchema } from "./combat.ts";
 import type { Scene } from "../model.ts";
 import type { ForumStore } from "./store.ts";
-import { freshReads, markAll, markTopic } from "./reader.ts";
+import { freshReads, markAll, markTopic, readUpTo } from "./reader.ts";
 import { isSolo, soloCharacters } from "../solo.ts";
 import { THEME_AREAS, ThemeError, deleteTheme, liveTheme, makeLive, saveTheme, type ThemeArea } from "../campaign-theme/model.ts";
 import type { ThemeStore } from "../campaign-theme/store.ts";
@@ -58,7 +59,7 @@ export type Deps = {
   /** The campaign a key names for this person, with its member list; null when they may not open it. */
   campaign: (userId: string, key: string) => Promise<Found | null>;
   workspace: (owner: string) => Promise<Workspace>;
-  store: Pick<ForumStore, "read" | "readTopic" | "apply" | "readReads" | "writeReads" | "readPresence" | "touchPresence" | "readAlerts" | "writeAlerts">;
+  store: Pick<ForumStore, "read" | "readTopic" | "withTopic" | "readPosts" | "findPost" | "firstAfter" | "apply" | "readReads" | "writeReads" | "readPresence" | "touchPresence" | "readAlerts" | "writeAlerts">;
   /** The campaign's themes (lib/campaign-theme). Without it the forum keeps its own look. */
   themes?: Pick<ThemeStore, "read" | "update">;
   /**
@@ -109,7 +110,7 @@ const format = z.enum(POST_FORMATS).optional();
 const boardFields = { categoryId: id, parentId: id.nullable().optional(), name: z.string().max(200), description: z.string().max(1000).optional(), placeId: id.nullable().optional(), locked: z.boolean().optional(), type: z.enum(["location", "campaign", "ooc"]).optional(), width: z.enum(["full", "half"]).optional() };
 const pageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("index") }), z.object({ kind: z.literal("active") }), z.object({ kind: z.literal("members") }), z.object({ kind: z.literal("settings") }), z.object({ kind: z.literal("profile") }),
-  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }), z.object({ kind: z.literal("sheet"), id }),
+  z.object({ kind: z.literal("board"), id, archive: z.boolean().optional() }), z.object({ kind: z.literal("topic"), id, page: z.number().int().min(1).max(1_000_000).optional(), post: id.optional(), last: z.boolean().optional(), per: z.number().int().min(1).max(MAX_PER_PAGE).optional() }), z.object({ kind: z.literal("trash") }), z.object({ kind: z.literal("reports") }), z.object({ kind: z.literal("pictures") }), z.object({ kind: z.literal("sheet"), id }),
   z.object({ kind: z.literal("search"), q: z.string().trim().min(2).max(100), boardId: id.optional() }),
 ]);
 const bulkOps = ["pin", "unpin", "lock", "unlock", "archive", "unarchive", "trash", "move"] as const;
@@ -333,14 +334,20 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
   switch (page.kind) {
     case "board": { const p = boardPage(ctx, page.id, { archive: page.archive }); return p ? json({ frame: frameOf(ctx), page: { kind: "board", ...p } }) : json({ error: "That board was removed." }, 404); }
     case "topic": {
-      const stored = await deps.store.readTopic(found.owner, found.campaignId, page.id), p = stored ? topicPage(ctx, stored.topic) : null;
-      if (!p) return json({ error: "That topic was removed." }, 404);
-      // Opening a topic reads it: the frame (unread counts) already shows it read.
+      const s0 = ctx.forum.topics.find(t => t.id === page.id), readAt = s0 && ctx.reads ? readUpTo(ctx.reads, s0.id) : null;
+      const shown = await deps.store.withTopic(found.owner, found.campaignId, page.id, async topic => {
+        const w = await topicWindow(deps, found, topic, page, readAt);
+        return { w, p: topicPage(ctx, topic, w) };
+      });
+      const p = shown?.p;
+      if (!p || !shown) return json({ error: "That topic was removed." }, 404);
+      // Opening a topic reads it up to the last post on the page: the frame (unread counts) already shows that.
       const s = ctx.forum.topics.find(t => t.id === page.id)!, live = new Set(ctx.forum.topics.map(t => t.id));
-      const marked = ctx.reads && markTopic(ctx.reads, s.id, s.lastAt, live);
+      const upTo = shown.w.page === shown.w.pages ? s.lastAt : shown.w.posts[shown.w.posts.length - 1]?.at ?? s.lastAt;
+      const marked = ctx.reads && markTopic(ctx.reads, s.id, upTo, live);
       if (marked) {
         ctx.reads = marked;
-        await deps.store.writeReads(found.owner, found.campaignId, ctx.viewer.userId, r => markTopic(r ?? marked, s.id, s.lastAt, live)).catch(() => undefined);
+        await deps.store.writeReads(found.owner, found.campaignId, ctx.viewer.userId, r => markTopic(r ?? marked, s.id, upTo, live)).catch(() => undefined);
       }
       return json({ frame: frameOf(ctx), page: { kind: "topic", ...p } });
     }
@@ -358,22 +365,37 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
     case "search": {
       // The latest topics first, at most SEARCH_TOPICS of them read for their posts.
       const all = shownTopics(ctx).filter(t => !page.boardId || t.boardId === page.boardId).sort((a, b) => b.lastAt.localeCompare(a.lastAt));
-      const pick = all.slice(0, SEARCH_TOPICS), got: { summary: (typeof pick)[number]; topic: Topic | null }[] = [];
+      const pick = all.slice(0, SEARCH_TOPICS), got: { summary: (typeof pick)[number]; posts: Numbered[] | null }[] = [];
+      // Each topic file's latest posts, then older pages, newest first, while the search has pages left to read.
+      let budget = SEARCH_PAGES;
       for (let i = 0; i < pick.length; i += 10) {
-        const batch = await Promise.all(pick.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t.id).catch(() => null)));
-        batch.forEach((b, n) => got.push({ summary: pick[i + n]!, topic: b?.topic ?? null }));
+        const batch = await Promise.all(pick.slice(i, i + 10).map(t => deps.store.withTopic(found.owner, found.campaignId, t.id, async topic => {
+          const total = postTotal(topic), out = numbered(topic.posts, total - topic.posts.length);
+          return { topic, total, out };
+        }).catch(() => null)));
+        for (const [n, b] of batch.entries()) {
+          if (b) for (let g = (b.topic.pages?.length ?? 0) - 1; g >= 0 && budget > 0; g--, budget--) {
+            const start = (b.topic.pages ?? []).slice(0, g).reduce((x, r) => x + r.count, 0);
+            const more = await deps.store.readPosts(found.owner, found.campaignId, b.topic, start, b.topic.pages![g]!.count).catch(() => null);
+            if (more) b.out.unshift(...numbered(more, start));
+          }
+          got.push({ summary: pick[i + n]!, posts: b?.out ?? null });
+        }
       }
       return json({ frame: frameOf(ctx), page: { kind: "search", boardId: page.boardId ?? null, ...searchPage(ctx, page.q, got, { of: all.length }) } });
     }
     case "members": return json({ frame: frameOf(ctx), page: { kind: "members", ...membersPage(ctx) } });
     case "reports": {
       if (!ctx.viewer.rights.moderate) return json({ error: "Only moderators can read reports." }, 403);
-      const ids = [...new Set([...reportedPosts(ctx).values()].map(r => r[0]!.topicId))].slice(0, 100), topics = new Map<string, Topic | null>();
-      for (let i = 0; i < ids.length; i += 10) {
-        const batch = await Promise.all(ids.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t).catch(() => null)));
-        batch.forEach((b, n) => topics.set(ids[i + n]!, b?.topic ?? null));
+      const wanted = [...reportedPosts(ctx)].slice(0, 100), posts = new Map<string, Numbered | null>();
+      for (let i = 0; i < wanted.length; i += 10) {
+        const batch = await Promise.all(wanted.slice(i, i + 10).map(([postId, r]) => deps.store.withTopic(found.owner, found.campaignId, r[0]!.topicId, async topic => {
+          const f = await deps.store.findPost(found.owner, found.campaignId, topic, postId), at = f ? f.posts.findIndex(p => p.id === postId) : -1;
+          return f && at >= 0 ? { post: f.posts[at]!, number: f.start + at + 1 } : null;
+        }).catch(() => null)));
+        batch.forEach((b, n) => posts.set(wanted[i + n]![0], b ?? null));
       }
-      return json({ frame: frameOf(ctx), page: { kind: "reports", ...reportsPage(ctx, topics) } });
+      return json({ frame: frameOf(ctx), page: { kind: "reports", ...reportsPage(ctx, posts) } });
     }
     case "sheet": {
       const sheet = sheetPage(ctx, page.id);
@@ -396,7 +418,30 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
   }
 }
 
-const SEARCH_TOPICS = 150;
+const SEARCH_TOPICS = 150, SEARCH_PAGES = 150;
+/** Posts with their number in the topic (from 1). */
+type Numbered = { post: Post; number: number };
+const numbered = (posts: readonly Post[], start: number): Numbered[] => posts.map((post, i) => ({ post, number: start + i + 1 }));
+
+/**
+ * The page of a topic to show: the one asked for, the one with `post`, the last, or else the one with the first post
+ * after the reader's read mark (the last when they've read it all).
+ */
+async function topicWindow(deps: Deps, found: Found, topic: Topic, want: { page?: number; post?: string; last?: boolean; per?: number }, readAt: string | null) {
+  const per = want.per ?? PER_PAGE, total = postTotal(topic), pages = Math.max(1, Math.ceil(total / per));
+  let page = pages;
+  if (want.page) page = Math.min(want.page, pages);
+  else if (want.post) {
+    const f = await deps.store.findPost(found.owner, found.campaignId, topic, want.post), at = f ? f.posts.findIndex(p => p.id === want.post) : -1;
+    if (f && at >= 0) page = pageFor(f.start + at + 1, per);
+  } else if (!want.last && readAt) {
+    const n = await deps.store.firstAfter(found.owner, found.campaignId, topic, readAt);
+    if (n !== null) page = pageFor(n + 1, per);
+  }
+  // The latest posts (the full reply page's review), however the pages fall.
+  const start = want.last && !want.page ? Math.max(0, total - per) : (page - 1) * per;
+  return { posts: await deps.store.readPosts(found.owner, found.campaignId, topic, start, per), start, total, page, pages, per };
+}
 const posterOf = (ctx: Context): Poster => ({ userId: ctx.viewer.userId, rights: ctx.viewer.rights, cast: new Set(castOf(ctx).map(c => c.id)), access: ctx.viewer.access });
 
 /** A board's topics with their posts, as text (GMs only, as players shouldn't take a whole board away). */
@@ -406,10 +451,10 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
   const ic = kindOf(ctx.forum, board) === "ic", names = new Map(castOf(ctx).map(c => [c.id, c.name]));
   const topics = shownTopics(ctx).filter(t => t.boardId === boardId).sort((a, b) => a.at.localeCompare(b.at)).slice(0, 300), out = [];
   for (let i = 0; i < topics.length; i += 10) {
-    const batch = await Promise.all(topics.slice(i, i + 10).map(t => deps.store.readTopic(found.owner, found.campaignId, t.id)));
+    const batch = await Promise.all(topics.slice(i, i + 10).map(t => deps.store.withTopic(found.owner, found.campaignId, t.id, topic => deps.store.readPosts(found.owner, found.campaignId, topic, 0, postTotal(topic)))));
     for (const [n, got] of batch.entries()) {
       if (!got) continue;
-      out.push({ title: topics[i + n]!.title, posts: got.topic.posts.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: withRollResults(p.body, p.rolls), ...(p.format ? { format: p.format } : {}) })) });
+      out.push({ title: topics[i + n]!.title, posts: got.map(p => ({ name: p.by.as ? names.get(p.by.as) ?? "A character" : ic ? "Game Master" : memberName(ctx, p.by.userId), by: memberName(ctx, p.by.userId), at: p.at, body: withRollResults(p.body, p.rolls), ...(p.format ? { format: p.format } : {}) })) });
     }
   }
   return { board: board.name, topics: out };
@@ -419,7 +464,7 @@ async function exportBoard(deps: Deps, ctx: Context, found: Found, boardId: stri
 function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { action: "view" | "ai" }>, now: Date) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const who = posterOf(ctx);
-  const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>) => deps.store.apply(found.owner, found.campaignId, topicId, make);
+  const run = <T>(topicId: string | null, make: (f: Forum, t: Topic | null) => Change<T>, postId?: string) => deps.store.apply(found.owner, found.campaignId, topicId, make, postId ? { postId } : {});
   const random = deps.random ?? secureDie;
   const needTopic = (t: Topic | null) => t ?? (() => { throw new ForumError("That topic was removed."); })();
   switch (body.action) {
@@ -428,7 +473,7 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
       return run(null, f => startTopic(f, { ...body, private: only, rolls: rollPost(body.body, random) }, who, ids, now));
     }
     case "reply": { const postId = newId(), rolls = rollPost(body.body, random); return run(body.topicId, (f, t) => reply(f, needTopic(t), { ...body, rolls }, who, postId, now)); }
-    case "report": { const n = newId(); return run(body.topicId, (f, t) => reportPost(f, needTopic(t), body, who, n, now)); }
+    case "report": { const n = newId(); return run(body.topicId, (f, t) => reportPost(f, needTopic(t), body, who, n, now), body.postId); }
     case "dismissReports": return run(null, f => dismissReports(f, body, who));
     case "suggestion": {
       const postId = newId();
@@ -437,7 +482,7 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
         return decideSuggestion(f, topic, { ...body, rolls: body.op === "approve" ? rollPost(text, random) : undefined }, who, postId, now);
       });
     }
-    case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), { ...body, reroll: (old, text) => rollPost(text, random, old ?? [], now) }, who, now));
+    case "edit": return run(body.topicId, (f, t) => editPost(f, needTopic(t), { ...body, reroll: (old, text) => rollPost(text, random, old ?? [], now) }, who, now), body.postId);
     case "combat": return runCombat(deps, ctx, found, body, who, now);
     case "combatSources": return combatSources(deps, ctx, found);
     case "mapScenes": return mapScenes(deps, ctx, found);
@@ -456,7 +501,7 @@ function change(deps: Deps, ctx: Context, found: Found, body: Exclude<Body, { ac
       return { ...out, name: scene.name };
     })();
     case "aiSettings": return (async () => { const ids = deps.ai && ctx.viewer.rights.owner ? (await deps.ai.connections(found.owner, found.campaignId)).map(c => c.id) : []; return run(null, f => setAi(f, body.ai, who, ids)); })();
-    case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who));
+    case "delete": return run(body.topicId, (f, t) => deletePost(f, needTopic(t), body, who), body.postId);
     case "deleteTopic": return run(body.topicId, (f, t) => deleteTopic(f, needTopic(t), who));
     case "topic": return run(body.boardId !== undefined ? body.topicId : null, (f, t) => setTopic(f, t, body, who));
     case "settings": return run(null, f => setSettings(f, body.settings, who));
@@ -589,6 +634,7 @@ function turnTakers(ctx: Context, found: Found, s: TopicSummary) {
  * The forum's AI help: Summarize or Catch me up on a topic, Check my post, Draft with AI. Only text the asker can read
  * goes to the AI, and characters as players see them. Nothing is saved.
  */
+const AI_POSTS = 200;
 async function aiHelp(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "ai" }>) {
   const settings = ctx.forum.settings.ai, may = aiFor(settings, ctx.viewer.rights);
   if (!settings || !deps.ai) throw new ForumError("The AI is off in this forum.");
@@ -597,8 +643,12 @@ async function aiHelp(deps: Deps, ctx: Context, found: Found, body: Extract<Body
   // The topic, when there is one, as this reader sees it.
   let page: ReturnType<typeof topicPage> = null;
   if (body.topicId) {
-    const s = shownTopics(ctx).find(t => t.id === body.topicId), got = s ? await deps.store.readTopic(found.owner, found.campaignId, s.id) : null;
-    page = got ? topicPage(ctx, got.topic) : null;
+    // The latest posts are what the AI reads (ai.ts keeps the newest that fit).
+    const s = shownTopics(ctx).find(t => t.id === body.topicId);
+    page = s ? await deps.store.withTopic(found.owner, found.campaignId, s.id, async topic => {
+      const total = postTotal(topic), start = Math.max(0, total - AI_POSTS);
+      return topicPage(ctx, topic, { posts: await deps.store.readPosts(found.owner, found.campaignId, topic, start, AI_POSTS), start, total, page: 1, pages: 1, per: AI_POSTS });
+    }) : null;
     if (!page) throw new ForumError("That topic was removed.");
   }
   const boardId = page?.topic.boardId ?? body.boardId, board = ctx.forum.boards.find(b => b.id === boardId && accessOn(ctx.viewer, b.id).read);
