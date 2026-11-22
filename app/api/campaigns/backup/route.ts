@@ -2,7 +2,7 @@ import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { failure, privateHeaders } from "@/lib/server";
 import { storedJson, workspaceBody } from "@/lib/transfers";
-import { campaignSession, deleteCampaign, haveImages, imageUrls, importCampaign, importFiles, putImage, readFiles, startBackup } from "@/lib/campaign-backup-server";
+import { campaignSession, deleteCampaign, duplicateCampaign, haveImages, imageUrls, importCampaign, importFiles, putImage, readFiles, startBackup } from "@/lib/campaign-backup-server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       case "putImage": return Response.json(await putImage(s, bucket, body), { headers: privateHeaders });
       case "import": return storedJson(bucket, s.prefix, await importCampaign(s, bucket, body.backup));
       case "importFiles": return Response.json(await importFiles(s, bucket, body.campaignId, body.files), { headers: privateHeaders });
+      case "duplicate": return storedJson(bucket, s.prefix, await duplicateCampaign(s, bucket, key, body));
       case "delete": return Response.json(await deleteCampaign(s, bucket, key, body.confirm), { headers: privateHeaders });
       default: throw new Error("Unknown action.");
     }

@@ -288,7 +288,8 @@ function HubSettings({ row, reload }: { row: CampaignHub["row"]; reload: () => v
     {notice && <p className="hub-note" role="status"><Check size={15} aria-hidden="true" />{notice}</p>}
     {!summary ? !error && <p className="hub-muted">Loading settings…</p>
       : current ? <CampaignDetails key={current.key} row={current} summary={summary} busy={busy} error={error} send={send} embedded
-          onDeleted={() => window.location.assign("/campaigns")} />
+          onDeleted={() => window.location.assign("/campaigns")}
+          onDuplicated={(next, key, name, warning) => { setSummary(next); if (warning) { setError(warning); setNotice(`Made “${name}”. Find it on the Campaigns page.`); } else window.location.assign(`/campaigns/${encodeURIComponent(key)}`); }} />
       : <p className="hub-muted">This campaign is no longer on your list.</p>}
   </div>;
 }

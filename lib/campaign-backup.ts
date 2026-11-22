@@ -251,18 +251,36 @@ export type ImportResult = {
   members: MemberPart | null; dashboard: Dashboard | null;
 };
 
-/** A name not used by another campaign: the backup's, or the backup's with “(imported)”. */
-function freeName(name: string, taken: Set<string>) {
+/** A name not used by another campaign: the one given, or it with “(imported)” (or the word given). */
+export function freeName(name: string, taken: Set<string>, word = "imported") {
   const base = name.trim().slice(0, 120) || "Imported campaign";
   if (!taken.has(base.toLocaleLowerCase())) return base;
   for (let n = 1; n < 100; n++) {
-    const next = `${base.slice(0, 100)} (imported${n > 1 ? ` ${n}` : ""})`;
+    const next = `${base.slice(0, 100)} (${word}${n > 1 ? ` ${n}` : ""})`;
     if (!taken.has(next.toLocaleLowerCase())) return next;
   }
-  return `${base.slice(0, 100)} (imported)`;
+  return `${base.slice(0, 100)} (${word})`;
 }
 
-export function planImport(backup: CampaignBackup, target: ImportTarget, newId: () => string = uid): ImportResult {
+/** The names of the campaigns already in an account, lowercased. */
+export function takenNames(target: Pick<ImportTarget, "map" | "book">) {
+  return new Set([...(target.map?.collections ?? []).filter(c => c.kind === "campaign").map(c => c.name), ...target.book.campaigns.map(c => c.name)].map(n => n.toLocaleLowerCase()));
+}
+
+/**
+ * How a backup joins the account. A duplicate (see duplicateCampaign in campaign-backup-server.ts) is a backup
+ * imported straight back: it names the copy, may give it a world of its own, and sits in the original's folder.
+ */
+export type ImportOptions = {
+  /** The new campaign's name; another campaign's name gets “(copy)” after it. Left out: the backup's, or it with “(imported)”. */
+  name?: string;
+  /** Copy the world and its shared lore too, even when the backup's world is still here. */
+  copyWorld?: boolean;
+  /** The Campaigns page folder to put it in. Left out: the top level. */
+  folderId?: string | null;
+};
+
+export function planImport(backup: CampaignBackup, target: ImportTarget, newId: () => string = uid, options: ImportOptions = {}): ImportResult {
   const ids = new Map<string, string>();
   const fresh = (id: string | undefined | null) => { if (id && !ids.has(id)) ids.set(id, newId()); };
   const m = backup.maptable, e = backup.encyclopedia;
@@ -276,7 +294,7 @@ export function planImport(backup: CampaignBackup, target: ImportTarget, newId: 
   let keepWorld = false;
   if (e) {
     const world = e.workspace.worlds[0];
-    keepWorld = !!world && target.book.worlds.some(w => w.id === world.id && !w.isTemplate);
+    keepWorld = !options.copyWorld && !!world && target.book.worlds.some(w => w.id === world.id && !w.isTemplate);
     for (const c of e.workspace.campaigns) fresh(c.id);
     if (!keepWorld) for (const w of e.workspace.worlds) fresh(w.id);
     for (const entry of e.workspace.entries) if (!keepWorld || entry.campaignId !== null) fresh(entry.id);
@@ -284,8 +302,11 @@ export function planImport(backup: CampaignBackup, target: ImportTarget, newId: 
   }
   const b = remapIds(backup, ids);
   const maptableId = b.maptable ? b.maptable.campaignId : null, encyclopediaId = b.encyclopedia ? b.encyclopedia.campaignId : null;
-  const taken = new Set([...(target.map?.collections ?? []).filter(c => c.kind === "campaign").map(c => c.name), ...target.book.campaigns.map(c => c.name)].map(n => n.toLocaleLowerCase()));
-  const name = freeName(b.name, taken);
+  const name = options.name !== undefined ? freeName(options.name, takenNames(target), "copy") : freeName(b.name, takenNames(target));
+  // A web address is unique in the account: the new campaign only keeps the backup's when nothing here uses it.
+  const slugs = new Set([...(target.map?.collections ?? []).map(c => c.slug), ...target.book.campaigns.map(c => c.slug)].filter(Boolean));
+  const freeSlug = <T extends { slug?: string },>(c: T): T => { if (!c.slug || !slugs.has(c.slug)) return c; const { slug: _taken, ...rest } = c; return rest as T; };
+  const folderId = options.folderId && (target.map?.collections ?? []).some(c => c.id === options.folderId && c.kind === "folder") ? options.folderId : null;
 
   let map: MapWorkspace | null = null;
   if (b.maptable) {
@@ -297,7 +318,7 @@ export function planImport(backup: CampaignBackup, target: ImportTarget, newId: 
     map = mapSchema.parse({
       ...base,
       scenes, activeId: scenes.some(s => s.id === base.activeId) ? base.activeId : scenes[0].id,
-      collections: [...base.collections, ...p.collections.map(c => c.id === maptableId ? { ...c, name, parentId: null } : c)],
+      collections: [...base.collections, ...p.collections.map(c => c.id === maptableId ? freeSlug({ ...c, name, parentId: folderId }) : c)],
       assets: [...base.assets, ...newAssets],
       assetCampaigns: { ...base.assetCampaigns, ...Object.fromEntries(newAssets.map(a => [a.id, p.assetCampaigns[a.id] === maptableId ? maptableId : null])) },
       tokenLibrary: [...base.tokenLibrary, ...p.tokenLibrary],
@@ -314,7 +335,7 @@ export function planImport(backup: CampaignBackup, target: ImportTarget, newId: 
     const ws = b.encyclopedia.workspace, campaign = ws.campaigns.find(c => c.id === encyclopediaId);
     if (!campaign) throw new Error("The notes in this backup are damaged.");
     const { folderId: _folder, maptableCampaignId: _paired, ...rest } = campaign;
-    const copy = { ...rest, name, ...(maptableId ? { maptableCampaignId: maptableId } : {}) };
+    const copy = freeSlug({ ...rest, name, ...(maptableId ? { maptableCampaignId: maptableId } : {}), ...(!maptableId && folderId ? { folderId } : {}) });
     // Rolls sent to a Maptable campaign's Discord channel only go on when that campaign came along.
     if (copy.discord && copy.discord.maptableCampaignId !== maptableId) delete copy.discord;
     let entries = target.book.entries;
@@ -353,13 +374,23 @@ function withCampaignParts(here: Entry, from: Entry, campaignId: string): Entry 
 /**
  * The files a backup carries, by their path in it. Forum: forum/forum.json and forum/topics/<id>.json. AI chats:
  * ai-chats/index.json, older.json, <id>.json and <id>.part-<n>.json. A session page's transcript: transcripts/<page id>.txt.
+ * The campaign's themes (lib/campaign-theme): theme.json.
  */
-export const FILE_PATH = /^(forum\/forum\.json|forum\/topics\/[A-Za-z0-9_-]{1,100}\.json|ai-chats\/(index|older)\.json|ai-chats\/[A-Za-z0-9-]{8,64}(\.part-[1-9][0-9]{0,4})?\.json|transcripts\/[A-Za-z0-9_-]{1,120}\.txt)$/;
+export const FILE_PATH = /^(theme\.json|forum\/forum\.json|forum\/topics\/[A-Za-z0-9_-]{1,100}\.json|ai-chats\/(index|older)\.json|ai-chats\/[A-Za-z0-9-]{8,64}(\.part-[1-9][0-9]{0,4})?\.json|transcripts\/[A-Za-z0-9_-]{1,120}\.txt)$/;
 export const isBackupFile = (path: unknown): path is string => typeof path === "string" && FILE_PATH.test(path);
 /** A file's path and text in the imported campaign: ids follow the new ones. The forum file goes last, after its topics. */
 export function remapFile(path: string, text: string, ids: Record<string, string>) {
   const page = /^transcripts\/(.+)\.txt$/.exec(path)?.[1];
   return { path: page !== undefined ? `transcripts/${ids[page] ?? page}.txt` : remapIds(path, ids), text: path.endsWith(".json") ? JSON.stringify(remapIds(JSON.parse(text), ids)) : text };
+}
+/**
+ * The forum file with its boards, categories, settings, tags, emoji and card design, but no topics, posts or
+ * anything about the people who posted: what a duplicated campaign starts with when its posts stay behind.
+ */
+export function forumSetupOnly(text: string) {
+  const f = JSON.parse(text) as Record<string, unknown> & { uploads?: { kind?: string }[] };
+  const { profiles: _people, ...rest } = f;
+  return JSON.stringify({ ...rest, topics: [], counts: {}, characters: [], recent: [], reports: [], ...(Array.isArray(f.uploads) ? { uploads: f.uploads.filter(u => u?.kind === "emoji") } : {}) });
 }
 export const fileOrder = (a: { path: string }, b: { path: string }) => Number(a.path === "forum/forum.json") - Number(b.path === "forum/forum.json");
 

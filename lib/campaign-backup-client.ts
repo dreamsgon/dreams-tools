@@ -6,7 +6,7 @@ import { zipFiles } from "./bridge/zip.ts";
 import { readZip } from "./zip-read.ts";
 import { readJsonResponse, stageTransfer } from "./transfer-client.ts";
 import {
-  BACKUP_JSON, FILES_DIR, IMAGES_DIR, checkBackup, fileOrder, imageExtension, isBackupFile, isImageId, remapFile, sniffImage,
+  BACKUP_JSON, FILES_DIR, IMAGES_DIR, checkBackup, fileOrder, forumSetupOnly, imageExtension, isBackupFile, isImageId, remapFile, sniffImage,
   type CampaignBackup, type ImageRef, type ImageTool,
 } from "./campaign-backup.ts";
 import type { CampaignSummary } from "./campaign-links.ts";
@@ -45,12 +45,10 @@ Not included, on purpose: player and agent links, AI connections and API keys, b
 Discord webhooks, and the people in the campaign (they can join again with a new invite).
 ${missing ? `\n${missing} picture${missing === 1 ? " was" : "s were"} not found in storage and are not in this backup.\n` : ""}`;
 
-/** Builds the backup ZIP for one campaign. */
-export async function campaignBackupZip(key: string, progress: Progress): Promise<{ blob: Blob; name: string; missing: number }> {
-  progress("Reading the campaign…");
-  const start = await call<{ backup: CampaignBackup; files: string[]; images: ImageRef[] }>({ action: "start", key });
-  const out: { name: string; data: Uint8Array }[] = [];
-  const queue = [...start.files], done = new Set<string>();
+/** Reads a campaign's files (the paths `start` or `duplicate` listed) in batches, with any AI chat part files. */
+async function readCampaignFiles(key: string, paths: string[], progress: Progress) {
+  const out: { path: string; text: string }[] = [];
+  const queue = [...paths], done = new Set<string>();
   while (queue.length) {
     const batch = queue.splice(0, 100).filter(p => !done.has(p));
     progress(`Reading files (${done.size + batch.length} of ${done.size + batch.length + queue.length})…`);
@@ -58,12 +56,34 @@ export async function campaignBackupZip(key: string, progress: Progress): Promis
     for (const [path, text] of Object.entries(files)) {
       done.add(path);
       if (text === null) continue;
-      out.push({ name: FILES_DIR + path, data: enc.encode(text) });
+      out.push({ path, text });
       // A long AI chat keeps its older turns in part files.
       const parts = /^ai-chats\/[A-Za-z0-9-]+\.json$/.test(path) && !/(index|older)\.json$/.test(path) ? Number((JSON.parse(text) as { parts?: number }).parts ?? 0) : 0;
       for (let n = 1; n <= Math.min(parts, 10_000); n++) { const p = path.replace(/\.json$/, `.part-${n}.json`); if (isBackupFile(p) && !done.has(p)) queue.push(p); }
     }
   }
+  return out;
+}
+
+/** Writes files into a campaign that was just added, given its new ids: batches of up to 200 files or about 1 MB. */
+async function writeCampaignFiles(campaignId: string, files: { path: string; text: string }[], ids: Record<string, string>, progress: Progress) {
+  const ready = files.map(f => remapFile(f.path, f.text, ids)).filter(f => isBackupFile(f.path)).sort(fileOrder);
+  let n = 0, batch: typeof ready = [], size = 0;
+  const send = async () => { if (!batch.length) return; progress(`Adding the forum, chats and transcripts (${n} of ${ready.length})…`); await call({ action: "importFiles", campaignId, files: batch }); n += batch.length; batch = []; size = 0; };
+  for (const f of ready) {
+    // The forum file goes on its own, after every topic is in place.
+    if (f.path === "forum/forum.json") await send();
+    if (batch.length >= 200 || size + f.text.length > BATCH_CHARS) await send();
+    batch.push(f); size += f.text.length;
+  }
+  await send();
+}
+
+/** Builds the backup ZIP for one campaign. */
+export async function campaignBackupZip(key: string, progress: Progress): Promise<{ blob: Blob; name: string; missing: number }> {
+  progress("Reading the campaign…");
+  const start = await call<{ backup: CampaignBackup; files: string[]; images: ImageRef[] }>({ action: "start", key });
+  const out: { name: string; data: Uint8Array }[] = (await readCampaignFiles(key, start.files, progress)).map(f => ({ name: FILES_DIR + f.path, data: enc.encode(f.text) }));
   let missing = 0, got = 0;
   for (const batch of chunks(start.images, 12)) {
     progress(`Copying pictures (${got} of ${start.images.length})…`);
@@ -126,21 +146,29 @@ export async function importBackupZip(file: Blob, progress: Progress): Promise<{
   }
   progress("Adding the campaign…");
   const made = await call<{ key: string; name: string; encyclopediaId: string | null; ids: Record<string, string>; summary: CampaignSummary }>({ action: "import", backup });
-  if (made.encyclopediaId && files.length) {
-    const ready = files.map(f => remapFile(f.path, f.text, made.ids)).filter(f => isBackupFile(f.path)).sort(fileOrder);
-    let n = 0;
-    // Batches of up to 200 files or about 2 MB, so each request stays small.
-    let batch: typeof ready = [], size = 0;
-    const send = async () => { if (!batch.length) return; progress(`Adding the forum, chats and transcripts (${n} of ${ready.length})…`); await call({ action: "importFiles", campaignId: made.encyclopediaId, files: batch }); n += batch.length; batch = []; size = 0; };
-    for (const f of ready) {
-      // The forum file goes on its own, after every topic is in place.
-      if (f.path === "forum/forum.json") await send();
-      if (batch.length >= 200 || size + f.text.length > BATCH_CHARS) await send();
-      batch.push(f); size += f.text.length;
-    }
-    await send();
-  }
+  if (made.encyclopediaId && files.length) await writeCampaignFiles(made.encyclopediaId, files, made.ids, progress);
   return { key: made.key, name: made.name, summary: made.summary };
+}
+
+export type DuplicateChoices = { name: string; copyWorld: boolean; posts: boolean; chats: boolean };
+/**
+ * Duplicates a campaign: the server adds the copy, then its forum, theme, transcripts (and the posts and AI chats
+ * when chosen) are copied across. Pictures are shared within the account, so none are copied.
+ */
+export async function duplicateCampaign(key: string, choices: DuplicateChoices, progress: Progress): Promise<{ key: string; name: string; summary: CampaignSummary; warning: string }> {
+  progress("Copying the campaign…");
+  const made = await call<{ key: string; name: string; encyclopediaId: string | null; ids: Record<string, string>; files: string[]; summary: CampaignSummary }>({ action: "duplicate", key, ...choices });
+  let warning = "";
+  if (made.encyclopediaId && made.files.length) {
+    try {
+      const files = (await readCampaignFiles(key, made.files, progress)).map(f => f.path === "forum/forum.json" && !choices.posts ? { ...f, text: forumSetupOnly(f.text) } : f);
+      await writeCampaignFiles(made.encyclopediaId, files, made.ids, progress);
+    } catch (e) {
+      // The copy itself is saved by now; say what is missing rather than hide it.
+      warning = `${made.name} was made, but its forum, theme or transcripts were not all copied (${e instanceof Error ? e.message : "something went wrong"}).`;
+    }
+  }
+  return { key: made.key, name: made.name, summary: made.summary, warning };
 }
 
 export async function deleteCampaign(key: string, confirm: string): Promise<{ deleted: string; summary: CampaignSummary }> {

@@ -213,7 +213,8 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
     </div>
     {tagsOpen && <TagsManager scope="campaigns" onClose={() => setTagsOpen(false)} onShow={t => setTagFilter(t.id)} />}
     {selected && summary && <CampaignDetails key={selected.key} row={selected} summary={summary} busy={busy} error={error} close={() => setSelectedKey(null)} send={send}
-      onDeleted={(next, name) => { setSelectedKey(null); setSummary(next); setNotice(`Deleted “${name}”.`); }} />}
+      onDeleted={(next, name) => { setSelectedKey(null); setSummary(next); setNotice(`Deleted “${name}”.`); }}
+      onDuplicated={(next, key, name, warning) => { setSummary(next); setSelectedKey(key); if (warning) setError(warning); setNotice(`Made “${name}”.`); }} />}
     {moving && summary && <MoveSheet row={summary.rows.find(r => r.key === moving.key) ?? moving} summary={summary} busy={busy} error={error} close={() => { setMoving(null); setError(""); }} send={send} />}
     {dialog?.kind === "new" && summary && <NewCampaign summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
     {dialog?.kind === "folder" && summary && <NewFolder summary={summary} busy={busy} close={() => setDialog(null)} send={send} />}
@@ -227,11 +228,11 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
 export type Send = (body: object, done?: string, after?: (next: CampaignSummary) => void) => Promise<boolean>;
 
 /**
- * A campaign's settings: its facts, solo play, folder, pairing, name, web address, backup and delete. The details panel on
- * the Campaigns page, and the Settings tab on the campaign's own Dashboard (`embedded`: no title, close or open buttons,
- * since the Dashboard already shows them).
+ * A campaign's settings: its facts, solo play, folder, pairing, name, web address, duplicate, backup and delete. The details
+ * panel on the Campaigns page, and the Settings tab on the campaign's own Dashboard (`embedded`: no title, close or open
+ * buttons, since the Dashboard already shows them).
  */
-export function CampaignDetails({ row, summary, busy, error, close, send, onDeleted, embedded = false }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close?: () => void; send: Send; onDeleted: (summary: CampaignSummary, name: string) => void; embedded?: boolean }) {
+export function CampaignDetails({ row, summary, busy, error, close, send, onDeleted, onDuplicated, embedded = false }: { row: CampaignRow; summary: CampaignSummary; busy: boolean; error: string; close?: () => void; send: Send; onDeleted: (summary: CampaignSummary, name: string) => void; onDuplicated: (summary: CampaignSummary, key: string, name: string, warning: string) => void; embedded?: boolean }) {
   const [forumSetup, setForumSetup] = useState(false);
   const [name, setName] = useState(row.name), [description, setDescription] = useState(row.encyclopedia?.description ?? "");
   const ref = useRef<HTMLElement>(null);
@@ -291,7 +292,7 @@ export function CampaignDetails({ row, summary, busy, error, close, send, onDele
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
     <SlugForm key={row.slug ?? ""} row={row} busy={busy} send={send} />
-    <CampaignBackupSection row={row} busy={busy} onDeleted={onDeleted} />
+    <CampaignBackupSection row={row} busy={busy} onDeleted={onDeleted} onDuplicated={onDuplicated} />
     {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
       onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum added. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;

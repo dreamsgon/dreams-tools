@@ -1,8 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
-import { Download, Trash2, Upload } from "lucide-react";
+import { Copy, Download, Trash2, Upload } from "lucide-react";
 import type { CampaignRow, CampaignSummary } from "@/lib/campaign-links";
-import { campaignBackupZip, deleteCampaign, importBackupZip, saveBlob } from "@/lib/campaign-backup-client";
+import { campaignBackupZip, deleteCampaign, duplicateCampaign, importBackupZip, saveBlob } from "@/lib/campaign-backup-client";
 import { Modal } from "./campaigns-modal";
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
@@ -23,10 +23,14 @@ function useBackup(row: CampaignRow) {
   return { step, error, done, run };
 }
 
-/** The Backup and Delete part of a campaign's details. */
-export function CampaignBackupSection({ row, busy, onDeleted }: { row: CampaignRow; busy: boolean; onDeleted: (summary: CampaignSummary, name: string) => void }) {
-  const backup = useBackup(row), [deleting, setDeleting] = useState(false);
-  return <section className="campaigns-backup" aria-label="Backup and delete">
+/** The Duplicate, Backup and Delete part of a campaign's details. */
+export function CampaignBackupSection({ row, busy, onDeleted, onDuplicated }: { row: CampaignRow; busy: boolean; onDeleted: (summary: CampaignSummary, name: string) => void; onDuplicated: (summary: CampaignSummary, key: string, name: string, warning: string) => void }) {
+  const backup = useBackup(row), [deleting, setDeleting] = useState(false), [copying, setCopying] = useState(false);
+  return <section className="campaigns-backup" aria-label="Duplicate, backup and delete">
+    <h3>Duplicate</h3>
+    <p className="campaigns-muted">Make a new campaign from this one&apos;s setup: its maps, pages, forum boards, theme and groups. Handy for running the same adventure again.</p>
+    <button type="button" className="campaigns-secondary" disabled={busy || !!backup.step} onClick={() => setCopying(true)}><Copy size={16} aria-hidden="true" />Duplicate…</button>
+    {copying && <DuplicateCampaign row={row} close={() => setCopying(false)} onDuplicated={onDuplicated} />}
     <h3>Backup</h3>
     <p className="campaigns-muted">A ZIP with this campaign&apos;s maps, notes, forum and pictures. Import it on the Campaigns page to bring it back as a new campaign.</p>
     <button type="button" className="campaigns-secondary" disabled={busy || !!backup.step} onClick={() => void backup.run()}><Download size={16} aria-hidden="true" />{backup.step || "Download backup"}</button>
@@ -94,5 +98,46 @@ export function ImportCampaign({ close, onImported }: { close: () => void; onImp
       {error && <p className="campaigns-error" role="alert">{error}</p>}
       <small>Its pictures are uploaded unless your account already has them. People in the campaign aren&apos;t included: invite them again.</small>
     </div>
+  </Modal>;
+}
+
+/** Duplicate: a new campaign from this one, with the choices that change what comes along. */
+function DuplicateCampaign({ row, close, onDuplicated }: { row: CampaignRow; close: () => void; onDuplicated: (summary: CampaignSummary, key: string, name: string, warning: string) => void }) {
+  const [name, setName] = useState(`${row.name} (copy)`), [copyWorld, setCopyWorld] = useState(false);
+  const [posts, setPosts] = useState(false), [chats, setChats] = useState(false), [step, setStep] = useState(""), [error, setError] = useState("");
+  const world = row.encyclopedia?.worldName || "the world";
+  const parts = [
+    row.maptable && `${plural(row.maptable.scenes, "scene")} in Maptable, with saved tokens`,
+    row.encyclopedia && `${plural(row.encyclopedia.pages, "page")} in the Wiki, with stats, calendars, quests and the front page`,
+    row.encyclopedia?.forum && "the forum's boards, categories and settings",
+    row.encyclopedia && "its theme, random tables and member groups with their permissions",
+  ].filter(Boolean) as string[];
+  async function run() {
+    setError("");
+    try { const r = await duplicateCampaign(row.key, { name: name.trim(), copyWorld, posts, chats }, setStep); onDuplicated(r.summary, r.key, r.name, r.warning); }
+    catch (e) { setError(e instanceof Error ? e.message : "The campaign could not be duplicated."); }
+    finally { setStep(""); }
+  }
+  return <Modal title={`Duplicate ${row.name}`} intro="The copy is a new campaign beside this one. Nothing in this campaign changes." close={step ? () => {} : close} footer={<>
+    <button type="button" className="campaigns-secondary" disabled={!!step} onClick={close}>Cancel</button>
+    <button type="submit" form="duplicate-campaign" className="campaigns-primary" disabled={!name.trim() || !!step}><Copy size={16} aria-hidden="true" />{step ? "Duplicating…" : "Duplicate"}</button>
+  </>}>
+    <form id="duplicate-campaign" className="campaigns-form campaigns-duplicate" onSubmit={e => { e.preventDefault(); if (name.trim() && !step) void run(); }}>
+      <label>Name of the copy<input value={name} maxLength={120} autoFocus disabled={!!step} onChange={e => setName(e.target.value)} /></label>
+      <div><p>The copy gets:</p><ul className="campaigns-delete-list">{parts.map(p => <li key={p}>{p}</li>)}</ul></div>
+      {row.encyclopedia && <fieldset disabled={!!step}>
+        <legend>{world}&apos;s shared lore</legend>
+        <label className="campaigns-choice"><input type="radio" name="dup-world" checked={!copyWorld} onChange={() => setCopyWorld(false)} /><span><strong>Share it</strong><small>Both campaigns use the same world. A change to its lore shows in both.</small></span></label>
+        <label className="campaigns-choice"><input type="radio" name="dup-world" checked={copyWorld} onChange={() => setCopyWorld(true)} /><span><strong>Make a separate copy</strong><small>The copy gets a world of its own, so its lore can change without touching this one.</small></span></label>
+      </fieldset>}
+      {row.encyclopedia && <fieldset disabled={!!step}>
+        <legend>Also copy</legend>
+        {row.encyclopedia.forum && <label className="campaigns-choice"><input type="checkbox" checked={posts} onChange={e => setPosts(e.target.checked)} /><span><strong>Forum topics and posts</strong><small>Off: the forum starts empty, with the same boards.</small></span></label>}
+        <label className="campaigns-choice"><input type="checkbox" checked={chats} onChange={e => setChats(e.target.checked)} /><span><strong>Saved AI chats</strong></span></label>
+      </fieldset>}
+      <small>Not copied: the people in the campaign, invite and player links, AI connections, agent and bridge keys, the Discord channel and the web address. Pictures are shared, not copied.</small>
+      {step && <p className="campaigns-muted" role="status" aria-live="polite">{step}</p>}
+      {error && <p className="campaigns-error" role="alert">{error}</p>}
+    </form>
   </Modal>;
 }

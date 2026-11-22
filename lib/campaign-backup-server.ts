@@ -7,6 +7,9 @@
  * already in the account (`have`, `putImage`), then the workspaces (`importCampaign`), then the files in batches
  * (`importFiles`). Deleting keeps a private copy of the campaign's data first, then revokes every key and link
  * that reached it.
+ *
+ * Duplicating is a backup imported straight back, without the ZIP: `duplicateCampaign` adds the copy and lists the
+ * original's files, and the browser then moves those across with `files` and `importFiles`, as an import would.
  */
 import type { S3Bucket } from "./storage.ts";
 import { campaignSession, readBoth, summaryOf, type Session } from "./campaigns-server.ts";
@@ -24,9 +27,11 @@ import { listBridgeKeys, revokeBridgeKey } from "./bridge/keys.ts";
 import { listConnections, revokeConnection } from "./mcp/connections.ts";
 import { readTransfer } from "./transfers.ts";
 import { MAX_IMAGE_BYTES } from "./encyclopedia/map-model.ts";
+import { themeKey } from "./campaign-theme/store.ts";
+import { themeFileSchema } from "./campaign-theme/model.ts";
 import {
   buildBackup, checkBackup, imageRefs, isBackupFile, isImageId, planImport, removeBookCampaign, removeMapCampaign, removeTablesCampaign, sniffImage,
-  type CampaignBackup, type ImageRef, type ImageTool,
+  type CampaignBackup, type ImageRef, type ImageTool, type ImportOptions,
 } from "./campaign-backup.ts";
 
 export { campaignSession };
@@ -50,6 +55,7 @@ function rowOf(both: Awaited<ReturnType<typeof readBoth>>, key: unknown) {
 function fileKey(owner: string, campaignId: string, path: string) {
   if (!isBackupFile(path)) throw new Error("That isn't a campaign file.");
   const base = encyclopediaPrefix(owner), c = encodeURIComponent(campaignId);
+  if (path === "theme.json") return themeKey(owner, campaignId);
   if (path.startsWith("forum/")) return `${base}forum/${c}/${path.slice("forum/".length)}`;
   if (path.startsWith("ai-chats/")) return `${base}ai-chats/${c}/${path.slice("ai-chats/".length)}`;
   return `${base}${path}`; // transcripts/<page id>.txt
@@ -83,6 +89,7 @@ async function campaignFiles(s: Session, bucket: S3Bucket, backup: CampaignBacku
   const eid = backup.encyclopedia?.campaignId;
   if (!eid) return { files: [] as string[], images: [] as ImageRef[] };
   const files: string[] = [], images: ImageRef[] = [];
+  if (await bucket.head(themeKey(s.owner, eid)).catch(() => null)) files.push("theme.json");
   const forum = await bucket.get(forumKey(s.owner, eid));
   if (forum) {
     const parsed = forumSchema.safeParse(await forum.json().catch(() => null));
@@ -156,10 +163,15 @@ export async function putImage(s: Session, bucket: S3Bucket, body: { tool?: unkn
 export async function importCampaign(s: Session, bucket: S3Bucket, input: unknown) {
   const checked = checkBackup(input);
   if (!checked.ok) throw new Error(checked.error);
-  const both = await readBoth(s), tablesNow = await s.book.readTables(s.owner);
+  return addCampaign(s, bucket, await readBoth(s), checked.backup, {}, "Some of the data in this backup is damaged or from a newer version, so nothing was imported.");
+}
+
+/** Saves a backup as a new campaign beside the others (an import, or a duplicate). */
+async function addCampaign(s: Session, bucket: S3Bucket, both: Awaited<ReturnType<typeof readBoth>>, backup: CampaignBackup, options: ImportOptions, damaged: string) {
+  const tablesNow = await s.book.readTables(s.owner);
   let plan: ReturnType<typeof planImport>;
-  try { plan = planImport(checked.backup, { map: both.map?.workspace ?? null, book: both.book.data, tables: tablesNow.data }); }
-  catch (e) { throw new Error(e instanceof Error && !("issues" in e) ? e.message : "Some of the data in this backup is damaged or from a newer version, so nothing was imported."); }
+  try { plan = planImport(backup, { map: both.map?.workspace ?? null, book: both.book.data, tables: tablesNow.data }, undefined, options); }
+  catch (e) { throw new Error(e instanceof Error && !("issues" in e) ? e.message : damaged); }
   // Everything is checked above before anything is saved. The Encyclopedia goes first: it has the stricter size limit.
   if (plan.book && (await s.book.save(s.owner, plan.book, both.book.revision)) === null) throw busy();
   if (plan.map && !(await saveWorkspace(bucket, s.prefix, plan.map, both.map?.revision ?? null))) throw busy();
@@ -172,6 +184,25 @@ export async function importCampaign(s: Session, bucket: S3Bucket, input: unknow
     await changeHome(bucket, s.owner, l => applyHomeAction(l, { action: "campaignDashboard", key: `m:${plan.maptableId}`, dashboard: plan.dashboard })).catch(() => {});
   const key = plan.encyclopediaId ? `e:${plan.encyclopediaId}` : `m:${plan.maptableId}`;
   return { key, name: plan.name, encyclopediaId: plan.encyclopediaId, ids: plan.ids, summary: summaryOf(await readBoth(s)) };
+}
+
+/** What a duplicate takes along besides the campaign itself. Boards, theme and session transcripts always go. */
+export type DuplicateOptions = { name: string; copyWorld: boolean; posts: boolean; chats: boolean };
+
+/**
+ * Adds a copy of a campaign beside it: its maps, tokens, pages, tables, member groups, theme and forum boards,
+ * with new ids, under a new name and in the same folder. Never its members, links, keys or web address. Returns
+ * the copy's key, the new ids, and the original's files for the browser to copy across next (`files`, then
+ * `importFiles`).
+ */
+export async function duplicateCampaign(s: Session, bucket: S3Bucket, key: string, input: Record<string, unknown>) {
+  const options: DuplicateOptions = { name: typeof input.name === "string" ? input.name : "", copyWorld: input.copyWorld === true, posts: input.posts === true, chats: input.chats === true };
+  if (!options.name.trim()) throw new Error("Give the copy a name.");
+  const both = await readBoth(s), row = rowOf(both, key), backup = await backupData(s, bucket, both, key);
+  const extra = await campaignFiles(s, bucket, backup);
+  const made = await addCampaign(s, bucket, both, backup, { name: options.name, copyWorld: options.copyWorld, folderId: row.folderId }, "Some of this campaign's data could not be read, so nothing was copied.");
+  const files = extra.files.filter(f => f.startsWith("forum/topics/") ? options.posts : f.startsWith("ai-chats/") ? options.chats : true);
+  return { ...made, from: key, files, posts: options.posts };
 }
 
 /** Writes a batch of an imported campaign's files (already given their new ids). A file that is already there is left alone. */
@@ -191,6 +222,7 @@ export async function importFiles(s: Session, bucket: S3Bucket, campaignId: unkn
       if (`forum/topics/${topic.id}.json` !== path) throw new Error("One of the forum's topics is damaged.");
       body = json(topic);
     } else if (path.startsWith("ai-chats/")) JSON.parse(text);
+    else if (path === "theme.json") body = json(themeFileSchema.parse(JSON.parse(text)));
     else {
       if (!pages.has(path.slice("transcripts/".length, -".txt".length))) return;
       type = "text/plain; charset=utf-8";
@@ -244,7 +276,7 @@ export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, 
     tasks.push(quietly(s.book.revokeLink(s.owner, eid, "player")), quietly(s.book.revokeLink(s.owner, eid, "agent")));
     tasks.push(quietly(listBridgeKeys(bucket, s.owner, eid).then(keys => Promise.all(keys.map(k => revokeBridgeKey(bucket, s.owner, eid, k.id)))).then(() => bucket.delete(`${base}bridge-keys/${c}.json`))));
     tasks.push(quietly(listConnections(bucket, s.owner, eid).then(list => Promise.all(list.map(k => revokeConnection(bucket, s.owner, eid, k.id)))).then(() => bucket.delete(`${base}ai-connections/${c}.json`))));
-    tasks.push(quietly(bucket.delete(`${base}ai-activity/${c}.json`)));
+    tasks.push(quietly(bucket.delete(`${base}ai-activity/${c}.json`)), quietly(bucket.delete(themeKey(s.owner, eid))));
     if (members?.etag) {
       const store = new MemberStore(bucket);
       for (const link of members.list.links) tasks.push(quietly(store.linkOff(s.owner, eid, link.groupId)));
