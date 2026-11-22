@@ -9,12 +9,22 @@
 @media print { .global-dice { display: none; } }
 
 /* Leave room under the last of the page's content so it can scroll clear of the buttons. */
-body:has(.global-dice) { padding-bottom: 64px; }
+body:has(.global-dice:not(.global-dice--bar)) { padding-bottom: 64px; }
 
 /* Phones: smaller, icon-only buttons, and enough room under the page's content (button height, gap and the home-bar inset) to scroll clear of them. */
 @media (max-width: 640px) {
   .global-dice { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); gap: 6px; }
   .global-dice button { min-height: 40px; min-width: 40px; padding: 0; width: 40px; }
   .global-dice button > span { display: none; }
-  body:has(.global-dice) { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  body:has(.global-dice:not(.global-dice--bar)) { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
+
+/* In the campaign bar (campaign-bar.tsx gives the slot): icon buttons like the bell beside them, out of the page's content. */
+.cbar-dice { display:flex; align-items:center; }
+.cbar-dice:empty { display:none; }
+.global-dice.global-dice--bar { position:static; z-index:auto; gap:2px; }
+.global-dice.global-dice--bar button { width:34px; min-width:34px; height:34px; min-height:34px; padding:0; border-color:transparent; border-radius:var(--radius, 6px); background:transparent; color:var(--chrome-text, var(--ink)); box-shadow:none; }
+.global-dice.global-dice--bar button > span { display:none; }
+.global-dice.global-dice--bar button:hover { border-color:transparent; background:var(--chrome-hover, var(--accent-soft)); }
+.global-dice.global-dice--bar button[aria-expanded="true"] { background:var(--accent-soft); border-color:transparent; color:var(--accent); }
+@media (max-width: 760px) { .global-dice.global-dice--bar { gap:0; } .global-dice.global-dice--bar button { width:32px; min-width:32px; height:40px; min-height:40px; } }

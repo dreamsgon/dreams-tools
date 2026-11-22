@@ -39,7 +39,7 @@ export type DicePanel='dice'|'log'|null;
 /** The board owns which panel is open; the tray only renders it. `style` positions the dock above the board tool bar. */
 /** `scene` is the open scene, so plain tray rolls can be posted to its campaign's Discord too. */
 /** Off Maptable, `discord` says where Send may post (decided by the page) and `localNote` says why not when it can't. */
-export default function StandardDiceTray({panel,onPanelChange,style,scene,discord,localNote}:{panel:DicePanel;onPanelChange:(panel:DicePanel)=>void;style?:CSSProperties;scene?:TrayScene|null;discord?:DiceDiscord|null;localNote?:string}){
+export default function StandardDiceTray({panel,onPanelChange,style,placement="above",scene,discord,localNote}:{panel:DicePanel;onPanelChange:(panel:DicePanel)=>void;style?:CSSProperties;/** Whether the tray opens up from a bottom tool bar or down from a top bar. */placement?:"above"|"below";scene?:TrayScene|null;discord?:DiceDiscord|null;localNote?:string}){
  const panelChange=useRef(onPanelChange);useEffect(()=>{panelChange.current=onPanelChange;},[onPanelChange]);
  const liveDiscord=useRef(discord);useEffect(()=>{liveDiscord.current=discord;},[discord]);
  const open=panel==='dice',logOpen=panel==='log';
@@ -71,7 +71,7 @@ export default function StandardDiceTray({panel,onPanelChange,style,scene,discor
   const typed=cleanRollName(rollName),c=await askRoll({title:'Dice tray',formula,note:typed});if(!c||!alive.current)return;
   let f:string;try{f=withKeepMode(addBonus(formula,c.bonus),c.mode);}catch(e){setError((e as Error).message);return;}
   const name=cleanRollName(c.note);if(name!==typed)setRollName(name);void roll(f,undefined,name||undefined);}
- return <div className="standard-dice-dock" style={style}>{throwing&&<div className="standard-dice-animation" aria-hidden="true"><canvas ref={canvas}/></div>}
+ return <div className={`standard-dice-dock${placement==="below"?" dock-below":""}`} style={style}>{throwing&&<div className="standard-dice-animation" aria-hidden="true"><canvas ref={canvas}/></div>}
  
  <section id="local-roll-log" className="standard-dice-tray local-roll-log" hidden={!logOpen} aria-label="Local roll log"><header><div><strong>Roll log</strong><small>Last 100 rolls · stored on this device</small></div><button disabled={!rollLog.length} onClick={clearLocalRollLog}>Clear log</button><button aria-label="Close roll log" onClick={()=>setLogOpen(false)}><X size={18}/></button></header>{rollLog.length?<ol>{rollLog.map(entry=><li key={entry.id}><b>{entry.total}</b><div><strong>{entry.label}</strong><small>{entry.breakdown}</small>{entry.outcome&&<span className="roll-log-outcome">{entry.outcome}</span>}<time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleString()}</time></div></li>)}</ol>:<p>No rolls yet. Dice tray and character rolls appear here.</p>}</section>
  <section id="standard-dice-tray" className="standard-dice-tray" hidden={!open} aria-label="Standard dice tray">

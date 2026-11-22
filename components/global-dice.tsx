@@ -1,8 +1,12 @@
 "use client";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { diceTargetStore } from "@/lib/dice-target";
+import { diceSlotStore, rollsHere } from "@/lib/dice-slot";
+import { diceDockBelow } from "@/lib/dice-dock";
+import { uiZoom } from "@/lib/appearance";
 import { onOpenDiceTray } from "@/lib/dice-open";
 import { listenForLinkedRolls } from "@/lib/roll-link";
 import { Bot, Dices, ScrollText } from "lucide-react";
@@ -53,17 +57,28 @@ export default function GlobalDice() {
     window.addEventListener(OPEN_CHAT_EVENT, on);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, on);
   }, [ai, aiKey]);
+  // In a campaign bar the buttons sit in its slot, and the tray opens just below them.
+  const slot = useSyncExternalStore(diceSlotStore.subscribe, diceSlotStore.get, diceSlotStore.getServer);
+  const [dock, setDock] = useState<CSSProperties>();
+  useLayoutEffect(() => {
+    if (!slot || !panel) return;
+    const place = () => { const z = uiZoom(), r = slot.getBoundingClientRect(); if (r.width) setDock(diceDockBelow({ bottom: r.bottom / z, right: r.right / z }, window.innerWidth / z, window.innerHeight / z)); };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [slot, panel]);
   const shared = <><LinkedRollPopup /><RollDialogHost /><DiceThrower /></>;
   if (hasOwnDice(pathname)) return shared;
   const toggle = (next: Exclude<DicePanel, null>) => { setUsed(true); setPanel(panel === next ? null : next); };
-  return <>
-    {shared}
-    <div className="global-dice" role="group" aria-label="Dice and AI">
+  const buttons = <div className={`global-dice${slot ? " global-dice--bar" : ""}`} role="group" aria-label="Dice and AI">
       {ai && <button type="button" title="Ask your AI about this campaign" aria-label="Ask AI" onClick={openAi}><Bot size={18} aria-hidden="true" /><span>AI</span></button>}
       <button type="button" aria-expanded={panel === "dice"} aria-controls="standard-dice-tray" title="Dice tray" aria-label="Dice tray" onClick={() => toggle("dice")}><Dices size={18} aria-hidden="true" /><span>Dice</span></button>
       <button type="button" className="global-dice-icon" aria-expanded={panel === "log"} aria-controls="local-roll-log" title="Roll log" aria-label="Roll log" onClick={() => toggle("log")}><ScrollText size={18} aria-hidden="true" /></button>
-    </div>
+    </div>;
+  return <>
+    {shared}
+    {slot ? createPortal(buttons, slot) : rollsHere(pathname) ? buttons : null}
     {ai && !ai.here && aiOpen.key === aiKey && aiOpen.n > 0 && <AiActivity key={aiKey} floating openSignal={aiOpen.n} campaignId={ai.campaignId} maptableCampaignId={ai.campaignId ? undefined : ai.maptableCampaignId} onChanged={() => window.dispatchEvent(new Event("focus"))} />}
-    {used && <StandardDiceTray panel={panel} onPanelChange={setPanel} scene={null} discord={target.discord} localNote={target.note} />}
+    {used && <StandardDiceTray panel={panel} onPanelChange={setPanel} placement={slot ? "below" : "above"} style={slot ? dock : undefined} scene={null} discord={target.discord} localNote={target.note} />}
   </>;
 }

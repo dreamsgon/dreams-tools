@@ -1702,8 +1702,9 @@ export default function Board(p: Props) {
         </div>
       )}
       {p.tool === "measure" && (
-        <div className="measure-hint">
-          Drag to measure. Press Q, Space, or right-click for a waypoint. On touch, tap cells to extend a path.{" "}
+        <div className="measure-hint measure-tool-hint">
+          <span className="hint-pointer">Drag to measure. Press Q, Space, or right-click for a waypoint.</span>
+          <span className="hint-touch">Drag to measure, or tap cells to make a path.</span>{" "}
           <button onClick={() => setMeasurement([])}>Clear</button>
         </div>
       )}

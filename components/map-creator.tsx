@@ -53,8 +53,10 @@ const gridOf=(s:Scene|undefined):CreatorGrid=>s?{size:s.grid.size,units:s.grid.u
 const TOOL_ICONS:Record<Tool,ReactNode>={select:<MousePointer2 size={19}/>,hex:<Hexagon size={19}/>,rect:<Square size={19}/>,poly:<Pentagon size={19}/>,circle:<Circle size={19}/>,ellipse:<Egg size={19} style={{transform:"rotate(90deg)"}}/>,line:<Slash size={19}/>,curve:<Spline size={19}/>,path:<PenLine size={19}/>,door:<DoorOpen size={19}/>,window:<AppWindow size={19}/>,stamp:<StampIcon size={19}/>,light:<Lightbulb size={19}/>,label:<Type size={19}/>};
 const floorPatterns:[NonNullable<MapShape["pattern"]>,string][]=[["flag","Flagstone"],["boards","Boards"],["tiles","Tiles"],["cobbles","Cobbles"],["earth","Earth"]];
 const doorKinds:[NonNullable<MapShape["door"]>,string][]=[["wood","Wood"],["iron","Iron"],["arch","Open arch"],["secret","Secret"]];
-export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist}: {
+export default function MapCreator({workspace,initialId,destination,commit,close,saveStatus,persist,startNew=false}: {
   workspace:Workspace;initialId:string|null;destination:string|null;
+  /** Opened from "Generate a map": show the Start a new map dialog (generate, trace or blank) straight away. */
+  startNew?:boolean;
   commit:(fn:(w:Workspace)=>void)=>void;close:(sceneId?:string)=>void;saveStatus:string;persist:()=>Promise<boolean>;
 }) {
   const initial=workspace.scenes.find(s=>s.id===initialId && s.drawing);
@@ -87,7 +89,7 @@ export default function MapCreator({workspace,initialId,destination,commit,close
   const [hexPaint,setHexPaint]=useState<HexPaint>({biome:"temperate",terrain:"forest"}),[hexRestore,setHexRestore]=useState(false);
   const [hoverHex,setHoverHex]=useState<number|null>(null),[regenerating,setRegenerating]=useState(false);
   const tools=toolsFor(!!draft.drawing.hexes);
-  const [using,setUsing]=useState(false),[newMap,setNewMap]=useState(false),[focusText,setFocusText]=useState<string|null>(null);
+  const [using,setUsing]=useState(false),[newMap,setNewMap]=useState(startNew),[focusText,setFocusText]=useState<string|null>(null);
   // An image to trace over: kept on this device only, never saved with the map.
   const [trace,setTrace]=useState<{url:string;x:number;y:number;w:number;h:number;opacity:number}|null>(null);
   // A new label's text box takes the keyboard once the click that placed it is over.
