@@ -25,6 +25,13 @@ import { ISSUE_ONE } from "./skins/issue-one.ts";
 import { FOUR_HOUSES } from "./skins/four-houses.ts";
 import { NILE_KINGDOM } from "./skins/nile-kingdom.ts";
 import { STORM_AND_SPIRE } from "./skins/storm-and-spire.ts";
+import { SAKURA_SKY } from "./skins/sakura-sky.ts";
+import { RAINBOW_MEADOW } from "./skins/rainbow-meadow.ts";
+import { METRO_LINE } from "./skins/metro-line.ts";
+import { GOLDEN_HOUR } from "./skins/golden-hour.ts";
+import { FLAMINGO_DECO } from "./skins/flamingo-deco.ts";
+import { STATUS_WINDOW } from "./skins/status-window.ts";
+import { RAID_NIGHT } from "./skins/raid-night.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -69,4 +76,18 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
   { inspired: "Eberron", theme: STORM_AND_SPIRE },
 
   { inspired: "World of Warcraft", theme: TWO_BANNERS },
+
+  { inspired: "Anime", theme: SAKURA_SKY },
+
+  { inspired: "My Little Pony", theme: RAINBOW_MEADOW },
+
+  { inspired: "The present day", theme: METRO_LINE },
+
+  { inspired: "Southern California", theme: GOLDEN_HOUR },
+
+  { inspired: "Florida", theme: FLAMINGO_DECO },
+
+  { inspired: "Isekai", theme: STATUS_WINDOW },
+
+  { inspired: "MMOs", theme: RAID_NIGHT },
 ];

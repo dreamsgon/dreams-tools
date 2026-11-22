@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanCss, scopeSelector } from '../lib/campaign-theme/css.ts';
+import { buildSkin, inParts, outline, sketch } from '../lib/campaign-theme/skins/kit.ts';
 import { THEME_PRESETS, areaCss, themeSchema, themeColours, PRESET_NOTES, THEME_FONTS, importTheme, themeCss, saveTheme, makeLive, deleteTheme, emptyThemeFile, contrastChecks, onAccent, ThemeError } from '../lib/campaign-theme/model.ts';
 
 const NOW = new Date('2026-01-01T12:00:00.000Z');
@@ -93,7 +94,7 @@ test('the theme file: save, make live (a copy), delete, and the limit', () => {
 
 test('preset skins: a light and a dark version each, readable, and their CSS passes the safety checks untouched', () => {
   const skins = THEME_PRESETS.filter(t => PRESET_NOTES[t.id]);
-  assert.equal(skins.length, 19);
+  assert.equal(skins.length, 26);
   assert.equal(new Set(THEME_PRESETS.map(t => t.id)).size, THEME_PRESETS.length, 'ids are unique');
   for (const t of skins) {
     assert.equal(t.mode, 'both', t.name);
@@ -108,6 +109,44 @@ test('preset skins: a light and a dark version each, readable, and their CSS pas
     assert.match(t.css, /\.board-head:not\(\.has-art\)/, t.name);
     assert.notDeepEqual(t.colors.light, t.colors.dark, t.name);
   }
+});
+
+test('skins built from the shared kit: every part styled, within the size limits, and long drawings split up', () => {
+  const ids = ['sakura-sky', 'rainbow-meadow', 'metro-line', 'golden-hour', 'flamingo-deco', 'status-window', 'raid-night'].map(id => `preset-${id}`);
+  for (const id of ids) {
+    const t = THEME_PRESETS.find(p => p.id === id);
+    assert.ok(t, id);
+    assert.ok(PRESET_NOTES[id], `${id} says what inspired it`);
+    assert.ok(themeSchema.safeParse(t).success, `${id} fits the limits`);
+    assert.equal(t.banner, 'picture', `${id} takes a banner picture`);
+    assert.deepEqual(Object.keys(t.areas).sort(), ['dashboard', 'encyclopedia', 'maptable'], id);
+    // The banner picture's own rules: the drawing goes and the title stays readable.
+    assert.match(t.css, /\.board-head\.has-art \.board-title a \{[^}]*color: #/, id);
+    for (const [part, css] of Object.entries({ forum: t.css, ...t.areas })) {
+      const cleaned = cleanCss(css);
+      assert.deepEqual(cleaned.problems, [], `${id} ${part}`);
+      assert.ok(cleaned.rules >= 30, `${id} ${part} has ${cleaned.rules} rules`);
+      assert.doesNotMatch(css, /color: transparent/, `${id} ${part}: titles stay solid over a picture`);
+    }
+  }
+  // The pony skin is original: none of the show's names in anything it ships.
+  const pony = THEME_PRESETS.find(p => p.id === 'preset-rainbow-meadow');
+  assert.doesNotMatch(JSON.stringify(pony), /pony|equestria|cutie|hasbro/i);
+  // A long list of layers or points is cut into variables, so no one value passes the 2,000 character limit.
+  const many = Array.from({ length: 300 }, (_, i) => `linear-gradient(red 0 0) ${i}px 0 / 1px 1px no-repeat`);
+  const parts = inParts('x', many);
+  assert.ok(parts.use.split(', ').length > 1);
+  for (const value of parts.declare.split(';')) assert.ok(value.length < 2000);
+  assert.deepEqual(cleanCss(`.a { ${parts.declare} background: ${parts.use}; }`).problems, []);
+  // Outlines are walked the same way round and joined back to the first, and a triangle's two halves meet at its point.
+  const square = [[0, 0], [10, 0], [10, 10], [0, 10]];
+  assert.deepEqual(outline(10, 10, [square]), outline(10, 10, [[...square].reverse()]));
+  assert.equal(outline(10, 10, [square]).length, 5);
+  assert.equal(outline(10, 10, [square, square]).length, 11);
+  const [left, right] = sketch().tri('red', 0, 0, 50, 50).split('no-repeat, ');
+  assert.match(left, /^linear-gradient\(to top left/);
+  assert.match(right, /^linear-gradient\(to top right/);
+  assert.equal(typeof buildSkin, 'function');
 });
 
 test('theme stylesheets for each part of the campaign', () => {

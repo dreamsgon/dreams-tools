@@ -58,6 +58,12 @@ export const THEME_FONTS = {
   almendra: { label: "Almendra", stack: '"Almendra", "IM Fell English", Georgia, serif', query: "Almendra:ital,wght@0,400;0,700;1,400;1,700" },
   fondamento: { label: "Fondamento", stack: '"Fondamento", "IM Fell English", Georgia, serif', query: "Fondamento:ital@0;1" },
   limelight: { label: "Limelight", stack: '"Limelight", "Broadway", "Jost", Georgia, serif', query: "Limelight" },
+  mochiy: { label: "Mochiy Pop One", stack: '"Mochiy Pop One", "Arial Rounded MT Bold", "Inter", sans-serif', query: "Mochiy+Pop+One" },
+  zenmaru: { label: "Zen Maru Gothic", stack: '"Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Inter", sans-serif', query: "Zen+Maru+Gothic:wght@400;500;700" },
+  fredoka: { label: "Fredoka", stack: '"Fredoka", "Arial Rounded MT Bold", "Inter", sans-serif', query: "Fredoka:wght@400;500;600;700" },
+  nunito: { label: "Nunito", stack: '"Nunito", "Inter", sans-serif', query: "Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400" },
+  pacifico: { label: "Pacifico", stack: '"Pacifico", "Brush Script MT", cursive', query: "Pacifico" },
+  righteous: { label: "Righteous", stack: '"Righteous", "Jost", "Inter", sans-serif', query: "Righteous" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);
