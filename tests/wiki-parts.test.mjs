@@ -161,3 +161,30 @@ test('an archive that loses a race leaves the Wiki and storage as they were',asy
  assert.ok(!data.has(encyclopediaPrefix('alice')+'archive/campaign-three.json'));
  assert.deepEqual((await store.read('alice')).data,w);
 });
+
+test('the page limit is per campaign, and the owner can raise the limit for the whole Wiki',async()=>{
+ const {store,data}=harness(),w=bigger();await store.save('alice',w,0);
+ const page=w.entries.find(e=>e.id==='p-0');
+ // 5,001 pages across two campaigns fit; 5,001 in one campaign don't.
+ const many=(n,campaignId,prefix)=>Array.from({length:n},(_,i)=>({...page,id:`${prefix}-${i}`,title:`${prefix} ${i}`,campaignId,worldId:w.campaigns.find(c=>c.id===campaignId).worldId}));
+ const spread={...w,entries:[...w.entries,...many(2600,'demo-campaign','a'),...many(2600,'campaign-three','b')]};
+ assert.equal(sizeProblem(spread),null);assert.equal(await store.save('alice',spread,1),2);
+ const crowded={...spread,entries:[...spread.entries,...many(2500,'campaign-three','c')]};
+ assert.match(sizeProblem(crowded),/Third campaign.*5,000 pages/);
+ await assert.rejects(()=>store.save('alice',crowded,2),/5,000 pages/);
+ // The whole-Wiki limit: refused over it, saved once it is raised.
+ assert.match(sizeProblem(w,20*MB,1000),/whole Wiki .* over the 0 MB limit/);
+ await assert.rejects(()=>store.setTotalLimit('alice',70*MB),/Choose one of the limits/);
+ assert.ok(await store.setTotalLimit('alice',100*MB));
+ assert.equal(index(data).total,100*MB);assert.equal((await store.read('alice')).total,100*MB);
+});
+
+test('a patch save leaves the campaigns it did not send alone, without writing them out again',async()=>{
+ const {store,data}=harness(),w=bigger();await store.save('alice',w,0);
+ const before=index(data),after=structuredClone(w);after.entries.find(e=>e.id==='p-3').body='changed';
+ // Damage a stored part's hash: if the save compared it, it would write that part again.
+ const i=index(data);i.parts['c:demo-campaign'].hash='not-the-real-hash';data.set(root,{...data.get(root),text:JSON.stringify(i)});
+ await store.savePatch('alice',wikiPatch(w,after),1);
+ assert.equal(index(data).parts['c:demo-campaign'].key,before.parts['c:demo-campaign'].key);
+ assert.notEqual(index(data).parts['c:campaign-three'].key,before.parts['c:campaign-three'].key);
+});
