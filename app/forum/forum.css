@@ -192,6 +192,11 @@ body:has(.forum-root:not(.forum-base)) { background: #ece5d6; }
 .f-select select { padding: 3px 6px; font-size: 12px; }
 
 .posts { display: grid; gap: 16px; }
+/* A long topic's pages, above and below its posts. */
+.topic-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 12px 0; font: 13px/1.4 var(--font-sans); }
+.topic-pager a, .topic-pager b { display: inline-flex; min-width: 28px; min-height: 28px; align-items: center; justify-content: center; padding: 0 6px; border-radius: 6px; }
+.topic-pager b { background: var(--accent-soft); color: var(--ink); }
+.topic-pager a:hover { background: var(--raised); }
 .post { background: var(--panel); border: 1px solid var(--line); }
 .post-band { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
 .post.flip .post-band { flex-direction: row-reverse; background: linear-gradient(270deg, var(--accent-soft), transparent 70%); }

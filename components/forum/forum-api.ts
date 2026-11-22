@@ -28,25 +28,27 @@ export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
 export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply' | 'html', Tri>>>;
 export type View = { frame: Frame; page: PageData };
-export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' | 'reports' | 'profile' } | { view: 'board'; id: string; archive?: boolean; start?: boolean } | { view: 'topic'; id: string } | { view: 'place'; id: string }
+export type Place = { view: 'index' | 'active' | 'members' | 'settings' | 'trash' | 'reports' | 'profile' } | { view: 'board'; id: string; archive?: boolean; start?: boolean } | { view: 'topic'; id: string; page?: number; post?: string } | { view: 'place'; id: string }
   | { view: 'reply'; id: string } | { view: 'edit'; id: string; post: string } | { view: 'print'; id: string } | { view: 'search'; q: string; board?: string };
 
 /**
  * The forum keeps its campaign in the address hash: #<key>, then &board=<id> (&new=1 opens a new topic), &topic=<id>
- * (with &reply=1 or &edit=<post>), &place=<Encyclopedia place> (its board) or &view=<page>.
+ * (with &page=<n> or &post=<id> for the page with that post, or &reply=1 or &edit=<post>), &place=<Encyclopedia place> (its board) or &view=<page>.
  */
 export function parseForumHash(hash: string): { key: string; place: Place } {
   const text = hash.replace(/^#/, ''), at = text.indexOf('&'), key = at < 0 ? text : text.slice(0, at);
   const rest = new URLSearchParams(at < 0 ? '' : text.slice(at + 1)), ok = (v: string | null) => !!v && /^[A-Za-z0-9_-]{1,100}$/.test(v);
   const board = rest.get('board'), topic = rest.get('topic'), view = rest.get('view'), edit = rest.get('edit'), placeId = rest.get('place');
-  const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : rest.get('print') === '1' ? { view: 'print', id: topic! } : { view: 'topic', id: topic! })
+  const n = Number(rest.get('page')), page = Number.isInteger(n) && n >= 1 && n <= 1_000_000 ? n : undefined, post = rest.get('post');
+  const place: Place = ok(topic) ? (ok(edit) ? { view: 'edit', id: topic!, post: edit! } : rest.get('reply') === '1' ? { view: 'reply', id: topic! } : rest.get('print') === '1' ? { view: 'print', id: topic! }
+    : { view: 'topic', id: topic!, ...(page ? { page } : {}), ...(ok(post) ? { post: post! } : {}) })
     : ok(board) ? { view: 'board', id: board!, ...(rest.get('archive') === '1' ? { archive: true } : rest.get('new') === '1' ? { start: true } : {}) }
     : ok(placeId) ? { view: 'place', id: placeId! }
     : view === 'search' ? { view: 'search', q: (rest.get('q') ?? '').slice(0, 100), ...(ok(rest.get('in')) ? { board: rest.get('in')! } : {}) } : view === 'active' || view === 'members' || view === 'settings' || view === 'trash' || view === 'reports' || view === 'profile' ? { view } : { view: 'index' };
   return { key, place };
 }
 export function forumHash(key: string, place: Place) {
-  const at = place.view === 'board' ? `&board=${place.id}${place.archive ? '&archive=1' : place.start ? '&new=1' : ''}` : place.view === 'place' ? `&place=${place.id}` : place.view === 'topic' ? `&topic=${place.id}` : place.view === 'reply' ? `&topic=${place.id}&reply=1` : place.view === 'print' ? `&topic=${place.id}&print=1`
+  const at = place.view === 'board' ? `&board=${place.id}${place.archive ? '&archive=1' : place.start ? '&new=1' : ''}` : place.view === 'place' ? `&place=${place.id}` : place.view === 'topic' ? `&topic=${place.id}${place.page ? `&page=${place.page}` : ''}${place.post ? `&post=${place.post}` : ''}` : place.view === 'reply' ? `&topic=${place.id}&reply=1` : place.view === 'print' ? `&topic=${place.id}&print=1`
     : place.view === 'edit' ? `&topic=${place.id}&edit=${place.post}` : place.view === 'search' ? `&view=search&q=${encodeURIComponent(place.q)}${place.board ? `&in=${place.board}` : ''}` : place.view === 'index' ? '' : `&view=${place.view}`;
   return `#${key}${at}`;
 }
@@ -79,10 +81,41 @@ export async function forumCall<T = Record<string, unknown>>(body: Record<string
   if (!r.ok) throw new ForumRequestError(value.error ?? 'The forum is unavailable right now.', r.status, value.code);
   return value;
 }
-/** The page the server builds for a place: the reply and edit pages read the topic. */
+/**
+ * The page the server builds for a place: the reply page reads the topic's last page, the edit page the page with its
+ * post. A topic without a page or post opens where the reader's new posts start (or its last page).
+ */
 export const pageOf = (place: Place) => place.view === 'board' ? { kind: 'board', id: place.id, ...(place.archive ? { archive: true } : {}) }
-  : place.view === 'topic' || place.view === 'reply' || place.view === 'edit' || place.view === 'print' ? { kind: 'topic', id: place.id }
+  : place.view === 'topic' ? { kind: 'topic', id: place.id, ...(place.page ? { page: place.page } : place.post ? { post: place.post } : {}) }
+  : place.view === 'reply' ? { kind: 'topic', id: place.id, last: true } : place.view === 'edit' ? { kind: 'topic', id: place.id, post: place.post }
+  : place.view === 'print' ? { kind: 'topic', id: place.id, page: 1, per: WHOLE_PER }
   : place.view === 'search' ? { kind: 'search', q: place.q, ...(place.board ? { boardId: place.board } : {}) } : place.view === 'place' ? { kind: 'index' } : { kind: place.view };
+
+/** Posts read at once when a whole topic is gathered (lib/forum/pages.ts MAX_PER_PAGE). */
+const WHOLE_PER = 200;
+/**
+ * Every post of a topic, for printing, downloads and recaps: `first` (a page of it) and the rest of its pages, read
+ * in turn. Cards, links and features of every page are kept. `progress` hears how many posts are in so far.
+ */
+export async function wholeTopic(k: string, first: TopicPage, progress?: (got: number, of: number) => void): Promise<TopicPage> {
+  const { total } = first.paging;
+  if (first.posts.length >= total) return first;
+  // The print page already has the first page at this size.
+  const reuse = first.paging.page === 1 && first.paging.per === WHOLE_PER;
+  const out: TopicPage = { ...first, posts: reuse ? [...first.posts] : [], cards: { ...first.cards }, links: { ...first.links }, features: { ...first.features } };
+  for (let page = reuse ? 2 : 1; out.posts.length < total && page <= Math.ceil(total / WHOLE_PER) + 1; page++) {
+    let got: { page: TopicPage } | null = null;
+    for (let tries = 0; !got; tries++) {
+      try { got = await forumCall<{ page: TopicPage }>({ action: 'view', campaign: k, page: { kind: 'topic', id: first.topic.id, page, per: WHOLE_PER } }); }
+      catch (e) { if (!(e instanceof ForumRequestError && e.status === 429) || tries > 5) throw e; await new Promise(r => setTimeout(r, 2500)); }
+    }
+    if (got.page.paging.page !== page) break;
+    out.posts.push(...got.page.posts);
+    Object.assign(out.cards, got.page.cards); Object.assign(out.links, got.page.links); Object.assign(out.features, got.page.features);
+    progress?.(out.posts.length, total);
+  }
+  return { ...out, paging: { page: 1, pages: 1, per: out.posts.length, total: out.posts.length, first: 1 } };
+}
 
 /* Pictures load once per page visit and stay as object URLs, so a refresh doesn't fetch them again. */
 const pictures = new Map<string, Promise<string>>();

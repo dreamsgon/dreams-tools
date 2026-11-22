@@ -372,11 +372,12 @@ function withCampaignParts(here: Entry, from: Entry, campaignId: string): Entry 
 /* ---- Files kept beside the workspaces ---- */
 
 /**
- * The files a backup carries, by their path in it. Forum: forum/forum.json and forum/topics/<id>.json. AI chats:
+ * The files a backup carries, by their path in it. Forum: forum/forum.json, forum/topics/<id>.json, a long topic's
+ * pages forum/topics/<id>/<page>.json and a big forum's index files forum/index/<key>.json (lib/forum/pages.ts). AI chats:
  * ai-chats/index.json, older.json, <id>.json and <id>.part-<n>.json. A session page's transcript: transcripts/<page id>.txt.
  * The campaign's themes (lib/campaign-theme): theme.json.
  */
-export const FILE_PATH = /^(theme\.json|forum\/forum\.json|forum\/topics\/[A-Za-z0-9_-]{1,100}\.json|ai-chats\/(index|older)\.json|ai-chats\/[A-Za-z0-9-]{8,64}(\.part-[1-9][0-9]{0,4})?\.json|transcripts\/[A-Za-z0-9_-]{1,120}\.txt)$/;
+export const FILE_PATH = /^(theme\.json|forum\/forum\.json|forum\/topics\/[A-Za-z0-9_-]{1,100}(\/[A-Za-z0-9_-]{1,100})?\.json|forum\/index\/[A-Za-z0-9_-]{1,100}\.json|ai-chats\/(index|older)\.json|ai-chats\/[A-Za-z0-9-]{8,64}(\.part-[1-9][0-9]{0,4})?\.json|transcripts\/[A-Za-z0-9_-]{1,120}\.txt)$/;
 export const isBackupFile = (path: unknown): path is string => typeof path === "string" && FILE_PATH.test(path);
 /** A file's path and text in the imported campaign: ids follow the new ones. The forum file goes last, after its topics. */
 export function remapFile(path: string, text: string, ids: Record<string, string>) {
@@ -389,8 +390,17 @@ export function remapFile(path: string, text: string, ids: Record<string, string
  */
 export function forumSetupOnly(text: string) {
   const f = JSON.parse(text) as Record<string, unknown> & { uploads?: { kind?: string }[] };
-  const { profiles: _people, ...rest } = f;
-  return JSON.stringify({ ...rest, topics: [], counts: {}, characters: [], recent: [], reports: [], ...(Array.isArray(f.uploads) ? { uploads: f.uploads.filter(u => u?.kind === "emoji") } : {}) });
+  // A big forum's file lists index files instead of topics: the copy has none, so it's an ordinary forum file again.
+  const { profiles: _people, index: _index, ...rest } = f;
+  return JSON.stringify({ ...rest, schemaVersion: 1, topics: [], counts: {}, characters: [], recent: [], reports: [], ...(Array.isArray(f.uploads) ? { uploads: f.uploads.filter(u => u?.kind === "emoji") } : {}) });
+}
+/** A long topic's page files, from its topic file (they're read after it, as an AI chat's parts are). */
+export function topicPageFiles(path: string, text: string): string[] {
+  const topic = /^forum\/topics\/([A-Za-z0-9_-]{1,100})\.json$/.exec(path)?.[1];
+  if (!topic) return [];
+  let pages: unknown;
+  try { pages = (JSON.parse(text) as { pages?: unknown }).pages; } catch { return []; }
+  return Array.isArray(pages) ? pages.map((g: { key?: unknown } | null) => `forum/topics/${topic}/${String(g?.key)}.json`).filter(p => FILE_PATH.test(p)) : [];
 }
 export const fileOrder = (a: { path: string }, b: { path: string }) => Number(a.path === "forum/forum.json") - Number(b.path === "forum/forum.json");
 

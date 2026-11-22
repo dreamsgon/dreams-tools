@@ -171,7 +171,20 @@ function ModTools({ frame, page, k, done, go, fight }: { frame: Frame; page: Top
 /** Why a topic takes no replies. */
 const closedNote = (t: TopicPage['topic']) => t.trashed ? 'This topic is in the Trash.' : t.archived ? 'This topic is archived. A moderator can bring it back to reply.' : t.locked ? 'This topic is locked.' : 'Your group can read this topic but not reply.';
 
-export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
+/** A long topic's pages: the first, the last and the ones around this one. */
+function Pager({ page, k, go }: { page: TopicPage; k: string; go: Go }) {
+  const { page: at, pages } = page.paging, id = page.topic.id;
+  if (pages <= 1) return null;
+  const shown = [...new Set([1, at - 2, at - 1, at, at + 1, at + 2, pages])].filter(n => n >= 1 && n <= pages).sort((a, b) => a - b);
+  return <nav className="topic-pager" aria-label="Pages of this topic">
+    <span className="muted">Page {at} of {pages}</span>
+    {at > 1 && <Link k={k} go={go} to={{ view: 'topic', id, page: at - 1 }}>‹ Previous</Link>}
+    {shown.map((n, i) => <Fragment key={n}>{i > 0 && n > shown[i - 1]! + 1 && <span className="muted" aria-hidden="true">…</span>}{n === at ? <b aria-current="page">{n}</b> : <Link k={k} go={go} to={{ view: 'topic', id, page: n }}>{n}</Link>}</Fragment>)}
+    {at < pages && <Link k={k} go={go} to={{ view: 'topic', id, page: at + 1 }}>Next ›</Link>}
+  </nav>;
+}
+
+export function TopicView({ frame, page, k, go, done, focus }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done; focus?: string }) {
   const t = page.topic, [quote, setQuote] = useState<{ text: string; n: number }>(), [setup, setSetup] = useState(false);
   const canFight = frame.you.rights.moderate && t.kind === 'ic' && !page.combat && !t.archived && !t.trashed;
   const slot = page.combat?.order.find(s => s.now);
@@ -181,13 +194,15 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   const isFresh = (p: TopicPage['posts'][number]) => !!readBefore && !p.mine && p.at > readBefore;
   const firstNew = page.posts.find(isFresh);
   useEffect(() => {
-    if (firstNew && firstNew.number > 1 && !location.hash.includes('post-')) document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ block: 'start' });
+    if (!focus && firstNew && firstNew.number > page.paging.first && !location.hash.includes('post-')) document.getElementById(`post-${firstNew.id}`)?.scrollIntoView({ block: 'start' });
     // Only when the topic opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // A link to one post (after replying or editing, a report, a search hit) opens its page there.
+  useEffect(() => { if (focus) document.getElementById(`post-${focus}`)?.scrollIntoView({ block: 'start' }); }, [focus, page.paging.page]);
   // Reply as the character you last posted as here.
   const mine = [...page.posts].reverse().find(p => p.mine), preferred = mine ? mine.as : undefined;
-  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { await sendReply(k, t.id, v); await done(); };
+  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { const postId = await sendReply(k, t.id, v); await done(postId ? { view: 'topic', id: t.id, post: postId } : undefined); };
   const addReply = t.canReply && <button type="button" className="f-btn" onClick={() => go({ view: 'reply', id: t.id })}><Reply size={14} aria-hidden="true" />Add reply</button>;
   return <>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
@@ -205,7 +220,9 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
     </header>
     {setup && canFight && <CombatSetup frame={frame} page={page} k={k} onCancel={() => setSetup(false)} done={async () => { setSetup(false); await done(); }} />}
     <CombatPanel frame={frame} page={page} k={k} done={() => done()} />
+    <Pager page={page} k={k} go={go} />
     <div className="posts">{page.posts.map((p, i) => <Fragment key={p.id}>{p.turn && p.turn.round !== page.posts[i - 1]?.turn?.round && <p className="sysline"><Swords size={13} aria-hidden="true" />{page.posts[i - 1]?.turn ? `Round ${p.turn.round}` : `Combat · round ${p.turn.round}`}</p>}<Post p={p} card={p.as ? page.cards[p.as] ?? null : null} k={k} go={go} flip={i % 2 === 1} fresh={isFresh(p)} topic={t} links={page.links} onQuote={text => setQuote(q => ({ text, n: (q?.n ?? 0) + 1 }))} done={done} /></Fragment>)}</div>
+    <Pager page={page} k={k} go={go} />
     <SuggestedPosts page={page} k={k} done={() => done()} />
     {t.canReply ? <section className="reply">
       {slot && t.next?.mine && <p className="your-turn"><Swords size={15} aria-hidden="true" /><span>It’s your turn in round {page.combat!.round}{yours.length ? <> as <b>{yours.join(' and ')}</b></> : <>: <b>{slot.name}</b></>}. {slot.as.length ? (slot.as.length > 1 ? `${slot.name} is a group turn: it moves on once each of them has posted.` : 'Posting as them moves the fight on.') : 'Narration, or a post as an NPC, moves the fight on.'}</span></p>}
@@ -216,16 +233,18 @@ export function TopicView({ frame, page, k, go, done }: { frame: Frame; page: To
   </>;
 }
 
+/** Posts a reply; its id, to open the page it's on. */
 async function sendReply(k: string, topicId: string, v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) {
-  await forumCall({ action: 'reply', campaign: k, topicId, body: v.body, as: v.as, ...(v.ai ? { ai: true } : {}), ...(v.format ? { format: v.format } : {}) });
+  const out = await forumCall<{ postId?: string }>({ action: 'reply', campaign: k, topicId, body: v.body, as: v.as, ...(v.ai ? { ai: true } : {}), ...(v.format ? { format: v.format } : {}) });
   await afterPosting(k, topicId, v.after);
+  return out.postId;
 }
 
 /** The latest posts, newest first, under the full reply and edit pages (Jcink's topic review). */
 function TopicReview({ page, k }: { page: TopicPage; k: string }) {
   const posts = [...page.posts].reverse().slice(0, 15);
   return <section className="review" aria-label="Topic review">
-    <h2 className="category-title">Topic review <small className="muted">newest first{page.posts.length > posts.length ? ` · the last ${posts.length} of ${page.posts.length}` : ''}</small></h2>
+    <h2 className="category-title">Topic review <small className="muted">newest first{page.paging.total > posts.length ? ` · ${posts.length} of ${page.paging.total}` : ''}</small></h2>
     {posts.map(p => {
       const card = p.as ? page.cards[p.as] : null, name = card?.name ?? (page.topic.kind === 'ic' ? 'Game Master' : p.name);
       return <article key={p.id} className="review-post">
@@ -253,7 +272,7 @@ function useFocusMode() {
 /** The full reply page: a bigger box, focus mode and the topic's latest posts newest first underneath. */
 export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done }) {
   const t = page.topic, focus = useFocusMode(), mine = [...page.posts].reverse().find(p => p.mine);
-  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id }); };
+  const send = async (v: { body: string; as: string | null; after: AfterPost; ai: boolean; format: PostFormat | null }) => { const postId = await sendReply(k, t.id, v); await done({ view: 'topic', id: t.id, ...(postId ? { post: postId } : {}) }); };
   if (!t.canReply) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{closedNote(t)}</p></>;
   return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
@@ -268,7 +287,7 @@ export function ReplyView({ frame, page, k, go, done }: { frame: Frame; page: To
 export function EditView({ frame, page, k, go, done, postId }: { frame: Frame; page: TopicPage; k: string; go: Go; done: Done; postId: string }) {
   const t = page.topic, p = page.posts.find(x => x.id === postId), focus = useFocusMode();
   if (!p || !p.canEdit) return <><Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} /><p className="muted locked-note">{p ? 'You can’t edit this post.' : 'That post was removed.'}</p></>;
-  const save = async (v: { body: string; format: PostFormat | null }) => { await forumCall({ action: 'edit', campaign: k, topicId: t.id, postId: p.id, body: v.body, ...(v.format ? { format: v.format } : {}) }); await done({ view: 'topic', id: t.id }); };
+  const save = async (v: { body: string; format: PostFormat | null }) => { await forumCall({ action: 'edit', campaign: k, topicId: t.id, postId: p.id, body: v.body, ...(v.format ? { format: v.format } : {}) }); await done({ view: 'topic', id: t.id, post: p.id }); };
   const card = p.as ? page.cards[p.as] : null;
   return <div className={`reply-page${focus.on ? ' focus' : ''}`}>
     <Crumbs frame={frame} boardId={t.boardId} k={k} go={go} last={t.title} />
