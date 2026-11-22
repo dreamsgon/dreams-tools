@@ -11,11 +11,11 @@ import { z } from "zod";
  * A campaign without `sidebar` uses the starting layout. Players never see it.
  */
 
-export const navIds = ["quests", "codex", "relationships", "characters", "maps", "calendar", "tables", "templates"] as const;
+export const navIds = ["quests", "sessions", "codex", "relationships", "characters", "maps", "calendar", "tables", "templates"] as const;
 export type NavId = typeof navIds[number];
 /** Menu items that need a campaign; a world on its own does not show them. */
-export const campaignOnlyNav: readonly NavId[] = ["quests", "codex", "calendar"];
-export const navLabels: Record<NavId, string> = { quests: "Quests", codex: "Codex", relationships: "Relationships", characters: "Characters", maps: "World maps", calendar: "Calendar", tables: "Random tables", templates: "Templates" };
+export const campaignOnlyNav: readonly NavId[] = ["quests", "sessions", "codex", "calendar"];
+export const navLabels: Record<NavId, string> = { quests: "Quests", sessions: "Sessions", codex: "Codex", relationships: "Relationships", characters: "Characters", maps: "World maps", calendar: "Calendar", tables: "Random tables", templates: "Templates" };
 
 /** Parts of the Encyclopedia a link can open: the menu items, and Look. */
 export const viewIds = [...navIds, "look"] as const;
@@ -27,9 +27,10 @@ export const toolIds = ["form", "share", "items", "dice", "log", "search", "tags
 export type ToolId = typeof toolIds[number];
 export const toolLabels: Record<ToolId, string> = { form: "Stat form", share: "Share with players", items: "Items and spells", dice: "Dice", log: "Roll log", search: "Quick search", tags: "Tags", ai: "Connect an AI", backups: "Workspace & backups", transfer: "Export & import" };
 
-export const builtInSections = ["lore", "notes", "sessions", "orgs"] as const;
+// Sessions was a folding section here until it moved up into the menu; a saved layout's old "sessions" section is dropped.
+export const builtInSections = ["lore", "notes", "orgs"] as const;
 export type BuiltInSection = typeof builtInSections[number];
-export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", sessions: "Sessions", orgs: "Organizations" };
+export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", orgs: "Organizations" };
 
 /** Page kinds a category can list on its own (the same kinds as Entry, less folders). */
 export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system", "timeline", "page", "other"] as const;
@@ -75,7 +76,7 @@ export const sidebarSchema = z.object({
   if (!unique(s.nav, x => x.id)) ctx.addIssue({ code: "custom", message: "Each menu item can only be in the sidebar once" });
   if (!unique(s.sections, x => x.id)) ctx.addIssue({ code: "custom", message: "Each section can only be in the sidebar once" });
   if (!unique(s.categories, x => x.id)) ctx.addIssue({ code: "custom", message: "Category IDs must be unique" });
-  if (s.categories.some(c => (builtInSections as readonly string[]).includes(c.id))) ctx.addIssue({ code: "custom", message: "A category cannot use a built-in section's ID" });
+  if (s.categories.some(c => (builtInSections as readonly string[]).includes(c.id) || c.id === "sessions")) ctx.addIssue({ code: "custom", message: "A category cannot use a built-in section's ID" });
   const groups = s.groups ?? [];
   if (!unique(groups, x => x.id) || groups.some(g => (builtInSections as readonly string[]).includes(g.id) || s.categories.some(c => c.id === g.id))) ctx.addIssue({ code: "custom", message: "Heading IDs must be unique" });
 });
@@ -102,7 +103,8 @@ export type SidebarGroup = { id: string; name: string };
 export function sidebarOf(saved: Sidebar | undefined | null): Sidebar {
   if (!saved) return defaultSidebar();
   const nav = saved.nav.filter((x, i, a) => navIds.includes(x.id) && a.findIndex(y => y.id === x.id) === i);
-  for (const id of navIds) if (!nav.some(x => x.id === id)) nav.push({ id, on: true });
+  // Missing items go at the end, except Sessions (moved up from a section), which goes right after Quests.
+  for (const id of navIds) if (!nav.some(x => x.id === id)) { const after = id === "sessions" ? nav.findIndex(x => x.id === "quests") : -1; nav.splice(after < 0 ? nav.length : after + 1, 0, { id, on: true }); }
   const known = new Set<string>([...builtInSections, ...saved.categories.map(c => c.id), ...(saved.groups ?? []).map(g => g.id)]);
   const sections = saved.sections.filter((x, i, a) => known.has(x.id) && a.findIndex(y => y.id === x.id) === i);
   for (const id of known) if (!sections.some(x => x.id === id)) sections.push({ id, on: true });

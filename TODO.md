@@ -166,6 +166,14 @@ Updated 2026-11-22. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - Done: the tree's look: a hairline guide joins a folder to what is inside it, open folders show an open-folder icon, folder names read a little stronger than pages, counts sit in small pills, the open page has an accent bar, and sections are divided by a rule. Tokens only, so campaign themes carry over.
 - Not checked on the live site or with a campaign skin; checked locally at 1440px (light and dark) and iPhone 13 against a sample 213-page campaign.
 
+## Filing characters, Campaign Notes by type, Sessions in the menu (2026-11-22)
+
+- Done: Characters page. Each card has a folder menu at the bottom ("Move to a folder…", the folder's name, or Take out of folder), and a card can be dragged onto a folder in Your folders (only folders it can go in light up; "Out of folders" appears while dragging a filed card). A green line says what moved. With a folder selected, Add character starts in that folder, the heading has Add character here, and an empty folder says so with Add a character here. `moveIntoFolder` in `lib/encyclopedia/page-tree.ts`; campaign characters still can't go into shared-lore folders.
+- Done: Campaign Notes in the sidebar is grouped by type (Characters, Places, Organizations, Quests, Sessions, Lore, Notes, Folders). Only the view changes; no page moves. A folder sits with the type most of its pages have; an empty folder sits under Folders. Groups start open and a closed one is remembered (`type-shut:<campaign>:<group>` in the open-folders list). Dropping a sidebar page on a group takes it out of its folder. Arrange mode shows the plain tree. `lib/encyclopedia/type-groups.ts`, tests in `tests/type-groups.test.mjs`.
+- Done: folder rows in the sidebar have a + (New page in this folder) beside the pencil.
+- Done: Sessions moved from a folding section into the menu, after Quests, with its own page (`components/encyclopedia/sessions-section.tsx`: newest first by played date, recap status, search over 4 sessions, New session). Saved layouts drop the old section and get Sessions after Quests; the dashboard's Sessions tile opens the page.
+- Checked locally with sample data (dev build, API answered by the test harness) at 1440px dark and light and iPhone 13. Not checked on the live site or with a campaign skin.
+
 ## Wiki bottom space
 
 - Done: the 64px strip that global-dice.css reserves under every page no longer shows under the Wiki. The Wiki's footer row is now the home of the floating AI and Dice buttons (taller footer, right padding so its text never sits under them). Phones are unchanged.
