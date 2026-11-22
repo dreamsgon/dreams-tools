@@ -74,6 +74,8 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-facts > div.campaigns-pair { flex-direction:column; align-items:stretch; gap:6px; }
 .campaigns-facts .campaigns-pair dd { text-align:left; }
 .campaigns-solo { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+.campaigns-hint { display:block; color:var(--muted); font-size:12px; line-height:1.45; }
+.campaigns-hint.campaigns-error { color:var(--danger, #b42318); }
 .campaigns-facts select { width:100%; }
 .campaigns-rename, .campaigns-form { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
 .campaigns-rename label, .campaigns-form label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }

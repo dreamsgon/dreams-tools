@@ -199,14 +199,14 @@ export class MemberStore {
 
   /**
    * The campaigns someone else runs that this person is in, checked against each member list. `open` says
-   * whether their groups may see the front page and player pages.
+   * whether their groups may see the front page and player pages; `closed`, that the GM has closed it to players.
    */
   async memberships(userId: string) {
     const out: Joined[] = [];
     for (const { owner, ...i } of await this.membershipItems(userId)) {
       const { list } = await this.read(owner, i.campaignId).catch(() => ({ list: null as MemberList | null }));
       if (!list || !(list.members.some(m => m.userId === userId) || list.requests.some(r => r.userId === userId))) continue;
-      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps"), forum: can(list, userId, "forumRead") && !!(await this.bucket.head(forumKey(owner, i.campaignId)).catch(() => null)) });
+      out.push({ ...i, ref: await memberRef(owner, i.campaignId), open: can(list, userId, "seePlayer"), closed: !!list.hidden && !can(list, userId, "seeGm"), gm: can(list, userId, "seeGm"), maps: can(list, userId, "seeGm") && can(list, userId, "editMaps"), forum: can(list, userId, "forumRead") && !!(await this.bucket.head(forumKey(owner, i.campaignId)).catch(() => null)) });
     }
     return out;
   }
@@ -310,5 +310,5 @@ export class MemberStore {
 }
 
 export type Membership = { owner: string; campaignId: string; campaign: string; world: string; ownerName: string; role: string; groups: string[]; asking: boolean; at: string };
-export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; gm: boolean; maps?: boolean; forum?: boolean };
+export type Joined = Omit<Membership, "owner"> & { ref: string; open: boolean; closed?: boolean; gm: boolean; maps?: boolean; forum?: boolean };
 export type Notice = { id: string; kind: "ask" | "join" | "left"; campaignId: string; campaign: string; userId: string; name: string; group: string; at: string; read: boolean };

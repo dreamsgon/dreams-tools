@@ -15,6 +15,6 @@ export async function POST(request:Request){
   // The campaign's live theme, as the Encyclopedia part of the campaign wears it (lib/campaign-theme).
   const at=found?.rights??grant;
   const skin=data&&at?liveTheme((await new ThemeStore(getBucket()).read(at.owner,at.campaignId).catch(()=>null))?.file.live??null,'encyclopedia'):null;
-  return data?json({...data,skin}):json({error:member?'You can no longer open this campaign. You may have left it, or the GM changed what your group can see.':'This player link is unavailable or has been revoked.'},404);}
+  return data?json({...data,skin}):json({error:member?'You can no longer open this campaign. You may have left it, the GM changed what your group can see, or the GM closed it to players for now.':'This player link is unavailable or has been revoked.'},404);}
  catch{return json({error:'Player view is unavailable.'},500);}
 }

@@ -23,7 +23,7 @@ export type PageData =
   | ({ kind: 'pictures' } & ReturnType<typeof picturesPage>)
   | ({ kind: 'profile' } & ReturnType<typeof profilePage>)
   | ({ kind: 'search'; boardId: string | null } & ReturnType<typeof searchPage>)
-  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; card: CardDesign & { fields: CardField[]; sample: CardSample }; strip: Strip; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean } };
+  | { kind: 'settings'; places: { id: string; name: string }[]; settings: ForumSettings; groups: SettingsGroup[]; masks: Record<string, Masks>; emoji: EmojiSettings; topicTags: TopicTag[]; card: CardDesign & { fields: CardField[]; sample: CardSample }; strip: Strip; ai: { settings: ForumAi | null; connections: AiConnection[]; may: boolean; players?: boolean } };
 export type Tri = 'yes' | 'no' | 'never';
 export type SettingsGroup = { id: string; name: string; read: Tri; start: Tri; reply: Tri; gm: boolean };
 export type Masks = Record<string, Partial<Record<'read' | 'start' | 'reply' | 'html', Tri>>>;

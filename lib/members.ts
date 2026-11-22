@@ -77,6 +77,10 @@ export const memberListSchema = z.object({
   notify: z.object({ joins: z.boolean(), discord: z.boolean() }),
   // Optional (added later): Who can edit, by Encyclopedia page id.
   pages: z.record(id, pageAccessSchema).optional(),
+  // Optional (added later), see campaignAccess: `hidden` closes the campaign to everyone but its GMs; `playerAi` lets
+  // members who aren't GMs use the AI. Lists saved before these read as open, with AI for the GMs only.
+  hidden: z.boolean().optional(),
+  playerAi: z.boolean().optional(),
 });
 export type Group = z.infer<typeof groupSchema>;
 export type Member = z.infer<typeof memberSchema>;
@@ -104,13 +108,43 @@ export function emptyMemberList(campaignId: string, ownerName = ""): MemberList 
   return { campaignId, ownerName: ownerName.slice(0, 80), groups: defaultGroups(), members: [], links: [], requests: [], bans: [], notify: { joins: true, discord: false } };
 }
 
-/** What a member may do: Yes in any of their groups and Never in none. The owner may always. */
+const groupsSay = (list: MemberList, m: Member, permission: Permission) => {
+  const said = m.groups.map(g => list.groups.find(x => x.id === g)?.perms[permission]).filter(Boolean);
+  return said.includes("yes") && !said.includes("never");
+};
+
+/**
+ * What a member may do: Yes in any of their groups and Never in none. The owner may always. While the GM has the
+ * campaign closed to players (`hidden`), only members who may see GM-only things (co-GMs) can do anything at all.
+ */
 export function can(list: MemberList, userId: string, permission: Permission, ownerId?: string) {
   if (ownerId && userId === ownerId) return true;
   const m = list.members.find(x => x.userId === userId);
-  if (!m) return false;
-  const said = m.groups.map(g => list.groups.find(x => x.id === g)?.perms[permission]).filter(Boolean);
-  return said.includes("yes") && !said.includes("never");
+  if (!m || !groupsSay(list, m, permission)) return false;
+  return !list.hidden || groupsSay(list, m, "seeGm");
+}
+
+/** The campaign's two switches for players and guests, as the GM's settings show them. */
+export function campaignAccess(list: Pick<MemberList, "hidden" | "playerAi">) {
+  return { players: list.hidden !== true, playerAi: list.playerAi === true };
+}
+
+export function setCampaignAccess(list: MemberList, patch: { players?: boolean; playerAi?: boolean }): MemberList {
+  const { hidden: _h, playerAi: _a, ...rest } = list;
+  const next = { ...campaignAccess(list), ...Object.fromEntries(Object.entries(patch).filter(([, v]) => typeof v === "boolean")) };
+  return { ...rest, ...(next.players ? {} : { hidden: true }), ...(next.playerAi ? { playerAi: true } : {}) };
+}
+
+/**
+ * Whether someone may use the campaign's AI (the AI panel, AI help in the forum). The GM always may, and co-GMs; a
+ * solo campaign's owner keeps it in the player view too, since they are its only player. Players and guests only
+ * when the GM turned on AI for players in the campaign's settings. `asPlayer` is the GM looking through the
+ * players' eyes (Preview as players), who sees what players would.
+ */
+export function mayUseAi(list: MemberList, userId: string, ownerId: string, opts: { solo?: boolean; asPlayer?: boolean } = {}) {
+  if (userId === ownerId) return opts.solo || !opts.asPlayer || list.playerAi === true;
+  if (can(list, userId, "seeGm")) return true;
+  return list.playerAi === true && !list.hidden && list.members.some(m => m.userId === userId);
 }
 
 /** A member's role for the Campaigns page: Co-GMs when they can see GM-only things, else Players or the group's name. */

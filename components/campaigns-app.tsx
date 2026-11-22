@@ -272,6 +272,7 @@ export function CampaignDetails({ row, summary, busy, error, close, send, onDele
           Just me, solo
         </label>
       </dd></div>}
+      {row.encyclopedia && <PlayerAccess key={row.encyclopedia.id} campaignId={row.encyclopedia.id} solo={row.encyclopedia.solo} />}
       {summary.folders.length > 0 && <div className="campaigns-pair"><dt><label htmlFor="campaign-folder">Folder</label></dt><dd>
         <select id="campaign-folder" value={row.folderId ?? ""} disabled={busy} onChange={e => send({ action: "moveCampaign", key: row.key, folderId: e.target.value || null }, "Moved.")}>
           <option value="">Top level</option>
@@ -296,6 +297,51 @@ export function CampaignDetails({ row, summary, busy, error, close, send, onDele
     {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
       onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum added. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;
+}
+
+type Access = { players: boolean; playerAi: boolean };
+/**
+ * Who besides the GM can open the campaign, and whether players may use the AI (kept on the member list, lib/members.ts
+ * campaignAccess; the server enforces both). Open to players and AI for the GMs only until the GM changes them.
+ */
+function PlayerAccess({ campaignId, solo }: { campaignId: string; solo: boolean }) {
+  const [access, setAccess] = useState<Access | null>(null), [busy, setBusy] = useState(false), [note, setNote] = useState(""), [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/members?campaignId=${encodeURIComponent(campaignId)}&access=1`, { cache: "no-store" })
+      .then(async r => { const body = await r.json() as Access & { error?: string }; if (!r.ok) throw Error(body.error || "Couldn't read who can see this campaign."); if (live) setAccess({ players: body.players, playerAi: body.playerAi }); })
+      .catch(e => { if (live) setError(e instanceof Error ? e.message : "Couldn't read who can see this campaign."); });
+    return () => { live = false; };
+  }, [campaignId]);
+  async function change(patch: Partial<Access>, done: string) {
+    setBusy(true); setError(""); setNote("");
+    try {
+      const r = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "access", campaignId, ...patch }) });
+      const body = await r.json() as Access & { error?: string };
+      if (!r.ok) throw Error(body.error || "Couldn't save that.");
+      setAccess({ players: body.players, playerAi: body.playerAi }); setNote(done);
+    } catch (e) { setError(e instanceof Error ? e.message : "Couldn't save that."); }
+    finally { setBusy(false); }
+  }
+  const off = !access || busy;
+  return <>
+    <div className="campaigns-pair campaigns-access"><dt>Who can see it</dt><dd>
+      <label className="campaigns-solo">
+        <input type="checkbox" checked={access?.players ?? true} disabled={off} onChange={e => void change({ players: e.target.checked }, e.target.checked ? "Players and guests can open this campaign again." : "Closed. Only you and your co-GMs can open it now.")} />
+        Players and guests can open it
+      </label>
+      <small className="campaigns-hint">{access && !access.players ? "Closed: players and guests can't open its Wiki, forum or player links until you turn this back on. Co-GMs still can." : "Turn off to keep it to you and your co-GMs while you prepare, or between arcs."}</small>
+    </dd></div>
+    <div className="campaigns-pair campaigns-access"><dt>AI</dt><dd>
+      <label className="campaigns-solo">
+        <input type="checkbox" checked={access?.playerAi ?? false} disabled={off} onChange={e => void change({ playerAi: e.target.checked }, e.target.checked ? "Players and guests can use the AI here now." : "The AI is for you and your co-GMs only.")} />
+        Players can use AI
+      </label>
+      <small className="campaigns-hint">{solo ? "Solo play: you always have the AI, in the GM and player views. This only matters for anyone else you invite." : access?.playerAi ? "Players and guests can use the AI features you turn on, like Catch me up in the forum." : "Off: only you and your co-GMs see the AI. Players and guests don't get AI buttons, and the server refuses their AI requests."}</small>
+      {error && <small className="campaigns-hint campaigns-error" role="alert">{error}</small>}
+      <span className="sr-only" role="status">{note}</span>
+    </dd></div>
+  </>;
 }
 
 /** The campaign's own web address, /campaigns/<slug> (lib/campaign-slug.ts). Old id links keep working. */

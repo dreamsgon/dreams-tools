@@ -924,6 +924,15 @@ test('request: AI help sends only what the asker can read, by permission, and co
   const page = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'settings' } })).json()).page;
   assert.deepEqual([page.ai.settings, page.ai.connections.map(c => c.name), page.ai.may], [null, ['Claude'], true]);
   assert.equal((await (await gm.post({ action: 'aiSettings', campaign: KEY, ai: { connectionId: 'c1', catchUp: 'all', check: 'all', draft: 'staff' } })).json()).ok, true);
+  // AI is the GMs' until the campaign's settings allow it for players, whatever the forum's own AI settings say.
+  const own = { provider: 'openai', model: 'gpt-test', apiKey: 'sk-player-own-key-1234' };
+  assert.deepEqual((await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.you.ai, { catchUp: false, check: false, draft: false });
+  assert.match((await (await p1.post({ action: 'ai', campaign: KEY, op: 'summary', topicId, own })).json()).error, /keeps the AI to the GMs/);
+  assert.equal(asks.length, 0, 'refused on the server, before any AI is asked');
+  assert.equal((await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'settings' } })).json()).page.ai.players, false);
+  const co = harness({ user: 'co' }); co.deps.store = gm.store; co.deps.ai = fakeAi;
+  assert.equal((await (await co.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame.you.ai.catchUp, true, 'co-GMs keep it');
+  p1.deps.campaign = async () => ({ owner: OWNER, campaignId: 'camp', list: { ...list(), playerAi: true } });
   const frame = (await (await p1.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
   assert.deepEqual(frame.you.ai, { catchUp: true, check: true, draft: false });
   const gmFrame = (await (await gm.post({ action: 'view', campaign: KEY, page: { kind: 'index' } })).json()).frame;
@@ -1633,4 +1642,15 @@ test('request: the campaign banner picture for Maptable’s scene list, signed, 
   look = { ...look, players: false };
   assert.equal(await hero(player), null);
   assert.equal((await hero(gm)).y, .3);
+});
+
+test('request: a campaign closed to players keeps its forum to the GM and co-GMs', async () => {
+  const closed = async () => ({ owner: OWNER, campaignId: 'camp', list: { ...list(), hidden: true } });
+  const index = { action: 'view', campaign: KEY, page: { kind: 'index' } };
+  for (const user of ['p1', 'g1']) {
+    const h = harness({ user, campaign: closed }), r = await h.post(index);
+    assert.equal(r.status, 403, user);
+    assert.match((await r.json()).error, /closed this campaign to players/);
+  }
+  for (const user of ['co', OWNER]) assert.equal((await harness({ user, campaign: closed }).post(index)).status, 200, user);
 });
