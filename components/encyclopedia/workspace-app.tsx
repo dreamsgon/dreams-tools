@@ -7,10 +7,12 @@ import { writingKinds, type WritingKind } from "@/lib/encyclopedia/ai-styles";
 import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { putWorkspace, workspaceBody } from "@/lib/encyclopedia/workspace-client";
 import { WikiStorage } from "./wiki-storage";
-import { DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, PART_LIMITS, TOTAL_LIMIT, formatMb, sizeProblem, wikiPatch } from "@/lib/encyclopedia/wiki-parts";
+import { DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, PART_LIMITS, TOTAL_LIMIT, formatMb, sizeProblem, wikiPatch, scopeKeys, type PartSize } from "@/lib/encyclopedia/wiki-parts";
+import { addPages, outsideScope, scopedUrl, scopeHint } from "@/lib/encyclopedia/wiki-scope-client";
+import { PageCounts } from "./page-counts";
 import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { withoutDeletedStats } from "@/lib/encyclopedia/stat-arrange";
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode, type ComponentType } from "react";
+import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type ComponentType } from "react";
 import dynamic from "next/dynamic";
 import { useIdlePreload } from "@/lib/idle-preload";
 import { ArrowLeftRight, ListCollapse, FolderOpen, Bot, Network, Backpack, UserRound, LayoutTemplate, LayoutDashboard, CalendarDays, Map as MapIcon, Compass, Plus, Search, ChevronRight, ChevronDown, Users, Flag, ScrollText, ListChecks, Check, Download, Upload, Settings, GitBranch as Github, ArrowUpRight, Menu, X, Archive, Pencil, Globe, PanelLeftClose, PanelLeftOpen, LoaderCircle, Dices, Goal, Library, Palette, Sparkles, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowUpDown, GripVertical } from "lucide-react";
@@ -157,6 +159,9 @@ export default function WorkspaceApp() {
     const [backups, setBackups] = useState(false);
     // How big one campaign (or one world's shared lore) may be; the owner can raise it in Wiki settings, Storage.
     const [partLimit, setPartLimit] = useState(DEFAULT_PART_LIMIT), [totalLimit, setTotalLimit] = useState(DEFAULT_TOTAL_LIMIT);
+    // The parts this tab has opened (one campaign at a time, lib/encyclopedia/wiki-scope-client.ts), and every part the Wiki has. Null scope: the whole Wiki (a co-GM's one campaign).
+    const opened = useRef<string[] | null>(null), known = useRef<Set<string>>(new Set()), [sizes, setSizes] = useState<PartSize[] | null>(null), [opening, setOpening] = useState(false);
+    const shownPlace = useRef<{ worldId: string; campaignId: string | null; loaded: boolean }>({ worldId: "", campaignId: null, loaded: false });
     const current = useRef(data), base = useRef(data), etag = useRef<string | null>(null), conflicts = useRef(0), revision = useRef(0), version = useRef(0), savedVersion = useRef(0), busy = useRef(false), blocked = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null), fileInput = useRef<HTMLInputElement>(null);
     const world = data.worlds.find(w => w.id === worldId), campaign = data.campaigns.find(c => c.id === campaignId), entry = data.entries.find(e => e.id === selected);
     useDiceTarget(loaded && !signedOut ? encyclopediaDiceTarget(campaign, !!memberRef()) : NO_CAMPAIGN);
@@ -172,9 +177,13 @@ export default function WorkspaceApp() {
     const linkedWorlds = campaign ? linkedLoreWorldIds(data, campaign).flatMap(id => data.worlds.filter(w => w.id === id)) : [], shown = visibleEntries(data, worldId, campaignId), scope = shown.filter(e => e.campaignId === campaignId), articles = shown.filter(e => e.kind !== "folder");
     const searchResults = articles.filter(e => searchableText(e).toLowerCase().includes(query.toLowerCase()));
     const linkQuery = useRef<URLSearchParams | null>(null);
+    const pageCounts = useMemo(() => sizes ? new Map(sizes.map(x => [x.key, x.pages])) : null, [sizes]);
     async function load() { try {
         setMemberRef(memberRefFromHash());
-        const res = await fetch(workspaceUrl());
+        // The owner opens one campaign (or world) and what it shows; the address, else the last place, says which. A co-GM gets their one campaign.
+        const hintQuery = shownPlace.current.loaded ? null : (linkQuery.current ??= new URLSearchParams(window.location.search));
+        const hint = shownPlace.current.loaded ? { campaign: shownPlace.current.campaignId, world: shownPlace.current.worldId } : scopeHint(hintQuery!, readRemembered(PLACE_KEY));
+        const res = await fetch(memberRef() ? workspaceUrl() : scopedUrl(hint));
         const body = await workspaceBody<{
             error?: string;
             data: unknown;
@@ -183,6 +192,8 @@ export default function WorkspaceApp() {
             limit?: number;
             total?: number;
             member?: CoGm;
+            scope?: string[];
+            sizes?: PartSize[];
         }>(res);
         if (res.status === 401) {
             setSignedOut(true);
@@ -191,6 +202,8 @@ export default function WorkspaceApp() {
         if (!res.ok)
             throw new Error(body.error);
         const checked = workspaceSchema.parse(body.data);
+        opened.current = !memberRef() && body.scope ? body.scope : null;
+        if (body.sizes) { known.current = new Set(body.sizes.map(x => x.key)); setSizes(body.sizes); }
         current.current = checked;
         setData(checked);
         revision.current = body.revision;
@@ -281,7 +294,11 @@ export default function WorkspaceApp() {
     async function save() { if (memberReadOnly() || busy.current || blocked.current || version.current === savedVersion.current)
         return; busy.current = true; let again = false; const sent = version.current, payload = current.current; setStatus("Saving…"); try {
         // Only the campaigns and worlds that changed go up (lib/encyclopedia/wiki-parts.ts); a co-GM sends their copy of one campaign.
-        const response = await putWorkspace(workspaceUrl(), memberRef() ? { data: payload, revision: revision.current } : { patch: wikiPatch(base.current, payload), revision: revision.current });
+        // A change that reaches into a campaign this tab hasn't opened (an import, say) opens its pages first, so they go up with it.
+        const outside = opened.current ? outsideScope(base.current, payload, opened.current, known.current) : [];
+        if (outside.length) { await openParts(outside); again = true; return; }
+        const patch = memberRef() ? null : wikiPatch(base.current, payload);
+        const response = await putWorkspace(workspaceUrl(), !patch ? { data: payload, revision: revision.current } : opened.current ? { patch, revision: revision.current, scope: opened.current } : { patch, revision: revision.current });
         const value = await response.json() as {
             error?: string;
             revision: number;
@@ -292,6 +309,8 @@ export default function WorkspaceApp() {
         if (!response.ok)
             throw new Error(value.error ?? "Save failed");
         conflicts.current = 0;
+        // A campaign or world made here is stored now, with its pages: it counts as opened.
+        if (patch && opened.current) for (const key of Object.keys(patch.parts)) if (patch.parts[key] && !known.current.has(key)) { known.current.add(key); opened.current.push(key); }
         revision.current = value.revision;
         etag.current = value.etag ?? null;
         base.current = payload;
@@ -313,17 +332,19 @@ export default function WorkspaceApp() {
      * Takes in the latest saved copy when it changed somewhere else. Unsaved edits in this tab are joined onto it
      * page by page; when both changed the same page, this tab's version is kept and named in a toast. False when it can't.
      */
-    async function pull() {
-        const res = await fetch(workspaceUrl(), { cache: "no-store", headers: etag.current ? { "If-None-Match": `"${etag.current}"` } : {} });
+    async function pull(force = false) {
+        const url = opened.current ? scopedUrl({ parts: opened.current }) : workspaceUrl();
+        const res = await fetch(url, { cache: "no-store", headers: etag.current && !force ? { "If-None-Match": `"${etag.current}"` } : {} });
         if (res.status === 304) return true;
         if (!res.ok) return false;
-        const body = await workspaceBody<{ data: unknown; revision: number; etag?: string | null; limit?: number; total?: number; member?: CoGm }>(res);
+        const body = await workspaceBody<{ data: unknown; revision: number; etag?: string | null; limit?: number; total?: number; member?: CoGm; sizes?: PartSize[] }>(res);
+        if (body.sizes) { known.current = new Set(body.sizes.map(x => x.key)); setSizes(body.sizes); }
         if (body.limit) setPartLimit(body.limit); if (body.total) setTotalLimit(body.total);
         // The GM may have changed what this co-GM's group can do since the page opened.
         if (body.member && memberRef() && !!body.member.edit !== !memberReadOnly()) { setMemberEdit(!!body.member.edit); setMember(body.member); setStatus(body.member.edit ? "All changes saved" : "Read only"); }
         const theirs = workspaceSchema.safeParse(body.data);
         if (!theirs.success) return false;
-        if (body.revision <= revision.current) { if (body.revision === revision.current) etag.current = body.etag ?? null; return true; }
+        if (body.revision < revision.current || (body.revision === revision.current && !force)) { if (body.revision === revision.current) etag.current = body.etag ?? null; return true; }
         let next = theirs.data;
         if (version.current !== savedVersion.current) {
             const joined = mergeWorkspaces(base.current, current.current, theirs.data);
@@ -335,6 +356,33 @@ export default function WorkspaceApp() {
         current.current = next; setData(next);
         return true;
     }
+    /**
+     * Opens more of the Wiki in this tab: the pages of `keys` (another campaign, a linked world's lore). When nothing
+     * was saved meanwhile they are simply added; otherwise the opened parts are read again and joined like a pull.
+     */
+    async function openParts(keys: string[]) {
+        if (!opened.current) return;
+        const res = await fetch(scopedUrl({ parts: keys }), { cache: "no-store" });
+        const body = await workspaceBody<{ error?: string; data: unknown; revision: number; etag?: string | null }>(res);
+        if (!res.ok) throw new Error(body.error ?? "Could not open that campaign.");
+        const theirs = workspaceSchema.parse(body.data);
+        opened.current = [...opened.current, ...keys.filter(k => !opened.current!.includes(k))];
+        if (body.revision === revision.current) { base.current = addPages(base.current, theirs); current.current = addPages(current.current, theirs); setData(current.current); return; }
+        if (!await pull(true)) throw new Error("Could not open that campaign. Reload the page.");
+    }
+    /** Opens what the campaign or world now shown needs, when this tab hasn't yet. */
+    async function openPlace(worldId: string, campaignId: string | null) {
+        if (!opened.current) return;
+        const need = scopeKeys(current.current, { worldId, campaignId }).filter(k => known.current.has(k) && !opened.current!.includes(k));
+        if (!need.length) return;
+        if (busy.current) { setTimeout(() => void openPlaceRef.current(worldId, campaignId), 300); return; }
+        busy.current = true; setOpening(true);
+        try { await openParts(need); } catch (e) { setError(e instanceof Error ? e.message : "Could not open that campaign."); }
+        finally { busy.current = false; setOpening(false); }
+    }
+    const openPlaceRef = useRef(openPlace);
+    useEffect(() => { openPlaceRef.current = openPlace; });
+    useEffect(() => { shownPlace.current = { worldId, campaignId, loaded }; if (loaded) void openPlaceRef.current(worldId, campaignId); }, [loaded, worldId, campaignId]);
     /** Checks for changes made somewhere else, between saves. */
     async function poll() { if (busy.current || blocked.current || document.hidden)
         return; busy.current = true; try { await pull(); } catch { /* Try again at the next poll. */ } finally {
@@ -417,7 +465,14 @@ export default function WorkspaceApp() {
     }
     function showSection(id: "characters" | "maps" | "calendar" | "tables" | "templates" | "quests" | "codex" | "relationships" | "look") { setView(id); if (id === "tables") setTablesHome(n => n + 1); setSelected(null); setQuery(""); setMobile(false); }
     function toggleFolder(id: string) { folders.toggle(id); }
-    function exportAll() { download(current.current, "world-manager-backup.json"); }
+    async function exportAll() {
+        if (!opened.current) { download(current.current, "world-manager-backup.json"); return; }
+        // This tab has only some campaigns open: save, then download the whole Wiki as stored.
+        if (version.current !== savedVersion.current) { await save(); if (version.current !== savedVersion.current) { setToast("Save your changes first, then export."); return; } }
+        const res = await fetch(workspaceUrl(), { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; error?: string }>(res);
+        if (!res.ok || !body.data) { setToast(body.error ?? "Could not read the whole Wiki to export it."); return; }
+        download(body.data, "world-manager-backup.json");
+    }
     async function importFile(file: File) { try {
         if (file.size > TOTAL_LIMIT)
             throw new Error(`Choose a JSON backup smaller than ${formatMb(TOTAL_LIMIT)}.`);
@@ -522,7 +577,7 @@ export default function WorkspaceApp() {
       trail={trailNode} actions={topActions} onPick={mref ? undefined : row => switchCampaign(row)} onWorlds={mref ? undefined : () => setModal({ type: "library" })}
       beforeLeave={leaveSaved} canOpenSwitcher={() => loaded && !signedOut && !modal && !palette && !tagsOpen && !aiOpen && !backups && !writing && !tool && !moreOpen}/>;
     if (asPlayer && campaign && !member && !mref) return <div className="wiki-player-preview">{wikiBar}<PlayerViewBanner>You read {campaign.name} as its players do: only what you marked player-visible.</PlayerViewBanner><PlayerView data={playerCampaign(data, campaign.id)}/></div>;
-    return <div className={`app-shell ${barOn?"wiki-shell ":""}${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}{themeDock.node}
+    return <PageCounts.Provider value={pageCounts}><div className={`app-shell ${barOn?"wiki-shell ":""}${sidebar.collapsed?"sidebar-collapsed":""}${member?" is-co-gm":""}${member&&!member.edit?" co-gm-read":""} ${skin.className}`} {...look} style={{"--sidebar-width":sidebar.width+"px",...look.style} as CSSProperties}>{skin.on?skin.nodes:<LookFont look={campaign?.look}/>}{themeDock.node}
   <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])}/>
   {mobile && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobile(false)}/>}
    {barOn && wikiBar}
@@ -547,7 +602,7 @@ export default function WorkspaceApp() {
   <main className="main-panel" id="main-content" tabIndex={-1}>
    {member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true"/><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a {member.role} here. {member.edit ? "Your changes save to their Wiki." : "Your group can read it, not edit it."}</span><Link href="/campaigns">Back to Campaigns</Link></div>}
    {!barOn && <header className="topbar"><div className="crumbs">{sidebarButtons}<ToolSwitch active="encyclopedia"/></div>{trailNode}<div className="top-actions">{topActions}<AccountLink/></div></header>}
-   {!member && <FogImageSync data={data} change={change}/>}{campaign?.archived && !member && <div className="error-banner" role="status"><div><strong>This campaign is archived.</strong> Its {campaign.archived.pages} pages are kept in storage, out of the Wiki. Bring them back from Settings, Storage.</div><button onClick={() => setModal({ type: "settings" })}>Open Storage</button></div>}{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))
+   {!member && <FogImageSync data={data} change={change}/>}{opening && <div className="info-note wiki-opening" role="status">Opening this campaign’s pages…</div>}{campaign?.archived && !member && <div className="error-banner" role="status"><div><strong>This campaign is archived.</strong> Its {campaign.archived.pages} pages are kept in storage, out of the Wiki. Bring them back from Settings, Storage.</div><button onClick={() => setModal({ type: "settings" })}>Open Storage</button></div>}{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))
         location.reload(); }}>Reload</button><button onClick={() => { blocked.current = false; setError(""); void save(); }}>Retry save</button></div>}
    {view==='dashboard'&&!query ? <WorkspaceDashboard data={data} worldId={worldId} change={change} onWorld={selectWorld} onCampaign={(wid,cid)=>{setWorldId(wid);selectCampaign(cid);}} onLore={wid=>{setWorldId(wid);selectCampaign(null);navigation.open('lore');}} onNewCampaign={()=>setModal({type:'campaign'})} onEdit={id=>setModal({type:'rename',id})}/> : !world ? <div className="empty-world"><span className="eyebrow">Every world starts with a page</span><h1>Make room for<br />your next adventure.</h1><p>Keep the world you imagine and the campaigns you play in one thoughtful workspace.</p><div className="button-row"><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={17}/> Create a world</button><button className="button" onClick={() => { change(demoWorkspace()); setWorldId("demo-world"); setCampaignId("demo-campaign"); }}>Explore a sample world <ArrowUpRight size={16}/></button></div><button className="text-button" onClick={() => fileInput.current?.click()}><Upload size={15}/> Bring an existing backup</button><div className="empty-illustration"><Compass size={120} strokeWidth={.7}/><span>WORLDS / CAMPAIGNS / STORIES</span></div></div> :
             query ? <section className="page-content"><span className="eyebrow">Search · {campaign?.name ?? "WORLD LORE"}</span><h1>Find a thread</h1><p className="subtitle">{searchResults.length} results for “{query}” · includes shared world lore</p><div className="result-list">{searchResults.map(e => <button key={e.id} onClick={() => openEntry(e.id)}><span className="entry-icon"><EntryIcon kind={e.kind}/></span><span><strong>{e.title}</strong><small>{e.campaignId ? labels[e.kind] : `Shared lore · ${labels[e.kind]}`}</small><p>{excerpt(e, data)}</p></span><ChevronRight size={16}/></button>)}{!searchResults.length && <p>No matches. Try a character, place, or phrase.</p>}</div></section> :
@@ -579,7 +634,7 @@ export default function WorkspaceApp() {
   {tagsOpen && <TagsManager scope="encyclopedia" onClose={() => setTagsOpen(false)} onShow={showTag}/>}
   {modal && <ModalDialog title={{ world: "Create a world", campaign: "Begin a campaign", entry: "Create an entry", settings: "Workspace & backups", library: "Your world library", rename: "Edit details", connections: "AI & campaign repositories" }[modal.type]} onClose={() => setModal(null)}>
    {modal.type === "library" ? <><p className="modal-intro">A home for every world you imagine.</p><div className="world-list">{data.worlds.map(w => <div key={w.id}><button onClick={() => { selectWorld(w.id); setModal(null); }}><Globe size={20}/><span><strong>{w.name}</strong><small>{w.archived ? "Archived" : `${data.campaigns.filter(c => c.worldId === w.id).length} campaigns`}</small></span><ChevronRight size={16}/></button><button aria-label={`${w.archived ? "Restore" : "Archive"} ${w.name}`} title={w.archived ? "Restore world" : "Archive world"} onClick={() => change({ ...data, worlds: data.worlds.map(x => x.id === w.id ? { ...x, archived: !x.archived } : x) })}><Archive size={16}/></button></div>)}</div><button className="button primary" onClick={() => setModal({ type: "world" })}><Plus size={16}/> Create a world</button></> :
-                modal.type === "settings" ? <><p className="modal-intro">Keep a copy you control. Backups include your worlds, campaigns, article links, and folder hierarchy.</p><div className="settings-action"><div><strong>Export all worlds</strong><p>Download a complete JSON backup, including unsaved changes.</p></div><button className="button" onClick={exportAll}><Download size={16}/> Export</button></div>{world && !member && <div className="settings-action"><div><strong>Export &amp; import content</strong><p>Move random tables, templates, stats, calendars and more between worlds and campaigns as a .json file.</p></div><button className="button" onClick={() => { setModal(null); setTool("transfer"); }}><ArrowLeftRight size={16}/> Open</button></div>}<div className="settings-action"><div><strong>Import a backup</strong><p>Creates new copies. Existing worlds are preserved.</p></div><button className="button" onClick={() => fileInput.current?.click()}><Upload size={16}/> Import</button></div>{!member && <WikiStorage data={data} limit={partLimit} total={totalLimit} onTotal={next => { setTotalLimit(next); void pollRef.current(); }} saved={unsaved === 0 && status === "All changes saved"} onChanged={next => { setPartLimit(next); void pollRef.current(); }} onArchived={() => void pollRef.current()}/>}<p className="info-note">Local and hosted workspaces use their configured storage. Use export and import to move content between them. Uploaded map images are stored separately: download each map’s Map package to include its image when moving between local and hosted workspaces.</p><a className="text-button" href="/account" target="_top">Sign out</a></> :
+                modal.type === "settings" ? <><p className="modal-intro">Keep a copy you control. Backups include your worlds, campaigns, article links, and folder hierarchy.</p><div className="settings-action"><div><strong>Export all worlds</strong><p>Download a complete JSON backup, including unsaved changes.</p></div><button className="button" onClick={exportAll}><Download size={16}/> Export</button></div>{world && !member && <div className="settings-action"><div><strong>Export &amp; import content</strong><p>Move random tables, templates, stats, calendars and more between worlds and campaigns as a .json file.</p></div><button className="button" onClick={() => { setModal(null); setTool("transfer"); }}><ArrowLeftRight size={16}/> Open</button></div>}<div className="settings-action"><div><strong>Import a backup</strong><p>Creates new copies. Existing worlds are preserved.</p></div><button className="button" onClick={() => fileInput.current?.click()}><Upload size={16}/> Import</button></div>{!member && <WikiStorage data={data} sizes={sizes} limit={partLimit} total={totalLimit} onTotal={next => { setTotalLimit(next); void pollRef.current(); }} saved={unsaved === 0 && status === "All changes saved"} onChanged={next => { setPartLimit(next); void pollRef.current(); }} onArchived={() => void pollRef.current()}/>}<p className="info-note">Local and hosted workspaces use their configured storage. Use export and import to move content between them. Uploaded map images are stored separately: download each map’s Map package to include its image when moving between local and hosted workspaces.</p><a className="text-button" href="/account" target="_top">Sign out</a></> :
                     modal.type === "connections" ? <><p className="modal-intro">Each campaign can have its own repository. AI can read a selected campaign and its shared lore through authenticated, read-only MCP tools.</p>{campaign ? <><div className="connection-label"><Flag size={17}/>{campaign.name}</div><p className="info-note"><b>Repository:</b> {campaign.github.repository ? `${campaign.github.repository} · branch ${campaign.github.branch}` : "none connected yet"}</p><button className="button primary full" onClick={() => { setModal(null); setBackups(true); }}><Github size={16}/> GitHub &amp; backups</button><p className="info-note">The sheet connects a GitHub repository (the key stays on this device), pushes this campaign to it as an RP repository, downloads it as a ZIP, or restores one as a new campaign. It includes shared world lore and never another campaign.</p><details className="connection-help"><summary>Command line</summary><p>The same layout can be written straight into a local clone of the repository. Download the campaign JSON, then run:</p><button type="button" className="button small" onClick={() => download(campaignExport(current.current, campaign.id), `campaign-${campaign.id}.json`)}><Download size={14}/> Download campaign JSON</button><code>node --experimental-strip-types scripts/campaign-sync.mjs export --file /path/campaign-{campaign.id}.json --repo /path/repository {campaign.github.folder ? `--dir "${campaign.github.folder}"` : "[--dir subfolder]"} [--tables tables.json] [--player-safe] [--push]</code><p>It writes the numbered folders, keeps files you edited in the repository, and with --player-safe leaves out 6-GM-Only/ and the restore copy. To read a repository back as a new copy:</p><code>node --experimental-strip-types scripts/campaign-sync.mjs pull --campaign {campaign.id} --repo /path/repository --repository {campaign.github.repository || "owner/repository"} --branch {campaign.github.branch} --out /path/restored.json</code><p>Pull imports are separate copies so existing notes are never silently overwritten.</p></details></> : <p className="info-note">Choose a campaign (open Worlds) to configure its repository and export.</p>}{campaign && <DiscordRollsSetting campaign={campaign} onChange={discord => change({ ...data, campaigns: data.campaigns.map(c => c.id === campaign.id ? { ...c, discord } : c) })}/>}<EncyclopediaAgentAccess campaignId={campaign?.id??null} campaignName={campaign?.name??null}/><BridgeAccess campaignId={campaign?.id??null} campaignName={campaign?.name??null}/></> :
                         <DetailsForm key={modal.type + modal.id} defaultKind={modal.id==="folder"?"folder":modal.kind??"page"} mode={modal.type} initialName={modal.type === "entry" ? modal.name ?? "" : modal.type === "rename" ? (data.entries.find(e => e.id === modal.id)?.title ?? data.campaigns.find(c => c.id === modal.id)?.name ?? data.worlds.find(w => w.id === modal.id)?.name ?? "") : ""} initialDescription={data.campaigns.find(c => c.id === modal.id)?.description ?? data.worlds.find(w => w.id === modal.id)?.description ?? ""} showDescription={modal.type === "world" || modal.type === "campaign" || modal.type === "rename" && !data.entries.some(e => e.id === modal.id)} campaignAvailable={!!campaign} defaultParent={modal.parent ?? (entry?.kind === "folder" ? entry.id : entry?.parentId ?? "")} defaultShared={modal.shared ?? (modal.parent ? data.entries.find(e => e.id === modal.parent)?.campaignId === null : entry ? entry.campaignId === null : !campaign)} folders={shown.map(e=>({...e,title:[folderPath(data,e),e.title].filter(Boolean).join(" / ")})).sort((a,b)=>a.title.localeCompare(b.title))} templates={modal.type==="entry"?templatesFor(data.worlds.find(w=>w.id===worldId),campaignId):[]} defaultTemplateId={modal.templateId} data={data} worldId={worldId} campaign={campaign?{id:campaign.id,name:campaign.name}:null} onNewType={t=>change(s=>saveTemplate(s,worldId,t,newId))} onSubmit={(name, description, kind, shared, parent, template) => { if (!name.trim())
                             throw new Error("A title is required"); if (modal.type === "world") {
@@ -616,7 +671,7 @@ export default function WorkspaceApp() {
                                 change({ ...data, worlds: data.worlds.map(w => w.id === modal.id ? { ...w, name: name.trim(), description } : w), campaigns: data.campaigns.map(c => c.id === modal.id ? { ...c, name: name.trim(), description } : c) });
                         } setModal(null); }}/>}
   </ModalDialog>}
- </div>;
+ </div></PageCounts.Provider>;
 }
 function EntryIcon({ kind }: {
     kind: Entry["kind"];

@@ -24,7 +24,7 @@ test('saving a changed page keeps its previous text as a version beside workspac
  assert.equal(h.versions.length,1);assert.equal(h.versions[0].body,original);
  assert(data.has(encyclopediaPrefix('alice')+'history/demo-greyhaven.json'));
  // workspace.json is unchanged in shape: still {data,revision}.
- assert.deepEqual(Object.keys(JSON.parse(data.get(encyclopediaPrefix('alice')+'workspace.json').text)).sort(),['format','layout','parts','revision','schemaVersion']);
+ assert.deepEqual(Object.keys(JSON.parse(data.get(encyclopediaPrefix('alice')+'workspace.json').text)).sort(),['format','layout','meta','parts','revision','schemaVersion']);
  // Another user's history is separate.
  assert.equal((await store.history('bob','demo-greyhaven')).versions.length,0);
 });

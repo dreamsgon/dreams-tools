@@ -2,11 +2,15 @@ import { getAppUser } from '@/lib/app-user';
 import { getBucket } from '../storage';
 import { EncyclopediaStore, encyclopediaPrefix } from './store';
 import type { Workspace } from './world-model';
-import type { WikiPatch } from './wiki-parts';
+import type { PartKey, ScopePlace, WikiPatch } from './wiki-parts';
 export const readWorkspace = (owner:string) => new EncyclopediaStore(getBucket()).read(owner);
 export const saveWorkspace = (owner:string,data:Workspace,revision:number) => new EncyclopediaStore(getBucket()).saveTagged(owner,data,revision);
 /** Saves only the campaigns and worlds that changed (lib/encyclopedia/wiki-parts.ts). */
 export const saveWorkspacePatch = (owner:string,patch:WikiPatch,revision:number) => new EncyclopediaStore(getBucket()).savePatch(owner,patch,revision);
+/** One campaign (or world) and what it shows, for the Wiki app (EncyclopediaStore.readScoped). */
+export const readWorkspaceScope = (owner:string,place:ScopePlace&{keys?:PartKey[];entryId?:string|null}) => new EncyclopediaStore(getBucket()).readScoped(owner,place);
+/** A save from a Wiki app that opened only `scope`. */
+export const saveWorkspaceScopedPatch = (owner:string,patch:WikiPatch,revision:number,scope:PartKey[]) => new EncyclopediaStore(getBucket()).saveScopedPatch(owner,patch,revision,scope);
 export const setWikiPartLimit = (owner:string,limit:number) => new EncyclopediaStore(getBucket()).setPartLimit(owner,limit);
 export const setWikiTotalLimit = (owner:string,total:number) => new EncyclopediaStore(getBucket()).setTotalLimit(owner,total);
 /** Moves a campaign's pages out of the Wiki into their own archive file, or brings them back. */

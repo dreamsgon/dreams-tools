@@ -2,18 +2,20 @@
 import {useState} from 'react';
 import {Archive,ArchiveRestore,HardDrive} from 'lucide-react';
 import {confirmDialog} from '../confirm-dialog';
-import {PAGE_LIMIT,PART_LIMITS,TOTAL_LIMITS,formatMb,partSizes} from '@/lib/encyclopedia/wiki-parts';
+import {PAGE_LIMIT,PART_LIMITS,TOTAL_LIMITS,formatMb,partSizes,type PartSize} from '@/lib/encyclopedia/wiki-parts';
 import type {Workspace} from '@/lib/encyclopedia/world-model';
 import './wiki-storage.css';
 /**
  * Wiki settings, Storage: how full each campaign (and each world's shared lore) is, and the limit for one of them,
  * which the owner can raise. Each campaign is stored on its own (lib/encyclopedia/wiki-parts.ts).
  */
-export function WikiStorage({data,limit,total:totalLimit,onChanged,onTotal,saved,onArchived}:{data:Workspace;limit:number;total:number;onChanged:(limit:number)=>void;onTotal:(total:number)=>void;
+export function WikiStorage({data,sizes:stored=null,limit,total:totalLimit,onChanged,onTotal,saved,onArchived}:{data:Workspace;limit:number;total:number;
+  /** Every part's size as the server last said, when this tab has only some campaigns open (null: measure `data`). */
+  sizes?:PartSize[]|null;onChanged:(limit:number)=>void;onTotal:(total:number)=>void;
   /** False while this tab has edits not saved yet: archiving waits for them, so they can't bring archived pages back. */
   saved:boolean;onArchived:()=>void}) {
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[all,setAll]=useState(false);
-  const sizes=partSizes(data).filter(s=>s.kind!=='other'&&!(s.kind==='campaign'&&data.campaigns.find(c=>`c:${c.id}`===s.key)?.archived)),total=sizes.reduce((n,s)=>n+s.bytes,0),shown=all?sizes:sizes.slice(0,6);
+  const sizes=(stored??partSizes(data)).filter(s=>s.kind!=='other'&&!(s.kind==='campaign'&&data.campaigns.find(c=>`c:${c.id}`===s.key)?.archived)),total=sizes.reduce((n,s)=>n+s.bytes,0),shown=all?sizes:sizes.slice(0,6);
   async function choose(next:number,which:'limit'|'total'='limit') {
     setBusy(true);setError('');
     try {
@@ -26,7 +28,7 @@ export function WikiStorage({data,limit,total:totalLimit,onChanged,onTotal,saved
   const archived=data.campaigns.filter(c=>c.archived);
   /** Archives a campaign's pages, or brings them back (store.ts archiveCampaign). */
   async function archive(campaignId:string,name:string,on:boolean) {
-    const pages=data.entries.filter(e=>e.campaignId===campaignId).length;
+    const pages=data.entries.filter(e=>e.campaignId===campaignId).length||(stored?.find(s=>s.key===`c:${campaignId}`)?.pages??0);
     if(on&&!await confirmDialog({title:`Archive ${name}?`,message:`Its ${pages} page${pages===1?'':'s'} leave the Wiki and are kept in storage on their own, so they don’t count toward any limit. The campaign stays, with its players, links and maps. Bring it back here any time.`,confirm:'Archive'}))return;
     setBusy(true);setError('');
     try {

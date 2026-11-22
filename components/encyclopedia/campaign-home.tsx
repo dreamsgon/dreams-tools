@@ -7,6 +7,7 @@
  * (campaign.look.banner), the same one Look and the Admin CP's Banner tab set. A live campaign theme draws its own art
  * in the hero; a banner picture takes its place.
  */
+import { usePagesIn } from "./page-counts";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type DragEvent } from "react";
 import { ArrowUpRight, Check, ChevronRight, Flag, Goal, ImagePlus, Map as MapIcon, Move, Palette, Plus, RotateCcw, ScrollText, Settings, Trash2, Users } from "lucide-react";
 import type { Campaign, Entry, Workspace, World } from "@/lib/encyclopedia/world-model";
@@ -53,6 +54,7 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
   onCampaign: (id: string) => void; onNewCampaign: () => void; onSection: (s: Section) => void; onUnlink: (worldId: string) => void;
   setLook: (look: Look | undefined) => void;
 }) {
+  const pagesIn = usePagesIn(data);
   const pages = (list: Entry[]) => list.filter(e => e.kind !== "folder");
   const recent = pages(scope).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);
   const lore = pages(shown.filter(e => e.campaignId === null)).sort((a, b) => Number(a.worldId !== worldId) - Number(b.worldId !== worldId) || b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
@@ -114,7 +116,7 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
             : <p className="home-quiet">Places, people and history every campaign in {world.name} shares. <button className="text-button home-add" onClick={() => onNew("lore", true)}>Add world lore</button></p>}
         </div> : <div className="home-block">
           <div className="section-heading home-heading"><h2>Campaigns</h2><button className="text-button home-add" onClick={onNewCampaign}>Begin another <Plus size={14} /></button></div>
-          {campaigns.length ? <ul className="home-lore">{campaigns.map(c => <li key={c.id}><button onClick={() => onCampaign(c.id)}><Flag size={16} /><span>{c.name}<small>{plural(data.entries.filter(e => e.campaignId === c.id && e.kind !== "folder").length, "page")}</small></span><ChevronRight size={15} className="home-go" /></button></li>)}</ul>
+          {campaigns.length ? <ul className="home-lore">{campaigns.map(c => <li key={c.id}><button onClick={() => onCampaign(c.id)}><Flag size={16} /><span>{c.name}<small>{plural(pagesIn(c.id), "page")}</small></span><ChevronRight size={15} className="home-go" /></button></li>)}</ul>
             : <p className="home-quiet">No campaigns in {world.name} yet.</p>}
         </div>}
       </aside>

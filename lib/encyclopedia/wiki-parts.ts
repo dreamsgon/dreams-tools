@@ -109,3 +109,57 @@ export function sizeProblem(w: Workspace, limit = DEFAULT_PART_LIMIT, total = DE
   if (sum > total) return `Your whole Wiki would be ${formatMb(sum)}, over the ${formatMb(total)} limit for all campaigns together. Raise it in Wiki settings, Storage, or archive a campaign you've finished.`;
   return null;
 }
+
+/* ---- Loading one campaign at a time ---- */
+
+/** The worlds and campaigns themselves, without their pages: kept in the index so the Wiki can open one campaign without reading the rest. */
+export type WikiMeta = { worlds: World[]; campaigns: Campaign[] };
+/** Where the Wiki opens: a campaign, or a world's own lore. */
+export type ScopePlace = { campaignId?: string | null; worldId?: string | null; /** A Maptable campaign: the Wiki campaign paired with it. */ maptableId?: string | null };
+/**
+ * The parts a place needs: the campaign's, its world's lore and the lore of worlds linked to it (a world's own view:
+ * just that world's lore), and every template world, which new campaigns and pages can start from.
+ */
+export function scopeKeys(meta: WikiMeta, place: ScopePlace): PartKey[] {
+  const keys: PartKey[] = [], add = (k: PartKey) => { if (!keys.includes(k)) keys.push(k); };
+  const campaign = (place.campaignId ? meta.campaigns.find(c => c.id === place.campaignId) : undefined) ?? (place.maptableId ? meta.campaigns.find(c => c.maptableCampaignId === place.maptableId) : undefined);
+  const world = campaign ? meta.worlds.find(w => w.id === campaign.worldId) : meta.worlds.find(w => w.id === place.worldId)
+    ?? meta.worlds.find(w => !w.archived && !w.isTemplate) ?? meta.worlds.find(w => !w.isTemplate);
+  if (campaign) { add(campaignKey(campaign.id)); add(worldKey(campaign.worldId)); for (const id of campaign.linkedWorldIds ?? []) if (meta.worlds.some(w => w.id === id)) add(worldKey(id)); }
+  else if (world) add(worldKey(world.id));
+  for (const w of meta.worlds) if (w.isTemplate) add(worldKey(w.id));
+  return keys;
+}
+/** The Wiki with every world and campaign but only the pages of `keys`, in their usual order. */
+export function scopedWorkspace(layout: Layout, meta: WikiMeta, parts: ReadonlyMap<PartKey, Part>, keys: PartKey[]): Workspace {
+  const want = new Set(keys), used = new Map<PartKey, number>(), entries: Entry[] = [];
+  for (const [key, count] of layout.runs) {
+    if (!want.has(key)) continue;
+    const part = parts.get(key), from = used.get(key) ?? 0;
+    if (!part || from + count > part.entries.length) throw new DamagedWikiError("Your Wiki's storage does not add up (pages are missing). Nothing was changed.");
+    entries.push(...part.entries.slice(from, from + count));
+    used.set(key, from + count);
+  }
+  const worlds = new Map(meta.worlds.map(w => [w.id, w])), campaigns = new Map(meta.campaigns.map(c => [c.id, c]));
+  return { schemaVersion: 1, worlds: layout.worlds.flatMap(id => worlds.get(id) ?? []), campaigns: layout.campaigns.flatMap(id => campaigns.get(id) ?? []), entries };
+}
+/**
+ * A save from a Wiki that opened only `scope` (scopedWorkspace). Parts in the scope are taken as sent. Outside it the
+ * browser has the world or campaign but not its pages: a changed one keeps its stored pages, and one it removed goes
+ * with its pages (deleting a campaign or world). Pages outside the scope can't be sent.
+ */
+export function applyScopedPatch(current: ReadonlyMap<PartKey, Part>, layout: Layout, patch: WikiPatch, scope: PartKey[]): Workspace {
+  if (!patch || typeof patch !== 'object' || !patch.layout || !Array.isArray(patch.layout.runs) || !patch.parts || typeof patch.parts !== 'object' || !Array.isArray(scope)) throw new DamagedWikiError('That save is not in a form this Wiki understands. Reload and try again.');
+  // A part not stored yet (a campaign made in this tab) has no pages to lose, so it counts as opened.
+  const inScope = new Set([...scope, ...Object.keys(patch.parts).filter(key => !current.has(key))]), parts = new Map(current);
+  for (const [key, part] of Object.entries(patch.parts)) {
+    if (part === null) { parts.delete(key); continue; }
+    if (inScope.has(key)) { parts.set(key, part); continue; }
+    if (part.entries?.length) throw new DamagedWikiError('That save has pages from a campaign this tab has not opened. Reload and try again.');
+    parts.set(key, { ...(part.world ? { world: part.world } : {}), ...(part.campaign ? { campaign: part.campaign } : {}), entries: current.get(key)?.entries ?? [] });
+  }
+  if (patch.layout.runs.some(([key]) => !inScope.has(key))) throw new DamagedWikiError('That save has pages from a campaign this tab has not opened. Reload and try again.');
+  // Pages outside the scope keep their place; the scope's pages follow in the order the browser has them.
+  const runs: [PartKey, number][] = [...layout.runs.filter(([key]) => !inScope.has(key) && parts.has(key)), ...patch.layout.runs];
+  return joinWorkspace({ worlds: patch.layout.worlds, campaigns: patch.layout.campaigns, runs }, parts);
+}
