@@ -1,15 +1,17 @@
 'use client';
 /*
- * Write's Insert and Style menus. Insert puts a block (info box, read-aloud, note, columns, an embedded page,
+ * Write's Insert and Style menus. Insert adds a picture, a battle map, a random table or a GM secret, or puts a block (info box, read-aloud, note, columns, an embedded page,
  * a page list, HTML…) on its own lines at the cursor; Style wraps the selected words in [words]{…} or the selected
  * lines in ::: style. Everything they write is plain text the reader understands (lib/encyclopedia/markup.ts).
  */
 import {useEffect,useRef,useState,type ReactNode,type RefObject} from 'react';
-import {ChevronDown,Plus,Type,BookOpen,ImagePlus} from 'lucide-react';
+import {ChevronDown,Plus,Type,HelpCircle,ImagePlus} from 'lucide-react';
 import {PALETTE,pictureLine} from '@/lib/encyclopedia/markup';
 import {uploadMapImage} from './map-transfer';
 
-type Props={editor:RefObject<HTMLTextAreaElement|null>;body:string;setBody:(next:string)=>void;caretTo:(at:number,end?:number)=>void};
+/** More things Insert offers, each with a word on what it does: a battle map, a random table, a GM secret. */
+export type InsertAction={label:string;hint:string;icon:ReactNode;run:()=>void;title?:string};
+type Props={editor:RefObject<HTMLTextAreaElement|null>;body:string;setBody:(next:string)=>void;caretTo:(at:number,end?:number)=>void;actions?:InsertAction[]};
 const INSERTS:[string,string][]=[
  ['Info box','::: infobox\nKind: \nHome: [[Page name]]\n(gm) Secret: \n:::'],
  ['Read-aloud box','::: read-aloud\nWhat the players hear.\n:::'],
@@ -35,7 +37,7 @@ function Menu({label,icon,children,open,setOpen,wide}:{label:string;icon:ReactNo
  return <div className="write-menu" ref={box}><button type="button" className="button small" aria-expanded={open} aria-haspopup="true" onMouseDown={e=>e.preventDefault()} onClick={()=>setOpen(!open)}>{icon}{label}<ChevronDown size={12} aria-hidden="true"/></button>{open&&<div className={`write-pop ${wide?'wide':''}`} role="menu">{children}</div>}</div>;
 }
 
-export function WriteTools({editor,body,setBody,caretTo}:Props){
+export function WriteTools({editor,body,setBody,caretTo,actions=[]}:Props){
  const [menu,setMenu]=useState<'insert'|'style'|null>(null),[status,setStatus]=useState('');
  const file=useRef<HTMLInputElement>(null);
  const latest=useRef({body,setBody});latest.current={body,setBody};
@@ -70,6 +72,8 @@ export function WriteTools({editor,body,setBody,caretTo}:Props){
  return <>
   <Menu label="Insert" icon={<Plus size={14} aria-hidden="true"/>} open={menu==='insert'} setOpen={v=>setMenu(v?'insert':null)}>
    <button type="button" role="menuitem" onMouseDown={e=>e.preventDefault()} onClick={()=>{setMenu(null);file.current?.click();}}><span><ImagePlus size={13} aria-hidden="true"/> Picture…</span><small>upload</small></button>
+   {actions.map(a=><button key={a.label} type="button" role="menuitem" title={a.title} onMouseDown={e=>e.preventDefault()} onClick={()=>{setMenu(null);a.run();}}><span>{a.icon} {a.label}</span><small className="write-pop-words">{a.hint}</small></button>)}
+   <hr className="write-pop-rule"/>
    {INSERTS.map(([name,text])=><button key={name} type="button" role="menuitem" onMouseDown={e=>e.preventDefault()} onClick={()=>insert(text)}><span>{name}</span><small>{text.split('\n')[0]!.slice(0,18)}</small></button>)}
   </Menu>
   <Menu label="Style" icon={<Type size={14} aria-hidden="true"/>} open={menu==='style'} setOpen={v=>setMenu(v?'style':null)} wide>
@@ -81,6 +85,6 @@ export function WriteTools({editor,body,setBody,caretTo}:Props){
   </Menu>
  <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={e=>{const files=[...(e.target.files??[])];e.target.value='';void pictures(files);}}/>
   {status&&<span className="write-status" role="status">{status}</span>}
-  <a className="button small write-guide" href="/guide/writing-wiki-pages" target="_blank" rel="noopener"><BookOpen size={14} aria-hidden="true"/> What can I type?</a>
+  <a className="button small write-guide" href="/guide/writing-wiki-pages" target="_blank" rel="noopener" title="What can I type?"><HelpCircle size={14} aria-hidden="true"/> <span className="write-guide-label">What can I type?</span></a>
  </>;
 }

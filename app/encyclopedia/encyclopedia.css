@@ -1665,7 +1665,7 @@ input,select,textarea{border-color:var(--field-line)}
 .article-layout .article-toolbar .segmented button{padding-left:9px;padding-right:9px}
 .article-layout .article-toolbar .write-menu>.button{gap:3px;padding-left:8px;padding-right:8px}
 .article-layout .article-toolbar .write-menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.article:not(.is-editing) .article-toolbar>.segmented:first-child+*{margin-left:auto}
+.article:not(.is-editing) .article-toolbar>.word-count+*{margin-left:auto}
 .article-layout .prose>:first-child{margin-top:0}
 }
 /* Text floor: nothing a GM reads in the Wiki's own chrome is under 12px (themed campaigns keep their sizes). */
@@ -1674,4 +1674,22 @@ input,select,textarea{border-color:var(--field-line)}
 .tab-share-switch button{font-size:12px}
 .main-footer{font-size:12px;letter-spacing:0}
 .aside-heading .text-button,.backlink.mention-link small,.article-aside small{font-size:12px}
+}
+/* The page toolbar: Read or Write and the writing tools on the left (Insert, Style, What can I type?); the page's own
+   buttons on the right as quiet icons (Text, Page, copy link, history, pin). Write's word count sits under the text. */
+.article-toolbar .write-guide{margin-right:auto}
+.article-toolbar>.word-count{margin-left:auto}
+.article-toolbar>.page-look>.button{border-color:transparent;background:none;box-shadow:none;color:var(--muted);padding:6px 5px;gap:1px}
+.article-toolbar>.page-look>.button:hover,.article-toolbar>.page-look>.button[aria-expanded="true"]{background:var(--hover);color:var(--ink)}
+.article-toolbar>.page-look .write-menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.article-toolbar>.page-look>.write-pop{left:auto;right:0}
+.write-pop-rule{border:0;border-top:1px solid var(--line);margin:5px 4px}
+.write-pop>button>span:has(>svg){display:inline-flex;align-items:center;gap:7px}
+.write-pop>button small.write-pop-words{font:12px var(--font-sans)}
+/* Writing on a phone: one row of Read or Write, Insert, Style and the guide; the page's own buttons wait for Read. */
+@media(max-width:720px){
+.article.is-editing .article-toolbar:not(:has(.write-status)){flex-wrap:nowrap}
+.article.is-editing .article-toolbar>:is(.page-look,button){display:none}
+.article.is-editing .article-toolbar .write-guide{padding-left:10px;padding-right:10px;margin-right:0}
+.article.is-editing .article-toolbar .write-guide-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 }
