@@ -4,7 +4,8 @@
  * Every post counts towards the member's own post count, in character or not.
  *
  * Kept in the GM's storage beside the member list (see store.ts): one forum file (settings, categories, boards,
- * a summary of every topic and the post counts) and one file per topic with its posts. Each change below is pure:
+ * a summary of every topic and the post counts; a big forum keeps its summaries in index files beside it) and one
+ * file per topic with its latest posts, its older posts in page files beside it (pages.ts). Each change below is pure:
  * it checks who is asking and returns the new topic file and a change to apply to the forum file, so the store can
  * read the forum file again and re-apply it when someone else saved in between.
  */
@@ -16,7 +17,8 @@ import { afterPost, cleanOrder, combatSchema, countsFor, step, turnMeta, turnMet
 import { ROLL_LIMIT, rollSchema, type Roll } from "./rolls.ts";
 import { POST_FORMATS, emojiCodes, htmlParts, pictureIds, type PostFormat } from "./markup.ts";
 
-export const FORUM_LIMITS = { categories: 12, boards: 80, topics: 3000, posts: 1500, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3, cardRows: 12, styles: 4, styleChars: 2000, profiles: 100 } as const;
+/** A forum has no limit on its topics, nor a topic on its posts: they are stored in pages (store.ts, pages.ts). */
+export const FORUM_LIMITS = { categories: 12, boards: 80, body: 30_000, title: 120, links: 8, characters: 2000, recent: 400, privateMembers: 30, bulk: 50, reports: 300, uploads: 3000, emoji: 200, uploadsEach: 300, topicTags: 20, tagsPerTopic: 3, cardRows: 12, styles: 4, styleChars: 2000, profiles: 100 } as const;
 /** Largest picture in a post, and largest emoji, in bytes. */
 export const PICTURE_BYTES = 8 * 1024 * 1024, EMOJI_BYTES = 256 * 1024;
 /** Days a topic stays in the Trash before it goes for good. */
@@ -130,7 +132,7 @@ export const forumSchema = z.object({
   settings: forumSettingsSchema,
   categories: z.array(categorySchema).max(FORUM_LIMITS.categories),
   boards: z.array(boardSchema).max(FORUM_LIMITS.boards),
-  topics: z.array(topicSummarySchema).max(FORUM_LIMITS.topics),
+  topics: z.array(topicSummarySchema),
   /** Posts per member account, in character and out. */
   counts: z.record(userId, z.number().int().min(0)),
   /** Every character that has posted here. Their pictures may be shown to everyone who reads the forum. */
@@ -164,7 +166,27 @@ export const postSchema = z.object({
 /** A post an AI connection (MCP) suggested, waiting in the topic for the GM or a co-GM to approve, change or skip. */
 export const suggestionSchema = z.object({ id, at, connection: nameOf(60), as: id.nullable(), body: z.string().min(1).max(FORUM_LIMITS.body) });
 export const SUGGESTED_LIMIT = 10;
-export const topicSchema = z.object({ schemaVersion: z.literal(1), id, boardId: id, posts: z.array(postSchema).max(FORUM_LIMITS.posts), suggested: z.array(suggestionSchema).max(SUGGESTED_LIMIT).optional() });
+/**
+ * A page of a topic's older posts (pages.ts): its own file, never changed in place (a change is a new file), and
+ * what the topic needs to know about it without reading it: how many posts, the first, who wrote them.
+ */
+export const pageRefSchema = z.object({
+  key: id, count: z.number().int().min(1),
+  first: z.object({ id, by: authorSchema, at }), lastAt: at,
+  /** Posts in it per member account. */
+  authors: z.record(userId, z.number().int().min(1)),
+  /** Characters, and turn takers, in order of their first post in this page. */
+  cast: z.array(id).max(40), order: z.array(z.string().min(1).max(100)).max(41),
+});
+export const postPageSchema = z.object({ schemaVersion: z.literal(1), topicId: id, posts: z.array(postSchema).min(1) });
+/**
+ * A topic file. Version 1 holds every post. Version 2 (a long topic) holds its latest posts and `pages`, its older
+ * posts oldest first, each in a file of its own; its latest posts are then never empty.
+ */
+export const topicSchema = z.object({
+  schemaVersion: z.union([z.literal(1), z.literal(2)]), id, boardId: id, posts: z.array(postSchema), suggested: z.array(suggestionSchema).max(SUGGESTED_LIMIT).optional(),
+  pages: z.array(pageRefSchema).optional(),
+});
 
 export type ForumSettings = z.infer<typeof forumSettingsSchema>;
 export type Category = z.infer<typeof categorySchema>;
@@ -174,6 +196,7 @@ export type TopicSummary = z.infer<typeof topicSummarySchema>;
 export type Forum = z.infer<typeof forumSchema>;
 export type Post = z.infer<typeof postSchema>;
 export type Topic = z.infer<typeof topicSchema>;
+export type PageRef = z.infer<typeof pageRefSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type Recent = z.infer<typeof recentSchema>;
 export type Report = z.infer<typeof reportSchema>;
@@ -303,19 +326,28 @@ const cleanBoard = (f: Forum, boardId: string, who: Poster, starting: boolean) =
 /** The topic's summary worked out again from its posts, keeping what moderators set (pinned, locked, title). */
 type Kept = Pick<TopicSummary, "title" | "pinned" | "locked"> & Partial<Pick<TopicSummary, "archived" | "trashed" | "private" | "combat" | "tags">>;
 export function summarize(topic: Topic, base: Kept): TopicSummary {
-  const first = topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1]!;
+  const pages = topic.pages ?? [], first = pages[0]?.first ?? topic.posts[0] ?? fail("A topic needs a post."), last = topic.posts[topic.posts.length - 1] ?? fail("A topic needs a post.");
   const cast: string[] = [], order: string[] = [];
-  for (const p of topic.posts) {
-    if (p.by.as && !cast.includes(p.by.as) && cast.length < 40) cast.push(p.by.as);
-    const who = p.by.as ?? NARRATION;
+  const add = (as: string | null) => {
+    if (as && !cast.includes(as) && cast.length < 40) cast.push(as);
+    const who = as ?? NARRATION;
     if (!order.includes(who) && order.length < 41) order.push(who);
-  }
+  };
+  // A page knows its characters and turn takers in order; together they're the topic's, as if read post by post.
+  for (const g of pages) { for (const o of g.order) add(o === NARRATION ? null : o); for (const c of g.cast) add(c); }
+  for (const p of topic.posts) add(p.by.as);
   return {
-    id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: topic.posts.length - 1, pinned: base.pinned, locked: base.locked, cast, order,
+    id: topic.id, boardId: topic.boardId, title: base.title, by: first.by, at: first.at, last: last.by, lastAt: last.at, replies: postTotal(topic) - 1, pinned: base.pinned, locked: base.locked, cast, order,
     ...(base.archived ? { archived: true } : {}), ...(base.trashed ? { trashed: base.trashed } : {}), ...(base.private ? { private: base.private } : {}), ...(base.combat ? { combat: base.combat } : {}), ...(base.tags?.length ? { tags: base.tags } : {}),
     ...(topic.suggested?.length ? { suggested: topic.suggested.length } : {}),
   };
 }
+/**
+ * How many posts a topic has, and its first post's id, counting its older pages. (A change to a post in one of those
+ * pages gets that page's posts in `posts`, the store.ts window; a topic with pages has at least two posts either way.)
+ */
+export const postTotal = (topic: Pick<Topic, "posts" | "pages">) => (topic.pages ?? []).reduce((n, g) => n + g.count, 0) + topic.posts.length;
+export const firstPostId = (topic: Pick<Topic, "posts" | "pages">) => topic.pages?.[0]?.first.id ?? topic.posts[0]?.id;
 const putSummary = (f: Forum, s: TopicSummary): Forum => ({ ...f, topics: f.topics.some(t => t.id === s.id) ? f.topics.map(t => t.id === s.id ? s : t) : [...f.topics, s] });
 const addCount = (f: Forum, userId: string, n: number): Forum => ({ ...f, counts: { ...f.counts, [userId]: Math.max(0, (f.counts[userId] ?? 0) + n) } });
 const RECENT_MS = 3 * 86_400_000;
@@ -346,7 +378,6 @@ export function startTopic(f: Forum, input: { boardId: string; title: unknown; b
   const board = cleanBoard(f, input.boardId, who, true), as = checkAs(f, board, input.as, who);
   const only = input.private ? [...new Set(input.private.filter(u => u !== who.userId))].slice(0, FORUM_LIMITS.privateMembers) : undefined;
   const title = cleanTitle(input.title), body = checkMarkup(f, cleanBody(input.body), who, "", board.id);
-  if (f.topics.length >= FORUM_LIMITS.topics) fail("This forum has as many topics as it can hold. Ask your GM to remove old ones.");
   const by = { userId: who.userId, as }, stamp = now.toISOString();
   const topic: Topic = { schemaVersion: 1, id: ids.topic, boardId: board.id, posts: [{ id: ids.post, by, body, at: stamp, ...withRolls(input.rolls), ...withAi(input.ai, who), ...withFormat(input.format) }] };
   const tags = input.tags?.length ? cleanTags(f, input.tags) : [];
@@ -359,7 +390,6 @@ export function reply(f: Forum, topic: Topic, input: { body: unknown; as: string
   const s = seenBy(f, topic.id, who), board = cleanBoard(f, s.boardId, who, false);
   if (s.archived) fail("This topic is archived. A moderator can bring it back to reply.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
-  if (topic.posts.length >= FORUM_LIMITS.posts) fail("This topic is full. Start a new one to carry on.");
   const as = checkAs(f, board, input.as, who), body = checkMarkup(f, cleanBody(input.body), who, "", board.id);
   // In a fight, a post in the current turn is marked with it.
   const turn = s.combat && countsFor(s.combat, as, who.rights.gm) ? turnMeta(s.combat) : undefined;
@@ -438,14 +468,20 @@ export function deletePost(f: Forum, topic: Topic, input: { postId: string }, wh
   const s = seenBy(f, topic.id, who), p = postOf(topic, input.postId);
   if (!mayChange(p, who)) fail("You can only delete your own posts.");
   if (s.locked && !who.rights.moderate) fail("This topic is locked.");
-  if (topic.posts[0]!.id === p.id) return topic.posts.length === 1 ? removeTopic(topic) : fail("The first post starts the topic. Delete the topic instead.");
+  if (firstPostId(topic) === p.id) return postTotal(topic) === 1 ? removeTopic(topic) : fail("The first post starts the topic. Delete the topic instead.");
   const next: Topic = { ...topic, posts: topic.posts.filter(x => x.id !== p.id) };
   return { topic: next, forum: (g, latest) => { const cur = g.topics.find(t => t.id === topic.id) ?? s; return unlog(addCount(putSummary(g, summarize(latest ?? next, cur)), p.by.userId, -1), r => r.postId === p.id); } };
 }
 
 const removeTopic = (topic: Topic): Change => ({
   topic: null,
-  forum: g => unlog(topic.posts.reduce((x, p) => addCount(x, p.by.userId, -1), { ...g, topics: g.topics.filter(t => t.id !== topic.id) }), r => r.topicId === topic.id),
+  forum: g => {
+    let next: Forum = { ...g, topics: g.topics.filter(t => t.id !== topic.id) };
+    // The older pages' posts come off by their counts; the posts in the topic file one by one.
+    for (const page of topic.pages ?? []) for (const [u, n] of Object.entries(page.authors)) next = addCount(next, u, -n);
+    for (const p of topic.posts) next = addCount(next, p.by.userId, -1);
+    return unlog(next, r => r.topicId === topic.id);
+  },
 });
 /** Moderators delete a whole topic for good (from the Trash); its posts come off their writers' counts. */
 export function deleteTopic(f: Forum, topic: Topic, who: Poster): Change {

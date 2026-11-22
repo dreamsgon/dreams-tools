@@ -8,7 +8,7 @@ import { formatDate } from "../encyclopedia/calendar-model.ts";
 import { can, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
-import { CARD_STYLES, DEFAULT_STRIP, STRIP_FIELDS, TRASH_DAYS, accessOn, boardTree, canSee, kindOf, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Report, type Topic, type TopicSummary } from "./model.ts";
+import { CARD_STYLES, DEFAULT_STRIP, STRIP_FIELDS, TRASH_DAYS, accessOn, boardTree, canSee, firstPostId, kindOf, postTotal, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Post, type Report, type Topic, type TopicSummary } from "./model.ts";
 import { playerLink } from "../encyclopedia/player-prose.ts";
 import { soloCharacters } from "../solo.ts";
 import { featureRefs, linkTargets, withoutHtml } from "./markup.ts";
@@ -443,24 +443,31 @@ export function boardPage(ctx: Context, boardId: string, opts: { archive?: boole
 const summaryOf = (ctx: Context, e: Entry) => ctx.viewer.rights.gm ? firstLine(e.body) : e.overviewVisibility === "players" ? firstLine(playerText(e.body)) : "";
 const firstLine = (text: string) => text.split("\n").map(l => l.replace(/[#>*`[\]]/g, "").trim()).find(l => l && !/^:::/.test(l))?.slice(0, 200) ?? "";
 
-/** A topic with its posts, the hover card of each character in it and what the viewer may do to each post. */
-export function topicPage(ctx: Context, topic: Topic) {
+/** One page of a topic's posts: where it starts (0 is the first post), the topic's total, and which page of how many. */
+export type TopicWindow = { posts: readonly Post[]; start: number; total: number; page: number; pages: number; per: number };
+/**
+ * A topic with one page of its posts (`win`; left out, the posts in the topic file), the hover card of each character
+ * on it and what the viewer may do to each post.
+ */
+export function topicPage(ctx: Context, topic: Topic, win?: TopicWindow) {
+  const total = postTotal(topic), w: TopicWindow = win ?? { posts: topic.posts, start: total - topic.posts.length, total, page: 1, pages: 1, per: Math.max(1, total) };
+  const posts = w.posts, firstId = firstPostId(topic);
   const s = ctx.forum.topics.find(t => t.id === topic.id);
   // Moderators may open a topic in the Trash to look before restoring it.
   if (!s || !(canSee(s, ctx.viewer) || (s.trashed && ctx.viewer.rights.moderate && canSee({ ...s, trashed: undefined }, ctx.viewer)))) return null;
   const entries = entriesOf(ctx), board = ctx.forum.boards.find(b => b.id === s.boardId), r = ctx.viewer.rights;
   const cards: Record<string, Card> = {};
-  for (const p of topic.posts) if (p.by.as && !cards[p.by.as]) { const e = entries.get(p.by.as); if (e) cards[e.id] = cardOf(ctx, e); }
+  for (const p of posts) if (p.by.as && !cards[p.by.as]) { const e = entries.get(p.by.as); if (e) cards[e.id] = cardOf(ctx, e); }
   // [[Page]] links in the posts: the ones this reader may open, with a line to preview.
   const pages = [...entries.values()].filter(e => !ctx.readable || ctx.readable.has(e.id)), links: Record<string, { title: string; url: string; summary: string }> = {};
-  for (const p of topic.posts) for (const target of linkTargets(p.body)) {
+  for (const p of posts) for (const target of linkTargets(p.body)) {
     if (links[target] || Object.keys(links).length >= 200) continue;
     const e = playerLink(pages, target), url = e && pageUrl(ctx, e.id);
     if (e && url) links[target] = { title: e.title, url, summary: summaryOf(ctx, e) };
   }
   // [feature=…] and [spell=…] tags: the text of the ones this reader may see on that character's sheet.
   const features: Record<string, SheetLine> = {};
-  for (const p of topic.posts) for (const ref of featureRefs(p.body)) {
+  for (const p of posts) for (const ref of featureRefs(p.body)) {
     if (ref in features || Object.keys(features).length >= 200) continue;
     const [kind, char, fid] = ref.split(":") as ["feature" | "spell", string, string], line = sheetOf(ctx, entries.get(char), kind).find(x => x.id === fid);
     if (line) features[ref] = line;
@@ -471,12 +478,14 @@ export function topicPage(ctx: Context, topic: Topic) {
     /** Posts after this, by others, are new to the viewer (null: all read, as for a first visit before marks). */
     readBefore: ctx.reads ? readUpTo(ctx.reads, s.id) : null,
     combat: s.combat ? combatOf(ctx, entries, s.combat) : null,
-    posts: topic.posts.map((p, i) => {
+    /** Which page of the topic this is: posts `first` (from 1) on, `per` to a page. */
+    paging: { page: w.page, pages: w.pages, per: w.per, total: w.total, first: w.start + 1 },
+    posts: posts.map((p, i) => {
       const mine = p.by.userId === ctx.viewer.userId, open = (!s.locked || r.moderate) && !s.trashed;
       const reports = (ctx.forum.reports ?? []).filter(x => x.postId === p.id);
-      return { id: p.id, number: i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, format: p.format ?? null, as: p.by.as && cards[p.by.as] ? p.by.as : null,
+      return { id: p.id, number: w.start + i + 1, at: p.at, editedAt: p.editedAt ?? null, body: p.body, format: p.format ?? null, as: p.by.as && cards[p.by.as] ? p.by.as : null,
         /** The player strip, under posts written as a character. */
-        strip: p.by.as && cards[p.by.as] ? stripOf(ctx, p.by.userId) : [], name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (i > 0 || topic.posts.length === 1),
+        strip: p.by.as && cards[p.by.as] ? stripOf(ctx, p.by.userId) : [], name: memberName(ctx, p.by.userId), posts: ctx.forum.counts[p.by.userId] ?? 0, rolls: p.rolls ?? [], turn: p.turn ?? null, ai: !!p.ai, mine, canEdit: (mine || r.moderate) && open, canDelete: (mine || r.moderate) && open && (p.id !== firstId || w.total === 1),
         /** Reports about it (moderators), and whether the viewer reported it. */
         reports: r.moderate ? reports.map(x => ({ by: memberName(ctx, x.by), reason: x.reason, at: x.at })) : [], reported: reports.some(x => x.by === ctx.viewer.userId), canReport: !mine && !s.trashed && !r.moderate };
     }),
@@ -501,13 +510,13 @@ export function reportedPosts(ctx: Context) {
   return out;
 }
 /** Reported posts (moderators), latest report first, each with its topic, author, a snippet and the reasons. */
-export function reportsPage(ctx: Context, topics: ReadonlyMap<string, Topic | null>) {
+export function reportsPage(ctx: Context, found: ReadonlyMap<string, { post: Post; number: number } | null>) {
   const entries = entriesOf(ctx), list = [];
   for (const [postId, reports] of reportedPosts(ctx)) {
-    const s = ctx.forum.topics.find(t => t.id === reports[0]!.topicId)!, topic = topics.get(s.id), i = topic?.posts.findIndex(p => p.id === postId) ?? -1, p = i >= 0 ? topic!.posts[i]! : null;
+    const s = ctx.forum.topics.find(t => t.id === reports[0]!.topicId)!, got = found.get(postId), p = got?.post ?? null;
     const board = ctx.forum.boards.find(b => b.id === s.boardId), e = p?.by.as ? entries.get(p.by.as) : undefined;
     list.push({
-      postId, topicId: s.id, title: s.title, board: board?.name ?? "", number: i + 1, gone: !p,
+      postId, topicId: s.id, title: s.title, board: board?.name ?? "", number: got?.number ?? 0, gone: !p,
       name: e?.title ?? (p && !p.by.as && board && kindOf(ctx.forum, board) === "ic" ? "Game Master" : p ? memberName(ctx, p.by.userId) : ""), player: p ? memberName(ctx, p.by.userId) : "", picture: pictureOf(e),
       snippet: p ? snippetOf(p.body, []).slice(0, 280) : "", at: p?.at ?? null,
       reports: reports.map(r => ({ by: memberName(ctx, r.by), reason: r.reason, at: r.at })), last: reports.reduce((a, r) => r.at > a ? r.at : a, ""),
@@ -560,7 +569,7 @@ function alertsOf(ctx: Context, entries: Map<string, Entry>) {
     unseen: a ? unseen({ ...a, items }) : 0,
     items: items.slice(0, 20).map(x => {
       const e = x.as ? entries.get(x.as) : undefined;
-      return { id: x.id, kind: x.kind, at: x.at, topicId: x.topicId, title: shown.get(x.topicId)!.title, name: e?.title ?? memberName(ctx, x.by), picture: e ? pictureOf(e) : null, fresh: !!a && x.at > a.seen };
+      return { id: x.id, kind: x.kind, at: x.at, topicId: x.topicId, postId: x.postId ?? null, title: shown.get(x.topicId)!.title, name: e?.title ?? memberName(ctx, x.by), picture: e ? pictureOf(e) : null, fresh: !!a && x.at > a.seen };
     }),
   };
 }
@@ -580,13 +589,13 @@ export function playersOf(ctx: Context, entryId: string) {
 }
 
 /** Search: the latest topics this viewer can read (and their posts), matching every word of the query. */
-export function searchPage(ctx: Context, q: string, topics: readonly { summary: TopicSummary; topic: Topic | null }[], searched: { of: number }) {
+export function searchPage(ctx: Context, q: string, topics: readonly { summary: TopicSummary; posts: readonly { post: Post; number: number }[] | null }[], searched: { of: number }) {
   const entries = entriesOf(ctx), words = q.toLocaleLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
   const has = (text: string) => { const t = text.toLocaleLowerCase(); return words.every(w => t.includes(w)); };
   const results = [];
-  for (const { summary: s, topic } of topics) {
+  for (const { summary: s, posts } of topics) {
     const kind = (() => { const b = ctx.forum.boards.find(x => x.id === s.boardId); return b ? kindOf(ctx.forum, b) : "ooc"; })();
-    const hits = (topic?.posts ?? []).flatMap((p, i) => has(p.body) ? [{ postId: p.id, number: i + 1, name: (p.by.as && entries.get(p.by.as)?.title) || (kind === "ic" && !p.by.as ? "Game Master" : memberName(ctx, p.by.userId)), snippet: snippetOf(p.body, words) }] : []);
+    const hits = (posts ?? []).flatMap(({ post: p, number }) => has(p.body) ? [{ postId: p.id, number, name: (p.by.as && entries.get(p.by.as)?.title) || (kind === "ic" && !p.by.as ? "Game Master" : memberName(ctx, p.by.userId)), snippet: snippetOf(p.body, words) }] : []);
     if (!hits.length && !has(s.title)) continue;
     results.push({ ...topicRow(ctx, entries, s), board: ctx.forum.boards.find(b => b.id === s.boardId)?.name ?? "", hits: hits.slice(0, 3), more: Math.max(0, hits.length - 3) });
     if (results.length >= 40) break;
