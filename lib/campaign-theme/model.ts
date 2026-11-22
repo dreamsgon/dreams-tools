@@ -204,7 +204,7 @@ export function themeCss(t: Theme, scope = SKIN_SCOPE, area: ThemeArea = "forum"
     : t.mode === "light" ? `${light}\n:root[data-theme="dark"] ${light}`
     : `${dark}\n:root[data-theme="dark"] ${dark}`;
   const sheet = cleanCss(areaCss(t, area), scope);
-  return { css: `${vars}\n${sheet.css}\n${dialogsOnTop(scope)}`, problems: sheet.problems };
+  return { css: `${vars}\n${sheet.css}\n${menusOnTop(scope)}\n${dialogsOnTop(scope)}`, problems: sheet.problems };
 }
 
 /**
@@ -214,8 +214,17 @@ export function themeCss(t: Theme, scope = SKIN_SCOPE, area: ThemeArea = "forum"
  * that holds it is lifted to the dialogs' layer. Added after the theme's own rules, and not something a theme can turn off.
  */
 export const dialogsOnTop = (scope: string) => `${scope} :has([aria-modal="true"]) { z-index: var(--z-modal, 200) !important; }`;
+/**
+ * The same for the tag menu, which opens below "+ Tag" and drops over whatever follows. On the dashboard a theme raises
+ * the banner's title and its buttons to the same layer, so the later buttons covered the menu, and the banner clips its
+ * drawing, which cut the menu off at the banner's foot. While the menu is open, the banner and the part of it holding the menu are
+ * lifted (to 20: above any theme's own layers, still under the header) and the banner lets it hang past its foot
+ * (still clipping the drawing at the top and sides, and dropping a cut corner while the menu is open).
+ */
+export const menusOnTop = (scope: string) => `${scope} .hub-head:has(.tag-picker), ${scope} .hub-head > :has(.tag-picker) { z-index: 20 !important; }
+${scope} .hub-head:has(.tag-picker) { overflow: visible !important; clip-path: inset(0 0 -200vh 0) !important; }`;
 /** Changes whenever the CSS added around every theme changes, so browsers drop the copies they kept. */
-const THEME_CSS_VERSION = 2;
+const THEME_CSS_VERSION = 3;
 
 /**
  * Only a theme's colours, inside `scope`: for a part that keeps its own fonts, corners and layout, like the Admin CP,

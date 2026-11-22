@@ -168,6 +168,15 @@ test('theme stylesheets for each part of the campaign', () => {
   assert.deepEqual(theme.areas, { encyclopedia: '.topbar { color: red }' });
 });
 
+test('the dashboard tag menu stays above the banner buttons and past the banner foot', () => {
+  // A drawn banner raises the title and the buttons to one layer and clips its drawing: the open menu still wins.
+  const t = { ...THEME_PRESETS[0], id: 'x', css: '', areas: { dashboard: '.hub-head { overflow: hidden; isolation: isolate } .hub-head > * { position: relative; z-index: 2 }' } };
+  const css = themeCss(t, '.campaign-skin', 'dashboard').css;
+  assert.ok(css.includes('.campaign-skin .hub-head > :has(.tag-picker) { z-index: 20 !important; }'));
+  assert.ok(css.includes('.campaign-skin .hub-head:has(.tag-picker) { overflow: visible !important; clip-path: inset(0 0 -200vh 0) !important; }'));
+  assert.ok(css.indexOf('overflow: visible !important') > css.indexOf('overflow: hidden'), 'after the theme’s own rules');
+});
+
 test('a theme’s colours alone, for the Admin CP', () => {
   const both = themeColours(THEME_PRESETS.find(t => t.id === 'preset-neon'), '.admin-cp');
   assert.match(both, /^\.admin-cp \{ --bg: #efe6f5; /);
@@ -186,5 +195,5 @@ test('an open dialog stays above a theme’s drawing', async () => {
     assert.ok(css.endsWith('.campaign-skin :has([aria-modal="true"]) { z-index: var(--z-modal, 200) !important; }'), area);
   }
   // Browsers drop the stylesheets they kept from before the lift.
-  assert.match(liveTheme(t, 'dashboard').key, /:dashboard:v2$/);
+  assert.match(liveTheme(t, 'dashboard').key, /:dashboard:v3$/);
 });

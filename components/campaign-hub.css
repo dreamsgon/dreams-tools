@@ -219,6 +219,8 @@
   .hub-heights { display:none; }
   .hub-board { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .hub-actions { width:100%; }
+  /* On a phone the tag menu keeps to the title's width (at least 240px), so an indented title doesn't push it off the banner. */
+  .hub-tags .tag-picker { max-width:max(100%, 240px); }
 }
 .hub-tags { margin-top:10px; }
 .hub-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
