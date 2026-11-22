@@ -2,6 +2,7 @@ import { z } from "zod";
 import { workspaceSchema } from "@/lib/encyclopedia/world-model";
 import { json, ownerFrom, readWorkspace, readWorkspaceScope, sameOrigin, saveWorkspace, saveWorkspacePatch, saveWorkspaceScopedPatch, transferPrefix, workspaceTag } from "@/lib/encyclopedia/workspace-server";
 import { DamagedWikiError } from "@/lib/encyclopedia/wiki-parts";
+import { knownTag } from "@/lib/encyclopedia/wiki-scope-client";
 import { getBucket } from "@/lib/storage";
 import { storedJson, workspaceBody } from "@/lib/transfers";
 import { coGmGone, coGmGrant, coGmReadOnly, coGmSave, coGmWorkspace } from "@/lib/encyclopedia/member-workspace-server";
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         const grant = await coGmGrant(owner, member);
         if (!grant)
             return json({ error: coGmGone }, 404);
-        const known = request.headers.get("If-None-Match")?.replace(/^W\//, "").replace(/"/g, "");
+        const known = knownTag(request.headers);
         if (known && known === await workspaceTag(grant.owner))
             return new Response(null, { status: 304, headers: { "Cache-Control": "private, no-store" } });
         const scoped = await coGmWorkspace(grant);
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
     }
     try {
         // The app asks every few seconds whether anything changed (an AI connection, another tab): answer that cheaply.
-        const known = request.headers.get("If-None-Match")?.replace(/^W\//, "").replace(/"/g, "");
+        const known = knownTag(request.headers);
         if (known && known === await workspaceTag(owner))
             return new Response(null, { status: 304, headers: { "Cache-Control": "private, no-store" } });
         // A Wiki over 3 MB is handed over through storage (lib/transfers.ts), since a response can't carry it.

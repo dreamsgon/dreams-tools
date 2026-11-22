@@ -1,5 +1,6 @@
 import { isStarterScene, type Workspace as MapWorkspace } from "./model.ts";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model";
+import type { LatestPage, PartStats } from "./encyclopedia/part-stats.ts";
 import { scenesInOrder } from "./scene-order.ts";
 import { sortSiblings } from "./folder-order.ts";
 
@@ -65,7 +66,33 @@ export function campaignFolders(collections: MapWorkspace["collections"] | undef
 const mapCampaigns = (w: Pick<MapWorkspace, "collections" | "scenes"> | null): MapCampaign[] =>
   (w?.collections ?? []).filter(c => c.kind === "campaign").map(c => ({ id: c.id, name: c.name, scenes: scenesInOrder(w!, c.id).length, ...(c.slug ? { slug: c.slug } : {}) }));
 
-function bookCampaigns(s: BookWorkspace): BookCampaign[] {
+/**
+ * The Wiki as its index has it (EncyclopediaStore.readIndex): every world and campaign, and the stats of each
+ * part, keyed `c:<campaign id>` or `w:<world id>`, but no pages. Enough for the campaign list.
+ */
+export type BookIndex = Pick<BookWorkspace, "worlds" | "campaigns"> & { stats: Record<string, PartStats> };
+const isIndex = (book: BookWorkspace | BookIndex): book is BookIndex => "stats" in book;
+
+function named(book: Pick<BookWorkspace, "worlds" | "campaigns">, p: LatestPage): RecentPage {
+  return { id: p.id, title: p.title, kind: p.kind, campaignId: p.campaignId,
+    campaignName: p.campaignId ? book.campaigns.find(c => c.id === p.campaignId)?.name ?? null : null,
+    worldName: book.worlds.find(w => w.id === p.worldId)?.name ?? "", path: p.path, updatedAt: p.updatedAt };
+}
+
+function bookCampaigns(s: BookWorkspace | BookIndex): BookCampaign[] {
+  if (isIndex(s)) {
+    const worlds = new Map(s.worlds.map(w => [w.id, w]));
+    return s.campaigns.filter(c => !worlds.get(c.worldId)?.isTemplate).map(c => {
+      const st = s.stats[`c:${c.id}`];
+      return {
+        id: c.id, name: c.name, description: c.description, worldId: c.worldId,
+        worldName: worlds.get(c.worldId)?.name ?? "", archived: worlds.get(c.worldId)?.archived ?? false,
+        pages: st?.pages ?? 0, characters: st?.characters ?? 0,
+        maptableCampaignId: c.maptableCampaignId ?? null, forum: c.forum === true, solo: c.solo === true,
+        lastEdited: st?.lastEdited ?? null, maps: st?.maps ?? 0, latest: (st?.latest ?? []).slice(0, 3).map(p => named(s, p)),
+      };
+    });
+  }
   const worlds = new Map(s.worlds.map(w => [w.id, w]));
   return s.campaigns.filter(c => !worlds.get(c.worldId)?.isTemplate).map(c => {
     const own = s.entries.filter(e => e.campaignId === c.id && e.kind !== "folder");
@@ -83,7 +110,7 @@ function bookCampaigns(s: BookWorkspace): BookCampaign[] {
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace, recentLimit = 6): CampaignSummary {
+export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes" | "campaignFoldersOrdered"> | null, book: BookWorkspace | BookIndex, recentLimit = 6): CampaignSummary {
   const maps = mapCampaigns(map), books = bookCampaigns(book);
   const mapById = new Map(maps.map(m => [m.id, m])), used = new Set<string>();
   // Folders list by name until someone re-orders them by hand; after that the saved order is kept.
@@ -176,8 +203,11 @@ export function recentPage(s: BookWorkspace, e: BookEntry): RecentPage {
     worldName: s.worlds.find(w => w.id === e.worldId)?.name ?? "", path: names.join(" › "), updatedAt: e.updatedAt };
 }
 
-function recentPages(s: BookWorkspace, limit = 6): RecentPage[] {
+function recentPages(s: BookWorkspace | BookIndex, limit = 6): RecentPage[] {
   const worlds = new Map(s.worlds.map(w => [w.id, w]));
+  // Each part keeps its newest pages, so the newest of all are among them.
+  if (isIndex(s)) return Object.values(s.stats).flatMap(st => st.latest).filter(p => p.kind !== "folder" && !worlds.get(p.worldId)?.isTemplate && !worlds.get(p.worldId)?.archived)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit).map(p => named(s, p));
   return newestFirst(s.entries.filter(e => e.kind !== "folder" && !worlds.get(e.worldId)?.isTemplate && !worlds.get(e.worldId)?.archived))
     .slice(0, limit).map(e => recentPage(s, e));
 }

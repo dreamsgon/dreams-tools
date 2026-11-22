@@ -8,7 +8,7 @@ import { mergeWorkspaces } from "@/lib/encyclopedia/merge";
 import { putWorkspace, workspaceBody } from "@/lib/encyclopedia/workspace-client";
 import { WikiStorage } from "./wiki-storage";
 import { DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, PART_LIMITS, TOTAL_LIMIT, formatMb, sizeProblem, wikiPatch, scopeKeys, type PartSize } from "@/lib/encyclopedia/wiki-parts";
-import { addPages, outsideScope, scopedUrl, scopeHint } from "@/lib/encyclopedia/wiki-scope-client";
+import { addPages, KNOWN_TAG_HEADER, outsideScope, scopedUrl, scopeHint } from "@/lib/encyclopedia/wiki-scope-client";
 import { PageCounts } from "./page-counts";
 import { coGmRefusal } from "@/lib/encyclopedia/co-gm-edit";
 import { withoutDeletedStats } from "@/lib/encyclopedia/stat-arrange";
@@ -337,7 +337,7 @@ export default function WorkspaceApp() {
      */
     async function pull(force = false) {
         const url = opened.current ? scopedUrl({ parts: opened.current }) : workspaceUrl();
-        const res = await fetch(url, { cache: "no-store", headers: etag.current && !force ? { "If-None-Match": `"${etag.current}"` } : {} });
+        const res = await fetch(url, { cache: "no-store", headers: etag.current && !force ? { [KNOWN_TAG_HEADER]: etag.current } : {} });
         if (res.status === 304) return true;
         if (!res.ok) return false;
         const body = await workspaceBody<{ data: unknown; revision: number; etag?: string | null; limit?: number; total?: number; member?: CoGm; sizes?: PartSize[] }>(res);

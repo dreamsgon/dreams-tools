@@ -1,7 +1,7 @@
 import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { failure, privateHeaders } from "@/lib/server";
-import { backupFile, campaignAction, campaignSession, loadHub, readBoth, saveDashboard, saveFrontPage, summaryOf, type CampaignAction } from "@/lib/campaigns-server";
+import { backupFile, campaignAction, campaignSession, listingSummary, loadHub, readBoth, readListing, saveDashboard, saveFrontPage, type CampaignAction } from "@/lib/campaigns-server";
 export const dynamic = "force-dynamic";
 
 // One campaign list across Maptable and the Encyclopedia. See lib/campaigns-server.ts.
@@ -17,10 +17,10 @@ export async function GET(request: Request) {
     const s = await session(), params = new URL(request.url).searchParams;
     const hub = params.get("hub");
     if (hub) return Response.json(await loadHub(s, hub), { headers: privateHeaders });
-    const both = await readBoth(s);
     if (params.get("download") === "backup")
-      return new Response(backupFile(both), { headers: { ...privateHeaders, "Content-Type": "application/json", "Content-Disposition": `attachment; filename="rpg-tools-backup-${new Date().toISOString().slice(0, 10)}.json"` } });
-    return Response.json(summaryOf(both), { headers: privateHeaders });
+      return new Response(backupFile(await readBoth(s)), { headers: { ...privateHeaders, "Content-Type": "application/json", "Content-Disposition": `attachment; filename="rpg-tools-backup-${new Date().toISOString().slice(0, 10)}.json"` } });
+    // The list itself comes from the Wiki's index, without reading every page.
+    return Response.json(listingSummary(await readListing(s)), { headers: privateHeaders });
   } catch (e) { return failure(e); }
 }
 
