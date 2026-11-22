@@ -15,6 +15,7 @@ import { newStore } from "./stores.ts";
 import { newGalaxy } from "./galaxies.ts";
 import { newSector } from "./sectors.ts";
 import { newStarSystem } from "./star-systems.ts";
+import { newTimeline } from "./timelines.ts";
 
 /** A type to pick: a built-in kind, or one of the world's templates. */
 export type EntryType = { kind: EntryKind; templateId?: undefined } | { templateId: string; kind?: undefined };
@@ -32,6 +33,7 @@ export function kindStarts(kind: EntryKind, world: World | undefined, title: str
     case "galaxy": return { galaxy: newGalaxy(title) };
     case "sector": return { sector: newSector(title) };
     case "system": return { starSystem: newStarSystem(title) };
+    case "timeline": return { timeline: newTimeline("history") };
     default: return {};
   }
 }

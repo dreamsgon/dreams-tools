@@ -32,7 +32,7 @@ export type BuiltInSection = typeof builtInSections[number];
 export const sectionLabels: Record<BuiltInSection, string> = { lore: "World Lore", notes: "Campaign Notes", sessions: "Sessions", orgs: "Organizations" };
 
 /** Page kinds a category can list on its own (the same kinds as Entry, less folders). */
-export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system", "page", "other"] as const;
+export const categoryKinds = ["character", "place", "faction", "lore", "session", "quest", "note", "tasks", "map", "vehicle", "store", "galaxy", "sector", "system", "timeline", "page", "other"] as const;
 export type CategoryKind = typeof categoryKinds[number];
 
 export const maxQuickLinks = 12, maxGroups = 8, maxCategoryTypes = 20, maxCategories = 30, maxCategoryLinks = 60, maxCategoryTags = 20;
