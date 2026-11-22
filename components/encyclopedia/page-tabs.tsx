@@ -29,7 +29,10 @@ function useOutside(open:boolean,close:()=>void){
  return ref;
 }
 
-const TabLabel=({t}:{t:PageTab})=><>{t.title}{t.visibility==='gm'&&<EyeOff size={12} className="tab-gm" aria-label="GM only"/>}</>;
+// The crossed-out eye marks a tab players don't get; hovering the tab says so.
+const HIDDEN='Hidden from players';
+const tip=(t:PageTab)=>t.visibility==='gm'?HIDDEN:undefined;
+const TabLabel=({t}:{t:PageTab})=><>{t.title}{t.visibility==='gm'&&<EyeOff size={12} className="tab-gm" aria-label={HIDDEN}/>}</>;
 
 export function PageTabs({tabs,active,onPick,hideable=[],onHide,own,onAdd,canAdd}:Props){
  const row=useRef<HTMLDivElement>(null),measure=useRef<HTMLDivElement>(null);
@@ -54,10 +57,10 @@ export function PageTabs({tabs,active,onPick,hideable=[],onHide,own,onAdd,canAdd
  return <div className="page-tabs article-tabs" ref={row}>
   <div className="page-tabs-measure" ref={measure} aria-hidden="true">{tabs.map(t=><button key={t.id} type="button" tabIndex={-1} data-w className="page-tab"><TabLabel t={t}/></button>)}</div>
   <div className="page-tabs-list" role="tablist" aria-label="Article tabs">
-   {shown.map(t=><button key={t.id} role="tab" className="page-tab" aria-selected={active===t.id} onClick={()=>onPick(t.id)}><TabLabel t={t}/></button>)}
+   {shown.map(t=><button key={t.id} role="tab" className="page-tab" aria-selected={active===t.id} title={tip(t)} onClick={()=>onPick(t.id)}><TabLabel t={t}/></button>)}
    {rest.length>0&&<div className="page-tabs-pop" ref={moreRef}>
     <button type="button" className="page-tab page-tab-more" aria-haspopup="menu" aria-expanded={more} onClick={()=>setMore(!more)}>More <span className="page-tab-count">{rest.length}</span><ChevronDown size={13}/></button>
-    {more&&<div className="page-tabs-menu" role="menu">{rest.map(t=><button key={t.id} role="menuitem" onClick={()=>{onPick(t.id);setMore(false);}}><span>{t.title}</span>{t.visibility==='gm'&&<EyeOff size={12} className="tab-gm" aria-label="GM only"/>}</button>)}</div>}
+    {more&&<div className="page-tabs-menu" role="menu">{rest.map(t=><button key={t.id} role="menuitem" title={tip(t)} onClick={()=>{onPick(t.id);setMore(false);}}><span>{t.title}</span>{t.visibility==='gm'&&<EyeOff size={12} className="tab-gm" aria-label={HIDDEN}/>}</button>)}</div>}
    </div>}
   </div>
   <div className="page-tabs-pop page-tabs-tools" ref={menuRef}>
