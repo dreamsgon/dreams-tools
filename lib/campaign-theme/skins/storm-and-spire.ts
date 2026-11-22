@@ -242,7 +242,7 @@ const GHOST_BTN = "border: 1px solid var(--ss-brass); border-radius: 0; backgrou
 const GHOST_ON = "border-color: var(--ss-brass); background: color-mix(in srgb, var(--ss-brass) 14%, transparent); color: var(--ss-ghost-ink);";
 /** The title: Limelight filled with brass by night and ink by day, edged so it reads over the sky. */
 const FILL = `background: var(--ss-title-fill); background: var(--ss-title-fill) 0 0 / 100% 1lh repeat-y; -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(1px 0 0 var(--ss-title-edge)) drop-shadow(-1px 0 0 var(--ss-title-edge)) drop-shadow(0 1px 0 var(--ss-title-edge)) drop-shadow(0 -1px 0 var(--ss-title-edge)) drop-shadow(3px 3px 0 var(--ss-title-drop));`;
-const TITLE = `display: block; width: fit-content; max-width: 100%; overflow-wrap: break-word; ${TITLE_TYPE} ${FILL}`;
+const TITLE = `display: block; width: fit-content; max-width: 100%; overflow-wrap: break-word; text-wrap: balance; ${TITLE_TYPE} ${FILL}`;
 /** The tagline, or the line above a title: a plate, as on a carriage door. */
 const PLAQUE = `display: inline-block; padding: 5px 14px; border: 1px solid #8c6a22; border-radius: 0; background: ${PLATE}; color: ${PLATE_INK}; box-shadow: inset 0 0 0 2px #111f2d, inset 0 0 0 3px rgba(210, 165, 80, .45); text-shadow: none;`;
 /** Three speed lines, longest at the top, fading away from the words. */
@@ -344,7 +344,7 @@ ${ruledLeft(".section-heading h2")}
 .article-tabs { border-bottom: 0; background: ${hairline("bottom")}; }
 .article-tabs button { ${SMALL} font-size: 11.5px; }
 .article-tabs button[aria-selected="true"], .article-tabs button.active { color: var(--ss-heading); box-shadow: inset 0 -3px 0 var(--ss-brass); }
-.picture-panel { border-radius: 0; border: 1px solid var(--ss-brass); outline: 1px solid var(--ss-brass); outline-offset: -6px; }
+.picture-panel:not(.picture-empty) { border-radius: 0; padding: 16px; border: 1px solid var(--ss-brass); outline: 1px solid color-mix(in srgb, var(--ss-brass) 45%, transparent); outline-offset: -6px; }
 .prose { font-family: var(--font-reading); }
 .prose h1, .prose h2, .prose h3 { ${TITLE_TYPE} color: var(--ss-heading); }
 .prose h2 { padding-bottom: 14px; background: ${lines("right").replace(/top (\d)/g, "bottom $1")}; }
