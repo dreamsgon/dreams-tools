@@ -18,8 +18,11 @@ import { cleanApiKey, unlock } from "../ai/secret.ts";
  * (claimStoredKeys), and no AI request ever reads it.
  */
 export type ApiSettings = { provider: ProviderId; baseUrl?: string; model: string; key?: string; last4: string; limit: number | null; month: string; used: number };
-/** `perms` is what the GM chose action by action; older connections only have `level`. An API connection has no rpg_ key, so `hash` is empty. */
-export type Connection = { id: string; name: string; level: Level; perms?: Perms; hash: string; createdAt: string; lastUsedAt?: string; api?: ApiSettings };
+/**
+ * `perms` is what the GM chose action by action; older connections only have `level`. An API connection has no rpg_ key, so
+ * `hash` is empty. `chatDefault` marks the API connection the AI panel asks first in a new chat (else the first one).
+ */
+export type Connection = { id: string; name: string; level: Level; perms?: Perms; hash: string; createdAt: string; lastUsedAt?: string; api?: ApiSettings; chatDefault?: true };
 export type PublicApi = Omit<ApiSettings, "key" | "month">;
 export type PublicConnection = Omit<Connection, "hash" | "api"> & { perms: Perms; mode: ReturnType<typeof modeOf>; api?: PublicApi };
 /** One request with an API-key connection: which one, and its key from the asking browser (used for the request, never saved). */
@@ -48,7 +51,21 @@ export function cleanName(v: unknown) {
 }
 export const usedNow = (a: ApiSettings, now = new Date()) => a.month === thisMonth(now) ? a.used : 0;
 export const publicApi = (a: ApiSettings, now = new Date()): PublicApi => ({ provider: a.provider, ...(a.baseUrl ? { baseUrl: a.baseUrl } : {}), model: a.model, last4: a.last4, limit: a.limit, used: usedNow(a, now) });
-export const publicConnection = (c: Connection): PublicConnection => ({ id: c.id, name: c.name, level: c.level, perms: permsOf(c), mode: modeOf(permsOf(c)), createdAt: c.createdAt, ...(c.lastUsedAt ? { lastUsedAt: c.lastUsedAt } : {}), ...(c.api ? { api: publicApi(c.api) } : {}) });
+export const publicConnection = (c: Connection): PublicConnection => ({ id: c.id, name: c.name, level: c.level, perms: permsOf(c), mode: modeOf(permsOf(c)), createdAt: c.createdAt, ...(c.lastUsedAt ? { lastUsedAt: c.lastUsedAt } : {}), ...(c.api ? { api: publicApi(c.api) } : {}), ...(c.chatDefault ? { chatDefault: true as const } : {}) });
+
+/** The API-key connections the AI panel can chat with, the default first (else in the order they were added). */
+export function chatConnections(list: Connection[]) {
+  const api = list.filter(c => c.api), first = api.find(c => c.chatDefault) ?? api[0];
+  return first ? [first, ...api.filter(c => c !== first)] : [];
+}
+
+/** Makes one API-key connection the AI that new chats ask first, for the whole campaign on every device. */
+export async function setChatDefault(bucket: S3Bucket, owner: string, campaignId: string, id: unknown) {
+  const list = await listConnections(bucket, owner, campaignId), c = list.find(x => x.id === id);
+  if (!c?.api) throw Error("That AI connection was removed.");
+  await writeConnections(bucket, owner, campaignId, list.map(x => { const { chatDefault: _was, ...rest } = x; return x === c ? { ...rest, chatDefault: true as const } : rest; }));
+  return c.name;
+}
 
 export async function listConnections(bucket: S3Bucket, owner: string, campaignId: string): Promise<Connection[]> {
   const object = await bucket.get(listPath(owner, campaignId));

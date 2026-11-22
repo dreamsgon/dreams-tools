@@ -60,6 +60,10 @@ Players and co-GMs can add **their own AI** under **Account settings › AI on t
 
 With a key, the **AI panel**'s **Ask** tab lets the AI use RPG Tools' tools and answer inside the app. Every chat is **saved** with its campaign and available on any device, shared by Maptable and the Wiki. The chat bar switches, searches, renames and deletes chats, and exports Markdown, copy, a session page or Discord (older messages beyond the latest 400 move to part files and are still included in exports).
 
+**Which AI and model.** Under the message box, pick the AI and the model for this chat. In the AI list, the **star** makes one AI the default that new chats ask, for the whole campaign on every device. In the model list, **Make … the default** sets that AI's model for new chats.
+
+**Pictures and files.** Press the **paperclip**, paste, or drop files on the message box to attach up to 6 **pictures** (PNG, JPEG, GIF, WebP), **PDFs** (up to 2 MB) or **text files** (Markdown, text, CSV, JSON, YAML), for models that can read them, such as recent Claude, GPT and Gemini models. Big pictures are shrunk before they're sent. PDFs work with Anthropic, OpenAI and OpenRouter; for other providers, attach pictures of the pages. Files go to the AI with the conversation but **aren't saved**: the saved chat notes their names.
+
 Features that use an API-key connection: [Check with your AI](World-Maps), [recaps and The story so far](Session-Recaps-and-AI-Writing), [Write with AI](Relationships-and-Family-Trees) in the relationship generators, and Star-system [setting drafts and checks](Star-Systems-and-Space). Without a key, each has **Copy prompt** for your own AI app. **Tokens count against the monthly limit**, even when a call fails.
 
 > **Tutorial: let your AI run a combat**
