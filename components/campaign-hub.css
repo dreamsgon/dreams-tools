@@ -151,6 +151,7 @@
 .hub-link-form { flex-wrap:wrap; }
 .hub-link-form input { flex:1 1 140px; width:auto; }
 .hub-recap-title { font-family:var(--font-display); font-size:18px; font-weight:600; }
+.hub-recap-text { white-space:pre-line; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:8; overflow:hidden; }
 
 /* Customize: on wide screens the page widens into its right margin to make room for the widget panel. */
 @media (min-width:1101px) { .hub-customizing { margin-right:max(-320px, min(0px, calc(24px - (100vw / var(--ui-zoom, 1) - var(--page-width, 1040px)) / 2))); } }

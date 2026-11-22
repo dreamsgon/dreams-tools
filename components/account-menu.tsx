@@ -108,7 +108,7 @@ export default function AccountMenu({ me: given, compact = false, signedIn: know
       <div className="acct-sep" role="separator" />
       <button role="menuitemcheckbox" aria-checked={player} type="button" className="acct-item acct-toggle" onClick={() => setViewAsPlayer(!player)}>
         <Eye size={16} aria-hidden="true" />
-        <span className="acct-toggle-text"><span>Switch to Player view</span><small>{player ? "You see what your players see. Turn off to get your GM tools back." : "See Maptable, the Wiki and the Forum as your players do."}</small></span>
+        <span className="acct-toggle-text"><span>View as a player everywhere</span><small>{player ? "You see what your players see. Turn off to get your GM tools back." : "See Maptable, the Wiki and the Forum as your players do."}</small></span>
         <span className="acct-switch" aria-hidden="true"><i /></span>
       </button>
       <div className="acct-sep" role="separator" />

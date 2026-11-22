@@ -65,9 +65,9 @@ export type Halves = { maps: boolean; notes: boolean };
 export const halvesKind = (h: Halves) => h.maps && h.notes ? "both" as const : h.maps ? "maps" as const : "notes" as const;
 /** "type:size" or "type:size:height". */
 const starting = {
-  both: ["next:s", "scenes:m", "links:s:2", "quests:m", "threads:s:2", "party:s", "initiative:s", "recap:m", "recent:s", "notes:s"],
-  maps: ["next:s", "scenes:m", "links:s:2", "initiative:s", "threads:s", "roll:s", "notes:s"],
-  notes: ["next:s", "quests:m", "links:s:2", "party:s", "recap:m", "threads:s", "recent:s", "notes:s"],
+  both: ["next:s", "scenes:m", "links:s", "quests:m", "threads:s", "party:s", "initiative:s", "recap:m", "recent:s", "notes:s"],
+  maps: ["next:s", "scenes:m", "links:s", "initiative:s", "threads:s", "roll:s", "notes:s"],
+  notes: ["next:s", "quests:m", "links:s", "party:s", "recap:m", "threads:s", "recent:s", "notes:s"],
 };
 /** The layout a campaign starts with (by the halves it has), and what "Reset" goes back to. Notes, threads and links are kept. */
 export function defaultDashboard(keep: Partial<Dashboard> = {}, halves: Halves = { maps: true, notes: true }): Dashboard {
@@ -130,8 +130,10 @@ export function setPicked(d: Dashboard, kind: PickWidget, x: Person | { id: stri
 }
 
 /** A short plain-text excerpt of a page for the Last session widget. */
-export function excerpt(text: string, max = 280) {
-  const plain = text.replace(/^:::.*$/gm, "").replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, "$1").replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/^#+\s*/gm, "")
-    .replace(/^\s*[-*]\s+(\[[ xX]\]\s*)?/gm, "").replace(/[*_`>]/g, "").replace(/\s+/g, " ").trim();
+export function excerpt(text: string, max = 280, opts: { lines?: boolean } = {}) {
+  const marked = text.replace(/^:::.*$/gm, "").replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, "$1").replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/^#+\s*/gm, "")
+    .replace(/^\s*[-*]\s+(\[[ xX]\]\s*)?/gm, "").replace(/[*_`>]/g, "");
+  // With lines, each heading, list item and paragraph keeps its own line (the dashboard's Last session shows them with white-space:pre-line).
+  const plain = opts.lines ? marked.split("\n").map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : marked.replace(/\s+/g, " ").trim();
   return plain.length > max ? plain.slice(0, max).replace(/\s+\S*$/, "") + "…" : plain;
 }

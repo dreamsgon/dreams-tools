@@ -36,6 +36,8 @@ test('widgets are turned on and off, moved and resized', () => {
 test('the last session excerpt drops links and markup', () => {
   assert.equal(excerpt('## Recap\n- The party met [[abc|Mira]] at **dawn**.'),'Recap The party met Mira at dawn.');
   assert.match(excerpt('word '.repeat(200),40),/…$/);
+  // The dashboard's Last session keeps a line for each heading and paragraph, so they don't run together.
+  assert.equal(excerpt('## Where we left off\nThe party   arrived.\n\n## Next session\n- Ask Mara',280,{lines:true}),'Where we left off\nThe party arrived.\nNext session\nAsk Mara');
 });
 
 test('the hub brings quests, codex, the party and the saved layout to the dashboard', async () => {
@@ -73,7 +75,7 @@ test('widget heights: 1 to 3, optional, and old saves stay valid', () => {
 test('the starting layout depends on the halves a campaign has', () => {
   const both=defaultDashboard({},bothHalves),maps=defaultDashboard({},mapsOnly),notes=defaultDashboard({},notesOnly);
   assert.deepEqual(both.widgets,defaultDashboard().widgets,'both is the default');
-  assert.deepEqual(both.widgets.slice(0,4),[{type:'next',size:'s'},{type:'scenes',size:'m'},{type:'links',size:'s',h:2},{type:'quests',size:'m'}]);
+  assert.deepEqual(both.widgets.slice(0,4),[{type:'next',size:'s'},{type:'scenes',size:'m'},{type:'links',size:'s'},{type:'quests',size:'m'}]);
   assert.deepEqual(types(maps),['next','scenes','links','initiative','threads','roll','notes']);
   assert.deepEqual(types(notes),['next','quests','links','party','recap','threads','recent','notes']);
   assert.equal(types(maps).some(t=>missingHalf(t,mapsOnly)),false,'maps-only starts with nothing it cannot show');
@@ -81,8 +83,8 @@ test('the starting layout depends on the halves a campaign has', () => {
     assert.equal(dashboardSchema.safeParse(layout).success,true);
     assert.deepEqual(types(layout).filter(t=>missingHalf(t,halves)),[]);
   }
-  assert.equal(maps.widgets.find(w=>w.type==='threads').h,undefined);
-  assert.equal(both.widgets.find(w=>w.type==='threads').h,2);
+  // Every starting widget is one row tall, so a short one isn't stretched beside a long one; the GM can still make one taller.
+  assert.deepEqual([both,maps,notes].flatMap(l=>l.widgets.filter(w=>w.h)),[]);
   const kept=defaultDashboard({notes:'n',threads:[{id:'t',text:'x',done:false}],links:[{label:'a',url:'https://a.example'}]},mapsOnly);
   assert.deepEqual([kept.notes,kept.threads.length,kept.links.length],['n',1,1],'reset keeps threads, notes and links');
 });
