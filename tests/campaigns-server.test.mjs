@@ -280,3 +280,37 @@ test('solo play is set when creating a campaign, switched on the campaign and ne
   assert.equal('solo' in (await s.book.read('owner-1')).data.campaigns.find(c=>c.id==='e1'),false,'switching off leaves nothing behind');
   await assert.rejects(campaignAction(s,{action:'solo',encyclopediaId:'nope',on:true}),/no Wiki/);
 });
+
+test('a campaign gets its own web address: unique, URL-safe, found by rowByKey, and old id keys still work', async () => {
+  const {b,s}=await setup();
+  const {rowByKey}=await import('../lib/campaign-links.ts');
+  let summary=await campaignAction(s,{action:'slug',key:'e:e1',slug:'  SotDQ B '});
+  assert.equal(summary.rows.find(r=>r.key==='e:e1').slug,'sotdq-b','typed text is tidied into a slug');
+  assert.equal((await s.book.read('owner-1')).data.campaigns[0].slug,'sotdq-b');
+  assert.equal(rowByKey(summary.rows,'sotdq-b').key,'e:e1');
+  assert.equal(rowByKey(summary.rows,'e:e1').slug,'sotdq-b','the id key keeps working');
+  assert.equal(rowByKey(summary.rows,'nope'),undefined);
+  // A Maptable-only campaign keeps its slug on the Maptable campaign; slugs are unique across both tools.
+  summary=await campaignAction(s,{action:'slug',key:'m:m2',slug:'one-shots'});
+  assert.equal((await loadWorkspace(b,s.prefix)).workspace.collections.find(c=>c.id==='m2').slug,'one-shots');
+  assert.equal(rowByKey(summary.rows,'one-shots').key,'m:m2');
+  await assert.rejects(()=>campaignAction(s,{action:'slug',key:'m:m2',slug:'sotdq-b'}),/already uses/);
+  await assert.rejects(()=>campaignAction(s,{action:'slug',key:'e:e1',slug:'one-shots'}),/already uses/);
+  await assert.rejects(()=>campaignAction(s,{action:'slug',key:'e:e1',slug:'!!!'}),/Type a web address/);
+  // Saving the same slug again changes nothing; null removes it.
+  const rev=(await s.book.read('owner-1')).revision;
+  await campaignAction(s,{action:'slug',key:'sotdq-b',slug:'sotdq-b'});
+  assert.equal((await s.book.read('owner-1')).revision,rev);
+  summary=await campaignAction(s,{action:'slug',key:'sotdq-b',slug:null});
+  assert.equal(summary.rows.find(r=>r.key==='e:e1').slug,null);
+  assert.equal((await s.book.read('owner-1')).data.campaigns[0].slug,undefined);
+});
+
+test('a paired campaign keeps one slug, on its Wiki campaign', async () => {
+  const {b,s}=await setup();
+  await campaignAction(s,{action:'slug',key:'m:m1',slug:'citadel'});
+  await campaignAction(s,{action:'pair',pairs:[{encyclopediaId:'e1',maptableId:'m1'}]});
+  let summary=await campaignAction(s,{action:'slug',key:'m:m1',slug:'sunless'});
+  assert.equal(summary.rows.find(r=>r.key==='e:e1').slug,'sunless');
+  assert.equal((await loadWorkspace(b,s.prefix)).workspace.collections.find(c=>c.id==='m1').slug,undefined,'the Maptable copy is cleared');
+});

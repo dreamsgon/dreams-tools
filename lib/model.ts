@@ -344,6 +344,8 @@ export const collectionSchema = z.object({
     showHp: z.boolean(),
   }).optional(),
   pinned: z.boolean().optional(),
+  /** A Maptable-only campaign's own web address, /campaigns/<slug> (lib/campaign-slug.ts). */
+  slug: z.string().min(1).max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
   id: short,
   name: z.string().trim().min(1).max(120),
   kind: z.enum(["folder", "campaign"]),

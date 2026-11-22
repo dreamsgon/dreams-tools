@@ -19,6 +19,7 @@ import { ForumStore } from "./forum/store.ts";
 import { applyForumAccess, defaultForumSetup, forumFromSetup, forumSetupSchema } from "./forum/setup.ts";
 import { MemberStore } from "./members-server.ts";
 import { applyPairs, campaignFolders, campaignSummary, cleanName, rowByKey } from "./campaign-links.ts";
+import { slugProblem, toSlug } from "./campaign-slug.ts";
 
 /*
  * The Campaigns page: one list of campaigns across Maptable and the Encyclopedia.
@@ -78,7 +79,8 @@ export type CampaignAction =
   | { action: "placeFolder"; folderId: string; targetId: string; place: "before" | "after" }
   | { action: "complete"; encyclopediaId?: string; maptableId?: string; worldId?: string; newWorld?: string }
   | { action: "forum"; encyclopediaId: string; setup?: unknown }
-  | { action: "solo"; encyclopediaId: string; on: boolean };
+  | { action: "solo"; encyclopediaId: string; on: boolean }
+  | { action: "slug"; key: string; slug: string | null };
 
 const str = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 120 ? v : undefined;
 const describe = (v: unknown) => typeof v === "string" ? v.trim().slice(0, 1000) : "";
@@ -189,6 +191,25 @@ export async function campaignAction(s: Session, body: CampaignAction) {
       delete next.solo;
       return body.on ? { ...next, solo: true } : next;
     }) });
+  } else if (body.action === "slug") {
+    // The campaign's own web address (lib/campaign-slug.ts). It lives on the Wiki campaign when there is one, else on the
+    // Maptable campaign; a copy left on the other half is cleared so only one is ever in force. null removes it.
+    const row = rowByKey(summaryOf(both).rows, str(body.key) ?? "");
+    if (!row) throw new Error("That campaign no longer exists. Reload the page.");
+    const eid = row.encyclopedia?.id, mid = row.maptable?.id;
+    let slug: string | null = null;
+    if (body.slug !== null) {
+      slug = toSlug(typeof body.slug === "string" ? body.slug.slice(0, 200) : "");
+      const taken = [...both.book.data.campaigns.filter(c => c.id !== eid).map(c => c.slug), ...mapNow.collections.filter(c => c.kind === "campaign" && c.id !== mid).map(c => c.slug)].filter((x): x is string => !!x);
+      const problem = slugProblem(slug, taken);
+      if (problem) throw new Error(problem);
+    }
+    const set = <T extends { slug?: string }>(c: T, value: string | null): T => { const next = { ...c }; delete next.slug; return value ? { ...next, slug: value } : next; };
+    const mapSlug = eid ? null : slug;
+    if (mid && (mapNow.collections.find(c => c.id === mid)?.slug ?? null) !== mapSlug)
+      await saveMap(s, both.map, { ...mapNow, collections: mapNow.collections.map(c => c.id === mid ? set(c, mapSlug) : c) });
+    if (eid && (both.book.data.campaigns.find(c => c.id === eid)?.slug ?? null) !== slug)
+      await saveBook(s, both.book.revision, { ...both.book.data, campaigns: both.book.data.campaigns.map(c => c.id === eid ? set(c, slug) : c) });
   } else if (body.action === "newFolder") {
     const name = cleanName(body.name, "folder"), parentId = parentOf(mapNow, body.parentId);
     await saveMap(s, both.map, { ...mapNow, collections: [...mapNow.collections, { id: uid(), name, kind: "folder", parentId }] });

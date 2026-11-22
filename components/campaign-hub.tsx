@@ -1,4 +1,5 @@
 "use client";
+import { campaignHref } from "@/lib/campaign-slug";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -79,9 +80,10 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
       if (!r.ok) throw new Error(body.error === "Campaign not found" ? "This campaign no longer exists. It may have been renamed or removed." : body.error || "Could not load this campaign.");
       if (!live) return;
       setHub(body);
-      // Maptable links here by its own campaign id (m:<id>); the address then shows the campaign's usual key.
-      const canonical = `/campaigns/${encodeURIComponent(body.row.key)}`;
-      if (body.row.key !== campaignKey && window.location.pathname !== canonical) window.history.replaceState(window.history.state, "", canonical + window.location.search + window.location.hash);
+      // Maptable links here by its own campaign id (m:<id>), and old links use the id key: the address then shows the
+      // campaign's own web address (its slug, lib/campaign-slug.ts) or its usual key.
+      const canonical = campaignHref(body.row);
+      if (window.location.pathname !== canonical) window.history.replaceState(window.history.state, "", canonical + window.location.search + window.location.hash);
     }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load this campaign."));
     return () => { live = false; };
   }, [campaignKey, reads]);

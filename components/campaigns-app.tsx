@@ -1,4 +1,5 @@
 "use client";
+import { campaignHref, slugProblem, SLUG_MAX, toSlug } from "@/lib/campaign-slug";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Download, Folder, FolderOpen, FolderPlus, House, Link2, Map as MapIcon, MessagesSquare, MoreHorizontal, Pencil, Plus, Search, Tag as TagIcon, Trash2, Upload, UserRound, X } from "lucide-react";
@@ -189,14 +190,14 @@ export default function CampaignsApp({ signedIn }: { signedIn: boolean }) {
             drag={dragProps({ type: "folder", id: item.folder.id })} drops={folderDrops(item.folder)} edge={edge?.id === item.folder.id ? edge.place : undefined}
             canStep={d => !filtered && canMoveSibling(folders, item.folder.id, d)} step={d => void send({ action: "stepFolder", folderId: item.folder.id, delta: d }, `Moved “${item.folder.name}” ${d < 0 ? "up" : "down"}.`)} /> : (r => <div key={r.key} role="row" {...dragProps({ type: "campaign", key: r.key })}
             className={`campaigns-row${r.key === selectedKey ? " selected" : ""}${drag?.type === "campaign" && drag.key === r.key ? " dragging" : ""}`} style={{ "--depth": item.depth } as React.CSSProperties}>
-            <span role="cell" className="campaigns-name"><span className="campaigns-name-line"><Link href={`/campaigns/${encodeURIComponent(r.key)}`} className="campaigns-name-link" title="Open the Dashboard"><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></Link><button type="button" className="campaigns-mini campaigns-expand" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey} aria-label={`Details for ${r.name}`} title="Details">{r.key === selectedKey ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}</button></span><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
+            <span role="cell" className="campaigns-name"><span className="campaigns-name-line"><Link href={campaignHref(r)} className="campaigns-name-link" title="Open the Dashboard"><strong>{r.name}</strong><small>{r.encyclopedia ? r.encyclopedia.worldName : "Maptable only"}</small></Link><button type="button" className="campaigns-mini campaigns-expand" onClick={() => setSelectedKey(r.key === selectedKey ? null : r.key)} aria-expanded={r.key === selectedKey} aria-label={`Details for ${r.name}`} title="Details">{r.key === selectedKey ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}</button></span><TagList tags={rowTags(r)} max={4} onClick={t => setTagFilter(t.id)} /></span>
             <span role="cell" className="campaigns-cell">{r.maptable ? <><a href={mapsHref(r.maptable.id)}>{r.maptable.scenes ? plural(r.maptable.scenes, "scene") : "No scenes yet"}</a>{r.maptable.name !== r.name && <small>Called “{r.maptable.name}”</small>}</> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => send({ action: "complete", encyclopediaId: r.encyclopedia!.id }, `Added “${r.name}” to Maptable.`)}><Plus size={14} aria-hidden="true" />Add Maptable</button>}</span>
             <span role="cell" className="campaigns-cell">{r.encyclopedia ? <><a href={notesHref(r.encyclopedia.id)}>{r.encyclopedia.pages ? plural(r.encyclopedia.pages, "page") : "No pages yet"}</a><small>{r.encyclopedia.characters ? plural(r.encyclopedia.characters, "character") : `${r.encyclopedia.worldName} world`}</small></> :
               <button type="button" className="campaigns-add" disabled={busy} onClick={() => setDialog({ kind: "notes", row: r })}><Plus size={14} aria-hidden="true" />Add Wiki</button>}</span>
             <span role="cell" className="campaigns-open">
               <button type="button" className="campaigns-mini campaigns-move" disabled={busy} onClick={() => setMoving(r)} aria-label={`Move ${r.name} to a folder`}>Move</button>
-              <a href={`/campaigns/${encodeURIComponent(r.key)}`} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
+              <a href={campaignHref(r)} aria-label={`Open ${r.name}`}>Open<ChevronRight size={15} aria-hidden="true" /></a>
             </span>
           </div>)(item.row))}
           {!rows.length && <p className="campaigns-muted campaigns-none">{summary.rows.length ? "No campaigns match." : "No campaigns yet. Make one with New campaign."}</p>}
@@ -282,10 +283,33 @@ function Details({ row, summary, busy, error, close, send, onDeleted }: { row: C
       <p className="campaigns-muted">{row.maptable && row.encyclopedia ? "Renaming here renames it in both tools. Maptable and Wiki content stay where they are." : "Maptable and Wiki content stay where they are."}</p>
       <button type="submit" className="campaigns-primary" disabled={busy || !changed || !name.trim()}>Save changes</button>
     </form>
+    <SlugForm key={row.slug ?? ""} row={row} busy={busy} send={send} />
     <CampaignBackupSection row={row} busy={busy} onDeleted={onDeleted} />
     {forumSetup && row.encyclopedia && <ForumSetupDialog campaignName={row.name} busy={busy} error={error} close={() => setForumSetup(false)}
       onConfirm={setup => void send({ action: "forum", encyclopediaId: row.encyclopedia!.id, setup }, "Forum added. Open it with Forum.", () => setForumSetup(false))} />}
   </aside>;
+}
+
+/** The campaign's own web address, /campaigns/<slug> (lib/campaign-slug.ts). Old id links keep working. */
+function SlugForm({ row, busy, send }: { row: CampaignRow; busy: boolean; send: Send }) {
+  const [value, setValue] = useState(row.slug ?? ""), slug = toSlug(value);
+  const changed = slug !== (row.slug ?? ""), problem = value.trim() && changed ? slugProblem(slug, []) : null;
+  return <form className="campaigns-rename campaigns-slug" onSubmit={e => { e.preventDefault(); if (changed) void send({ action: "slug", key: row.key, slug: slug || null }, slug ? `Web address saved: /campaigns/${slug}` : "Web address removed."); }}>
+    <label htmlFor="campaign-slug">Web address</label>
+    <div className="campaigns-slug-field">
+      <span aria-hidden="true">/campaigns/</span>
+      <input id="campaign-slug" value={value} maxLength={SLUG_MAX + 20} placeholder={toSlug(row.name) || "my-campaign"} spellCheck={false} autoCapitalize="none" autoComplete="off"
+        onChange={e => setValue(e.target.value)} onBlur={() => setValue(toSlug(value))} aria-describedby="campaign-slug-help" />
+    </div>
+    <p className="campaigns-muted" id="campaign-slug-help">{problem ? problem
+      : changed && slug ? <>Will open at <code>/campaigns/{slug}</code>. Lowercase letters, numbers and hyphens.</>
+      : row.slug ? <>Opens at <a href={campaignHref(row)}><code>/campaigns/{row.slug}</code></a>. Old links still work.</>
+      : "A short address for this campaign, like sotdq-b. Old links still work."}</p>
+    <div className="campaigns-slug-actions">
+      <button type="submit" className="campaigns-primary" disabled={busy || !changed || !!problem}>{slug || !row.slug ? "Save address" : "Remove address"}</button>
+      {!row.slug && !value && <button type="button" className="campaigns-secondary" disabled={busy} onClick={() => setValue(toSlug(row.name))}>Use the name</button>}
+    </div>
+  </form>;
 }
 
 function FolderRow({ item, busy, renaming, removing, over, dragging, toggle, startRename, startRemove, stop, send, filtered, drag, drops, edge, canStep, step }: {

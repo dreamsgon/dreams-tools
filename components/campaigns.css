@@ -81,6 +81,12 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-form small { color:var(--muted); font-size:12px; font-weight:400; }
 .campaigns-rename .campaigns-muted { margin:0; font-size:13px; }
 .campaigns-rename button { align-self:flex-start; }
+.campaigns-slug > label { margin-bottom:-8px; }
+.campaigns-slug-field { display:flex; align-items:stretch; min-width:0; }
+.campaigns-slug-field span { display:flex; align-items:center; padding:0 8px; font-size:13px; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-right:0; border-radius:var(--radius) 0 0 var(--radius); white-space:nowrap; }
+.campaigns-slug-field input { flex:1; min-width:0; border-top-left-radius:0; border-bottom-left-radius:0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+.campaigns-slug code { font-size:12.5px; }
+.campaigns-slug-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .campaigns-form fieldset { display:flex; flex-direction:column; gap:8px; margin:0; padding:0; border:0; }
 .campaigns-form legend { font-size:13px; font-weight:600; margin-bottom:8px; }
 .campaigns-form .campaigns-check { flex-direction:row; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); font-weight:400; font-size:14px; }
