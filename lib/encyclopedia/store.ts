@@ -5,7 +5,7 @@ import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from '.
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 import { pictureIds } from './markup.ts';
-import { applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, joinWorkspace, partLimitOk, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
+import { applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, joinWorkspace, partLimitOk, totalLimitOk, PAGE_LIMIT, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
 const INDEX_FORMAT = 'wiki-parts-v1';
 /** A campaign whose pages are archived (store.ts archiveCampaign): its pages, kept apart from the Wiki. */
 const archiveSchema = z.object({ format: z.literal('wiki-archive-v1'), campaignId: z.string(), at: z.string(), entries: z.array(entrySchema) });
@@ -13,8 +13,8 @@ const archiveSchema = z.object({ format: z.literal('wiki-archive-v1'), campaignI
 export class ArchiveError extends Error {}
 type PartRef = { key: string; bytes: number; hash: string };
 /** workspace.json once the Wiki is split: which part holds each campaign and world. It has no `data`, so older code refuses it instead of saving over it. */
-type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; legacyBackup?: string };
-type Stored = { data: Workspace; revision: number; etag: string | null; index: WikiIndex | null; parts: Map<PartKey, Part> | null; legacy: unknown; limit: number };
+type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; total?: number; legacyBackup?: string };
+type Stored = { data: Workspace; revision: number; etag: string | null; index: WikiIndex | null; parts: Map<PartKey, Part> | null; legacy: unknown; limit: number; total: number };
 function isIndex(x: Record<string, unknown>, prefix: string): x is WikiIndex & Record<string, unknown> {
   if (x.format !== INDEX_FORMAT) return false;
   const i = x as WikiIndex;
@@ -52,23 +52,23 @@ export class EncyclopediaStore {
   constructor(bucket: S3Bucket) { this.bucket = bucket; }
   /** The Wiki as one workspace, joined from its parts (or read from the single file an account had before they were split). */
   async read(owner: string) {
-    const { data, revision, etag, limit } = await this.stored(owner);
-    return { data, revision, etag, limit };
+    const { data, revision, etag, limit, total } = await this.stored(owner);
+    return { data, revision, etag, limit, total };
   }
   /** What is stored: the workspace, its revision and etag, the parts it was read from (null for the old single file) and the limit per part. */
   private async stored(owner: string, tries = 3): Promise<Stored> {
     const object = await this.bucket.get(encyclopediaPrefix(owner)+'workspace.json');
-    if (!object) return { data: emptyWorkspace(), revision: 0, etag: null, index: null, parts: null, legacy: null, limit: DEFAULT_PART_LIMIT };
+    if (!object) return { data: emptyWorkspace(), revision: 0, etag: null, index: null, parts: null, legacy: null, limit: DEFAULT_PART_LIMIT, total: DEFAULT_TOTAL_LIMIT };
     const saved = await object.json<Record<string, unknown>>();
     if (!Number.isSafeInteger(saved.revision) || (saved.revision as number) < 1) throw Error('Invalid encyclopedia revision.');
     const revision = saved.revision as number;
-    if (!isIndex(saved, encyclopediaPrefix(owner))) return { data: workspaceSchema.parse(saved.data), revision, etag: object.etag, index: null, parts: null, legacy: saved, limit: DEFAULT_PART_LIMIT };
+    if (!isIndex(saved, encyclopediaPrefix(owner))) return { data: workspaceSchema.parse(saved.data), revision, etag: object.etag, index: null, parts: null, legacy: saved, limit: DEFAULT_PART_LIMIT, total: DEFAULT_TOTAL_LIMIT };
     const refs = Object.entries(saved.parts);
     const loaded = await eachLimited(refs, async ([, ref]) => { const part = await this.bucket.get(ref.key); return part ? part.json<Part>() : null; });
     // A save that landed between reading the index and its parts removes parts it replaced: read again.
     if (loaded.some(p => !p)) { if (tries > 1) return this.stored(owner, tries - 1); throw new DamagedWikiError('Part of your Wiki could not be found. Nothing was changed.'); }
     const parts = new Map(refs.map(([key], i) => [key, loaded[i]!]));
-    return { data: workspaceSchema.parse(joinWorkspace(saved.layout, parts)), revision, etag: object.etag, index: saved, parts, legacy: null, limit: partLimitOk(saved.limit) ? saved.limit : DEFAULT_PART_LIMIT };
+    return { data: workspaceSchema.parse(joinWorkspace(saved.layout, parts)), revision, etag: object.etag, index: saved, parts, legacy: null, limit: partLimitOk(saved.limit) ? saved.limit : DEFAULT_PART_LIMIT, total: totalLimitOk(saved.total) ? saved.total : DEFAULT_TOTAL_LIMIT };
   }
   async save(owner: string, input: Workspace, revision: number) {
     return (await this.saveTagged(owner, input, revision))?.revision ?? null;
@@ -89,13 +89,21 @@ export class EncyclopediaStore {
     const previous=await this.stored(owner);
     if (previous.revision!==revision) return null;
     const data=workspaceSchema.parse(applyWikiPatch(previous.parts ?? splitWorkspace(previous.data).parts, patch));
-    return this.commit(owner, previous, markEditor(previous.data,data));
+    // Parts the patch didn't send are stored as they were: no need to write them out again to see that.
+    const untouched=new Set(Object.keys(previous.index?.parts ?? {}).filter(key => !(key in patch.parts)));
+    return this.commit(owner, previous, markEditor(previous.data,data), { untouched });
   }
   /** Sets how big one campaign (or one world's shared lore) may be. Saves the Wiki as it is, under the new limit. */
   async setPartLimit(owner: string, limit: number) {
     if (!partLimitOk(limit)) throw Error('Choose one of the limits offered.');
     const previous=await this.stored(owner);
-    return this.commit(owner, previous, previous.data, limit);
+    return this.commit(owner, previous, previous.data, { limit });
+  }
+  /** Sets how big the whole Wiki, every live campaign together, may be. */
+  async setTotalLimit(owner: string, total: number) {
+    if (!totalLimitOk(total)) throw Error('Choose one of the limits offered.');
+    const previous=await this.stored(owner);
+    return this.commit(owner, previous, previous.data, { total });
   }
   /**
    * Writes each campaign and world that changed to a new part, then publishes the index that names them, only if
@@ -122,7 +130,7 @@ export class EncyclopediaStore {
     if (!made) return null;
     const next: Workspace={ ...previous.data, campaigns: previous.data.campaigns.map(c => c.id===campaignId ? { ...c, archived: { at: now.toISOString(), pages: entries.length, bytes: new TextEncoder().encode(text).length } } : c), entries: previous.data.entries.filter(e => e.campaignId!==campaignId) };
     let saved: Awaited<ReturnType<EncyclopediaStore['commit']>> = null;
-    try { saved=await this.commit(owner, previous, workspaceSchema.parse(next), previous.limit, false); }
+    try { saved=await this.commit(owner, previous, workspaceSchema.parse(next), { history: false }); }
     finally { if (!saved && !leftover) await this.bucket.delete(path).catch(() => {}); }
     return saved;
   }
@@ -137,22 +145,24 @@ export class EncyclopediaStore {
     if (!parsed.success || parsed.data.campaignId!==campaignId) throw new ArchiveError('The archived pages of this campaign could not be read. Nothing was changed.');
     // Pages made in the campaign while it was archived (by an AI connection, say) stay as they are.
     const live=new Set(previous.data.entries.map(e => e.id)), back=parsed.data.entries.filter(e => !live.has(e.id));
-    if (previous.data.entries.length+back.length>5000) throw new ArchiveError(`Bringing back ${back.length} pages would take your Wiki over 5,000 pages. Nothing was changed.`);
+    if (previous.data.entries.filter(e => e.campaignId===campaignId).length+back.length>PAGE_LIMIT) throw new ArchiveError(`Bringing back ${back.length} pages would take this campaign over ${PAGE_LIMIT.toLocaleString('en-US')} pages. Nothing was changed.`);
     const { archived: _was, ...rest }=campaign;
     const next: Workspace={ ...previous.data, campaigns: previous.data.campaigns.map(c => c.id===campaignId ? rest : c), entries: [...previous.data.entries, ...back] };
     const checked=workspaceSchema.safeParse(next);
     if (!checked.success) throw new ArchiveError(`These pages no longer fit the Wiki (${checked.error.issues[0]?.message}). Nothing was changed.`);
-    const saved=await this.commit(owner, previous, checked.data, previous.limit, false);
+    const saved=await this.commit(owner, previous, checked.data, { history: false });
     if (saved) await this.bucket.delete(path).catch(() => {});
     return saved;
   }
-  private async commit(owner: string, previous: Stored, data: Workspace, limit = previous.limit, history = true) {
-    const problem=sizeProblem(data, limit);
+  private async commit(owner: string, previous: Stored, data: Workspace, { limit = previous.limit, total = previous.total, history = true, untouched = new Set<string>() }: { limit?: number; total?: number; history?: boolean; untouched?: Set<string> } = {}) {
+    const problem=sizeProblem(data, limit, total);
     if (problem) throw Error(problem);
     const base=encyclopediaPrefix(owner), next=previous.revision+1, { layout, parts }=splitWorkspace(data), old=previous.index?.parts ?? {};
     const written: string[]=[];
     const refs=Object.fromEntries(await eachLimited([...parts], async ([key, part]) => {
-      const text=JSON.stringify(part), hash=await sha256(text), had=old[key];
+      const had=old[key];
+      if (had && untouched.has(key)) return [key, had] as const;
+      const text=JSON.stringify(part), hash=await sha256(text);
       if (had && had.hash===hash) return [key, had] as const;
       const path=`${base}parts/${encodeURIComponent(key)}/${crypto.randomUUID()}.json`;
       written.push(path);
@@ -166,7 +176,7 @@ export class EncyclopediaStore {
       try { await this.bucket.put(legacyBackup, JSON.stringify(previous.legacy), { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } }); }
       catch (error) { await this.forget(written); throw error; }
     }
-    const index: WikiIndex={ format: INDEX_FORMAT, schemaVersion: 1, revision: next, layout, parts: refs, ...(limit!==DEFAULT_PART_LIMIT ? { limit } : {}), ...(legacyBackup ? { legacyBackup } : {}) };
+    const index: WikiIndex={ format: INDEX_FORMAT, schemaVersion: 1, revision: next, layout, parts: refs, ...(limit!==DEFAULT_PART_LIMIT ? { limit } : {}), ...(total!==DEFAULT_TOTAL_LIMIT ? { total } : {}), ...(legacyBackup ? { legacyBackup } : {}) };
     const saved=await this.bucket.put(base+'workspace.json', JSON.stringify(index), { onlyIf: previous.etag ? { etagMatches: previous.etag } : { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } })
       .catch(async (error) => { await this.forget(written); throw error; });
     if (!saved) { await this.forget(written); return null; }

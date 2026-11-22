@@ -4,6 +4,7 @@ Updated 2026-11-22. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 ## Completed source preparation
 
+- [x] Wiki-wide limits (2026-11-22): the 5,000-page limit is now per campaign (and per world's shared lore, `PAGE_LIMIT` in `lib/encyclopedia/wiki-parts.ts`); the whole Wiki can hold up to 100,000 pages. The whole-Wiki size limit (live campaigns only; archived ones don't count) is 60 MB by default and the owner can raise it to 100 or 150 MB in Settings, **Storage** (`total` in the index, `PUT /api/encyclopedia/storage {total}`). Staged workspace transfers allow 160 MB. Patch saves no longer re-serialize campaigns they didn't send, and the browser only compares campaigns whose objects changed.
 - [x] Forums without topic or post limits (2026-11-22): the 3,000 topics per forum and 1,500 posts per topic limits are gone. A long topic keeps its latest posts in its topic file and older ones in page files of up to 100 posts (`lib/forum/pages.ts`); a forum past 1,000 topics keeps its topic summaries in index files of up to 500. A post rewrites only the topic file (and one index file in a big forum), never the whole topic or the whole list. Page and index files are new files on every change and the topic and forum files stay the conditional commit, so concurrent posts, edits and deletes keep their If-Match protection. The topic page now shows 30 posts a page with a pager, opens where the reader's new posts start, and marks read up to the page shown; links to a post (after replying or editing, reports, search hits, alerts) open its page. Print and downloads, recaps from a forum topic, board export, search, reports, AI help, the MCP `read_topic` tool, backups, Duplicate campaign and Delete campaign handle pages and index files. Migration is lazy and keeps data: version 1 files are read as before and split only when they next change past the limits; the first split of a forum file keeps the old file as `forum.v1-backup.json`. Rollback: an older deployment refuses (doesn't overwrite) version 2 topic and forum files, so long topics and big forums would show "can't be read" until rolled forward. Tests in `tests/forum-pages.test.mjs`.
   - [ ] Not done: a signed-in browser check of the pager on the live site; board export still returns one response (very large boards may hit Vercel's response size limit); search reads at most 150 older pages per search.
 
@@ -289,7 +290,7 @@ Plan: one system-agnostic character format (`rpgtools-sheet`, version 1) that an
 - [ ] Test public player links, hidden GM content, key replacement/revocation, and fresh fog previews. Previously issued image URLs expire within five minutes.
 - [ ] Verify hosted encyclopedia MCP access and wrong-campaign rejection with a real campaign key.
 - [x] Review the 2 MB encyclopedia workspace limit and plan larger storage if needed (now per campaign, see above).
-- [ ] After the per-campaign split is live: check a real account splits on its first save (index, parts and `backups/before-wiki-split.json`), then reloads unchanged; the 5,000-page limit is still for the whole Wiki.
+- [ ] After the per-campaign split is live: check a real account splits on its first save (index, parts and `backups/before-wiki-split.json`), then reloads unchanged.
 
 ## Usability pass (docs/UX_HANDOFF.md)
 
