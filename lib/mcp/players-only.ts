@@ -9,6 +9,7 @@ import type { Tie } from "../encyclopedia/ties.ts";
 import { playerRecapTabs } from "../encyclopedia/recap-schema.ts";
 import { withoutLinkDetails } from "../encyclopedia/sheet-link.ts";
 import { playerSafeVehicle } from "../encyclopedia/vehicles.ts";
+import { playerSafeTimeline } from "../encyclopedia/timelines.ts";
 import type { Scene, Workspace as Maps } from "../model.ts";
 import { fogged, permsFor, type McpContext } from "./tools.ts";
 
@@ -23,14 +24,17 @@ export function playersBook(book: Book, campaignId: string): Book {
     const found = e.codex?.found[campaignId];
     const map = e.mapData?.visibility === "players";
     const vehicle = e.vehicle ? playerSafeVehicle(e.vehicle, playerText) ?? undefined : undefined;
-    if (!overview && !tabs.length && !found && !map && !vehicle) return [];
+    const timeline = playerSafeTimeline(e.timeline, playerText);
+    if (!overview && !tabs.length && !found && !map && !vehicle && !timeline) return [];
     const quest = e.quest && overview ? { ...e.quest, prep: undefined, linkIds: undefined, ...(e.quest.rewardHidden ? { reward: undefined, rewardIds: undefined } : {}), objectives: e.quest.objectives.filter(o => !o.hidden), log: e.quest.log.filter(l => l.players) } : undefined;
     const character = e.character ? { ...e.character, statblock: e.character.statblockVisibility === "players" && !e.hiddenTabs?.includes("statblock") ? e.character.statblock : undefined, sheet: e.character.statsVisibility === "players" && e.character.sheet ? withoutLinkDetails(e.character.sheet) : undefined, statsByCampaign: e.character.statsVisibility === "players" ? e.character.statsByCampaign : {}, features: e.character.featuresVisibility === "players" && e.character.features?.length ? e.character.features.filter(f => !f.gm) : undefined } : undefined;
     return [{ ...e, body: overview ? playerText(e.body) : "", tabs, quest, character, codex: found ? { ...e.codex!, summary: playerText(e.codex!.summary) } : undefined, mapData: map ? e.mapData : undefined, recap: undefined,
       // Organization and character profiles hold GM-only items, so they are not read here at all (players get their own copy from playerCampaign).
       org: undefined, profile: undefined,
       // A vehicle keeps only what its shared tabs show (playerSafeVehicle).
-      vehicle }];
+      vehicle,
+      // A timeline keeps only shared events and eras, and only when its tab is shared.
+      timeline }];
   });
   const campaigns = book.campaigns.map(c => ({ ...c, calendars: c.calendars?.filter(x => x.visibility === "players") }));
   return { ...book, campaigns, entries: playersTies(entries) };

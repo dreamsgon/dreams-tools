@@ -5,7 +5,7 @@
  * A GM type is a page template (lib/encyclopedia/templates.ts) with an icon; its fields and tabs are on the Templates page.
  */
 import { useState, type ComponentType } from 'react';
-import { BookOpen, File, FileText, Flag, Folder, Goal, Hexagon, LayoutTemplate, ListChecks, Map as MapIcon, MapPin, Orbit, Plus, ScrollText, Shapes, Ship, Store, TriangleAlert, Users } from 'lucide-react';
+import { BookOpen, File, FileText, Flag, Folder, Goal, Hexagon, LayoutTemplate, ListChecks, Map as MapIcon, MapPin, Milestone, Orbit, Plus, ScrollText, Shapes, Ship, Store, TriangleAlert, Users } from 'lucide-react';
 import { GalaxyIcon } from './galaxy-art';
 import { PAGE_ICON_GLYPHS } from './page-icons';
 import { ToolDialog } from './tool-dialog';
@@ -17,7 +17,7 @@ import { changeEntryType, typeChangeLoses, typeOf, type EntryType } from '@/lib/
 
 export const KIND_ICONS: Record<EntryKind, ComponentType<{ size?: number }>> = {
   map: MapIcon, folder: Folder, note: FileText, page: File, other: Shapes, character: Users, place: MapPin, faction: Flag, lore: BookOpen,
-  session: ScrollText, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store, galaxy: GalaxyIcon, sector: Hexagon, system: Orbit,
+  session: ScrollText, timeline: Milestone, tasks: ListChecks, quest: Goal, vehicle: Ship, store: Store, galaxy: GalaxyIcon, sector: Hexagon, system: Orbit,
 };
 
 /** A GM type's icon: its own, or its kind's. */
