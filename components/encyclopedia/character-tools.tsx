@@ -51,10 +51,12 @@ function CharacterCreator({defaultRole,defaultParent='',campaignId,folders,templ
  <label>Folder<select value={parent} onChange={e=>setParent(e.target.value)}><option value="">Not in a folder</option>{folders.filter(f=>f.campaignId===(shared?null:campaignId)).map(f=><option key={f.id} value={f.id}>{f.title}</option>)}</select></label>
  <p className="aside-hint">New characters start GM-only. Choose which tabs to share after writing them.</p><button className="button primary">Create character <Plus size={16}/></button></form></ToolDialog>;
 }
-export function CharacterDetails({entry,onChange,onClose}:{entry:Entry;onChange:(c:CharacterData)=>void;onClose:()=>void}){
+export function CharacterDetails({entry,onChange,onClose,groups=[]}:{entry:Entry;onChange:(c:CharacterData)=>void;onClose:()=>void;groups?:string[]}){
  const [c,setC]=useState(entry.character??defaultCharacter());
- return <ToolDialog title="Character details" onClose={onClose}><form className="details-form" onSubmit={e=>{e.preventDefault();onChange(c);onClose();}}>
+ const groupList=[...new Set(groups.map(g=>g.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ return <ToolDialog title="Character details" onClose={onClose}><form className="details-form" onSubmit={e=>{e.preventDefault();onChange({...c,group:c.group.trim()});onClose();}}>
  <label>Character category<select value={c.role} onChange={e=>setC({...c,role:e.target.value as CharacterData['role']})}>{Object.entries(roles).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+ <label>Group<input maxLength={300} list="character-groups" placeholder="Played by Dreams, Villains, The crew…" value={c.group} onChange={e=>setC({...c,group:e.target.value})}/><datalist id="character-groups">{groupList.map(g=><option key={g} value={g}/>)}</datalist><small className="aside-hint">Shown after the category in The party on the campaign page.</small></label>
  <label>Location<input maxLength={160} value={c.location} onChange={e=>setC({...c,location:e.target.value})}/></label>
  <label>Faction<input maxLength={160} value={c.faction} onChange={e=>setC({...c,faction:e.target.value})}/></label>
  <label>Status<select value={c.status} onChange={e=>setC({...c,status:e.target.value as CharacterData['status']})}>{['active','inactive','missing','deceased'].map(v=><option key={v}>{v}</option>)}</select></label>
