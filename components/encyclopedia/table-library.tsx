@@ -3,6 +3,7 @@
  * Random tables outside the Random tables page: the library loaded once and shared, chips and whole
  * tables on Encyclopedia pages ([[table:Name]]), the Write-mode picker, and posting results to Discord.
  */
+import { workspaceBody, putWorkspace } from "@/lib/encyclopedia/workspace-client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Dices, ListOrdered, Search } from "lucide-react";
 import { playerInline } from "@/lib/encyclopedia/inline";
@@ -22,7 +23,7 @@ export function loadTables(force = false) {
   if (loading && !force) return loading;
   loading = (async () => {
     try {
-      const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
+      const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; error?: string }>(res);
       if (!res.ok) throw Error(body.error ?? "Could not load your tables.");
       set({ lib: librarySchema.parse(body.data), revision: body.revision ?? 0, error: "", loaded: true });
     } catch (e) { set({ error: e instanceof Error ? e.message : "Could not load your tables.", loaded: true }); }
@@ -42,7 +43,7 @@ export async function saveTables(edit: (lib: TableLibrary) => TableLibrary) {
     if (!state.lib) throw Error(state.error || "Could not load your tables.");
     const data = edit(state.lib);
     set({ lib: data });
-    const res = await fetch("/api/encyclopedia/tables", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data, revision: state.revision }) });
+    const res = await putWorkspace("/api/encyclopedia/tables", { data, revision: state.revision });
     const body = await res.json().catch(() => ({})) as { revision?: number; error?: string };
     if (res.ok) { set({ revision: body.revision ?? state.revision + 1 }); return; }
     if (res.status !== 409) { await loadTables(true); throw Error(body.error ?? "Could not save your tables."); }

@@ -15,6 +15,7 @@ import type { S3Bucket } from "./storage.ts";
 import { campaignSession, readBoth, summaryOf, type Session } from "./campaigns-server.ts";
 import { rowByKey } from "./campaign-links.ts";
 import { saveWorkspace } from "./workspace-storage.ts";
+import { archiveKey, withArchivedMaps } from "./scene-archive-server.ts";
 import { encyclopediaPrefix } from "./encyclopedia/store.ts";
 import { ForumStore, forumKey, forumV1Key, presenceKey, readsKey, alertsKey } from "./forum/store.ts";
 import { forumSchema, postPageSchema, topicSchema } from "./forum/model.ts";
@@ -31,7 +32,7 @@ import { MAX_IMAGE_BYTES } from "./encyclopedia/map-model.ts";
 import { themeKey } from "./campaign-theme/store.ts";
 import { themeFileSchema } from "./campaign-theme/model.ts";
 import {
-  buildBackup, checkBackup, imageRefs, isBackupFile, isImageId, planImport, removeBookCampaign, removeMapCampaign, removeTablesCampaign, sniffImage,
+  buildBackup, checkBackup, imageRefs, subtree as mapSubtree, isBackupFile, isImageId, planImport, removeBookCampaign, removeMapCampaign, removeTablesCampaign, sniffImage,
   type CampaignBackup, type ImageRef, type ImageTool, type ImportOptions,
 } from "./campaign-backup.ts";
 
@@ -74,13 +75,15 @@ const asRefs = (v: unknown): ImageRef[] => {
 
 async function backupData(s: Session, bucket: S3Bucket, both: Awaited<ReturnType<typeof readBoth>>, key: string, now = new Date()) {
   const row = rowOf(both, key), eid = row.encyclopedia?.id ?? null, mid = row.maptable?.id ?? null;
+  // A campaign's archived maps go in its backup (and its copy, and the copy kept when it is deleted) like its live ones.
+  const map = both.map && mid ? await withArchivedMaps(bucket, s.prefix, both.map.workspace, c => c !== null && mapSubtree(both.map!.workspace, mid).has(c)) : both.map?.workspace ?? null;
   const [tables, members, home] = await Promise.all([
     eid ? s.book.readTables(s.owner).then(t => t.data) : null,
     eid ? new MemberStore(bucket).read(s.owner, eid).then(r => r.etag ? { groups: r.list.groups, ...(r.list.pages ? { pages: r.list.pages } : {}) } : null) : null,
     !eid && mid ? readHome(bucket, s.owner).catch(() => null) : null,
   ]);
   return buildBackup({
-    name: row.name, now: now.toISOString(), map: both.map?.workspace ?? null, maptableId: mid, book: both.book.data, encyclopediaId: eid,
+    name: row.name, now: now.toISOString(), map, maptableId: mid, book: both.book.data, encyclopediaId: eid,
     tables, members, dashboard: (mid && home?.layout.campaignDashboards?.[`m:${mid}`]) || null,
   });
 }
@@ -258,6 +261,8 @@ export const deletedKey = (owner: string, campaignId: string, now: Date) => ency
 export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, confirm: unknown, now = new Date()) {
   const both = await readBoth(s), row = rowOf(both, key);
   if (typeof confirm !== "string" || confirm.trim().toLocaleLowerCase() !== row.name.trim().toLocaleLowerCase()) throw new Error(`Type the campaign's name, ${row.name}, to delete it.`);
+  // An archived Wiki campaign's pages aren't in the Wiki, so the copy kept below would miss them.
+  notArchived(both, key);
   const eid = row.encyclopedia?.id ?? null, mid = row.maptable?.id ?? null;
   const backup = await backupData(s, bucket, both, key, now), extra = await campaignFiles(s, bucket, backup);
   // Every forum file goes with it, long topics' pages too (read from each topic file before anything is deleted).
@@ -273,6 +278,7 @@ export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, 
     const next = removeTablesCampaign(tables.data, eid);
     if (next !== tables.data) await s.book.saveTables(s.owner, next, tables.revision).catch(() => null);
   }
+  const archivedMaps = mid && both.map ? (both.map.workspace.archivedScenes ?? []).filter(m => m.containerId !== null && mapSubtree(both.map!.workspace, mid).has(m.containerId)).map(m => m.id) : [];
   if (mid && both.map) {
     if (!(await saveWorkspace(bucket, s.prefix, removeMapCampaign(both.map.workspace, mid), both.map.revision))) throw busy();
     await changeHome(bucket, s.owner, l => l.campaignDashboards?.[`m:${mid}`] ? applyHomeAction(l, { action: "campaignDashboard", key: `m:${mid}`, dashboard: null }) : l).catch(() => {});
@@ -286,6 +292,8 @@ export async function deleteCampaign(s: Session, bucket: S3Bucket, key: string, 
     const hash = access ? (await access.json<{ hash?: string }>().catch(() => ({ hash: undefined }))).hash : undefined;
     if (hash && /^[a-f0-9]{64}$/.test(hash)) tasks.push(quietly(bucket.delete(`agent-keys/${hash}.json`)));
     tasks.push(quietly(bucket.delete(`${s.prefix}agent-access/${encodeURIComponent(mid)}.json`)), quietly(bucket.delete(`${s.prefix}campaign-settings/${encodeURIComponent(mid)}.json`)));
+    // Its archived maps are in the copy kept above.
+    for (const id of archivedMaps) tasks.push(quietly(bucket.delete(archiveKey(s.prefix, id))));
   }
   if (eid) {
     const base = encyclopediaPrefix(s.owner), c = encodeURIComponent(eid);

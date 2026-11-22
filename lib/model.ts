@@ -3,6 +3,8 @@ export const uid = () => crypto.randomUUID();
 const finite = z.number().finite();
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const short = z.string().max(120);
+/** Tokens one scene can hold (lib/token-clipboard.ts and the board use it too). */
+export const MAX_SCENE_TOKENS = 2000;
 const point = z.object({ x: finite, y: finite });
 export const assetSchema = z.object({
   kind: z.enum(["image", "border", "stamp"]).optional(),
@@ -292,7 +294,7 @@ export const mapAreaSchema = z.object({
 export type MapArea = z.infer<typeof mapAreaSchema>;
 export const sceneSchema = z.object({
   initiativeLiveDiscord: z.boolean().optional(),
-  initiativeState: z.object({round: finite.int().min(1), currentId: z.string().max(160).nullable(), order: z.array(z.string().max(160)).max(500)}).optional(),
+  initiativeState: z.object({round: finite.int().min(1), currentId: z.string().max(160).nullable(), order: z.array(z.string().max(160)).max(MAX_SCENE_TOKENS)}).optional(),
   id: short,
   name: z.string().min(1).max(120),
   folder: short,
@@ -311,7 +313,7 @@ export const sceneSchema = z.object({
   mapId: short.nullable(),
   drawing: mapDrawingSchema.nullable().default(null),
   grid: gridSchema,
-  tokens: z.array(tokenSchema).max(500),
+  tokens: z.array(tokenSchema).max(MAX_SCENE_TOKENS),
   effects: z.array(effectSchema).max(300),
   measurements: z.array(z.object({
     id: short, label: short, points: z.array(point).min(2).max(200),
@@ -377,6 +379,18 @@ export function migrateTokenFolders(w: TokenFolderWorkspace) {
   for (const token of w.tokenLibrary) tokenFolderLocations[token.id] = copy(w.libraryLocations[token.id] ?? null, w.libraryCampaigns[token.id] ?? null);
   return { tokenFolders, tokenFolderLocations };
 }
+/** A map moved out of the live workspace into its own file (lib/scene-archive.ts): enough to list it and bring it back. */
+export const archivedSceneSchema = z.object({
+  id: short,
+  name: z.string().max(120),
+  mapType: z.enum(["encounter", "world", "area"]),
+  /** The folder or campaign it was in; a folder deleted since means it comes back outside any folder. */
+  containerId: short.nullable(),
+  at: z.string().max(40),
+  bytes: z.number().int().min(0),
+  tokens: z.number().int().min(0),
+});
+export type ArchivedScene = z.infer<typeof archivedSceneSchema>;
 export const workspaceSchema = z.object({
   version: z.literal(1),
   scenes: z.array(sceneSchema).min(1),
@@ -399,6 +413,8 @@ export const workspaceSchema = z.object({
   conditionLocations: z.record(z.string(), short.nullable()).default({}),
   /** Set once the Campaigns page folders have been re-ordered by hand; until then that page lists them by name. */
   campaignFoldersOrdered: z.boolean().optional(),
+  /** Archived maps: not loaded with the workspace, each kept in its own file until it is brought back. */
+  archivedScenes: z.array(archivedSceneSchema).max(10000).optional(),
 }).transform((w) => {
   // Upgrade legacy text folders once, preserving their contents.
   for (const s of w.scenes) {

@@ -1,4 +1,5 @@
 'use client';
+import {workspaceBody,putWorkspace} from '@/lib/encyclopedia/workspace-client';
 import {tablesSaved} from './table-library';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Dices,Plus,Upload,Download,Search,ArrowLeft,Trash2,Copy,Pencil,Check,RotateCcw,X,ListOrdered,Lock,LockOpen,UserPlus,ArrowUp} from 'lucide-react';
@@ -28,15 +29,15 @@ export function RandomTablesSection({campaignId,campaigns,home=0,onSaveCharacter
  const campaign=campaigns.find(c=>c.id===campaignId)??null;
  const [seenHome,setSeenHome]=useState(home);
  if(home!==seenHome){setSeenHome(home);setOpen(null);setEditing(false);}
- useEffect(()=>{let live=true;(async()=>{try{const res=await fetch('/api/encyclopedia/tables');const body=await res.json() as {data:unknown;revision:number;error?:string};if(!res.ok)throw new Error(body.error??'Could not load your tables.');if(!live)return;const data=librarySchema.parse(body.data);current.current=data;revision.current=body.revision;setLib(data);tablesSaved(data,body.revision);}catch(e){if(live)setError(e instanceof Error?e.message:'Could not load your tables.');}})();return()=>{live=false;};},[]);
+ useEffect(()=>{let live=true;(async()=>{try{const res=await fetch('/api/encyclopedia/tables',{cache:'no-store'});const body=await workspaceBody<{data:unknown;revision:number;error?:string}>(res);if(!res.ok)throw new Error(body.error??'Could not load your tables.');if(!live)return;const data=librarySchema.parse(body.data);current.current=data;revision.current=body.revision;setLib(data);tablesSaved(data,body.revision);}catch(e){if(live)setError(e instanceof Error?e.message:'Could not load your tables.');}})();return()=>{live=false;};},[]);
  useEffect(()=>{const leave=(e:BeforeUnloadEvent)=>{if(dirty.current)e.preventDefault();};window.addEventListener('beforeunload',leave);return()=>{window.removeEventListener('beforeunload',leave);if(timer.current){clearTimeout(timer.current);void saveRef.current?.();}};},[]);
  async function save(){if(busy.current||!dirty.current||!current.current)return;busy.current=true;dirty.current=false;setStatus('Saving…');const sent=current.current;
-  try{const res=await fetch('/api/encyclopedia/tables',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:sent,revision:revision.current})});const v=await res.json() as {revision:number;error?:string};if(!res.ok)throw new Error(v.error??'Could not save your tables.');revision.current=v.revision;tablesSaved(sent,v.revision);setStatus(dirty.current?'Saving…':'Saved');}
+  try{const res=await putWorkspace('/api/encyclopedia/tables',{data:sent,revision:revision.current});const v=await res.json() as {revision:number;error?:string};if(!res.ok)throw new Error(v.error??'Could not save your tables.');revision.current=v.revision;tablesSaved(sent,v.revision);setStatus(dirty.current?'Saving…':'Saved');}
   catch(e){dirty.current=true;blocked.current=true;setStatus('Not saved');setError(e instanceof Error?e.message:'Could not save your tables.');}
   finally{busy.current=false;if(dirty.current&&!blocked.current)timer.current=setTimeout(save,800);}}
  useEffect(()=>{saveRef.current=save;});
  function change(next:TableLibrary){const ok=librarySchema.safeParse(next);if(!ok.success){setError(ok.error.issues[0]?.message??'That change isn’t valid.');return false;}
-  if(new TextEncoder().encode(JSON.stringify(next)).length>LIBRARY_LIMIT){setError('Your tables would go over the 1 MB limit. Export some and delete them to make room.');return false;}
+  if(new TextEncoder().encode(JSON.stringify(next)).length>LIBRARY_LIMIT){setError(`Your tables would go over the ${LIBRARY_LIMIT/1_000_000} MB limit. Export some and delete them to make room.`);return false;}
   setError('');blocked.current=false;current.current=next;setLib(next);dirty.current=true;setStatus('Unsaved changes');if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(save,600);return true;}
  const updateTable=(id:string,patch:Partial<RandomTable>)=>{const l=current.current;if(l)change({...l,tables:l.tables.map(t=>t.id===id?{...t,...patch,updatedAt:now()}:t)});};
  const record=(r:TableRoll,extra:Partial<LogItem>={})=>setLog(old=>[{...r,...extra,at:Date.now(),n:++sequence},...old].slice(0,40));
@@ -248,7 +249,7 @@ function ImportDialog({lib,campaigns,campaignId,onClose,onDone,setError}:{lib:Ta
  const parsed=useMemo(()=>text.trim()?parseTableText(text,newId):null,[text]);
  const elsewhere=lib.tables.filter(t=>from&&t.campaignIds!==null&&t.campaignIds.includes(from));
  const make=(n:string,p:Parsed):RandomTable=>({id:newId(),name:uniqueName(lib,n),category,kind:'table',mode:p.mode,formula:p.formula,rows:p.rows,campaignIds:scope,updatedAt:now()});
- async function readFile(file:File){setProblem('');try{if(file.size>LIBRARY_LIMIT)throw new Error('Choose a file smaller than 1 MB.');const body=await file.text(),base=file.name.replace(/\.(tables\.)?(json|csv|txt)$/i,'');
+ async function readFile(file:File){setProblem('');try{if(file.size>LIBRARY_LIMIT)throw new Error(`Choose a file smaller than ${LIBRARY_LIMIT/1_000_000} MB.`);const body=await file.text(),base=file.name.replace(/\.(tables\.)?(json|csv|txt)$/i,'');
   if(/\.json$/i.test(file.name)){const r=importTables(lib,JSON.parse(body),scope,newId);onDone(r.library,`Imported ${r.added} table${r.added===1?'':'s'}`);return;}
   const p=/\.csv$/i.test(file.name)?parseCsvTable(body,newId):parseTableText(body,newId);if(!p.rows.length)throw new Error('No rows found in that file.');onDone({...lib,tables:[...lib.tables,make(base||'Imported table',p)]},`Imported “${base}”`);}
   catch(e){setProblem(e instanceof Error&&!(e instanceof SyntaxError)?(e.message.startsWith('[')?'That isn’t an RPG Tools tables file.':e.message):'That file couldn’t be read. Use a .json export from RPG Tools, a .csv or a .txt list.');}}
