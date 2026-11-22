@@ -1693,3 +1693,31 @@ input,select,textarea{border-color:var(--field-line)}
 .article.is-editing .article-toolbar .write-guide{padding-left:10px;padding-right:10px;margin-right:0}
 .article.is-editing .article-toolbar .write-guide-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 }
+
+/* The sidebar scrolls on its own (2026-11): on a desktop it stays in view under the campaign bar, which stays at the top,
+   so a long page tree never makes the whole page scroll. --wiki-bar-h is the bar's measured height (workspace-app.tsx).
+   Phones keep their full-screen drawer, which already scrolls by itself. */
+@media(min-width:721px){
+.app-shell>.sidebar{position:sticky;top:0;align-self:start;height:calc(100vh / var(--ui-zoom, 1));min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line-strong,var(--line)) transparent}
+.wiki-shell>.wiki-bar{position:sticky;top:0}
+.wiki-shell>.sidebar{top:var(--wiki-bar-h,52px);align-self:start;height:calc(100vh / var(--ui-zoom, 1) - var(--wiki-bar-h,52px));min-height:0}
+.wiki-shell .templates-list{top:calc(var(--wiki-bar-h,52px) + 16px)}
+.wiki-shell .tables-log{top:var(--wiki-bar-h,52px);max-height:calc(100vh / var(--ui-zoom, 1) - var(--wiki-bar-h,52px))}
+.wiki-shell .write-preview{top:calc(var(--wiki-bar-h,52px) + 12px);max-height:calc(100vh / var(--ui-zoom, 1) - var(--wiki-bar-h,52px) - 24px)}
+}
+
+/* The page tree: folders start closed (only the path to the open page unfolds), a hairline guide joins a folder to what is
+   inside it, folder names read a little stronger than pages, and counts sit in small pills. Tokens only, so campaign themes carry over. */
+.tree-children{position:relative}
+.tree-children::before{content:"";position:absolute;left:var(--guide,18px);top:0;bottom:6px;width:1px;background:var(--line);pointer-events:none}
+.tree-row .disclosure{align-items:center;justify-content:center;width:16px;min-width:16px;height:22px;border-radius:var(--radius-sm);color:var(--muted)}
+.tree-row button.disclosure:hover{color:var(--ink);background:var(--hover)}
+.tree-row:has(>.tree-item[aria-expanded]) .tree-item{color:var(--ink);font-weight:500}
+.tree-row.selected,.tree-row.selected:has(>.tree-item[aria-expanded]) .tree-item{color:var(--accent)}
+.tree-row.selected{font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+.tree-row.selected .tree-item svg{color:inherit}
+.tree-item .tree-count{min-width:20px;padding:1px 6px;border-radius:999px;background:var(--raised);text-align:center;line-height:1.5}
+.tree-row.selected .tree-count{background:transparent;color:inherit}
+.navigation-trees>.navigation-section+.navigation-section,.navigation-trees>.navigation-section+.sb-group-heading{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.side-heading .fold-all{margin-left:0}
+.side-heading .shared-tag+.fold-all,.side-heading .shared-tag+.arrange-toggle{margin-left:auto}
