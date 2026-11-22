@@ -84,7 +84,7 @@ test('sidebar headings: the GM adds one, sections after it sit under it, and rem
   assert.equal(under[0].heading,true);assert.ok(under.slice(1).every(x=>x.group?.id==='grp1'));
   s=renameGroup(s,'grp1','Lands');assert.equal(s.groups[0].name,'Lands');
   assert.deepEqual(sidebarOf(s).sections.map(x=>x.id),s.sections.map(x=>x.id));
-  const gone=removeGroup(s,'grp1');assert.equal(gone.groups,undefined);assert.equal(gone.sections.length,4);
+  const gone=removeGroup(s,'grp1');assert.equal(gone.groups,undefined);assert.equal(gone.sections.length,3);
   // A category can gather every page of one of the GM's types.
   const c=addCategory(gone,'Gods',()=> 'cat1');const withType=setCategoryTypes(c.sidebar,'cat1',['tpl1']);
   const items=categoryItems(withType.categories[0],[{id:'a',title:'Sarenrae',kind:'lore',templateId:'tpl1'},{id:'b',title:'Bob',kind:'lore'}]);

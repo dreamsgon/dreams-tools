@@ -61,3 +61,16 @@ test('mentions show nearby words; unlinked names can be linked in one go', () =>
   assert.deepEqual(unlinkedMentions(linked,g),[]);
   assert.equal(workspaceSchema.safeParse(linked).success,true);
 });
+
+test('a character can be filed into a folder, back to the top level, and not into another scope', async () => {
+  const {moveIntoFolder}=await import('../lib/encyclopedia/page-tree.ts');
+  const s=world([page('cultists','Cultists',null,'','demo-campaign','folder'),page('galinix','Galinix',null,'','demo-campaign','character'),page('world-folder','World folk',null,'',null,'folder')]);
+  const filed=moveIntoFolder(s,'galinix','cultists');
+  assert.equal(filed.entries.find(e=>e.id==='galinix').parentId,'cultists');
+  assert.equal(workspaceSchema.safeParse(filed).success,true);
+  const back=moveIntoFolder(filed,'galinix',null);
+  assert.equal(back.entries.find(e=>e.id==='galinix').parentId,null);
+  assert.equal(moveIntoFolder(s,'galinix',null),s);
+  assert.equal(moveIntoFolder(s,'galinix','world-folder'),null);
+  assert.match(dropProblem(s,'galinix','world-folder','inside'),/campaign/);
+});
