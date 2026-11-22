@@ -2,7 +2,7 @@ import { readPack, type ContentPack } from "./content-pack.ts";
 
 /**
  * Character sheet templates: a character template and the stats it uses, in one content file (rpg-tools-content,
- * the same format Export & import uses). The GM imports a ready-made one (D&D 5E below), a file someone shared, or one
+ * the same format Export & import uses). The GM imports a ready-made one (ready-templates.ts), a file someone shared, or one
  * an AI app wrote from templatePrompt(). authored-pack.ts fills in what a hand-written or AI-written file leaves out.
  * The guide page content/guide/Character-Sheet-Templates.md describes the same format for people and AI apps.
  */
@@ -95,60 +95,6 @@ A small example (a real sheet has more):
 }`;
 }
 
-/* ---- Ready-made templates ---- */
+/* ---- Ready-made templates (ready-templates.ts) ---- */
 
-const ABILITIES = [["str", "Strength"], ["dex", "Dexterity"], ["con", "Constitution"], ["int", "Intelligence"], ["wis", "Wisdom"], ["cha", "Charisma"]] as const;
-const SKILLS: [string, string, typeof ABILITIES[number][0]][] = [
-  ["acrobatics", "Acrobatics", "dex"], ["animal-handling", "Animal Handling", "wis"], ["arcana", "Arcana", "int"], ["athletics", "Athletics", "str"],
-  ["deception", "Deception", "cha"], ["history", "History", "int"], ["insight", "Insight", "wis"], ["intimidation", "Intimidation", "cha"],
-  ["investigation", "Investigation", "int"], ["medicine", "Medicine", "wis"], ["nature", "Nature", "int"], ["perception", "Perception", "wis"],
-  ["performance", "Performance", "cha"], ["persuasion", "Persuasion", "cha"], ["religion", "Religion", "int"], ["sleight-of-hand", "Sleight of Hand", "dex"],
-  ["stealth", "Stealth", "dex"], ["survival", "Survival", "wis"],
-];
-const abbr = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
-const abilityName = (id: string) => ABILITIES.find(a => a[0] === id)![1];
-
-/** D&D 5th edition (2014 and 2024): names and formulas only, as a hand-written content file. */
-export function dnd5eFile() {
-  return {
-    format: "rpg-tools-content", version: 1,
-    from: { world: "RPG Tools ready-made templates" },
-    stats: [
-      { id: "prof", label: "Proficiency bonus", section: "Core", type: "number", quick: true, note: "+2 at levels 1 to 4" },
-      { id: "ac", label: "Armor Class", section: "Core", type: "number", quick: true },
-      { id: "init", label: "Initiative", section: "Core", type: "none", quick: true, derived: "{Dexterity mod}", rolls: [{ name: "Roll", formula: "1d20+{Initiative mod}" }] },
-      { id: "speed", label: "Speed", section: "Core", type: "text", quick: true },
-      { id: "passive-perception", label: "Passive Perception", section: "Core", type: "none", quick: true, derived: "10+{Perception mod}" },
-      ...ABILITIES.map(([id, label]) => ({ id, label, section: "Abilities", type: "number", look: "score", derived: "floor(({value}-10)/2)", save: true, description: "Type a save bonus beside Save when proficient, or the modifier is used." })),
-      ...SKILLS.map(([id, label, ab]) => ({ id, label, section: "Skills", type: "checkbox", note: abbr(ab), derived: `{${abilityName(ab)} mod}+{Proficiency bonus}*{value}`, rolls: [{ name: "Check", formula: `1d20+{${label} mod}` }], description: "Tick when proficient." })),
-      { id: "spell-dc", label: "Spell save DC", section: "Spellcasting", type: "number" },
-      { id: "spell-attack", label: "Spell attack bonus", section: "Spellcasting", type: "number", rolls: [{ name: "Attack", formula: "1d20+{value}" }] },
-    ],
-    templates: [{
-      name: "D&D 5E character", kind: "character", icon: "shield",
-      fields: [
-        { label: "Alignment", type: "choice", options: ["Lawful good", "Neutral good", "Chaotic good", "Lawful neutral", "Neutral", "Chaotic neutral", "Lawful evil", "Neutral evil", "Chaotic evil", "Unaligned"] },
-        { label: "Size", type: "choice", options: ["Tiny", "Small", "Medium", "Large"] },
-        { label: "Experience points", type: "number" },
-      ],
-      layout: { facts: ["Player", "Species", "Class", "Subclass", "Level", "Background"] },
-      trackers: [
-        { label: "Hit points", max: 10, shape: "bar", colour: "red" },
-        { label: "Temporary HP", max: 10, shape: "bar", colour: "blue", value: 0 },
-        { label: "Hit dice", max: 1, shape: "pips", colour: "amber" },
-        { label: "Death save successes", max: 3, shape: "pips", colour: "green", value: 0 },
-        { label: "Death save failures", max: 3, shape: "pips", colour: "red", value: 0 },
-        { label: "Heroic Inspiration", max: 1, shape: "pips", colour: "purple", value: 0 },
-      ],
-      hiddenTabs: ["statblock"],
-      tabs: [{ title: "Backstory", visibility: "players" }],
-      body: "## Appearance\n\n## Personality\n\n## Goals\n",
-      overviewVisibility: "players",
-    }],
-  };
-}
-
-export type ReadyTemplate = { id: string; name: string; detail: string; file: () => unknown };
-export const READY_TEMPLATES: ReadyTemplate[] = [
-  { id: "dnd5e", name: "D&D 5E character", detail: "Abilities with saves, 18 skills, AC, initiative, HP, hit dice and death saves. Works for the 2014 and 2024 rules.", file: dnd5eFile },
-];
+export { READY_TEMPLATES, dnd5eFile, pf2eFile, add2eFile, dnd35File, pf1eFile, masksFile, cityOfMistFile, daggerheartFile, type ReadyTemplate, type ReadyOptions } from "./ready-templates.ts";

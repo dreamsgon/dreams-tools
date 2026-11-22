@@ -1,6 +1,6 @@
 "use client";
 /*
- * Import a character sheet template: a ready-made one (D&D 5E), a .json file someone shared, or one an AI app wrote
+ * Import a character sheet template: a ready-made one (D&D 5E, Pathfinder, Daggerheart…, some as gestalt), a .json file someone shared, or one an AI app wrote
  * from the copied prompt. Shows what the file adds, then puts its template in the world and its stats on the open
  * campaign's stat form (lib/encyclopedia/sheet-template.ts, content-pack.ts importPack).
  */
@@ -20,7 +20,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 export function TemplateImport({ data, worldId, campaignId, change, onClose, onDone }: { data: Workspace; worldId: string; campaignId: string | null; change: Change; onClose: () => void; onDone: (templateId: string | null, message: string) => void }) {
   const world = data.worlds.find(w => w.id === worldId), campaign = campaignId ? data.campaigns.find(c => c.id === campaignId && c.worldId === worldId) : undefined;
-  const [system, setSystem] = useState(""), [copied, setCopied] = useState(""), [reply, setReply] = useState(""), [error, setError] = useState("");
+  const [system, setSystem] = useState(""), [gestalt, setGestalt] = useState<Set<string>>(new Set()), [copied, setCopied] = useState(""), [reply, setReply] = useState(""), [error, setError] = useState("");
   const [file, setFile] = useState<{ name: string; pack: ContentPack } | null>(null), [scope, setScope] = useState<"campaign" | "world">(campaign ? "campaign" : "world");
   const prompt = useMemo(() => templatePrompt(system), [system]);
 
@@ -72,7 +72,9 @@ export function TemplateImport({ data, worldId, campaignId, change, onClose, onD
       {!campaign && <p className="import-warn">Open a campaign first to bring in stats. Without one, only the template itself is added.</p>}
 
       <section><h3 className="import-h">Ready-made</h3>
-        <div className="template-ready">{READY_TEMPLATES.map(t => <div key={t.id} className="template-ready-card"><BookOpen size={18} aria-hidden="true"/><span><b>{t.name}</b><small>{t.detail}</small></span><button type="button" className="button small" onClick={() => read(JSON.stringify(t.file()), t.name)}>Use this <ArrowRight size={13}/></button></div>)}</div>
+        <div className="template-ready">{READY_TEMPLATES.map(t => { const g = !!t.gestalt && gestalt.has(t.id); return <div key={t.id} className="template-ready-card"><BookOpen size={18} aria-hidden="true"/><span><b>{t.name}</b><small>{t.detail}</small>
+          {t.gestalt && <label className="template-ready-option"><input type="checkbox" checked={g} onChange={e => setGestalt(prev => { const next = new Set(prev); if (e.target.checked) next.add(t.id); else next.delete(t.id); return next; })}/> Gestalt <small>two classes side by side</small></label>}</span>
+          <button type="button" className="button small" aria-label={`Use ${g ? t.name.replace(" character", " gestalt character") : t.name}`} onClick={() => read(JSON.stringify(t.file({ gestalt: g })))}>Use this <ArrowRight size={13}/></button></div>; })}</div>
       </section>
 
       <section><h3 className="import-h">Make one with an AI <span>any game</span></h3>
