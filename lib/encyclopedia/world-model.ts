@@ -38,6 +38,8 @@ const name = z.string().trim().min(1).max(160);
 export const githubSchema = z.object({
     repository: z.string().max(200).refine(v => !v || /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(v), "Use owner/repository"),
     branch: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_/-]+$/).refine(v => !v.includes("..") && !v.startsWith("-") && !v.endsWith("/")),
+    // Optional (added later): the folder inside the repository this campaign is kept in, so several campaigns can share one repository (lib/github-push.ts cleanFolder).
+    folder: z.string().max(200).refine(v => !v || v.split("/").every(p => /^[\w .-]{1,80}$/.test(p) && !p.startsWith(".") && p.trim() === p), "Folder names can use letters, numbers, spaces, dots, dashes and underscores, separated by slashes").optional(),
 });
 export const visibilitySchema = z.enum(["gm", "players"]);
 export const tabSchema = z.object({id, title:name, body:z.string().max(100000), visibility:visibilitySchema});
@@ -163,7 +165,9 @@ export const campaignSchema = z.object({ id, worldId: id, name, description: z.s
   // Optional (added later): the GM's Encyclopedia sidebar for this campaign: menu order, quick links and their own categories (sidebar.ts).
   sidebar:sidebarSchema.optional(),
   // Optional (added later): other worlds whose shared lore this campaign's Wiki also shows, live (see campaignLoreWorldIds). Nothing is copied.
-  linkedWorldIds:z.array(id).max(12).optional() });
+  linkedWorldIds:z.array(id).max(12).optional(),
+  // Optional (added later): the campaign's pages are archived: kept in their own file in storage, not in the Wiki, until brought back (store.ts archiveCampaign).
+  archived:z.object({at:z.string().datetime(), pages:z.number().int().min(0).max(5000), bytes:z.number().int().min(0)}).optional() });
 /**
  * A page's picture (a portrait for characters and creatures). The whole picture is shown on the page;
  * the circle (centre x, y as fractions of its width and height, diameter as a fraction of its shorter side)

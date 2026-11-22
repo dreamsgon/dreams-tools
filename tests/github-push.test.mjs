@@ -270,3 +270,29 @@ test('an empty repository that gained commits after the plan is not pushed onto'
   const e=await fail(pushFiles(TOKEN,prep,'Late',g.fetch));assert.equal(e.code,'moved');
   assert.ok(!g.log.some(r=>r.method!=='GET'));assert.equal(g.files()['AGENTS.md'],'someone else');
 });
+
+test('a campaign kept in a folder: pushes and reads touch only that folder',async()=>{
+ const {cleanFolder,readRepoChanges}=await import('../lib/github-push.ts');
+ assert.equal(cleanFolder(' /Campaigns/Salt Road/ '),'Campaigns/Salt Road');assert.equal(cleanFolder(''),'');
+ for(const bad of ['../x','a/../b','.git','a/.hidden','x'.repeat(81),'a|b'])assert.equal(cleanFolder(bad),null,bad);
+ const g=fakeGithub();g.seed({'README.md':'my repo\n','Campaigns/Other/1-Campaign/Overview.md':'another campaign\n'});
+ const dir='Campaigns/Salt Road';
+ const prep=await preparePush(TOKEN,REPO,'main',true,builder(ws,true,T1),g.fetch,dir);
+ assert.equal(prep.dir,dir);assert.ok(prep.changes.every(c=>!c.path.startsWith('Campaigns/')),'paths in the plan are inside the folder');
+ assert.ok(!prep.removals.length,'nothing outside the folder is removed');
+ await pushFiles(TOKEN,prep,'Into a folder',g.fetch);
+ const files=g.files();
+ assert.equal(files['README.md'],'my repo\n');assert.equal(files['Campaigns/Other/1-Campaign/Overview.md'],'another campaign\n');
+ const mine=Object.keys(files).filter(p=>p.startsWith(dir+'/'));
+ assert.ok(mine.includes(`${dir}/.rpg-tools/files.json`)&&mine.includes(`${dir}/.rpg-tools/campaign.json`));
+ assert.ok(Object.keys(files).every(p=>p.startsWith(dir+'/')||p==='README.md'||p.startsWith('Campaigns/Other/')));
+ // Reading it back finds the campaign in the folder, and a second push with nothing new changes nothing.
+ const restored=await readRepoRestore(TOKEN,REPO,'main',g.fetch,dir);assert.ok(restored.ok,restored.error);assert.equal(restored.workspace.campaigns[0].id,cid);
+ const changes=await readRepoChanges(TOKEN,REPO,'main',g.fetch,undefined,dir);assert.ok(changes.ok);assert.ok(changes.files.every(f=>!f.path.startsWith('Campaigns/')));
+ const again=await preparePush(TOKEN,REPO,'main',true,builder(ws,true,T1),g.fetch,dir);assert.ok(again.nothingToPush);
+ // The top of the repository doesn't see the folder's campaign.
+ assert.equal((await readRepoRestore(TOKEN,REPO,'main',g.fetch)).ok,false);
+ // A folder not made yet reads as empty, and a bad folder is refused before anything is asked of GitHub.
+ const none=await preparePush(TOKEN,REPO,'main',true,builder(ws,true,T1),g.fetch,'Campaigns/New');assert.ok(none.changes.every(c=>c.kind==='new'));
+ assert.equal((await fail(preparePush(TOKEN,REPO,'main',true,builder(ws,true,T1),g.fetch,'../up'))).code,'bad-input');
+});

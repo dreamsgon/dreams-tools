@@ -37,7 +37,8 @@ export function fakeGithub({token='github_pat_TESTSECRET1234567890abcdef',repo='
     if((r=rest.match(/^\/git\/trees\/([^?]+)$/))&&method==='GET'){
       const [tid,prefix='']=decodeURIComponent(r[1]).split('|'),flat=g.trees.get(tid);if(!flat)return json(404,{});
       if(u.searchParams.get('recursive')){
-        const all=[...flat].map(([p,s])=>({path:p,type:'blob',sha:s,size:g.blobs.get(s).length}));
+        // Like GitHub, a subtree lists its files relative to itself.
+        const all=[...flat].filter(([p])=>p.startsWith(prefix)).map(([p,s])=>({path:p.slice(prefix.length),type:'blob',sha:s,size:g.blobs.get(s).length}));
         if(truncate||(g.limit===null&&false))return json(200,{sha:tid,tree:all.slice(0,3),truncated:true});
         return json(200,{sha:tid,tree:all,truncated:false});}
       const out=[],dirs=new Set();

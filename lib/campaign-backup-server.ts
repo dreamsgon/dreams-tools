@@ -107,9 +107,16 @@ async function campaignFiles(s: Session, bucket: S3Bucket, backup: CampaignBacku
   return { files: files.filter(isBackupFile), images };
 }
 
+/** An archived campaign's pages are in their own file, not the Wiki (store.ts archiveCampaign): a backup or copy made now would miss them. */
+function notArchived(both: Awaited<ReturnType<typeof readBoth>>, key: string) {
+  const eid = rowOf(both, key).encyclopedia?.id;
+  if (eid && both.book.data.campaigns.find(c => c.id === eid)?.archived) throw new Error("This campaign is archived. Bring it back in the Wiki's Settings, Storage, first.");
+}
 /** The first step of a backup: the campaign's data, the files to read next and the pictures to fetch. */
 export async function startBackup(s: Session, bucket: S3Bucket, key: string) {
-  const both = await readBoth(s), backup = await backupData(s, bucket, both, key);
+  const both = await readBoth(s);
+  notArchived(both, key);
+  const backup = await backupData(s, bucket, both, key);
   const extra = await campaignFiles(s, bucket, backup);
   const seen = new Set<string>(), images = [...imageRefs(backup), ...extra.images].filter(r => isImageId(r.id) && !seen.has(`${r.tool}:${r.id}`) && !!seen.add(`${r.tool}:${r.id}`));
   return { backup, files: extra.files, images };
@@ -198,7 +205,9 @@ export type DuplicateOptions = { name: string; copyWorld: boolean; posts: boolea
 export async function duplicateCampaign(s: Session, bucket: S3Bucket, key: string, input: Record<string, unknown>) {
   const options: DuplicateOptions = { name: typeof input.name === "string" ? input.name : "", copyWorld: input.copyWorld === true, posts: input.posts === true, chats: input.chats === true };
   if (!options.name.trim()) throw new Error("Give the copy a name.");
-  const both = await readBoth(s), row = rowOf(both, key), backup = await backupData(s, bucket, both, key);
+  const both = await readBoth(s), row = rowOf(both, key);
+  notArchived(both, key);
+  const backup = await backupData(s, bucket, both, key);
   const extra = await campaignFiles(s, bucket, backup);
   const made = await addCampaign(s, bucket, both, backup, { name: options.name, copyWorld: options.copyWorld, folderId: row.folderId }, "Some of this campaign's data could not be read, so nothing was copied.");
   const files = extra.files.filter(f => f.startsWith("forum/topics/") ? options.posts : f.startsWith("ai-chats/") ? options.chats : true);
