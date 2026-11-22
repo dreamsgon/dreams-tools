@@ -24,6 +24,7 @@ import { GALACTIC_CRAWL } from "./skins/galactic-crawl.ts";
 import { ISSUE_ONE } from "./skins/issue-one.ts";
 import { FOUR_HOUSES } from "./skins/four-houses.ts";
 import { NILE_KINGDOM } from "./skins/nile-kingdom.ts";
+import { STORM_AND_SPIRE } from "./skins/storm-and-spire.ts";
 
 /** Page, panels, raised parts, lines, text, quiet text, accent, second accent. */
 const set = (bg: string, panel: string, raised: string, line: string, ink: string, muted: string, accent: string, accent2: string): ColourSet => ({ bg, panel, raised, line, ink, muted, accent, accent2 });
@@ -64,6 +65,8 @@ export const SKIN_PRESETS: { inspired: string; theme: Theme }[] = [
   { inspired: "Ancient Egypt", theme: NILE_KINGDOM },
 
   { inspired: "Dragonlance", theme: LANCE_AND_MOONS },
+
+  { inspired: "Eberron", theme: STORM_AND_SPIRE },
 
   { inspired: "World of Warcraft", theme: TWO_BANNERS },
 ];
