@@ -325,7 +325,14 @@ export class EncyclopediaStore {
     const grant=await object.json<Grant>();
     const current=await this.bucket.get(this.linkPath(grant.owner,grant.campaignId,kind));
     if(!current||(await current.json<{hash:string}>()).hash!==hash)return null;
+    // A campaign the GM closed to players (the member list's `hidden`, lib/members.ts) opens to no player link either.
+    if(kind==='player'&&await this.closedToPlayers(grant.owner,grant.campaignId))return null;
     return grant;
+  }
+  /** Whether the GM has closed this campaign to players and guests. Read from its member list, kept in members-server.ts. */
+  async closedToPlayers(owner:string,campaignId:string){
+    const list=await this.bucket.get(`${encyclopediaPrefix(owner)}members/${encodeURIComponent(campaignId)}.json`);
+    return !!list&&(await list.json<{hidden?:unknown}>().catch(()=>null))?.hidden===true;
   }
   async player(token: string) {
     const grant=await this.grant(token);

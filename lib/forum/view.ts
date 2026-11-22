@@ -5,7 +5,7 @@
  */
 import { playerText, visibleEntries, type Entry, type Workspace } from "../encyclopedia/world-model.ts";
 import { formatDate } from "../encyclopedia/calendar-model.ts";
-import { can, type MemberList } from "../members.ts";
+import { can, mayUseAi, type MemberList } from "../members.ts";
 import { createHash } from "node:crypto";
 import { aiFor } from "./ai.ts";
 import { CARD_STYLES, DEFAULT_STRIP, STRIP_FIELDS, TRASH_DAYS, accessOn, boardTree, canSee, firstPostId, kindOf, postTotal, typeOf, widthOf, type Author, type BoardAccess, type Board, type Forum, type ForumRights, type Post, type Report, type Topic, type TopicSummary } from "./model.ts";
@@ -44,6 +44,10 @@ export type Context = {
   /** Any other campaign's owner previewing the forum as the Players group (the account menu's Switch to Player view). Read only. */
   preview?: true;
 };
+
+/** Whether this viewer may use the AI at all (lib/members.ts mayUseAi): the GMs, a solo player, or everyone once the GM allows it. */
+export const aiOpen = (ctx: Pick<Context, "list" | "owner" | "viewer" | "solo" | "preview">) =>
+  mayUseAi(ctx.list, ctx.viewer.userId, ctx.owner, { solo: !!ctx.solo, asPlayer: !!ctx.preview });
 
 export type Picture = { imageId: string; x: number; y: number };
 /** A row of the GM's card design (forum settings › Hover card), with this reader's values; `gm` rows hold a GM-only field. */
@@ -370,7 +374,7 @@ export function frameOf(ctx: Context) {
       styles: f.profiles?.[ctx.viewer.userId]?.styles ?? [],
       unread: shownTopics(ctx).filter(t => isUnread(ctx.reads, t, ctx.viewer.userId)).length, waiting, alerts: alertsOf(ctx, entries),
       /** The AI help this viewer may use (ai.ts). The GM also gets the forum's connection, whose key their device may hold. */
-      ai: { ...aiFor(f.settings.ai, ctx.viewer.rights), ...(ctx.viewer.rights.owner && f.settings.ai ? { connectionId: f.settings.ai.connectionId } : {}) },
+      ai: { ...aiFor(f.settings.ai, ctx.viewer.rights, aiOpen(ctx)), ...(ctx.viewer.rights.owner && f.settings.ai ? { connectionId: f.settings.ai.connectionId } : {}) },
       /** Members by key and name, for choosing who a private topic is for. */
       people: ctx.viewer.rights.start ? [ctx.owner, ...ctx.list.members.filter(m => can(ctx.list, m.userId, "forumRead")).map(m => m.userId)].filter(u => u !== ctx.viewer.userId).map(u => ({ key: memberKey(ctx, u), name: memberName(ctx, u), gm: u === ctx.owner || can(ctx.list, u, "seeGm") })) : [],
     },

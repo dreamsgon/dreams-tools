@@ -190,3 +190,47 @@ test('a group colour can be a named colour or any picked #rrggbb, and nothing el
   const list=M.editGroup({groups:[g],members:[],links:[]},'g1',{color:'#336699'});
   assert.equal(list.groups[0].color,'#336699');
 });
+
+test('closing a campaign to players: only the owner and co-GMs can do anything, and it opens again as it was',()=>{
+ let l=M.emptyMemberList(C,'Dreams');
+ l={...l,members:[{userId:'mara',name:'Mara',groups:['players'],joinedAt:''},{userId:'gus',name:'Gus',groups:['guests'],joinedAt:''},{userId:'alder',name:'Alder',groups:['cogms'],joinedAt:''}]};
+ assert.deepEqual(M.campaignAccess(l),{players:true,playerAi:false},'open, with AI for the GMs, until the GM says otherwise');
+ const closed=M.setCampaignAccess(l,{players:false});
+ assert.equal(M.memberListSchema.parse(closed).hidden,true);
+ for(const p of ['seePlayer','forumRead','editOwnCharacter'])for(const u of ['mara','gus'])assert.equal(M.can(closed,u,p),false,`${u} ${p}`);
+ assert.equal(M.can(closed,'alder','seePlayer'),true);assert.equal(M.can(closed,'alder','editMaps'),true);assert.equal(M.can(closed,'gm','seePlayer','gm'),true);
+ assert.equal(M.roleOf(closed,'mara'),'Player');assert.equal(M.roleOf(closed,'alder'),'Co-GM');
+ const open=M.setCampaignAccess(closed,{players:true});
+ assert.equal('hidden' in open,false);assert.equal(M.can(open,'mara','seePlayer'),true);
+ assert.deepEqual(M.campaignAccess(M.setCampaignAccess(open,{playerAi:true})),{players:true,playerAi:true},'the other switch stays as it was');
+});
+
+test('AI is for the GM and co-GMs unless the GM allows it for players; a solo player always has it',()=>{
+ let l=M.emptyMemberList(C,'Dreams');
+ l={...l,members:[{userId:'mara',name:'Mara',groups:['players'],joinedAt:''},{userId:'gus',name:'Gus',groups:['guests'],joinedAt:''},{userId:'alder',name:'Alder',groups:['cogms'],joinedAt:''}]};
+ assert.equal(M.mayUseAi(l,'gm','gm'),true);assert.equal(M.mayUseAi(l,'alder','gm'),true);
+ assert.equal(M.mayUseAi(l,'mara','gm'),false);assert.equal(M.mayUseAi(l,'gus','gm'),false);assert.equal(M.mayUseAi(l,'stranger','gm'),false);
+ assert.equal(M.mayUseAi(l,'gm','gm',{asPlayer:true}),false,'previewing as players shows what players get');
+ assert.equal(M.mayUseAi(l,'gm','gm',{solo:true,asPlayer:true}),true,'a solo campaign’s owner keeps the AI in the player view');
+ const allowed=M.setCampaignAccess(l,{playerAi:true});
+ assert.equal(M.mayUseAi(allowed,'mara','gm'),true);assert.equal(M.mayUseAi(allowed,'gus','gm'),true);assert.equal(M.mayUseAi(allowed,'stranger','gm'),false);
+ assert.equal(M.mayUseAi(M.setCampaignAccess(allowed,{players:false}),'mara','gm'),false,'a closed campaign gives players nothing');
+});
+
+test('a closed campaign: Campaigns you\'re in says so, and member pages and player links stop opening',async()=>{
+ const b=bucket(),store=new MemberStore(b),enc=new EncyclopediaStore(b);
+ await enc.save(gm.userId,demoWorkspace(),0);
+ const token=await store.newLink(gm.userId,C,'players',{approve:false,expiresAt:null},NOW);
+ await store.join(token,mara,'Mara',NOW);
+ const link=await enc.createLink(gm.userId,C);
+ const ref=await memberRef(gm.userId,C);
+ assert.ok(await store.openAs(mara.userId,ref));assert.ok(await enc.player(link));
+ await store.change(gm.userId,C,l=>M.setCampaignAccess(l,{players:false}));
+ const [row]=await store.memberships(mara.userId);
+ assert.deepEqual([row.open,row.closed,row.forum],[false,true,false]);
+ assert.equal(await store.openAs(mara.userId,ref),null);assert.equal(await store.rightsAs(mara.userId,ref),null);
+ assert.equal(await enc.player(link),null,'a player link opens nothing while it is closed');
+ assert.ok(await enc.grant(await enc.createLink(gm.userId,C,'agent'),'agent'),'the GM’s own AI keys still work');
+ await store.change(gm.userId,C,l=>M.setCampaignAccess(l,{players:true}));
+ assert.ok(await store.openAs(mara.userId,ref));assert.ok(await enc.player(link),'the same link works again once it is open');
+});

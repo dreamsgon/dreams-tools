@@ -176,6 +176,7 @@ function AiSettings({ page, k, done }: { page: Settings; k: string; done: Done }
     {!list.length && <p className="muted small">This campaign has no API-key connection yet. Add one under Connect an AI on the campaign’s page in the Wiki, then come back.</p>}
     {v.connectionId && <>
       <h3>What members may use</h3>
+      {page.ai.players === false && <p className="muted small" role="note">Players and guests don’t get the AI in this campaign, whatever is set here: only you and your co-GMs do. To let players use it, turn on Players can use AI in the campaign’s Settings.</p>}
       {use('catchUp', 'Summarize and Catch me up', 'A short summary of a topic, or of what’s new since you last read it.')}
       {use('check', 'Check my post', 'Continuity and spelling notes on a draft before posting, against the topic and the character’s card.')}
       <label className="ai-use"><span><b>Draft with AI</b><small>A post written by the AI into the box, as narration or an NPC, for a moderator to read, change and post. It carries an AI mark.</small></span>

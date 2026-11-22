@@ -4,7 +4,7 @@ import { getAppUser } from "@/lib/app-user";
 import { getBucket } from "@/lib/storage";
 import { MemberStore, requestIp, type Who } from "@/lib/members-server";
 import {
-  MembersError, addGroup, ban, choices, decline, deleteGroup, editGroup, groupColorSchema, letIn, permissionKeys, removeMember, setMemberGroups, setPageAccess, setPermission, unban,
+  MembersError, addGroup, ban, campaignAccess, choices, decline, deleteGroup, editGroup, groupColorSchema, letIn, permissionKeys, removeMember, setMemberGroups, setPageAccess, setPermission, unban, setCampaignAccess,
   type MemberList,
 } from "@/lib/members";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,8 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("ban"), ...owned, userId: id, email: z.boolean(), ip: z.boolean(), note: z.string().max(200) }),
   z.object({ action: z.literal("unban"), ...owned, banId: id }),
   z.object({ action: z.literal("notify"), ...owned, joins: z.boolean(), discord: z.boolean() }),
+  // The campaign's Settings: whether players and guests can open it at all, and whether they may use the AI.
+  z.object({ action: z.literal("access"), ...owned, players: z.boolean().optional(), playerAi: z.boolean().optional() }),
   // Who can edit one Encyclopedia page, set from the page.
   z.object({ action: z.literal("pageAccess"), ...owned, pageId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/), people: z.record(id, z.object({ edit: z.boolean(), subPages: z.boolean() })), groups: z.record(id, z.boolean()), add: z.record(id, z.boolean()).optional() }),
 ]);
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
     if (params.get("mine")) return json({ campaigns: await store.memberships(user.userId) });
     const campaignId = id.parse(params.get("campaignId"));
     await store.campaign(user.userId, campaignId);
+    if (params.get("access")) return json(campaignAccess((await store.read(user.userId, campaignId)).list));
     return json(await store.forOwner(user.userId, campaignId, new URL(request.url).origin));
   } catch (e) { return failed(e); }
 }
@@ -82,6 +85,7 @@ export async function POST(request: Request) {
     // Everything else is the owner's, on their own campaign.
     await store.campaign(who.userId, body.campaignId);
     await manage(store, who, body);
+    if (body.action === "access") return json(campaignAccess((await store.read(who.userId, body.campaignId)).list));
     return json(await store.forOwner(who.userId, body.campaignId, new URL(request.url).origin));
   } catch (e) { return failed(e); }
 }
@@ -113,6 +117,8 @@ async function manage(store: MemberStore, who: Who, body: Owned) {
     case "ban": await edit(l => ban(l, body.userId, { email: body.email, ip: body.ip }, body.note, `b-${newId()}`)); break;
     case "unban": await edit(l => unban(l, body.banId)); return;
     case "notify": await edit(l => ({ ...l, notify: { joins: body.joins, discord: body.discord } })); return;
+    // Members' Campaigns pages read these from the list each time (memberships), so nothing else needs writing.
+    case "access": await edit(l => setCampaignAccess(l, { players: body.players, playerAi: body.playerAi })); return;
     case "pageAccess": await edit(l => setPageAccess(l, body.pageId, { people: body.people, groups: body.groups, add: body.add })); return;
   }
   await store.syncMembership(owner, c, body.userId);

@@ -14,7 +14,7 @@ import {
   postTotal, type Change, type Forum, type Post, type Poster, type Topic, type TopicSummary,
 } from "./model.ts";
 import { MAX_PER_PAGE, PER_PAGE, pageFor } from "./pages.ts";
-import { cardFields, cardSample, profilePage, picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
+import { cardFields, cardSample, profilePage, picturesPage, sheetPage, activePage, boardPage, reportedPosts, reportsPage, cardOf, castOf, entriesOf, characterIds, forumImages, frameOf, aiOpen, memberName, membersFromKeys, membersPage, namesOf, playersOf, placesOf, searchPage, shownTopics, topicPage, trashPage, type Context } from "./view.ts";
 import { addAlerts, mentioned, quoted, unseen, type Alert } from "./alerts.ts";
 import { rollPost, secureDie, withRollResults } from "./rolls.ts";
 import { POST_FORMATS } from "./markup.ts";
@@ -289,6 +289,7 @@ type Body = z.infer<typeof bodySchema>;
 
 const signIn = "Sign in to open the forum.";
 const notMember = "You can't open this forum. You may have left the campaign, or the GM changed what your group can do.";
+const CLOSED = "The GM has closed this campaign to players for now.";
 
 /** Who is asking and what they may see: the context the views and changes need. */
 async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, playerView = false) {
@@ -299,6 +300,7 @@ async function contextOf(deps: Deps, campaign: string, now: Date, marks = true, 
   // The GM's own name stands in until the member list stores one (it does once the GM changes members), not "The GM".
   if (userId === found.owner && !found.list.ownerName && deps.userName) { const name = (await deps.userName())?.trim(); if (name) found.list = { ...found.list, ownerName: name.slice(0, 80) }; }
   let rights = forumRights(found.list, userId, found.owner);
+  if (found.list.hidden && !rights.owner && !rights.gm) return { fail: json({ error: CLOSED }, 403) };
   if (!rights.read) return { fail: json({ error: "Your group can't read the forum." }, 403) };
   const workspace = await deps.workspace(found.owner);
   if (!workspace.campaigns.some(c => c.id === found.campaignId)) return { fail: json({ error: notMember }, 404) };
@@ -411,7 +413,7 @@ async function view(deps: Deps, ctx: Context, found: Found, page: z.infer<typeof
       const masks = Object.fromEntries(ctx.forum.boards.flatMap(b => b.masks ? [[b.id, b.masks]] : []));
       // Only the campaign's owner chooses the forum's AI, as it spends their API key.
       const connections = ctx.viewer.rights.owner && deps.ai ? await deps.ai.connections(found.owner, found.campaignId).catch(() => []) : [];
-      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, topicTags: ctx.forum.topicTags ?? [], card: { rows: ctx.forum.card?.rows ?? [], fields: cardFields(ctx), sample: cardSample(ctx) }, strip: ctx.forum.strip ?? DEFAULT_STRIP, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner } } });
+      return json({ frame: frameOf(ctx), page: { kind: "settings", places: placesOf(ctx), settings: ctx.forum.settings, groups, masks, emoji: ctx.forum.emoji ?? { use: "all", list: [] }, topicTags: ctx.forum.topicTags ?? [], card: { rows: ctx.forum.card?.rows ?? [], fields: cardFields(ctx), sample: cardSample(ctx) }, strip: ctx.forum.strip ?? DEFAULT_STRIP, ai: { settings: ctx.forum.settings.ai ?? null, connections, may: ctx.viewer.rights.owner, players: ctx.list.playerAi === true || !!ctx.solo } } });
     }
     case "profile": return json({ frame: frameOf(ctx), page: { kind: "profile", ...profilePage(ctx) } });
     default: return json({ frame: frameOf(ctx), page: { kind: "index" } });
@@ -636,8 +638,10 @@ function turnTakers(ctx: Context, found: Found, s: TopicSummary) {
  */
 const AI_POSTS = 200;
 async function aiHelp(deps: Deps, ctx: Context, found: Found, body: Extract<Body, { action: "ai" }>) {
-  const settings = ctx.forum.settings.ai, may = aiFor(settings, ctx.viewer.rights);
+  const settings = ctx.forum.settings.ai, may = aiFor(settings, ctx.viewer.rights, aiOpen(ctx));
   if (!settings || !deps.ai) throw new ForumError("The AI is off in this forum.");
+  // Checked on the server, not only by hiding the buttons: players and guests get no AI unless the GM allows it.
+  if (!aiOpen(ctx)) throw new ForumError("The GM keeps the AI to the GMs in this campaign.");
   const allowed = body.op === "summary" || body.op === "catchUp" ? may.catchUp : may[body.op];
   if (!allowed) throw new ForumError("Your group can't use that here.");
   // The topic, when there is one, as this reader sees it.

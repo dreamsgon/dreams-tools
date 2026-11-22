@@ -50,6 +50,7 @@ export default function CampaignsJoined() {
         {c.asking ? <span className="joined-note">The GM will let you in soon.</span>
           : c.gm ? <><a className="hub-button hub-button-primary" href={`/encyclopedia#m-${c.ref}`}><BookOpen size={15} aria-hidden="true" />Open Wiki</a>{c.maps && <a className="hub-button" href={`/maptable#m-${c.ref}`}><Map size={15} aria-hidden="true" />Open Maptable</a>}</>
           : c.open ? <Link className="hub-button hub-button-primary" href={`/encyclopedia/player#m-${c.ref}`}><BookOpen size={15} aria-hidden="true" />Open Wiki</Link>
+          : c.closed ? <span className="joined-note">The GM has closed this campaign to players for now.</span>
           : <span className="joined-note">Your groups can&apos;t see the player pages yet.</span>}
         {!c.asking && c.forum && <a className="hub-button" href={`/forum#m-${c.ref}`}><MessagesSquare size={15} aria-hidden="true" />Forum</a>}
         <button type="button" className="hub-button" onClick={() => { setLeaving(c.ref); setError(""); }}>{c.asking ? "Stop asking" : "Leave"}</button>

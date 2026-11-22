@@ -22,7 +22,10 @@ export type AiUse = z.infer<typeof aiUseSchema>;
 export const AI_OFF: Omit<ForumAi, "connectionId"> = { catchUp: "off", check: "off", draft: "off" };
 
 /** What the viewer may use, given their rights. */
-export function aiFor(ai: ForumAi | undefined, rights: { reply: boolean; moderate: boolean }) {
+export function aiFor(ai: ForumAi | undefined, rights: { reply: boolean; moderate: boolean }, open = true) {
+  // `open`: whether this person may use the campaign's AI at all (lib/members.ts mayUseAi). Players and guests may not
+  // unless the GM turned AI on for players in the campaign's settings, whatever the forum's own AI settings say.
+  if (!open) return { catchUp: false, check: false, draft: false };
   const may = (u: AiUse | "staff") => u === "all" ? rights.reply || rights.moderate : u === "staff" ? rights.moderate : false;
   return { catchUp: !!ai && may(ai.catchUp), check: !!ai && may(ai.check), draft: !!ai && ai.draft === "staff" && rights.moderate };
 }
