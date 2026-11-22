@@ -23,7 +23,7 @@ export const IMPORT_LIMITS = {
   files: 5000,
   /** Markdown files that would be imported. */
   pages: 600,
-  /** All imported text together, in characters. The workspace as a whole is limited to 2 MB. */
+  /** All imported text together, in characters. Each campaign is limited to its owner’s per-campaign limit (wiki-parts.ts). */
   chars: 1_500_000,
   /** One file, in characters (a page body holds 100,000). */
   file: 100_000,

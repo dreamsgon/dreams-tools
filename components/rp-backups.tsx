@@ -1,4 +1,6 @@
 "use client";
+import { sizeProblem } from "@/lib/encyclopedia/wiki-parts";
+import { putWorkspace, workspaceBody } from "@/lib/encyclopedia/workspace-client";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, Download, FileArchive, FolderOpen, GitBranch as Github, Info, TriangleAlert, Upload, X } from "lucide-react";
 import { importCopy, workspaceSchema, type Workspace } from "@/lib/encyclopedia/world-model";
@@ -17,8 +19,6 @@ import { BringBackView } from "./rp-bring-back";
 import { memberRef } from "./encyclopedia/member-view";
 import "./rp-backups.css";
 
-const WORKSPACE_LIMIT = 2_000_000;
-const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 const WORKSPACE_URL = "/api/encyclopedia/workspace";
 
 function saveLastExport(campaignId: string, iso: string) { try { window.localStorage.setItem(lastExportKey(campaignId), iso); } catch { /* Not remembered. */ } }
@@ -110,7 +110,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       try {
         let ws = latest.current;
         if (!ws) {
-          const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; error?: string };
+          const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; error?: string }>(res);
           if (res.status === 401) throw new Error("Sign in again to export this campaign.");
           if (!res.ok) throw new Error(body.error || "Could not load this campaign's notes.");
           ws = workspaceSchema.parse(body.data);
@@ -118,7 +118,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
         // A co-GM's tables call would return their own library, not the GM's, so it is left out.
         let tables = emptyLibrary();
         if (!memberRef()) {
-          const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await res.json() as { data?: unknown; error?: string };
+          const res = await fetch("/api/encyclopedia/tables", { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; error?: string }>(res);
           if (!res.ok) throw new Error(body.error || "Could not load your random tables.");
           const parsed = librarySchema.safeParse(body.data);
           if (parsed.success) tables = parsed.data;
@@ -157,7 +157,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   /** The saved notes (not unsaved edits), so what is reviewed is what the save will be made from. */
   async function loadSaved(): Promise<Workspace | null> {
     try {
-      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown };
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown }>(res);
       return res.ok ? workspaceSchema.parse(body.data) : null;
     } catch { return null; }
   }
@@ -250,13 +250,13 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   async function saveGithub(next: Github): Promise<string | null> {
     if (onSaveGithub) { if (!onSaveGithub(next)) return "Could not save the repository settings."; setSavedGh(next); setImp(i => i.step === "reading" || i.step === "restoring" || i.step === "importing" ? i : { step: "idle" }); return null; }
     try {
-      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; error?: string }>(res);
       if (res.status === 401) return "Sign in again to save the repository.";
       if (!res.ok || typeof body.revision !== "number") return body.error || "Could not read your notes. The repository was not saved.";
       const current = workspaceSchema.parse(body.data);
       if (!current.campaigns.some(c => c.id === campaignId)) return "This campaign was not found in your notes.";
       const updated = { ...current, campaigns: current.campaigns.map(c => c.id === campaignId ? { ...c, github: next } : c) };
-      const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: updated, revision: body.revision }) });
+      const put = await putWorkspace(WORKSPACE_URL, { data: updated, revision: body.revision });
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return "Your notes changed somewhere else, so the repository was not saved. Try again.";
       if (!put.ok) return out.error || "Could not save the repository.";
@@ -280,15 +280,15 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     setImp({ ...found, step: "restoring" });
     const fail = (message: string) => setImp({ step: "error", title: "Not restored", message });
     try {
-      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; error?: string }>(res);
       if (res.status === 401) return fail("Sign in again to restore this campaign.");
       if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
       const current = workspaceSchema.parse(body.data);
       const copy = { ...found.incoming, campaigns: found.incoming.campaigns.map(c => ({ ...c, name: `${c.name.slice(0, 150)} (copy)` })) };
       const next = importCopy(current, copy);
-      if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this copy are over the 2 MB workspace limit. Nothing was changed.");
+      { const big = sizeProblem(next, body.limit); if (big) return fail(`${big} Nothing was changed.`); }
       const added = next.campaigns[next.campaigns.length - 1];
-      const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: body.revision }) });
+      const put = await putWorkspace(WORKSPACE_URL, { data: next, revision: body.revision });
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return fail("Your notes changed somewhere else while this was restoring. Nothing was overwritten. Choose the file and try again.");
       if (!put.ok) return fail(out.error || "Could not save the restored campaign. Nothing was changed.");
@@ -320,15 +320,15 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     setImp({ ...found, step: "importing" });
     const fail = (message: string) => setImp({ step: "error", title: "Not imported", message });
     try {
-      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json() as { data?: unknown; revision?: number; error?: string };
+      const res = await fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; error?: string }>(res);
       if (res.status === 401) return fail("Sign in again to import this repository.");
       if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
       const current = workspaceSchema.parse(body.data);
       const built = buildCampaign(found.preview, { name: found.name, showPlayers: found.show });
       if (current.entries.length + built.workspace.entries.length > 5000 || current.campaigns.length >= 500 || current.worlds.length >= 100) return fail("Your notes have no room for another campaign of this size (the limit is 5,000 pages, 500 campaigns and 100 worlds). Nothing was changed.");
       const next = addImported(current, built);
-      if (byteLength(next) > WORKSPACE_LIMIT) return fail("Your notes plus this campaign are over the 2 MB workspace limit. Nothing was changed.");
-      const put = await fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: body.revision }) });
+      { const big = sizeProblem(next, body.limit); if (big) return fail(`${big} Nothing was changed.`); }
+      const put = await putWorkspace(WORKSPACE_URL, { data: next, revision: body.revision });
       const out = await put.json().catch(() => ({})) as { error?: string };
       if (put.status === 409) return fail("Your notes changed somewhere else while this was importing. Nothing was overwritten. Choose the repository and try again.");
       if (!put.ok) return fail(out.error || "Could not save the imported campaign. Nothing was changed.");

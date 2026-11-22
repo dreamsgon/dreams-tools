@@ -125,6 +125,6 @@ Calendars support moons and seasons, with weather and travel tied to map regions
 
 ## Settings, import and backup
 
-Settings can export all worlds or one campaign as JSON, and import JSON (imports make separate copies). The workspace limit is 2 MB; atlas images allow up to 8 MB each. Backups can contain GM-only material: keep them private.
+Settings can export all worlds or one campaign as JSON, and import JSON (imports make separate copies). Each campaign, and each world’s shared lore, can hold up to 2 MB, and you can raise that to 5, 10 or 20 MB in Settings, Storage; atlas images allow up to 8 MB each. Backups can contain GM-only material: keep them private.
 
 The floating **AI** and **Dice** buttons sit in the Wiki's footer row, so they never cover the end of a page.

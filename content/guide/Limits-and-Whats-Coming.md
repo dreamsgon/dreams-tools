@@ -3,7 +3,7 @@
 ## Good to know
 
 - **Accounts and sharing**: separate accounts; no live multiplayer yet. Players join by link or through Members.
-- **Storage**: the Wiki workspace is limited to 2 MB; atlas images up to 8 MB each. Uploaded map icons up to 1 MB, up to 40 per map.
+- **Storage**: each campaign in the Wiki, and each world’s shared lore, is stored on its own and limited to 2 MB, which you can raise to 5, 10 or 20 MB in the Wiki’s Settings, Storage (all campaigns together up to 60 MB); atlas images up to 8 MB each. Uploaded map icons up to 1 MB, up to 40 per map.
 - **Maptable and Wiki stay separate**: pairing links them but maps do not sync automatically.
 - **Maptable fog**: manual fog; automatic wall-based vision is not built.
 - **Offline mode** is not available.

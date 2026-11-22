@@ -14,6 +14,8 @@
  * and exporting again: a file whose text does not come out of the export the same cannot be inverted safely, so its text is added
  * as a new GM-only tab instead of guessing. A file in 6-GM-Only/ only ever reaches the GM part of its page.
  */
+import { DEFAULT_PART_LIMIT, sizeProblem } from "./wiki-parts.ts";
+import { putWorkspace, workspaceBody } from "./workspace-client.ts";
 import { rpExportFiles, isRewrittenPath, textHash, headingLabel, sameApartFromFrontMatter, withoutFrontMatter, DERIVED_SECTIONS, WHERE_WIDGET, FOLDERS_LIST } from "./rp-export.ts";
 import { defaultCharacter, newId as randomId, playerText, workspaceSchema, type Entry, type Workspace } from "./world-model.ts";
 import { defaultFrontPage } from "./front-page.ts";
@@ -501,7 +503,8 @@ export async function readBringSources(sources: Source[]): Promise<{ ok: true; f
 }
 
 /* ---- saving ---- */
-export const WORKSPACE_LIMIT = 2_000_000;
+/** The default limit for one campaign; the owner may have raised theirs (lib/encyclopedia/wiki-parts.ts). */
+export const WORKSPACE_LIMIT = DEFAULT_PART_LIMIT;
 const WORKSPACE_URL = "/api/encyclopedia/workspace", HISTORY_URL = "/api/encyclopedia/history";
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 const stableKey = (plan: BringBackPlan) => JSON.stringify(plan.rows.map(r => [r.key, r.tag, r.maps, r.matched, !!r.blocked]));
@@ -520,12 +523,12 @@ export type SaveResult =
 export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; plan: BringBackPlan; input: PlanInput; sel: Selection; now?: string; newId?: () => string }): Promise<SaveResult> {
   const now = o.now ?? new Date().toISOString();
   const read = async () => {
-    const res = await o.fetch(WORKSPACE_URL, { cache: "no-store" }), body = await res.json().catch(() => ({})) as { data?: unknown; revision?: number; error?: string };
+    const res = await o.fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; error?: string }>(res, o.fetch as typeof fetch).catch(() => ({} as { data?: unknown; revision?: number; limit?: number; error?: string }));
     if (res.status === 401) return { error: "Sign in again to bring back changes." };
     if (!res.ok || typeof body.revision !== "number") return { error: body.error || "Could not read your notes. Nothing was changed." };
     const parsed = workspaceSchema.safeParse(body.data);
     if (!parsed.success) return { error: "Your notes could not be read. Nothing was changed." };
-    return { ws: parsed.data, revision: body.revision };
+    return { ws: parsed.data, revision: body.revision, limit: body.limit ?? DEFAULT_PART_LIMIT };
   };
   try {
     const got = await read();
@@ -536,7 +539,7 @@ export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; pla
     let done = applyBringBack(got.ws, fresh, o.sel, { now, newId: o.newId });
     if (!done.ok) return { status: "error", message: `${done.error} Nothing was changed.` };
     // Too big to save: say so before anything is written to page history.
-    const tooBig = (w: Workspace) => (w.entries.length > 5000 ? "Your notes have no room for these pages (the limit is 5,000 pages). Nothing was changed." : new TextEncoder().encode(JSON.stringify(w)).length > WORKSPACE_LIMIT ? "Your notes plus these changes are over the 2 MB workspace limit. Nothing was changed." : null);
+    const tooBig = (w: Workspace) => (w.entries.length > 5000 ? "Your notes have no room for these pages (the limit is 5,000 pages). Nothing was changed." : sizeProblem(w, got.limit)?.replace(/$/, " Nothing was changed.") ?? null);
     const big = tooBig(done.workspace); if (big) return { status: "error", message: big };
     // Page history keeps the old text first (the server keeps it only for pages that are in the saved notes, which they are).
     const failed = new Set<string>();
@@ -547,7 +550,7 @@ export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; pla
     if (failed.size) { done = applyBringBack(got.ws, fresh, o.sel, { now, newId: o.newId, keepTab: failed }); if (!done.ok) return { status: "error", message: `${done.error} Nothing was changed.` }; }
     const next = done.workspace, big2 = failed.size ? tooBig(next) : null;
     if (big2) return { status: "error", message: big2 };
-    const put = await o.fetch(WORKSPACE_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: next, revision: got.revision }) });
+    const put = await putWorkspace(WORKSPACE_URL, { data: next, revision: got.revision }, o.fetch as typeof fetch);
     const out = await put.json().catch(() => ({})) as { error?: string };
     if (put.status === 409) {
       const again = await read();

@@ -1,0 +1,13 @@
+.wiki-storage{display:flex;flex-direction:column;gap:10px;padding-bottom:6px}
+.wiki-storage .settings-action strong{display:inline-flex;align-items:center;gap:6px}
+.wiki-storage-limit{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);flex-shrink:0}
+.wiki-storage-limit select{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:8px 10px;font-size:13px;color:var(--ink)}
+.wiki-storage-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.wiki-storage-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font-size:12px}
+.wiki-storage-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wiki-storage-size{color:var(--muted);font-variant-numeric:tabular-nums}
+.wiki-storage-bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--raised);overflow:hidden}
+.wiki-storage-bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.wiki-storage-list li.near .wiki-storage-bar span{background:var(--warning)}
+.wiki-storage-list li.near .wiki-storage-size{color:var(--warning)}
+@media(max-width:720px){.wiki-storage .settings-action{flex-wrap:wrap}}

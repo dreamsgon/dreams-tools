@@ -1,9 +1,17 @@
 import { z } from "zod";
 import { workspaceSchema } from "@/lib/encyclopedia/world-model";
-import { json, ownerFrom, readWorkspace, sameOrigin, saveWorkspace, workspaceTag } from "@/lib/encyclopedia/workspace-server";
+import { json, ownerFrom, readWorkspace, sameOrigin, saveWorkspace, saveWorkspacePatch, transferPrefix, workspaceTag } from "@/lib/encyclopedia/workspace-server";
+import { DamagedWikiError } from "@/lib/encyclopedia/wiki-parts";
+import { getBucket } from "@/lib/storage";
+import { storedJson, workspaceBody } from "@/lib/transfers";
 import { coGmGone, coGmGrant, coGmReadOnly, coGmSave, coGmWorkspace } from "@/lib/encyclopedia/member-workspace-server";
 import { CoGmEditError } from "@/lib/encyclopedia/co-gm-edit";
 export const dynamic = "force-dynamic";
+const partSchema = z.object({ world: z.unknown().optional(), campaign: z.unknown().optional(), entries: z.array(z.unknown()) }).passthrough();
+const patchBody = z.object({ revision: z.number().int().nonnegative(), patch: z.object({
+    layout: z.object({ worlds: z.array(z.string()), campaigns: z.array(z.string()), runs: z.array(z.tuple([z.string(), z.number().int().positive()])) }),
+    parts: z.record(z.string(), partSchema.nullable()),
+}) }) as unknown as z.ZodType<{ revision: number; patch: import("@/lib/encyclopedia/wiki-parts").WikiPatch }>;
 export async function GET(request: Request) {
     const owner = await ownerFrom(request);
     if (!owner)
@@ -30,7 +38,8 @@ export async function GET(request: Request) {
         const known = request.headers.get("If-None-Match")?.replace(/^W\//, "").replace(/"/g, "");
         if (known && known === await workspaceTag(owner))
             return new Response(null, { status: 304, headers: { "Cache-Control": "private, no-store" } });
-        return json(await readWorkspace(owner));
+        // A Wiki over 3 MB is handed over through storage (lib/transfers.ts), since a response can't carry it.
+        return storedJson(getBucket(), transferPrefix(owner), await readWorkspace(owner));
     }
     catch {
         return json({ error: "Could not read the workspace. Your existing data has not been changed." }, 500);
@@ -50,11 +59,12 @@ export async function PUT(request: Request) {
             return json({ error: coGmGone }, 404);
         if (grant && !grant.edit)
             return json({ error: coGmReadOnly }, 403);
-        const text = await request.text();
-        if (text.length > 2100000)
-            return json({ error: "Workspace is too large." }, 413);
-        const body = z.object({ data: workspaceSchema, revision: z.number().int().nonnegative() }).parse(JSON.parse(text));
-        const saved = grant ? await coGmSave(grant, body.data, body.revision) : await saveWorkspace(owner, body.data, body.revision);
+        // Over 3 MB, the browser stages the save in storage first and sends its transfer id (lib/transfers.ts).
+        const raw = await workspaceBody(request, getBucket(), transferPrefix(owner));
+        // The Wiki app sends only the campaigns and worlds that changed (lib/encyclopedia/wiki-parts.ts); anything else sends the whole workspace.
+        const patched = !grant && raw && typeof raw === "object" && "patch" in raw ? patchBody.parse(raw) : null;
+        const body = patched ? null : z.object({ data: workspaceSchema, revision: z.number().int().nonnegative() }).parse(raw);
+        const saved = patched ? await saveWorkspacePatch(owner, patched.patch, patched.revision) : grant ? await coGmSave(grant, body!.data, body!.revision) : await saveWorkspace(owner, body!.data, body!.revision);
         if (saved === null)
             return json({ error: "This workspace changed somewhere else. Export your unsaved draft, then reload before continuing." }, 409);
         return json(saved);
@@ -62,6 +72,10 @@ export async function PUT(request: Request) {
     catch (error) {
         if (error instanceof CoGmEditError)
             return json({ error: error.message }, 403);
+        if (error instanceof DamagedWikiError)
+            return json({ error: error.message }, 422);
+        if (error instanceof Error && /over the .* limit|staged transfer|Upload is missing|Invalid uploaded/.test(error.message))
+            return json({ error: error.message }, 413);
         return json({ error: error instanceof z.ZodError ? error.issues[0]?.message : "Could not save. Keep this tab open and export a backup of your draft." }, 400);
     }
 }
