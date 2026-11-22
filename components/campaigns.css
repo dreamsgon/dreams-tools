@@ -77,7 +77,7 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-facts select { width:100%; }
 .campaigns-rename, .campaigns-form { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
 .campaigns-rename label, .campaigns-form label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }
-.campaigns-rename input, .campaigns-rename textarea, .campaigns-form input:not([type="checkbox"]), .campaigns-form select { font-size:14px; font-weight:400; }
+.campaigns-rename input, .campaigns-rename textarea, .campaigns-form input:not([type="checkbox"]):not([type="radio"]), .campaigns-form select { font-size:14px; font-weight:400; }
 .campaigns-form small { color:var(--muted); font-size:12px; font-weight:400; }
 .campaigns-rename .campaigns-muted { margin:0; font-size:13px; }
 .campaigns-rename button { align-self:flex-start; }
@@ -94,6 +94,13 @@ button.campaigns-link:hover { background:none; text-decoration:underline; }
 .campaigns-check svg { color:var(--accent); flex:none; }
 .campaigns-check span { color:var(--muted); }
 .campaigns-check strong { color:var(--ink); font-weight:600; }
+/* Duplicate: a choice with a line under it saying what it does. */
+.campaigns-form .campaigns-choice { flex-direction:row; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); font-weight:400; font-size:14px; cursor:pointer; }
+.campaigns-form .campaigns-choice:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
+.campaigns-choice input { width:18px; height:18px; accent-color:var(--accent); margin:1px 0 0; flex:none; }
+.campaigns-choice > span { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.campaigns-choice strong { color:var(--ink); font-weight:600; }
+.campaigns-duplicate p { margin:0 0 6px; font-size:14px; }
 
 .campaigns-backdrop { position:fixed; inset:0; z-index:var(--z-modal, 200); display:flex; align-items:center; justify-content:center; padding:16px; background:color-mix(in srgb, #000 45%, transparent); }
 .campaigns-modal { display:flex; flex-direction:column; width:min(100%,540px); max-height:calc(calc(100vh / var(--ui-zoom, 1)) - 32px); border:1px solid var(--line); border-radius:var(--radius-lg, 8px); background:var(--panel); color:var(--ink); box-shadow:0 18px 50px #0004; overflow:hidden; }
@@ -230,6 +237,7 @@ button.campaigns-folder-more { display:none; }
 /* A campaign's Backup and Delete (components/campaign-backup.tsx). */
 .campaigns-backup { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
 .campaigns-backup h3 { margin:0; font-size:15px; }
+.campaigns-backup h3:not(:first-child) { margin-top:14px; padding-top:18px; border-top:1px solid var(--line); align-self:stretch; }
 .campaigns-backup p { margin:0; font-size:13px; }
 .campaigns-backup .campaigns-error { margin:0; }
 button.campaigns-delete-open { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:6px 0; border:0; background:none; color:var(--danger); font-size:13px; font-weight:600; }
