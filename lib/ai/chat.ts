@@ -6,8 +6,10 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { baseUrlFor, providerOf, type ProviderId } from "./providers.ts";
+import type { Attachment } from "./attachments.ts";
 
-export type ChatTurn = { role: "user" | "assistant"; text: string };
+/** `files`: pictures, PDFs and text files the GM attached to this message (user turns only). */
+export type ChatTurn = { role: "user" | "assistant"; text: string; files?: Attachment[] };
 export type ToolDef = { name: string; title: string; description: string; inputSchema: Record<string, unknown>; readOnly: boolean };
 export type ToolOutcome = { text: string; image?: { data: string; mimeType: string }; isError: boolean };
 export type Step = { tool: string; title: string; ok: boolean; waiting?: string; summary?: string };
@@ -80,11 +82,42 @@ export async function runChat(t: Target, system: string, history: ChatTurn[], to
     steps.push({ tool: name, title: title(name), ok: !out.isError, ...waitingOf(out) });
     return out;
   }
+  checkFiles(t.provider, history);
   return providerOf(t.provider).kind === "anthropic" ? anthropicTurn(t, system, history, tools, call, steps, fetchImpl) : openaiTurn(t, system, history, tools, call, steps, fetchImpl);
 }
 
+/** Providers whose OpenAI-style API takes a PDF as a file part. Anthropic takes PDFs too, as a document. */
+const PDF_OK = new Set<ProviderId>(["anthropic", "openai", "openrouter"]);
+/** Throws when a file can't go to this provider, before anything is sent. */
+export function checkFiles(provider: ProviderId, history: ChatTurn[]) {
+  const pdf = history.flatMap(h => h.files ?? []).find(f => f.kind === "pdf");
+  if (pdf && !PDF_OK.has(provider)) throw new ProviderError(`${providerOf(provider).name} can't read PDFs from here. Attach pictures of the pages, or copy the text in.`);
+}
+const fileHeading = (f: Attachment) => `File: ${f.name}`;
+
+/** A turn as Anthropic takes it: files as image and document blocks, then the text. */
+function anthropicContent(h: ChatTurn): string | Anthropic.Beta.BetaContentBlockParam[] {
+  if (!h.files?.length) return h.text;
+  const blocks: Anthropic.Beta.BetaContentBlockParam[] = h.files.map(f => f.kind === "image"
+    ? { type: "image" as const, source: { type: "base64" as const, media_type: f.mimeType, data: f.data } }
+    : f.kind === "pdf" ? { type: "document" as const, title: f.name, source: { type: "base64" as const, media_type: "application/pdf" as const, data: f.data } }
+    : { type: "document" as const, title: f.name, source: { type: "text" as const, media_type: "text/plain" as const, data: f.text || "(empty file)" } });
+  return h.text.trim() ? [...blocks, { type: "text" as const, text: h.text }] : blocks;
+}
+type OaPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } } | { type: "file"; file: { filename: string; file_data: string } };
+/** A turn as OpenAI-style APIs take it: the text, then pictures as data URLs, PDFs as files and text files as text. */
+function openaiContent(h: ChatTurn): string | OaPart[] {
+  if (!h.files?.length) return h.text;
+  return [
+    ...(h.text.trim() ? [{ type: "text" as const, text: h.text }] : []),
+    ...h.files.map((f): OaPart => f.kind === "image" ? { type: "image_url", image_url: { url: `data:${f.mimeType};base64,${f.data}` } }
+      : f.kind === "pdf" ? { type: "file", file: { filename: f.name, file_data: `data:application/pdf;base64,${f.data}` } }
+      : { type: "text", text: `${fileHeading(f)}\n\n${f.text}` }),
+  ];
+}
+
 async function anthropicTurn(t: Target, system: string, history: ChatTurn[], tools: ToolDef[], call: (n: string, a: unknown) => Promise<ToolOutcome>, steps: Step[], fetchImpl: Fetch): Promise<ChatResult> {
-  const client = anthropicClient(t, fetchImpl), messages: Anthropic.Beta.BetaMessageParam[] = history.map(h => ({ role: h.role, content: h.text }));
+  const client = anthropicClient(t, fetchImpl), messages: Anthropic.Beta.BetaMessageParam[] = history.map(h => ({ role: h.role, content: anthropicContent(h) }));
   const defs: Anthropic.Beta.BetaTool[] = tools.map(x => ({ name: x.name, description: x.description, input_schema: x.inputSchema as Anthropic.Beta.BetaTool.InputSchema }));
   let tokens = 0;
   for (let round = 0; round < MAX_STEPS; round++) {
@@ -112,12 +145,12 @@ async function anthropicTurn(t: Target, system: string, history: ChatTurn[], too
   return { reply: "I stopped after several steps. Ask me to carry on if there's more to do.", steps, tokens };
 }
 
-type OaMessage = { role: "system" | "user" | "assistant" | "tool"; content: string | null; tool_calls?: OaCall[]; tool_call_id?: string };
+type OaMessage = { role: "system" | "user" | "assistant" | "tool"; content: string | OaPart[] | null; tool_calls?: OaCall[]; tool_call_id?: string };
 type OaCall = { id: string; type: "function"; function: { name: string; arguments: string } };
 
 async function openaiTurn(t: Target, system: string, history: ChatTurn[], tools: ToolDef[], call: (n: string, a: unknown) => Promise<ToolOutcome>, steps: Step[], fetchImpl: Fetch): Promise<ChatResult> {
   const url = `${baseUrlFor(t.provider, t.baseUrl)}/chat/completions`;
-  const messages: OaMessage[] = [{ role: "system", content: system }, ...history.map(h => ({ role: h.role, content: h.text }))];
+  const messages: OaMessage[] = [{ role: "system", content: system }, ...history.map(h => ({ role: h.role, content: openaiContent(h) }))];
   const defs = tools.map(x => ({ type: "function", function: { name: x.name, description: x.description, parameters: x.inputSchema } }));
   let tokens = 0, withTools = defs.length > 0, toolsOff = false;
   for (let round = 0; round < MAX_STEPS; round++) {

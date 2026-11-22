@@ -13,11 +13,11 @@ export function useWriters(campaignId:string|null|undefined){
  useEffect(()=>{
   if(!campaignId)return;
   let live=true;
-  type C={id:string;name:string;level:string;api?:{model:string};perms?:Record<string,string>};
+  type C={id:string;name:string;level:string;api?:{model:string};perms?:Record<string,string>;chatDefault?:boolean};
   fetchConnections<C>(campaignId).then(all=>{
    if(!live)return;
    const list=all.filter(c=>c.level!=='read'&&c.perms?.notes!=='off');
-   setW({apps:list.filter(c=>!c.api).map(c=>c.name),keys:list.filter(c=>c.api).map(c=>({id:c.id,name:c.name,model:c.api!.model,transcripts:c.perms?.seeSecrets!=='off'}))});
+   setW({apps:list.filter(c=>!c.api).map(c=>c.name),keys:list.filter(c=>c.api).sort((a,b)=>Number(!!b.chatDefault)-Number(!!a.chatDefault)).map(c=>({id:c.id,name:c.name,model:c.api!.model,transcripts:c.perms?.seeSecrets!=='off'}))});
   }).catch(()=>{if(live)setW({apps:[],keys:[]});});
   return ()=>{live=false;};
  },[campaignId]);

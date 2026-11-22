@@ -8,6 +8,7 @@
 import type { S3Bucket } from "../storage.ts";
 import { encyclopediaPrefix } from "../encyclopedia/store.ts";
 import type { Step } from "./chat.ts";
+import type { AttachmentName } from "./attachments.ts";
 
 import { chatTitle, type ChatFolder, type ChatMeta, type SavedChat, type SavedTurn } from "./chat-text.ts";
 export * from "./chat-text.ts";
@@ -101,12 +102,13 @@ export async function saveExchange(bucket: S3Bucket, owner: string, campaignId: 
   id?: unknown; connectionId: string; connectionName: string; model?: string; scene?: string;
   /** For a new chat: the folder it starts in, if that folder still exists. A saved chat keeps its own folder. */
   folder?: unknown;
-  question: string; answer: string; steps: Step[]; now?: Date; newId?: () => string;
+  /** `files`: the names of files attached to the question. The files themselves aren't saved. */
+  question: string; files?: AttachmentName[]; answer: string; steps: Step[]; now?: Date; newId?: () => string;
 }): Promise<ChatMeta> {
   const now = (input.now ?? new Date()).toISOString();
   let chat: SavedChat | null = null;
   if (isChatId(input.id)) chat = await readChat(bucket, owner, campaignId, input.id).catch(() => null);
-  const asked: SavedTurn = { role: "user", text: input.question, at: now };
+  const asked: SavedTurn = { role: "user", text: input.question, at: now, ...(input.files?.length ? { files: input.files } : {}) };
   const answered: SavedTurn = { role: "assistant", text: input.answer, at: now, ...(input.steps.length ? { steps: input.steps } : {}), by: input.connectionName, ...(input.model ? { model: input.model } : {}) };
   const folder = chat ? chat.folder : isFolderId(input.folder) && (await listFolders(bucket, owner, campaignId)).some(f => f.id === input.folder) ? input.folder : undefined;
   let turns = [...(chat?.turns ?? []), asked, answered], parts = chat?.parts ?? 0, earlier = chat?.earlier ?? 0;
@@ -118,7 +120,7 @@ export async function saveExchange(bucket: S3Bucket, owner: string, campaignId: 
     parts++; earlier += part.length; turns = turns.slice(PART_SIZE);
   }
   const meta: ChatMeta = {
-    id, title: chat?.title ?? chatTitle(input.question),
+    id, title: chat?.title ?? chatTitle(input.question || (input.files ?? []).map(f => f.name).join(", ")),
     connectionId: input.connectionId, connectionName: input.connectionName, ...(input.model ? { model: input.model } : {}),
     ...(input.scene ? { scene: input.scene.slice(0, 120) } : chat?.scene ? { scene: chat.scene } : {}),
     ...(folder ? { folder } : {}),

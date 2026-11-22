@@ -7,20 +7,28 @@ import type { S3Bucket } from "../storage.ts";
 import { addUsage, listConnections, overLimit, publicApi, targetFor, type KeyUse } from "../mcp/connections.ts";
 import { loadContext } from "../mcp/load.ts";
 import { callTool, listTools, serverInstructions } from "../mcp/tools.ts";
-import { runChat, type ChatTurn, type ToolOutcome } from "./chat.ts";
+import { ProviderError, runChat, type ChatResult, type ChatTurn, type ToolOutcome } from "./chat.ts";
+import { cleanAttachments, namesOf, SEND_BUDGET, sizeOf } from "./attachments.ts";
 import { chatLines } from "../encyclopedia/ai-styles.ts";
 import { CONTEXT_TURNS, saveExchange } from "./chats.ts";
 import { cleanModel } from "./providers.ts";
 
 const MAX_TEXT = 8000;
 
-/** The conversation from the browser: user and assistant lines only, newest last, kept short. */
+/**
+ * The conversation from the browser: user and assistant lines only, newest last, kept short. A user line can carry
+ * attached files (`files`), and then needs no text; all the files together stay within SEND_BUDGET.
+ */
 export function cleanHistory(v: unknown): ChatTurn[] {
   if (!Array.isArray(v)) throw Error("Send the conversation.");
-  const turns = v.slice(-CONTEXT_TURNS).map(t => {
+  let budget = SEND_BUDGET;
+  const turns = v.slice(-CONTEXT_TURNS).map((t): ChatTurn => {
     const role = (t as ChatTurn)?.role, text = (t as ChatTurn)?.text;
-    if ((role !== "user" && role !== "assistant") || typeof text !== "string" || !text.trim()) throw Error("Each message needs a role and some text.");
-    return { role, text: text.slice(0, MAX_TEXT) };
+    const files = role === "user" ? cleanAttachments((t as { files?: unknown })?.files) : [];
+    if ((role !== "user" && role !== "assistant") || typeof text !== "string" || (!text.trim() && !files.length)) throw Error("Each message needs a role and some text.");
+    for (const f of files) budget -= sizeOf(f);
+    if (budget < 0) throw Error("The attached files are too big to send together. Attach fewer or smaller ones.");
+    return { role, text: text.slice(0, MAX_TEXT), ...(files.length ? { files } : {}) };
   });
   while (turns.length && turns[0]!.role !== "user") turns.shift();
   if (!turns.length || turns[turns.length - 1]!.role !== "user") throw Error("Ask something first.");
@@ -53,9 +61,16 @@ export async function chatTurn(bucket: S3Bucket, owner: string, campaignId: stri
     ...(scene ? [`The GM has the Maptable scene "${scene.slice(0, 120)}" open.`] : []),
   ].join("\n\n");
   const target = targetFor(c, use.apiKey), model = opts.model === undefined || opts.model === "" ? target.model : cleanModel(opts.model);
-  const result = await runChat({ ...target, model }, system, history, tools, run, fetchImpl);
+  const asked = history[history.length - 1]!, withFiles = history.some(h => h.files?.length);
+  let result: ChatResult;
+  try { result = await runChat({ ...target, model }, system, history, tools, run, fetchImpl); }
+  catch (e) {
+    // A model that only reads text refuses pictures and files with a 400 or similar.
+    if (withFiles && e instanceof ProviderError && /\((400|415|422)\)|image|vision|multimodal|file|document|pdf/i.test(e.message)) throw new ProviderError(`${e.message} ${model} may not read pictures or files: pick a model that does, such as a recent Claude, GPT or Gemini model.`);
+    throw e;
+  }
   const after = await addUsage(bucket, owner, campaignId, c.id, result.tokens);
   const reply = result.reply || "(No answer.)";
-  const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model, scene, folder: opts.folder, question: history[history.length - 1]!.text, answer: reply, steps: result.steps });
+  const chat = await saveExchange(bucket, owner, campaignId, { id: chatId, connectionId: c.id, connectionName: c.name, model, scene, folder: opts.folder, question: asked.text, files: namesOf(asked.files), answer: reply, steps: result.steps });
   return { ...result, api: after?.api ? publicApi(after.api) : undefined, chat };
 }
