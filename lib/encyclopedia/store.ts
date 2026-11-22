@@ -4,6 +4,26 @@ import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from '.
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 import { pictureIds } from './markup.ts';
+import { applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, joinWorkspace, partLimitOk, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
+const INDEX_FORMAT = 'wiki-parts-v1';
+type PartRef = { key: string; bytes: number; hash: string };
+/** workspace.json once the Wiki is split: which part holds each campaign and world. It has no `data`, so older code refuses it instead of saving over it. */
+type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; legacyBackup?: string };
+type Stored = { data: Workspace; revision: number; etag: string | null; index: WikiIndex | null; parts: Map<PartKey, Part> | null; legacy: unknown; limit: number };
+function isIndex(x: Record<string, unknown>, prefix: string): x is WikiIndex & Record<string, unknown> {
+  if (x.format !== INDEX_FORMAT) return false;
+  const i = x as WikiIndex;
+  if (!i.layout || !Array.isArray(i.layout.worlds) || !Array.isArray(i.layout.campaigns) || !Array.isArray(i.layout.runs) || !i.parts || typeof i.parts !== 'object'
+    || Object.values(i.parts).some(r => !r || typeof r.key !== 'string' || !r.key.startsWith(prefix + 'parts/') || typeof r.hash !== 'string')) throw new DamagedWikiError('Your Wiki index is damaged. Nothing was changed.');
+  return true;
+}
+async function sha256(text: string) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), b => b.toString(16).padStart(2, '0')).join(''); }
+/** Runs `fn` on each item, at most 8 at a time, keeping their order. */
+async function eachLimited<T, U>(items: T[], fn: (item: T) => Promise<U>): Promise<U[]> {
+  const out = new Array<U>(items.length); let at = 0;
+  await Promise.all(Array.from({ length: Math.min(8, items.length) }, async () => { while (at < items.length) { const i = at++; out[i] = await fn(items[i]); } }));
+  return out;
+}
 export async function hashToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -25,12 +45,25 @@ type Grant = { owner: string; campaignId: string; hash: string };
 export class EncyclopediaStore {
   readonly bucket: S3Bucket;
   constructor(bucket: S3Bucket) { this.bucket = bucket; }
+  /** The Wiki as one workspace, joined from its parts (or read from the single file an account had before they were split). */
   async read(owner: string) {
+    const { data, revision, etag, limit } = await this.stored(owner);
+    return { data, revision, etag, limit };
+  }
+  /** What is stored: the workspace, its revision and etag, the parts it was read from (null for the old single file) and the limit per part. */
+  private async stored(owner: string, tries = 3): Promise<Stored> {
     const object = await this.bucket.get(encyclopediaPrefix(owner)+'workspace.json');
-    if (!object) return { data: emptyWorkspace(), revision: 0, etag: null };
-    const saved = await object.json<{data:unknown;revision:number}>();
-    if (!Number.isSafeInteger(saved.revision) || saved.revision < 1) throw Error('Invalid encyclopedia revision.');
-    return { data: workspaceSchema.parse(saved.data), revision: saved.revision, etag: object.etag };
+    if (!object) return { data: emptyWorkspace(), revision: 0, etag: null, index: null, parts: null, legacy: null, limit: DEFAULT_PART_LIMIT };
+    const saved = await object.json<Record<string, unknown>>();
+    if (!Number.isSafeInteger(saved.revision) || (saved.revision as number) < 1) throw Error('Invalid encyclopedia revision.');
+    const revision = saved.revision as number;
+    if (!isIndex(saved, encyclopediaPrefix(owner))) return { data: workspaceSchema.parse(saved.data), revision, etag: object.etag, index: null, parts: null, legacy: saved, limit: DEFAULT_PART_LIMIT };
+    const refs = Object.entries(saved.parts);
+    const loaded = await eachLimited(refs, async ([, ref]) => { const part = await this.bucket.get(ref.key); return part ? part.json<Part>() : null; });
+    // A save that landed between reading the index and its parts removes parts it replaced: read again.
+    if (loaded.some(p => !p)) { if (tries > 1) return this.stored(owner, tries - 1); throw new DamagedWikiError('Part of your Wiki could not be found. Nothing was changed.'); }
+    const parts = new Map(refs.map(([key], i) => [key, loaded[i]!]));
+    return { data: workspaceSchema.parse(joinWorkspace(saved.layout, parts)), revision, etag: object.etag, index: saved, parts, legacy: null, limit: partLimitOk(saved.limit) ? saved.limit : DEFAULT_PART_LIMIT };
   }
   async save(owner: string, input: Workspace, revision: number) {
     return (await this.saveTagged(owner, input, revision))?.revision ?? null;
@@ -41,18 +74,60 @@ export class EncyclopediaStore {
    * with their name, and pages anyone else changed lose an old mark.
    */
   async saveTagged(owner: string, input: Workspace, revision: number, editor?: Editor) {
-    let data=workspaceSchema.parse(input);
-    const previous=await this.read(owner);
+    const data=workspaceSchema.parse(input);
+    const previous=await this.stored(owner);
     if (previous.revision!==revision) return null;
-    data=markEditor(previous.data,data,editor);
-    if (new TextEncoder().encode(JSON.stringify(data)).length > 2_000_000) throw Error('Wiki workspace exceeds the 2 MB limit. Export a backup before reducing content.');
-    const next=revision+1;
-    const saved=await this.bucket.put(encyclopediaPrefix(owner)+'workspace.json',JSON.stringify({data,revision:next}),{onlyIf:previous.etag?{etagMatches:previous.etag}:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
-    if (!saved) return null;
+    return this.commit(owner, previous, markEditor(previous.data,data,editor));
+  }
+  /** Saves only the campaigns and worlds that changed (wiki-parts.ts wikiPatch), made against `revision`. */
+  async savePatch(owner: string, patch: WikiPatch, revision: number) {
+    const previous=await this.stored(owner);
+    if (previous.revision!==revision) return null;
+    const data=workspaceSchema.parse(applyWikiPatch(previous.parts ?? splitWorkspace(previous.data).parts, patch));
+    return this.commit(owner, previous, markEditor(previous.data,data));
+  }
+  /** Sets how big one campaign (or one world's shared lore) may be. Saves the Wiki as it is, under the new limit. */
+  async setPartLimit(owner: string, limit: number) {
+    if (!partLimitOk(limit)) throw Error('Choose one of the limits offered.');
+    const previous=await this.stored(owner);
+    return this.commit(owner, previous, previous.data, limit);
+  }
+  /**
+   * Writes each campaign and world that changed to a new part, then publishes the index that names them, only if
+   * nothing else saved since (workspace.json stays the one commit point). Parts the new index no longer names are
+   * removed afterwards. The first save after the split keeps the old single file as a backup.
+   */
+  private async commit(owner: string, previous: Stored, data: Workspace, limit = previous.limit) {
+    const problem=sizeProblem(data, limit);
+    if (problem) throw Error(problem);
+    const base=encyclopediaPrefix(owner), next=previous.revision+1, { layout, parts }=splitWorkspace(data), old=previous.index?.parts ?? {};
+    const written: string[]=[];
+    const refs=Object.fromEntries(await eachLimited([...parts], async ([key, part]) => {
+      const text=JSON.stringify(part), hash=await sha256(text), had=old[key];
+      if (had && had.hash===hash) return [key, had] as const;
+      const path=`${base}parts/${encodeURIComponent(key)}/${crypto.randomUUID()}.json`;
+      written.push(path);
+      await this.bucket.put(path, text, { httpMetadata: { contentType: 'application/json' } });
+      return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash }] as const;
+    }).catch(async (error) => { await this.forget(written); throw error; }));
+    let legacyBackup=previous.index?.legacyBackup;
+    if (previous.legacy) {
+      // The single file from before the split, exactly as it was. Kept until the owner removes it; only the first one is kept.
+      legacyBackup=base+'backups/before-wiki-split.json';
+      try { await this.bucket.put(legacyBackup, JSON.stringify(previous.legacy), { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } }); }
+      catch (error) { await this.forget(written); throw error; }
+    }
+    const index: WikiIndex={ format: INDEX_FORMAT, schemaVersion: 1, revision: next, layout, parts: refs, ...(limit!==DEFAULT_PART_LIMIT ? { limit } : {}), ...(legacyBackup ? { legacyBackup } : {}) };
+    const saved=await this.bucket.put(base+'workspace.json', JSON.stringify(index), { onlyIf: previous.etag ? { etagMatches: previous.etag } : { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } })
+      .catch(async (error) => { await this.forget(written); throw error; });
+    if (!saved) { await this.forget(written); return null; }
+    const using=new Set(Object.values(refs).map(r => r.key));
+    await this.forget(Object.values(old).map(r => r.key).filter(k => !using.has(k)));
     // Page history is a convenience copy: a failure here never fails or undoes the save.
     await this.recordHistory(owner, previous.data, data).catch(() => {});
     return { revision: next, etag: saved.etag };
   }
+  private async forget(keys: string[]) { await eachLimited(keys, key => this.bucket.delete(key).catch(() => {})); }
   /** Random tables: one library per account, used across campaigns. Saved separately so the workspace limit is unaffected. */
   async readTables(owner: string) {
     const object = await this.bucket.get(encyclopediaPrefix(owner)+'tables.json');
@@ -99,7 +174,7 @@ export class EncyclopediaStore {
     await this.addHistory(owner, entryId, snapshot, entry.updatedAt, now, true);
     return true;
   }
-  /** A session's transcript, kept beside the workspace so a long session never counts against its 2 MB. */
+  /** A session's transcript, kept beside the workspace so a long session never counts against its campaign's limit. */
   private transcriptPath(owner: string, entryId: string) { return encyclopediaPrefix(owner)+`transcripts/${encodeURIComponent(entryId)}.txt`; }
   async readTranscript(owner: string, entryId: string) {
     if (!historyEntryId(entryId)) return null;

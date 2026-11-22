@@ -1,4 +1,5 @@
 "use client";
+import {workspaceBody} from "@/lib/encyclopedia/workspace-client";
 import {useEffect,useMemo,useState} from "react";
 import Link from "next/link";
 import {Plus,Search} from "lucide-react";
@@ -18,7 +19,7 @@ export {encyclopediaCharacters,encyclopediaVehicles,campaignCharacters,pairedCam
 let cached:Promise<EncyclopediaRaw>|null=null;
 /** The signed-in user's Wiki, read-only and fetched once per page unless refreshed. */
 export function loadEncyclopedia(refresh=false):Promise<EncyclopediaRaw>{
- if(!cached||refresh){cached=fetch(bookWorkspaceUrl()).then(async r=>{const v=await r.json().catch(()=>({})) as {data?:EncyclopediaRaw;error?:string};if(!r.ok)throw new Error(r.status===401?"Sign in to use your Wiki characters.":v.error??"Could not load your Wiki.");return v.data??{};});cached.catch(()=>{cached=null;});}
+ if(!cached||refresh){cached=fetch(bookWorkspaceUrl()).then(async r=>{const v=await workspaceBody<{data?:EncyclopediaRaw;error?:string}>(r).catch(()=>({} as {data?:EncyclopediaRaw;error?:string}));if(!r.ok)throw new Error(r.status===401?"Sign in to use your Wiki characters.":v.error??"Could not load your Wiki.");return v.data??{};});cached.catch(()=>{cached=null;});}
  return cached;
 }
 

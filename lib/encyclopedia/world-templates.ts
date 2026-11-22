@@ -1,7 +1,9 @@
+import {PART_LIMITS,sizeProblem} from './wiki-parts.ts';
 import {calendarTemplates,makeCalendar} from './calendar-templates.ts';
 import {emptyWorkspace,importCopy,newId,workspaceSchema,type Workspace,type Entry} from './world-model.ts';
 export const worldStarters=[{id:'blank',title:'Blank world',description:'An empty world for your own structure.',calendarId:null},...calendarTemplates.map(t=>({id:t.id,title:t.id==='custom'?'Homebrew world':t.title,description:t.id==='custom'?'Editable folders and a custom calendar.':t.subtitle,calendarId:t.id}))];
-function checked(s:Workspace){const result=workspaceSchema.parse(s);if(new TextEncoder().encode(JSON.stringify(result)).length>2000000)throw Error('The combined workspace exceeds 2 MB. Export and free space before creating a copy.');return result;}
+/** The server holds each campaign to the owner's limit (wiki-parts.ts); this catches a copy that is too big even at the largest one. */
+function checked(s:Workspace){const result=workspaceSchema.parse(s);const big=sizeProblem(result,PART_LIMITS[PART_LIMITS.length-1]);if(big)throw Error(big);return result;}
 export function createStarter(s:Workspace,starterId:string,name:string,campaignName:string){
  const starter=worldStarters.find(t=>t.id===starterId);if(!starter)throw Error('Choose a world starter.');
  const worldId=newId(),campaignId=starter.calendarId?newId():null;

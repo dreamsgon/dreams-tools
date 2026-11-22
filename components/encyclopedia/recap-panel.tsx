@@ -150,7 +150,7 @@ export function TranscriptTab({entry,editing,update}:{entry:Entry;editing:boolea
  if(text===null)return <p className="muted">Loading…</p>;
  const value=draft??text;
  return <div className="transcript-tab">
-  <p className="aside-hint"><FileText size={13}/> Kept apart from your pages, so it never counts toward the 2 MB limit. Only you and AI apps you connect with “See GM-only things” can read it. They read it in parts of about 5,000 tokens, with timestamps and filler taken out.</p>
+  <p className="aside-hint"><FileText size={13}/> Kept apart from your pages, so it never counts toward your campaign’s size limit. Only you and AI apps you connect with “See GM-only things” can read it. They read it in parts of about 5,000 tokens, with timestamps and filler taken out.</p>
   {editing?<>
    <textarea className="editor transcript-editor" aria-label="Transcript" value={value} maxLength={TRANSCRIPT_LIMIT} placeholder={'Paste the session transcript here, such as\nMara: I’m not hiding. I’m being very still in a threatening way.\nGM: Ostra Hale lifts the toll lantern.'} onChange={e=>setDraft(e.target.value)}/>
    <div className="button-row transcript-actions"><button className="button primary small" disabled={busy||draft===null} onClick={()=>save(value)}>{busy?'Saving…':'Save transcript'}</button>{draft!==null&&<button className="button small" onClick={()=>setDraft(null)}>Cancel</button>}<span className="word-count">{words(wordCount(value))}</span></div>

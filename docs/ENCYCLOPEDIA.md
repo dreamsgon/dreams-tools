@@ -12,7 +12,7 @@ Imported from the owner's [TTRPG World Manager GPT Site](https://ttrpg-world-man
 4. Import the map packages into the appropriate campaigns/maps and check images, fog, article references and calendar content. Keep the original exports until everything is verified.
 5. Create new player links and agent keys in the new deployment. Old Sites links and credentials do not migrate.
 
-The encyclopedia workspace limit remains 2 MB; PNG/JPEG/WebP atlas images allow up to 8 MB each. Maptable and encyclopedia retain separate data formats; a map does not automatically synchronize between them. Data stays in the same configured private S3 bucket under separate per-account paths. Existing `MAPTABLE_` environment names serve both modules.
+Each campaign and each world’s shared lore is stored as its own part (`lib/encyclopedia/wiki-parts.ts`), limited to 2 MB by default and up to 20 MB when the owner raises it (60 MB for the whole Wiki); PNG/JPEG/WebP atlas images allow up to 8 MB each. Maptable and encyclopedia retain separate data formats; a map does not automatically synchronize between them. Data stays in the same configured private S3 bucket under separate per-account paths. Existing `MAPTABLE_` environment names serve both modules.
 
 ## Page text
 
