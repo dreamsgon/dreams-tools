@@ -179,7 +179,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  {tablePicker&&<TablePicker campaignId={entry.campaignId??campaign?.id??null} onPick={t=>insertTable(t.name)} onClose={()=>setTablePicker(false)}/>}
  {picker&&<MaptablePicker onPick={insertMaptable} onClose={()=>setPicker(false)}/>}
  {historyOpen&&<PageHistory key={entry.id} entry={entry} selected={preview} onSelect={setPreview} onRestore={restore} onClose={()=>{setHistoryOpen(false);setPreview(null);}}/>}
- {details&&<CharacterDetails entry={entry} onChange={character=>update({character})} onClose={()=>setDetails(false)}/>}
+ {details&&<CharacterDetails entry={entry} groups={data.entries.filter(e=>e.kind==='character'&&e.campaignId===entry.campaignId&&e.worldId===entry.worldId).map(e=>e.character?.group??'')} onChange={character=>update({character})} onClose={()=>setDetails(false)}/>}
  {tabDialog&&<TabName key={tabDialog} initial={tabDialog==='rename'?tab?.title??'':''} onClose={()=>setTabDialog(null)} onSave={title=>{if(tabDialog==='rename'&&tab){update({tabs:custom.map(t=>t.id===tab.id?{...t,title}:t)});}else{const t:ArticleTab={id:newId(),title,body:'',visibility:'gm'};update({tabs:[...custom,t]});pick(t.id);setEditing(true);}setTabDialog(null);}}/>}
  </section>;
 }
