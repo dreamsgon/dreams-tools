@@ -280,3 +280,9 @@
   .hub-card:not(.hub-empty) > h2, .hub-card-head h2 { font-size:13px; color:var(--ink); }
   .hub-actions button { border-color:var(--control-line); }
 }
+
+/* The Settings tab: the Campaigns page's details panel, in the page instead of beside a list. */
+.hub-settings.campaigns-page { display:block; max-width:620px; padding:0; }
+.hub-settings .campaigns-details-embedded { position:static; }
+.hub-settings .campaigns-details-embedded .campaigns-facts { margin-top:0; }
+.hub-settings > .hub-error, .hub-settings > .hub-note { margin:0 0 12px; }
