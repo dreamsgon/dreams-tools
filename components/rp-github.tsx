@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ExternalLink, TriangleAlert } from "lucide-react";
 import { githubSchema } from "@/lib/encyclopedia/world-model";
 import type { RpFile } from "@/lib/encyclopedia/rp-export";
-import { checkBranch, checkRepo, GithubError, parseRepo, preparePush, pushFiles, validKey, type FetchLike, type Prepared, type PushResult } from "@/lib/github-push";
+import { checkBranch, checkRepo, cleanFolder, GithubError, parseRepo, preparePush, pushFiles, validKey, type FetchLike, type Prepared, type PushResult } from "@/lib/github-push";
 import { forgetKey, saveKey } from "@/lib/github-key";
 
 /* On a phone the sheet scrolls, so bring a new error into view. */
@@ -15,12 +15,12 @@ const message = (e: unknown, fallback: string) => e instanceof GithubError || e 
 export const TOKEN_PAGE = "https://github.com/settings/personal-access-tokens/new";
 
 /** The "Connect a repository" screen: repository, branch and key. Nothing is saved until GitHub says the key can read and write. */
-export function ConnectView({ initialRepo, initialBranch, tokenFor, saveConfig, onToken, onForget, onContinue, onBack, continueLabel }: {
-  initialRepo: string; initialBranch: string; tokenFor: (repo: string) => string | null;
-  saveConfig: (github: { repository: string; branch: string }) => Promise<string | null>;
+export function ConnectView({ initialRepo, initialBranch, initialFolder = "", tokenFor, saveConfig, onToken, onForget, onContinue, onBack, continueLabel }: {
+  initialRepo: string; initialBranch: string; initialFolder?: string; tokenFor: (repo: string) => string | null;
+  saveConfig: (github: { repository: string; branch: string; folder?: string }) => Promise<string | null>;
   onToken: (repo: string, token: string) => void; onForget: (repo: string) => void; onContinue: () => void; onBack: () => void; continueLabel: string;
 }) {
-  const [repoText, setRepoText] = useState(initialRepo), [branch, setBranch] = useState(initialBranch || "main"), [key, setKey] = useState("");
+  const [repoText, setRepoText] = useState(initialRepo), [branch, setBranch] = useState(initialBranch || "main"), [folderText, setFolderText] = useState(initialFolder), [key, setKey] = useState("");
   const [state, setState] = useState<{ step: "idle" } | { step: "checking" } | { step: "error"; text: string } | { step: "ok"; repo: string; kept: boolean; isPrivate: boolean } | { step: "forgot" }>({ step: "idle" });
   const parsed = parseRepo(repoText), saved = parsed ? tokenFor(parsed) : null;
   const busy = state.step === "checking";
@@ -30,6 +30,8 @@ export function ConnectView({ initialRepo, initialBranch, tokenFor, saveConfig, 
     if (!repo) return fail("Write the repository as owner/repository, for example ayla/salt-road.");
     const parsedBranch = githubSchema.shape.branch.safeParse(branch.trim());
     if (!parsedBranch.success) return fail("Branch names here can use letters, numbers, dashes, underscores and slashes.");
+    const folder = cleanFolder(folderText);
+    if (folder === null) return fail("Folder names can use letters, numbers, spaces, dots, dashes and underscores, separated by slashes, like Campaigns/Salt Road.");
     const token = key.trim() || tokenFor(repo);
     if (!token) return fail("Paste a GitHub key first. The steps are above.");
     if (!validKey(token)) return fail("That does not look like a GitHub key. Paste the whole key, starting with github_pat_.");
@@ -39,7 +41,8 @@ export function ConnectView({ initialRepo, initialBranch, tokenFor, saveConfig, 
       const found = await checkBranch(token, repo, parsedBranch.data, githubFetch);
       if (found === "missing") return fail(`The branch “${parsedBranch.data}” does not exist in ${info.fullName}. Create it on GitHub or use the branch it has. RPG Tools does not create branches.`);
       if (found === "empty" && info.defaultBranch !== parsedBranch.data) return fail(`${info.fullName} is empty, so GitHub can only start it on its default branch, ${info.defaultBranch}. Use that branch name.`);
-      const wrote = await saveConfig({ repository: repo, branch: parsedBranch.data });
+      const wrote = await saveConfig({ repository: repo, branch: parsedBranch.data, ...(folder ? { folder } : {}) });
+      setFolderText(folder);
       if (wrote) return fail(wrote);
       const kept = key.trim() ? saveKey(repo, token) : true;
       onToken(repo, token); setKey("");
@@ -53,6 +56,8 @@ export function ConnectView({ initialRepo, initialBranch, tokenFor, saveConfig, 
     <form className="rpb-panel" onSubmit={e => { e.preventDefault(); void check(); }} autoComplete="off">
       <label className="rpb-field">Repository<input value={repoText} onChange={e => { setRepoText(e.target.value); setState({ step: "idle" }); }} placeholder="your-name/salt-road" spellCheck={false} autoCapitalize="none" autoComplete="off" maxLength={200} disabled={busy} /></label>
       <label className="rpb-field">Branch<input value={branch} onChange={e => { setBranch(e.target.value); setState({ step: "idle" }); }} placeholder="main" spellCheck={false} autoCapitalize="none" autoComplete="off" maxLength={100} disabled={busy} /></label>
+      <label className="rpb-field">Folder (optional)<input value={folderText} onChange={e => { setFolderText(e.target.value); setState({ step: "idle" }); }} placeholder="Leave empty for the top, or e.g. Campaigns/Salt Road" spellCheck={false} autoCapitalize="none" autoComplete="off" maxLength={200} disabled={busy} /></label>
+      <p className="rpb-note">With a folder, this campaign is kept inside it, so several campaigns can share one repository. Pushes and reads touch only that folder.</p>
       <label className="rpb-field">GitHub key (fine-grained token)<input type="password" value={key} onChange={e => { setKey(e.target.value); setState({ step: "idle" }); }} placeholder={saved ? "A key is saved on this device. Paste to replace it." : "github_pat_…"} autoComplete="off" spellCheck={false} autoCapitalize="none" maxLength={400} disabled={busy} /></label>
       <ol className="rpb-steps">
         <li>On GitHub, <a href={TOKEN_PAGE} target="_blank" rel="noopener">make a fine-grained key<ExternalLink size={12} aria-hidden="true" /></a> (Settings › Developer settings › Fine-grained tokens).</li>
@@ -96,8 +101,8 @@ function Rows({ rows, extra, label }: { rows: { key: string; tag?: keyof typeof 
 }
 
 /** Compares the campaign with the branch, shows what a push would change, and pushes one commit. */
-export function PushView({ repo, branch, token, includeGm, build, defaultMessage, onBack, onChangeKey, onPushed, onBusy }: {
-  repo: string; branch: string; token: string; includeGm: boolean; build: (exportLog: string | undefined) => RpFile[]; defaultMessage: string;
+export function PushView({ repo, branch, folder = "", token, includeGm, build, defaultMessage, onBack, onChangeKey, onPushed, onBusy }: {
+  repo: string; branch: string; folder?: string; token: string; includeGm: boolean; build: (exportLog: string | undefined) => RpFile[]; defaultMessage: string;
   onBack: () => void; onChangeKey: () => void; onPushed: (result: PushResult) => void; onBusy: (busy: boolean) => void;
 }) {
   const [state, setState] = useState<PushState>({ step: "loading" }), [msg, setMsg] = useState(defaultMessage);
@@ -113,11 +118,11 @@ export function PushView({ repo, branch, token, includeGm, build, defaultMessage
   useEffect(() => {
     let live = true;
     (async () => {
-      try { const prep = await preparePush(token, repo, branch, includeGm, log => buildRef.current(log), githubFetch); if (live) setState({ step: "review", prep }); }
+      try { const prep = await preparePush(token, repo, branch, includeGm, log => buildRef.current(log), githubFetch, folder); if (live) setState({ step: "review", prep }); }
       catch (e) { if (live) setState({ step: "error", text: message(e, "Could not read the repository."), code: e instanceof GithubError ? e.code : undefined }); }
     })();
     return () => { live = false; };
-  }, [token, repo, branch, includeGm, run]);
+  }, [token, repo, branch, folder, includeGm, run]);
   function again() { setState({ step: "loading" }); setRun(n => n + 1); }
 
   async function push(prep: Prepared) {
@@ -140,7 +145,7 @@ export function PushView({ repo, branch, token, includeGm, build, defaultMessage
   const keyProblem = (code?: string) => code === "bad-key" || code === "no-access" || code === "read-only";
   return <div className="rpb-panel">
     <div className="rpb-subhead"><button type="button" className="rpb-back" onClick={onBack} disabled={state.step === "pushing"} aria-label="Back to export"><ChevronLeft size={18} aria-hidden="true" /></button><h3>{state.step === "done" ? "Pushed to GitHub" : prep && !prep.nothingToPush ? `Push ${count} changed file${count === 1 ? "" : "s"}` : "Push to GitHub"}</h3></div>
-    <p className="rpb-muted">{repo} · Branch {branch}</p>
+    <p className="rpb-muted">{repo} · Branch {branch}{folder ? ` · Folder ${folder}` : ""}</p>
     {state.step === "loading" && <p className="rpb-muted" role="status">Comparing with {repo}…</p>}
     {state.step === "error" && <>
       <p className="rpb-alert" role="alert" ref={showAlert}><TriangleAlert size={16} aria-hidden="true" />{state.text}</p>

@@ -23,7 +23,7 @@ const WORKSPACE_URL = "/api/encyclopedia/workspace";
 
 function saveLastExport(campaignId: string, iso: string) { try { window.localStorage.setItem(lastExportKey(campaignId), iso); } catch { /* Not remembered. */ } }
 function saveLastPush(campaignId: string, push: LastPush) { try { window.localStorage.setItem(lastPushKey(campaignId), JSON.stringify(push)); } catch { /* Not remembered. */ } }
-type Github = { repository: string; branch: string };
+type Github = { repository: string; branch: string; folder?: string };
 
 type Loaded = { workspace: Workspace; tables: TableLibrary };
 /** The changes in a repository that came from this campaign, read and compared, ready to review. */
@@ -132,7 +132,8 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   const notes = workspace ?? loaded?.workspace;
   const campaign = notes?.campaigns.find(c => c.id === campaignId);
   const github: Github = savedGh ?? campaign?.github ?? { repository: "", branch: "main" };
-  const repo = github.repository, canPush = canRestore && !!repo;
+  // An archived campaign has no pages in the Wiki: a push would remove them from GitHub, so it waits until they're brought back.
+  const archived = !!campaign?.archived, repo = github.repository, canPush = canRestore && !!repo && !archived;
   const tokenFor = (r: string) => (memKey?.repo.toLowerCase() === r.toLowerCase() ? memKey.token : null) ?? readKey(r);
   void keyTick;
   const plan = useMemo(() => {
@@ -230,14 +231,14 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     if (!repo || !token) { setThen("import"); setView("connect"); return; }
     setImp({ step: "reading" });
     try {
-      const got = await readRepoRestore(token, repo, github.branch, githubFetch);
+      const got = await readRepoRestore(token, repo, github.branch, githubFetch, github.folder ?? "");
       if (got.ok) {
         let bring: Bring | null = null;
-        if (got.workspace.campaigns[0].id === campaignId) { const ch = await readRepoChanges(token, repo, github.branch, githubFetch); if (ch.ok) bring = await makeBring(ch.map, ch.files, ch.log, repo); }
+        if (got.workspace.campaigns[0].id === campaignId && !archived) { const ch = await readRepoChanges(token, repo, github.branch, githubFetch, undefined, github.folder ?? ""); if (ch.ok) bring = await makeBring(ch.map, ch.files, ch.log, repo); }
         setImp(foundFrom(got.workspace, got.date, got.files, bring)); return;
       }
       if (got.kind !== "numbered" && got.kind !== "player-safe") { setImp(restoreNotice(got.kind, "repository", got.error)); return; }
-      const read = await readRepoFiles(token, repo, github.branch, githubFetch);
+      const read = await readRepoFiles(token, repo, github.branch, githubFetch, undefined, github.folder ?? "");
       if (!read.ok) { setImp({ step: "error", title: "Cannot import this repository", message: read.error }); return; }
       const result = previewRepo(read.files, { name: repo.split("/")[1] ?? repo });
       if (!result.ok) { setImp(got.kind === "player-safe" ? restoreNotice(got.kind, "repository", got.error) : { step: "error", title: "Cannot import this repository", message: result.error }); return; }
@@ -267,7 +268,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
   }
 
   function connect(next: "export" | "push" | "import") { setThen(next); setView("connect"); }
-  function startPush() { if (!repo) return connect("push"); if (!tokenFor(repo)) return connect("push"); setView("push"); }
+  function startPush() { if (archived) return; if (!repo) return connect("push"); if (!tokenFor(repo)) return connect("push"); setView("push"); }
   function pushed(res: PushResult) {
     const note: LastPush = { at: new Date().toISOString(), repository: repo, branch: github.branch, url: res.url };
     saveLastPush(campaignId, note); setLastPush(note); onPushed?.(note);
@@ -354,12 +355,12 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
         {showTab.map(([id, label]) => <button key={id} type="button" role="tab" id={`rpb-tab-${id}`} aria-selected={tab === id} aria-controls={`rpb-panel-${id}`} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)}>{label}</button>)}
       </div>}
       <div className="rpb-body">
-        {view === "connect" ? <ConnectView initialRepo={repo} initialBranch={github.branch} tokenFor={tokenFor} saveConfig={saveGithub}
+        {view === "connect" ? <ConnectView initialRepo={repo} initialBranch={github.branch} initialFolder={github.folder ?? ""} tokenFor={tokenFor} saveConfig={saveGithub}
             onToken={(r, t) => { setMemKey({ repo: r, token: t }); setKeyTick(n => n + 1); }}
             onForget={r => { setMemKey(m => m?.repo.toLowerCase() === r.toLowerCase() ? null : m); forgetKey(r); setKeyTick(n => n + 1); }}
             onBack={() => setView("main")} continueLabel={then === "push" ? "Continue to push" : then === "import" ? "Continue to import" : "Back to export"}
             onContinue={() => { if (then === "push" && canPush) setView("push"); else { setView("main"); if (then === "import") { setTab("import"); setSource("github"); } } }} />
-        : view === "push" && plan && loaded && notes ? <PushView repo={repo} branch={github.branch} token={tokenFor(repo) ?? ""} includeGm={includeGm} defaultMessage={defaultCommitMessage(notes, campaignId)}
+        : view === "push" && !archived && plan && loaded && notes ? <PushView repo={repo} branch={github.branch} folder={github.folder ?? ""} token={tokenFor(repo) ?? ""} includeGm={includeGm} defaultMessage={defaultCommitMessage(notes, campaignId)}
             build={log => rpExportFiles(notes, campaignId, { includeGm, exportedAt: new Date().toISOString(), tables: loaded.tables, exportLog: log })}
             onBack={() => setView("main")} onChangeKey={() => connect("push")} onPushed={pushed} onBusy={b => { busy.current = b; }} />
         : tab === "export" ? <div role="tabpanel" id="rpb-panel-export" aria-labelledby="rpb-tab-export" className="rpb-panel">
@@ -375,11 +376,11 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
                 <button type="button" role="switch" aria-checked={includeGm} aria-labelledby="rpb-gm-label" className="rpb-switch" onClick={() => setIncludeGm(v => !v)}><span /></button>
               </div>
               {canRestore && (repo
-                ? <div className="rpb-row"><div><b>{repo}</b><small>Branch {github.branch}{lastPush && lastPush.repository === repo ? ` · last push ${shortDate(lastPush.at)}` : ""}</small></div><button type="button" className="rpb-link" onClick={() => connect("export")}>Change</button></div>
+                ? <div className="rpb-row"><div><b>{repo}</b><small>Branch {github.branch}{github.folder ? ` · ${github.folder}` : ""}{lastPush && lastPush.repository === repo ? ` · last push ${shortDate(lastPush.at)}` : ""}</small></div><button type="button" className="rpb-link" onClick={() => connect("export")}>Change</button></div>
                 : <button type="button" className="rpb-row rpb-connect" onClick={() => connect("push")}><div><b>Connect a GitHub repository</b><small>Push this campaign to your own repository, private or public</small></div><Github size={18} aria-hidden="true" /></button>)}
               <div className={canPush ? "rpb-btns" : undefined}>
                 <button type="button" className={canPush ? "rpb-secondary" : "rpb-primary"} onClick={download} disabled={!!plan.error}><Download size={16} aria-hidden="true" />Download ZIP</button>
-                {canPush && <button type="button" className="rpb-primary" onClick={startPush} disabled={!!plan.error}><Upload size={16} aria-hidden="true" />Push to GitHub</button>}
+                {canPush && <button type="button" className="rpb-primary" onClick={startPush} disabled={!!plan.error}><Upload size={16} aria-hidden="true" />Push to GitHub</button>}{archived && <p className="rpb-muted">This campaign is archived, so it can&apos;t be pushed. Bring it back in the Wiki&apos;s Settings, Storage, first.</p>}
               </div>
               {exportError && <p className="rpb-alert" role="alert"><TriangleAlert size={16} aria-hidden="true" />{exportError}</p>}
               {saved && <p className="rpb-ok" role="status"><Check size={15} aria-hidden="true" />{saved}</p>}
@@ -391,7 +392,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
             {chips.map(([id, text]) =>
               <button key={id} type="button" aria-pressed={source === id} disabled={working} onClick={() => { if (source !== id) { setSource(id); setImp({ step: "idle" }); } }}>{text}</button>)}
           </div>
-          {source === "github" && <div className="rpb-row"><div><b>{repo || "No repository connected"}</b><small>{repo ? `Branch ${github.branch}` : "Connect one to read it back"}</small></div><button type="button" className="rpb-link" onClick={() => connect("import")}>{repo ? "Change" : "Connect"}</button></div>}
+          {source === "github" && <div className="rpb-row"><div><b>{repo || "No repository connected"}</b><small>{repo ? `Branch ${github.branch}${github.folder ? ` · ${github.folder}` : ""}` : "Connect one to read it back"}</small></div><button type="button" className="rpb-link" onClick={() => connect("import")}>{repo ? "Change" : "Connect"}</button></div>}
           <input ref={picker} type="file" accept=".zip,application/zip" className="rpb-file" tabIndex={-1} aria-hidden="true" onChange={e => void pick(e.target.files?.[0])} />
           <input ref={folderPicker} type="file" multiple className="rpb-file" tabIndex={-1} aria-hidden="true" {...({ webkitdirectory: "" } as Record<string, string>)} onChange={e => void pickFolder(e.target.files)} />
           {imp.step !== "done" && <button type="button" className={imp.step === "idle" || imp.step === "reading" ? "rpb-primary" : "rpb-secondary"} disabled={working} onClick={() => source === "zip" ? picker.current?.click() : source === "folder" ? folderPicker.current?.click() : void readGithub()}>{source === "zip" ? <FileArchive size={16} aria-hidden="true" /> : source === "folder" ? <FolderOpen size={16} aria-hidden="true" /> : <Github size={16} aria-hidden="true" />}{imp.step === "reading" ? "Reading…" : source === "zip" ? (imp.step === "idle" ? "Choose a ZIP file" : "Choose another ZIP") : source === "folder" ? (imp.step === "idle" ? "Choose a folder" : "Choose another folder") : !repo ? "Connect a GitHub repository" : imp.step === "idle" ? `Read ${repo}` : "Read it again"}</button>}

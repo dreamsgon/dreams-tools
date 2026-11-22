@@ -8,6 +8,8 @@ export const saveWorkspace = (owner:string,data:Workspace,revision:number) => ne
 /** Saves only the campaigns and worlds that changed (lib/encyclopedia/wiki-parts.ts). */
 export const saveWorkspacePatch = (owner:string,patch:WikiPatch,revision:number) => new EncyclopediaStore(getBucket()).savePatch(owner,patch,revision);
 export const setWikiPartLimit = (owner:string,limit:number) => new EncyclopediaStore(getBucket()).setPartLimit(owner,limit);
+/** Moves a campaign's pages out of the Wiki into their own archive file, or brings them back. */
+export const archiveCampaign = (owner:string,campaignId:string,archive:boolean) => archive ? new EncyclopediaStore(getBucket()).archiveCampaign(owner,campaignId) : new EncyclopediaStore(getBucket()).unarchiveCampaign(owner,campaignId);
 /** Where a big save is staged and a big load is handed over (lib/transfers.ts), the same place /api/transfers uses for this account. */
 export const transferPrefix = (owner:string) => `users/${encodeURIComponent(owner)}/`;
 /** The workspace's etag without reading it, or null when there is none yet. */

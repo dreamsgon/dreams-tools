@@ -5,7 +5,8 @@
 .wiki-storage-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
 .wiki-storage-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font-size:12px}
 .wiki-storage-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wiki-storage-size{color:var(--muted);font-variant-numeric:tabular-nums}
+.wiki-storage-size{color:var(--muted);font-variant-numeric:tabular-nums;display:inline-flex;gap:10px;align-items:center}
+.wiki-storage-heading{font-size:12px;font-weight:500;margin-top:8px}
 .wiki-storage-bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--raised);overflow:hidden}
 .wiki-storage-bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
 .wiki-storage-list li.near .wiki-storage-bar span{background:var(--warning)}

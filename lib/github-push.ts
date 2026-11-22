@@ -23,7 +23,8 @@ export class GithubError extends Error {
   code: GithubErrorCode;
   constructor(code: GithubErrorCode, message: string) { super(message); this.code = code; this.name = "GithubError"; }
 }
-export type Conn = { token: string; repo: string; fetch: FetchLike };
+/** `dir`: the folder inside the repository the campaign lives in ("" for the top). Paths the functions here take and give are inside it. */
+export type Conn = { token: string; repo: string; fetch: FetchLike; dir?: string };
 
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 /** "owner/repo", from that or from a pasted github.com address. Null when it is neither. */
@@ -34,6 +35,17 @@ export function parseRepo(input: string): string | null {
 /** A key is one run of printable ASCII (github_pat_..., ghp_...). Anything else would also break the header. */
 export const validKey = (token: string) => /^[\x21-\x7e]{8,400}$/.test(token);
 const scrub = (text: string, token: string) => { let out = text; if (token) out = out.split(token).join("***"); return out.replace(/(github_pat_|gh[pousr]_)[A-Za-z0-9_]+/g, "***"); };
+/**
+ * A campaign's folder in its repository, tidied: no leading or trailing slashes, and each part plain letters, numbers, spaces, dots,
+ * dashes or underscores. "" is the top of the repository. Null when it can't be used.
+ */
+export function cleanFolder(input: string): string | null {
+  const parts = input.trim().replace(/\\/g, "/").split("/").map(p => p.trim()).filter(Boolean);
+  if (parts.length > 10 || parts.some(p => p === "." || p === ".." || p.startsWith(".") || !/^[\w .-]{1,80}$/.test(p))) return null;
+  const dir = parts.join("/");
+  return dir.length <= 200 ? dir : null;
+}
+const inDir = (c: Conn, path: string) => c.dir ? `${c.dir}/${path}` : path;
 const refPath = (branch: string) => branch.split("/").map(encodeURIComponent).join("/");
 
 // GitHub's JSON is read defensively field by field, so it is typed loosely on purpose.
@@ -99,10 +111,12 @@ async function pool<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>)
 /* ---- the repository ---- */
 export type RepoInfo = { fullName: string; isPrivate: boolean; defaultBranch: string };
 export type BranchState = "found" | "empty" | "missing";
-const conn = (token: string, repo: string, fetch: FetchLike): Conn => {
+const conn = (token: string, repo: string, fetch: FetchLike, dir = ""): Conn => {
   if (!parseRepo(repo)) throw new GithubError("bad-input", "Use the form owner/repository.");
+  const folder = cleanFolder(dir);
+  if (folder === null) throw new GithubError("bad-input", "Folder names can use letters, numbers, spaces, dots, dashes and underscores, separated by slashes.");
   if (!validKey(token)) throw new GithubError("bad-key", "That does not look like a GitHub key. Paste the whole key, starting with github_pat_.");
-  return { token, repo, fetch };
+  return { token, repo, fetch, dir: folder };
 };
 
 /** Can this key read and write the repository? Errors are plain GithubErrors. */
@@ -138,8 +152,16 @@ async function readHead(c: Conn, branch: string): Promise<Head> {
 
 type TreeItem = { path: string; sha: string; size?: number };
 /** The files (blobs) of a tree: one recursive call, or when GitHub cuts it short, a walk of only the RP folders. */
-async function readTree(c: Conn, treeSha: string): Promise<{ files: Map<string, TreeItem>; truncated: boolean }> {
+async function readTree(c: Conn, rootSha: string): Promise<{ files: Map<string, TreeItem>; truncated: boolean }> {
   const files = new Map<string, TreeItem>();
+  // In a folder: its own tree, one level at a time, so the paths come out inside it. A folder not made yet holds nothing.
+  let treeSha = rootSha;
+  for (const name of c.dir ? c.dir.split("/") : []) {
+    const level = await call(c, "GET", `/repos/${c.repo}/git/trees/${treeSha}`);
+    const next = (level.data?.tree ?? []).find((t: { type?: string; path?: string }) => t.type === "tree" && t.path === name);
+    if (!next || typeof next.sha !== "string") return { files, truncated: false };
+    treeSha = next.sha;
+  }
   const whole = await call(c, "GET", `/repos/${c.repo}/git/trees/${treeSha}?recursive=1`);
   if (whole.data?.truncated !== true) {
     for (const t of whole.data?.tree ?? []) if (t.type === "blob" && typeof t.path === "string") files.set(t.path, { path: t.path, sha: t.sha, size: t.size });
@@ -175,6 +197,8 @@ export type Skipped = { path: string; reason: "edited" | "unowned" | "template" 
 export const isHousekeeping = (path: string) => path === "8-Archive/Export-Log.md" || path === ".rpg-tools/files.json";
 export type Prepared = {
   repo: string; branch: string; includeGm: boolean;
+  /** The campaign's folder in the repository ("" for the top); the paths below are inside it. */
+  dir?: string;
   /** Where the branch was when the plan was made. Null for an empty repository. */
   head: { commit: string; tree: string } | null;
   changes: Change[]; removals: Removal[]; skipped: Skipped[]; unchanged: number;
@@ -189,8 +213,8 @@ export type Prepared = {
  * log line is added to the repository's own log. Only files whose content the decision needs are downloaded: the previous
  * file map, the log, and layout files that differ from both the new text and what the last push recorded.
  */
-export async function preparePush(token: string, repo: string, branch: string, includeGm: boolean, build: (exportLog: string | undefined) => RpFile[], fetch: FetchLike): Promise<Prepared> {
-  const c = conn(token, repo, fetch);
+export async function preparePush(token: string, repo: string, branch: string, includeGm: boolean, build: (exportLog: string | undefined) => RpFile[], fetch: FetchLike, dir = ""): Promise<Prepared> {
+  const c = conn(token, repo, fetch, dir);
   const head = await readHead(c, branch);
   if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}. Create it on GitHub, or connect another branch. RPG Tools does not create branches.`);
   const empty = head.state === "empty";
@@ -281,7 +305,7 @@ export async function preparePush(token: string, repo: string, branch: string, i
   const rank = (c: Change) => (c.path.startsWith(".rpg-tools/") || isHousekeeping(c.path) ? 2 : 0) + (c.kind === "edit" ? 1 : 0);
   changes.sort((a, b) => rank(a) - rank(b) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const removals = [...plan.remove.filter(r => tree.has(r.path)), ...moved.sort((a, b) => (a.path < b.path ? -1 : 1))];
-  return { repo, branch, includeGm, head: empty ? null : { commit: head.commit, tree: head.tree }, changes, removals, skipped: plan.skip.filter(s => tree.has(s.path)), unchanged, nothingToPush: !changes.some(ch => !isHousekeeping(ch.path)) && removals.length === 0, truncated };
+  return { repo, branch, includeGm, dir: c.dir, head: empty ? null : { commit: head.commit, tree: head.tree }, changes, removals, skipped: plan.skip.filter(s => tree.has(s.path)), unchanged, nothingToPush: !changes.some(ch => !isHousekeeping(ch.path)) && removals.length === 0, truncated };
 }
 
 /* ---- pushing ---- */
@@ -291,7 +315,7 @@ export type PushResult = { commit: string; url: string; files: number; commits: 
  * An empty repository gets README.md through the Contents API first (git's own blob calls refuse an empty repository), then the rest.
  */
 export async function pushFiles(token: string, prepared: Prepared, message: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined): Promise<PushResult> {
-  const { repo, branch } = prepared, c = conn(token, repo, fetch);
+  const { repo, branch } = prepared, c = conn(token, repo, fetch, prepared.dir ?? "");
   const note = message.replace(/\r\n?/g, "\n").trim();
   if (!note) throw new GithubError("bad-input", "Write a commit message first.");
   let changes = prepared.changes, commits = 0, base = prepared.head;
@@ -303,7 +327,7 @@ export async function pushFiles(token: string, prepared: Prepared, message: stri
     if ((await readHead(c, branch)).state !== "empty") throw moved();
     const info = await checkRepo(token, repo, fetch);
     if (info.defaultBranch !== branch) throw new GithubError("bad-input", `${repo} is empty, so GitHub can only start it on its default branch (${info.defaultBranch}). Connect that branch, or add a first file on GitHub.`);
-    const made = await call(c, "PUT", `/repos/${repo}/contents/${first.path.split("/").map(encodeURIComponent).join("/")}`, { message: note, content: toBase64(enc.encode(first.text)), branch }, undefined, [422]);
+    const made = await call(c, "PUT", `/repos/${repo}/contents/${inDir(c, first.path).split("/").map(encodeURIComponent).join("/")}`, { message: note, content: toBase64(enc.encode(first.text)), branch }, undefined, [422]);
     if (made.status === 422) throw new GithubError("failed", "GitHub would not start this repository. Add a first file on GitHub, then push again.");
     commits++; changes = changes.filter(ch => ch !== first);
     const now = await readHead(c, branch);
@@ -321,9 +345,9 @@ export async function pushFiles(token: string, prepared: Prepared, message: stri
     const { data } = await call(c, "POST", `/repos/${repo}/git/blobs`, { content: toBase64(enc.encode(ch.text)), encoding: "base64" });
     if (typeof data?.sha !== "string") throw new GithubError("failed", "GitHub did not return an id for an uploaded file.");
     onProgress(`Uploading files… ${++done} of ${total}`);
-    return { path: ch.path, mode: "100644", type: "blob", sha: data.sha as string };
+    return { path: inDir(c, ch.path), mode: "100644", type: "blob", sha: data.sha as string };
   });
-  const gone = prepared.removals.map(r => ({ path: r.path, mode: "100644", type: "blob", sha: null as string | null }));
+  const gone = prepared.removals.map(r => ({ path: inDir(c, r.path), mode: "100644", type: "blob", sha: null as string | null }));
   onProgress("Writing the commit…");
   const tree = await call(c, "POST", `/repos/${repo}/git/trees`, { base_tree: base.tree, tree: [...entries, ...gone] });
   if (typeof tree.data?.sha !== "string") throw new GithubError("failed", "GitHub did not return the new file tree.");
@@ -347,8 +371,8 @@ export type GithubRestore =
   | { ok: false; kind: ZipKind; error: string };
 
 /** Reads .rpg-tools/campaign.json (or the old world-manager/<id>/campaign.json) from a branch, ready for "Restore as a new campaign". */
-export async function readRepoRestore(token: string, repo: string, branch: string, fetch: FetchLike): Promise<GithubRestore> {
-  const c = conn(token, repo, fetch);
+export async function readRepoRestore(token: string, repo: string, branch: string, fetch: FetchLike, dir = ""): Promise<GithubRestore> {
+  const c = conn(token, repo, fetch, dir);
   const head = await readHead(c, branch);
   if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}.`);
   if (head.state === "empty") return { ok: false, kind: "unknown", error: `${repo} is empty. There is nothing to restore.` };
@@ -378,8 +402,8 @@ export type GithubFiles = { ok: true; files: RepoFile[]; truncated: boolean } | 
  * files that would be imported (never 7-Library or 8-Archive, never pictures). A repository over the import limits is refused
  * before anything is downloaded.
  */
-export async function readRepoFiles(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined): Promise<GithubFiles> {
-  const c = conn(token, repo, fetch);
+export async function readRepoFiles(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined, dir = ""): Promise<GithubFiles> {
+  const c = conn(token, repo, fetch, dir);
   const head = await readHead(c, branch);
   if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}.`);
   if (head.state === "empty") return { ok: false, error: `${repo} is empty. There is nothing to import.` };
@@ -403,8 +427,8 @@ export type GithubChanges = { ok: true; files: RepoFile[]; map: FilesMap; log: s
  * Reads a branch for "Bring back changes": the tree, .rpg-tools/files.json, the export log, and the text of only the Markdown files whose
  * git blob id differs from the one the last push recorded (all of them when the map has no blob ids). Everything else counts as unchanged.
  */
-export async function readRepoChanges(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined): Promise<GithubChanges> {
-  const c = conn(token, repo, fetch);
+export async function readRepoChanges(token: string, repo: string, branch: string, fetch: FetchLike, onProgress: (text: string) => void = () => undefined, dir = ""): Promise<GithubChanges> {
+  const c = conn(token, repo, fetch, dir);
   const head = await readHead(c, branch);
   if (head.state === "missing") throw new GithubError("no-branch", `The branch “${branch}” does not exist in ${repo}.`);
   if (head.state === "empty") return { ok: false, error: `${repo} is empty. There is nothing to bring back.` };

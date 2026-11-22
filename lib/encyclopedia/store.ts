@@ -1,11 +1,16 @@
 import type { S3Bucket } from '../storage.ts';
-import { emptyWorkspace, workspaceSchema, playerCampaign, type Workspace } from './world-model.ts';
+import { z } from 'zod';
+import { emptyWorkspace, entrySchema, workspaceSchema, playerCampaign, type Workspace } from './world-model.ts';
 import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from './tables.ts';
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 import { pictureIds } from './markup.ts';
 import { applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, joinWorkspace, partLimitOk, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
 const INDEX_FORMAT = 'wiki-parts-v1';
+/** A campaign whose pages are archived (store.ts archiveCampaign): its pages, kept apart from the Wiki. */
+const archiveSchema = z.object({ format: z.literal('wiki-archive-v1'), campaignId: z.string(), at: z.string(), entries: z.array(entrySchema) });
+/** An archive request that can't be done; the message is for the person. */
+export class ArchiveError extends Error {}
 type PartRef = { key: string; bytes: number; hash: string };
 /** workspace.json once the Wiki is split: which part holds each campaign and world. It has no `data`, so older code refuses it instead of saving over it. */
 type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; legacyBackup?: string };
@@ -97,7 +102,51 @@ export class EncyclopediaStore {
    * nothing else saved since (workspace.json stays the one commit point). Parts the new index no longer names are
    * removed afterwards. The first save after the split keeps the old single file as a backup.
    */
-  private async commit(owner: string, previous: Stored, data: Workspace, limit = previous.limit) {
+  private archivePath(owner: string, campaignId: string) { return encyclopediaPrefix(owner)+`archive/${encodeURIComponent(campaignId)}.json`; }
+  /**
+   * Archives a campaign: its pages move to their own file (encyclopedia/archive/<id>.json) and out of the Wiki, so they
+   * count toward no limit and aren't loaded. The campaign itself stays, marked archived, so its links, members, Maptable
+   * pairing and settings are untouched. The file is written first and the Wiki saved after; if that save loses a race,
+   * the file is removed again. Page history and transcripts stay where they are. Null when the Wiki changed meanwhile.
+   */
+  async archiveCampaign(owner: string, campaignId: string, now = new Date()) {
+    const previous=await this.stored(owner), campaign=previous.data.campaigns.find(c => c.id===campaignId);
+    if (!campaign) throw new ArchiveError('That campaign was not found.');
+    if (campaign.archived) throw new ArchiveError('That campaign is already archived.');
+    const path=this.archivePath(owner, campaignId), pages=previous.data.entries.filter(e => e.campaignId===campaignId);
+    // A file left by an archive that never finished holds older copies of the same pages: the ones in the Wiki now replace them.
+    const leftover=await this.bucket.get(path), old=leftover ? archiveSchema.safeParse(await leftover.json()) : null;
+    const ids=new Set(pages.map(e => e.id)), kept=old?.success ? old.data.entries.filter(e => !ids.has(e.id)) : [];
+    const entries=[...pages, ...kept], text=JSON.stringify({ format: 'wiki-archive-v1', campaignId, at: now.toISOString(), entries });
+    const made=await this.bucket.put(path, text, { onlyIf: leftover ? { etagMatches: leftover.etag } : { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } });
+    if (!made) return null;
+    const next: Workspace={ ...previous.data, campaigns: previous.data.campaigns.map(c => c.id===campaignId ? { ...c, archived: { at: now.toISOString(), pages: entries.length, bytes: new TextEncoder().encode(text).length } } : c), entries: previous.data.entries.filter(e => e.campaignId!==campaignId) };
+    let saved: Awaited<ReturnType<EncyclopediaStore['commit']>> = null;
+    try { saved=await this.commit(owner, previous, workspaceSchema.parse(next), previous.limit, false); }
+    finally { if (!saved && !leftover) await this.bucket.delete(path).catch(() => {}); }
+    return saved;
+  }
+  /** Brings an archived campaign's pages back into the Wiki, then removes the archive file. Null when the Wiki changed meanwhile. */
+  async unarchiveCampaign(owner: string, campaignId: string) {
+    const previous=await this.stored(owner), campaign=previous.data.campaigns.find(c => c.id===campaignId);
+    if (!campaign) throw new ArchiveError('That campaign was not found.');
+    if (!campaign.archived) throw new ArchiveError('That campaign is not archived.');
+    const path=this.archivePath(owner, campaignId), object=await this.bucket.get(path);
+    if (!object) throw new ArchiveError('The archived pages of this campaign could not be found. Nothing was changed.');
+    const parsed=archiveSchema.safeParse(await object.json());
+    if (!parsed.success || parsed.data.campaignId!==campaignId) throw new ArchiveError('The archived pages of this campaign could not be read. Nothing was changed.');
+    // Pages made in the campaign while it was archived (by an AI connection, say) stay as they are.
+    const live=new Set(previous.data.entries.map(e => e.id)), back=parsed.data.entries.filter(e => !live.has(e.id));
+    if (previous.data.entries.length+back.length>5000) throw new ArchiveError(`Bringing back ${back.length} pages would take your Wiki over 5,000 pages. Nothing was changed.`);
+    const { archived: _was, ...rest }=campaign;
+    const next: Workspace={ ...previous.data, campaigns: previous.data.campaigns.map(c => c.id===campaignId ? rest : c), entries: [...previous.data.entries, ...back] };
+    const checked=workspaceSchema.safeParse(next);
+    if (!checked.success) throw new ArchiveError(`These pages no longer fit the Wiki (${checked.error.issues[0]?.message}). Nothing was changed.`);
+    const saved=await this.commit(owner, previous, checked.data, previous.limit, false);
+    if (saved) await this.bucket.delete(path).catch(() => {});
+    return saved;
+  }
+  private async commit(owner: string, previous: Stored, data: Workspace, limit = previous.limit, history = true) {
     const problem=sizeProblem(data, limit);
     if (problem) throw Error(problem);
     const base=encyclopediaPrefix(owner), next=previous.revision+1, { layout, parts }=splitWorkspace(data), old=previous.index?.parts ?? {};
@@ -123,8 +172,8 @@ export class EncyclopediaStore {
     if (!saved) { await this.forget(written); return null; }
     const using=new Set(Object.values(refs).map(r => r.key));
     await this.forget(Object.values(old).map(r => r.key).filter(k => !using.has(k)));
-    // Page history is a convenience copy: a failure here never fails or undoes the save.
-    await this.recordHistory(owner, previous.data, data).catch(() => {});
+    // Page history is a convenience copy: a failure here never fails or undoes the save. Archiving moves pages rather than deleting them, so it keeps their history and transcripts.
+    if (history) await this.recordHistory(owner, previous.data, data).catch(() => {});
     return { revision: next, etag: saved.etag };
   }
   private async forget(keys: string[]) { await eachLimited(keys, key => this.bucket.delete(key).catch(() => {})); }

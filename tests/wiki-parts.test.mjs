@@ -132,3 +132,32 @@ test('the browser stages a save over 3 MB and follows a handed-over load',async(
  assert.deepEqual(calls.slice(-3).map(c=>c[0]),['/api/transfers','https://bucket.example/upload','/api/encyclopedia/workspace']);
  assert.deepEqual(await workspaceBody(Response.json({downloadUrl:'https://bucket.example/download'}),request),{data:{big:true},revision:3});
 });
+
+test('archiving a campaign moves its pages out of the Wiki and brings them back unchanged',async()=>{
+ const {store,data}=harness(),w=bigger();await store.save('alice',w,0);
+ const pages=w.entries.filter(e=>e.campaignId==='campaign-three'),history=encyclopediaPrefix('alice')+`history/${encodeURIComponent(pages[0].id)}.json`;
+ data.set(history,{text:'{"versions":[]}',etag:'h'});
+ const saved=await store.archiveCampaign('alice','campaign-three',new Date('2026-11-22T05:00:00Z'));assert.equal(saved.revision,2);
+ const read=(await store.read('alice')).data,c=read.campaigns.find(x=>x.id==='campaign-three');
+ assert.equal(read.entries.filter(e=>e.campaignId==='campaign-three').length,0);
+ assert.equal(c.archived.pages,pages.length);assert.equal(c.archived.at,'2026-11-22T05:00:00.000Z');
+ assert.ok(data.has(encyclopediaPrefix('alice')+'archive/campaign-three.json'));
+ assert.ok(data.has(history),'page history stays');
+ await assert.rejects(()=>store.archiveCampaign('alice','campaign-three'),/already archived/);
+ assert.ok(await store.unarchiveCampaign('alice','campaign-three'));
+ const back=(await store.read('alice')).data;
+ assert.equal(back.campaigns.find(x=>x.id==='campaign-three').archived,undefined);
+ assert.deepEqual(back.entries.filter(e=>e.campaignId==='campaign-three'),pages);
+ assert.deepEqual(new Set(back.entries.map(e=>e.id)),new Set(w.entries.map(e=>e.id)));
+ assert.ok(!data.has(encyclopediaPrefix('alice')+'archive/campaign-three.json'),'the archive file goes once they are back');
+ await assert.rejects(()=>store.unarchiveCampaign('alice','campaign-three'),/not archived/);
+});
+
+test('an archive that loses a race leaves the Wiki and storage as they were',async()=>{
+ const {store,data,bucket}=harness(),w=bigger();await store.save('alice',w,0);
+ const put=bucket.put;bucket.put=async(key,text,options)=>key.endsWith('/workspace.json')?null:put(key,text,options);
+ assert.equal(await store.archiveCampaign('alice','campaign-three'),null);
+ bucket.put=put;
+ assert.ok(!data.has(encyclopediaPrefix('alice')+'archive/campaign-three.json'));
+ assert.deepEqual((await store.read('alice')).data,w);
+});

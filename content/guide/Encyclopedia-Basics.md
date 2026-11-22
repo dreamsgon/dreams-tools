@@ -127,4 +127,8 @@ Calendars support moons and seasons, with weather and travel tied to map regions
 
 Settings can export all worlds or one campaign as JSON, and import JSON (imports make separate copies). Each campaign, and each world’s shared lore, can hold up to 2 MB, and you can raise that to 5, 10 or 20 MB in Settings, Storage; atlas images allow up to 8 MB each. Backups can contain GM-only material: keep them private.
 
+**Archiving a campaign.** In Settings, Storage, **Archive** next to a campaign moves its pages out of the Wiki into a file of their own in your storage, so they count toward no limit and don't load. The campaign stays, with its players, links, maps and settings; its pages show again when you press **Bring back** under Archived campaigns. Save your changes first. An archived campaign can't be pushed to GitHub, backed up or duplicated until it's brought back.
+
+**A campaign in a GitHub folder.** Under **AI & GitHub › GitHub & backups**, connecting a repository has an optional **Folder**, such as `Campaigns/Salt Road`. The campaign is pushed into that folder, and restore and bring back read only that folder, so several campaigns can share one repository and the rest of it is left alone.
+
 The floating **AI** and **Dice** buttons sit in the Wiki's footer row, so they never cover the end of a page.
