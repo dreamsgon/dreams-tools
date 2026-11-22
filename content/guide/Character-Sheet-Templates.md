@@ -1,6 +1,6 @@
 # Character sheet templates
 
-A character sheet template sets up a game's sheet in one go: the stats and skills with their rolls, the trackers (hit points, hit dice), the Profile facts at the top of the page and the tabs a character gets. Import a ready-made one for D&D 5E, a file someone shared with you, or one an AI app makes for any other game.
+A character sheet template sets up a game's sheet in one go: the stats and skills with their rolls, the trackers (hit points, hit dice), the Profile facts at the top of the page and the tabs a character gets. Import a ready-made one (D&D 5E, Pathfinder 2E, AD&D 2E, D&D 3.5E, Pathfinder 1E, Masks, City of Mist or Daggerheart), a file someone shared with you, or one an AI app makes for any other game.
 
 ## What a template brings in
 
@@ -8,14 +8,27 @@ A character sheet template sets up a game's sheet in one go: the stats and skill
 - **The template** appears on the Templates page and under **Characters › Add character › Start from**. Characters made from it show only its stats, in its order, and start with its trackers. The form's other stats stay where they were, switched off on this template.
 - An existing character can take it too: open the character, choose **Use a template**, and pick it. Its values stay; trackers it doesn't have yet are added.
 
-## Import the D&D 5E template
+## Import a ready-made template
 
 1. Open the campaign in the Wiki.
 2. Go to **Templates** and choose **Import**.
-3. Under **Ready-made**, choose **Use this** beside *D&D 5E character*.
+3. Under **Ready-made**, choose **Use this** beside the game. For a gestalt character, tick **Gestalt** on the card first.
 4. Check what it adds, pick whether the template is for this campaign only or every campaign in the world, and choose **Import**.
 
-It has the six abilities as score boxes with saves, Proficiency bonus, Armor Class, Initiative, Speed and Passive Perception, the 18 skills (tick a skill when proficient and its bonus works itself out), spell save DC and spell attack, and trackers for hit points, temporary HP, hit dice, death saves and Heroic Inspiration. It works for the 2014 and 2024 rules. Attacks, spells, items and features go on each character's own tabs.
+| Template | What it has |
+|---|---|
+| D&D 5E character | The six abilities as score boxes with saves, Proficiency bonus, Armor Class, Initiative, Speed and Passive Perception, the 18 skills (tick a skill when proficient and its bonus works itself out), spell save DC and spell attack, and trackers for hit points, temporary HP, hit dice, death saves and Heroic Inspiration. Works for the 2014 and 2024 rules. |
+| Pathfinder 2E character | Level, the six attribute modifiers, and Perception, saves, skills (two Lores), strikes and Class DC by proficiency: type the rank's bonus (0, 2, 4, 6 or 8) and your level is added once trained. Spell attack, spell DC and tradition. Trackers for HP, temporary HP, Hero Points, Focus Points, dying and wounded. |
+| AD&D 2E character | Abilities that roll 1d20 at or under the score, exceptional strength, THAC0, descending Armor Class, movement and initiative, the five saving throws (roll at or over), the eight thief skills as percentages, weapon and nonweapon proficiencies, and hit points. |
+| D&D 3.5E character | Ability scores, Fortitude, Reflex and Will (base save plus the ability), base attack bonus with melee, ranged and grapple, AC, touch and flat-footed AC, all skills by ranks (each Knowledge on its own), caster level, and HP, temporary HP and nonlethal damage. |
+| Pathfinder 1E character | The same as 3.5E with Pathfinder's skill list, and CMB and CMD in place of grapple. |
+| Masks character | The five Labels rolled with 2d6, the five Conditions as boxes to mark, playbook, hero and real name, Potential, and Influence, Relationships and Moment of Truth on the page. |
+| City of Mist character | Four themes, each with its themebook, mystery or identity, power tags and weakness tag, and Attention and Fade or Crack trackers for each. Power rolls 2d6 plus your tags; Build-up and statuses. |
+| Daggerheart character | The six traits with a Duality roll (Hope and Fear dice plus the trait), Evasion, Armor score, Major and Severe thresholds, Proficiency, spellcast trait, Experiences, domains and community, and trackers for HP, Stress, Hope and armor slots. |
+
+**Gestalt.** The D&D 5E, Pathfinder 2E, D&D 3.5E and Pathfinder 1E cards have a **Gestalt** box: a character with two classes side by side at every level. That template puts both classes on the Profile (Class side A and side B), keeps spellcasting for each side, and starts the page with a table for what each side takes at each level. Numbers such as base attack bonus and saves take the better of the two sides.
+
+Attacks, spells, items and features go on each character's own tabs. A campaign usually uses one game: stats are matched by name, so importing a second game into the same campaign reuses stats with the same name (like Strength or Perception) as they are.
 
 ## Make a template for any game with an AI
 
