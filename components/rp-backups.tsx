@@ -326,7 +326,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
       if (!res.ok || typeof body.revision !== "number") return fail(body.error || "Could not read your notes. Nothing was changed.");
       const current = workspaceSchema.parse(body.data);
       const built = buildCampaign(found.preview, { name: found.name, showPlayers: found.show });
-      if (current.campaigns.length >= 500 || current.worlds.length >= 100) return fail("Your notes have no room for another campaign (the limit is 500 campaigns and 100 worlds). Nothing was changed.");
+      if (current.campaigns.length >= 500) return fail("Your notes have no room for another campaign (the limit is 500 campaigns). Nothing was changed.");
       const next = addImported(current, built);
       { const big = sizeProblem(next, body.limit, body.total); if (big) return fail(`${big} Nothing was changed.`); }
       const put = await putWorkspace(WORKSPACE_URL, { data: next, revision: body.revision });

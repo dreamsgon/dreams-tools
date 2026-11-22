@@ -5,13 +5,15 @@ import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from '.
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 import { pictureIds } from './markup.ts';
-import { applyScopedPatch, scopeKeys, scopedWorkspace, partSizes, type PartSize, type ScopePlace, type WikiMeta, applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, joinWorkspace, worldKey, campaignKey, partLimitOk, totalLimitOk, PAGE_LIMIT, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
+import { bytes as jsonBytes, partOf, sizesProblem, applyScopedPatch, scopeKeys, scopedWorkspace, partSizes, type PartSize, type ScopePlace, type WikiMeta, applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, joinWorkspace, worldKey, campaignKey, partLimitOk, totalLimitOk, PAGE_LIMIT, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
+import { isPartStats, partStats, type PartStats } from './part-stats.ts';
+import type { BookIndex } from '../campaign-links.ts';
 const INDEX_FORMAT = 'wiki-parts-v1';
 /** A campaign whose pages are archived (store.ts archiveCampaign): its pages, kept apart from the Wiki. */
 const archiveSchema = z.object({ format: z.literal('wiki-archive-v1'), campaignId: z.string(), at: z.string(), entries: z.array(entrySchema) });
 /** An archive request that can't be done; the message is for the person. */
 export class ArchiveError extends Error {}
-type PartRef = { key: string; bytes: number; hash: string; pages?: number };
+type PartRef = { key: string; bytes: number; hash: string; pages?: number; /** Added later: what the campaign list shows of this part (part-stats.ts). */ stats?: PartStats };
 /** workspace.json once the Wiki is split: which part holds each campaign and world. It has no `data`, so older code refuses it instead of saving over it. */
 type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; total?: number; legacyBackup?: string; meta?: WikiMeta };
 type Stored = { data: Workspace; revision: number; etag: string | null; index: WikiIndex | null; parts: Map<PartKey, Part> | null; legacy: unknown; limit: number; total: number };
@@ -44,6 +46,10 @@ export function markEditor(before: Workspace, after: Workspace, editor?: Editor)
     return rest;
   }) };
 }
+/** savePartial's answer when this save needs the whole Wiki read after all (see there). */
+const FULL = Symbol('full');
+/** True when every part's ref says how many pages it holds and has its stats: what reading or saving only some parts needs. */
+const complete = (index: WikiIndex) => Object.values(index.parts).every(r => Number.isSafeInteger(r.pages) && isPartStats(r.stats));
 export const encyclopediaPrefix = (owner: string) => `users/${encodeURIComponent(owner)}/encyclopedia/`;
 type LinkKind = 'player' | 'agent';
 type Grant = { owner: string; campaignId: string; hash: string };
@@ -93,7 +99,9 @@ export class EncyclopediaStore {
       const hinted = place.campaignId || place.worldId || place.maptableId ? null : place.entryId;
       // A link to a page names only the page: find the campaign (or world lore) it is in.
       let found: PartKey | null = null;
-      if (hinted) for (const key of Object.keys(index.parts)) { const part = await read(key); if (part?.entries.some(e => e.id === hinted)) { found = key; break; } }
+      // Recently changed pages are named in the index (part-stats.ts); otherwise the parts are searched 8 at a time, not one by one.
+      if (hinted) found = Object.entries(index.parts).find(([, ref]) => ref.stats?.latest?.some(p => p.id === hinted))?.[0] ?? null;
+      if (hinted && !found) { let hit: PartKey | null = null; await eachLimited(Object.keys(index.parts), async key => { if (!hit && (await read(key))?.entries.some(e => e.id === hinted)) hit = key; }); found = hit; }
       keys = scopeKeys(index.meta, found ? (found.startsWith('c:') ? { campaignId: found.slice(2) } : { worldId: found.slice(2) }) : place).filter(k => k in index.parts);
     }
     const loaded = await eachLimited(keys, read);
@@ -110,8 +118,142 @@ export class EncyclopediaStore {
     const found = hinted ? [...parts].find(([, p]) => p.entries.some(e => e.id === hinted))?.[0] : undefined;
     return scopeKeys(meta, found ? (found.startsWith('c:') ? { campaignId: found.slice(2) } : { worldId: found.slice(2) }) : place).filter(k => parts.has(k));
   }
+  /** The index (workspace.json) when the Wiki is split and the index names its worlds and campaigns, else null. */
+  private async readIndexObject(owner: string): Promise<{ index: WikiIndex & { meta: WikiMeta }; etag: string } | null> {
+    const object = await this.bucket.get(encyclopediaPrefix(owner)+'workspace.json');
+    if (!object) return null;
+    const saved = await object.json<Record<string, unknown>>();
+    if (!isIndex(saved, encyclopediaPrefix(owner)) || !saved.meta || !Array.isArray(saved.meta.worlds) || !Array.isArray(saved.meta.campaigns)) return null;
+    if (!Number.isSafeInteger(saved.revision) || saved.revision < 1) throw Error('Invalid encyclopedia revision.');
+    return { index: saved as WikiIndex & { meta: WikiMeta }, etag: object.etag };
+  }
+  /**
+   * Every world and campaign and a few numbers about each (part-stats.ts), read from the index alone: what the
+   * campaign list needs, without reading any pages. Null when the index doesn't have them yet (an account whose
+   * Wiki hasn't been saved since they were added): read the whole Wiki then.
+   */
+  async readIndex(owner: string): Promise<BookIndex | null> {
+    const read = await this.readIndexObject(owner);
+    if (!read || !complete(read.index)) return null;
+    return { worlds: read.index.meta.worlds, campaigns: read.index.meta.campaigns, stats: Object.fromEntries(Object.entries(read.index.parts).map(([key, ref]) => [key, ref.stats!])) };
+  }
+  /**
+   * Saves a patch by reading only the parts it changes, instead of the whole Wiki, so a save takes the same time
+   * however many campaigns there are. Checks what EncyclopediaStore.commit checks, with the other parts' sizes and
+   * page counts taken from the index. Answers FULL when it can't be sure (an older index, a page that belongs in a
+   * part the patch doesn't send): the caller then saves the usual way, reading everything.
+   */
+  private async savePartial(owner: string, patch: WikiPatch, revision: number, scope: PartKey[] | null, tries = 3): Promise<{ revision: number; etag: string } | null | typeof FULL> {
+    if (!patch || typeof patch !== 'object' || !patch.layout || !Array.isArray(patch.layout.runs) || !Array.isArray(patch.layout.worlds) || !Array.isArray(patch.layout.campaigns) || !patch.parts || typeof patch.parts !== 'object') throw new DamagedWikiError('That save is not in a form this Wiki understands. Reload and try again.');
+    const read = await this.readIndexObject(owner);
+    if (!read || !complete(read.index)) return FULL;
+    const { index, etag } = read, base = encyclopediaPrefix(owner);
+    if (index.revision !== revision) return null;
+    const limit = partLimitOk(index.limit) ? index.limit : DEFAULT_PART_LIMIT, total = totalLimitOk(index.total) ? index.total : DEFAULT_TOTAL_LIMIT;
+    const stored = Object.keys(patch.parts).filter(key => key in index.parts);
+    const loaded = await eachLimited(stored, async key => { const part = await this.bucket.get(index.parts[key].key); return part ? part.json<Part>() : null; });
+    // A save between reading the index and its parts removes parts it replaced: read again.
+    if (loaded.some(p => !p)) { if (tries > 1) return this.savePartial(owner, patch, revision, scope, tries - 1); throw new DamagedWikiError('Part of your Wiki could not be found. Nothing was changed.'); }
+    const before = new Map(stored.map((key, i) => [key, loaded[i]!]));
+    // The parts after the save. From a tab that opened only `scope`, a part outside it keeps its stored pages (applyScopedPatch).
+    const inScope = scope ? new Set([...scope, ...Object.keys(patch.parts).filter(key => !(key in index.parts))]) : null;
+    const after = new Map<PartKey, Part>(), removed = new Set<PartKey>();
+    for (const [key, part] of Object.entries(patch.parts)) {
+      if (part === null) { removed.add(key); continue; }
+      if (!part || typeof part !== 'object' || !Array.isArray(part.entries)) throw new DamagedWikiError('That save is not in a form this Wiki understands. Reload and try again.');
+      if (!inScope || inScope.has(key)) { after.set(key, part); continue; }
+      if (part.entries.length) throw new DamagedWikiError('That save has pages from a campaign this tab has not opened. Reload and try again.');
+      after.set(key, { ...(part.world ? { world: part.world } : {}), ...(part.campaign ? { campaign: part.campaign } : {}), entries: before.get(key)?.entries ?? [] });
+    }
+    if (inScope && patch.layout.runs.some(([key]) => !inScope.has(key))) throw new DamagedWikiError('That save has pages from a campaign this tab has not opened. Reload and try again.');
+    const kept = (key: PartKey) => !removed.has(key) && (after.has(key) || key in index.parts);
+    const runs: [PartKey, number][] = [];
+    for (const [key, count] of [...(inScope ? index.layout.runs.filter(([key]) => !inScope.has(key) && kept(key)) : []), ...patch.layout.runs]) {
+      if (typeof key !== 'string' || !Number.isSafeInteger(count) || count < 1) throw new DamagedWikiError("Your Wiki's storage does not add up (pages are missing). Nothing was changed.");
+      const last = runs[runs.length - 1];
+      if (last && last[0] === key) last[1] += count; else runs.push([key, count]);
+    }
+    const layout: Layout = { worlds: patch.layout.worlds, campaigns: patch.layout.campaigns, runs };
+    // The worlds and campaigns themselves: as sent for parts the patch has, as the index has them for the rest.
+    const oldWorlds = new Map(index.meta.worlds.map(w => [w.id, w])), oldCampaigns = new Map(index.meta.campaigns.map(c => [c.id, c]));
+    const worldOf = (id: string) => after.has(worldKey(id)) ? after.get(worldKey(id))!.world : kept(worldKey(id)) ? oldWorlds.get(id) : undefined;
+    const campaignOf = (id: string) => after.has(campaignKey(id)) ? after.get(campaignKey(id))!.campaign : kept(campaignKey(id)) ? oldCampaigns.get(id) : undefined;
+    const worlds = layout.worlds.map(id => worldOf(id)), campaigns = layout.campaigns.map(id => campaignOf(id));
+    if (worlds.some((w, i) => !w || w.id !== layout.worlds[i]) || campaigns.some((c, i) => !c || c.id !== layout.campaigns[i])) return FULL;
+    // Every part must be used up exactly by the runs, as joinWorkspace checks; one the layout no longer names goes (only an empty one can).
+    const named = new Set([...layout.worlds.map(worldKey), ...layout.campaigns.map(campaignKey), ...runs.map(([key]) => key)]);
+    const pagesOf = (key: PartKey) => after.get(key)?.entries.length ?? index.parts[key]?.pages ?? 0;
+    const used = new Map<PartKey, number>();
+    for (const [key, count] of runs) { if (!kept(key)) return FULL; used.set(key, (used.get(key) ?? 0) + count); }
+    const parts = [...new Set([...Object.keys(index.parts), ...after.keys()])].filter(kept);
+    for (const key of parts) if ((used.get(key) ?? 0) !== pagesOf(key) && (named.has(key) || pagesOf(key))) return FULL;
+    const final = parts.filter(key => named.has(key));
+    // Each page sent must be in the part it belongs in (wikiPatch always sends it there). Refused rather than re-sorted:
+    // re-sorting would put pages into parts this save didn't send.
+    const campaignIds = new Set(layout.campaigns), worldIds = new Set(layout.worlds);
+    for (const [key, part] of after) if (part.entries.some(e => !e || typeof e !== 'object' || partOf(e, campaignIds, worldIds) !== key)) throw new DamagedWikiError('That save is not in a form this Wiki understands. Reload and try again.');
+    // Checks the sent parts (and every world and campaign) as a whole Wiki would be checked.
+    const order = runs.filter(([key]) => after.has(key)), taken = new Map<PartKey, number>(), sentEntries = [];
+    for (const [key, count] of order) { const from = taken.get(key) ?? 0; sentEntries.push(...after.get(key)!.entries.slice(from, from + count)); taken.set(key, from + count); }
+    const checked = workspaceSchema.parse({ schemaVersion: 1, worlds, campaigns, entries: sentEntries });
+    const beforeWs: Workspace = { schemaVersion: 1, worlds: checked.worlds, campaigns: checked.campaigns, entries: [...before.values()].flatMap(p => p.entries) };
+    const marked = markEditor(beforeWs, checked);
+    const newWorlds = new Map(marked.worlds.map(w => [w.id, w])), newCampaigns = new Map(marked.campaigns.map(c => [c.id, c]));
+    const written = new Map<PartKey, Part>();
+    for (const key of after.keys()) if (final.includes(key)) {
+      const id = key.slice(2);
+      written.set(key, { ...(key.startsWith('w:') ? { world: newWorlds.get(id) } : {}), ...(key.startsWith('c:') ? { campaign: newCampaigns.get(id) } : {}), entries: [] });
+    }
+    for (const e of marked.entries) written.get(partOf(e, campaignIds, worldIds))!.entries.push(e);
+    const names = new Map<PartKey, Pick<PartSize, 'name' | 'kind'>>([...marked.worlds.map(w => [worldKey(w.id), { name: `${w.name} (shared lore)`, kind: 'world' as const }] as const), ...marked.campaigns.map(c => [campaignKey(c.id), { name: c.name, kind: 'campaign' as const }] as const)]);
+    const sizes: PartSize[] = final.map(key => ({ key, bytes: written.has(key) ? jsonBytes(written.get(key)) : index.parts[key].bytes, pages: pagesOf(key), ...(names.get(key) ?? { name: 'Pages outside any world', kind: 'other' as const }) }));
+    const problem = sizesProblem(sizes, limit, total);
+    if (problem) throw Error(problem);
+    const paths: string[] = [];
+    const refs: Record<PartKey, PartRef> = Object.fromEntries(final.filter(key => !written.has(key)).map(key => [key, index.parts[key]]));
+    try {
+      for (const [key, ref] of await eachLimited([...written], async ([key, part]) => {
+        const text = JSON.stringify(part), hash = await sha256(text), had = index.parts[key], stats = partStats(part.entries);
+        if (had && had.hash === hash) return [key, { ...had, pages: part.entries.length, stats }] as const;
+        const path = `${base}parts/${encodeURIComponent(key)}/${crypto.randomUUID()}.json`;
+        paths.push(path);
+        await this.bucket.put(path, text, { httpMetadata: { contentType: 'application/json' } });
+        return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash, pages: part.entries.length, stats }] as const;
+      })) refs[key] = ref;
+    } catch (error) { await this.forget(paths); throw error; }
+    const meta: WikiMeta = { worlds: layout.worlds.map(id => newWorlds.get(id)!), campaigns: layout.campaigns.map(id => newCampaigns.get(id)!) };
+    const next: WikiIndex = { format: INDEX_FORMAT, schemaVersion: 1, revision: index.revision + 1, layout, parts: refs, meta, ...(index.limit !== undefined ? { limit: index.limit } : {}), ...(index.total !== undefined ? { total: index.total } : {}), ...(index.legacyBackup ? { legacyBackup: index.legacyBackup } : {}) };
+    const saved = await this.bucket.put(base+'workspace.json', JSON.stringify(next), { onlyIf: { etagMatches: etag }, httpMetadata: { contentType: 'application/json' } })
+      .catch(async (error) => { await this.forget(paths); throw error; });
+    if (!saved) { await this.forget(paths); return null; }
+    const using = new Set(Object.values(refs).map(r => r.key));
+    await this.forget(Object.values(index.parts).map(r => r.key).filter(k => !using.has(k)));
+    await this.recordHistory(owner, beforeWs, marked).catch(() => {});
+    return { revision: next.revision, etag: saved.etag };
+  }
+  /**
+   * Changes one campaign's own settings (its dashboard, front page…) without touching its pages: reads and writes
+   * only that campaign's part. Null when the Wiki changed meanwhile.
+   */
+  async updateCampaign(owner: string, campaignId: string, change: (campaign: Workspace['campaigns'][number]) => Workspace['campaigns'][number]) {
+    const read = await this.readIndexObject(owner), key = campaignKey(campaignId);
+    if (read && complete(read.index) && key in read.index.parts) {
+      const object = await this.bucket.get(read.index.parts[key].key), part = object ? await object.json<Part>() : null;
+      if (part?.campaign) {
+        const { layout } = read.index;
+        const patch: WikiPatch = { layout: { worlds: layout.worlds, campaigns: layout.campaigns, runs: layout.runs.filter(([k]) => k === key) }, parts: { [key]: { ...part, campaign: change(part.campaign) } } };
+        const saved = await this.savePartial(owner, patch, read.index.revision, [key]);
+        if (saved !== FULL) return saved;
+      }
+    }
+    const { data, revision } = await this.read(owner);
+    if (!data.campaigns.some(c => c.id === campaignId)) throw Error('Campaign not found');
+    return this.saveTagged(owner, { ...data, campaigns: data.campaigns.map(c => c.id === campaignId ? change(c) : c) }, revision);
+  }
   /** A save from a Wiki that opened only `scope` (readScoped): pages outside it stay as stored. */
   async saveScopedPatch(owner: string, patch: WikiPatch, revision: number, scope: PartKey[]) {
+    const quick=await this.savePartial(owner, patch, revision, scope);
+    if (quick!==FULL) return quick;
     const previous=await this.stored(owner);
     if (previous.revision!==revision) return null;
     const split=previous.parts && previous.index ? { layout: previous.index.layout, parts: previous.parts } : splitWorkspace(previous.data);
@@ -135,6 +277,8 @@ export class EncyclopediaStore {
   }
   /** Saves only the campaigns and worlds that changed (wiki-parts.ts wikiPatch), made against `revision`. */
   async savePatch(owner: string, patch: WikiPatch, revision: number) {
+    const quick=await this.savePartial(owner, patch, revision, null);
+    if (quick!==FULL) return quick;
     const previous=await this.stored(owner);
     if (previous.revision!==revision) return null;
     const data=workspaceSchema.parse(applyWikiPatch(previous.parts ?? splitWorkspace(previous.data).parts, patch));
@@ -210,13 +354,13 @@ export class EncyclopediaStore {
     const written: string[]=[];
     const refs=Object.fromEntries(await eachLimited([...parts], async ([key, part]) => {
       const had=old[key];
-      if (had && untouched.has(key)) return [key, { ...had, pages: part.entries.length }] as const;
+      if (had && untouched.has(key)) return [key, { ...had, pages: part.entries.length, stats: isPartStats(had.stats) ? had.stats : partStats(part.entries) }] as const;
       const text=JSON.stringify(part), hash=await sha256(text);
-      if (had && had.hash===hash) return [key, { ...had, pages: part.entries.length }] as const;
+      if (had && had.hash===hash) return [key, { ...had, pages: part.entries.length, stats: isPartStats(had.stats) ? had.stats : partStats(part.entries) }] as const;
       const path=`${base}parts/${encodeURIComponent(key)}/${crypto.randomUUID()}.json`;
       written.push(path);
       await this.bucket.put(path, text, { httpMetadata: { contentType: 'application/json' } });
-      return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash, pages: part.entries.length }] as const;
+      return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash, pages: part.entries.length, stats: partStats(part.entries) }] as const;
     }).catch(async (error) => { await this.forget(written); throw error; }));
     let legacyBackup=previous.index?.legacyBackup;
     if (previous.legacy) {

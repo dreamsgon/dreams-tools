@@ -6,6 +6,16 @@ import { wikiPatch, type PartKey } from './wiki-parts.ts';
 import type { Workspace } from './world-model.ts';
 
 const WORKSPACE = '/api/encyclopedia/workspace';
+/**
+ * The header the Wiki's "anything new?" check sends with the copy it has. Not If-None-Match: Vercel answers that one
+ * itself and doesn't pass it on to the function, so the check never got a "nothing changed" and downloaded the whole
+ * campaign every 8 seconds.
+ */
+export const KNOWN_TAG_HEADER = 'X-Wiki-Known';
+/** The tag a request says it already has, from KNOWN_TAG_HEADER or If-None-Match, without quotes or W/. */
+export function knownTag(headers: Headers) {
+  return (headers.get(KNOWN_TAG_HEADER) ?? headers.get('If-None-Match'))?.replace(/^W\//, '').replace(/"/g, '').trim() || null;
+}
 /** The scoped load: a place (campaign, world, page, Maptable campaign) or exact parts. */
 export function scopedUrl(place: { campaign?: string | null; world?: string | null; entry?: string | null; maptable?: string | null; parts?: PartKey[] }) {
   const q = new URLSearchParams({ scope: '1' });
