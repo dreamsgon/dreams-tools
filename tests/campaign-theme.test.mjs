@@ -93,7 +93,7 @@ test('the theme file: save, make live (a copy), delete, and the limit', () => {
 
 test('preset skins: a light and a dark version each, readable, and their CSS passes the safety checks untouched', () => {
   const skins = THEME_PRESETS.filter(t => PRESET_NOTES[t.id]);
-  assert.equal(skins.length, 18);
+  assert.equal(skins.length, 19);
   assert.equal(new Set(THEME_PRESETS.map(t => t.id)).size, THEME_PRESETS.length, 'ids are unique');
   for (const t of skins) {
     assert.equal(t.mode, 'both', t.name);

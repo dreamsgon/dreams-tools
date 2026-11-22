@@ -43,11 +43,14 @@ export function PageTabs({tabs,active,onPick,hideable=[],onHide,own,onAdd,canAdd
  useLayoutEffect(()=>{
   const el=row.current,m=measure.current;if(!el||!m)return;
   const count=()=>{
-   const widths=[...m.querySelectorAll<HTMLElement>('[data-w]')].map(b=>b.getBoundingClientRect().width),tools=44,moreW=92,room=el.clientWidth-tools;
+   const widths=[...m.querySelectorAll<HTMLElement>('[data-w]')].map(b=>b.getBoundingClientRect().width),tools=44,room=el.clientWidth-tools;
+   // A campaign skin can widen More (capitals, wider letters), so it is measured too, with the gap after it.
+   const moreW=Math.max(92,(m.querySelector<HTMLElement>('[data-more]')?.getBoundingClientRect().width??0)+2);
    const total=widths.reduce((a,b)=>a+b,0);if(total<=room){setFit(widths.length);return;}
    let used=moreW,n=0;for(const w of widths){if(used+w>room)break;used+=w;n++;}setFit(Math.max(1,n));
   };
-  count();const ro=new ResizeObserver(count);ro.observe(el);return()=>ro.disconnect();
+  // The hidden copy is watched as well: a skin or its font can arrive after the first count and change every width.
+  count();const ro=new ResizeObserver(count);ro.observe(el);ro.observe(m);return()=>ro.disconnect();
  },[key]);
  const at=tabs.findIndex(t=>t.id===active);
  // The open tab is always in the row: when it would be under More, it takes the last place that fits.
@@ -55,7 +58,7 @@ export function PageTabs({tabs,active,onPick,hideable=[],onHide,own,onAdd,canAdd
  const rest=tabs.filter(t=>!shown.includes(t));
  const hiddenCount=hideable.filter(h=>h.hidden).length;
  return <div className="page-tabs article-tabs" ref={row}>
-  <div className="page-tabs-measure" ref={measure} aria-hidden="true">{tabs.map(t=><button key={t.id} type="button" tabIndex={-1} data-w className="page-tab"><TabLabel t={t}/></button>)}</div>
+  <div className="page-tabs-measure" ref={measure} aria-hidden="true">{tabs.map(t=><button key={t.id} type="button" tabIndex={-1} data-w className="page-tab"><TabLabel t={t}/></button>)}<button type="button" tabIndex={-1} data-more className="page-tab page-tab-more">More <span className="page-tab-count">{tabs.length}</span><ChevronDown size={13}/></button></div>
   <div className="page-tabs-list" role="tablist" aria-label="Article tabs">
    {shown.map(t=><button key={t.id} role="tab" className="page-tab" aria-selected={active===t.id} title={tip(t)} onClick={()=>onPick(t.id)}><TabLabel t={t}/></button>)}
    {rest.length>0&&<div className="page-tabs-pop" ref={moreRef}>
