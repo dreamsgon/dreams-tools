@@ -17,7 +17,7 @@ import { drawSceneBackdrop, renderScene, type Images } from "@/lib/render";
 import { drawRulerCells, drawRulerPath, measureRuler } from "@/lib/drag-ruler-draw";
 import { dragRuler } from "@/lib/drag-ruler";
 import { facingFromPointer, flipToken, footprint, resetTransform, resizeToken, sizeFromHandle, sizeLabel, stepSize, turnToken } from "@/lib/token-transform";
-import { TOKEN_CLIPBOARD_KEY, copyTokens, duplicateTokens, expandGroups, groupMembers, groupTokens, pasteTokens, readClipboard, toggleInSelection, ungroupTokens, type TokenClipboard } from "@/lib/token-clipboard";
+import { MAX_SCENE_TOKENS, TOKEN_CLIPBOARD_KEY, copyTokens, duplicateTokens, expandGroups, groupMembers, groupTokens, pasteTokens, readClipboard, toggleInSelection, ungroupTokens, type TokenClipboard } from "@/lib/token-clipboard";
 import { syncTokenAttachments } from "@/lib/token-attachments";
 import { fogRegionContains, fogRegionParts, polygonContains, polygonMidpoints } from "@/lib/fog";
 import { WHEEL_IDLE_MS, accumulateWheel, wheelAmount, wheelResizeEffect, wheelResizeToken } from "@/lib/wheel-resize";
@@ -276,7 +276,7 @@ export default function Board(p: Props) {
         bounds ?? { x: 0, y: 0, width: p.scene.width, height: p.scene.height });
       if (!point) return;
       event.preventDefault();
-      if (p.scene.tokens.length >= 500) { if (!detail.previewOnly) setNotice("This scene has the most tokens it can hold."); return; }
+      if (p.scene.tokens.length >= MAX_SCENE_TOKENS) { if (!detail.previewOnly) setNotice("This scene has the most tokens it can hold."); return; }
       if (!detail.previewOnly) p.onLibraryTokenDrop?.(detail.tokenId, point);
     };
     target.addEventListener(LIBRARY_TOKEN_DROP, drop);
@@ -1547,7 +1547,7 @@ export default function Board(p: Props) {
         {menuItem && "name" in menuItem && menuItem.name && <div className="context-menu-title">{contextMenu.kind === "token" && menuTokenInitials !== undefined && <TokenFace token={menuItem as Token} workspace={p.workspace} campaignId={tokenCampaignId(p.workspace, p.scene.id)} initials={menuTokenInitials} size={22} className="context-menu-face" />}<span>{menuItem.name}</span></div>}
         {menuAction(contextMenu.kind === "fog" ? "Edit fog region" : contextMenu.kind === "measurement" ? "Select measurement" : `Edit ${contextMenu.kind === "poi" ? "location" : contextMenu.kind}`, editMenuTarget, { icon: contextMenu.kind === "measurement" ? <MousePointer2 size={15} /> : <Pencil size={15} /> })}
         {menuItem && menuAction(menuItem.hidden ? "Show to players" : "Hide from players", () => changeMenuTarget("visibility"), { icon: menuItem.hidden ? <Eye size={15} /> : <EyeOff size={15} /> })}
-        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && !(contextMenu.kind === "token" && menuTokenIds(String(contextMenu.id)).length > 1) && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= 500 : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}
+        {contextMenu.kind !== "fog" && contextMenu.kind !== "measurement" && !(contextMenu.kind === "token" && menuTokenIds(String(contextMenu.id)).length > 1) && menuAction("Duplicate", () => changeMenuTarget("duplicate"), { icon: <Copy size={15} />, disabled: contextMenu.kind === "token" ? p.scene.tokens.length >= MAX_SCENE_TOKENS : contextMenu.kind === "effect" ? p.scene.effects.length >= 300 : p.scene.pointsOfInterest.length >= 500 })}
         {contextMenu.kind === "token" && (() => {
           const id = String(contextMenu.id), selection = currentSelection(), inSelection = selection.length > 1 && selection.includes(id);
           const ids = menuTokenIds(id);

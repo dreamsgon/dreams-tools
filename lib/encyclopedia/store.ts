@@ -197,7 +197,7 @@ export class EncyclopediaStore {
   }
   async saveTables(owner: string, input: TableLibrary, revision: number) {
     const data = librarySchema.parse(input);
-    if (new TextEncoder().encode(JSON.stringify(data)).length > LIBRARY_LIMIT) throw Error('Your tables exceed the 1 MB limit. Export some and delete them to make room.');
+    if (new TextEncoder().encode(JSON.stringify(data)).length > LIBRARY_LIMIT) throw Error(`Your tables exceed the ${LIBRARY_LIMIT / 1_000_000} MB limit. Export some and delete them to make room.`);
     const previous = await this.readTables(owner);
     if (previous.revision !== revision) return null;
     const next = revision + 1;

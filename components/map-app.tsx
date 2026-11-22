@@ -67,7 +67,9 @@ import {
   MoreHorizontal,
   Images as ImagesIcon,
   Sparkles,
+  Archive,
 } from "lucide-react";
+import { archivedIn } from "@/lib/scene-archive";
 import NextLink from "next/link";
 import { mapMemberRef, mapWorkspaceUrl, bookImageUrl } from "@/lib/maptable-member";
 import { maptableCoGmRefusal } from "@/lib/maptable-co-gm";
@@ -648,6 +650,20 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     state, revision, acknowledged, loadEpoch, generation, savedGeneration, saving, blocked, savePromise, setSaveStatus: reportSave, setSaveError, rebase,
     request: (input, init) => fetch(typeof input === "string" && input.split("?")[0] === "/api/workspace" && mapMemberRef() ? mapWorkspaceUrl() : input, init),
   }), [rebase, reportSave]);
+  /**
+   * Archives a map (moves it into its own file, out of what loads here) or brings one back (lib/scene-archive-server.ts).
+   * Unsaved edits are saved first; the result is then read back like a save from another device. The owner's maps only.
+   */
+  const sceneArchive = useCallback(async (sceneId: string, archive: boolean) => {
+    if (mapMemberRef()) throw new Error("Only the campaign's GM can archive maps.");
+    if (!await save() || generation.current !== savedGeneration.current) throw new Error("Your latest changes haven't saved yet. Try again once they have.");
+    const res = await fetch("/api/workspace/archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneId, archive, revision: revision.current }) });
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    if (!res.ok) throw new Error(body.error ?? (archive ? "Could not archive that map." : "Could not bring that map back."));
+    const response = await fetch(mapWorkspaceUrl(), { cache: "no-store" });
+    const result = response.ok ? await readJsonResponse(response) as { workspace: Workspace | null; revision: string | null } : null;
+    if (!result?.workspace || !takeIn(workspaceSchema.parse(result.workspace), result.revision)) { await load(); return; }
+  }, [save, takeIn, load]);
   const manualSave = useCallback(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
@@ -1309,6 +1325,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
     <div className="dashboard-content">{saveRecovery}<CampaignScenes workspace={workspace} campaignId={pickerCampaignId} heroKey={skinKey}
       lastSceneId={campaignFor(scene.containerId) === pickerCampaignId ? scene.id : rememberedCampaignScene(workspace, pickerCampaignId ?? "", pickerCampaignId ? readRemembered(campaignSceneKey(sceneScope, pickerCampaignId)) : null)} open={enterScene}
       unfiled={pickerCampaignId && unfiledCount ? { count: unfiledCount, open: () => setOverview({ id: null }) } : null}
+      archived={member ? [] : archivedIn(workspace, pickerCampaignId)} bringBack={id => sceneArchive(id, false)}
       addScenes={() => { const target = campaignFor(scene.containerId) === pickerCampaignId ? scene : workspace.scenes.find(s => campaignFor(s.containerId) === pickerCampaignId); setNewMapType("encounter"); if (target) { enterScene(target.id); setDialog("add-scenes"); } else setPickerAdd(true); }} /></div>
     {pickerAdd && <AddScenes workspace={workspace} campaignId={pickerCampaignId} initialDestination={pickerCampaignId} initialMapType={newMapType} commit={commit} close={() => setPickerAdd(false)}
       splitMap={target => { setPickerAdd(false); setPickerDialog({ kind: "split-map", destination: target }); }}
@@ -1600,6 +1617,20 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                       <Trash2 size={15} aria-hidden="true" />
                       Remove scene
                     </button>
+                    {!member && <button
+                      disabled={workspace.scenes.length < 2}
+                      title="Keeps the map in its own file, out of what Maptable loads. Bring it back from the Scene Picker."
+                      onClick={async () => {
+                        if (!await confirmDialog({ title: `Archive “${scene.name}”?`, message: "It leaves the Scene Picker and no longer loads with your maps, with its tokens, fog and drawings kept as they are. Bring it back any time from Archived maps at the bottom of the Scene Picker.", confirm: "Archive map" })) return;
+                        const pickerId = campaignFor(scene.containerId);
+                        setNotice("Archiving…");
+                        try { await sceneArchive(scene.id, true); setSelected(null); setPanel("scenes"); setDashboard(true); setOverview({ id: pickerId }); setNotice(""); }
+                        catch (e) { setNotice((e as Error).message); }
+                      }}
+                    >
+                      <Archive size={15} aria-hidden="true" />
+                      Archive map
+                    </button>}
                   </div>
                   </>}
                   {settingsTab==="lights" && <SceneLights scene={scene} update={updateScene}/>}

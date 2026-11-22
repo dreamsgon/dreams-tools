@@ -1,10 +1,10 @@
-import { snap, uid, type Effect, type Point, type Scene, type Token } from "./model.ts";
+import { snap, uid, MAX_SCENE_TOKENS, type Effect, type Point, type Scene, type Token } from "./model.ts";
 
 /** What Ctrl C keeps: copies of the tokens and the auras attached to them, with the grid they came from. */
 export type TokenClipboard = { v: 1; sceneId: string; sceneName: string; gridSize: number; tokens: Token[]; effects: Effect[] };
 
 export const TOKEN_CLIPBOARD_KEY = "maptable:token-clipboard";
-export const MAX_SCENE_TOKENS = 500;
+export { MAX_SCENE_TOKENS };
 export const MAX_SCENE_EFFECTS = 300;
 
 /** A token and everyone grouped with it. */

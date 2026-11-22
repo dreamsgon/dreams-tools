@@ -1,4 +1,5 @@
 'use client';
+import { workspaceBody } from '@/lib/encyclopedia/workspace-client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Check, CloudFog, Dices, Eye, EyeOff, Map as MapIcon, MapPin as PinIcon, Mountain, ChevronRight, ZoomIn, MousePointer2, Paintbrush, Redo2, Route, Shield, Stamp, Type, Undo2, Waves } from 'lucide-react';
@@ -91,7 +92,7 @@ export function WorldMapStudio({ entry, data, campaign, setMap, close, start, on
   useEffect(() => {
     if (!gridded || library) return;
     let live = true;
-    fetch('/api/encyclopedia/tables').then(r => r.ok ? r.json() : Promise.reject(r)).then((body: { data?: TableLibrary }) => { if (live) setLibrary(body.data?.tables ? body.data : { schemaVersion: 1, tables: [] }); }).catch(() => { if (live) setLibrary('error'); });
+    fetch('/api/encyclopedia/tables', { cache: 'no-store' }).then(r => r.ok ? workspaceBody<{ data?: TableLibrary }>(r) : Promise.reject(r)).then((body: { data?: TableLibrary }) => { if (live) setLibrary(body.data?.tables ? body.data : { schemaVersion: 1, tables: [] }); }).catch(() => { if (live) setLibrary('error'); });
     return () => { live = false; };
   }, [gridded, library]);
   const select = (id: string) => { setSelected(id); setCell(-1); };

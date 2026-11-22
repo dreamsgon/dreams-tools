@@ -58,7 +58,11 @@ export function mergeMaptable(base: Workspace, mine: Workspace, theirs: Workspac
     if (my && their) scenes.push(same(my, was) ? their : same(their, was) ? my : joinScene(was, my, their, both));
     else { const v = pick(was, my, their, () => both.push((my ?? their)!.name)); if (v) scenes.push(v); }
   }
-  out.scenes = scenes;
+  // A map archived on the other side stays archived, even when this side changed it meanwhile.
+  const archived = new Set(((out.archivedScenes ?? []) as { id: string }[]).map(x => x.id));
+  out.scenes = scenes.filter(s => !archived.has(s.id));
+  if (!(out.scenes as Scene[]).length) return null;
+  if (!(out.scenes as Scene[]).some(s => s.id === out.activeId)) out.activeId = (out.scenes as Scene[])[0].id;
   const checked = workspaceSchema.safeParse(out);
   return checked.success ? { merged: checked.data, both } : null;
 }
