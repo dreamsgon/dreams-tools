@@ -57,6 +57,7 @@ export const THEME_FONTS = {
   garamond: { label: "EB Garamond", stack: '"EB Garamond", Garamond, Georgia, serif', query: "EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500" },
   almendra: { label: "Almendra", stack: '"Almendra", "IM Fell English", Georgia, serif', query: "Almendra:ital,wght@0,400;0,700;1,400;1,700" },
   fondamento: { label: "Fondamento", stack: '"Fondamento", "IM Fell English", Georgia, serif', query: "Fondamento:ital@0;1" },
+  limelight: { label: "Limelight", stack: '"Limelight", "Broadway", "Jost", Georgia, serif', query: "Limelight" },
 } as const;
 export type FontId = keyof typeof THEME_FONTS;
 const fontId = z.enum(Object.keys(THEME_FONTS) as [FontId, ...FontId[]]);
