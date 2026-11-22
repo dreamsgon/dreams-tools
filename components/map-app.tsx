@@ -1151,7 +1151,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
           /^data:image\/(png|jpeg|webp);base64,/.test(embedded)
         ) {
           const blob = await (await fetch(embedded)).blob();
-          a.src = (await uploadAsset(blob, a.name)).src;
+          a.src = (await uploadAsset(blob, a.name, "hosted", true)).src;
         }
       }
       const remap = new Map<string, string>();

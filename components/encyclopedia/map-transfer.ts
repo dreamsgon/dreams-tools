@@ -1,15 +1,19 @@
 import {stageTransfer} from "@/lib/transfer-client";
+import {toWebp} from "@/lib/webp-upload";
 import {addUploaded,imageSrc,uploadUrl} from './member-view';
 import {unlinkMapWeather} from '@/lib/encyclopedia/map-weather';
 import {mapPackageSchema,MAX_IMAGE_BYTES,type MapData} from '@/lib/encyclopedia/map-model';
 import type {Entry} from '@/lib/encyclopedia/world-model';
 export async function uploadMapImage(file:Blob){
- if(file.size>MAX_IMAGE_BYTES)throw new Error('Choose an image up to 8 MB.');
  if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('Choose a PNG, JPEG, or WebP image.');
+ // A PNG or JPEG over 8 MB may still fit once it is WebP, so the limit applies to what is uploaded.
+ if(file.size>(file.type==='image/webp'?1:4)*MAX_IMAGE_BYTES)throw new Error('Choose an image up to 8 MB.');
  let bitmap:ImageBitmap;try{bitmap=await createImageBitmap(file);}catch{throw new Error('This file could not be opened as an image.');}
  const width=bitmap.width,height=bitmap.height;bitmap.close();
  if(width>12000||height>12000||width*height>40000000)throw new Error('Use an image up to 12,000 pixels per side and 40 megapixels.');
- const response=await fetch(uploadUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transferId:await stageTransfer(file,'image')})});const result=await response.json() as {id:string;error?:string};if(!response.ok)throw new Error(result.error??'Upload failed');addUploaded(result.id);return {imageId:result.id,imageWidth:width,imageHeight:height};
+ const upload=await toWebp(file);
+ if(upload.size>MAX_IMAGE_BYTES)throw new Error('Choose an image up to 8 MB.');
+ const response=await fetch(uploadUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transferId:await stageTransfer(upload,'image')})});const result=await response.json() as {id:string;error?:string};if(!response.ok)throw new Error(result.error??'Upload failed');addUploaded(result.id);return {imageId:result.id,imageWidth:width,imageHeight:height};
 }
 export function downloadMapFile(value:unknown,title:string){const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=title.replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,80)+'.map.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 /** Uploaded icons live in this account's storage, so a map package leaves them out and those places keep their usual symbol. */

@@ -4,13 +4,14 @@ import {createServerClient} from "@supabase/ssr";
 import {z} from "zod";
 import {supabaseUrl,supabaseKey,rememberCookie,sessionCookieOptions} from "@/lib/supabase-config";
 const input=z.object({
-  action:z.enum(["signup","login","reset","password","logout","logout-all","profile","change-password","email","resend-email"]),
+  action:z.enum(["signup","login","reset","password","logout","logout-all","profile","change-password","email","resend-email","uploads"]),
   email:z.string().email().max(254).optional(),password:z.string().min(12).max(128).optional(),
   currentPassword:z.string().min(1).max(128).optional(),
   username:z.string().regex(/^[a-zA-Z0-9_-]{3,32}$/).optional(),
   // Letters, numbers, spaces and punctuation from any language; no control characters.
   displayName:z.string().max(80).transform(s=>s.normalize("NFC").replace(/\s+/g," ").trim()).pipe(z.string().min(1).max(40).regex(/^[^\p{C}]+$/u)).optional(),
   remember:z.boolean().optional(),
+  webpUploads:z.boolean().optional(),
 }).strict();
 type Input=z.infer<typeof input>;
 const fail=(message:string)=>Object.assign(Error(message),{shown:true});
@@ -52,6 +53,10 @@ export async function POST(request:NextRequest){
       if(!data.displayName)throw fail("Enter a display name of 1 to 40 characters.");
       await signedIn();
       ({error}=await client.auth.updateUser({data:{display_name:data.displayName}}));
+    }else if(data.action==="uploads"){
+      if(typeof data.webpUploads!=="boolean")throw fail("Choose whether pictures become WebP.");
+      await signedIn();
+      ({error}=await client.auth.updateUser({data:{webp_uploads:data.webpUploads}}));
     }else if(data.action==="change-password"){
       if(!data.password)throw fail("Choose a new password of 12 to 128 characters.");
       const user=await signedIn();await confirmPassword(user.email!);
@@ -81,10 +86,10 @@ export async function POST(request:NextRequest){
     return NextResponse.json({error:message},{status:400,headers:{"Cache-Control":"private, no-store"}});
   }
 }
-/** The signed-in person's name, masked-ready email and picture version, for the account menu on pages rendered in the browser. */
+/** The signed-in person's name, masked-ready email, picture version and upload format choice, for the account menu on pages rendered in the browser. */
 export async function GET(){
   const user=await getAppUser();
   const headers={"Cache-Control":"private, no-store"};
   if(!user)return NextResponse.json({signedIn:false},{headers});
-  return NextResponse.json({signedIn:true,name:user.displayName,email:user.email,avatar:user.avatar},{headers});
+  return NextResponse.json({signedIn:true,name:user.displayName,email:user.email,avatar:user.avatar,webpUploads:user.webpUploads},{headers});
 }

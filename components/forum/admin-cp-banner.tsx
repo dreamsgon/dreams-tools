@@ -7,6 +7,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { stageTransfer } from '@/lib/transfer-client';
+import { toWebp } from '@/lib/webp-upload';
 import type { Look } from '@/lib/encyclopedia/look';
 import { usePictureSrc } from '../encyclopedia/character-picture';
 import { bannerChanged } from '../campaign-theme-entry';
@@ -27,12 +28,15 @@ export function BannerTab({ k, banner, setBanner, owner, onSaved }: { k: string;
   }
   async function upload(f: File) {
     if (!TYPES.includes(f.type)) { setError('Choose a PNG, JPEG or WebP picture.'); return; }
-    if (f.size > 8 * 1024 * 1024) { setError('Choose a picture up to 8 MB.'); return; }
+    if (f.size > (f.type === 'image/webp' ? 1 : 4) * 8 * 1024 * 1024) { setError('Choose a picture up to 8 MB.'); return; }
     setBusy('Uploading…'); setError('');
     let size: { width: number; height: number };
     try { const bitmap = await createImageBitmap(f); size = { width: bitmap.width, height: bitmap.height }; bitmap.close(); }
     catch { setBusy(''); setError('That file could not be opened as a picture.'); return; }
-    try { const transferId = await stageTransfer(f, 'image'); await send({ picture: { transferId, ...size }, y: .5 }, 'Uploading…'); }
+    try {
+      const upload = await toWebp(f);
+      if (upload.size > 8 * 1024 * 1024) throw new Error('Choose a picture up to 8 MB.');
+      const transferId = await stageTransfer(upload, 'image'); await send({ picture: { transferId, ...size }, y: .5 }, 'Uploading…'); }
     catch (e) { setBusy(''); setError(e instanceof Error ? e.message : 'The picture could not be uploaded.'); }
   }
   if (!owner) return <div className="cp-section"><h3>Banner picture</h3><p className="muted small">Only the GM can change the campaign’s banner picture.</p></div>;

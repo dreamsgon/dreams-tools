@@ -5,7 +5,8 @@ import {avatarSrc} from "@/lib/avatar";
 import {DeviceAi} from "./device-ai";
 import AvatarCrop from "./avatar-crop";
 import {forgetDeviceAi} from "@/lib/ai/device-keys";
-export type AccountUser={name:string;username:string;email:string;avatar:string;pendingEmail:string};
+import {rememberWebpUploads} from "@/lib/webp-upload";
+export type AccountUser={name:string;username:string;email:string;avatar:string;pendingEmail:string;webpUploads:boolean};
 type Status={text:string;ok:boolean}|null;
 /** Shows "dr•••••@gmail.com": enough to recognize, not enough to read over a shoulder or on a stream. */
 export function maskEmail(email:string){const at=email.indexOf("@");if(at<1)return email;return email.slice(0,Math.min(2,at))+"•••••"+email.slice(at);}
@@ -23,7 +24,7 @@ export default function AccountSettings({user}:{user:AccountUser}){
  const [newEmail,setNewEmail]=useState(""),[emailPassword,setEmailPassword]=useState(""),[pending,setPending]=useState(user.pendingEmail);
  const [current,setCurrent]=useState(""),[next,setNext]=useState(""),[confirm,setConfirm]=useState("");
  const [busy,setBusy]=useState(""),[status,setStatus]=useState<Record<string,Status>>({});
- const file=useRef<HTMLInputElement>(null),router=useRouter(),[picked,setPicked]=useState<File|null>(null);
+ const file=useRef<HTMLInputElement>(null),router=useRouter(),[picked,setPicked]=useState<File|null>(null),[webp,setWebp]=useState(user.webpUploads);
  useEffect(()=>{
   const changed=new URLSearchParams(location.search).get("changed");
   if(changed==="email")setStatus(s=>({...s,email:{ok:true,text:"Your sign-in email is changed. Use the new address next time you sign in."}}));
@@ -49,7 +50,7 @@ export default function AccountSettings({user}:{user:AccountUser}){
   <p className="account-lead">Your profile is what players and other GMs see. Sign-in details stay private to you.</p>
   <div className="account-layout">
    <nav className="account-side" aria-label="Account sections">
-    <a href="#profile">Profile</a><a href="#email">Email</a><a href="#password">Password</a><a href="#device-ai">AI on this device</a><a href="#devices">Signed-in devices</a>
+    <a href="#profile">Profile</a><a href="#email">Email</a><a href="#password">Password</a><a href="#uploads">Uploads</a><a href="#device-ai">AI on this device</a><a href="#devices">Signed-in devices</a>
    </nav>
    <div className="account-sections">
     <section id="profile" className="account-section" aria-labelledby="profile-h">
@@ -106,6 +107,13 @@ export default function AccountSettings({user}:{user:AccountUser}){
       <div className="account-row-end account-row-split"><button type="button" className="account-link" disabled={disabled} onClick={()=>void run("password",async()=>{await post({action:"reset",email:user.email});return "Reset email sent. Open its link in this browser.";})}>Forgot it? Send a reset email</button><button className="account-primary" disabled={disabled}>{busy==="password"?"Saving…":"Change password"}</button></div>
      </form>
      <Note status={status.password??null}/>
+    </section>
+
+    <section id="uploads" className="account-section" aria-labelledby="uploads-h">
+     <h2 id="uploads-h">Uploads</h2>
+     <p className="account-hint">Pictures you upload anywhere in RPG Tools, such as Wiki pictures, banners, maps and tokens, are saved as WebP, which is usually much smaller and looks the same. A picture that would come out larger keeps its own format. GIFs and WebP pictures are never changed.</p>
+     <label className="account-check"><input type="checkbox" checked={webp} disabled={disabled} onChange={e=>{const on=e.target.checked;setWebp(on);void run("uploads",async()=>{try{await post({action:"uploads",webpUploads:on});}catch(err){setWebp(!on);throw err;}rememberWebpUploads(on);return on?"New PNG and JPEG uploads will be saved as WebP.":"New uploads keep their own format.";});}}/><span>Convert PNG and JPEG uploads to WebP</span></label>
+     <Note status={status.uploads??null}/>
     </section>
 
     <DeviceAi/>
