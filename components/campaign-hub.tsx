@@ -3,7 +3,7 @@ import { campaignHref } from "@/lib/campaign-slug";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, Bot, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, MessageSquare, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Users, Handshake, Shield, ListChecks, Bot, BookMarked, CalendarDays, Check, Copy, Dices, Eye, FileText, Flag, GripVertical, LayoutDashboard, House, Link2, Map as MapIcon, MessageSquare, Palette, Pencil, Plus, ScrollText, Sparkles, Swords, Settings, Trash2, User, X } from "lucide-react";
 import type { CampaignHub } from "@/lib/campaigns-server";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { newWidget, widgetNames, type FrontPage, type FrontWidget, type FrontWidgetType } from "@/lib/encyclopedia/front-page";
@@ -23,6 +23,8 @@ import { tokenPicture } from "@/lib/encyclopedia/picture";
 import { campaignTargets } from "@/lib/tags";
 import type { MembersView } from "./campaign-members";
 import { BackupsButton } from "./rp-backups-button";
+import { CampaignDetails } from "./campaigns-app";
+import type { CampaignSummary } from "@/lib/campaign-links";
 import "./campaign-hub.css";
 import { usePageTitle } from "./use-page-title";
 import { useDiceTarget } from "./use-dice-target";
@@ -42,8 +44,8 @@ import { keyFields } from "@/lib/ai/device-keys";
 // The Members tab (owners only) loads when it is opened.
 const CampaignMembers = dynamic(() => import("./campaign-members"));
 
-type Tab = "dashboard" | "front" | "members";
-const tabParam = (): Tab => { const t = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"); return t === "front" || t === "members" ? t : "dashboard"; };
+type Tab = "dashboard" | "front" | "members" | "settings";
+const tabParam = (): Tab => { const t = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"); return t === "front" || t === "members" || t === "settings" ? t : "dashboard"; };
 type AddTool = Exclude<CampaignTool, "dashboard">;
 const addParam = (): AddTool | null => typeof window === "undefined" ? null : addToolParam(new URLSearchParams(window.location.search).get("add"));
 const post = async (body: object, failed: string): Promise<CampaignHub> => {
@@ -73,13 +75,15 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
   const saves = useRef(0), [reads, setReads] = useState(0);
   // The Admin CP changed the banner picture: read the campaign again.
   useEffect(() => { const again = () => setReads(n => n + 1); window.addEventListener(BANNER_CHANGED, again); return () => window.removeEventListener(BANNER_CHANGED, again); }, []);
+  // After the first load the campaign is read by its id key, which never changes, so a new web address set in Settings still finds it.
+  const idKey = useRef(campaignKey);
   useEffect(() => {
     let live = true;
-    fetch(`/api/campaigns?hub=${encodeURIComponent(campaignKey)}`, { cache: "no-store" }).then(async r => {
+    fetch(`/api/campaigns?hub=${encodeURIComponent(idKey.current)}`, { cache: "no-store" }).then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error === "Campaign not found" ? "This campaign no longer exists. It may have been renamed or removed." : body.error || "Could not load this campaign.");
       if (!live) return;
-      setHub(body);
+      setHub(body); idKey.current = body.row.key;
       // Maptable links here by its own campaign id (m:<id>), and old links use the id key: the address then shows the
       // campaign's own web address (its slug, lib/campaign-slug.ts) or its usual key.
       const canonical = campaignHref(body.row);
@@ -99,6 +103,13 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
     }).catch(e => live && setMembersError(e instanceof Error ? e.message : "Could not load the members."));
     return () => { live = false; };
   }, [notesId]);
+  // On a phone the tabs scroll sideways: keep the open one in view (Settings is last and starts off screen).
+  useEffect(() => {
+    const on = document.querySelector<HTMLElement>('.hub-tabs [role="tablist"] [aria-selected="true"]'), list = on?.parentElement;
+    if (!on || !list || list.scrollWidth <= list.clientWidth) return;
+    const a = on.getBoundingClientRect(), box = list.getBoundingClientRect();
+    if (a.right > box.right) list.scrollLeft += a.right - box.right; else if (a.left < box.left) list.scrollLeft -= box.left - a.left;
+  }, [tab, hub, members]);
   function choose(next: Tab) {
     setTab(next); setEditing(false); setDraft(null);
     const url = new URL(window.location.href);
@@ -216,11 +227,13 @@ export default function CampaignHub({ campaignKey }: { campaignKey: string }) {
         <button role="tab" aria-selected={tab === "dashboard"} onClick={() => choose("dashboard")}><LayoutDashboard size={16} aria-hidden="true" />Prep</button>
         <button role="tab" aria-selected={tab === "front"} onClick={() => choose("front")}><House size={16} aria-hidden="true" />Front page</button>
         {e && <button role="tab" aria-selected={tab === "members"} onClick={() => choose("members")}><Users size={16} aria-hidden="true" />Members{members && <span className={`mem-count${members.requests.length ? " mem-count-warn" : ""}`} title={members.requests.length ? `${members.requests.length} asking to join` : undefined}>{members.requests.length ? members.requests.length : members.members.length + 1}</span>}</button>}
+        <button role="tab" aria-selected={tab === "settings"} onClick={() => choose("settings")}><Settings size={16} aria-hidden="true" />Settings</button>
       </div>
     </div>
     {saveError && <p className="hub-error" role="alert">{saveError}</p>}
     <div className="hub-body" role="tabpanel">
-      {tab === "members" ? !e ? <NoNotes href={L.startNotes} /> : members ? <><SoloCard on={e.solo} busy={soloBusy} setOn={on => void setSolo(on)} /><CampaignMembers campaignId={e.id} view={members} setView={setMembers} /></>
+      {tab === "settings" ? <HubSettings row={row} reload={() => setReads(n => n + 1)} />
+        : tab === "members" ? !e ? <NoNotes href={L.startNotes} /> : members ? <><SoloCard on={e.solo} busy={soloBusy} setOn={on => void setSolo(on)} /><CampaignMembers campaignId={e.id} view={members} setView={setMembers} /></>
         : <p className={membersError ? "hub-error" : "hub-muted"}>{membersError || "Loading members…"}</p>
         : tab === "dashboard" ? draft
         ? <Customize hub={hub} draft={draft} setDraft={setDraft} halves={halves} />
@@ -244,6 +257,42 @@ function AddNotice({ tool, name, busy, add, dismiss }: { tool: AddTool; name: st
 }
 
 /** Members tab: solo play on or off. */
+/** The Settings tab: the same settings as the campaign's details on the Campaigns page. Each change reads the campaign again. */
+function HubSettings({ row, reload }: { row: CampaignHub["row"]; reload: () => void }) {
+  const [summary, setSummary] = useState<CampaignSummary | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch("/api/campaigns", { cache: "no-store" }).then(async r => {
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || "Could not load the settings.");
+      if (live) setSummary(body);
+    }).catch(e => live && setError(e instanceof Error ? e.message : "Could not load the settings."));
+    return () => { live = false; };
+  }, []);
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(""), 4000); return () => clearTimeout(t); }, [notice]);
+  async function send(body: object, done?: string, after?: (next: CampaignSummary) => void) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const r = await fetch("/api/campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const next = await r.json();
+      if (!r.ok) throw new Error(next.error || "Could not save.");
+      setSummary(next); if (done) setNotice(done); after?.(next); reload();
+      return true;
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save."); return false; }
+    finally { setBusy(false); }
+  }
+  // The newest copy of this campaign from the list, found by either of its id keys (pairing can change which one it has).
+  const current = summary?.rows.find(r => r.key === row.key || (row.encyclopedia && r.encyclopedia?.id === row.encyclopedia.id) || (row.maptable && r.maptable?.id === row.maptable.id));
+  return <div className="campaigns-page hub-settings">
+    {error && <p className="hub-error" role="alert">{error}</p>}
+    {notice && <p className="hub-note" role="status"><Check size={15} aria-hidden="true" />{notice}</p>}
+    {!summary ? !error && <p className="hub-muted">Loading settings…</p>
+      : current ? <CampaignDetails key={current.key} row={current} summary={summary} busy={busy} error={error} send={send} embedded
+          onDeleted={() => window.location.assign("/campaigns")} />
+      : <p className="hub-muted">This campaign is no longer on your list.</p>}
+  </div>;
+}
+
 function SoloCard({ on, busy, setOn }: { on: boolean; busy: boolean; setOn: (on: boolean) => void }) {
   return <div className={`hub-card hub-solo${on ? " on" : ""}`}>
     <label><input type="checkbox" checked={on} disabled={busy} onChange={ev => setOn(ev.target.checked)} /><b>Solo play</b></label>
