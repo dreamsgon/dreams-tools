@@ -6,12 +6,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
-import { ArrowUp, BookOpen, Bot, Check, ChevronDown, Copy, Dices, Download, Folder, Map as MapIcon, KeyRound, Maximize2, MessageSquare, Minimize2, PanelLeft, Pause, Play, Plus, ScrollText, Send, Undo2, User, X } from "lucide-react";
+import { ArrowUp, BookOpen, Bot, Paperclip, Check, ChevronDown, Copy, Dices, Download, Folder, Map as MapIcon, KeyRound, Maximize2, MessageSquare, Minimize2, PanelLeft, Pause, Play, Plus, ScrollText, Send, Undo2, User, X } from "lucide-react";
 import { chatFileName, chatMarkdown, chatRecap, CONTEXT_TURNS, OPEN_CHAT_EVENT, takeAiRequest, type ChatFolder, type ChatMeta, type RecapPick, type SavedChat } from "@/lib/ai/chat-text";
 import "./ai-connection.css";
 import { keepMoved, keyFields } from "@/lib/ai/device-keys";
 import { isChatModel } from "@/lib/ai/model-list";
 import { ChatList, ConnectionMenu, ModelMenu, type ChatConnection, type ModelList } from "./ai-chat-parts";
+import { AttachChips, readAttachments } from "./ai-attach";
+import { ACCEPT, attachedLine, SEND_BUDGET, sizeOf, type Attachment, type AttachmentName } from "@/lib/ai/attachments";
 
 type Line = { id: string; at: string; connection: string; tool: string; summary: string; detail?: string; undone?: string; canUndo: boolean };
 /** Where a suggested move would put a token, for the dashed token on the map. */
@@ -38,8 +40,26 @@ function pageTheme(): Themed {
   return { className: skin ? "campaign-skin" : "", attrs, style };
 }
 type Step = { tool: string; title: string; ok: boolean; waiting?: string; summary?: string };
-/** An answer says which AI (`by`) and model wrote it, since a chat can switch partway. */
-type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true; by?: string; model?: string };
+/**
+ * An answer says which AI (`by`) and model wrote it, since a chat can switch partway. A question can carry files: with
+ * their data while this tab has them, or only their names once the chat is opened again.
+ */
+type Said = { role: "user" | "assistant"; text: string; steps?: Step[]; error?: true; by?: string; model?: string; files?: (Attachment | AttachmentName)[] };
+const hasData = (f: Attachment | AttachmentName): f is Attachment => "data" in f || "text" in f;
+/**
+ * The conversation as the server takes it. Files go again with later questions while they fit in SEND_BUDGET, newest
+ * first, so the AI can still look at them; older ones are named in the text instead.
+ */
+function toSend(turns: Said[]) {
+  let budget = SEND_BUDGET;
+  return turns.slice(-CONTEXT_TURNS).reverse().map(m => {
+    const files = (m.files ?? []).filter(hasData), size = files.reduce((n, f) => n + sizeOf(f), 0);
+    const send = files.length > 0 && size <= budget;
+    if (send) budget -= size;
+    const named = m.files?.length && !send ? attachedLine(m.files.map(f => ({ name: f.name, kind: f.kind }))) : "";
+    return { role: m.role, text: [m.text, named].filter(Boolean).join("\n\n"), ...(send ? { files } : {}) };
+  }).reverse();
+}
 /**
  * The chat open in the panel. Chats are saved with the campaign on the server; this tab remembers which one was open.
  * `folder` is the chat's folder, or for a new chat the folder it will be saved in.
@@ -89,6 +109,9 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const [full, setFull] = useState(() => remembered(FULL_KEY) === "1"), [side, setSide] = useState(false);
   /** The model picked for each connection in this tab (else the connection's own), and the models each one's key can use. */
   const [modelFor, setModelFor] = useState<Record<string, string>>({}), [modelLists, setModelLists] = useState<Record<string, ModelList>>({});
+  /** Files attached to the message being written. */
+  const [files, setFiles] = useState<Attachment[]>([]), [reading, setReading] = useState(false), [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [posting, setPosting] = useState<{ chat: SavedChat; campaign?: string; pick: RecapPick; title: string; text: string } | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const newest = useRef<string | null>(null), changed = useRef(onChanged), chip = useRef<HTMLButtonElement>(null), moves = useRef(onSuggestedMoves), lastMoves = useRef("[]");
@@ -167,7 +190,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     setMenu(""); setChatNote(null);
     try {
       const { chat: saved } = await fetchChat(id);
-      setChatLog({ key: campaignKey, id: saved.id, title: saved.title, savedAt: saved.updatedAt, folder: saved.folder, turns: saved.turns.map(t => ({ role: t.role, text: t.text, ...(t.steps ? { steps: t.steps } : {}), ...(t.by ? { by: t.by } : {}), ...(t.model ? { model: t.model } : {}) })) });
+      setChatLog({ key: campaignKey, id: saved.id, title: saved.title, savedAt: saved.updatedAt, folder: saved.folder, turns: saved.turns.map(t => ({ role: t.role, text: t.text, ...(t.steps ? { steps: t.steps } : {}), ...(t.by ? { by: t.by } : {}), ...(t.model ? { model: t.model } : {}), ...(t.files?.length ? { files: t.files } : {}) })) });
       remember(openKey, saved.id); setSide(false);
       // Carry on with the AI and model the chat last used.
       if (chats.some(c => c.id === saved.connectionId)) { setTalkTo(saved.connectionId); if (saved.model) setModelFor(m => ({ ...m, [saved.connectionId]: saved.model! })); }
@@ -209,12 +232,12 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   /** `given`: a question from elsewhere (the dashboard), asked in a new chat. */
   async function ask(given?: string) {
     const fresh = given !== undefined, base: Open = fresh ? { key: campaignKey, id: null, turns: [] } : current;
-    const text = (given ?? draft).trim();
-    if (!text || !chat || thinking) return;
-    const next: Said[] = [...(fresh ? [] : said).filter(m => !m.error), { role: "user", text }];
-    setChatLog({ ...base, turns: next }); if (!fresh) setDraft(""); if (fresh) remember(openKey, null); setThinking(true); setMenu(""); setChatNote(null);
+    const text = (given ?? draft).trim(), attached = fresh ? [] : files;
+    if ((!text && !attached.length) || !chat || thinking || reading) return;
+    const next: Said[] = [...(fresh ? [] : said).filter(m => !m.error), { role: "user", text, ...(attached.length ? { files: attached } : {}) }];
+    setChatLog({ ...base, turns: next }); if (!fresh) { setDraft(""); setFiles([]); } if (fresh) remember(openKey, null); setThinking(true); setMenu(""); setChatNote(null);
     try {
-      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, model, ...(base.id ? { chatId: base.id } : base.folder ? { folder: base.folder } : {}), messages: next.slice(-CONTEXT_TURNS).map(m => ({ role: m.role, text: m.text })) }) });
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, ...keyFields(chat.id), scene, model, ...(base.id ? { chatId: base.id } : base.folder ? { folder: base.folder } : {}), messages: toSend(next) }) });
       const body = await res.json() as { reply?: string; steps?: Step[]; toolsOff?: boolean; error?: string; chat?: ChatMeta };
       if (!res.ok) throw Error(body.error ?? "Could not ask the AI.");
       const reply = (body.reply || "(No answer.)") + (body.toolsOff ? "\n\n(This model can't use RPG Tools' tools, so it can only answer from what you tell it.)" : "");
@@ -266,6 +289,26 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       setMenu(""); setChatNote({ text: `${pick} is now the default for new chats with ${chats.find(c => c.id === id)?.name ?? "this AI"}.` });
     } catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Could not change the model.", error: true }); }
     finally { setBusy(""); }
+  }
+  /** Makes a connection the AI new chats ask first, for the campaign on every device. */
+  async function makeDefaultAi(id: string) {
+    setBusy("defaultAi");
+    try {
+      const res = await fetch("/api/encyclopedia/ai-chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...which, connectionId: id, action: "defaultAi" }) });
+      const body = await res.json() as { name?: string; error?: string };
+      if (!res.ok) throw Error(body.error ?? "Could not change the default AI.");
+      setState(s => s && { ...s, chat: (s.chat ?? []).map(c => ({ ...c, isDefault: c.id === id })) });
+      setChatNote({ text: `New chats ask ${body.name ?? "this AI"} first.` });
+    } catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Could not change the default AI.", error: true }); }
+    finally { setBusy(""); }
+  }
+  /** Reads files the GM picked, pasted or dropped onto the message. */
+  async function attach(list: File[]) {
+    if (!list.length) return;
+    setReading(true); setChatNote(null);
+    try { const read = await readAttachments(list, files.length); setFiles(f => [...f, ...read]); }
+    catch (e) { setChatNote({ text: e instanceof Error ? e.message : "Couldn't attach that.", error: true }); }
+    finally { setReading(false); if (fileInput.current) fileInput.current.value = ""; }
   }
   /** Export: a Markdown file, the clipboard, a session page or a Discord recap. */
   async function exportChat(how: "markdown" | "copy" | "session" | "discord") {
@@ -378,7 +421,7 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
   const noteLine = chatNote && <p className={`ai-chat-note${chatNote.error ? " error" : ""}`} role="status">{chatNote.text}{chatNote.href && <> <a href={chatNote.href}>{chatNote.link}</a></>}<button type="button" aria-label="Dismiss" onClick={() => setChatNote(null)}><X size={12}/></button></p>;
   const conversation = chat && <div className="ai-chat" aria-live="polite"><div className="ai-chat-col">
     {!said.length && <p className="ai-panel-empty">Ask {chat.name} about this campaign{scene ? " or the open scene" : ""}: what a monster does on its turn, a line of read-aloud, a name for the innkeeper. What it may change follows What it may do, so moves and rolls can wait for your OK here. Every chat is saved with the campaign{folderName ? `, this one in ${folderName}` : ""}, so you can come back to it.</p>}
-    {said.map((m, i) => m.role === "user" ? <p key={i} className="ai-chat-me">{m.text}</p> : <div key={i} className={`ai-chat-ai${m.error ? " error" : ""}`}>
+    {said.map((m, i) => m.role === "user" ? <div key={i} className="ai-chat-me">{m.text && <p>{m.text}</p>}{m.files && <AttachChips files={m.files}/>}</div> : <div key={i} className={`ai-chat-ai${m.error ? " error" : ""}`}>
       {mixed && !m.error && (m.by || m.model) && <span className="ai-chat-by">{[m.by, m.model].filter(Boolean).join(" · ")}</span>}
       {m.text.split(/\n{2,}/).map((para, j) => <p key={j}>{para}</p>)}{m.steps && steps(m.steps)}
     </div>)}
@@ -387,11 +430,13 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
     <div ref={bottom}/>
   </div></div>;
   const odd = !!model && !isChatModel(model);
-  const composer = chat && <form className="ai-chat-box" onSubmit={e => { e.preventDefault(); void ask(); }}><div className="ai-chat-col">
+  const composer = chat && <form className={`ai-chat-box${dragging ? " dropping" : ""}`} onSubmit={e => { e.preventDefault(); void ask(); }}
+    onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+    onDrop={e => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); void attach(Array.from(e.dataTransfer.files)); }}><div className="ai-chat-col">
     <div className="ai-chat-meta">
       <div className="ai-pick-wrap">
         <button type="button" className="ai-pick" aria-haspopup="true" aria-expanded={menu === "ai"} data-ai-menu title="Which AI to ask" onClick={() => setMenu(menu === "ai" ? "" : "ai")}><Bot size={12}/><span>{chat.name}</span><ChevronDown size={12}/></button>
-        {menu === "ai" && <ConnectionMenu chats={chats} current={chat.id} connectLink={settingsLink} onPick={id => { setTalkTo(id); setMenu(""); }}/>}
+        {menu === "ai" && <ConnectionMenu chats={chats} current={chat.id} connectLink={settingsLink} busy={busy === "defaultAi"} onDefault={id => void makeDefaultAi(id)} onPick={id => { setTalkTo(id); setMenu(""); }}/>}
       </div>
       <div className="ai-pick-wrap">
         <button type="button" className={`ai-pick${odd ? " odd" : ""}`} aria-haspopup="true" aria-expanded={menu === "model"} data-ai-menu title={odd ? `${model} can’t chat. Pick another model.` : "Which model to use"} onClick={() => { if (menu === "model") setMenu(""); else { setMenu("model"); void loadModels(chat.id); } }}><span>{model}</span><ChevronDown size={12}/></button>
@@ -402,7 +447,15 @@ export function AiActivity({ campaignId, maptableCampaignId, combat, scene, onCh
       {!current.id && folderName && <span className="ai-chat-sees"><Folder size={11}/> {folderName}</span>}
     </div>
     {odd && <p className="ai-chat-odd">{model} looks like a speech, image or embedding model, so it can’t answer here. Pick a chat model above.</p>}
-    <div className="ai-chat-row"><textarea value={draft} rows={full ? 3 : 2} placeholder={`Ask ${chat.name}…`} aria-label={`Ask ${chat.name}`} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(); } }}/><button type="submit" className="button primary" aria-label="Send" disabled={!draft.trim() || thinking}><ArrowUp size={16}/></button></div>
+    <AttachChips files={files} onRemove={i => setFiles(f => f.filter((_, j) => j !== i))}/>
+    <div className="ai-chat-row">
+      <input ref={fileInput} type="file" multiple accept={ACCEPT} hidden onChange={e => void attach(Array.from(e.target.files ?? []))}/>
+      <button type="button" className="icon-button ai-attach-button" aria-label="Attach pictures or files" title="Attach pictures, PDFs or text files (or paste or drop them here), for models that can read them" disabled={reading || thinking} onClick={() => fileInput.current?.click()}><Paperclip size={16}/></button>
+      <textarea value={draft} rows={full ? 3 : 2} placeholder={reading ? "Reading the file…" : `Ask ${chat.name}…`} aria-label={`Ask ${chat.name}`} onChange={e => setDraft(e.target.value)}
+        onPaste={e => { const pasted = Array.from(e.clipboardData.files); if (pasted.length) { e.preventDefault(); void attach(pasted); } }}
+        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(); } }}/>
+      <button type="submit" className="button primary" aria-label="Send" disabled={(!draft.trim() && !files.length) || thinking || reading}><ArrowUp size={16}/></button>
+    </div>
   </div></form>;
   const activity = <>
     {combat && <p className="ai-panel-combat"><span>Round {combat.round}</span><strong>{combat.turn}’s turn</strong>{combat.next && <span>Next: {combat.next}</span>}</p>}

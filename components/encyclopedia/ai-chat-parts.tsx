@@ -8,8 +8,8 @@ import { Bot, Check, ChevronDown, ChevronRight, Folder, FolderInput, FolderPlus,
 import type { ChatFolder, ChatMeta } from "@/lib/ai/chat-text";
 import { isChatModel } from "@/lib/ai/model-list";
 
-/** A connection made with an API key: the GM can ask it from the panel. */
-export type ChatConnection = { id: string; name: string; provider: string; model: string };
+/** A connection made with an API key: the GM can ask it from the panel. `isDefault`: new chats ask it first. */
+export type ChatConnection = { id: string; name: string; provider: string; model: string; isDefault?: boolean };
 /** The models a connection's key can chat with, as loaded from the provider. */
 export type ModelList = { status: "loading" } | { status: "error"; error: string } | { status: "ok"; models: string[]; other: string[] };
 
@@ -25,13 +25,18 @@ const byDate = (list: ChatMeta[]) => {
 };
 
 /** Which AI to ask: the campaign's API-key connections, with a way to add another. */
-export function ConnectionMenu({ chats, current, onPick, connectLink }: { chats: ChatConnection[]; current: string; onPick: (id: string) => void; connectLink: React.ReactNode }) {
+export function ConnectionMenu({ chats, current, onPick, onDefault, busy, connectLink }: { chats: ChatConnection[]; current: string; onPick: (id: string) => void; onDefault: (id: string) => void; busy: boolean; connectLink: React.ReactNode }) {
+  const marked = chats.find(c => c.isDefault)?.id ?? chats[0]?.id;
   return <div className="ai-chat-menu ai-pop ai-pop-up" role="menu" aria-label="Which AI to ask" data-ai-menu>
     <h4>Ask which AI</h4>
-    {chats.map(c => <button key={c.id} type="button" role="menuitemradio" aria-checked={c.id === current} className="ai-pop-item" onClick={() => onPick(c.id)}>
-      <Bot size={15}/><span><strong>{c.name}</strong><small>{c.provider} · {c.model}</small></span>{c.id === current && <Check size={14} className="ai-pop-check"/>}
-    </button>)}
-    <div className="ai-pop-foot">{connectLink}<small>The chat carries on with whichever AI you pick. Each answer says who wrote it.</small></div>
+    {chats.map(c => <div key={c.id} className="ai-pop-row">
+      <button type="button" role="menuitemradio" aria-checked={c.id === current} className="ai-pop-item" onClick={() => onPick(c.id)}>
+        <Bot size={15}/><span><strong>{c.name}</strong><small>{c.provider} · {c.model}{chats.length > 1 && c.id === marked ? " · Default for new chats" : ""}</small></span>{c.id === current && <Check size={14} className="ai-pop-check"/>}
+      </button>
+      {chats.length > 1 && <button type="button" className={`icon-button ai-pop-star${c.id === marked ? " on" : ""}`} disabled={busy || c.id === marked} aria-pressed={c.id === marked}
+        aria-label={c.id === marked ? `${c.name} is the default for new chats` : `Make ${c.name} the default for new chats`} title={c.id === marked ? "Default for new chats" : "Make this the default for new chats"} onClick={() => onDefault(c.id)}><Star size={14}/></button>}
+    </div>)}
+    <div className="ai-pop-foot">{connectLink}<small>The chat carries on with whichever AI you pick. Each answer says who wrote it.{chats.length > 1 ? " The star sets which AI new chats ask, on every device." : ""}</small></div>
   </div>;
 }
 

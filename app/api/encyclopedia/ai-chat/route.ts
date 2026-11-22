@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {json,ownerFrom,sameOrigin} from '@/lib/encyclopedia/workspace-server';
 import {getBucket} from '@/lib/storage';
 import {campaignFor} from '@/lib/mcp/campaign-for';
-import {listConnections,targetFor,updateApi} from '@/lib/mcp/connections';
+import {listConnections,setChatDefault,targetFor,updateApi} from '@/lib/mcp/connections';
 import {chatTurn,cleanHistory} from '@/lib/ai/run';
 import {listModels,ProviderError} from '@/lib/ai/chat';
 import {chatModels} from '@/lib/ai/model-list';
@@ -13,13 +13,15 @@ export const maxDuration=60;
 const id=z.string().min(1).max(100);
 // The AI panel's chat, for a connection made with the GM's own API key. The key comes from the GM's device with this
 // request, is used for it only, and is never saved. Besides asking (the default), `models` lists the models the
-// connection's key can chat with, and `defaultModel` makes one the connection's model for new chats.
+// connection's key can chat with, and `defaultModel` makes one the connection's model for new chats, and `defaultAi`
+// makes the connection the AI new chats ask first.
 export async function POST(request:Request){
  const owner=await ownerFrom(request);if(!owner)return json({error:'Sign in required'},401);
  if(!sameOrigin(request))return json({error:'Same-origin request required'},403);
  try{
-  const raw=await request.text();if(raw.length>200_000)return json({error:'The conversation is too long. Start a new one.'},413);
-  const input=z.object({action:z.enum(['ask','models','defaultModel']).optional(),campaignId:id.optional(),maptableCampaignId:id.optional(),connectionId:id,apiKey:z.string().max(500).optional(),messages:z.array(z.unknown()).max(200).optional(),scene:z.string().max(200).optional(),chatId:z.string().max(100).optional(),model:z.string().max(200).optional(),folder:z.string().max(100).optional()}).parse(JSON.parse(raw));
+  const raw=await request.text();// Attached pictures and PDFs ride along as base64 (lib/ai/attachments.ts), under the host's 4.5 MB request limit.
+  if(raw.length>4_000_000)return json({error:'The conversation and its files are too big. Attach smaller files, or start a new chat.'},413);
+  const input=z.object({action:z.enum(['ask','models','defaultModel','defaultAi']).optional(),campaignId:id.optional(),maptableCampaignId:id.optional(),connectionId:id,apiKey:z.string().max(500).optional(),messages:z.array(z.unknown()).max(200).optional(),scene:z.string().max(200).optional(),chatId:z.string().max(100).optional(),model:z.string().max(200).optional(),folder:z.string().max(100).optional()}).parse(JSON.parse(raw));
   const bucket=getBucket(),campaign=await campaignFor(bucket,owner,input);
   if(!campaign)throw Error('This map has no Wiki campaign paired with it.');
   if(input.action==='models'){
@@ -29,6 +31,7 @@ export async function POST(request:Request){
    const {chat,other}=chatModels(await listModels({provider,baseUrl,key}),provider,providerOf(provider).suggested);
    return json({models:chat,other,current:c.api.model});
   }
+  if(input.action==='defaultAi')return json({ok:true,name:await setChatDefault(bucket,owner,campaign,input.connectionId)});
   if(input.action==='defaultModel'){
    const updated=await updateApi(bucket,owner,campaign,input.connectionId,{model:input.model});
    return json({ok:true,model:updated.api?.model});

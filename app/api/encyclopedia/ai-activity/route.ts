@@ -3,7 +3,7 @@ import {json,ownerFrom,sameOrigin} from '@/lib/encyclopedia/workspace-server';
 import {EncyclopediaStore} from '@/lib/encyclopedia/store';
 import {getBucket} from '@/lib/storage';
 import {publicActivity,readActivity,undoChanges,updateActivity} from '@/lib/mcp/activity';
-import {claimStoredKeys,listConnections} from '@/lib/mcp/connections';
+import {chatConnections,claimStoredKeys,listConnections} from '@/lib/mcp/connections';
 import {undoTable} from '@/lib/mcp/table';
 import {loadWorkspace,saveWorkspace} from '@/lib/workspace-storage';
 import {decideSuggestion} from '@/lib/mcp/suggestions';
@@ -23,8 +23,8 @@ export async function GET(request:Request){
   const moved=await claimStoredKeys(bucket,owner,id).catch(()=>[]);
   const [log,connections]=await Promise.all([readActivity(bucket,owner,id),listConnections(bucket,owner,id)]);
   const now=Date.now(),active=connections.filter(c=>c.lastUsedAt&&now-Date.parse(c.lastUsedAt)<ACTIVE_MS).sort((a,b)=>b.lastUsedAt!.localeCompare(a.lastUsedAt!));
-  // Connections made with an API key can be asked from the panel.
-  const chat=connections.flatMap(c=>c.api?[{id:c.id,name:c.name,provider:providerOf(c.api.provider).name,model:c.api.model}]:[]);
+  // Connections made with an API key can be asked from the panel: the GM's default first, which new chats ask.
+  const chat=chatConnections(connections).map(c=>({id:c.id,name:c.name,provider:providerOf(c.api!.provider).name,model:c.api!.model,...(c.chatDefault?{isDefault:true}:{})}));
   return json({...publicActivity(log),campaign:id,connected:active.map(c=>c.name),hasConnections:connections.length>0,chat,...(moved.length?{moved}:{})});
  }catch{return json({error:'Could not load the AI activity.'},400);}
 }

@@ -3,9 +3,13 @@
  * No server code, so the AI panel uses the same text it shows in its previews.
  */
 import type { Step } from "./chat.ts";
+import { attachedLine, type AttachmentName } from "./attachments.ts";
 
-/** An answer notes which connection (`by`) and model wrote it, since a chat can switch AI or model partway. */
-export type SavedTurn = { role: "user" | "assistant"; text: string; at: string; steps?: Step[]; by?: string; model?: string };
+/**
+ * An answer notes which connection (`by`) and model wrote it, since a chat can switch AI or model partway. A question
+ * notes the names of the files attached to it (`files`); the files themselves aren't saved.
+ */
+export type SavedTurn = { role: "user" | "assistant"; text: string; at: string; steps?: Step[]; by?: string; model?: string; files?: AttachmentName[] };
 /** `connectionId`, `connectionName` and `model` are the last ones used; `folder` is a ChatFolder's id. */
 export type ChatMeta = { id: string; title: string; connectionId: string; connectionName: string; model?: string; scene?: string; folder?: string; count: number; createdAt: string; updatedAt: string };
 /** A folder of saved chats, per campaign. */
@@ -34,7 +38,7 @@ export function chatMarkdown(chat: SavedChat, opts: { campaign?: string; heading
     lines.push(`# ${chat.title}`, "", `_${[opts.campaign, chat.scene, `${chat.connectionName}${chat.model ? ` (${chat.model})` : ""}`, dateLine(chat.createdAt)].filter(Boolean).join(" · ")}_`, "");
   }
   for (const t of chat.turns) {
-    lines.push(`**${t.role === "user" ? "You" : t.by ?? chat.connectionName}:** ${t.text.trim()}`, "");
+    lines.push(`**${t.role === "user" ? "You" : t.by ?? chat.connectionName}:** ${[t.text.trim(), attachedLine(t.files)].filter(Boolean).join(" ")}`, "");
     const steps = stepLines(t.steps);
     if (steps.length) lines.push(...steps, "");
   }
