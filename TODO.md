@@ -152,6 +152,13 @@ Updated 2026-11-22. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 - Done: Customize sidebar has Add a heading: a top-level heading the GM names, with the sections below it folded together. Custom categories have a + that makes a page shown in them, and can list every page of one of the GM's types.
 - Next: the MCP and bridge tools create Page and Other pages but not pages of a GM type. Not checked on the live site; checked locally (dark theme, 1440px and iPhone 13) against a sample workspace.
 
+## Wiki sidebar folders
+
+- Done: the page tree in the Wiki sidebar starts with its folders closed, so big imported campaigns (100 to 200 pages) show their top level only. Opening a page unfolds the folders above it and scrolls its row to the middle of the sidebar. Folders you open or close stay that way in this browser (`ttrpg-wiki-open-folders` in localStorage, at most 1,500 ids, newest kept). World Lore and Campaign Notes have a Close all folders button while any folder is open. Logic in `lib/encyclopedia/folder-state.ts`, hook in `components/encyclopedia/folder-state.ts`, tests in `tests/wiki-folders.test.mjs`.
+- Done: on a desktop the sidebar scrolls on its own: the campaign bar stays at the top and the sidebar stays in view under it (its measured height is `--wiki-bar-h`), so the page no longer scrolls a long way because of the tree. Phones keep their full-screen drawer, which now also scrolls to the open page.
+- Done: the tree's look: a hairline guide joins a folder to what is inside it, open folders show an open-folder icon, folder names read a little stronger than pages, counts sit in small pills, the open page has an accent bar, and sections are divided by a rule. Tokens only, so campaign themes carry over.
+- Not checked on the live site or with a campaign skin; checked locally at 1440px (light and dark) and iPhone 13 against a sample 213-page campaign.
+
 ## Wiki bottom space
 
 - Done: the 64px strip that global-dice.css reserves under every page no longer shows under the Wiki. The Wiki's footer row is now the home of the floating AI and Dice buttons (taller footer, right padding so its text never sits under them). Phones are unchanged.
