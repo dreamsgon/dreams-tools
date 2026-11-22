@@ -3,10 +3,10 @@
  * Moderation: multi-moderation on a board, private topics, the Trash, and printing or downloading a topic or a
  * whole board.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArchiveRestore, Check, Download, EyeOff, Flag, Lock, LockOpen, Pin, PinOff, Printer, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { confirmDialog } from '../confirm-dialog';
-import { forumCall, fullDate, when, type Frame, type PageData, type TopicPage } from './forum-api';
+import { forumCall, fullDate, when, wholeTopic, type Frame, type PageData, type TopicPage } from './forum-api';
 import { download, topicsHtml, topicsText, type ExportTopic } from './forum-export';
 import { Crumbs, Link, Portrait, TopicRow, type Go } from './forum-parts';
 
@@ -122,7 +122,7 @@ export function ReportsView({ frame, page, k, go, done }: { frame: Frame; page: 
         {p.snippet && <blockquote className="report-snippet">{p.snippet}{p.snippet.length >= 280 ? '…' : ''}</blockquote>}
         <ul className="report-reasons">{p.reports.map((r, i) => <li key={i}><Flag size={12} aria-hidden="true" /><span><b>{r.by}</b>: {r.reason}</span><small className="muted">{when(r.at)}</small></li>)}</ul>
         <footer className="trash-acts">
-          {!p.gone && <a className="f-btn small" href={`#post-${p.postId}`} onClick={e => { e.preventDefault(); go({ view: 'topic', id: p.topicId }); setTimeout(() => document.getElementById(`post-${p.postId}`)?.scrollIntoView({ block: 'start' }), 600); }}>Open the post</a>}
+          {!p.gone && <a className="f-btn small" href={`#post-${p.postId}`} onClick={e => { e.preventDefault(); go({ view: 'topic', id: p.topicId, post: p.postId }); }}>Open the post</a>}
           <button type="button" className="f-btn ghost small" disabled={busy === p.postId} onClick={() => void dismiss(p.postId)}><Check size={13} aria-hidden="true" />{busy === p.postId ? 'Dismissing…' : 'Dismiss'}</button>
         </footer>
       </article>) : <p className="muted empty">Nothing is reported.</p>}
@@ -142,16 +142,28 @@ export function exportTopic(page: TopicPage): ExportTopic {
 }
 
 /** The print page: the topic plainly, with Print and the downloads. */
-export function PrintView({ frame, page, k, go }: { frame: Frame; page: TopicPage; k: string; go: Go }) {
+export function PrintView({ frame, page: first, k, go }: { frame: Frame; page: TopicPage; k: string; go: Go }) {
+  // A long topic comes in pages: every page is read before it can be printed or downloaded.
+  const [whole, setWhole] = useState<TopicPage | null>(null), [got, setGot] = useState(0), [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    wholeTopic(k, first, n => { if (live) setGot(n); }).then(t => { if (live) { setWhole(t); setError(''); } }, e => { if (live) setError(e instanceof Error ? e.message : 'The topic couldn’t be read.'); });
+    return () => { live = false; };
+    // Again only when the topic gains or loses posts, not on every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [k, first.topic.id, first.paging.total]);
+  const page = whole ?? first, ready = !!whole;
   const topic = exportTopic(page), html = topicsHtml(topic.title, [topic]);
   const name = `${frame.settings.title} - ${topic.title}`, sheet = useRef<HTMLIFrameElement>(null);
   return <div className="print-page">
     <div className="print-tools no-print">
       <Crumbs frame={frame} boardId={page.topic.boardId} k={k} go={go} last={page.topic.title} />
       <p className="print-acts">
-        <button type="button" className="f-btn" onClick={() => { const w = sheet.current?.contentWindow; if (w) { w.focus(); w.print(); } else window.print(); }}><Printer size={14} aria-hidden="true" />Print</button>
-        <button type="button" className="f-btn ghost" onClick={() => download(`${name}.html`, html, 'text/html')}><Download size={14} aria-hidden="true" />Download .html</button>
-        <button type="button" className="f-btn ghost" onClick={() => download(`${name}.txt`, topicsText(topic.title, [topic]), 'text/plain')}><Download size={14} aria-hidden="true" />Download .txt</button>
+        {!ready && !error && <span className="muted">Reading all {first.paging.total} posts… {got || first.posts.length} so far</span>}
+        {error && <span className="form-error">{error}</span>}
+        <button type="button" className="f-btn" disabled={!ready} onClick={() => { const w = sheet.current?.contentWindow; if (w) { w.focus(); w.print(); } else window.print(); }}><Printer size={14} aria-hidden="true" />Print</button>
+        <button type="button" className="f-btn ghost" disabled={!ready} onClick={() => download(`${name}.html`, html, 'text/html')}><Download size={14} aria-hidden="true" />Download .html</button>
+        <button type="button" className="f-btn ghost" disabled={!ready} onClick={() => download(`${name}.txt`, topicsText(topic.title, [topic]), 'text/plain')}><Download size={14} aria-hidden="true" />Download .txt</button>
         <Link k={k} go={go} to={{ view: 'topic', id: page.topic.id }}>Back to the topic</Link>
       </p>
     </div>

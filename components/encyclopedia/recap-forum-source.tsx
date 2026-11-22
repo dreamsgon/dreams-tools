@@ -6,7 +6,7 @@
  */
 import {useEffect,useMemo,useState} from 'react';
 import {Search,Check} from 'lucide-react';
-import {forumCall,when,type Frame,type TopicPage} from '../forum/forum-api';
+import {forumCall,when,wholeTopic,type Frame,type TopicPage} from '../forum/forum-api';
 import type {TopicRow} from '@/lib/forum/view';
 import {withRollResults} from '@/lib/forum/rolls';
 
@@ -32,7 +32,8 @@ export function ForumSource({campaignId,picked,onPick}:{campaignId:string;picked
  const shown=(list?.page.topics??[]).filter(t=>!find.trim()||t.title.toLowerCase().includes(find.trim().toLowerCase()));
  const pick=async(t:TopicRow)=>{
   setBusy(t.id);setError('');
-  try{const v=await forumCall<{page:TopicPage}>({action:'view',campaign:key,page:{kind:'topic',id:t.id}});onPick({id:t.id,title:t.title,text:topicTranscript(v.page)});}
+  // A long topic comes in pages: the recap reads every one.
+  try{const v=await forumCall<{page:TopicPage}>({action:'view',campaign:key,page:{kind:'topic',id:t.id,page:1,per:200}});onPick({id:t.id,title:t.title,text:topicTranscript(await wholeTopic(key,v.page))});}
   catch(e){setError(e instanceof Error?e.message:'Couldn’t read that topic.');}
   finally{setBusy('');}
  };

@@ -8,14 +8,14 @@
  */
 import type { MemberList } from "../members.ts";
 import { playerCampaign, type Workspace } from "../encyclopedia/world-model.ts";
-import { ForumError, boardAccess, forumRights, kindOf, reply, startTopic, suggestPost, typeOf, type Board, type Poster, type Topic, type TopicSummary } from "./model.ts";
+import { ForumError, boardAccess, forumRights, kindOf, postTotal, reply, startTopic, suggestPost, typeOf, type Board, type Poster, type Topic, type TopicSummary } from "./model.ts";
 import { activePage, castOf, controls, memberName, shownTopics, topicPage, type Context } from "./view.ts";
 import { rollLine, rollPost, secureDie, withRollResults, type Roll } from "./rolls.ts";
 import { sendAlerts } from "./request.ts";
 import type { ForumStore } from "./store.ts";
 
 export type ForumMcpDeps = {
-  store: Pick<ForumStore, "read" | "readTopic" | "apply" | "readAlerts" | "writeAlerts">;
+  store: Pick<ForumStore, "read" | "readTopic" | "withTopic" | "readPosts" | "apply" | "readAlerts" | "writeAlerts">;
   /** The campaign's member list (read when a forum tool is first used). */
   members: () => Promise<MemberList>;
   owner: string; campaignId: string;
@@ -96,9 +96,6 @@ export function forumMcp(d: ForumMcpDeps) {
   }
   const gmRowsOf = (gm: Context) => new Map(activePage(gm, 3000).topics.map(r => [r.id, r]));
 
-  async function topicFile(t: TopicSummary) {
-    return (await d.store.readTopic(d.owner, d.campaignId, t.id))?.topic ?? fail("That topic was removed.");
-  }
 
   return {
     /** list_forum: categories and their boards, with subforums. */
@@ -124,10 +121,15 @@ export function forumMcp(d: ForumMcpDeps) {
 
     /** read_topic: a topic's posts with the dice written in, its fight and whose turn it is. */
     async read(a: { topic: string; from?: number; last?: number }) {
-      const { ctx, gm } = await load(), s = topicOf(ctx, a.topic), page = topicPage(ctx, await topicFile(s)) ?? fail("That topic was removed.");
-      const board = ctx.forum.boards.find(b => b.id === s.boardId), ic = !!board && kindOf(ctx.forum, board) === "ic", total = page.posts.length;
-      const count = Math.min(Math.max(a.last ?? 30, 1), 100), start = a.from ? Math.min(Math.max(a.from, 1), total) - 1 : Math.max(0, total - count);
-      const posts = page.posts.slice(start, start + count).map(p => ({
+      const { ctx, gm } = await load(), s = topicOf(ctx, a.topic), count = Math.min(Math.max(a.last ?? 30, 1), 100);
+      // Only the posts asked for are read: a long topic keeps its older posts in pages (pages.ts).
+      const got = await d.store.withTopic(d.owner, d.campaignId, s.id, async topic => {
+        const total = postTotal(topic), start = a.from ? Math.min(Math.max(a.from, 1), total) - 1 : Math.max(0, total - count);
+        return { total, start, page: topicPage(ctx, topic, { posts: await d.store.readPosts(d.owner, d.campaignId, topic, start, count), start, total, page: 1, pages: 1, per: count }) };
+      });
+      const page = got?.page ?? fail("That topic was removed."), { total, start } = got!;
+      const board = ctx.forum.boards.find(b => b.id === s.boardId), ic = !!board && kindOf(ctx.forum, board) === "ic";
+      const posts = page.posts.map(p => ({
         number: p.number, name: p.as ? page.cards[p.as]?.name ?? "A character" : ic ? "Game Master" : p.name, player: p.name, at: shortDate(p.at),
         ...(p.turn ? { turn: `Round ${p.turn.round}, ${p.turn.name}'s turn` } : {}), ...(p.ai ? { draftedWithAi: true } : {}), ...(p.editedAt ? { edited: true } : {}),
         body: withRollResults(p.body, p.rolls),

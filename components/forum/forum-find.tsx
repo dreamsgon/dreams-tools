@@ -43,7 +43,7 @@ export function Alerts({ frame, k, go }: { frame: Frame; k: string; go: Go }) {
         return <li key={x.id} className={x.fresh ? 'due' : ''}>
           <Portrait k={k} picture={x.picture} name={x.name} className="portrait small" />
           <div><span className="alert-line"><Icon size={12} aria-hidden="true" /><b>{x.name}</b> {alertText[x.kind]}</span>
-            <Link k={k} go={p => { setOpen(false); go(p); }} to={{ view: 'topic', id: x.topicId }}>{x.title}</Link>
+            <Link k={k} go={p => { setOpen(false); go(p); }} to={{ view: 'topic', id: x.topicId, ...(x.postId ? { post: x.postId } : {}) }}>{x.title}</Link>
             <small>{when(x.at)}</small></div>
         </li>;
       })}</ul> : <p className="muted">Nothing yet. You’ll hear here when someone writes @ and your name or your character’s, quotes you, adds you to a private topic, or a fight comes round to your turn.</p>}
@@ -92,7 +92,7 @@ export function SearchView({ frame, page, k, go }: { frame: Frame; page: SearchD
       <p className="muted">{n ? `${n}${n === 40 ? '+' : ''} ${n === 1 ? 'topic' : 'topics'} with “${page.q}”` : `Nothing found for “${page.q}”.`}{page.of > page.searched ? ` Searched the latest ${page.searched} of ${page.of} topics.` : ''}</p>
       {page.results.map(t => <div key={t.id} className="search-hit">
         <TopicRow t={t} k={k} go={go} board={t.board} />
-        {t.hits.length > 0 && <ul className="hit-posts">{t.hits.map(h => <li key={h.postId}><b>{h.name}</b> <small className="muted">#{h.number}</small><p>{mark(h.snippet, page.q)}</p></li>)}{t.more > 0 && <li className="muted small">and {t.more} more {t.more === 1 ? 'post' : 'posts'}</li>}</ul>}
+        {t.hits.length > 0 && <ul className="hit-posts">{t.hits.map(h => <li key={h.postId}><b>{h.name}</b> <small className="muted"><Link k={k} go={go} to={{ view: 'topic', id: t.id, post: h.postId }}>#{h.number}</Link></small><p>{mark(h.snippet, page.q)}</p></li>)}{t.more > 0 && <li className="muted small">and {t.more} more {t.more === 1 ? 'post' : 'posts'}</li>}</ul>}
       </div>)}
     </section>
   </>;
