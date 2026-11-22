@@ -221,3 +221,17 @@ test('the untouched starter scene is not counted as a map to sort', async () => 
   assert.equal(campaignSummary({...map,scenes:[...map.scenes,starter]},book()).loose,1);
   assert.equal(campaignSummary({...map,scenes:[...map.scenes,{...starter,name:'Harbor'}]},book()).loose,2);
 });
+
+test('campaign slugs: tidying, checks and links', async () => {
+  const {toSlug,isSlug,slugProblem,campaignHref}=await import('../lib/campaign-slug.ts');
+  assert.equal(toSlug('  Storm King\'s Thunder: Part 2 '),'storm-king-s-thunder-part-2');
+  assert.equal(toSlug('Café Ünder--Mountain'),'cafe-under-mountain');
+  assert.equal(toSlug('---'),'');
+  assert.equal(toSlug('a'.repeat(80)).length,60);
+  assert.ok(isSlug('sotdq-b'));
+  for(const bad of ['e:abc','Sotdq','a--b','-a','a-','',`${'a'.repeat(61)}`])assert.equal(isSlug(bad),false,bad);
+  assert.equal(slugProblem('sotdq-b',['other']),null);
+  assert.match(slugProblem('sotdq-b',['sotdq-b']),/already uses/);
+  assert.equal(campaignHref({key:'e:a1',slug:'sotdq-b'}),'/campaigns/sotdq-b');
+  assert.equal(campaignHref({key:'e:a1',slug:null}),'/campaigns/e%3Aa1');
+});

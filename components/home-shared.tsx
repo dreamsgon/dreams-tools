@@ -1,3 +1,4 @@
+import { campaignHref } from "@/lib/campaign-slug";
 import { FileText, Map as MapIcon, User } from "lucide-react";
 import type { CampaignRow } from "@/lib/campaign-links";
 
@@ -16,7 +17,7 @@ export function when(iso: string, now = Date.now()) {
 }
 
 /** A campaign opens in its hub on the Campaigns page. */
-export const openHref = (r: { key: string }) => `/campaigns/${encodeURIComponent(r.key)}`;
+export const openHref = (r: { key: string; slug?: string | null }) => campaignHref(r);
 export const notesHref = (r: CampaignRow) => r.encyclopedia ? `/encyclopedia?campaign=${encodeURIComponent(r.encyclopedia.id)}` : null;
 export const mapsHref = (r: CampaignRow) => r.maptable ? `/maptable?campaign=${encodeURIComponent(r.maptable.id)}` : null;
 /** The campaign's forum, once the GM has set it up. */

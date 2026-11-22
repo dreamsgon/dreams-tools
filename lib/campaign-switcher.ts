@@ -1,3 +1,4 @@
+import { campaignHref } from "./campaign-slug.ts";
 import { campaignLayout, homeCampaigns, type CampaignFolder, type CampaignRow, type CampaignSummary } from "./campaign-links.ts";
 import { joinedForSwitcher, type JoinedCampaign } from "./campaign-nav.ts";
 
@@ -47,7 +48,7 @@ export function hasHalf(tool: SwitcherTool, row: CampaignRow): boolean {
 }
 
 /** The campaign's hub on the Campaigns page. */
-export const hubHref = (row: CampaignRow) => `/campaigns/${encodeURIComponent(row.key)}`;
+export const hubHref = (row: CampaignRow) => campaignHref(row);
 
 /** The small line under a campaign name. */
 export function rowDetail(tool: SwitcherTool, row: CampaignRow): string {

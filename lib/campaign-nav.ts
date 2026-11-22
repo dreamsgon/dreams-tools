@@ -65,12 +65,12 @@ export function campaignToolLinks(campaign: BarCampaign): ToolLink[] {
   }
   const row = campaign.row, links = hubLinks(row);
   const href: Record<CampaignTool, string | null> = {
-    dashboard: dashboardHref(row.key),
+    dashboard: dashboardHref(row.slug ?? row.key),
     maptable: links.maptable,
     encyclopedia: links.notes(),
     forum: links.forum,
   };
-  return campaignTools.map(t => ({ tool: t, name: toolNames[t], href: href[t], add: href[t] || t === "dashboard" ? null : addToolHref(row.key, t) }));
+  return campaignTools.map(t => ({ tool: t, name: toolNames[t], href: href[t], add: href[t] || t === "dashboard" ? null : addToolHref(row.slug ?? row.key, t) }));
 }
 
 /**
@@ -80,7 +80,7 @@ export function campaignToolLinks(campaign: BarCampaign): ToolLink[] {
 export function landingHref(campaign: BarCampaign, tool: CampaignTool): string | null {
   const links = campaignToolLinks(campaign), same = links.find(l => l.tool === tool);
   if (same?.href) return same.href;
-  if (campaign.kind === "own") return tool === "dashboard" ? dashboardHref(campaign.key) : addToolHref(campaign.key, tool);
+  if (campaign.kind === "own") { const at = campaign.row.slug ?? campaign.key; return tool === "dashboard" ? dashboardHref(at) : addToolHref(at, tool); }
   return links.find(l => l.href)?.href ?? null;
 }
 
@@ -108,7 +108,7 @@ export type CampaignRef = { key?: string; maptableId?: string; encyclopediaId?: 
 export function matchesRef(campaign: BarCampaign, ref: CampaignRef): boolean {
   if (campaign.kind === "member") return !!ref.memberRef && campaign.joined.ref === ref.memberRef;
   const row = campaign.row;
-  if (ref.key) return row.key === ref.key || (!!row.maptable && ref.key === `m:${row.maptable.id}`) || (!!row.encyclopedia && ref.key === `e:${row.encyclopedia.id}`);
+  if (ref.key) return row.key === ref.key || (!!row.slug && ref.key === row.slug) || (!!row.maptable && ref.key === `m:${row.maptable.id}`) || (!!row.encyclopedia && ref.key === `e:${row.encyclopedia.id}`);
   if (ref.encyclopediaId) return row.encyclopedia?.id === ref.encyclopediaId;
   if (ref.maptableId) return row.maptable?.id === ref.maptableId;
   return false;

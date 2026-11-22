@@ -11,7 +11,9 @@ import { sortSiblings } from "./folder-order.ts";
  * copied, and removing the link leaves both campaigns exactly as they were.
  */
 
-export type MapCampaign = { id: string; name: string; scenes: number };
+export type MapCampaign = { id: string; name: string; scenes: number;
+  /** The web address set while it had no Wiki campaign (lib/campaign-slug.ts). */
+  slug?: string };
 export type BookCampaign = { id: string; name: string; description: string; worldId: string; worldName: string; archived: boolean; pages: number; characters: number; maptableCampaignId: string | null;
   /** Whether the GM set up this campaign's forum. */
   forum: boolean;
@@ -24,6 +26,8 @@ export type BookCampaign = { id: string; name: string; description: string; worl
   /** Its most recently changed pages, newest first (at most three). */
   latest: RecentPage[] };
 export type CampaignRow = { key: string; name: string; maptable: MapCampaign | null; encyclopedia: BookCampaign | null;
+  /** The campaign's own web address, /campaigns/<slug>, or null when it has none (lib/campaign-slug.ts). */
+  slug: string | null;
   /** The campaign folder it sits in on the Campaigns page, or null at the top level. */
   folderId: string | null };
 /** A folder on the Campaigns page. These are Maptable collections of kind "folder" whose ancestors are all folders, never scene folders inside a campaign. */
@@ -59,7 +63,7 @@ export function campaignFolders(collections: MapWorkspace["collections"] | undef
 }
 
 const mapCampaigns = (w: Pick<MapWorkspace, "collections" | "scenes"> | null): MapCampaign[] =>
-  (w?.collections ?? []).filter(c => c.kind === "campaign").map(c => ({ id: c.id, name: c.name, scenes: scenesInOrder(w!, c.id).length }));
+  (w?.collections ?? []).filter(c => c.kind === "campaign").map(c => ({ id: c.id, name: c.name, scenes: scenesInOrder(w!, c.id).length, ...(c.slug ? { slug: c.slug } : {}) }));
 
 function bookCampaigns(s: BookWorkspace): BookCampaign[] {
   const worlds = new Map(s.worlds.map(w => [w.id, w]));
@@ -86,13 +90,13 @@ export function campaignSummary(map: Pick<MapWorkspace, "collections" | "scenes"
   const found = campaignFolders(map?.collections), folders = map?.campaignFoldersOrdered ? found : sortSiblings(found, byName), folderIds = new Set(folders.map(f => f.id));
   const parentOf = new Map((map?.collections ?? []).map(c => [c.id, c.parentId]));
   const inFolder = (id: string | null | undefined) => id && folderIds.has(id) ? id : null;
-  const bookFolders = new Map(book.campaigns.map(c => [c.id, c.folderId]));
+  const bookFolders = new Map(book.campaigns.map(c => [c.id, c.folderId])), bookSlugs = new Map(book.campaigns.map(c => [c.id, c.slug]));
   const rows: CampaignRow[] = books.map(b => {
     const paired = b.maptableCampaignId ? mapById.get(b.maptableCampaignId) ?? null : null;
     if (paired) used.add(paired.id);
-    return { key: `e:${b.id}`, name: b.name, maptable: paired, encyclopedia: b, folderId: inFolder(paired ? parentOf.get(paired.id) : bookFolders.get(b.id)) };
+    return { key: `e:${b.id}`, name: b.name, maptable: paired, encyclopedia: b, slug: bookSlugs.get(b.id) ?? null, folderId: inFolder(paired ? parentOf.get(paired.id) : bookFolders.get(b.id)) };
   });
-  for (const m of maps) if (!used.has(m.id)) rows.push({ key: `m:${m.id}`, name: m.name, maptable: m, encyclopedia: null, folderId: inFolder(parentOf.get(m.id)) });
+  for (const m of maps) if (!used.has(m.id)) rows.push({ key: `m:${m.id}`, name: m.name, maptable: m, encyclopedia: null, slug: m.slug ?? null, folderId: inFolder(parentOf.get(m.id)) });
   const inCampaign = new Set(maps.flatMap(m => scenesInOrder(map!, m.id).map(item => item.scene.id)));
   return {
     rows: rows.sort(byName), folders,
@@ -245,8 +249,10 @@ export const cleanName = (name: unknown, what = "campaign") => {
 /**
  * A campaign row by its key. Maptable only knows its own campaign id, so it links to a campaign's
  * dashboard as `m:<maptable id>`; that finds the row even when the campaign also has notes (key `e:<id>`).
+ * A campaign's slug (lib/campaign-slug.ts) finds it too: slugs never hold a colon, so they can't clash with a key.
  */
-export function rowByKey<R extends { key: string; maptable: { id: string } | null; encyclopedia: { id: string } | null }>(rows: readonly R[], key: string): R | undefined {
+export function rowByKey<R extends { key: string; maptable: { id: string } | null; encyclopedia: { id: string } | null; slug?: string | null }>(rows: readonly R[], key: string): R | undefined {
+  if (!key.includes(":")) return key ? rows.find(r => r.slug === key) : undefined;
   return rows.find(r => r.key === key)
     ?? (key.startsWith("m:") ? rows.find(r => r.maptable?.id === key.slice(2)) : key.startsWith("e:") ? rows.find(r => r.encyclopedia?.id === key.slice(2)) : undefined);
 }

@@ -1,3 +1,4 @@
+import { campaignHref } from "./campaign-slug.ts";
 import type { Bucket } from "./storage-types";
 import { collectionPath, type Workspace as MapWorkspace } from "./model.ts";
 import type { Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
@@ -73,7 +74,7 @@ export function describeTagged(lib: TagLibrary, map: Pick<MapWorkspace, "collect
       // A campaign paired after it was tagged has two keys; show it once with both sets of tags.
       const seen = campaignRows.get(r.key);
       if (seen) { seen.tagIds = [...new Set([...seen.tagIds, ...tagIds])]; continue; }
-      const item: TaggedItem = { key: `campaign:${r.key}`, kind, title: r.name, detail: "Campaign", href: `/campaigns/${encodeURIComponent(r.key)}`, tagIds };
+      const item: TaggedItem = { key: `campaign:${r.key}`, kind, title: r.name, detail: "Campaign", href: campaignHref(r), tagIds };
       campaignRows.set(r.key, item); items.push(item);
     }
   }
