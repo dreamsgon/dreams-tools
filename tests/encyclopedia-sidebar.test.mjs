@@ -8,10 +8,10 @@ function withSidebar(sidebar){const s=demoWorkspace();s.campaigns=s.campaigns.ma
 
 test('a campaign without a sidebar shows the starting layout', () => {
   const d=sidebarOf(undefined);
-  assert.deepEqual(d.nav.map(x=>x.id),['quests','codex','relationships','characters','maps','calendar','tables','templates']);
+  assert.deepEqual(d.nav.map(x=>x.id),['quests','sessions','codex','relationships','characters','maps','calendar','tables','templates']);
   assert.ok(d.nav.every(x=>x.on));
   assert.deepEqual(d.quick.map(l=>l.type==='tool'?l.tool:l.type==='view'?l.view:''),['form','items','share','look']);
-  assert.deepEqual(d.sections.map(x=>x.id),['lore','notes','sessions','orgs']);
+  assert.deepEqual(d.sections.map(x=>x.id),['lore','notes','orgs']);
   assert.equal(sidebarToSave(defaultSidebar()),undefined);
 });
 
@@ -29,13 +29,13 @@ test('a sidebar layout is checked with the campaign', () => {
 
 test('menu items and sections are moved, hidden and shown', () => {
   let s=defaultSidebar();
-  s=moveNav(s,7,0);
+  s=moveNav(s,8,0);
   assert.equal(s.nav[0].id,'templates');
   assert.equal(moveNav(s,0,99),s);
   s=showNav(s,'codex',false);
   assert.equal(s.nav.find(x=>x.id==='codex').on,false);
-  s=moveSection(s,3,0);
-  assert.deepEqual(s.sections.map(x=>x.id),['orgs','lore','notes','sessions']);
+  s=moveSection(s,2,0);
+  assert.deepEqual(s.sections.map(x=>x.id),['orgs','lore','notes']);
   s=showSection(s,'lore',false);
   assert.equal(s.sections.find(x=>x.id==='lore').on,false);
   assert.notEqual(sidebarToSave(s),undefined);
@@ -81,7 +81,7 @@ test('categories are added, renamed, filled, ordered and removed', () => {
   assert.equal('kinds' in s.categories[0],false);
   s=removeCategory(s,made.id);
   assert.deepEqual(s.categories,[]);
-  assert.deepEqual(s.sections.map(x=>x.id),['lore','notes','sessions','orgs']);
+  assert.deepEqual(s.sections.map(x=>x.id),['lore','notes','orgs']);
 });
 
 test('a category lists its links, then every page of its kinds by name', () => {
@@ -95,7 +95,7 @@ test('a saved layout is made whole: new menu items and loose categories join, un
   const s=sidebarOf({nav:[{id:'maps',on:false},{id:'maps',on:true}],quick:[],sections:[{id:'gone',on:true},{id:'notes',on:false}],categories:[{id:'k1',name:'Mine',links:[]}]});
   assert.equal(s.nav.length,navIds.length);
   assert.deepEqual(s.nav[0],{id:'maps',on:false});
-  assert.deepEqual(s.sections.map(x=>x.id),['notes','lore','sessions','orgs','k1']);
+  assert.deepEqual(s.sections.map(x=>x.id),['notes','lore','orgs','k1']);
   assert.equal(s.sections[0].on,false);
 });
 
@@ -127,4 +127,12 @@ test('a category can gather every page with one of its tags, after its links and
  assert.deepEqual(items(cat,pages,id=>tags[id]??[]).map(x=>x.page.id),['c','a']);
  assert.deepEqual(items(cat,pages).length,0,'without tags to read, tags gather nothing');
  assert.equal(setCategoryTags(s,'coast',[]).categories[0].tags,undefined);
+});
+
+test('Sessions moved from a folding section up into the menu, after Quests, in saved layouts too', () => {
+  const saved=sidebarOf({nav:[{id:'codex',on:true},{id:'quests',on:false}],quick:[],sections:[{id:'sessions',on:true},{id:'notes',on:true}],categories:[]});
+  assert.deepEqual(saved.nav.slice(0,3).map(x=>x.id),['codex','quests','sessions']);
+  assert.equal(saved.nav.find(x=>x.id==='sessions').on,true);
+  assert.equal(saved.sections.some(x=>x.id==='sessions'),false,'the old section is gone');
+  assert.equal(sidebarSchema.safeParse({...defaultSidebar(),categories:[{id:'sessions',name:'Clash',links:[]}]}).success,false);
 });

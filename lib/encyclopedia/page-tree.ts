@@ -61,6 +61,19 @@ export function movePage(s: Workspace, id: string, targetId: string, place: Drop
   return { ...s, entries: s.entries.map(e => e.id === id ? { ...e, parentId, order: orders.get(e.id) } : orders.has(e.id) ? { ...e, order: orders.get(e.id) } : e) };
 }
 
+/**
+ * Files a page into a folder (any page that holds sub-pages), at the end, or back at the top level when `folderId` is null.
+ * Returns null when it can’t go there, e.g. a campaign page into a shared-lore folder; `dropProblem` says why.
+ */
+export function moveIntoFolder(s: Workspace, id: string, folderId: string | null): Workspace | null {
+  if (folderId) return movePage(s, id, folderId, "inside");
+  const entry = byId(s, id);
+  if (!entry) return null;
+  if (entry.parentId === null) return s;
+  const order = s.entries.filter(e => e.id !== id && e.worldId === entry.worldId && e.campaignId === entry.campaignId && e.parentId === null).length;
+  return { ...s, entries: s.entries.map(e => e.id === id ? { ...e, parentId: null, order } : e) };
+}
+
 /** Pages a link typed on `from` can point at: its own campaign and shared lore in the same world. */
 const linkable = (s: Workspace, from: Entry) => visibleEntries(s, from.worldId, from.campaignId).filter(e => e.id !== from.id);
 
