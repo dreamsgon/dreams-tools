@@ -5,15 +5,15 @@ import { librarySchema, emptyLibrary, LIBRARY_LIMIT, type TableLibrary } from '.
 import { TRANSCRIPT_LIMIT } from './recaps.ts';
 import { addVersion, changedEntries, emptyHistory, historyEntryId, historySchema, snapshotOf, type PageHistory, type Snapshot } from './history.ts';
 import { pictureIds } from './markup.ts';
-import { applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, joinWorkspace, partLimitOk, totalLimitOk, PAGE_LIMIT, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
+import { applyScopedPatch, scopeKeys, scopedWorkspace, partSizes, type PartSize, type ScopePlace, type WikiMeta, applyWikiPatch, DamagedWikiError, DEFAULT_PART_LIMIT, DEFAULT_TOTAL_LIMIT, joinWorkspace, worldKey, campaignKey, partLimitOk, totalLimitOk, PAGE_LIMIT, sizeProblem, splitWorkspace, type Layout, type Part, type PartKey, type WikiPatch } from './wiki-parts.ts';
 const INDEX_FORMAT = 'wiki-parts-v1';
 /** A campaign whose pages are archived (store.ts archiveCampaign): its pages, kept apart from the Wiki. */
 const archiveSchema = z.object({ format: z.literal('wiki-archive-v1'), campaignId: z.string(), at: z.string(), entries: z.array(entrySchema) });
 /** An archive request that can't be done; the message is for the person. */
 export class ArchiveError extends Error {}
-type PartRef = { key: string; bytes: number; hash: string };
+type PartRef = { key: string; bytes: number; hash: string; pages?: number };
 /** workspace.json once the Wiki is split: which part holds each campaign and world. It has no `data`, so older code refuses it instead of saving over it. */
-type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; total?: number; legacyBackup?: string };
+type WikiIndex = { format: typeof INDEX_FORMAT; schemaVersion: 1; revision: number; layout: Layout; parts: Record<PartKey, PartRef>; limit?: number; total?: number; legacyBackup?: string; meta?: WikiMeta };
 type Stored = { data: Workspace; revision: number; etag: string | null; index: WikiIndex | null; parts: Map<PartKey, Part> | null; legacy: unknown; limit: number; total: number };
 function isIndex(x: Record<string, unknown>, prefix: string): x is WikiIndex & Record<string, unknown> {
   if (x.format !== INDEX_FORMAT) return false;
@@ -69,6 +69,55 @@ export class EncyclopediaStore {
     if (loaded.some(p => !p)) { if (tries > 1) return this.stored(owner, tries - 1); throw new DamagedWikiError('Part of your Wiki could not be found. Nothing was changed.'); }
     const parts = new Map(refs.map(([key], i) => [key, loaded[i]!]));
     return { data: workspaceSchema.parse(joinWorkspace(saved.layout, parts)), revision, etag: object.etag, index: saved, parts, legacy: null, limit: partLimitOk(saved.limit) ? saved.limit : DEFAULT_PART_LIMIT, total: totalLimitOk(saved.total) ? saved.total : DEFAULT_TOTAL_LIMIT };
+  }
+  /**
+   * The Wiki with every world and campaign but only the pages one place needs (wiki-parts.ts scopeKeys): what the Wiki
+   * app opens, so a big Wiki loads one campaign at a time. `keys` asks for those parts instead (the app's poll and a
+   * switch to another campaign). `entryId` finds the campaign or world a page is in when nothing else says where.
+   * `scope` is the parts the pages came from; `sizes` is how big every part is, opened or not.
+   */
+  async readScoped(owner: string, place: ScopePlace & { keys?: PartKey[]; entryId?: string | null }, tries = 3): Promise<{ data: Workspace; revision: number; etag: string | null; limit: number; total: number; scope: PartKey[]; sizes: PartSize[] }> {
+    const object = await this.bucket.get(encyclopediaPrefix(owner)+'workspace.json');
+    const saved = object ? await object.json<Record<string, unknown>>() : null;
+    const index = saved && isIndex(saved, encyclopediaPrefix(owner)) && saved.meta && Array.isArray(saved.meta.worlds) && Array.isArray(saved.meta.campaigns) ? saved as WikiIndex & { meta: WikiMeta } : null;
+    if (!index || !object) {
+      // An account not split yet, or split before the index named its campaigns: read it all, then cut it down.
+      const all = await this.stored(owner), { layout, parts } = splitWorkspace(all.data), meta = { worlds: all.data.worlds, campaigns: all.data.campaigns };
+      const keys = this.keysFor(meta, place, parts);
+      return { data: scopedWorkspace(layout, meta, parts, keys), revision: all.revision, etag: all.etag, limit: all.limit, total: all.total, scope: keys, sizes: partSizes(all.data) };
+    }
+    if (!Number.isSafeInteger(index.revision) || index.revision < 1) throw Error('Invalid encyclopedia revision.');
+    const read = async (key: PartKey) => { const ref = index.parts[key], part = ref ? await this.bucket.get(ref.key) : null; return part ? part.json<Part>() : null; };
+    let keys = (place.keys ?? []).filter(k => k in index.parts);
+    if (!place.keys) {
+      const hinted = place.campaignId || place.worldId || place.maptableId ? null : place.entryId;
+      // A link to a page names only the page: find the campaign (or world lore) it is in.
+      let found: PartKey | null = null;
+      if (hinted) for (const key of Object.keys(index.parts)) { const part = await read(key); if (part?.entries.some(e => e.id === hinted)) { found = key; break; } }
+      keys = scopeKeys(index.meta, found ? (found.startsWith('c:') ? { campaignId: found.slice(2) } : { worldId: found.slice(2) }) : place).filter(k => k in index.parts);
+    }
+    const loaded = await eachLimited(keys, read);
+    // A save between reading the index and its parts removes parts it replaced: read again.
+    if (loaded.some(p => !p)) { if (tries > 1) return this.readScoped(owner, place, tries - 1); throw new DamagedWikiError('Part of your Wiki could not be found. Nothing was changed.'); }
+    const parts = new Map(keys.map((k, i) => [k, loaded[i]!]));
+    const names = new Map<string, Pick<PartSize, 'name' | 'kind'>>([...index.meta.worlds.map(w => [worldKey(w.id), { name: `${w.name} (shared lore)`, kind: 'world' as const }] as const), ...index.meta.campaigns.map(c => [campaignKey(c.id), { name: c.name, kind: 'campaign' as const }] as const)]);
+    const sizes: PartSize[] = Object.entries(index.parts).map(([key, ref]) => ({ key, bytes: ref.bytes, pages: ref.pages ?? parts.get(key)?.entries.length ?? 0, ...(names.get(key) ?? { name: 'Pages outside any world', kind: 'other' as const }) })).sort((a, b) => b.bytes - a.bytes);
+    return { data: workspaceSchema.parse(scopedWorkspace(index.layout, index.meta, parts, keys)), revision: index.revision, etag: object.etag, limit: partLimitOk(index.limit) ? index.limit : DEFAULT_PART_LIMIT, total: totalLimitOk(index.total) ? index.total : DEFAULT_TOTAL_LIMIT, scope: keys, sizes };
+  }
+  private keysFor(meta: WikiMeta, place: ScopePlace & { keys?: PartKey[]; entryId?: string | null }, parts: ReadonlyMap<PartKey, Part>) {
+    if (place.keys) return place.keys.filter(k => parts.has(k));
+    const hinted = place.campaignId || place.worldId || place.maptableId ? null : place.entryId;
+    const found = hinted ? [...parts].find(([, p]) => p.entries.some(e => e.id === hinted))?.[0] : undefined;
+    return scopeKeys(meta, found ? (found.startsWith('c:') ? { campaignId: found.slice(2) } : { worldId: found.slice(2) }) : place).filter(k => parts.has(k));
+  }
+  /** A save from a Wiki that opened only `scope` (readScoped): pages outside it stay as stored. */
+  async saveScopedPatch(owner: string, patch: WikiPatch, revision: number, scope: PartKey[]) {
+    const previous=await this.stored(owner);
+    if (previous.revision!==revision) return null;
+    const split=previous.parts && previous.index ? { layout: previous.index.layout, parts: previous.parts } : splitWorkspace(previous.data);
+    const data=workspaceSchema.parse(applyScopedPatch(split.parts, split.layout, patch, scope));
+    const untouched=new Set(Object.keys(previous.index?.parts ?? {}).filter(key => !(key in patch.parts)));
+    return this.commit(owner, previous, markEditor(previous.data,data), { untouched });
   }
   async save(owner: string, input: Workspace, revision: number) {
     return (await this.saveTagged(owner, input, revision))?.revision ?? null;
@@ -161,13 +210,13 @@ export class EncyclopediaStore {
     const written: string[]=[];
     const refs=Object.fromEntries(await eachLimited([...parts], async ([key, part]) => {
       const had=old[key];
-      if (had && untouched.has(key)) return [key, had] as const;
+      if (had && untouched.has(key)) return [key, { ...had, pages: part.entries.length }] as const;
       const text=JSON.stringify(part), hash=await sha256(text);
-      if (had && had.hash===hash) return [key, had] as const;
+      if (had && had.hash===hash) return [key, { ...had, pages: part.entries.length }] as const;
       const path=`${base}parts/${encodeURIComponent(key)}/${crypto.randomUUID()}.json`;
       written.push(path);
       await this.bucket.put(path, text, { httpMetadata: { contentType: 'application/json' } });
-      return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash }] as const;
+      return [key, { key: path, bytes: new TextEncoder().encode(text).length, hash, pages: part.entries.length }] as const;
     }).catch(async (error) => { await this.forget(written); throw error; }));
     let legacyBackup=previous.index?.legacyBackup;
     if (previous.legacy) {
@@ -176,7 +225,8 @@ export class EncyclopediaStore {
       try { await this.bucket.put(legacyBackup, JSON.stringify(previous.legacy), { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } }); }
       catch (error) { await this.forget(written); throw error; }
     }
-    const index: WikiIndex={ format: INDEX_FORMAT, schemaVersion: 1, revision: next, layout, parts: refs, ...(limit!==DEFAULT_PART_LIMIT ? { limit } : {}), ...(total!==DEFAULT_TOTAL_LIMIT ? { total } : {}), ...(legacyBackup ? { legacyBackup } : {}) };
+    // The worlds and campaigns themselves also go in the index, so the Wiki can open one campaign without reading the others (readScoped).
+    const index: WikiIndex={ format: INDEX_FORMAT, schemaVersion: 1, revision: next, layout, parts: refs, meta: { worlds: data.worlds, campaigns: data.campaigns }, ...(limit!==DEFAULT_PART_LIMIT ? { limit } : {}), ...(total!==DEFAULT_TOTAL_LIMIT ? { total } : {}), ...(legacyBackup ? { legacyBackup } : {}) };
     const saved=await this.bucket.put(base+'workspace.json', JSON.stringify(index), { onlyIf: previous.etag ? { etagMatches: previous.etag } : { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json' } })
       .catch(async (error) => { await this.forget(written); throw error; });
     if (!saved) { await this.forget(written); return null; }

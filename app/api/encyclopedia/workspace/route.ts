@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { workspaceSchema } from "@/lib/encyclopedia/world-model";
-import { json, ownerFrom, readWorkspace, sameOrigin, saveWorkspace, saveWorkspacePatch, transferPrefix, workspaceTag } from "@/lib/encyclopedia/workspace-server";
+import { json, ownerFrom, readWorkspace, readWorkspaceScope, sameOrigin, saveWorkspace, saveWorkspacePatch, saveWorkspaceScopedPatch, transferPrefix, workspaceTag } from "@/lib/encyclopedia/workspace-server";
 import { DamagedWikiError } from "@/lib/encyclopedia/wiki-parts";
 import { getBucket } from "@/lib/storage";
 import { storedJson, workspaceBody } from "@/lib/transfers";
@@ -8,10 +8,16 @@ import { coGmGone, coGmGrant, coGmReadOnly, coGmSave, coGmWorkspace } from "@/li
 import { CoGmEditError } from "@/lib/encyclopedia/co-gm-edit";
 export const dynamic = "force-dynamic";
 const partSchema = z.object({ world: z.unknown().optional(), campaign: z.unknown().optional(), entries: z.array(z.unknown()) }).passthrough();
-const patchBody = z.object({ revision: z.number().int().nonnegative(), patch: z.object({
+const patchBody = z.object({ revision: z.number().int().nonnegative(), scope: z.array(z.string().max(200)).max(1000).optional(), patch: z.object({
     layout: z.object({ worlds: z.array(z.string()), campaigns: z.array(z.string()), runs: z.array(z.tuple([z.string(), z.number().int().positive()])) }),
     parts: z.record(z.string(), partSchema.nullable()),
-}) }) as unknown as z.ZodType<{ revision: number; patch: import("@/lib/encyclopedia/wiki-parts").WikiPatch }>;
+}) }) as unknown as z.ZodType<{ revision: number; scope?: string[]; patch: import("@/lib/encyclopedia/wiki-parts").WikiPatch }>;
+/** ?scope: the Wiki app opening one campaign (or world) at a time; ?campaign, ?world and ?entry say where, ?parts which parts exactly. */
+function scopeOf(url: URL) {
+    if (!url.searchParams.has("scope")) return null;
+    const one = (name: string) => url.searchParams.get(name)?.slice(0, 200) || null, parts = url.searchParams.get("parts");
+    return { campaignId: one("campaign"), worldId: one("world"), entryId: one("entry"), maptableId: one("maptable"), ...(parts !== null ? { keys: parts.split(",").filter(Boolean).slice(0, 1000) } : {}) };
+}
 export async function GET(request: Request) {
     const owner = await ownerFrom(request);
     if (!owner)
@@ -39,7 +45,8 @@ export async function GET(request: Request) {
         if (known && known === await workspaceTag(owner))
             return new Response(null, { status: 304, headers: { "Cache-Control": "private, no-store" } });
         // A Wiki over 3 MB is handed over through storage (lib/transfers.ts), since a response can't carry it.
-        return storedJson(getBucket(), transferPrefix(owner), await readWorkspace(owner));
+        const scope = scopeOf(new URL(request.url));
+        return storedJson(getBucket(), transferPrefix(owner), scope ? await readWorkspaceScope(owner, scope) : await readWorkspace(owner));
     }
     catch {
         return json({ error: "Could not read the workspace. Your existing data has not been changed." }, 500);
@@ -64,7 +71,7 @@ export async function PUT(request: Request) {
         // The Wiki app sends only the campaigns and worlds that changed (lib/encyclopedia/wiki-parts.ts); anything else sends the whole workspace.
         const patched = !grant && raw && typeof raw === "object" && "patch" in raw ? patchBody.parse(raw) : null;
         const body = patched ? null : z.object({ data: workspaceSchema, revision: z.number().int().nonnegative() }).parse(raw);
-        const saved = patched ? await saveWorkspacePatch(owner, patched.patch, patched.revision) : grant ? await coGmSave(grant, body!.data, body!.revision) : await saveWorkspace(owner, body!.data, body!.revision);
+        const saved = patched ? (patched.scope ? await saveWorkspaceScopedPatch(owner, patched.patch, patched.revision, patched.scope) : await saveWorkspacePatch(owner, patched.patch, patched.revision)) : grant ? await coGmSave(grant, body!.data, body!.revision) : await saveWorkspace(owner, body!.data, body!.revision);
         if (saved === null)
             return json({ error: "This workspace changed somewhere else. Export your unsaved draft, then reload before continuing." }, 409);
         return json(saved);
