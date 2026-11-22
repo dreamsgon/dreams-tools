@@ -117,8 +117,8 @@ export default function ForumApp() {
   const addForum = !view && !loading && noForum && key.startsWith('c-');
   useEffect(() => { if (addForum) location.replace(`/campaigns/${encodeURIComponent('e:' + decodeURIComponent(key.slice(2)))}?add=forum`); }, [addForum, key]);
 
-  if (!view && !key && !loading) return <div className="forum-root">{appBar}<div className="forum-page"><ForumPicker /></div></div>;
-  if (!view) return <>{campaignBar()}<div className="forum-root">{!ref && appBar}<div className="forum-page"><div className="forum-message">
+  if (!view && !key && !loading) return <div className="forum-root forum-base">{appBar}<div className="forum-page"><ForumPicker /></div></div>;
+  if (!view) return <>{campaignBar()}<div className="forum-root forum-base">{!ref && appBar}<div className="forum-page"><div className="forum-message">
     <h1>{loading || addForum ? 'Opening the forum…' : status === 401 ? 'Sign in first' : noForum ? 'No forum yet' : 'Forum unavailable'}</h1>
     {!loading && !addForum && <p>{error}</p>}
     {status === 401 && <p><a className="f-btn" href={`/account?mode=login&next=${encodeURIComponent('/forum' + location.hash)}`}>Sign in</a></p>}
@@ -136,7 +136,7 @@ export default function ForumApp() {
     {trailBoard && <a href={forumHash(k, { view: 'board', id: trailBoard.id })}>{trailBoard.name}</a>}
     {page.kind === 'topic' && <>{trailBoard && <span aria-hidden="true">›</span>}<span className="f-trail-here" aria-current="page">{page.topic.title}</span></>}
   </span> : undefined;
-  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><>{campaignBar(trail)}{frame.preview && <PlayerViewBanner>You read {frame.campaign.name}&apos;s forum as the Players group does. Posting is off while you look.</PlayerViewBanner>}<div className={`forum-root${frame.solo?.player ? ' solo-player' : ''}`} id="top">
+  return <PostContext.Provider value={{ k, emoji: emojiMap(frame) }}><>{campaignBar(trail)}{frame.preview && <PlayerViewBanner>You read {frame.campaign.name}&apos;s forum as the Players group does. Posting is off while you look.</PlayerViewBanner>}<div className={`forum-root${skin ? '' : ' forum-base'}${frame.solo?.player ? ' solo-player' : ''}`} id="top">
     <div className={`forum-body${showCp ? ` cp-open cp-${dock}` : ''}`}>
     {showCp && <AdminCp k={k} dock={dock} setDock={setDock} onClose={cp.close} onPreview={setPreview} onSaved={() => void load(key, place, true)} />}
     <div className="skin-frame">

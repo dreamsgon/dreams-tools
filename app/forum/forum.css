@@ -5,19 +5,24 @@
  * and uses its class names, so a campaign theme (lib/campaign-theme) layers over it. Phone layouts use the `page` container, as themes are told to.
  */
 html, body { margin: 0; }
-body { background: #ece5d6; }
-:root[data-theme="dark"] body { background: #111110; }
+body { background: var(--bg); }
+body:has(.forum-root:not(.forum-base)) { background: #ece5d6; }
+:root[data-theme="dark"] body:has(.forum-root:not(.forum-base)) { background: #111110; }
 
 .forum-root {
+  min-height: calc(100vh / var(--ui-zoom, 1)); background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-sans);
+}
+/* The parchment and gold tokens, under a campaign theme (which was drawn against them). With no theme the forum wears
+   the app's base look (.forum-base, at the end of this file); the parchment look itself is the Parchment and gold theme. */
+.forum-root:not(.forum-base) {
   --bg: #ece5d6; --panel: #f9f5ea; --raised: #f1ebdb; --line: #dcd1b8; --line-strong: #bfae85;
   --ink: #2b261d; --muted: #6c6352; --accent: #87620f; --accent-2: #1b6c60; --on-accent: #fffaf0; --accent-soft: #efe2bd;
   --danger: #a33a2e;
   --card-bg: rgba(20, 16, 10, .9); --card-ink: #f1ede4; --card-head: #e7c873; --card-line: rgba(231, 200, 115, .35);
   --font-display: "Cinzel", Georgia, serif; --font-reading: "Cormorant Garamond", Georgia, serif; --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius: 3px; --banner: none;
-  min-height: calc(100vh / var(--ui-zoom, 1)); background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-sans);
 }
-:root[data-theme="dark"] .forum-root {
+:root[data-theme="dark"] .forum-root:not(.forum-base) {
   --bg: #111110; --panel: #1a1a18; --raised: #21211e; --line: #302e27; --line-strong: #4d4838;
   --ink: #ece5d3; --muted: #a59d88; --accent: #dfbe6a; --accent-2: #49b8a0; --on-accent: #191405; --accent-soft: #2b2515;
   --danger: #f0a196; color-scheme: dark;
@@ -914,3 +919,47 @@ html.forum-focus .composer.big textarea { min-height: calc(70vh / var(--ui-zoom,
 .f-trail a { color: inherit; text-decoration: none; white-space: nowrap; }
 .f-trail a:hover { color: var(--chrome-text, var(--ink)); }
 .f-trail-here { color: var(--chrome-text, var(--ink)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/*
+ * No campaign theme: the app's base look (app/appearance.css tokens: paper, ink and one accent, Literata and Inter,
+ * sentence case). The banner is a quiet panel unless the campaign has a banner picture.
+ */
+.forum-root.forum-base, .forum-base .campaign-skin {
+  --card-bg: var(--panel); --card-ink: var(--ink); --card-head: var(--accent); --card-line: var(--line);
+  --head-bg: linear-gradient(170deg, var(--accent-soft), var(--panel) 75%); --head-ink: var(--muted); --head-title: var(--ink); --head-shadow: none;
+  --head-nav: var(--panel); --head-line: var(--line); --banner: none;
+  --label-case: none; --label-track: 0; --ring: color-mix(in oklab, var(--accent) 55%, transparent);
+  --accent-2: var(--accent);
+}
+.forum-base .board-head.has-art { --head-ink: #f4f1ea; --head-title: #ffffff; --head-shadow: 0 2px 14px rgba(0, 0, 0, .6); --head-nav: rgba(0, 0, 0, .45); --head-line: rgba(255, 255, 255, .2); }
+.forum-base .board-bar, .forum-base .board-head, .forum-base .forum, .forum-base .foot-cols, .forum-base .settings-card { border-radius: var(--radius); }
+.forum-base .board-head { min-height: 150px; }
+.forum-base .board-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.forum-base :is(.board-title, .category-title, .location-name, .post-name, .mini-name, .foot-cols h3, .settings-card h2, .wait-panel header, .foot-line h3, .clps summary, .card-rows .r-title, .forum-message h1) {
+  text-transform: none; letter-spacing: -.01em;
+}
+.forum-base .board-title { font-weight: 600; font-size: 40px; }
+.forum-base :is(.category-title, .foot-cols h3, .wait-panel header, .foot-line h3, .settings-card h2) { font-family: var(--font-sans); font-weight: 600; color: var(--ink); }
+.forum-base .category-title { font-size: 15px; }
+.forum-base :is(.location-name, .post-name, .mini-name) { font-weight: 600; }
+.forum-base :is(.board-nav a, .tag, .location-kind, .mini-fields dt, .post-actions button, .last-label, .composer-kind, .as-label, .as-menu h5, .tool-pop .pop-title, .feat-card small, .mask-head, .roll-stamp, .sysline, .card-rows small, .card-rows .r-sub, .card-rows .r-rule, .card-rows .r-chips span, .player-strip dt, .solo-tag, .board-date b, .circ) {
+  text-transform: none; letter-spacing: 0;
+}
+.forum-base :is(.board-nav a, .location-kind, .composer-kind, .as-label, .solo-tag, .card-rows .r-sub, .card-rows .r-rule, .card-rows .r-chips span, .player-strip dt, .circ) { font-family: var(--font-sans); }
+.forum-base .board-nav a { font-size: 13px; font-weight: 600; }
+.forum-base .tag { border-radius: 999px; font-size: 11px; }
+.forum-base .f-btn { letter-spacing: 0; }
+.empty-categories { margin: 4px 0 22px; font-size: 13px; }
+/* Literata reads larger than Cormorant at the same size: the reading text steps down, and names lose the wide tracking. */
+.forum-base :is(.forum-name, .topic-title, .topic-name, .post-text h3, .post-text h4, .post-text h5, .post-text h6, .composer-title, .settings-card h3, .portrait-empty > span, .board-date b) { letter-spacing: -.005em; }
+.forum-base .forum-name { font-size: 17px; font-weight: 600; }
+.forum-base .topic-name { font-weight: 600; font-size: 24px; }
+.forum-base .forum-desc { font-style: normal; font-size: 14px; font-family: var(--font-sans); }
+.forum-base .board-tagline { font-size: 17px; }
+.forum-base .location-summary { font-size: 16px; }
+.forum-base :is(.topic-main small, .foot-line h3 small, .review .category-title small, .gm-band small) { font-size: 13px; }
+.forum-base :is(.forum-last a, .foot-list a, .wait-panel li a) { font-size: 15px; }
+.forum-base .post-text { font-size: 16.5px; line-height: 1.65; }
+.forum-base textarea { font-size: 16px; }
+.forum-base :is(.mini-fields dd, .hit-posts p, .report-snippet) { font-size: 14.5px; }
+.forum-base .ai-panel p { font-size: 15px; }

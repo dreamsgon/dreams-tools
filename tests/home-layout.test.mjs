@@ -174,3 +174,15 @@ test('opening a campaign is remembered, newest kept, repeats within a few minute
   assert.deepEqual(applyHomeAction(l,{action:'layout',layout:{widgets:[],opened:{}}}).opened,l.opened,'a saved layout never replaces them');
   assert.deepEqual(presetLayout('gm',l).opened,l.opened,'presets keep them');
 });
+
+test('a new account hides Your campaigns and Recently edited until they have something in them', async () => {
+  const { hiddenUntilUsed } = await import('../lib/home-layout.ts');
+  const empty = { rows: [], recent: [] }, some = { rows: [{}], recent: [{}] };
+  assert.equal(hiddenUntilUsed('campaigns', empty), true);
+  assert.equal(hiddenUntilUsed('recent', empty), true);
+  assert.equal(hiddenUntilUsed('recent', { rows: [{}] }), true);
+  assert.equal(hiddenUntilUsed('campaigns', some), false);
+  assert.equal(hiddenUntilUsed('recent', some), false);
+  assert.equal(hiddenUntilUsed('links', empty), false);
+  assert.equal(hiddenUntilUsed('campaigns', undefined), false, 'nothing hides while the data loads');
+});

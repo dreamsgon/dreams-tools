@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, BookOpen, Bell, CalendarDays, Check, ChevronRight, Dices, FileText, Flag, Folder, GripVertical, LayoutGrid, Link2, ListChecks, Map as MapIcon, MessagesSquare, PenLine, Pin, Plus, Settings, SlidersHorizontal, Star, X, Goal } from "lucide-react";
 import { folderChoices, homeCampaigns, lastOpened, type CampaignRow, type CampaignSummary, type RecentPage } from "@/lib/campaign-links";
 import {
-  applyHomeAction, campaignShowNames, campaignShows, hasWidget, homeHeights, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, setWidgetHeight, toggleWidget,
+  applyHomeAction, campaignShowNames, hiddenUntilUsed, campaignShows, hasWidget, homeHeights, homeInfo, homePresets, homeSizes, homeWidgets, isPinnedCampaign, moveWidget, presetLayout, presetNames, resizeWidget, setOption, setWidgetHeight, toggleWidget,
   type HomeAction, type HomeHeight, type HomeLayout, type HomePreset, type HomeSize, type HomeWidget,
 } from "@/lib/home-layout";
 import type { HomeData } from "@/lib/home-server";
@@ -77,9 +77,11 @@ export default function HomeDashboard({ first, tools }: { first: string; tools: 
   const cancel = () => { setDraft(null); setError(""); void load().catch(() => {}); };
 
   const view: HomeLayout | null = draft && layout ? { ...layout, widgets: draft.widgets, options: draft.options } : layout;
+  // A new account (no campaigns yet) is welcomed, not welcomed back, and gets one way in instead of empty sections.
+  const fresh = !!data?.summary && !data.summary.rows.length;
   return <>
     <section className="home-hello home-hello-signed-in">
-      <div><h1>Welcome back{first ? `, ${first}` : ""}.</h1><p>{draft ? "Choose what your home page shows." : "Pick up where you left off, or open a tool."}</p></div>
+      <div><h1>{fresh ? "Welcome" : "Welcome back"}{first ? `, ${first}` : ""}.</h1><p>{draft ? "Choose what your home page shows." : fresh ? "Start with a campaign, or open a tool." : "Pick up where you left off, or open a tool."}</p></div>
       {!draft && <div className="home-hello-right">{tools}<button type="button" className="home-tool-button" title="Customize this page" disabled={!layout} onClick={start}><SlidersHorizontal size={17} strokeWidth={1.7} aria-hidden="true" />Customize</button></div>}
     </section>
     {draft && <div className="home-custom-bar"><p><b>Customizing your home page.</b> Changes show here as you make them.</p>
@@ -94,7 +96,7 @@ export default function HomeDashboard({ first, tools }: { first: string; tools: 
 
 function Grid({ layout, data, act, onCustomize }: { layout: HomeLayout; data: HomeData; act: Act; onCustomize: () => void }) {
   if (!layout.widgets.length) return <div className="home-empty">Your home page is empty. <button type="button" className="home-text-button" onClick={onCustomize}>Customize</button> to add sections.</div>;
-  return <div className="home-grid">{layout.widgets.map(w => <Panel key={w.type} type={w.type} size={w.size} h={w.h}><Section type={w.type} size={w.size} h={w.h ?? 1} layout={layout} data={data} act={act} /></Panel>)}</div>;
+  return <div className="home-grid">{layout.widgets.filter(w => !hiddenUntilUsed(w.type, data.summary)).map(w => <Panel key={w.type} type={w.type} size={w.size} h={w.h}><Section type={w.type} size={w.size} h={w.h ?? 1} layout={layout} data={data} act={act} /></Panel>)}</div>;
 }
 
 /** The full-width Continue, Your campaigns and Recently edited sections have no box, as the page was before it could be customized. */
@@ -123,8 +125,7 @@ function Section({ type, size, h, layout, data, act }: { type: HomeWidget; size:
 
 function Continue({ summary, opened }: { summary?: CampaignSummary; opened?: Record<string, string> }) {
   const row = summary ? homeCampaigns(summary, opened)[0] : undefined;
-  if (!row) return <section className="home-continue"><div className="home-continue-main"><h2>Continue where you left off</h2><p className="home-continue-text">You have no campaigns yet.</p>
-    <div className="home-continue-actions"><Link className="home-button home-button-primary" href="/campaigns?new=1"><Plus size={15} aria-hidden="true" />New campaign</Link></div></div></section>;
+  if (!row) return summary ? <FirstCampaign /> : null;
   return <ContinueCard row={row} opened={lastOpened(row, opened)} />;
 }
 
@@ -159,6 +160,28 @@ function Recent({ layout, data }: { layout: HomeLayout; data: HomeData }) {
     <Head title="Recently edited" id="home-recent-title" />
     <ul>{recent.map(p => <RecentRow key={p.id} page={p} />)}</ul>
   </div>;
+}
+
+/** The Continue section before there is anything to continue: one way in, and what a campaign holds. */
+function FirstCampaign() {
+  return <section className="home-continue home-first-run" aria-labelledby="home-first-title">
+    <div className="home-continue-main">
+      <h2 id="home-first-title">Start your first campaign</h2>
+      <p className="home-continue-text">A campaign is one game: the scenes you run at the table and the notes that remember your world.</p>
+      <div className="home-continue-actions">
+        <Link className="home-button home-button-primary" href="/campaigns?new=1"><Plus size={15} aria-hidden="true" />New campaign</Link>
+        <Link className="home-button home-button-quiet" href="/guide/getting-started"><BookOpen size={15} aria-hidden="true" />Getting started</Link>
+      </div>
+    </div>
+    <div className="home-continue-side">
+      <h3>Each campaign has</h3>
+      <ul className="home-first-list">
+        <li><MapIcon size={17} aria-hidden="true" /><span>Maptable<small>Scenes with maps, tokens and fog</small></span></li>
+        <li><BookOpen size={17} aria-hidden="true" /><span>Wiki<small>Places, people, sessions and lore</small></span></li>
+        <li><MessagesSquare size={17} aria-hidden="true" /><span>Forum, if you want one<small>Play by post between sessions</small></span></li>
+      </ul>
+    </div>
+  </section>;
 }
 
 const continueLabel = (opened: string | null, edited: string | null) =>

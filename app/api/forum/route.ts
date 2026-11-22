@@ -24,6 +24,7 @@ const deps = (): Deps => {
   return {
     sameOrigin,
     user: async () => (await getAppUser())?.userId ?? null,
+    userName: async () => (await getAppUser())?.displayName ?? null,
     campaign: async (userId, key) => {
       const members = new MemberStore(bucket);
       if (key.startsWith('m-')) return members.forumAs(userId, key.slice(2));

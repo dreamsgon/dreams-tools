@@ -119,6 +119,8 @@ import {
 import { api, loadImage, uploadAsset, download } from "@/lib/api";
 import {
   initialWorkspace,
+  isStarterScene,
+  withoutStarterScene,
   fitImageDimensions,
   newScene,
   newToken,
@@ -142,7 +144,7 @@ import type { Workspace as EncyclopediaWorkspace } from "@/lib/encyclopedia/worl
 import { GmNoteCard, PlayerNoteCard } from "./map-note-card";
 import { AreaDialog, AreaDraw, AreaLayer, AreasPanel, GmAreaCard, PlayerAreaCard } from "./map-areas";
 import { MAX_AREAS, playerAreaText, roomAt } from "@/lib/map-areas";
-import { campaignSceneKey, campaignTableScene, maptableSearch, readMaptablePlace, rememberedCampaignScene } from "@/lib/maptable-place";
+import { campaignSceneKey, campaignTableScene, lastCampaignKey, lastUsedCampaign, maptableSearch, readMaptablePlace, rememberedCampaignScene } from "@/lib/maptable-place";
 import { useCampaignOpened } from "@/lib/opened-campaign";
 import { maptableTitle } from "@/lib/page-title";
 import { usePageTitle } from "./use-page-title";
@@ -368,6 +370,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   }, [navigationReady, campaignId, openSceneId, sceneScope]);
   // The Scene Picker shows the campaign picked there (a campaign that was removed falls back), else the open scene's campaign.
   const pickerCampaignId = overview && (overview.id === null || workspace?.collections.some(c => c.id === overview.id && c.kind === "campaign")) ? overview.id : campaignId;
+  // The campaign used last, so a bare /maptable can open it rather than the untouched starter scene.
+  const usedCampaign = dashboard ? pickerCampaignId : campaignId;
+  useEffect(() => {
+    if (navigationReady && usedCampaign) remember(lastCampaignKey(sceneScope), usedCampaign);
+  }, [navigationReady, usedCampaign, sceneScope]);
   // The address names the open scene (or the Scene Picker's campaign), so it can be bookmarked. Other parameters stay.
   const overviewCampaignId = dashboard ? pickerCampaignId : null;
   // The campaign's live theme (lib/campaign-theme), through the Wiki campaign paired with this one. A co-GM asks
@@ -448,9 +455,10 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       }>(mapWorkspaceUrl());
       memberInfo.current = result.member ?? null;
       setMember(result.member ?? null);
-      let data = result.workspace
+      // The untouched starter scene goes once there is another scene (lib/model.ts).
+      let data = withoutStarterScene(result.workspace
         ? workspaceSchema.parse(result.workspace)
-        : initialWorkspace();
+        : initialWorkspace());
       loadEpoch.current++;
       acknowledged.current=result.workspace?data:null;
       let saved = null;
@@ -462,6 +470,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       let requested: string | null = null, requestedCampaign: string | null = null, sceneList = false, unfiled = false;
       if (!navigationRestored.current) { try { const place = readMaptablePlace(window.location.search, data); requested = place.sceneId; requestedCampaign = place.campaignId; sceneList = place.view === "scenes"; unfiled = sceneList && !requestedCampaign; } catch { requested = null; } }
       const remembered = navigationRestored.current ? state.current?.activeId : saved?.activeId;
+      // A bare /maptable whose open scene would be only the untouched starter scene opens the campaign used last instead.
+      if (!navigationRestored.current && !requested && !requestedCampaign && !sceneList) {
+        const open = data.scenes.find(s => s.id === (remembered ?? data.activeId));
+        if (!open || isStarterScene(open)) requestedCampaign = lastUsedCampaign(data, readRemembered(lastCampaignKey(scopeOf(navigationScope) ?? "local")));
+      }
       if (!requested && requestedCampaign && !sceneList) requested = campaignTableScene(data, requestedCampaign, rememberedCampaignScene(data, requestedCampaign, readRemembered(campaignSceneKey(scopeOf(navigationScope) ?? "local", requestedCampaign))) ?? remembered ?? data.activeId);
       const linked = requested && data.scenes.some(s => s.id === requested) ? requested : null;
       const activeId = linked ?? remembered;
@@ -1212,7 +1225,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         )}
       </main>
     );
-  const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null).length : 0;
+  const unfiledCount = workspace ? workspace.scenes.filter((s) => campaignFor(s.containerId) === null && !isStarterScene(s)).length : 0;
   /** A campaign's dashboard is its home page: Maptable's way back out goes there (saving first). Co-GMs and maps not in a campaign go to the Campaigns page. */
   const dashboardHref = (id: string | null) => member ? "/campaigns" : maptableHubHref(id);
   const toDashboard = (id: string | null) => { setGridAdjust(false); void leaveSaved().then(ok => { if (ok) window.location.assign(dashboardHref(id)); }); };
