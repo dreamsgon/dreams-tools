@@ -2540,3 +2540,8 @@ button.primary, .rpg-open { font-weight:500; }
   .measure-tool-hint .hint-pointer { display: none; }
   .measure-tool-hint .hint-touch { display: inline; }
 }
+/* Text floor: Maptable's own labels and hints are at least 12px (themed campaigns keep their sizes). */
+@scope (:root) to (.campaign-skin) {
+  .rail button, .map-title, .map-footer, .board-info, .board-info span, .crop-control-actions button, .app-shell .side-panel small, .map-topbar button span, .zoom-controls span { font-size: 12px; }
+  .board-info { letter-spacing: 0; }
+}

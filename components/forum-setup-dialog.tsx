@@ -16,15 +16,17 @@ const ACCESS: { value: ForumAccess; label: string }[] = [
  * failure comes back as `error` with the choices kept.
  */
 export function ForumSetupDialog({ campaignName, busy, error, close, onConfirm }: { campaignName: string; busy: boolean; error: string; close: () => void; onConfirm: (setup: ForumSetup) => void }) {
-  const [setup, setSetup] = useState<ForumSetup>(defaultForumSetup), [review, setReview] = useState(false);
+  // The name starts filled with the campaign's (a real value, not a grey placeholder); kept as is, it is stored empty so it follows a rename.
+  const [setup, setSetup] = useState<ForumSetup>(() => ({ ...defaultForumSetup(), title: campaignName.slice(0, 80) })), [review, setReview] = useState(false);
+  const chosen = (): ForumSetup => ({ ...setup, title: setup.title.trim() === campaignName.trim() ? "" : setup.title });
   const set = <K extends keyof ForumSetup>(k: K, v: ForumSetup[K]) => setSetup(s => ({ ...s, [k]: v }));
   const errorLine = error && <p className="campaigns-error" role="alert">{error}</p>;
 
   if (review) return <Modal title="Confirm the forum" intro="Here is how the forum will start. You can change all of it later in the forum's settings and on Members." close={busy ? () => {} : close} footer={<>
     <button type="button" className="campaigns-secondary" disabled={busy} onClick={() => setReview(false)}>Back</button>
-    <button type="button" className="campaigns-primary" disabled={busy} onClick={() => onConfirm(setup)}><Check size={16} aria-hidden="true" />{busy ? "Setting up…" : "Set up forum"}</button>
+    <button type="button" className="campaigns-primary" disabled={busy} onClick={() => onConfirm(chosen())}><Check size={16} aria-hidden="true" />{busy ? "Setting up…" : "Set up forum"}</button>
   </>}>
-    <ul className="forum-setup-summary">{describeForumSetup(setup, campaignName).map(line => <li key={line}>{line}</li>)}</ul>
+    <ul className="forum-setup-summary">{describeForumSetup(chosen(), campaignName).map(line => <li key={line}>{line}</li>)}</ul>
     {errorLine}
   </Modal>;
 
@@ -33,8 +35,8 @@ export function ForumSetupDialog({ campaignName, busy, error, close, onConfirm }
     <button type="submit" form="forum-setup" className="campaigns-primary">Review</button>
   </>}>
     <form id="forum-setup" className="campaigns-form" onSubmit={e => { e.preventDefault(); setReview(true); }}>
-      <label>Name<input autoFocus value={setup.title} maxLength={80} placeholder={campaignName} onChange={e => set("title", e.target.value)} /><small>Shown in the forum&apos;s banner. Left empty, it uses the campaign&apos;s name.</small></label>
-      <label>Tagline<input value={setup.tagline} maxLength={160} placeholder="For example, Tales from the Lantern Coast" onChange={e => set("tagline", e.target.value)} /></label>
+      <label>Name<input autoFocus value={setup.title} maxLength={80} placeholder={campaignName} onChange={e => set("title", e.target.value)} /><small>Shown in the forum&apos;s banner. Keep the campaign&apos;s name, or write another.</small></label>
+      <label>Tagline<input value={setup.tagline} maxLength={160} placeholder="e.g. Tales from the Lantern Coast" onChange={e => set("tagline", e.target.value)} /></label>
       <label className="campaigns-check"><input type="checkbox" checked={setup.banner} onChange={e => set("banner", e.target.checked)} /><span><strong>Banner picture</strong> show the campaign&apos;s banner behind the name</span></label>
       <label>New posts start in<select value={setup.markup} onChange={e => set("markup", e.target.value as ForumSetup["markup"])}>
         <option value="markdown">Markdown</option>

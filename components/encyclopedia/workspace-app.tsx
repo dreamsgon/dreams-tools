@@ -521,7 +521,7 @@ export default function WorkspaceApp() {
    <div className="sidebar-bottom">{campaign && <button onClick={() => setAiOpen(true)}><Sparkles size={16}/> Connect an AI</button>}<button onClick={() => setModal({ type: "connections" })}><Github size={16}/> AI & GitHub <span className="tiny">BETA</span></button>{world && !member && <button onClick={() => setTool("transfer")}><ArrowLeftRight size={16}/> Export & import</button>}<button onClick={() => setModal({ type: "settings" })}><Settings size={16}/> Workspace & backups</button></div>
    <SidebarResize width={sidebar.width} maxWidth={sidebar.maxWidth} onChange={sidebar.setWidth}/>
   </aside>
-  <main className="main-panel">
+  <main className="main-panel" id="main-content" tabIndex={-1}>
    {member && <div className="co-gm-bar" role="note"><Users size={15} aria-hidden="true"/><span><strong>{member.ownerName}&apos;s campaign</strong> · You&apos;re a {member.role} here. {member.edit ? "Your changes save to their Wiki." : "Your group can read it, not edit it."}</span><Link href="/campaigns">Back to Campaigns</Link></div>}
    {!barOn && <header className="topbar"><div className="crumbs">{sidebarButtons}<ToolSwitch active="encyclopedia"/></div>{trailNode}<div className="top-actions">{topActions}<AccountLink/></div></header>}
    {!member && <FogImageSync data={data} change={change}/>}{error && <div className="error-banner" role="alert"><div><strong>Your changes need attention.</strong> {error}</div><button onClick={exportAll}>Export unsaved draft</button><button onClick={async () => { if (await confirmDialog({ title: "Reload saved data?", message: "Unsaved changes in this tab will be discarded. Export your draft first.", confirm: "Reload", danger: true }))

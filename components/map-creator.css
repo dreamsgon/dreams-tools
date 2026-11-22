@@ -14,9 +14,9 @@
 .map-creator .creator-header .creator-icon:disabled { opacity:.4; }
 
 .map-creator .creator-layout { position:relative; }
-.creator-rail { flex:none; width:60px; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0; overflow:auto; border-right:1px solid var(--line); background:var(--panel); }
-.creator-rail button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; width:46px; min-height:48px; padding:4px 0; border:0; border-radius:var(--radius); background:none; color:var(--muted); box-shadow:none; }
-.creator-rail button span { font-size:10px; font-weight:600; letter-spacing:.03em; }
+.creator-rail { flex:none; width:72px; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0; overflow:auto; border-right:1px solid var(--line); background:var(--panel); }
+.creator-rail button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; width:64px; min-height:52px; padding:5px 0; border:0; border-radius:var(--radius); background:none; color:var(--muted); box-shadow:none; }
+.creator-rail button span { font-size:12px; font-weight:500; line-height:1.1; }
 .creator-rail button:hover { background:var(--chrome-hover, var(--accent-soft)); color:var(--ink); }
 .creator-rail button.active { background:var(--accent-soft); color:var(--accent); }
 .creator-rail button:nth-child(1), .creator-rail button:nth-child(8) { margin-bottom:8px; position:relative; }

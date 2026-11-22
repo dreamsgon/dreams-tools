@@ -48,7 +48,8 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 .button.primary { background:var(--accent); border-color:var(--accent); }
 .button.primary:hover { background:var(--accent-hover); }
-input::placeholder,textarea::placeholder { color:var(--muted);opacity:1; }
+/* Placeholders read as hints, not values: lighter than muted text. Example names start with "e.g.". */
+input::placeholder,textarea::placeholder { color:var(--muted);opacity:.62; }
 select option { background:var(--paper);color:var(--ink); }
 .theme-toggle { display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);white-space:nowrap;font-size:11px;color:var(--ink);background:var(--white);flex-shrink:0; }
 .theme-toggle:hover { background:var(--sand); }
@@ -1666,4 +1667,11 @@ input,select,textarea{border-color:var(--field-line)}
 .article-layout .article-toolbar .write-menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .article:not(.is-editing) .article-toolbar>.segmented:first-child+*{margin-left:auto}
 .article-layout .prose>:first-child{margin-top:0}
+}
+/* Text floor: nothing a GM reads in the Wiki's own chrome is under 12px (themed campaigns keep their sizes). */
+@scope (:root) to (.campaign-skin){
+.shared-tag,.tree-item .tree-count,.search-box .quick-hint kbd,.dashboard-card small,.text-button,.segmented button,.aside-hint,.backlink,.aside-heading small,.field-label,.editor-hint,.write-preview-label,.inline-link,.article-meta,.kind-pill,.crumbs,.article-path,.outline-line,.card-footer,.section-heading>span,.lore-list small,.result-list small,.overview-strip,.save-status{font-size:12px}
+.tab-share-switch button{font-size:12px}
+.main-footer{font-size:12px;letter-spacing:0}
+.aside-heading .text-button,.backlink.mention-link small,.article-aside small{font-size:12px}
 }

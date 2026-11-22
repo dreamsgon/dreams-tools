@@ -176,3 +176,11 @@ html[data-page-width="full"] { --page-width:100000px; --content-width:none; --re
 .campaign-skin { background:var(--bg); color:var(--ink); font-family:var(--font-sans); }
 .skin-preview-note { position:fixed; z-index:400; left:16px; bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; max-width:calc(100vw / var(--ui-zoom, 1) - 32px); padding:8px 10px 8px 14px; border-radius:6px; background:#1c2329; color:#f5f6f7; font:13px/1.4 "Inter", system-ui, sans-serif; box-shadow:0 8px 24px #0006; }
 .skin-preview-note button { padding:4px 10px; border:1px solid #f5f6f7; border-radius:4px; background:transparent; color:inherit; font:inherit; font-weight:600; cursor:pointer; }
+
+/* Placeholders read as hints, not values: lighter than the muted text beside them. Pages may set their own. */
+:where(input, textarea)::placeholder { color: var(--muted); opacity: .62; }
+
+/* Skip to content (components/skip-link.tsx): hidden until Tab reaches it, then shown at the top left. */
+.skip-link { position: fixed; left: 12px; top: 12px; z-index: 10000; padding: 10px 14px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font: 600 14px var(--font-sans, system-ui, sans-serif); text-decoration: none; transform: translateY(-200%); }
+.skip-link:focus, .skip-link:focus-visible { transform: none; outline: 2px solid var(--on-accent); outline-offset: -4px; }
+#main-content:focus { outline: none; }

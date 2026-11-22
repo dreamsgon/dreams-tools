@@ -147,7 +147,7 @@ export default function AppearanceMenu({ className = "" }: { className?: string 
       {campaignTheme && <div className="appearance-campaign">
         <h2>Campaign theme</h2>
         <p className="appearance-note">Colours, fonts and a stylesheet for every part of this campaign, for everyone in it.</p>
-        <button type="button" className="appearance-campaign-open" onClick={() => { setOpen(false); openAdminCp(); }}><Brush size={15} aria-hidden="true" />Open the Admin CP</button>
+        <button type="button" className="appearance-campaign-open" data-opens-admin-cp onClick={() => { setOpen(false); openAdminCp(); }}><Brush size={15} aria-hidden="true" />Open the Admin CP</button>
       </div>}
       <h2>Appearance</h2>
       <fieldset className="appearance-group">

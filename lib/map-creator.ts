@@ -1,21 +1,22 @@
 import type { MapShape, Point } from "./model.ts";
 
 /** The drawing tools, in rail order, with their one-key shortcuts. Paint hexes is only there on a hex map. */
+/** Each drawing tool: its name, the short name under its icon in the rail, and its key. */
 export const creatorTools = [
-  { id: "select", label: "Select", key: "V" },
-  { id: "hex", label: "Paint hexes", key: "B", hexOnly: true },
-  { id: "rect", label: "Room", key: "R" },
-  { id: "poly", label: "Shaped room", key: "P" },
-  { id: "circle", label: "Round room", key: "C" },
-  { id: "ellipse", label: "Oval room", key: "O" },
-  { id: "line", label: "Wall", key: "W" },
-  { id: "curve", label: "Curved wall", key: "A" },
-  { id: "path", label: "Freehand", key: "F" },
-  { id: "door", label: "Door", key: "D" },
-  { id: "window", label: "Window", key: "N" },
-  { id: "stamp", label: "Stamps", key: "S" },
-  { id: "light", label: "Light", key: "L" },
-  { id: "label", label: "Label", key: "T" },
+  { id: "select", label: "Select", short: "Select", key: "V" },
+  { id: "hex", label: "Paint hexes", short: "Hexes", key: "B", hexOnly: true },
+  { id: "rect", label: "Room", short: "Room", key: "R" },
+  { id: "poly", label: "Shaped room", short: "Shaped", key: "P" },
+  { id: "circle", label: "Round room", short: "Round", key: "C" },
+  { id: "ellipse", label: "Oval room", short: "Oval", key: "O" },
+  { id: "line", label: "Wall", short: "Wall", key: "W" },
+  { id: "curve", label: "Curved wall", short: "Curve", key: "A" },
+  { id: "path", label: "Freehand", short: "Freehand", key: "F" },
+  { id: "door", label: "Door", short: "Door", key: "D" },
+  { id: "window", label: "Window", short: "Window", key: "N" },
+  { id: "stamp", label: "Stamps", short: "Stamps", key: "S" },
+  { id: "light", label: "Light", short: "Light", key: "L" },
+  { id: "label", label: "Label", short: "Label", key: "T" },
 ] as const;
 export type CreatorTool = typeof creatorTools[number]["id"];
 /** The tools a drawing offers: Paint hexes only when it has a hex map. */

@@ -195,7 +195,7 @@ function Hero({ world, campaign, linkedWorlds, gm, onEdit, onUnlink, setLook }: 
       </> : <button type="button" className="look-banner-empty home-banner-empty" disabled={busy} onClick={() => file.current?.click()}><ImagePlus size={20} /><span><strong>{busy ? "Uploading…" : "Upload a picture"}</strong><small>Wide pictures work best. PNG, JPEG or WebP up to 8 MB. You can also drop one on the banner.</small></span></button>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <p className="home-pop-hint home-pop-foot"><span>The same banner shows on the dashboard, the player site and the forum.</span>
-        <button type="button" className="text-button" onClick={() => { setOpen(false); openThemeEditor(); }}><Palette size={13} /> Theme in the Admin CP</button></p>
+        <button type="button" className="text-button" data-opens-admin-cp onClick={() => { setOpen(false); openThemeEditor(); }}><Palette size={13} /> Theme in the Admin CP</button></p>
     </div>}
     <input ref={file} type="file" accept={PICTURE_TYPES.join(",")} hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
   </div>;

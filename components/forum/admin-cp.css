@@ -126,3 +126,6 @@
 .cp-banner-empty b { display: block; color: var(--accent); }
 .cp-banner-empty small { display: block; margin-top: 2px; }
 .cp-banner-empty:hover { border-color: var(--accent); }
+/* Basics and the stylesheets before a theme is picked: what they are, and the way to Themes. */
+.cp-pick-first { display:grid; gap:10px; justify-items:start; padding:4px 0; }
+.cp-pick-first p { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
