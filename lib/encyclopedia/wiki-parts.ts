@@ -21,9 +21,16 @@ export const MB = 1_000_000;
 export const DEFAULT_PART_LIMIT = 2 * MB;
 /** What the owner can choose in Wiki settings, Storage. */
 export const PART_LIMITS = [2 * MB, 5 * MB, 10 * MB, 20 * MB] as const;
-/** The whole Wiki, all campaigns together: a safety cap on what one load or save moves. */
-export const TOTAL_LIMIT = 60 * MB;
+/** Pages in one campaign, or in one world's shared lore. The whole Wiki can hold many such campaigns. */
+export const PAGE_LIMIT = 5000;
+/** The whole Wiki, all campaigns together: every live campaign is loaded at once, so this keeps loads and saves quick. Archived campaigns don't count. */
+export const DEFAULT_TOTAL_LIMIT = 60 * MB;
+/** What the owner can choose for the whole Wiki in Wiki settings, Storage. */
+export const TOTAL_LIMITS = [60 * MB, 100 * MB, 150 * MB] as const;
+/** The biggest the whole Wiki can be under any setting. */
+export const TOTAL_LIMIT = TOTAL_LIMITS[TOTAL_LIMITS.length - 1];
 export const partLimitOk = (n: unknown): n is number => typeof n === 'number' && (PART_LIMITS as readonly number[]).includes(n);
+export const totalLimitOk = (n: unknown): n is number => typeof n === 'number' && (TOTAL_LIMITS as readonly number[]).includes(n);
 
 export const worldKey = (id: string) => `w:${id}`;
 export const campaignKey = (id: string) => `c:${id}`;
@@ -67,10 +74,13 @@ export function joinWorkspace(layout: Layout, parts: ReadonlyMap<PartKey, Part>)
   return { schemaVersion: 1, worlds, campaigns, entries };
 }
 
+/** True when two parts hold the very same objects: an edit always makes new objects for what it changes, so they can't differ. */
+const sameObjects = (a: Part, b: Part) => a.world === b.world && a.campaign === b.campaign && a.entries.length === b.entries.length && a.entries.every((e, i) => e === b.entries[i]);
 /** What a save sends: only the parts that differ from the copy it was made against. */
 export function wikiPatch(before: Workspace, after: Workspace): WikiPatch {
   const a = splitWorkspace(before), b = splitWorkspace(after), parts: Record<PartKey, Part | null> = {};
-  for (const [key, part] of b.parts) { const old = a.parts.get(key); if (!old || JSON.stringify(old) !== JSON.stringify(part)) parts[key] = part; }
+  // Only parts holding a changed object are written out to compare, so a big Wiki doesn't turn every save into a full copy.
+  for (const [key, part] of b.parts) { const old = a.parts.get(key); if (!old || (!sameObjects(old, part) && JSON.stringify(old) !== JSON.stringify(part))) parts[key] = part; }
   for (const key of a.parts.keys()) if (!b.parts.has(key)) parts[key] = null;
   return { layout: b.layout, parts };
 }
@@ -82,18 +92,20 @@ export function applyWikiPatch(current: ReadonlyMap<PartKey, Part>, patch: WikiP
   return joinWorkspace(patch.layout, parts);
 }
 
-export type PartSize = { key: PartKey; name: string; kind: 'campaign' | 'world' | 'other'; bytes: number };
+export type PartSize = { key: PartKey; name: string; kind: 'campaign' | 'world' | 'other'; bytes: number; pages: number };
 /** How big each campaign and each world's shared lore is, biggest first. */
 export function partSizes(w: Workspace): PartSize[] {
   const { parts } = splitWorkspace(w);
-  return [...parts].map(([key, part]) => ({ key, bytes: bytes(part), kind: part.campaign ? 'campaign' as const : part.world ? 'world' as const : 'other' as const,
+  return [...parts].map(([key, part]) => ({ key, bytes: bytes(part), pages: part.entries.length, kind: part.campaign ? 'campaign' as const : part.world ? 'world' as const : 'other' as const,
     name: part.campaign?.name ?? (part.world ? `${part.world.name} (shared lore)` : 'Pages outside any world') })).sort((x, y) => y.bytes - x.bytes);
 }
 export const formatMb = (n: number) => `${(n / MB).toFixed(n < 10 * MB ? 1 : 0).replace(/\.0$/, '')} MB`;
-/** Why this workspace can't be saved under `limit` per part, or null when it can. */
-export function sizeProblem(w: Workspace, limit = DEFAULT_PART_LIMIT): string | null {
-  const sizes = partSizes(w), total = sizes.reduce((n, s) => n + s.bytes, 0), big = sizes.find(s => s.bytes > limit);
-  if (big) return `${big.kind === 'campaign' ? `The campaign “${big.name}”` : big.name} is ${formatMb(big.bytes)}, over the ${formatMb(limit)} limit for one campaign. Raise the limit in Wiki settings, Storage, or move some pages out.`;
-  if (total > TOTAL_LIMIT) return `Your whole Wiki would be ${formatMb(total)}, over the ${formatMb(TOTAL_LIMIT)} limit for all campaigns together.`;
+/** Why this workspace can't be saved under `limit` per part and `total` for the whole Wiki, or null when it can. */
+export function sizeProblem(w: Workspace, limit = DEFAULT_PART_LIMIT, total = DEFAULT_TOTAL_LIMIT): string | null {
+  const sizes = partSizes(w), sum = sizes.reduce((n, s) => n + s.bytes, 0), big = sizes.find(s => s.bytes > limit), many = sizes.find(s => s.pages > PAGE_LIMIT);
+  const named = (s: PartSize) => s.kind === 'campaign' ? `The campaign “${s.name}”` : s.name;
+  if (many) return `${named(many)} has ${many.pages.toLocaleString('en-US')} pages, over the ${PAGE_LIMIT.toLocaleString('en-US')} pages one campaign can hold. Move some pages out, or into another campaign.`;
+  if (big) return `${named(big)} is ${formatMb(big.bytes)}, over the ${formatMb(limit)} limit for one campaign. Raise the limit in Wiki settings, Storage, or move some pages out.`;
+  if (sum > total) return `Your whole Wiki would be ${formatMb(sum)}, over the ${formatMb(total)} limit for all campaigns together. Raise it in Wiki settings, Storage, or archive a campaign you've finished.`;
   return null;
 }

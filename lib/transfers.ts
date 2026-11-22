@@ -2,7 +2,7 @@ import type { S3Bucket } from './storage.ts';
 
 export const INLINE_LIMIT = 3_000_000;
 export const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
-export const limits = { image: 20 * 1024 * 1024, discord: 9 * 1024 * 1024, workspace: 50_000_000 };
+export const limits = { image: 20 * 1024 * 1024, discord: 9 * 1024 * 1024, workspace: 160_000_000 };
 export type Purpose = keyof typeof limits;
 export function transferKey(prefix: string, purpose: Purpose, id: unknown) {
   if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/.test(id)) throw Error('Invalid transfer ID.');

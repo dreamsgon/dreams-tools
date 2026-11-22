@@ -3,7 +3,7 @@
 ## Good to know
 
 - **Accounts and sharing**: separate accounts; no live multiplayer yet. Players join by link or through Members.
-- **Storage**: each campaign in the Wiki, and each world’s shared lore, is stored on its own and limited to 2 MB, which you can raise to 5, 10 or 20 MB in the Wiki’s Settings, Storage (all campaigns together up to 60 MB). Archiving a finished campaign takes its pages out of the Wiki so they count toward nothing; atlas images up to 8 MB each. Uploaded map icons up to 1 MB, up to 40 per map.
+- **Storage**: each campaign in the Wiki, and each world’s shared lore, is stored on its own and limited to 2 MB, which you can raise to 5, 10 or 20 MB in the Wiki’s Settings, Storage and holds up to 5,000 pages. All live campaigns together start at 60 MB, which you can raise to 100 or 150 MB in the same place. Archiving a finished campaign takes its pages out of the Wiki so they count toward nothing; atlas images up to 8 MB each. A Maptable scene holds up to 2,000 tokens, and archived maps don't load with the rest. Random tables: up to 10,000 tables and 10 MB per account. Uploaded map icons up to 1 MB, up to 40 per map.
 - **Maptable and Wiki stay separate**: pairing links them but maps do not sync automatically.
 - **Maptable fog**: manual fog; automatic wall-based vision is not built.
 - **Offline mode** is not available.

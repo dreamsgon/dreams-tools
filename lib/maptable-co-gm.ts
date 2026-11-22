@@ -85,6 +85,8 @@ export function maptableExport(w: Workspace, campaignId: string, ref: string): W
     libraryLocations: pick(w.libraryLocations, s.tokens),
     tokenFolders: (w.tokenFolders ?? []).filter(f => s.tokenFolders.has(f.id)),
     tokenFolderLocations: pick(w.tokenFolderLocations ?? {}, s.tokens),
+    // Archived maps stay with the GM: a co-GM neither sees nor brings them back (the GM's list stays as it is on save).
+    archivedScenes: undefined,
   };
   return workspaceSchema.parse(copy);
 }
@@ -154,6 +156,7 @@ export function applyMaptableCoGm(full: Workspace, campaignId: string, ref: stri
   const refused = maptableCoGmRefusal(before, edited, campaignId, ref, s.locked);
   if (refused) no(refused);
   const campaign = full.collections.find(c => c.id === campaignId)!;
+  const archived = new Set((full.archivedScenes ?? []).map(x => x.id));
   const all = <T extends Keyed>(items: T[]) => new Set(items.map(x => x.id));
   const originals = new Map(full.assets.map(a => [a.id, a.src]));
   // The GM's campaign for a picture stays when it is a different campaign's; otherwise the co-GM's choice, unsorted included.
@@ -161,7 +164,8 @@ export function applyMaptableCoGm(full: Workspace, campaignId: string, ref: stri
   for (const id of s.locked) assetCampaigns[id] = full.assetCampaigns[id];
   const next: Workspace = {
     ...full,
-    scenes: merge(full.scenes, s.scenes, edited.scenes, "map"),
+    // A map the GM archived since the co-GM's copy was made stays archived, not added back as new.
+    scenes: merge(full.scenes, s.scenes, edited.scenes.filter(x => !archived.has(x.id)), "map"),
     collections: merge(full.collections, s.collections, edited.collections.map(c => c.id === campaignId ? { ...c, parentId: campaign.parentId } : c), "folder"),
     assets: merge(full.assets, s.assets, edited.assets.map(a => ({ ...a, src: withoutMember(a.src, ref, originals.get(a.id)) })), "picture"),
     assetCampaigns,

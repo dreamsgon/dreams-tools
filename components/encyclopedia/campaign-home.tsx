@@ -21,7 +21,7 @@ import { cleanFraming } from "@/lib/banner-frame";
 import "./campaign-home.css";
 
 type Kind = Entry["kind"];
-type Section = "characters" | "quests" | "maps";
+type Section = "characters" | "quests" | "sessions" | "maps";
 const PICTURE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
@@ -64,7 +64,7 @@ export function CampaignHome({ data, world, campaign, worldId, scope, shown, lin
     { id: "characters", Icon: Users, label: "Characters", sub: count("character") ? plural(count("character"), "page") : "Add a character", go: () => onSection("characters") },
     ...(campaign ? [
       { id: "quests", Icon: Goal, label: "Quests", sub: active.length ? `${active.length} active` : "None active", go: () => onSection("quests") },
-      { id: "sessions", Icon: ScrollText, label: "Sessions", sub: sessions.length ? plural(sessions.length, "recap") : "Write the first recap", go: () => sessions[0] ? onOpen(sessions[0].id) : onNew("session") },
+      { id: "sessions", Icon: ScrollText, label: "Sessions", sub: sessions.length ? plural(sessions.length, "recap") : "Write the first recap", go: () => onSection("sessions") },
     ] : [
       { id: "campaigns", Icon: Flag, label: "Campaigns", sub: campaigns.length ? plural(campaigns.length, "campaign") : "Begin a campaign", go: () => campaigns[0] ? onCampaign(campaigns[0].id) : onNewCampaign() },
     ]),

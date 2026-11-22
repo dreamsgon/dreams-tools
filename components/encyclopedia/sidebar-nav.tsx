@@ -21,7 +21,7 @@ import {
  */
 
 type Page = { id: string; title: string; kind: string; campaignId: string | null; templateId?: string; pageLook?: { icon?: PageIcon } };
-const viewIcons: Record<ViewId, typeof Goal> = { quests: Goal, codex: Library, relationships: Network, characters: Users, maps: MapIcon, calendar: CalendarDays, tables: Dices, templates: LayoutTemplate, look: Palette };
+const viewIcons: Record<ViewId, typeof Goal> = { quests: Goal, sessions: ScrollText, codex: Library, relationships: Network, characters: Users, maps: MapIcon, calendar: CalendarDays, tables: Dices, templates: LayoutTemplate, look: Palette };
 const toolIcons: Record<ToolId, typeof Goal> = { form: ListChecks, share: Eye, items: Backpack, dice: Dices, log: ScrollText, search: Search, tags: Tag, ai: Sparkles, backups: Settings, transfer: ArrowLeftRight };
 const newLinkId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const isBuiltIn = (id: string): id is BuiltInSection => (builtInSections as readonly string[]).includes(id);
@@ -108,7 +108,7 @@ export function SidebarNav(p: SidebarNavProps) {
 
 
 function BuiltIn({ id, open, toggle, extra, children }: { id: BuiltInSection; open: boolean; toggle: () => void; extra?: ReactNode; children: ReactNode }) {
-  const bodyId = id === "lore" ? "world-lore-tree" : id === "notes" ? "campaign-notes-tree" : id === "sessions" ? "sessions-list" : "organizations-list";
+  const bodyId = id === "lore" ? "world-lore-tree" : id === "notes" ? "campaign-notes-tree" : "organizations-list";
   return <section className="navigation-section">
     <div className={`side-heading${id === "notes" ? " campaign-heading" : ""}`}><button className="section-toggle" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {sectionLabels[id]}</button>{extra}</div>
     {open && <div id={bodyId}>{children}</div>}

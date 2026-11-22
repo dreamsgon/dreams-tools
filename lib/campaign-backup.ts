@@ -17,6 +17,7 @@
  * are kept: a picture is stored once per account under its id, so a picture already there is not uploaded again.
  * When the backup's world is still in the account the campaign joins it and the world's lore is left as it is.
  */
+import { usedAssets } from "./scene-archive.ts";
 import { initialWorkspace, newScene, uid, workspaceSchema as mapSchema, type Workspace as MapWorkspace } from "./model.ts";
 import { campaignExport, workspaceSchema as bookSchema, type Entry, type Workspace as BookWorkspace } from "./encyclopedia/world-model.ts";
 import type { RandomTable, TableLibrary } from "./encyclopedia/tables.ts";
@@ -58,26 +59,12 @@ export type CampaignBackup = {
 /* ---- Maptable ---- */
 
 /** The campaign and the folders inside it, at any depth. A campaign nested inside it is its own campaign, and not part of it. */
-function subtree(w: Pick<MapWorkspace, "collections">, campaignId: string) {
+export function subtree(w: Pick<MapWorkspace, "collections">, campaignId: string) {
   const ids = new Set([campaignId]);
   for (let grew = true; grew;) { grew = false; for (const c of w.collections) if (c.parentId && c.kind !== "campaign" && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); grew = true; } }
   return ids;
 }
 const pick = <T,>(record: Record<string, T> | undefined, keys: Set<string>) => Object.fromEntries(Object.entries(record ?? {}).filter(([k]) => keys.has(k)));
-/** Pictures (asset ids) these scenes, tokens and conditions show. */
-function usedAssets(scenes: MapWorkspace["scenes"], tokens: MapWorkspace["tokenLibrary"], conditions: MapWorkspace["conditions"]) {
-  const used = new Set<string>();
-  const add = (id: string | null | undefined) => { if (id) used.add(id); };
-  for (const s of scenes) {
-    add(s.mapId);
-    for (const t of s.tokens) { add(t.assetId); add(t.borderAssetId); }
-    for (const shape of s.drawing?.shapes ?? []) add(shape.stamp);
-  }
-  for (const t of tokens) { add(t.assetId); add(t.borderAssetId); }
-  for (const c of conditions) add(c.assetId);
-  return used;
-}
-
 export function mapPart(w: MapWorkspace, campaignId: string): MapPart | null {
   if (!w.collections.some(c => c.id === campaignId && c.kind === "campaign")) return null;
   const ids = subtree(w, campaignId);
@@ -124,6 +111,8 @@ export function removeMapCampaign(w: MapWorkspace, campaignId: string): MapWorks
     assets: w.assets.filter(a => !goneAssets.has(a.id)),
     assetCampaigns: Object.fromEntries(Object.entries(without(w.assetCampaigns, goneAssets)).map(([k, v]) => [k, v === campaignId ? null : v])),
     assetLocations: without(w.assetLocations, goneAssets),
+    // Its archived maps go too; deleteCampaign removes their files (lib/scene-archive-server.ts).
+    ...(w.archivedScenes ? { archivedScenes: w.archivedScenes.filter(s => !(s.containerId !== null && ids.has(s.containerId))) } : {}),
   });
 }
 

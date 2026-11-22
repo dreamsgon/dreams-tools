@@ -217,7 +217,7 @@ test('not an RP repository, and an empty one',()=>{
 
 test('limits: file count, total size, one file',()=>{
  const many=Array.from({length:IMPORT_LIMITS.pages+1},(_,i)=>f(`3-People/NPCs/n${i}.md`,'x'));
- const a=previewRepo(many);assert.equal(a.ok,false);assert.match(a.error,/limit is 600/);
+ const a=previewRepo(many);assert.equal(a.ok,false);assert.match(a.error,/limit is 4500/);
  assert.equal(planRead(many.map(x=>({path:x.path,size:1}))).ok,false);
  const lib=Array.from({length:IMPORT_LIMITS.files+1},(_,i)=>f(`7-Library/b${i}.pdf`));
  assert.equal(previewRepo([f('3-People/Ayla.md','x'),...lib]).ok,false);

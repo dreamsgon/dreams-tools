@@ -21,10 +21,10 @@ export type RepoFile = { path: string; text?: string; size?: number };
 export const IMPORT_LIMITS = {
   /** Files in the whole repository (the ZIP reader's own limit). */
   files: 5000,
-  /** Markdown files that would be imported. */
-  pages: 600,
-  /** All imported text together, in characters. Each campaign is limited to its owner’s per-campaign limit (wiki-parts.ts). */
-  chars: 1_500_000,
+  /** Markdown files that would be imported: most of the 5,000 pages one campaign can hold (wiki-parts.ts PAGE_LIMIT). */
+  pages: 4500,
+  /** All imported text together, in characters: about the 20 MB one campaign can hold at the largest limit. The save says so if the owner's own limit is smaller. */
+  chars: 18_000_000,
   /** One file, in characters (a page body holds 100,000). */
   file: 100_000,
 } as const;

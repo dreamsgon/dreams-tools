@@ -3,7 +3,9 @@ import {workspaceSchema,type Workspace} from './model.ts';
 import type { Bucket } from './storage-types';
 type Ref={id:string;key:string};
 type Manifest={format:'maptable-segments-v1';fields:Record<string,string>;scenes:Ref[];collections:Ref[];legacyBackup?:string};
-type Snapshot={workspace:Workspace;revision:string;manifest:Manifest|null;legacyRaw?:unknown};
+export type Snapshot={workspace:Workspace;revision:string;manifest:Manifest|null;legacyRaw?:unknown};
+/** One scene, or one other part of the workspace. Bigger saves go through staged transfers (lib/transfers.ts). */
+export const SEGMENT_LIMIT=10_000_000;
 const rootKey=(prefix:string)=>prefix+'workspace.json';
 async function mapLimited<T,U>(items:T[],fn:(item:T)=>Promise<U>):Promise<U[]>{const result=new Array<U>(items.length);let cursor=0;await Promise.all(Array.from({length:Math.min(8,items.length)},async()=>{while(cursor<items.length){const index=cursor++;result[index]=await fn(items[index]);}}));return result;}
 const isManifest=(x:unknown):x is Manifest=>!!x&&typeof x==='object'&&(x as Manifest).format==='maptable-segments-v1'&&!!(x as Manifest).fields&&typeof (x as Manifest).fields==='object'&&Array.isArray((x as Manifest).scenes)&&Array.isArray((x as Manifest).collections);
@@ -38,7 +40,7 @@ export async function loadWorkspace(bucket:Bucket,prefix:string):Promise<Snapsho
 }
 const equal=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 async function writeSegment(bucket:Bucket,prefix:string,value:unknown,previous?:unknown):Promise<string>{
- const text=JSON.stringify(value);const previousSize=previous===undefined?0:new TextEncoder().encode(JSON.stringify(previous)).length;if(new TextEncoder().encode(text).length>Math.max(5_000_000,previousSize))throw new Error('This scene or workspace segment exceeds its allowed size; reduce its content before saving.');
+ const text=JSON.stringify(value);const previousSize=previous===undefined?0:new TextEncoder().encode(JSON.stringify(previous)).length;if(new TextEncoder().encode(text).length>Math.max(SEGMENT_LIMIT,previousSize))throw new Error('This scene or workspace segment exceeds its allowed size; reduce its content before saving.');
  const key=prefix+'workspace-segments/'+crypto.randomUUID()+'.json';await bucket.put(key,text,{httpMetadata:{contentType:'application/json'}});return key;
 }
 /** Write new immutable segments, then atomically publish their manifest if revision matches. */
@@ -47,7 +49,7 @@ export async function saveWorkspace(bucket:Bucket,prefix:string,workspace:Worksp
  if((previous?.revision??null)!==revision)return null;
  return saveFromSnapshot(bucket,prefix,workspace,revision,previous);
 }
-async function saveFromSnapshot(bucket:Bucket,prefix:string,workspace:Workspace,revision:string|null,previous:Snapshot|null):Promise<{revision:string}|null>{
+export async function saveFromSnapshot(bucket:Bucket,prefix:string,workspace:Workspace,revision:string|null,previous:Snapshot|null):Promise<{revision:string}|null>{
  const next=validate(workspace);
  const {scenes,collections,...fields}=next,old=previous?.workspace;
  const tasks:{kind:'field'|'scene'|'collection';id:string;value:unknown;oldValue:unknown;oldKey?:string}[]=[];

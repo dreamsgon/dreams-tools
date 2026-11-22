@@ -12,6 +12,8 @@ import { parseDice, rollDice, termRange } from '../rolls.ts';
  *
  * Results can roll dice with [[1d4]] and roll other tables with [[table:Name]].
  */
+/** Random tables one account can keep. */
+export const MAX_TABLES = 10000;
 const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 export const TABLE_CATEGORIES = [
   ['oracle', 'Solo oracles'], ['meaning', 'Meaning'], ['npc', 'NPCs'], ['encounter', 'Encounters'], ['loot', 'Loot'],
@@ -54,7 +56,7 @@ export const tableSchema = z.object({
 });
 export const librarySchema = z.object({
   schemaVersion: z.literal(1),
-  tables: z.array(tableSchema).max(2000),
+  tables: z.array(tableSchema).max(MAX_TABLES),
   /** Oracle tension per Encyclopedia campaign ("" when no campaign is open), 1 to 9. */
   tension: z.record(z.string().max(100), z.number().int().min(1).max(9)).optional(),
 }).superRefine((s, ctx) => {
@@ -78,7 +80,8 @@ export type RandomTable = z.infer<typeof tableSchema>;
 export type TableRow = z.infer<typeof rowSchema>;
 export type TableLibrary = z.infer<typeof librarySchema>;
 export const emptyLibrary = (): TableLibrary => ({ schemaVersion: 1, tables: [] });
-export const LIBRARY_LIMIT = 1_000_000;
+/** All of an account's random tables together. Over 3 MB they load and save through storage (lib/transfers.ts). */
+export const LIBRARY_LIMIT = 10_000_000;
 
 /** "d20" is short for "1d20"; "d%" and "d00" mean d100. */
 export function diceFormula(text: string) {
@@ -299,7 +302,7 @@ export function exportTables(library: TableLibrary, ids: string[]) {
 }
 /** Adds tables from an export as new tables with new IDs, used in the given campaigns (null: all). Pairs are re-pointed. */
 export function importTables(library: TableLibrary, input: unknown, campaignIds: string[] | null, makeId: () => string, now = new Date().toISOString()): { library: TableLibrary; added: number } {
-  const parsed = z.object({ format: z.literal(EXPORT_FORMAT), version: z.literal(1), tables: z.array(tableSchema).max(2000) }).parse(input);
+  const parsed = z.object({ format: z.literal(EXPORT_FORMAT), version: z.literal(1), tables: z.array(tableSchema).max(MAX_TABLES) }).parse(input);
   const map = new Map(parsed.tables.map(t => [t.id, makeId()]));
   const names = new Set(library.tables.map(t => t.name.toLowerCase()));
   const tables = parsed.tables.map(t => {

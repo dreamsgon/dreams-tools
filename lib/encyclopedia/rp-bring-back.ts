@@ -523,12 +523,12 @@ export type SaveResult =
 export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; plan: BringBackPlan; input: PlanInput; sel: Selection; now?: string; newId?: () => string }): Promise<SaveResult> {
   const now = o.now ?? new Date().toISOString();
   const read = async () => {
-    const res = await o.fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; error?: string }>(res, o.fetch as typeof fetch).catch(() => ({} as { data?: unknown; revision?: number; limit?: number; error?: string }));
+    const res = await o.fetch(WORKSPACE_URL, { cache: "no-store" }), body = await workspaceBody<{ data?: unknown; revision?: number; limit?: number; total?: number; error?: string }>(res, o.fetch as typeof fetch).catch(() => ({} as { data?: unknown; revision?: number; limit?: number; total?: number; error?: string }));
     if (res.status === 401) return { error: "Sign in again to bring back changes." };
     if (!res.ok || typeof body.revision !== "number") return { error: body.error || "Could not read your notes. Nothing was changed." };
     const parsed = workspaceSchema.safeParse(body.data);
     if (!parsed.success) return { error: "Your notes could not be read. Nothing was changed." };
-    return { ws: parsed.data, revision: body.revision, limit: body.limit ?? DEFAULT_PART_LIMIT };
+    return { ws: parsed.data, revision: body.revision, limit: body.limit ?? DEFAULT_PART_LIMIT, total: body.total };
   };
   try {
     const got = await read();
@@ -539,7 +539,7 @@ export async function saveBringBack(o: { fetch: FetchFn; campaignId: string; pla
     let done = applyBringBack(got.ws, fresh, o.sel, { now, newId: o.newId });
     if (!done.ok) return { status: "error", message: `${done.error} Nothing was changed.` };
     // Too big to save: say so before anything is written to page history.
-    const tooBig = (w: Workspace) => (w.entries.length > 5000 ? "Your notes have no room for these pages (the limit is 5,000 pages). Nothing was changed." : sizeProblem(w, got.limit)?.replace(/$/, " Nothing was changed.") ?? null);
+    const tooBig = (w: Workspace) => (sizeProblem(w, got.limit, got.total)?.replace(/$/, " Nothing was changed.") ?? null);
     const big = tooBig(done.workspace); if (big) return { status: "error", message: big };
     // Page history keeps the old text first (the server keeps it only for pages that are in the saved notes, which they are).
     const failed = new Set<string>();

@@ -1,9 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ChevronRight, Map as MapIcon, Plus, Search } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronRight, Map as MapIcon, Plus, Search } from "lucide-react";
 import { countLabel } from "@/lib/plural";
 import { scenesInOrder } from "@/lib/scene-order";
-import type { Scene, Workspace } from "@/lib/model";
+import type { ArchivedScene, Scene, Workspace } from "@/lib/model";
 import { SceneKindIcon, sceneKindLabel } from "./scene-switcher";
 import { useCampaignHero } from "./campaign-hero";
 
@@ -14,14 +14,18 @@ const KINDS: [Kind, string][] = [["all", "All"], ["encounter", "Encounters"], ["
  * The Scene Picker: a campaign's scenes as a picture grid, grouped by folder, with Continue at the top.
  * It is where Maptable opens. The campaign bar above it names the campaign, so the page itself just says "Scenes".
  */
-export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, unfiled, heroKey }: {
+export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, open, addScenes, unfiled, heroKey, archived = [], bringBack }: {
   workspace: Workspace; campaignId: string | null; lastSceneId: string | null;
   /** The campaign's forum key, for its banner picture behind the heading. */
   heroKey?: string | null;
   open: (sceneId: string) => void; addScenes: () => void;
   /** Maps not in a campaign, offered at the bottom of a campaign's picker when there are any. */
   unfiled?: { count: number; open: () => void } | null;
+  /** This campaign's archived maps (lib/scene-archive.ts), listed at the bottom with Bring back. */
+  archived?: ArchivedScene[];
+  bringBack?: (sceneId: string) => Promise<void>;
 }) {
+  const [busy, setBusy] = useState<string | null>(null), [problem, setProblem] = useState("");
   const [query, setQuery] = useState(""), [kind, setKind] = useState<Kind>("all");
   const hero = useCampaignHero(campaignId ? heroKey : null);
   const all = useMemo(() => scenesInOrder(w, campaignId), [w, campaignId]);
@@ -65,6 +69,19 @@ export default function CampaignScenes({ workspace: w, campaignId, lastSceneId, 
       })}</div>
     </section>)}
     {!all.length ? <p className="muted">No scenes in this campaign yet. Add scenes to start its table.</p> : !shown.length && <p className="muted">No scenes match.</p>}
+    {archived.length > 0 && <details className="campaign-scenes-archived">
+      <summary><Archive size={16} aria-hidden="true" />Archived maps <span>{countLabel(archived.length, "map")}</span></summary>
+      <p className="muted">Archived maps don&apos;t load with your maps. Bring one back to open it again; it returns to its folder.</p>
+      {problem && <p className="error" role="alert">{problem}</p>}
+      <ul>{archived.map(a => <li key={a.id}>
+        <SceneKindIcon type={a.mapType} size={18} />
+        <span><strong>{a.name}</strong><small>{a.mapType === "encounter" ? `${countLabel(a.tokens, "token")} · ` : ""}archived {new Date(a.at).toLocaleDateString()}</small></span>
+        {bringBack && <button disabled={busy !== null} onClick={async () => {
+          setBusy(a.id); setProblem("");
+          try { await bringBack(a.id); } catch (e) { setProblem((e as Error).message); } finally { setBusy(null); }
+        }}><ArchiveRestore size={15} aria-hidden="true" />{busy === a.id ? "Bringing back…" : "Bring back"}</button>}
+      </li>)}</ul>
+    </details>}
     {unfiled && <button className="dashboard-unfiled" onClick={unfiled.open}>
       <MapIcon size={22} aria-hidden="true" /><span><strong>Maps not in a campaign</strong><small>{countLabel(unfiled.count, "scene")}</small></span>
     </button>}
