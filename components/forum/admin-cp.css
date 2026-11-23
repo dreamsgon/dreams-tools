@@ -19,7 +19,6 @@
 .cp-seg.text button { padding: 4px 10px; font-size: 12px; }
 .cp-seg.text button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
 .cp-close { display: inline-grid; place-items: center; padding: 3px; border: 0; background: transparent; color: inherit; cursor: pointer; }
-.cp-editing { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--raised); }
 .cp-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 11px; color: var(--muted); }
 .cp-tag.live { border-color: var(--accent-2); color: var(--accent-2); }
 .cp-tag.warn { border-color: var(--accent); color: var(--accent); }
@@ -70,8 +69,6 @@
 @media (max-width: 900px) {
   .admin-cp { position: relative; height: auto; max-height: calc(70vh / var(--ui-zoom, 1)); border: 0; border-bottom: 1px solid var(--line-strong); box-shadow: none; }
 }
-.cp-find { width: 100%; }
-.cp-list.presets li { grid-template-columns: auto minmax(0, 1fr) auto; }
 /* The Admin CP's tabs: the theme on one row, a stylesheet for each part of the campaign on the next. */
 .cp-tabs { flex-direction: column; }
 .cp-tab-row { display: flex; align-items: stretch; }
@@ -129,3 +126,46 @@
 /* Basics and the stylesheets before a theme is picked: what they are, and the way to Themes. */
 .cp-pick-first { display:grid; gap:10px; justify-items:start; padding:4px 0; }
 .cp-pick-first p { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
+
+/* The menu along the top: the theme being changed. */
+.cp-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--raised); }
+.cp-pick { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; font: 600 12.5px var(--font-sans); color: var(--muted); }
+.cp-pick select { flex: 1; min-width: 0; width: 100%; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 600 14px var(--font-sans); }
+.cp-picker .cp-tag { margin-left: 0; }
+/* Theme: the one being changed, with what can be done with it. */
+.cp-current { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; padding: 10px; border: 1px solid var(--line); background: var(--bg); }
+.cp-current-note { grid-column: 1 / -1; }
+.cp-paste, .cp-faint { border-top: 1px solid var(--line); padding-top: 10px; }
+.cp-paste > summary, .cp-faint > summary { cursor: pointer; font: 700 11.5px var(--font-sans); letter-spacing: calc(var(--label-track, 1) * .1em); text-transform: var(--label-case, uppercase); color: var(--muted); }
+.cp-paste > summary .small, .cp-faint > summary .small { letter-spacing: 0; text-transform: none; font-weight: 400; }
+.cp-paste[open] > * + *, .cp-faint[open] > * + * { margin-top: 10px !important; }
+/* Colours: a swatch for each colour, tapped to open the colour picker. */
+.cp-swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px 8px; }
+.cp-swatch-grid.main { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cp-swatch { position: relative; min-width: 0; }
+.cp-swatch label { display: grid; gap: 3px; cursor: pointer; }
+.cp-swatch input[type="color"] { display: block; width: 100%; height: 34px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px; background: none; cursor: pointer; }
+.cp-swatch input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.cp-swatch input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 5px; }
+.cp-swatch input[type="color"]::-moz-color-swatch { border: 0; border-radius: 5px; }
+.cp-swatch.changed input[type="color"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+.cp-swatch-name { overflow: hidden; font-size: 11px; line-height: 1.3; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.cp-swatch.wide .cp-swatch-name { font-size: 11.5px; color: var(--ink); }
+.cp-reset { position: absolute; top: -10px; right: -8px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--panel); color: var(--ink); cursor: pointer; }
+.cp-reset:hover { border-color: var(--accent); color: var(--accent); }
+.cp-gradients { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.cp-gradients li { display: grid; gap: 5px; }
+.cp-gradient-name { font-size: 12px; font-weight: 600; }
+.cp-gradient-bar { height: 22px; border: 1px solid var(--line); border-radius: 6px; }
+.cp-gradient-stops { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 8px 6px; }
+.cp-gradient-stops .cp-swatch input[type="color"] { height: 28px; }
+.cp-gradient-stops .cp-swatch-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.cp-reset-all { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.admin-cp.floating .cp-swatch input[type="color"], .admin-cp.floating .cp-pick select { min-height: 0; }
+.admin-cp.floating .cp-reset { min-height: 0; }
+@media (max-width: 900px) {
+  .cp-swatch-grid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .cp-swatch input[type="color"] { height: 38px; }
+  .cp-reset { width: 30px; height: 30px; top: -12px; right: -8px; }
+  .cp-pick select { font-size: 16px; }
+}
