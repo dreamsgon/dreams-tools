@@ -13,7 +13,8 @@ import { classifyZip, defaultCommitMessage, exportedAt, folderRows, lastExportKe
 import { readLastPush } from "@/lib/encyclopedia/rp-last";
 import { readRepoChanges, readRepoFiles, readRepoRestore, type PushResult } from "@/lib/github-push";
 import { isThisCampaign, planBringBack, readBringSources, saveBringBack, type BringBackPlan, type FilesMap, type PlanInput, type Selection } from "@/lib/encyclopedia/rp-bring-back";
-import { forgetKey, readKey } from "@/lib/github-key";
+import { forgetKey, hasAnyKey, readKey } from "@/lib/github-key";
+import { freshSignIn } from "@/lib/github-signin";
 import { ConnectView, PushView, githubFetch } from "./rp-github";
 import { BringBackView } from "./rp-bring-back";
 import { memberRef } from "./encyclopedia/member-view";
@@ -69,7 +70,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 }) {
   const [tab, setTab] = useState<"export" | "import">("export"), [includeGm, setIncludeGm] = useState(true);
   const [view, setView] = useState<"main" | "connect" | "push">("main"), [then, setThen] = useState<"export" | "push" | "import">("export");
-  const [source, setSource] = useState<"zip" | "github" | "folder">("zip"), [savedGh, setSavedGh] = useState<Github | null>(null), [keyTick, setKeyTick] = useState(0);
+  const [source, setSource] = useState<"zip" | "github" | "folder">("zip"), [savedGh, setSavedGh] = useState<Github | null>(null), [keyTick, setKeyTick] = useState(0), [autoConnect, setAutoConnect] = useState(false);
   const [lastPush, setLastPush] = useState<LastPush | null>(() => readLastPush(campaignId));
   const [memKey, setMemKey] = useState<{ repo: string; token: string } | null>(null), busy = useRef(false);
   const [loaded, setLoaded] = useState<Loaded | null>(null), [loadError, setLoadError] = useState("");
@@ -227,8 +228,9 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
 
   /** Reads .rpg-tools/campaign.json (or the old world-manager copy) from the saved repository and branch with the key kept on this device. */
   async function readGithub() {
+    if (repo) await freshSignIn();
     const token = tokenFor(repo);
-    if (!repo || !token) { setThen("import"); setView("connect"); return; }
+    if (!repo || !token) { connect("import", !!repo); return; }
     setImp({ step: "reading" });
     try {
       const got = await readRepoRestore(token, repo, github.branch, githubFetch, github.folder ?? "");
@@ -267,8 +269,9 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
     } catch (e) { return errorText(e, "Could not save the repository."); }
   }
 
-  function connect(next: "export" | "push" | "import") { setThen(next); setView("connect"); }
-  function startPush() { if (archived) return; if (!repo) return connect("push"); if (!tokenFor(repo)) return connect("push"); setView("push"); }
+  /** `auto`: the repository is set and only its key is missing here, so try the saved keys straight away. */
+  function connect(next: "export" | "push" | "import", auto = false) { setThen(next); setAutoConnect(auto); setView("connect"); }
+  async function startPush() { if (archived) return; if (!repo) return connect("push"); await freshSignIn(); if (!tokenFor(repo)) return connect("push", true); setKeyTick(n => n + 1); setView("push"); }
   function pushed(res: PushResult) {
     const note: LastPush = { at: new Date().toISOString(), repository: repo, branch: github.branch, url: res.url };
     saveLastPush(campaignId, note); setLastPush(note); onPushed?.(note);
@@ -355,7 +358,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
         {showTab.map(([id, label]) => <button key={id} type="button" role="tab" id={`rpb-tab-${id}`} aria-selected={tab === id} aria-controls={`rpb-panel-${id}`} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)}>{label}</button>)}
       </div>}
       <div className="rpb-body">
-        {view === "connect" ? <ConnectView initialRepo={repo} initialBranch={github.branch} initialFolder={github.folder ?? ""} tokenFor={tokenFor} saveConfig={saveGithub}
+        {view === "connect" ? <ConnectView autoCheck={autoConnect && !!repo && hasAnyKey()} initialRepo={repo} initialBranch={github.branch} initialFolder={github.folder ?? ""} tokenFor={tokenFor} saveConfig={saveGithub}
             onToken={(r, t) => { setMemKey({ repo: r, token: t }); setKeyTick(n => n + 1); }}
             onForget={r => { setMemKey(m => m?.repo.toLowerCase() === r.toLowerCase() ? null : m); forgetKey(r); setKeyTick(n => n + 1); }}
             onBack={() => setView("main")} continueLabel={then === "push" ? "Continue to push" : then === "import" ? "Continue to import" : "Back to export"}
@@ -380,7 +383,7 @@ export function BackupsSheet({ campaignId, campaignName, close, returnFocus, wor
                 : <button type="button" className="rpb-row rpb-connect" onClick={() => connect("push")}><div><b>Connect a GitHub repository</b><small>Push this campaign to your own repository, private or public</small></div><Github size={18} aria-hidden="true" /></button>)}
               <div className={canPush ? "rpb-btns" : undefined}>
                 <button type="button" className={canPush ? "rpb-secondary" : "rpb-primary"} onClick={download} disabled={!!plan.error}><Download size={16} aria-hidden="true" />Download ZIP</button>
-                {canPush && <button type="button" className="rpb-primary" onClick={startPush} disabled={!!plan.error}><Upload size={16} aria-hidden="true" />Push to GitHub</button>}{archived && <p className="rpb-muted">This campaign is archived, so it can&apos;t be pushed. Bring it back in the Wiki&apos;s Settings, Storage, first.</p>}
+                {canPush && <button type="button" className="rpb-primary" onClick={() => void startPush()} disabled={!!plan.error}><Upload size={16} aria-hidden="true" />Push to GitHub</button>}{archived && <p className="rpb-muted">This campaign is archived, so it can&apos;t be pushed. Bring it back in the Wiki&apos;s Settings, Storage, first.</p>}
               </div>
               {exportError && <p className="rpb-alert" role="alert"><TriangleAlert size={16} aria-hidden="true" />{exportError}</p>}
               {saved && <p className="rpb-ok" role="status"><Check size={15} aria-hidden="true" />{saved}</p>}
