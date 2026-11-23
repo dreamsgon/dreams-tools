@@ -169,3 +169,11 @@
   .cp-reset { width: 30px; height: 30px; top: -12px; right: -8px; }
   .cp-pick select { font-size: 16px; }
 }
+/* Scrolling: on a wide screen the panel is a column of its own, so scrolling to its end doesn't carry on into the page
+   beside it. On a phone it sits above the page and takes most of the screen, and scrolling past its end carries on down
+   to the page. */
+@media (min-width: 901px) { .cp-body { overscroll-behavior: contain; } }
+@media (max-width: 900px) {
+  .admin-cp, .admin-cp.floating, .admin-cp.floating.dock-right { max-height: calc(82vh / var(--ui-zoom, 1)); max-height: calc(82dvh / var(--ui-zoom, 1)); }
+  .cp-body { -webkit-overflow-scrolling: touch; }
+}
