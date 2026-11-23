@@ -18,7 +18,7 @@ import type { Workspace } from "./encyclopedia/world-model.ts";
 
 export const API_BASE = "https://api.github.com";
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
-export type GithubErrorCode = "bad-key" | "no-access" | "read-only" | "rate-limit" | "network" | "no-branch" | "moved" | "protected" | "too-big" | "bad-input" | "failed";
+export type GithubErrorCode = "bad-key" | "no-access" | "read-only" | "rate-limit" | "network" | "no-branch" | "moved" | "protected" | "too-big" | "bad-input" | "failed" | "no-app";
 export class GithubError extends Error {
   code: GithubErrorCode;
   constructor(code: GithubErrorCode, message: string) { super(message); this.code = code; this.name = "GithubError"; }
@@ -31,6 +31,23 @@ const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 export function parseRepo(input: string): string | null {
   const text = input.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\/+$/, "").replace(/\.git$/i, "");
   return REPO_RE.test(text) && !text.split("/").some(p => p === "." || p === "..") ? text : null;
+}
+/** A pasted repository: "owner/repo", a github.com link (also with /tree/<branch>/<folder>), or a git clone address. */
+export type RepoLink = { repo: string; branch?: string; folder?: string };
+export function parseRepoLink(input: string): RepoLink | null {
+  let text = input.trim().replace(/^git@github\.com:/i, "").replace(/^(git\+)?(https?|ssh|git):\/\/(git@)?/i, "").replace(/^(www\.)?github\.com\//i, "");
+  text = text.replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const parts = text.split("/");
+  // GitHub account names are letters, numbers and dashes, so "gitlab.com/…" or any other host stops here.
+  if (parts.length < 2 || !/^[A-Za-z0-9-]{1,39}$/.test(parts[0])) return null;
+  const repo = parseRepo(`${parts[0]}/${parts[1].replace(/\.git$/i, "")}`);
+  if (!repo) return null;
+  if (parts.length === 2) return { repo };
+  // github.com/owner/repo/tree/<branch>/<folder…>. A branch with a slash can't be told apart from a folder here, so the first part is the branch.
+  if (parts[2] !== "tree" || !parts[3]) return { repo };
+  const decode = (p: string) => { try { return decodeURIComponent(p); } catch { return p; } };
+  const folder = cleanFolder(parts.slice(4).map(decode).join("/"));
+  return { repo, branch: decode(parts[3]), ...(folder ? { folder } : {}) };
 }
 /** A key is one run of printable ASCII (github_pat_..., ghp_...). Anything else would also break the header. */
 export const validKey = (token: string) => /^[\x21-\x7e]{8,400}$/.test(token);
@@ -54,7 +71,7 @@ type Json = any;
 type Reply = { status: number; data: Json; headers: Headers };
 /** One API call. Network failures and the usual failures (401, 403, 404, 5xx) become plain GithubErrors; callers handle the rest. */
 async function call(c: Conn, method: string, path: string, body?: unknown, accept = "application/vnd.github+json", expect: number[] = []): Promise<Reply> {
-  if (!path.startsWith("/repos/")) throw new GithubError("bad-input", "Internal error: unexpected GitHub path.");
+  if (!path.startsWith("/repos/") && !path.startsWith("/user/installations")) throw new GithubError("bad-input", "Internal error: unexpected GitHub path.");
   let res: Response;
   const { fetch: send } = c; // called on its own, never as a method: the browser's fetch refuses a foreign `this`
   try {
@@ -76,7 +93,7 @@ function explain(c: Conn, r: Reply): GithubError {
   }
   if (r.status === 401) return new GithubError("bad-key", "GitHub did not accept that key. It may be wrong, expired or revoked. Make a new one and paste it again.");
   if (r.status === 403) return new GithubError("no-access", `GitHub says this key may not do that. Give it Contents: Read and write on ${c.repo} only.${said ? ` GitHub said: “${said}”` : ""}`);
-  if (r.status === 404) return new GithubError("no-access", `GitHub can't find ${c.repo}, or this key has no access to it. Check the name, and that the key lists this repository.`);
+  if (r.status === 404) return new GithubError("no-access", `GitHub can't find ${c.repo}, or this key has no access to it. Check the link. If the repository is private, the key has to include it: on GitHub, edit the key and add ${c.repo.split("/")[1]} under Repository access.`);
   if (r.status === 422) return new GithubError("failed", `GitHub did not accept the request.${said ? ` GitHub said: “${said}”` : ""}`);
   if (r.status >= 500) return new GithubError("failed", `GitHub had a problem (${r.status}). Nothing was lost. Try again in a minute.`);
   return new GithubError("failed", `GitHub answered ${r.status}.${said ? ` GitHub said: “${said}”` : ""}`);
@@ -125,6 +142,47 @@ export async function checkRepo(token: string, repo: string, fetch: FetchLike): 
   const { data } = await call(c, "GET", `/repos/${repo}`);
   if (!data?.permissions || data.permissions.push !== true) throw new GithubError("read-only", `This key can read ${repo} but not write to it. Make a new key with Contents set to Read and write.`);
   return { fullName: String(data.full_name ?? repo), isPrivate: data.private === true, defaultBranch: String(data.default_branch ?? "main") };
+}
+
+/** A "Sign in with GitHub" key (ghu_…) reaches only the repositories the RPG Tools GitHub App was added to. */
+export const isAppToken = (token: string) => token.startsWith("ghu_");
+/** Has the RPG Tools GitHub App been added to this repository (for the signed-in person)? */
+export async function appCanReach(token: string, repo: string, fetch: FetchLike): Promise<boolean> {
+  const c = conn(token, repo, fetch), [owner] = repo.toLowerCase().split("/");
+  const { data } = await call(c, "GET", "/user/installations?per_page=100");
+  for (const inst of Array.isArray(data?.installations) ? data.installations : []) {
+    if (String(inst?.account?.login ?? "").toLowerCase() !== owner || typeof inst.id !== "number") continue;
+    if (inst.repository_selection === "all") return true;
+    for (let page = 1; page <= 10; page++) {
+      const list = await call(c, "GET", `/user/installations/${inst.id}/repositories?per_page=100&page=${page}`);
+      const repos: Json[] = Array.isArray(list.data?.repositories) ? list.data.repositories : [];
+      if (repos.some(r => String(r?.full_name ?? "").toLowerCase() === repo.toLowerCase())) return true;
+      if (repos.length < 100) break;
+    }
+  }
+  return false;
+}
+
+export type Access = { token: string; info: RepoInfo };
+/**
+ * Tries each key in turn (a pasted one first, then the saved ones) and gives the first that can read and write the repository.
+ * When none can, throws the most useful error: a key GitHub turned down matters less than "can't find it" or "read only".
+ */
+export async function findAccess(tokens: string[], repo: string, fetch: FetchLike): Promise<Access> {
+  const rank: Partial<Record<GithubErrorCode, number>> = { "bad-key": 1, "no-access": 2, "read-only": 3, "rate-limit": 4, network: 4 };
+  let best: GithubError | null = null;
+  for (const token of [...new Set(tokens.filter(Boolean))]) {
+    try {
+      const info = await checkRepo(token, repo, fetch);
+      if (isAppToken(token) && !(await appCanReach(token, repo, fetch))) throw new GithubError("no-app", `RPG Tools hasn't been added to ${info.fullName} on GitHub yet.`);
+      return { token, info };
+    } catch (e) {
+      const err = e instanceof GithubError ? e : new GithubError("failed", "Could not check the repository.");
+      if (err.code === "rate-limit" || err.code === "network") throw err;
+      if (!best || (rank[err.code] ?? 5) >= (rank[best.code] ?? 5)) best = err;
+    }
+  }
+  throw best ?? new GithubError("bad-key", "Paste a GitHub key, or sign in with GitHub.");
 }
 
 /** Does the branch exist, or is the whole repository empty (no commits, so no branches)? */
