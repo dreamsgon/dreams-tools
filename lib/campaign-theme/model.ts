@@ -16,9 +16,10 @@ import { z } from "zod";
 import { contrastRatio, relativeLuminance } from "../contrast.ts";
 import { SKIN_SCOPE, cleanCss, type CssProblem } from "./css.ts";
 import { SKIN_PRESETS } from "./presets.ts";
+import { swapColours } from "./palette.ts";
 import { NEON_WIRE } from "./skins/neon-wire.ts";
 
-export const THEME_LIMITS = { saved: 20, name: 60, css: 100_000, allCss: 160_000 } as const;
+export const THEME_LIMITS = { saved: 20, name: 60, css: 100_000, allCss: 160_000, palette: 400 } as const;
 
 /** The parts of a campaign a theme styles. The forum's stylesheet is the theme's `css`; the others are in `areas`. */
 export const THEME_AREAS = [
@@ -97,6 +98,13 @@ export const themeSchema = z.object({
   css: z.string().max(THEME_LIMITS.css),
   /** The other parts' stylesheets. Missing: that part gets the theme's colours, fonts and corners only. */
   areas: z.object({ encyclopedia: z.string().max(THEME_LIMITS.css), maptable: z.string().max(THEME_LIMITS.css), dashboard: z.string().max(THEME_LIMITS.css) }).partial().optional(),
+  /**
+   * The GM's own colours for the stylesheets (palette.ts): each colour the stylesheets use, swapped for another wherever
+   * it appears. The stylesheets keep their own colours, so clearing this puts them back.
+   */
+  palette: z.record(z.string().regex(/^#[0-9a-f]{6}$/), hex).refine(p => Object.keys(p).length <= THEME_LIMITS.palette, { message: "Too many colours." }).optional(),
+  /** The preset it was started from, for Reset to the theme's own colours. */
+  from: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/).optional(),
   updatedAt: z.string().datetime().optional(),
 }).refine(t => cssSize(t) <= THEME_LIMITS.allCss, { message: "The stylesheets are over 160 KB together.", path: ["css"] });
 export type Theme = z.infer<typeof themeSchema>;
@@ -148,6 +156,15 @@ const BASE_PRESETS: Theme[] = [
 export const THEME_PRESETS: Theme[] = [...BASE_PRESETS, ...SKIN_PRESETS.map(p => p.theme)];
 /** What a preset skin is inspired by, by its id, for the Admin CP's list. */
 export const PRESET_NOTES: Record<string, string> = { [NEON_WIRE.id]: "Synthwave", ...Object.fromEntries(SKIN_PRESETS.map(p => [p.theme.id, p.inspired])) };
+
+/**
+ * The preset a theme started from, for resetting its colours: the one it names, else a preset with its name (a theme
+ * saved before themes noted where they came from, or its copy). Undefined for a theme of the GM's own.
+ */
+export function presetOf(t: Pick<Theme, "from" | "name">): Theme | undefined {
+  const name = t.name.replace(/\s*\(copy\)$/i, "").trim().toLowerCase();
+  return THEME_PRESETS.find(p => p.id === t.from) ?? THEME_PRESETS.find(p => p.name.toLowerCase() === name);
+}
 
 /** The colour a theme's text on its accent should be: near-black or white, whichever reads better. */
 export const onAccent = (accent: string) => contrastRatio(accent, "#111111") >= contrastRatio(accent, "#ffffff") ? "#111111" : "#ffffff";
@@ -203,7 +220,7 @@ export function themeCss(t: Theme, scope = SKIN_SCOPE, area: ThemeArea = "forum"
   const vars = t.mode === "both" ? `${light}\n:root[data-theme="dark"] ${dark}`
     : t.mode === "light" ? `${light}\n:root[data-theme="dark"] ${light}`
     : `${dark}\n:root[data-theme="dark"] ${dark}`;
-  const sheet = cleanCss(areaCss(t, area), scope);
+  const sheet = cleanCss(swapColours(areaCss(t, area), t.palette), scope);
   return { css: `${vars}\n${sheet.css}\n${menusOnTop(scope)}\n${dialogsOnTop(scope)}`, problems: sheet.problems };
 }
 
@@ -270,6 +287,8 @@ export function importTheme(raw: unknown, id: string): { theme: Theme; notes: st
     radius: Math.max(0, Math.min(16, Math.round(Number(o.radius ?? 3)) || 0)), banner,
     fonts: { display: pick(fonts.display, "cinzel"), reading: pick(fonts.reading, "cormorant"), ui: pick(fonts.ui, "inter") },
     colors: { light: lightIn, dark: darkIn }, css: typeof o.css === "string" ? o.css : "", ...(Object.keys(areas).length ? { areas } : {}),
+    ...(o.palette && typeof o.palette === "object" && Object.keys(o.palette).length ? { palette: Object.fromEntries(Object.entries(o.palette).map(([k, v]) => [k.toLowerCase(), v])) } : {}),
+    ...(typeof o.from === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(o.from) ? { from: o.from } : {}),
   });
   if (!parsed.success) {
     const where = parsed.error.issues[0]?.path.join(".") ?? "";

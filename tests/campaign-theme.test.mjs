@@ -197,3 +197,59 @@ test('an open dialog stays above a theme’s drawing', async () => {
   // Browsers drop the stylesheets they kept from before the lift.
   assert.match(liveTheme(t, 'dashboard').key, /:dashboard:v3$/);
 });
+
+test('every colour in a theme can be changed, and the theme’s own colours come back when the palette is cleared', async () => {
+  const { paletteOf, swapColours, readColour, colourName } = await import('../lib/campaign-theme/palette.ts');
+  assert.deepEqual(readColour('#ABC'), { hex: '#aabbcc', alpha: 1 });
+  assert.deepEqual(readColour('rgba(0, 0, 0, .5)'), { hex: '#000000', alpha: 0.5 });
+  assert.deepEqual(readColour('rgb(255 128 0 / 50%)'), { hex: '#ff8000', alpha: 0.5 });
+  assert.equal(readColour('rgb(var(--x))'), null);
+  const css = `:root { --x-gold: #d4a826; --x-trim: linear-gradient(180deg, #d4a826, #6e5214); --x-sky: #88aaff; }
+:root[data-theme="dark"] { --x-sky: #101020; --x-moon: #eeeeff; }
+#d4a826.post { color: #D4A826; box-shadow: 0 0 4px rgba(212, 168, 38, .4); border-color: #0000; }`;
+  const { colours, gradients } = paletteOf([css]);
+  const by = Object.fromEntries(colours.map(c => [c.hex, c]));
+  assert.equal(by['#d4a826'].uses, 4, 'one colour however it is written');
+  assert.deepEqual(by['#d4a826'].names, ['x-gold', 'x-trim']);
+  assert.equal(by['#88aaff'].version, 'light', 'set again by the dark version');
+  assert.equal(by['#101020'].version, 'dark');
+  assert.equal(by['#d4a826'].version, 'both');
+  assert.ok(!by['#000000'], 'fully see-through colours are left out');
+  assert.equal(gradients.length, 1);
+  assert.deepEqual(gradients[0].stops, ['#d4a826', '#6e5214']);
+  assert.equal(colourName('x-gold-hi'), 'Gold hi');
+
+  const swapped = swapColours(css, { '#d4a826': '#3fa0d0' });
+  assert.match(swapped, /--x-gold: #3fa0d0;/);
+  assert.match(swapped, /linear-gradient\(180deg, #3fa0d0, #6e5214\)/);
+  assert.match(swapped, /color: #3fa0d0;/);
+  assert.match(swapped, /rgba\(63, 160, 208, 0\.4\)/, 'a see-through use keeps its transparency');
+  assert.match(swapped, /^#d4a826\.post/m, 'selectors are never changed');
+  assert.equal(swapColours(css, {}), css);
+
+  // On a real skin: the swap reaches the compiled theme in every part, and leaves the stylesheet as it came.
+  const two = THEME_PRESETS.find(t => t.id === 'preset-two-banners');
+  const gold = paletteOf([two.css]).colours.find(c => c.names.includes('tb-gold')).hex;
+  const custom = themeSchema.parse({ ...two, id: 'mine', from: two.id, palette: { [gold]: '#2266cc' } });
+  for (const area of ['forum', 'encyclopedia', 'maptable', 'dashboard']) {
+    const out = themeCss(custom, '.campaign-skin', area).css;
+    assert.ok(!out.includes(gold), `${area}: the old gold is gone`);
+  }
+  assert.ok(themeCss(custom).css.includes('#2266cc'));
+  assert.equal(custom.css, two.css);
+  assert.ok(themeCss({ ...custom, palette: undefined }).css.includes(gold));
+  assert.equal(themeSchema.safeParse({ ...two, id: 'bad', palette: { '#d4a826': 'gold' } }).success, false);
+  assert.equal(themeSchema.safeParse({ ...two, id: 'old' }).success, true, 'themes saved before palettes still read');
+  // Theme code carries the palette.
+  const { theme } = importTheme({ ...two, palette: { '#D4A826': '#2266cc' }, from: two.id }, 'z');
+  assert.deepEqual(theme.palette, { '#d4a826': '#2266cc' });
+  assert.equal(theme.from, two.id);
+});
+
+test('a theme’s own colours: the skin it started from, by its note or its name', async () => {
+  const { presetOf } = await import('../lib/campaign-theme/model.ts');
+  const two = THEME_PRESETS.find(t => t.id === 'preset-two-banners');
+  assert.equal(presetOf({ name: 'Anything', from: two.id }), two);
+  assert.equal(presetOf({ name: 'Two Banners (copy)' }), two);
+  assert.equal(presetOf({ name: 'My own' }), undefined);
+});
