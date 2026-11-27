@@ -45,10 +45,25 @@ export function effectHandles(e: Effect, grid: Grid): { resize: Point; rotate: P
   return { resize: world(e, { x: extent, y: 0 }), rotate: world(e, { x: extent + 32, y: 0 }) };
 }
 
-/** Attached areas use the token center, including temporary drag previews. */
+/**
+ * The size of a token's aura that reaches `reach` squares past the token's edge, as a 5e emanation does.
+ * A circle or cone: radius from the centre. A square: the whole side, covering the token's squares and `reach` on every side.
+ */
+export function auraSize(type: Effect["type"], tokenSize: number, reach: number) {
+  const size = type === "square" ? tokenSize + reach * 2 : tokenSize / 2 + reach;
+  return Math.min(200, Math.max(0.25, size));
+}
+/** How far an aura reaches past its token's edge, in squares, from its size. */
+export function auraReach(type: Effect["type"], tokenSize: number, size: number) {
+  return Math.max(0, type === "square" ? (size - tokenSize) / 2 : size - tokenSize / 2);
+}
+
+/** Attached areas use the token center, including temporary drag previews. A token's aura also grows and shrinks with the token. */
 export function resolveEffect(effect: Effect, tokens: readonly Token[]): Effect {
   const token = effect.tokenId ? tokens.find(token => token.id === effect.tokenId) : undefined;
-  return token ? { ...effect, x: token.x, y: token.y } : effect;
+  if (!token) return effect;
+  const size = effect.reach !== undefined && effect.type !== "custom" ? auraSize(effect.type, token.size, effect.reach) : effect.size;
+  return { ...effect, x: token.x, y: token.y, size };
 }
 export function effectVisibleToPlayers(effect: Effect, tokens: readonly Token[]): boolean {
   return !effect.hidden && !tokens.some(token => token.id === effect.tokenId && token.hidden);

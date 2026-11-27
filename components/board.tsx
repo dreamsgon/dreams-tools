@@ -724,7 +724,10 @@ export default function Board(p: Props) {
     wheelCarry.current = { carry, at: now };
     if (steps) p.update(scene => {
       for (const token of scene.tokens) if (tokenIds.includes(token.id)) wheelResizeToken(token, scene.grid, steps);
-      for (const effect of scene.effects) if (effectIds.includes(effect.id) && !effect.locked) wheelResizeEffect(effect, steps);
+      for (const effect of scene.effects) if (effectIds.includes(effect.id) && !effect.locked) {
+        if (effect.reach !== undefined) { effect.size = resolveEffect(effect, scene.tokens).size; delete effect.reach; }
+        wheelResizeEffect(effect, steps);
+      }
     }, { burst: true });
     return true;
   };
@@ -1330,6 +1333,8 @@ export default function Board(p: Props) {
       if (valid && changed) {
         p.update((scene) => {
           const index = scene.effects.findIndex((item) => item.id === effect.id);
+          // Resizing a token's aura by hand fixes its size: it stops following the token's size.
+          if (g.kind === "resize") delete effect.reach;
           if (index >= 0) { if (!scene.effects[index].locked) scene.effects[index] = effect; }
           else scene.effects.push(effect);
         });

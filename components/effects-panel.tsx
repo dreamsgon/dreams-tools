@@ -81,6 +81,7 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
                 Object.assign(item, { x: resolved.x, y: resolved.y, tokenId: null });
             }
             Object.assign(item, values);
+            if (values.size !== undefined) delete item.reach;
         });
     };
     const selectEffect = (id: string) => { chooseTool("select"); select(id); setEditorOpen(true); };

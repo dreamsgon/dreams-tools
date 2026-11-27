@@ -60,3 +60,13 @@ Follow GITHUB_SETUP.md when the user asks to put the project on GitHub. GitHub p
 ## Provider independence
 
 No OpenAI, Anthropic, DeepSeek, or xAI API key is needed to edit this code. T3Code is a coding client; load this folder in it and provide these same instructions. Do not add model SDKs merely to let an assistant contribute. Client-specific configuration must point back to this document rather than duplicate rules.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
