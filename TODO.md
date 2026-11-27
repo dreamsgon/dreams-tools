@@ -195,6 +195,12 @@ Updated 2026-11-27. Keep work scoped to Maptable and RPG Encyclopedia. Work on o
 
 - [x] Document the shared GitHub branch/PR, validation, Vercel deployment, data protection and rollback workflow in AGENTS.md.
 
+## Token auras (2026-11-27)
+
+- Done: the Edit token dialog has an Auras section (tokens on a map). A token can have up to 8 auras, each with a name, a shape (Circle, Square counted in grid squares the 5e way, or Cone with a direction), a reach past the token's edge in the scene's units, a colour, a fill strength and Hidden from players.
+- Done: an aura is an ordinary attached persistent aura (scene effect with `tokenId`) plus a new optional `reach` field (squares past the token's edge). Its size follows the token's size (`auraSize` in lib/effects.ts) and it moves with the token. Old saves load unchanged; effects without `reach` keep their own size. Resizing an aura by hand on the map, by wheel or in the Auras & AoEs panel drops `reach` so it keeps the size you chose. Lib: lib/token-auras.ts. Tests: tests/token-auras.test.mjs.
+- Next: saved tokens (roster/library) cannot carry auras yet, since auras live on the scene; placing a saved paladin does not bring its aura. A cone does not turn with the token's facing. Checked locally against a sample scene (desktop and iPhone width), not on the live site.
+
 ## Wiki entry types and sidebar headings
 
 - Done: Page (a plain article, now the default) and Other are new kinds of Wiki page. New entry picks the type from grouped pills (Your types, Writing, People and places, At the table, Space) instead of one long dropdown.

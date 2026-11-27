@@ -134,6 +134,8 @@ export const effectSchema = z.object({
   label: short,
   persistent: z.boolean().default(false),
   tokenId: short.nullable().default(null),
+  /** A token's aura: how far it reaches past the token's edge, in squares. Its size follows the token's size (see lib/effects.ts, auraSize). */
+  reach: finite.min(0).max(200).optional(),
   hidden: z.boolean().default(false),
   rotation: finite.default(0),
   width: finite.min(0.05).max(200).default(1),

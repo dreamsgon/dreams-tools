@@ -81,6 +81,7 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
                 Object.assign(item, { x: resolved.x, y: resolved.y, tokenId: null });
             }
             Object.assign(item, values);
+            if (values.size !== undefined) delete item.reach;
         });
     };
     const selectEffect = (id: string) => { chooseTool("select"); select(id); setEditorOpen(true); };
@@ -101,6 +102,9 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
    <p className="muted">{effect.kind==="label"?"Changes appear immediately. Drag the label on the map to move it, and adjust its text size below (Shift + scroll over it also resizes).":"Changes appear on the map immediately. Drag the area to move it, or use its resize and rotation handles (Shift + scroll over it also resizes)."}</p>
    <Toggle label="Lock in place" checked={effect.locked??false} onChange={locked=>patch({locked})}/>{effect.locked&&<p className="muted">Locked: dragging, resizing, and rotation are disabled. Unlock to reposition.</p>}
    <Field label={effect.kind==="label"?"Label text":"Area label"}><input value={effect.label} maxLength={120} onChange={e => patch({ label: e.target.value })}/></Field>
+   {(!effect.kind||effect.kind==="area")&&<><Toggle label="Persistent aura (stays when one-off AoEs are cleared)" checked={effect.persistent} onChange={persistent => patch({ persistent })}/>{!effect.persistent&&<p className="muted">Turn this on to keep the area, or to attach it to a token so it moves with the token.</p>}</>}
+   {effect.persistent && (!effect.kind||effect.kind==="area") && <Field label="Attach aura to token"><select value={effect.tokenId ?? ""} onChange={e => patch({ tokenId: e.target.value || null })}><option value="">Unattached</option>{scene.tokens.map(token => <option key={token.id} value={token.id}>{token.name || "Unnamed token"}{token.hidden ? " (hidden)" : ""}</option>)}</select></Field>}
+   {effect.tokenId && <p className="muted">This aura follows its token center. Move the token to move the aura, or choose Unattached to move it independently. Hidden tokens also hide their auras from players.</p>}
    {effect.kind!=="label"&&<fieldset className="effect-geometry" disabled={effect.locked}><Field label="Shape"><select value={effect.type} onChange={e=>patch({type:e.target.value as Effect["type"]})}>{shapes.map(shape=><option key={shape} value={shape} disabled={shape==="custom"&&effect.points.length<3}>{effect.kind==="object"&&shape==="line"?"Rectangle":names[shape]}</option>)}</select></Field><Adjustment label={effect.type === "circle" ? "Radius (cells)" : effect.type === "cone" || effect.type === "line" ? "Length (cells)" : "Size (cells)"} value={effect.size} min={0.25} max={200} sliderMax={30} step={0.25} onChange={size => patch({ size })}/>
    {effect.type !== "circle" && <>
     <Adjustment label="Rotation (degrees)" value={effect.rotation} min={-360} max={360} step={1} onChange={rotation => patch({ rotation })}/>
@@ -112,9 +116,6 @@ export default function EffectsPanel({ workspace, commit, onUsePreset, scene, to
    {effect.kind!=="label"&&<Field label="Fill / outline color"><input type="color" value={effect.color} onChange={e => patch({ color: e.target.value })}/></Field>}
    <EffectAppearance effect={effect} patch={patch}/>
    {!effect.tokenId&&<fieldset className="form-row effect-geometry" disabled={effect.locked}><NumberField label="X position (px)" min={0} max={scene.width} value={effect.x} onChange={x=>patch({x})}/><NumberField label="Y position (px)" min={0} max={scene.height} value={effect.y} onChange={y=>patch({y})}/></fieldset>}
-   {(!effect.kind||effect.kind==="area")&&<Toggle label="Persistent aura" checked={effect.persistent} onChange={persistent => patch({ persistent })}/>}
-   {effect.persistent && (!effect.kind||effect.kind==="area") && <Field label="Attach aura to token"><select value={effect.tokenId ?? ""} onChange={e => patch({ tokenId: e.target.value || null })}><option value="">Unattached</option>{scene.tokens.map(token => <option key={token.id} value={token.id}>{token.name || "Unnamed token"}{token.hidden ? " (hidden)" : ""}</option>)}</select></Field>}
-   {effect.tokenId && <p className="muted">This aura follows its token center. Move the token to move the aura, or choose Unattached to move it independently. Hidden tokens also hide their auras from players.</p>}
    <Toggle label="Hidden from players" checked={effect.hidden} onChange={hidden => patch({ hidden })}/>
    <button disabled={scene.effects.length>=300} onClick={()=>{const copy={...structuredClone(resolveEffect(effect,scene.tokens)),id:uid(),tokenId:null,locked:false,x:Math.min(scene.width,resolveEffect(effect,scene.tokens).x+scene.grid.size),y:Math.min(scene.height,resolveEffect(effect,scene.tokens).y+scene.grid.size)};update(s=>{s.effects.push(copy);});select(copy.id);}}>Duplicate</button>
    <button className="danger" onClick={() => { update(s => { s.effects = s.effects.filter(item => item.id !== effect.id); }); select(null); }}><Trash2 size={15}/> Remove area</button>
