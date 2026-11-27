@@ -1,6 +1,6 @@
 "use client";
 import { jsonEqual } from "@/lib/json-equal";
-import { auraSize } from "@/lib/effects";
+import { activeSceneId, editWorkspace } from "@/lib/maptable-commit";
 import { uiZoom } from "@/lib/appearance";
 import {readJsonResponse} from "@/lib/transfer-client";
 import { countLabel } from "@/lib/plural";
@@ -17,9 +17,8 @@ import TokenFace from "./token-face";
 import { ArmedPlacement } from "./token-placement";
 import TokenOptions from "./token-options";
 import SaveGalleryStats from "./save-gallery-stats";
-import {syncConditionRounds,getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
+import {getCurrentInitiativeEntry,getInitiativeEntries,isInitiativeEntryActive} from "@/lib/initiative-tracker";
 import type { SuggestedMove } from "./encyclopedia/ai-activity";
-import {syncTokenAttachments} from "@/lib/token-attachments";
 import { preserveActiveScene, workspaceSyncDecision } from "@/lib/workspace-sync";
 import { navigationStorageKey, parseNavigationState, phoneWidth, readRemembered, remember, type NavigationPanel } from "@/lib/navigation-state";
 import SavedMeasurements from "./saved-measurements";
@@ -99,7 +98,6 @@ import { tokenImageFit, tokenPicture } from "@/lib/encyclopedia/picture";
 import MapInitiative, { InitiativeField } from "./map-initiative";
 import { InitiativeArrangeList } from "./initiative-arrange";
 import "./maptable-token-layout.css";
-import { applyWorkspaceHpStates } from "@/lib/token-hp-state";
 import CampaignTokenDefaults from "./campaign-token-defaults";
 import { resolvedToken, SIDE_COLOURS, type TokenSide } from "@/lib/token-defaults";
 import { sceneInitials, tokenInitials } from "@/lib/token-initials";
@@ -692,24 +690,11 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
   // A burst of wheel resizes joins into one undo step: while the last change is still the latest one, the next folds into it.
   const burst = useRef<{ at: number; before: Workspace; after: Workspace } | null>(null);
   const commit = useCallback(
-    (fn: (w: Workspace) => void, options?: { burst?: boolean }) => {
+    (fn: (w: Workspace) => void, options?: { burst?: boolean; sceneId?: string }) => {
       const previous = state.current;
       if (!previous) return;
-      const next = structuredClone(previous);
-      fn(next);
-      for(const scene of next.scenes)syncConditionRounds(scene,previous.scenes.find(s=>s.id===scene.id));
-      applyWorkspaceHpStates(previous,next);
-      next.scenes=next.scenes.map(scene=>syncTokenAttachments(previous.scenes.find(s=>s.id===scene.id) ?? scene,scene));
-      // Hex crawls: party tokens that moved clear the hexes around them, in the same undo step as the move.
-      for(const scene of next.scenes)revealAroundTokens(previous.scenes.find(s=>s.id===scene.id),scene);
-      // Keep attached origins saved, and leave auras in place when their token is removed.
-      for(const scene of next.scenes) for(const area of scene.effects){
-        if(!area.tokenId)continue;
-        const token=scene.tokens.find(t=>t.id===area.tokenId);
-        const origin=token??previous.scenes.find(s=>s.id===scene.id)?.tokens.find(t=>t.id===area.tokenId);
-        if(origin){area.x=origin.x;area.y=origin.y;if(area.reach!==undefined&&area.type!=="custom")area.size=auraSize(area.type,origin.size,area.reach);}
-        if(!token)area.tokenId=null;
-      }
+      // An edit to one scene copies only that scene (lib/maptable-commit.ts).
+      const next = editWorkspace(previous, fn, options?.sceneId);
       // Compared without writing out two copies of the whole workspace on every edit (lib/json-equal.ts).
       if (jsonEqual(next, previous)) return;
       const ref = mapMemberRef(), co = memberInfo.current;
@@ -731,7 +716,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
       commit((w) => {
         const s = w.scenes.find((s) => s.id === w.activeId) || w.scenes[0];
         fn(s);
-      }, options),
+      }, { ...options, sceneId: activeSceneId(state.current) }),
     [commit],
   );
   const undo = useCallback(() => {

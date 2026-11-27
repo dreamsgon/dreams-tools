@@ -7,8 +7,10 @@ export function applyZeroHpState(previous: Token | undefined, token: Token, poli
  if (previous && token.hp > previous.hp && token.hp > 0 && previous.status === "unconscious" && token.status === "unconscious") token.status = "active";
  if (token.hp === 0 && policy !== "off" && (!previous || previous.hp !== token.hp || previousPolicy !== policy)) token.status = policy;
 }
-export function applyWorkspaceHpStates(previous: Workspace, next: Workspace) {
+/** `onlySceneId`: an edit to that one scene, which leaves the token library and the other scenes as they were. */
+export function applyWorkspaceHpStates(previous: Workspace, next: Workspace, onlySceneId?: string) {
  for (const scene of next.scenes) {
+  if (onlySceneId && scene.id !== onlySceneId) continue;
   const old = new Map(previous.scenes.find(s => s.id === scene.id)?.tokens.map(t => [t.id,t]) ?? []);
   const campaignId = tokenCampaignId(next, scene.id), previousCampaignId = tokenCampaignId(previous, scene.id);
   const newlyDead = new Set<string>();
@@ -19,6 +21,7 @@ export function applyWorkspaceHpStates(previous: Workspace, next: Workspace) {
   }
   if (newlyDead.size) scene.tokens = [...scene.tokens.filter(t => newlyDead.has(t.id)), ...scene.tokens.filter(t => !newlyDead.has(t.id))];
  }
+ if (onlySceneId) return;
  const library = new Map(previous.tokenLibrary.map(t=>[t.id,t]));
  for (const token of next.tokenLibrary) {
   const before = library.get(token.id);
