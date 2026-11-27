@@ -10,6 +10,7 @@ import TokenBorder from "./token-border";
 import TokenImage from "./token-image";
 import TokenNotesControl from "./token-notes-control";
 import TokenStatblock from "./token-statblock";
+import TokenAuras from "./token-auras";
 import { MovementCard, RidingCard, LayerCard } from "./token-position";
 import { OnTheMapCard, FineLayout } from "./token-display-controls";
 import { HitPointsCard, StateCard, InitiativeCard, StatsCard } from "./token-combat";
@@ -17,6 +18,7 @@ import { address, type Scene, type Token, type Workspace } from "@/lib/model";
 import { resolveTokenForCampaign, tokenDisposition, sidePatch, usesSideColours, type TokenSide } from "@/lib/token-defaults";
 import { resizeToken, sizeLabel, stepSize } from "@/lib/token-transform";
 import { conditionAge } from "@/lib/initiative-tracker";
+import { auraSummary, tokenAuras } from "@/lib/token-auras";
 
 const SIDES: { id: TokenSide; label: string; name: string }[] = [
   { id: "party", label: "Party", name: "Party" }, { id: "ally", label: "Ally", name: "Allies" },
@@ -66,6 +68,7 @@ export default function TokenEditor(p: TokenEditorProps) {
     : { sideColours: false, color: look.color, borderColor: look.borderColor ?? look.color, textColor: look.textColor ?? "#ffffff" });
 
   const conditions = workspace.conditions.filter(c => token.conditions.includes(c.id));
+  const auras = scene ? tokenAuras(scene, token.id) : [];
   const sections: { id: string; label: string; summary: string; content: ReactNode }[] = [
     { id: "basics", label: "Basics", summary: mode === "scene" ? "Movement, riding, layer" : "Movement, exact size", content: <>
       <MovementCard unit={unit} token={token} patch={p.patch} />
@@ -126,6 +129,8 @@ export default function TokenEditor(p: TokenEditorProps) {
         </div>
         {!workspace.conditions.length && <small>No conditions are set up for this campaign yet.</small>}
       </section> },
+      { id: "auras", label: "Auras", summary: auras.length ? auras.map(a => auraSummary(a, token, scene.grid)).join(", ") : "None", content: p.updateScene
+        ? <TokenAuras scene={scene} token={token} update={p.updateScene} /> : <section className="editor-card"><small>Auras can be added to tokens on a map.</small></section> },
       { id: "statblock", label: "Statblock", summary: token.encyclopediaEntryId ? "Linked to the Wiki" : "Not linked", content: <section className="editor-card" aria-label="Statblock"><TokenStatblock token={token} sceneId={scene.id} campaignId={campaignId} onLink={encyclopediaEntryId => p.patch({ encyclopediaEntryId })} /></section> },
     ] : []),
     { id: "notes", label: "Notes", summary: token.notes?.trim() ? token.notes.trim().split("\n")[0].slice(0, 30) : "Empty", content: <section className="editor-card" aria-label="Notes">

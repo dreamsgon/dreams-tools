@@ -1,5 +1,6 @@
 "use client";
 import { jsonEqual } from "@/lib/json-equal";
+import { auraSize } from "@/lib/effects";
 import { uiZoom } from "@/lib/appearance";
 import {readJsonResponse} from "@/lib/transfer-client";
 import { countLabel } from "@/lib/plural";
@@ -706,7 +707,7 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         if(!area.tokenId)continue;
         const token=scene.tokens.find(t=>t.id===area.tokenId);
         const origin=token??previous.scenes.find(s=>s.id===scene.id)?.tokens.find(t=>t.id===area.tokenId);
-        if(origin){area.x=origin.x;area.y=origin.y;}
+        if(origin){area.x=origin.x;area.y=origin.y;if(area.reach!==undefined&&area.type!=="custom")area.size=auraSize(area.type,origin.size,area.reach);}
         if(!token)area.tokenId=null;
       }
       // Compared without writing out two copies of the whole workspace on every edit (lib/json-equal.ts).
@@ -1776,7 +1777,9 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
                         value={effect.size}
                         onChange={(v) =>
                           updateScene((s) => {
-                            s.effects.find((t) => t.id === effect.id)!.size = v;
+                            const item = s.effects.find((t) => t.id === effect.id)!;
+                            item.size = v;
+                            delete item.reach;
                           })
                         }
                       />
