@@ -1765,3 +1765,6 @@ input,select,textarea{border-color:var(--field-line)}
 .session-recap{padding:2px 8px;border-radius:999px;background:var(--raised)}
 .session-recap.published{background:var(--green-pale);color:var(--green)}
 @media(max-width:720px){.session-row{padding:14px;gap:10px}.session-meta time{white-space:nowrap}}
+/* Write with its preview hidden: the text box takes the whole width. */
+.write-split.no-preview{grid-template-columns:minmax(0,1fr)}
+@media(max-width:640px){.article-toolbar .preview-toggle-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}}

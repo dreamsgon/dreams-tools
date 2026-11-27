@@ -36,6 +36,22 @@ export const worldKey = (id: string) => `w:${id}`;
 export const campaignKey = (id: string) => `c:${id}`;
 export const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 
+/** bytes() of an object that is never changed in place (a world, campaign or page), kept so it is counted once. */
+const sizes = new WeakMap<object, number>();
+const objectBytes = (value: object) => { let n = sizes.get(value); if (n === undefined) { n = bytes(value); sizes.set(value, n); } return n; };
+/**
+ * bytes(part), adding up its world or campaign and each page rather than writing the whole part out. The size check runs
+ * on every edit, and writing out every campaign on each key press made typing lag in a big Wiki.
+ */
+export function partBytes(part: Part): number {
+  let n = '{}'.length;
+  if (part.world !== undefined) n += '"world":,'.length + objectBytes(part.world);
+  if (part.campaign !== undefined) n += '"campaign":,'.length + objectBytes(part.campaign);
+  n += '"entries":[]'.length + Math.max(0, part.entries.length - 1);
+  for (const e of part.entries) n += objectBytes(e);
+  return n;
+}
+
 /** Which part a page is kept in: its campaign's, else its world's shared lore. */
 export function partOf(e: Entry, campaigns: ReadonlySet<string>, worlds: ReadonlySet<string>): PartKey {
   if (e.campaignId && campaigns.has(e.campaignId)) return campaignKey(e.campaignId);
@@ -96,7 +112,7 @@ export type PartSize = { key: PartKey; name: string; kind: 'campaign' | 'world' 
 /** How big each campaign and each world's shared lore is, biggest first. */
 export function partSizes(w: Workspace): PartSize[] {
   const { parts } = splitWorkspace(w);
-  return [...parts].map(([key, part]) => ({ key, bytes: bytes(part), pages: part.entries.length, kind: part.campaign ? 'campaign' as const : part.world ? 'world' as const : 'other' as const,
+  return [...parts].map(([key, part]) => ({ key, bytes: partBytes(part), pages: part.entries.length, kind: part.campaign ? 'campaign' as const : part.world ? 'world' as const : 'other' as const,
     name: part.campaign?.name ?? (part.world ? `${part.world.name} (shared lore)` : 'Pages outside any world') })).sort((x, y) => y.bytes - x.bytes);
 }
 export const formatMb = (n: number) => `${(n / MB).toFixed(n < 10 * MB ? 1 : 0).replace(/\.0$/, '')} MB`;
