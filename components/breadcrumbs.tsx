@@ -13,7 +13,7 @@ export type Crumb = {
   /** Goes to this level. Without it, clicking the name opens the sibling list instead. */
   go?: () => void;
   /** Other places at this level, listed by the arrow next to the name. */
-  siblings?: { heading: string; items: CrumbSibling[]; onNew?: { label: string; run: () => void } };
+  siblings?: { heading: string; /** The list, or a function that makes it when the menu opens (with `count`), for a long one. */ items: CrumbSibling[] | (() => CrumbSibling[]); count?: number; onNew?: { label: string; run: () => void } };
   /** Replaces the name button, for a level that brings its own control (such as Maptable's scene switcher). */
   render?: ReactNode;
 };
@@ -66,7 +66,8 @@ export default function Breadcrumbs({ items, label = "Breadcrumb", className = "
 function Level({ crumb: c, last }: { crumb: Crumb; last: boolean }) {
   const { open, setOpen, wrapper } = usePopover();
   if (c.render) return <>{c.render}</>;
-  const list = c.siblings && (c.siblings.items.length > 1 || c.siblings.onNew);
+  const many = c.siblings && (typeof c.siblings.items === "function" ? c.siblings.count ?? 2 : c.siblings.items.length) > 1;
+  const list = c.siblings && (many || c.siblings.onNew);
   const name = <>{c.icon}<span>{c.label}</span></>;
   return <div className={`crumbbar-level${last ? " is-current" : ""}${open ? " is-open" : ""}`} ref={wrapper}>
     {last ? <span className="crumbbar-name" aria-current="page">{name}</span>
@@ -76,7 +77,7 @@ function Level({ crumb: c, last }: { crumb: Crumb; last: boolean }) {
     {open && c.siblings && <div className="crumbbar-menu" role="menu" aria-label={c.siblings.heading}>
       <div className="crumbbar-menu-head">{c.siblings.heading}</div>
       <div className="crumbbar-menu-list">
-        {c.siblings.items.map(s => <button type="button" role="menuitem" key={s.id} className={s.current ? "is-current" : ""} aria-current={s.current ? "true" : undefined} onClick={() => { setOpen(false); s.go(); }}>
+        {(typeof c.siblings.items === "function" ? c.siblings.items() : c.siblings.items).map(s => <button type="button" role="menuitem" key={s.id} className={s.current ? "is-current" : ""} aria-current={s.current ? "true" : undefined} onClick={() => { setOpen(false); s.go(); }}>
           {s.icon}<span>{s.label}</span>{s.current && <Check size={14} aria-hidden="true" />}
         </button>)}
       </div>

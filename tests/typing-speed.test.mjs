@@ -79,3 +79,18 @@ test('child lookups and mentions give the same answers in a big Wiki, quickly',(
   assert.equal(checkWorkspace(edited).success,true);sizeProblem(edited);parentChoices(edited,edited.entries[edited.entries.length-1]);
   assert(performance.now()-started<3000,'the checks a key press runs stay quick');
 });
+
+test('a page\'s backlinks are kept while only that page changes, and follow other pages',async()=>{
+  const {pageBacklinks,unlinkedMentions:unlinked}=await import('../lib/encyclopedia/page-tree.ts');
+  const s=bigWiki(20),grey=s.entries.find(e=>e.id==='demo-greyhaven');
+  const first=pageBacklinks(s,grey);
+  assert.deepEqual(first.mentions.map(m=>m.entry.id),mentionsOf(s,grey).map(m=>m.entry.id));
+  assert.deepEqual(first.unlinked.map(e=>e.id),unlinked(s,grey).map(e=>e.id));
+  const typed={...s,entries:s.entries.map(e=>e.id===grey.id?{...e,body:e.body+' more'}:e)};
+  assert.equal(pageBacklinks(typed,typed.entries.find(e=>e.id===grey.id)).mentions,first.mentions);
+  const other={...typed,entries:typed.entries.map(e=>e.id==='p3'?{...e,body:'Greyhaven, unlinked.'}:e)};
+  const after=pageBacklinks(other,grey);
+  assert(!after.mentions.some(m=>m.entry.id==='p3'));assert(after.unlinked.some(e=>e.id==='p3'));
+  const renamed=pageBacklinks(other,{...grey,title:'Greyhaven Port'});
+  assert(!renamed.unlinked.some(e=>e.id==='p3'));
+});

@@ -1,4 +1,5 @@
 "use client";
+import { jsonEqual } from "@/lib/json-equal";
 import { uiZoom } from "@/lib/appearance";
 import {readJsonResponse} from "@/lib/transfer-client";
 import { countLabel } from "@/lib/plural";
@@ -708,7 +709,8 @@ function MapAppContent({ navigationScope }: { navigationScope?: string } = {}) {
         if(origin){area.x=origin.x;area.y=origin.y;}
         if(!token)area.tokenId=null;
       }
-      if (JSON.stringify(next) === JSON.stringify(previous)) return;
+      // Compared without writing out two copies of the whole workspace on every edit (lib/json-equal.ts).
+      if (jsonEqual(next, previous)) return;
       const ref = mapMemberRef(), co = memberInfo.current;
       if (ref && co) { const refused = maptableCoGmRefusal(previous, next, co.campaignId, ref, new Set(co.locked ?? [])); if (refused) { setNotice(refused); return; } }
       const joining = !!options?.burst && !!burst.current && burst.current.after === previous && history.current.at(-1) === burst.current.before && Date.now() - burst.current.at < WHEEL_IDLE_MS;

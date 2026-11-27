@@ -28,7 +28,7 @@ import {LookBanner} from './look-section';
 import {WriteTools} from './write-tools';
 import {scrollToHeading} from './wiki-prose';
 import {contents,wikiBlocks} from '@/lib/encyclopedia/markup';
-import {childrenOf,descendantCount,linkMentions,linkText,mentionsOf,unlinkedMentions} from '@/lib/encyclopedia/page-tree';
+import {childrenOf,descendantCount,linkMentions,linkText,pageBacklinks} from '@/lib/encyclopedia/page-tree';
 import {TagRow} from '@/components/tags';
 import {PinToHome} from './pin-to-home';
 import type {Tag} from '@/lib/tags';
@@ -114,7 +114,7 @@ export function ArticleEditor({entry,data,campaign,editing,setEditing,update,cha
  const parents=useMemo(()=>{const paths=folderPaths(data),list=parentChoices(data,entry);return list.sort((a,b)=>paths.get(a.id)!.localeCompare(paths.get(b.id)!)||compareEntries(a,b)).map(e=>({entry:e,label:[paths.get(e.id),e.title].filter(Boolean).join(' / ')}));},[data,entry]);
  const siblings=data.entries.filter(e=>e.worldId===entry.worldId&&e.campaignId===entry.campaignId&&e.parentId===entry.parentId).sort(compareEntries),position=siblings.findIndex(e=>e.id===entry.id);
  const rides=entry.kind==='character'||entry.kind==='faction'?data.entries.flatMap(e=>{if(e.kind!=='vehicle'||!e.vehicle||e.worldId!==entry.worldId)return [];const roles=vehicleRolesOf(e.vehicle,vehicleTypeOf(e.vehicle,world),entry.id);return roles.length?[{entry:e,roles}]:[];}):[];
- const mentions=mentionsOf(data,entry),unlinked=unlinkedMentions(data,entry),subpages=childrenOf(data,entry.id);
+ const {mentions,unlinked}=pageBacklinks(data,entry),subpages=childrenOf(data,entry.id);
  // Typing [[ or @ links a page; the last choice makes a new page inside this one.
  const replaceText=(start:number,end:number,text:string)=>{const next=draft.slice(0,start)+text+draft.slice(end);if(next.length>100000){setNotice('This text is at its length limit.');return null;}return next;};
  const caretTo=(at:number,end?:number)=>requestAnimationFrame(()=>{editor.current?.focus();editor.current?.setSelectionRange(at,end??at);});
