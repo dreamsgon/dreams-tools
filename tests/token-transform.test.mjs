@@ -30,13 +30,16 @@ test('the turn handle snaps to 15° unless Alt is held', () => {
 
 test('sizes step through common sizes and read as D&D sizes', () => {
   assert.equal(stepSize(1, 1), 2);
-  assert.equal(stepSize(1, -1), 0.5);
+  assert.equal(stepSize(1, -1), 0.75);
+  assert.equal(stepSize(0.75, -1), 0.5);
+  assert.equal(stepSize(0.5, 1), 0.75);
   assert.equal(stepSize(0.25, -1), 0.25);
   assert.equal(stepSize(20, 1), 20);
   assert.equal(stepSize(1.5, 1), 2);
   assert.equal(sizeLabel(1), 'Medium 1×1');
   assert.equal(sizeLabel(2), 'Large 2×2');
   assert.equal(sizeLabel(0.5), 'Tiny ½');
+  assert.equal(sizeLabel(0.75), 'Small ¾');
   assert.equal(sizeLabel(4), 'Gargantuan 4×4');
 });
 
@@ -45,6 +48,8 @@ test('resizing keeps the top-left corner and lands on the grid', () => {
   assert.deepEqual(footprint(token, grid), { left: 140, top: 70, side: 70 });
   assert.equal(sizeFromHandle(token, grid, { x: 140 + 150, y: 70 + 120 }), 2);
   assert.equal(sizeFromHandle(token, grid, { x: 140 + 30, y: 70 + 20 }), 0.5);
+  assert.equal(sizeFromHandle(token, grid, { x: 140 + 52, y: 70 + 20 }), 0.75);
+  assert.equal(sizeFromHandle(token, grid, { x: 140 + 10, y: 70 + 5 }), 0.25);
   assert.equal(sizeFromHandle(token, grid, { x: 140 + 150, y: 70 + 120 }, true), 2.15);
   resizeToken(token, grid, 2);
   assert.deepEqual([token.x, token.y, token.size], [210, 140, 2]);

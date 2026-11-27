@@ -24,7 +24,8 @@ test("wheel travel adds up to a step; scrolling up is bigger", () => {
 
 test("token sizes use the same steps as the size buttons and stop at the ends", () => {
   assert.equal(stepTokenSize(1, 1), 2);
-  assert.equal(stepTokenSize(1, -1), 0.5);
+  assert.equal(stepTokenSize(1, -1), 0.75);
+  assert.equal(stepTokenSize(1, -2), 0.5);
   assert.equal(stepTokenSize(1, 2), 3);
   assert.equal(stepTokenSize(20, 1), 20);
   assert.equal(stepTokenSize(0.25, -1), 0.25);
