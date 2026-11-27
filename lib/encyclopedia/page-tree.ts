@@ -20,11 +20,22 @@ export function pagePath(s: Workspace, e: Entry): string[] {
 
 export const childrenOf = (s: Workspace, id: string) => s.entries.filter(e => e.parentId === id).sort(compareEntries);
 
+/**
+ * The pages directly inside each page of `list`, by parent id (top-level pages under ""), in list order. Kept per list,
+ * so a sidebar drawing every row looks each one's children up instead of searching the whole Wiki per row.
+ */
+const indexes = new WeakMap<readonly Entry[], Map<string, Entry[]>>();
+export function childIndex(list: readonly Entry[]): Map<string, Entry[]> {
+  let index = indexes.get(list);
+  if (!index) { index = new Map(); for (const e of list) { const key = e.parentId ?? '', kids = index.get(key); if (kids) kids.push(e); else index.set(key, [e]); } indexes.set(list, index); }
+  return index;
+}
+
 /** Every page below this one, at any depth. */
 export function descendantCount(s: Workspace, id: string): number {
   let count = 0;
-  const seen = new Set([id]), queue = [id];
-  while (queue.length) { const at = queue.pop()!; for (const c of s.entries) if (c.parentId === at && !seen.has(c.id)) { seen.add(c.id); count++; queue.push(c.id); } }
+  const index = childIndex(s.entries), seen = new Set([id]), queue = [id];
+  while (queue.length) { const at = queue.pop()!; for (const c of index.get(at) ?? []) if (!seen.has(c.id)) { seen.add(c.id); count++; queue.push(c.id); } }
   return count;
 }
 
@@ -97,11 +108,13 @@ export type Mention = { entry: Entry; before: string; label: string; after: stri
 
 /** Pages that link to this one, each with the words around its first link. */
 export function mentionsOf(s: Workspace, entry: Entry): Mention[] {
-  const out: Mention[] = [];
+  const out: Mention[] = [], id = entry.id, title = entry.title.toLowerCase();
+  // Only a link naming this page's id or title can resolve to it: check that before resolving, which searches the Wiki.
+  const mayName = (target: string) => target === id || target.toLowerCase() === title;
   for (const e of s.entries) {
     if (e.id === entry.id || e.worldId !== entry.worldId || !(entry.campaignId === null || e.campaignId === entry.campaignId)) continue;
     for (const text of texts(e)) {
-      const hit = [...text.matchAll(LINK)].find(m => resolveLink(s, e, m[1])?.id === entry.id);
+      const hit = [...text.matchAll(LINK)].find(m => mayName(m[1]) && resolveLink(s, e, m[1])?.id === entry.id);
       if (!hit) continue;
       const at = hit.index!, before = plain(text.slice(Math.max(0, at - 160), at)).trimStart(), after = plain(text.slice(at + hit[0].length, at + hit[0].length + 160)).trimEnd();
       out.push({ entry: e, before: (before.length > 48 ? "…" + before.slice(-48).replace(/^\S*\s/, "") : before), label: hit[2]?.trim() || entry.title, after: after.length > 48 ? after.slice(0, 48).replace(/\s\S*$/, "") + "…" : after });

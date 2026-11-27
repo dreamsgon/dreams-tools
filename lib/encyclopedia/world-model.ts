@@ -222,7 +222,9 @@ export const entrySchema = z.object({
     pageLook:pageLookSchema.optional(),
     updatedAt: z.string().datetime(),
 });
-export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(100000) }).superRefine((s, ctx) => {
+const workspaceShape = z.object({ schemaVersion: z.literal(1), worlds: z.array(worldSchema), campaigns: z.array(campaignSchema).max(500), entries: z.array(entrySchema).max(100000) });
+/** The rules between pages, campaigns and worlds, checked once every world, campaign and page is valid on its own. */
+const workspaceRules = (s: z.infer<typeof workspaceShape>, ctx: z.RefinementCtx) => {
     const bad = (message: string) => ctx.addIssue({ code: "custom", message });
     const all = [...s.worlds, ...s.campaigns, ...s.entries];
     if (new Set(all.map(x => x.id)).size !== all.length)
@@ -323,7 +325,30 @@ export const workspaceSchema = z.object({ schemaVersion: z.literal(1), worlds: z
             next = p.parentId;
         }
     }
-});
+};
+export const workspaceSchema = workspaceShape.superRefine(workspaceRules);
+/**
+ * workspaceSchema.safeParse for an edit, quickly. Worlds, campaigns and pages are checked on their own only when they
+ * are new objects: an edit always makes new objects for what it changes (see wiki-parts sameObjects), so one that
+ * passed before still passes. The rules between them run every time. Typing in a page made the editor check every
+ * page of the Wiki on each key press, which lagged in a big Wiki; this checks the one page that changed.
+ */
+export function checkWorkspace(w: Workspace): { success: true } | { success: false; message: string } {
+    const top = z.object({ schemaVersion: z.literal(1), worlds: z.array(z.unknown()), campaigns: z.array(z.unknown()).max(500), entries: z.array(z.unknown()).max(100000) }).safeParse(w);
+    if (!top.success) return { success: false, message: top.error.issues[0].message };
+    for (const [list, schema] of [[w.worlds, worldSchema], [w.campaigns, campaignSchema], [w.entries, entrySchema]] as const)
+        for (const item of list as readonly object[]) {
+            if (checkedObjects.has(item)) continue;
+            const one = (schema as z.ZodTypeAny).safeParse(item);
+            if (!one.success) return { success: false, message: one.error.issues[0].message };
+            checkedObjects.add(item);
+        }
+    const issues: string[] = [];
+    workspaceRules(w, { addIssue: (issue: { message?: string }) => { issues.push(issue.message ?? 'Invalid'); }, path: [] } as unknown as z.RefinementCtx);
+    return issues.length ? { success: false, message: issues[0] } : { success: true };
+}
+/** Worlds, campaigns and pages that passed their own schema. Never changed in place, so a pass holds. */
+const checkedObjects = new WeakSet<object>();
 export type Workspace = z.infer<typeof workspaceSchema>;
 export type Entry = z.infer<typeof entrySchema>;
 export type Campaign = z.infer<typeof campaignSchema>;
@@ -384,19 +409,58 @@ export function importCopy(current: Workspace, input: unknown): Workspace {
         entries: [...current.entries, ...incoming.entries.map(e => ({ ...e, id: ref(e.id), worldId: ref(e.worldId), campaignId: e.campaignId ? ref(e.campaignId) : null, parentId: e.parentId ? ref(e.parentId) : null, mapData:e.mapData?{...e.mapData,...(e.mapData.zoomOf?{zoomOf:ids.has(e.mapData.zoomOf.mapId)?{...e.mapData.zoomOf,mapId:ref(e.mapData.zoomOf.mapId)}:undefined}:{}),pins:e.mapData.pins.map(p=>({...p,entryId:p.entryId?ids.get(p.entryId)??null:null,areaMapId:p.areaMapId?ids.get(p.areaMapId)??null:p.areaMapId,weatherLinks:p.weatherLinks?.map(l=>({...l,campaignId:ref(l.campaignId)}))}))}:undefined, body:links(e.body), tabs:e.tabs?.map(t=>({...t,body:links(t.body)})), character:e.character?{...e.character,statsByCampaign:Object.fromEntries(Object.entries(e.character.statsByCampaign).map(([cid,values])=>[ref(cid),values]))}:undefined, quest:e.quest?{...e.quest,giverId:e.quest.giverId?ids.get(e.quest.giverId)??null:null,placeId:e.quest.placeId?ids.get(e.quest.placeId)??null:null,...(e.quest.rewardIds?{rewardIds:e.quest.rewardIds.flatMap(id=>ids.get(id)??[])}:{}),...(e.quest.linkIds?{linkIds:e.quest.linkIds.flatMap(id=>ids.get(id)??[])}:{}),objectives:e.quest.objectives.map(o=>({...o,...(o.targetId?{targetId:ids.get(o.targetId)??null}:{}),...(o.whereId?{whereId:ids.get(o.whereId)??null}:{})}))}:undefined, org:e.org?remapOrg(e.org,ids):undefined, vehicle:e.vehicle?remapVehicle(e.vehicle,id=>ids.get(id)):undefined, store:e.store?remapStore(e.store,id=>ids.get(id)):undefined, sector:e.sector?{...e.sector,systems:e.sector.systems.map(x=>({...x,pageId:x.pageId?ids.get(x.pageId):undefined}))}:undefined, starSystem:e.starSystem?remapSystem(e.starSystem,id=>ids.get(id)):undefined, planet:e.planet?{...e.planet,systemPageId:ids.get(e.planet.systemPageId)??e.planet.systemPageId,worldMapId:e.planet.worldMapId?ids.get(e.planet.worldMapId):undefined}:undefined, profile:e.profile?remapProfile(e.profile,ids):undefined, ties:remapTies(e.ties,ids), timeline:e.timeline?remapTimeline(e.timeline,ids):undefined, codex:e.codex?{...e.codex,found:Object.fromEntries(Object.entries(e.codex.found).map(([cid,f])=>[ref(cid),f]))}:undefined }))],
     });
 }
+/**
+ * Whether `entry` may go inside `parent`: the same campaign (or both shared lore), no loop, and every page under `entry`
+ * stays within the 20 levels the workspace schema allows. Only the folder rules depend on where a page sits, so this
+ * checks those directly instead of validating a whole moved copy of the Wiki (which, once per candidate page on every
+ * render of the page editor, made typing lag in a big Wiki).
+ */
 export function canParent(entry: Entry, parent: Entry, s: Workspace) {
-    if (parent.worldId !== entry.worldId || parent.campaignId !== entry.campaignId)
-        return false;
-    let current: Entry | undefined = parent;
-    const seen = new Set<string>();
-    while (current) {
-        if (current.id === entry.id || seen.has(current.id))
-            return false;
-        seen.add(current.id);
-        current = s.entries.find(e => e.id === current!.parentId);
-    }
-    const next = {...s,entries:s.entries.map(e=>e.id===entry.id?{...e,parentId:parent.id}:e)};
-    return workspaceSchema.safeParse(next).success;
+    return parentChecker(s, entry)(parent);
+}
+/** The pages `entry` can go inside, for the Move inside picker. One pass over the Wiki for all of them. */
+export function parentChoices(s: Workspace, entry: Entry) {
+    const ok = parentChecker(s, entry);
+    return s.entries.filter(ok);
+}
+const MAX_PAGE_DEPTH = 20;
+function parentChecker(s: Workspace, entry: Entry) {
+    const byId = new Map(s.entries.map(e => [e.id, e]));
+    const children = new Map<string, Entry[]>();
+    for (const e of s.entries) if (e.parentId) { const list = children.get(e.parentId); if (list) list.push(e); else children.set(e.parentId, [e]); }
+    // How many levels sit below `entry` (0 when it has no sub-pages).
+    const below = (() => { let most = 0; const seen = new Set([entry.id]); const walk = (id: string, depth: number) => { for (const c of children.get(id) ?? []) { if (seen.has(c.id)) continue; seen.add(c.id); most = Math.max(most, depth + 1); walk(c.id, depth + 1); } }; walk(entry.id, 0); return most; })();
+    // Levels from a page up to the top, counting the page itself; null when its chain loops, leaves its campaign or reaches `entry`.
+    const levels = new Map<string, number | null>();
+    const chain = (start: Entry): number | null => {
+        const path: Entry[] = [], seen = new Set<string>();
+        let current: Entry | undefined = start, base = 0, bad = false;
+        while (current) {
+            if (current.id === entry.id || seen.has(current.id)) { bad = true; break; }
+            const known = levels.get(current.id);
+            if (known !== undefined) { if (known === null) bad = true; else base = known; break; }
+            seen.add(current.id); path.push(current);
+            if (!current.parentId) break;
+            const up = byId.get(current.parentId);
+            if (!up || up.worldId !== current.worldId || up.campaignId !== current.campaignId) { bad = true; break; }
+            current = up;
+        }
+        for (let i = path.length - 1; i >= 0; i--) levels.set(path[i].id, bad ? null : base + (path.length - i));
+        return bad ? null : base + path.length;
+    };
+    return (parent: Entry) => {
+        if (parent.worldId !== entry.worldId || parent.campaignId !== entry.campaignId) return false;
+        const up = chain(parent);
+        return up !== null && up + below <= MAX_PAGE_DEPTH;
+    };
+}
+/** folderPath for every page at once, by page id: one pass instead of a search of the Wiki per level of every page. */
+export function folderPaths(s:Workspace):Map<string,string> {
+    const byId=new Map(s.entries.map(e=>[e.id,e])),paths=new Map<string,string>();
+    for(const entry of s.entries){const names:string[]=[];let parent=entry.parentId;const seen=new Set<string>();
+        while(parent&&!seen.has(parent)){seen.add(parent);const f=byId.get(parent);if(!f)break;names.unshift(f.title);parent=f.parentId;}
+        paths.set(entry.id,names.join(' / '));}
+    return paths;
 }
 export function folderPath(s:Workspace, entry:Entry):string {
     const names:string[]=[];let parent=entry.parentId;const seen=new Set<string>();
