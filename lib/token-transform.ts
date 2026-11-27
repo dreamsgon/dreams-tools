@@ -1,7 +1,7 @@
 import { snap, type Grid, type Point, type Token } from "./model.ts";
 
-/** Sizes the − and + buttons step through, in squares. */
-export const SIZE_STEPS = [0.25, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+/** Sizes the − and + buttons step through, in squares. Small (¾) still fills one square on the grid but draws a little smaller than Medium. */
+export const SIZE_STEPS = [0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
 export const MIN_SIZE = 0.25, MAX_SIZE = 20;
 
 /** An angle in degrees, between -180 (exclusive) and 180. */
@@ -29,10 +29,10 @@ export function stepSize(size: number, direction: 1 | -1) {
 export function clampSize(size: number) {
   return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
 }
-/** "Medium 1×1", "Large 2×2", "Tiny ½". */
+/** "Medium 1×1", "Large 2×2", "Small ¾", "Tiny ½". */
 export function sizeLabel(size: number) {
-  const name = size < 1 ? "Tiny" : size < 2 ? "Medium" : size < 3 ? "Large" : size < 4 ? "Huge" : "Gargantuan";
-  const squares = size === 0.25 ? "¼" : size === 0.5 ? "½" : Number.isInteger(size) ? `${size}×${size}` : `${Math.round(size * 100) / 100}×`;
+  const name = size < 0.75 ? "Tiny" : size < 1 ? "Small" : size < 2 ? "Medium" : size < 3 ? "Large" : size < 4 ? "Huge" : "Gargantuan";
+  const squares = size === 0.25 ? "¼" : size === 0.5 ? "½" : size === 0.75 ? "¾" : Number.isInteger(size) ? `${size}×${size}` : `${Math.round(size * 100) / 100}×`;
   return `${name} ${squares}`;
 }
 
@@ -41,12 +41,12 @@ export function footprint(token: Pick<Token, "x" | "y" | "size">, grid: Grid) {
   const side = token.size * grid.size;
   return { left: token.x - side / 2, top: token.y - side / 2, side };
 }
-/** Size from dragging the bottom-right corner handle: whole squares (half and quarter below one) unless free. */
+/** Size from dragging the bottom-right corner handle: whole squares (quarters below one) unless free. */
 export function sizeFromHandle(token: Pick<Token, "x" | "y" | "size">, grid: Grid, pointer: Point, free = false) {
   const { left, top } = footprint(token, grid);
   const raw = Math.max(pointer.x - left, pointer.y - top) / grid.size;
   if (free) return clampSize(Math.round(raw * 20) / 20);
-  return clampSize(raw < 0.75 ? (raw < 0.375 ? 0.25 : 0.5) : Math.round(raw));
+  return clampSize(raw < 0.875 ? Math.max(0.25, Math.round(raw * 4) / 4) : Math.round(raw));
 }
 /** Where the centre goes for a new size, keeping the top-left corner, then on the grid. */
 export function resizedCentre(token: Pick<Token, "x" | "y" | "size">, grid: Grid, size: number, free = false): Point {
