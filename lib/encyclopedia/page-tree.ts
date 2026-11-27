@@ -139,9 +139,9 @@ function firstPlainMention(text: string, title: string): { at: number; length: n
 }
 
 /** Pages that name this page in plain text but never link to it. Short names (under 3 letters) and folders are left out. */
-export function unlinkedMentions(s: Workspace, entry: Entry): Entry[] {
+export function unlinkedMentions(s: Workspace, entry: Entry, mentions?: Mention[]): Entry[] {
   if (entry.kind === "folder" || entry.title.trim().length < 3) return [];
-  const linked = new Set(mentionsOf(s, entry).map(m => m.entry.id));
+  const linked = new Set((mentions ?? mentionsOf(s, entry)).map(m => m.entry.id));
   return s.entries.filter(e => e.id !== entry.id && !linked.has(e.id) && e.kind !== "folder" && e.worldId === entry.worldId && (entry.campaignId === null || e.campaignId === entry.campaignId)
     && texts(e).some(t => firstPlainMention(t, entry.title))).sort((a, b) => a.title.localeCompare(b.title));
 }
@@ -157,4 +157,22 @@ export function linkMentions(s: Workspace, entry: Entry, pageIds: string[], now 
     const tabs = e.tabs ?? [], at = tabs.findIndex(t => firstPlainMention(t.body, entry.title));
     return at < 0 ? e : { ...e, tabs: tabs.map((t, i) => i === at ? { ...t, body: link(t.body)! } : t), updatedAt: now };
   }) };
+}
+
+/**
+ * mentionsOf and unlinkedMentions for a page's side panel, kept while only that page changes. Both read every other
+ * page's text, and typing in the page itself re-asked them on each key press; the other pages are the same objects
+ * then (an edit makes new objects only for what it changes), so the last answer still holds.
+ */
+let lastBacklinks: { entries: readonly Entry[]; campaigns: Workspace["campaigns"]; worlds: Workspace["worlds"]; key: string; id: string; mentions: Mention[]; unlinked: Entry[] } | null = null;
+export function pageBacklinks(s: Workspace, entry: Entry): { mentions: Mention[]; unlinked: Entry[] } {
+  const key = [entry.id, entry.title, entry.kind, entry.worldId, entry.campaignId].join("\u0001"), last = lastBacklinks;
+  if (last && last.key === key && last.campaigns === s.campaigns && last.worlds === s.worlds && last.entries.length === s.entries.length
+    && s.entries.every((e, i) => e === last.entries[i] || (e.id === entry.id && last.entries[i].id === entry.id))) {
+    last.entries = s.entries;
+    return last;
+  }
+  const mentions = mentionsOf(s, entry), unlinked = unlinkedMentions(s, entry, mentions);
+  lastBacklinks = { entries: s.entries, campaigns: s.campaigns, worlds: s.worlds, key, id: entry.id, mentions, unlinked };
+  return lastBacklinks;
 }
